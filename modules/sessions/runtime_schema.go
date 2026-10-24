@@ -47,12 +47,14 @@ const (
 	colRunEnvAllow                = "env_allow_names"
 	colRunSecretEnv               = "secret_env_names"
 	colRunGitRead                 = "git_read"
+	colRunCredentials             = "credential_names"
 	colRunRegistrySecrets         = "registry_secret_names"
 	colRunQueuedIntent            = "queued_intent"
 	colRunRef                     = "run_ref"
 	colRunPeers                   = "peers"
 	colRunPeersRule               = "peers_rule"
 	colRunName                    = "name"
+	colRunArchivedAt              = "archived_at"
 	colTransport                  = "transport"
 	colPermissionMode             = "permission_mode"
 	colEffort                     = "effort"
@@ -302,12 +304,18 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			{Name: colRunEnvAllow, Kind: model.KindText, Nullable: true, Principal: model.None("JSON array of permitted environment variable names; never their values: runtime.go:1332-1333")},
 			{Name: colRunSecretEnv, Kind: model.KindText, Nullable: true, Principal: model.None("JSON array of {env, secret} NAMES of the vault secrets a run is given; never their values: session_secret_env.go:151, session_secret_env.go:165, runtime.go:1499")},
 			{Name: colRunGitRead, Kind: model.KindText, Nullable: true, Principal: model.None("the approved repository binding id a run gets a GitHub read credential for; never the token: session_git_read.go:144-157, runtime_dto.go:173")},
+			{Name: colRunCredentials, Kind: model.KindText, Nullable: true, Principal: model.None("JSON array of the NAMES of the managed credentials a run was given a way to use; never a secret or its location: session_credentials.go:235, runtime.go:1674, runtime_dto.go:203, session_move.go:171")},
 			// Nullable for the expand-contract reason: an existing sessions_run gains it on the
 			// next boot. A launch records "[]" when it opens none, so a row with no value
 			// predates it and is unknown (usedRegistryTokens).
 			{Name: colRunRegistrySecrets, Kind: model.KindText, Nullable: true, Principal: model.None("JSON array of {env, secret} NAMES of the vault secrets holding the package registry tokens a launch of the run used; never their values: provider_profile_packages.go:331, provider_profile_packages.go:345, runtime.go:2908, runtime.go:1673")},
 			{Name: colRunQueuedIntent, Kind: model.KindText, Nullable: true, Principal: model.None("references-only launch question pinned to the original approval: runtime_approval_wait.go:53")},
 			{Name: colRunName, Kind: model.KindText, Nullable: true, Principal: model.None("an operator-chosen run label, shown only: runtime_dto.go:119")},
+			// When the session was archived (run_name_archive.go): the session's own
+			// state, shared by everyone who reads it, not a person's mark. Nullable for
+			// the expand-contract reason: an existing sessions_run gains it on the next
+			// boot (reconcileColumns) and a row that predates it is not archived.
+			{Name: colRunArchivedAt, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colTransport, Kind: model.KindText, Principal: model.None("a run transport, a closed set: runtime_ports.go:39-49, runtime_dto.go:120")},
 			{Name: colPermissionMode, Kind: model.KindText, Principal: pdeclNonePermissionMode},
 			{Name: colEffort, Kind: model.KindText, Nullable: true, Principal: model.None("an effort level, a closed set: runtime_ports.go:98-100, runtime_dto.go:122")},

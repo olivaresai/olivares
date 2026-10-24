@@ -533,6 +533,12 @@ if [ "$OLIVARES_PKG_INIT" = systemd ] && [ "$action" = upgrade ]; then
     rm -f "$snapshot_request"
     refuse snapshot-request-failed "cannot publish the pre-migration snapshot request"
   fi
+  # SELinux creates the request with the package state directory's label, which the engine may not read; its file
+  # context gives it the one type the engine reads (dev#3048). A host without SELinux has nothing to relabel.
+  if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v restorecon >/dev/null 2>&1 &&
+    ! restorecon "$package_state_dir/upgrade-snapshot"; then
+    echo "olivares package: could not relabel $package_state_dir/upgrade-snapshot; under SELinux the engine refuses its first start after this upgrade (restorecon $package_state_dir/upgrade-snapshot, then start it)" >&2
+  fi
 fi
 
 olivares_started=no # yes once this script itself started or restarted the service

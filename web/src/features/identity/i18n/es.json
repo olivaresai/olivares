@@ -42,7 +42,7 @@
       "providers": "Registrar o retirar una credencial de proveedor",
       "generic": "Esta acción",
       "console": "Gestionar conectores",
-      "stepUpPolicy": "Changing the extra check for administrative actions",
+      "stepUpPolicy": "Cambiar la comprobación adicional para las acciones administrativas",
       "modules": "Activar o desactivar módulos",
       "signing": "Activar o desactivar la firma de informes"
     },
@@ -67,18 +67,18 @@
     "cancelHint": "Al cerrar se cancela esta acción. Un registro o una autenticación ya enviados pueden completarse.",
     "registrationUnknownElsewhere": "No se pudo confirmar el registro. Es posible que la clave de acceso se haya guardado. Cierra este diálogo y revisa tus claves de acceso antes de iniciar otro registro.",
     "code": {
-      "title": "Sign in with your authenticator code",
-      "body": "{{action}} needs a sign-in with your authenticator code on this deployment. Sign in again and enter your code.",
-      "signInAgain": "Sign in again"
+      "title": "Inicia sesión con el código de tu aplicación de autenticación",
+      "body": "{{action}} requiere iniciar sesión con el código de tu aplicación de autenticación en esta instalación. Vuelve a iniciar sesión e introduce tu código.",
+      "signInAgain": "Volver a iniciar sesión"
     }
   },
   "references": {
     "note": "Estándares que este panel refleja. El panel observa y verifica; no afirma estar certificado.",
     "labels": {
       "scim": "SCIM 2.0 (RFC 7644)",
-      "prm": "Protected Resource Metadata (RFC 9728)",
-      "asMetadata": "Authorization Server Metadata (RFC 8414)",
-      "resourceIndicators": "Resource Indicators (RFC 8707)",
+      "prm": "Metadatos de recurso protegido (RFC 9728)",
+      "asMetadata": "Metadatos del servidor de autorización (RFC 8414)",
+      "resourceIndicators": "Indicadores de recurso (RFC 8707)",
       "pkce": "PKCE (RFC 7636)",
       "oauthSecurityBcp": "OAuth 2.0 Security BCP (RFC 9700)",
       "webauthn": "NIST SP 800-63B-4 (nivel de garantía del autenticador)",
@@ -87,7 +87,7 @@
       "wifReference": "Referencia de identidad de carga de trabajo de Anthropic",
       "workloadIdentity": "Workload Identity Federation de Anthropic",
       "externalKeys": "External Keys (CMEK) de Anthropic",
-      "workspaceUpdate": "Residencia de workspace de Anthropic"
+      "workspaceUpdate": "Residencia de espacio de trabajo de Anthropic"
     },
     "sso": {
       "title": "Estándares de SSO y SCIM"
@@ -122,7 +122,7 @@
     "required": "Obligatoria",
     "secret": "Secreto",
     "envNote": "La configuración se lee una sola vez al arranque desde el entorno; no hay API de escritura de configuración. Los secretos nunca se vuelven a leer.",
-    "testLogin": "Iniciar un login de prueba"
+    "testLogin": "Iniciar un inicio de sesión de prueba"
   },
   "scim": {
     "title": "Aprovisionamiento SCIM 2.0",
@@ -149,7 +149,7 @@
     "col": {
       "userName": "Usuario",
       "state": "Estado",
-      "externalId": "External ID",
+      "externalId": "ID externo",
       "lastModified": "Última modificación"
     }
   },
@@ -160,9 +160,9 @@
     "openInAccessMap": "Ver en el mapa de acceso",
     "col": {
       "name": "Nombre",
-      "externalId": "External ID",
+      "externalId": "ID externo",
       "kind": "Tipo",
-      "principalType": "Principal",
+      "principalType": "Tipo de principal",
       "source": "Origen",
       "state": "Estado"
     },
@@ -195,7 +195,7 @@
     "prmDescription": "Cómo un servidor MCP protegido por OAuth liga un token a un único recurso concreto — para que un token emitido para un servidor no pueda reutilizarse en otro.",
     "flow": {
       "prm": {
-        "title": "Protected Resource Metadata",
+        "title": "Metadatos de recurso protegido",
         "body": "El servidor anuncia sus authorization servers en /.well-known/oauth-protected-resource (RFC 9728)."
       },
       "asDiscovery": {
@@ -243,20 +243,20 @@
     },
     "passkeys": {
       "title": "Passkeys registradas",
-      "description": "Gestiona tus autenticadores FIDO2/WebAuthn. Cada passkey proporciona login resistente a phishing y vinculado a hardware.",
+      "description": "Gestiona tus autenticadores FIDO2/WebAuthn. Cada passkey proporciona un inicio de sesión resistente a phishing y vinculado a hardware.",
       "register": "Registrar passkey",
       "registerTitle": "Registrar nueva passkey",
       "registerHint": "Opcional. Si lo dejas vacío, se nombra por este dispositivo.",
       "nameLabel": "Nombre de la passkey",
       "namePlaceholder": "p.ej. YubiKey 5C, MacBook Touch ID",
       "defaultName": "Passkey en {{device}}",
-      "defaultNameNoDevice": "Passkey",
+      "defaultNameNoDevice": "Clave de acceso",
       "registering": "Registrando la llave de acceso…",
       "registered": "Passkey registrada.",
       "registerFailed": "Falló el registro de la llave de acceso. Puede que tu navegador no admita WebAuthn, o el registro se canceló.",
       "unsupported": "Este navegador no soporta WebAuthn/FIDO2.",
       "none": "No hay passkeys registradas",
-      "noneHint": "Registra una passkey para habilitar login resistente a phishing vinculado a hardware (AAL3).",
+      "noneHint": "Registra una passkey para habilitar un inicio de sesión resistente a phishing vinculado a hardware (AAL3).",
       "colName": "Nombre",
       "colCreated": "Registrada",
       "colBackup": "Respaldo",
@@ -298,14 +298,14 @@
     "sealerUnavailable": "El sellador de semillas TOTP no está disponible en este despliegue; el registro queda desactivado hasta que un operador lo arregle.",
     "loadFailed": "No se pudo cargar el estado del factor.",
     "policyTitle": "Exigir TOTP a los administradores",
-    "policyDescription": "Cuando está activo, los administradores (superadministradores y cualquier admin o owner de tenant) deben registrar un factor antes de completar su login con contraseña.",
+    "policyDescription": "Cuando está activo, los administradores (superadministradores y cualquier admin o owner de tenant) deben registrar un factor antes de completar su inicio de sesión con contraseña.",
     "policyState": "Política",
     "policyOn": "Exigido",
     "policyOff": "Desactivada",
     "policyEnable": "Exigir a los administradores",
     "policyConfirmOn": "Confirmar: exigir",
     "policyDisable": "Desactivar",
-    "policyAal3Note": "Cambiar esta política requiere una sesión AAL3. Las cuentas sin factor se envían al registro en su próximo login; nunca quedan bloqueadas."
+    "policyAal3Note": "Cambiar esta política requiere una sesión AAL3. Las cuentas sin factor se envían al registro en su próximo inicio de sesión; nunca quedan bloqueadas."
   },
   "stepUpPolicy": {
     "title": "Verificación adicional para acciones administrativas",
@@ -313,7 +313,7 @@
     "options": {
       "none": "Desactivada",
       "totp": "Código del autenticador",
-      "passkey": "Passkey"
+      "passkey": "Clave de acceso"
     },
     "saved": "Guardado.",
     "loadFailed": "No se pudo leer este ajuste. Recarga la página para volver a intentarlo.",

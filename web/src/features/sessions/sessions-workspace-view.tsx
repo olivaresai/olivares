@@ -6,6 +6,7 @@ import {
   useQuery,
   useQueryClient,
   type QueryClient,
+  type QueryKey,
 } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Activity, Eye, HelpCircle, Plus, Terminal } from 'lucide-react'
@@ -74,6 +75,7 @@ import {
   railOrder,
   workingCount,
 } from './session-groups'
+import { modelName } from '@/features/agentops/model-name'
 import { sessionModelRef } from './session-usage'
 import { useSessionPins } from './use-session-pins'
 import { useSessionResolution } from './use-session-resolution'
@@ -84,12 +86,16 @@ import {
 } from './list-header'
 import { WorkSurface } from './work-surface'
 import type { SessionTarget } from './session-target'
+import type { ListResponse } from '@/lib/api/types'
+import type { RunDTO } from '@/features/agentops/types'
 import type { CcState, LiveDTO } from './types'
 import './i18n'
 import { ActionName } from './action-name'
 
-const LIVE_LIMIT = WORKING_SET_PAGE_LIMIT
-const RUNS_LIMIT = WORKING_SET_PAGE_LIMIT
+/** Each half reads one page of this size; Load more asks for one more page of each. */
+const PAGE_LIMIT = WORKING_SET_PAGE_LIMIT
+/** The longest page the engine's store returns (sqlstore generic.go `maxLimit`). */
+const LIST_CEILING = 1000
 const ALL = '__all__'
 
 /**
@@ -509,6 +515,22 @@ function Inner({
   }
   const episodio = episode.n
 
+  /**
+   * HOW MANY PAGES THE LIST HAS ASKED FOR (dev#3120). Load more asks again for a longer
+   * page of each half, up to the engine's ceiling; a new episode starts from one page.
+   * The rows already read stay on screen while the longer page comes, but only when they
+   * are THIS episode's previous page still in the cache (`keepPage`), never another
+   * tenant's or epoch's, and never an entry a departed read bit removed.
+   */
+  const [more, setMore] = useState({ episode: episodio, pages: 1 })
+  const pages = more.episode === episodio ? more.pages : 1
+  const limitAt = (n: number) => Math.min(PAGE_LIMIT * n, LIST_CEILING)
+  const listLimit = limitAt(pages)
+  const loadMore =
+    listLimit < LIST_CEILING
+      ? () => setMore({ episode: episodio, pages: pages + 1 })
+      : undefined
+
   /** Where each half's standing refusal is recorded, for THIS episode. */
   const liveMark = `${episodio}|live`
   const runMark = `${episodio}|run`
@@ -526,21 +548,29 @@ function Inner({
    *    the topbar selector is left alone: it is a real selection for the views that DO
    *    scope by it, and changing it here manufactures no departure — see the label.
    */
-  const liveKey = useMemo(
-    () =>
-      sessionsKeys.liveScoped(activeTenant, boundary.epoch, {
-        limit: LIVE_LIMIT,
-      }),
+  const liveKeyAt = useCallback(
+    (limit: number) =>
+      sessionsKeys.liveScoped(activeTenant, boundary.epoch, { limit }),
     [activeTenant, boundary.epoch],
   )
-
-  const runsKey = useMemo(
-    () =>
-      agentOpsKeys.runsScoped(activeTenant, boundary.epoch, {
-        limit: RUNS_LIMIT,
-      }),
+  const runsKeyAt = useCallback(
+    (limit: number) =>
+      agentOpsKeys.runsScoped(activeTenant, boundary.epoch, { limit }),
     [activeTenant, boundary.epoch],
   )
+  const liveKey = useMemo(() => liveKeyAt(listLimit), [liveKeyAt, listLimit])
+  const runsKey = useMemo(() => runsKeyAt(listLimit), [runsKeyAt, listLimit])
+  /** The shorter page's rows, held while the longer one is read: only the page just
+   * before it under the SAME tenant and epoch, never an answer from another scope. */
+  // Read from the cache by key, never from the observer's last answer: an entry removed
+  // when a read bit left (the departure handling below) cannot come back as a placeholder.
+  const keepPage =
+    <T,>(keyAt: (limit: number) => QueryKey) =>
+    // The observer's own previous answer is ignored on purpose (see above).
+    (_previous: T | undefined): T | undefined =>
+      pages > 1
+        ? queryClient.getQueryData<T>(keyAt(limitAt(pages - 1)))
+        : undefined
 
   const profilesQuery = useQuery({
     queryKey: agentOpsKeys.profiles(activeTenant, boundary.epoch, {
@@ -576,14 +606,23 @@ function Inner({
    * a SUCCESSFUL state is a different matter: its data is what a read last returned,
    * and it is admitted as it always was.
    */
+  // Every page size a Load more may have read is inherited, not only the first.
   const [refusals, setRefusals] = useState<RefusalMarks>(() =>
-    marcasHeredadas(queryClient, [
-      [liveKey, `${episodio}|live`],
-      [runsKey, `${episodio}|run`],
-    ]),
+    marcasHeredadas(
+      queryClient,
+      Array.from({ length: LIST_CEILING / PAGE_LIMIT }, (_, i) =>
+        limitAt(i + 1),
+      ).flatMap(
+        (limit) =>
+          [
+            [liveKeyAt(limit), `${episodio}|live`],
+            [runsKeyAt(limit), `${episodio}|run`],
+          ] as const,
+      ),
+    ),
   )
 
-  const liveQuery = useQuery({
+  const liveQuery = useQuery<ListResponse<LiveDTO>>({
     queryKey: liveKey,
     // The request is pinned to the context its KEY was built for, and carries the
     // query's own abort signal: a read cannot be answered under a tenant this entry
@@ -595,7 +634,7 @@ function Inner({
     queryFn: async ({ signal }) => {
       try {
         const answer = await sessionsApi.live(
-          { limit: LIVE_LIMIT },
+          { limit: listLimit },
           { tenant: activeTenant, signal },
         )
         setRefusals((prev) => sinMarca(prev, liveMark))
@@ -606,14 +645,15 @@ function Inner({
       }
     },
     enabled: canLiveRead,
+    placeholderData: keepPage<ListResponse<LiveDTO>>(liveKeyAt),
   })
 
-  const runsQuery = useQuery({
+  const runsQuery = useQuery<ListResponse<RunDTO>>({
     queryKey: runsKey,
     queryFn: async ({ signal }) => {
       try {
         const answer = await agentOpsApi.listRuns(
-          { limit: RUNS_LIMIT },
+          { limit: listLimit },
           { tenant: activeTenant, signal },
         )
         setRefusals((prev) => sinMarca(prev, runMark))
@@ -625,6 +665,7 @@ function Inner({
     },
     enabled: canRunRead,
     refetchInterval: 8_000,
+    placeholderData: keepPage<ListResponse<RunDTO>>(runsKeyAt),
   })
 
   /**
@@ -962,6 +1003,8 @@ function Inner({
    *    any real selection is the operator's, through `patchAddress`.
    */
   const [latchedDefault, setLatchedDefault] = useState<string | null>(null)
+  // An archived or snoozed session is folded out of the rail's order (`railOrder`), so it
+  // is never the one opened by default either; a link to it still opens it.
   const railOrdered = useMemo(
     () => railOrder(groupSessions(sessions)),
     [sessions],
@@ -1286,9 +1329,10 @@ function Inner({
         header: t('cols.model'),
         cell: ({ getValue }) => {
           const v = getValue<string>()
+          // The model by its name (dev#3120); the id it sorts and filters by is the hover.
           return v ? (
-            <span className="font-mono text-caption text-muted-foreground">
-              {v}
+            <span className="text-caption text-muted-foreground" title={v}>
+              {modelName(v)}
             </span>
           ) : (
             <span className="text-muted-foreground">—</span>
@@ -1616,7 +1660,6 @@ function Inner({
   // The provider-profile plane has its OWN read tier, independent of runs — the
   // tab follows that permission, and the panel checks write/admin at each control.
   const showProfiles = can('sessions:profile:read')
-  const canBindingRead = can('sessions:profile-binding:read')
   const loadingCounts = liveQuery.isLoading || runsQuery.isLoading
   /**
    * NEW SESSION IS OFFERED ONCE PER SCREEN. With sessions listed it is the header's verb;
@@ -1676,6 +1719,51 @@ function Inner({
           .filter(Boolean)
           .join(' · ')
 
+  // THE LIST SAYS ITS OWN LIMITS, AT ITS FOOT (dev#3120): what the role cannot see, and
+  // that the page is the most recent part with the way to load more. Nothing of it sits
+  // over the rail and the conversation.
+  const listFooter =
+    truncated || !canLiveRead || !canRunRead ? (
+      <div
+        data-testid="rail-footer"
+        className="flex shrink-0 flex-wrap items-center gap-x-1.5 gap-y-1 border-t border-line px-3 py-2 text-caption text-text-3"
+      >
+        {truncated ? (
+          <>
+            <span>
+              {t('list.recent', {
+                count: sessions.length,
+                n: formatInt(sessions.length, lang),
+              })}
+            </span>
+            {loadMore ? (
+              <>
+                <span aria-hidden="true">·</span>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-caption"
+                  onClick={loadMore}
+                  // One page at a time: the longer page is read before the next is asked.
+                  disabled={
+                    liveQuery.isPlaceholderData || runsQuery.isPlaceholderData
+                  }
+                >
+                  {t('list.loadMore')}
+                </Button>
+              </>
+            ) : null}
+          </>
+        ) : null}
+        {!canLiveRead ? (
+          <p className="basis-full">{t('partial.noLiveRead')}</p>
+        ) : null}
+        {!canRunRead ? (
+          <p className="basis-full">{t('partial.noRunRead')}</p>
+        ) : null}
+      </div>
+    ) : undefined
+
   const listViews: SessionsView[] = [
     'table',
     ...(showWorkspaces ? (['workspaces'] as const) : []),
@@ -1732,16 +1820,6 @@ function Inner({
               </p>
             )}
 
-            {!canLiveRead && (
-              <p className="rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground">
-                {t('partial.noLiveRead')}
-              </p>
-            )}
-            {!canRunRead && (
-              <p className="rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground">
-                {t('partial.noRunRead')}
-              </p>
-            )}
             {/* A HALF THAT FAILED CAN BE ASKED AGAIN. The observed half has no timer and its
               stream opens only over an answer, so without this a failed first read stayed
               failed until the page was reloaded. Retry is the same permission-guarded read
@@ -1784,31 +1862,6 @@ function Inner({
                 ) : null}
               </p>
             )}
-            {truncated && (
-              <p className="rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning">
-                {t('partial.truncated')}
-              </p>
-            )}
-            {/* ⛔ THE INSTANCE CELL'S DASH HAS FOUR CAUSES AND SAYS ONE THING. Refused (the
-            grant is absent, so the read is never made), refused by the engine, failed,
-            and "the profile is older than the page the engine returned" all reach the
-            same quiet dash. The row can only be honest about the VALUE; WHICH of the
-            four happened is a fact about the READ, and only this surface holds it.
-            Said once for the table, in the shape the findings table already uses, and
-            only when it changes something: a table with no unnamed profile in it gets
-            no line regretting a read it did not need. The fourth cause stays silent on
-            purpose — there the read ANSWERED, and "it is not in this page" is what the
-            truncation notice above already says. */}
-            {profileNamesRefused && (
-              <NamesUnreadNotice testId="sessions-profile-names-refused">
-                {t('partial.noProfileRead')}
-              </NamesUnreadNotice>
-            )}
-            {profileNamesFailed && (
-              <NamesUnreadNotice testId="sessions-profile-names-failed">
-                {t('partial.profileLookupFailed')}
-              </NamesUnreadNotice>
-            )}
           </div>
 
           <div
@@ -1843,6 +1896,7 @@ function Inner({
                   setDetailOpen(true)
                 }}
                 emptyAction={emptyActionVisible ? emptyNewSession : undefined}
+                listFooter={listFooter}
                 listHeader={
                   <SessionsListHeader
                     count={counts.total}
@@ -1869,6 +1923,48 @@ function Inner({
               {subview(
                 'table',
                 <>
+                  {/* WHAT THIS TABLE COULD NOT SEE, said in the table it is about and
+                      nowhere else (dev#3120): a missing grant and a page that is not the
+                      whole list change what the Origin column can claim, so they sit above
+                      it, quietly, and never over the rail and the conversation. */}
+                  {!canLiveRead && (
+                    <p className="text-caption text-muted-foreground">
+                      {t('partial.noLiveRead')}
+                    </p>
+                  )}
+                  {!canRunRead && (
+                    <p className="text-caption text-muted-foreground">
+                      {t('partial.noRunRead')}
+                    </p>
+                  )}
+                  {truncated && (
+                    <p
+                      data-testid="sessions-table-page-note"
+                      className="text-caption text-muted-foreground"
+                    >
+                      {t('partial.truncated')}
+                    </p>
+                  )}
+                  {/* ⛔ THE INSTANCE CELL'S DASH HAS FOUR CAUSES AND SAYS ONE THING. Refused (the
+                  grant is absent, so the read is never made), refused by the engine, failed,
+                  and "the profile is older than the page the engine returned" all reach the
+                  same quiet dash. The row can only be honest about the VALUE; WHICH of the
+                  four happened is a fact about the READ, and only this surface holds it.
+                  Said once for the table, in the shape the findings table already uses, and
+                  only when it changes something: a table with no unnamed profile in it gets
+                  no line regretting a read it did not need. The fourth cause stays silent on
+                  purpose — there the read ANSWERED, and "it is not in this page" is what the
+                  page note above already says. */}
+                  {profileNamesRefused && (
+                    <NamesUnreadNotice testId="sessions-profile-names-refused">
+                      {t('partial.noProfileRead')}
+                    </NamesUnreadNotice>
+                  )}
+                  {profileNamesFailed && (
+                    <NamesUnreadNotice testId="sessions-profile-names-failed">
+                      {t('partial.profileLookupFailed')}
+                    </NamesUnreadNotice>
+                  )}
                   <div className="flex flex-wrap items-center justify-end gap-2">
                     <Select value={source} onValueChange={setSource}>
                       <SelectTrigger
@@ -1988,27 +2084,19 @@ function Inner({
                 {subview(
                   'profiles',
                   <>
-                    {/* The plane also has its own doors, each entered on its own read tier. */}
-                    <p className="text-caption text-muted-foreground">
-                      {ta('profiles.view.crossHint')}{' '}
-                      <Link
-                        to={'/provider-profiles' as never}
-                        className="underline"
-                      >
-                        {ta('profiles.view.openProfiles')}
-                      </Link>
-                      {canBindingRead && (
-                        <>
-                          {' · '}
-                          <Link
-                            to={'/provider-bindings' as never}
-                            className="underline"
-                          >
-                            {ta('profiles.view.openBindings')}
-                          </Link>
-                        </>
-                      )}
-                    </p>
+                    {/* Each account, with its profile and bindings, is on Tools too:
+                        offered to whoever may open Tools (the account read tier). */}
+                    {can('sessions:account:read') && (
+                      <p className="text-caption text-muted-foreground">
+                        {ta('profiles.view.crossHint')}{' '}
+                        <Link
+                          to={'/agent-tools' as never}
+                          className="underline"
+                        >
+                          {ta('profiles.view.openProfiles')}
+                        </Link>
+                      </p>
+                    )}
                     <ProfilesPanel />
                   </>,
                 )}

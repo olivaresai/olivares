@@ -593,7 +593,6 @@
     "emptyTitle": "Nessuna generazione",
     "emptyBody": "Nessuna generazione di concessione memorizzata corrisponde allo stato e al soggetto selezionati. Una nuova concessione ne aggiunge una.",
     "temporalHint": "“Stato memorizzato” è ciò che il motore ha persistito; “all'osservazione” indica se la riga era in vigore all'istante osservato. Una scadenza già passata viene riportata, non materializzata: non revoca la riga, e un successore per quel soggetto richiede comunque prima una revoca esplicita.",
-    "snapshotChanged": "Il canale è cambiato tra due pagine di questo storico, quindi tutte le pagine lette finora sono state scartate e l'elenco è ripartito dall'inizio (riavviato {{count}} volta/e).",
     "detail": {
       "title": "Dettaglio della generazione",
       "id": "ID della concessione",
@@ -641,7 +640,10 @@
       "revoked": "Revocate (memorizzate)",
       "expired": "Scadute (memorizzate)",
       "all": "Tutte (memorizzate)"
-    }
+    },
+    "snapshotChanged_one": "Il canale è cambiato tra due pagine di questo storico, quindi tutte le pagine lette finora sono state scartate e l'elenco è ripartito dall'inizio (riavviato {{count}} volta).",
+    "snapshotChanged_other": "Il canale è cambiato tra due pagine di questo storico, quindi tutte le pagine lette finora sono state scartate e l'elenco è ripartito dall'inizio (riavviato {{count}} volte).",
+    "snapshotChanged_many": "Il canale è cambiato tra due pagine di questo storico, quindi tutte le pagine lette finora sono state scartate e l'elenco è ripartito dall'inizio (riavviato {{count}} volte)."
   },
   "cursor": {
     "title": "Segna come visto fino a qui",

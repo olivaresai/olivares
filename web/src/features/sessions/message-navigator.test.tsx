@@ -309,6 +309,36 @@ describe('MessageNavigator rail', () => {
     expect(screen.queryByTestId('message-problem')).not.toBeInTheDocument()
   })
 
+  it('counts no messages while the conversation shows none (dev#3120)', async () => {
+    // The 0.3 empty session read "Messages 2" beside "No turns yet": a count of rows
+    // the person could not see. The control above shows the bar over shown rows.
+    const empty = show(transcript(2), [])
+    await empty.idle()
+    expect(screen.queryByTestId('message-bar')).not.toBeInTheDocument()
+    expect(screen.queryByText('Messages')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('message-rail')).not.toBeInTheDocument()
+  })
+
+  it('says nothing of a missing transcript while the conversation shows no message (dev#3120)', async () => {
+    // A session stopped before its first turn has no transcript yet: over its empty
+    // conversation "not in its account home" was a second, contradictory state.
+    vi.mocked(agentOpsApi.messages).mockResolvedValue({
+      driver: 'claude',
+      transcript: 'missing',
+      total: 0,
+      items: [],
+    })
+    const qc = new QueryClient()
+    render(
+      <QueryClientProvider client={qc}>
+        <Host items={[]} onJump={vi.fn()} />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(qc.isFetching()).toBe(0))
+    expect(vi.mocked(agentOpsApi.messages)).toHaveBeenCalled()
+    expect(screen.queryByTestId('message-problem')).not.toBeInTheDocument()
+  })
+
   it.each([
     [500, 'internal', 'The messages could not be read.'],
     [

@@ -36,6 +36,13 @@ type builtBundle struct {
 // passphrase, and write the gzip-tar bundle.
 func makeBundle(t *testing.T, e *estate) builtBundle {
 	t.Helper()
+	return makeBundleFormat(t, e, false)
+}
+
+// makeBundleFormat is makeBundle, optionally in the pre-v2 format: manifest v1 and
+// the snapshot in the clear, written through the low-level API as old producers did.
+func makeBundleFormat(t *testing.T, e *estate, legacy bool) builtBundle {
+	t.Helper()
 	ctx := context.Background()
 	work := t.TempDir()
 	snap := e.snapshotInto(t, filepath.Join(work, "olivares.db"))
@@ -81,7 +88,15 @@ func makeBundle(t *testing.T, e *estate) builtBundle {
 		SnapshotPath: snap,
 		SealedKeys:   map[string][]byte{keyRef.File: sealed},
 	}
-	if err := dr.WriteAuthenticatedBundle(f, bundleInput, cipher); err != nil {
+	if legacy {
+		m.Format = dr.ManifestFormatV1
+		if err := dr.AuthenticateBundle(bundleInput, cipher); err != nil {
+			t.Fatalf("authenticate legacy bundle: %v", err)
+		}
+		if err := dr.WriteBundle(f, bundleInput); err != nil {
+			t.Fatalf("write legacy bundle: %v", err)
+		}
+	} else if err := dr.WriteAuthenticatedBundle(f, bundleInput, cipher); err != nil {
 		t.Fatalf("write bundle: %v", err)
 	}
 	if err := f.Close(); err != nil {
@@ -90,9 +105,9 @@ func makeBundle(t *testing.T, e *estate) builtBundle {
 	return builtBundle{path: bundlePath, manifest: m, keyPriv: e.priv}
 }
 
-// extractBundle opens a bundle into a fresh dir and checks the snapshot digest
-// against the manifest (the bundle-integrity gate every restore runs first).
-func extractBundle(t *testing.T, b builtBundle) (dir string, m *dr.Manifest, kek dr.KDFParams) {
+// extractBundleRaw unpacks a bundle into a fresh dir with no KEK: the snapshot
+// member is left as it travels (sealed).
+func extractBundleRaw(t *testing.T, b builtBundle) (dir string, m *dr.Manifest, kek dr.KDFParams) {
 	t.Helper()
 	dir = t.TempDir()
 	f, err := os.Open(b.path)
@@ -103,6 +118,22 @@ func extractBundle(t *testing.T, b builtBundle) (dir string, m *dr.Manifest, kek
 	m, kek, err = dr.ExtractBundle(f, dir)
 	if err != nil {
 		t.Fatalf("extract: %v", err)
+	}
+	return dir, m, kek
+}
+
+// extractBundle unpacks a bundle, opens its snapshot with the KEK the way a
+// restore does (dr.VerifyBundleIntegrity) and checks the snapshot digest against
+// the manifest (the bundle-integrity gate every restore runs first).
+func extractBundle(t *testing.T, b builtBundle) (dir string, m *dr.Manifest, kek dr.KDFParams) {
+	t.Helper()
+	dir, m, kek = extractBundleRaw(t, b)
+	cipher, err := dr.OpenCipher([]byte(testPass), kek)
+	if err != nil {
+		t.Fatalf("open cipher: %v", err)
+	}
+	if err := dr.VerifyBundleIntegrity(dir, m, kek, cipher, false); err != nil {
+		t.Fatalf("verify bundle: %v", err)
 	}
 	snap := filepath.Join(dir, m.Store.File)
 	sum, _, err := dr.FileSHA256(snap)

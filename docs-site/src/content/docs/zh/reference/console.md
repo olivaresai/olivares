@@ -6,21 +6,21 @@ description: >-
 ---
 
 :::note[版本]
-目录来源（LDAP、Okta/Entra 及代理/工作负载 IdP）、托管身份生命周期和入站 SCIM 服务器需要 Business/Enterprise 附加组件。Community 保留通用来源采集、资源目录、安全发现、Access Map、身份清单、单 IdP SSO、本地角色与绑定、策略和审批。有偿控制台面板和 CLI 命令不会显示；其已发布的 API 路由返回 HTTP `501`。启用模块不会添加 Business 实现。
+目录来源（LDAP、Okta/Entra 及智能体/工作负载 IdP）、托管身份生命周期和入站 SCIM 服务器需要 Business/Enterprise 附加组件。Community 保留通用来源采集、资源目录、安全发现、Access Map、身份清单、单 IdP SSO、本地角色与绑定、策略和审批。有偿控制台面板和 CLI 命令不会显示；其已发布的 API 路由返回 HTTP `501`。启用模块不会添加 Business 实现。
 :::
 
 本页是控制台的地图。它列出**应用挂载的每条路由**——不是选集，也不是某人记得
 写下的那些——以及主体进入路由所需的权限和更多信息所在的位置。
 
 控制台只有**一个导航结构：带分区的九个区域**。每个屏幕都位于一个区域及其中的一个
-分区，所有显示屏幕位置的地方都指向同一处：“所有区域”（侧边栏中，手机上为“更多”）、
-区域目录页、面包屑、命令面板，以及屏幕上方的链接行——它列出同一分区的其他屏幕。
-侧边栏固定一小组屏幕，首要工作在前（主页、会话、AI 工具、审批），然后是工作，固定的屏幕在其分区的其他屏幕上也保持
-选中标记。导航过滤会把分组树替换成已授权匹配项的排序列表；命令面板使用同一索引、
+分区，所有显示屏幕位置的地方都指向同一处：“所有区域”（账户菜单和命令面板中，手机上为
+“更多”）、区域目录页、命令面板，以及屏幕上方的链接行——它列出同一分区的其他屏幕。
+顶部栏列出五个位置，首要工作在前（主页、会话、工具、规则、账本；Business 另加
+组织），一个位置在其分区的其他屏幕上也保持选中标记。“所有区域”以两级列出每个区域及其屏幕，不重复顶部栏已显示的位置。导航过滤会把分组树替换成已授权匹配项的排序列表；命令面板使用同一索引、
 同一排序和同一权限投影。区域目录是链接页——列出你的权限允许的条目——不是能力、
 可用性或就绪状态的实时读数。
 
-新安装只列出首要工作：主页、会话、AI 工具及提供方、审批、配置向导和设置。其他屏幕在新安装中
+新安装只列出首要工作：主页、会话、AI 工具、审批、配置向导和设置。其他屏幕在新安装中
 属于预览：其地址、API 和 CLI 照常可用，但导航、命令面板和快捷键不会列出它们。升级前已存在的
 安装会继续列出它原来列出的所有屏幕；管理员已选择模块的安装（自下次启动起）和使用演示数据的
 安装也是如此。
@@ -28,7 +28,7 @@ description: >-
 本页是**生成的**。名册来自 `web/src/features/route-census.json`，这是一份只追加的
 清单，`registry.route-conservation.test.ts` 会将它与构建后的路由器固定比对，因此
 任何屏幕的新增、移动或丢失都会引起本页变化。每个屏幕的名称和单行描述都是
-**控制台自己的字符串**，来自侧边栏使用的同一翻译目录，所以你在这里读到的就是
+**控制台自己的字符串**，来自控制台使用的同一翻译目录，所以你在这里读到的就是
 在产品中看到的内容。下面的表格按区域分组这些行：主页（概览）在前，登录、设置和账户在后。九个区域
 目录页与功能注册表之外挂载的路由列在同一张表中。
 
@@ -40,7 +40,7 @@ description: >-
 
 ## 如何阅读本页
 
-- **屏幕**——侧边栏、区域目录和命令面板使用的名称。
+- **屏幕**——“所有区域”、区域目录和命令面板使用的名称。
 - **路径**——相对于部署控制台 origin 的 URL。它是已发布契约：书签、runbook
   深层链接和文档交叉引用都使用这段字符串。
 - **需要**——RBAC 权限。`任何已登录用户`表示路由向所有已认证主体开放；
@@ -48,11 +48,11 @@ description: >-
 - **参考**——控制台为该屏幕提供的帮助链接所打开的页面。
 
 下面的标题就是各个区域，顺序与“所有区域”一致：基础设施、AI、数据与上下文、
-工作与通信、自动化、安全与身份、部署、可观测性与证据，然后是系统与设置。
+工作与通信、自动化、安全与身份、交付、监督，然后是系统与设置。
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-控制台发布 **73 条路由**。以下表格列出了每一条路由、所需权限，以及产品内帮助链接
+控制台发布 **74 条路由**。以下表格列出了每一条路由、所需权限，以及产品内帮助链接
 打开的参考页面。
 
 ### 主页
@@ -73,7 +73,7 @@ description: >-
 
 | 屏幕 | 路径 | 用途 | 需要 | 参考 |
 |---|---|---|---|---|
-| 智能体工具 | `/agent-tools` | 检测、安装和更新此主机上的智能体工具，并跟踪每次安装；仅限部署管理员 | `system:admin` | [how-to/add-a-provider](/zh/how-to/add-a-provider/) |
+| 智能体工具 | `/agent-tools` | 查看会话所用的账户和 API 密钥；安装工具并登录仅限部署管理员 | `sessions:account:read` | [how-to/add-a-provider](/zh/how-to/add-a-provider/) |
 | 运营会话 | `/agentops` | 启动会话并跟踪每个会话的工作，包括 Olivares 发现的会话 | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/zh/how-to/run-claude-code-with-olivares/) |
 | MCP 服务器 | `/mcp-servers` | 将远程 MCP 服务器连接到此组织，测试它们，并选择会话可以使用哪些工具 | `tenant:admin` | [how-to/connectors/mcp-governance](/zh/how-to/connectors/mcp-governance/) |
 | 模型运维 | `/model-operations` | 自有模型、准入和部署 | `models:registry:read` | [reference/modules/xxiii-model-operations](/zh/reference/modules/xxiii-model-operations/) |
@@ -82,8 +82,9 @@ description: >-
 | 提供商账户 | `/provider-accounts` | 列出已命名的提供商账户，并将现有提供商配置文件采纳为账户 | `sessions:account:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 来源绑定 | `/provider-bindings` | 将已配置的来源关联到提供商配置文件 | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 提供商配置文件 | `/provider-profiles` | 登记并管理会话启动所依据的提供商主目录，并按需读取其配置 | `sessions:profile:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
-| 提供方 | `/providers` | 注册会话启动时使用的 API 密钥与端点；可测试、更换和吊销 | `sessions:provider:read` | [how-to/add-a-provider](/zh/how-to/add-a-provider/) |
+| 提供商 | `/providers` | 注册会话启动时使用的 API 密钥与端点；可测试、更换和吊销 | `sessions:provider:read` | [how-to/add-a-provider](/zh/how-to/add-a-provider/) |
 | 速率限制 | `/rate-limits` | Anthropic 速率限制清单（只读） | `models:ratelimits:read` | [reference/modules/x-models](/zh/reference/modules/x-models/) |
+| 覆盖范围 | `/reach` | 查看每个工具可以访问哪些目标，以及哪些正在等待批准。 | `accessmap:graph:read` | [reference/modules/iii-access-map](/zh/reference/modules/iii-access-map/) |
 | 沙箱 | `/sandbox` | 隔离的 Agent 测试与重放 | `sandbox:run:read` | [reference/modules/xvii-sandbox](/zh/reference/modules/xvii-sandbox/) |
 | 会话 | `/sessions` | 启动会话并跟踪每个会话的工作，包括 Olivares 发现的会话 | `sessions:live:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 语音 | `/voice` | 语音和实时会话 | `voice:session:read` | [reference/modules/xvi-voice](/zh/reference/modules/xvi-voice/) |
@@ -123,8 +124,8 @@ description: >-
 | 屏幕 | 路径 | 用途 | 需要 | 参考 |
 |---|---|---|---|---|
 | 访问图 | `/access-map` | 每个 Agent 读取和写入的内容（R/RW） | `accessmap:graph:read` | [reference/modules/iii-access-map](/zh/reference/modules/iii-access-map/) |
-| AgentCore 导出 | `/agentcore-export` | 规划、审阅并应用将本租户治理规则投射为 AWS AgentCore Cedar 策略；规划不写入任何内容 | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/zh/reference/modules/vi-governance/) |
-| Claude Code 治理 | `/claude-policy` | 托管策略、hook、MCP、沙箱和策略即代码 | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/zh/how-to/connectors/claude-code-hooks-pep/) |
+| 策略导出 | `/agentcore-export` | 规划、审阅并应用将本租户治理规则投射为 AWS AgentCore Cedar 策略；规划不写入任何内容 | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/zh/reference/modules/vi-governance/) |
+| 托管策略 | `/claude-policy` | 托管策略、hook、MCP、沙箱和策略即代码 | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/zh/how-to/connectors/claude-code-hooks-pep/) |
 | 身份与访问 | `/identity` | SSO、SCIM 以及智能体使用的身份 | `governance:identity:read` | [reference/modules/vi-governance](/zh/reference/modules/vi-governance/) |
 | 推理代理 | `/inference-proxy` | 代理门禁、出站 DLP 规则和设备批准 | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/zh/reference/modules/inferenceproxy/) |
 | 紧急开关 | `/killswitch` | 紧急停止、双人控制恢复和 guardian 遏制 | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/zh/how-to/cookbook/kill-switch-drill/) |
@@ -133,17 +134,17 @@ description: >-
 | 安全 | `/security` | 护栏、取证和异常 | `security:finding:read` | [reference/modules/ix-security](/zh/reference/modules/ix-security/) |
 | 保险库 | `/vault` | 您的密码、笔记和验证码 | `tenant:read` | [reference/console](/zh/reference/console/) |
 
-### 部署
+### 交付
 
 | 屏幕 | 路径 | 用途 | 需要 | 参考 |
 |---|---|---|---|---|
 | Git 发布 | `/git-publication` | 通过已批准的 Git 目标推送提交、创建拉取请求并合并 | `gitpublish:target:read` | [reference/modules/gitpublish](/zh/reference/modules/gitpublish/) |
 
-### 可观测性与证据
+### 监督
 
 | 屏幕 | 路径 | 用途 | 需要 | 参考 |
 |---|---|---|---|---|
-| Claude Code 采用情况 | `/adoption` | 生产力、接受率和模型组合 | `adoption:metrics:read` | [reference/modules/claudeadoption](/zh/reference/modules/claudeadoption/) |
+| 采用情况 | `/adoption` | 生产力、接受率和模型组合 | `adoption:metrics:read` | [reference/modules/claudeadoption](/zh/reference/modules/claudeadoption/) |
 | 供应链 | `/attestation` | 发布证明——SLSA、SBOM、VEX 和 Scorecard | `observability:attestation:read` | [how-to/verify-a-release](/zh/how-to/verify-a-release/) |
 | 审计账本 | `/audit` | 可检测篡改的证据账本 | `audit:read` | [reference/modules/ix-security](/zh/reference/modules/ix-security/) |
 | 仪表板 | `/dashboards` | 管理层 KPI 和报告 | 任何已登录用户 | [reference/modules/xxi-executive-dashboards](/zh/reference/modules/xxi-executive-dashboards/) |
@@ -159,7 +160,7 @@ description: >-
 |---|---|---|---|---|
 | API Playground | `/api-playground` | 交互式探索和测试控制平面 API | `tenant:admin` | [reference/modules/xix-api-manage-as-code](/zh/reference/modules/xix-api-manage-as-code/) |
 | 备份 | `/backups` | 触发、计划、下载和恢复备份，并在破坏性路径上进行第二次确认。 | `system:admin` | [how-to/backup-and-restore](/zh/how-to/backup-and-restore/) |
-| 管理 | `/console` | 用户、SSO/IdP、工作区、代理组、角色、密钥、连接器、API 密钥以及此安装的许可证 | `tenant:admin` | [reference/modules/xx-multi-tenancy](/zh/reference/modules/xx-multi-tenancy/) |
+| 管理 | `/console` | 用户、SSO/IdP、工作区、智能体组、角色、密钥、连接器、API 密钥以及此安装的许可证 | `tenant:admin` | [reference/modules/xx-multi-tenancy](/zh/reference/modules/xx-multi-tenancy/) |
 | 源差异 | `/console/sources/diff` | 逐个文件比较已连接 Git 仓库的基准修订与 head 修订 | `system:admin` | [reference/console](/zh/reference/console/) |
 | 日志 | `/logs` | 实时引擎日志流，可按级别和模块过滤，并支持搜索和暂停。 | `system:admin` | [how-to/troubleshooting](/zh/how-to/troubleshooting/) |
 | 设置向导 | `/onboarding` | 分步部署配置 | `system:admin` | [start/quickstart](/zh/start/quickstart/) |
@@ -175,9 +176,9 @@ description: >-
 | AI | `/areas/ai` | AI区域目录：会话观测与操作、提供商配置文件与环境、模型、专项执行和提供商参考。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
 | 自动化 | `/areas/automation` | 自动化区域目录：流程与编排、事件与通知。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
 | 数据与上下文 | `/areas/data-context` | 数据与上下文区域目录：能力、知识与工件。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
-| 部署 | `/areas/deployment` | 部署区域目录：部署的准备与控制。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
+| 交付 | `/areas/deployment` | 交付区域目录：部署的准备与控制。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
 | 基础设施 | `/areas/infrastructure` | 基础设施区域目录：环境清单与工作区。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
-| 可观测性与证据 | `/areas/observation` | 可观测性与证据区域目录：状态与活动、成本与采用、审计、评估与证据。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
+| 监督 | `/areas/observation` | 监督区域目录：状态与活动、成本与采用、审计、评估与证据。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
 | 安全与身份 | `/areas/security-identity` | 安全与身份区域目录：身份与访问、策略与治理边界、防护与响应。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
 | 系统与设置 | `/areas/system` | 系统与设置区域目录：管理、安装与维护、开发者工具和个人偏好。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
 | 工作与通信 | `/areas/work-communications` | 工作与通信区域目录：持久保存的跨会话工作清单与受治理的通信。列出您的权限允许访问的条目。 | 任何已登录用户 | — |

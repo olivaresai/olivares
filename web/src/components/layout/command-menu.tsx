@@ -5,10 +5,10 @@ import { EditionBadge } from '@/features/console/edition-badge'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useRouterState } from '@tanstack/react-router'
 import {
+  Circle,
   LogOut,
   Moon,
-  PanelLeftClose,
-  PanelLeftOpen,
+  LayoutGrid,
   Play,
   Search,
   Sun,
@@ -50,7 +50,11 @@ import {
   viewById,
   type NavSearchEntry,
 } from '@/features/navigation/model'
-import { isTypingTarget, resolveBinding } from '@/lib/keybindings/model'
+import {
+  chordKeys,
+  isTypingTarget,
+  resolveBinding,
+} from '@/lib/keybindings/model'
 import {
   KEYBINDINGS,
   NAV_LEADER,
@@ -59,9 +63,7 @@ import {
 } from '@/lib/keybindings/table'
 import { useCommandStore } from '@/stores/command'
 import { useThemeStore } from '@/stores/theme'
-import { usePreferencesStore } from '@/stores/preferences'
-import { foldOrOverlay } from './sidebar-mode'
-import { frameFor } from './page-frames'
+import { useAreasSheet } from './areas-sheet-store'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { RailRow } from './session-rail-model'
 import { useSessionRail } from './use-session-rail'
@@ -256,6 +258,7 @@ function PaletteBody() {
   const ToolIcon = toolsView?.icon ?? Search
   // Installed objects use the Tools page's authority and its existing scoped reads.
   // Disabled queries may retain cached data: also gate the rows below on readTools.
+  // The installed tools are a superadmin's read, as on the Tools page itself (#2552).
   const readTools = !!isSuperadmin && !!toolsView && navigable(toolsView)
   const queryClient = useQueryClient()
   const toolScope = useMemo(
@@ -353,7 +356,7 @@ function PaletteBody() {
     : rankNavMatches(
         [
           ...authorized.filter((e) => e.kind === 'settings'),
-          ...settingsSearchEntries(t, !!isSuperadmin),
+          ...settingsSearchEntries(t, !!isSuperadmin, navigable),
         ],
         matchQuery,
       )
@@ -538,36 +541,30 @@ function PaletteBody() {
   const showStartSession = shows(startSessionLabel)
   const startBlocked = refusal('sessions:run:write')
   const sessionsPath = viewById('sessions')?.path
-  const startKeys = (
-    KEYBINDINGS.find((rule) => rule.command === 'session.new')?.keys ?? ''
-  )
-    .split('+')
-    .filter(Boolean)
-    .map((part) => (part.toLowerCase() === 'mod' ? '⌘' : part.toUpperCase()))
+  const startKeys = chordKeys(
+    KEYBINDINGS.find((rule) => rule.command === 'session.new')?.keys ?? '',
+  ).map((part) => (part.length === 1 ? part.toUpperCase() : part))
 
   const lightLabel = t('common:theme.light')
   const darkLabel = t('common:theme.dark')
+  const blackLabel = t('common:theme.black')
   const signOutLabel = t('auth:account.signOut')
   const themeLabel = t('common:theme.label')
   const showLight = shows(`${themeLabel} ${lightLabel}`)
   const showDark = shows(`${themeLabel} ${darkLabel}`)
+  const showBlack = shows(`${themeLabel} ${blackLabel}`)
   const showSignOut = shows(signOutLabel)
-  // The palette's fold entry is the sidebar's own gesture (sidebar-mode.ts): on a work page
-  // it unfolds the navigation over the page, elsewhere it folds or unfolds the sidebar.
-  const unfolds =
-    frameFor(window.location.pathname) === 'work' ||
-    usePreferencesStore.getState().sidebarCollapsed
-  const foldLabel = t(
-    unfolds ? 'common:actions.expandSidebar' : 'common:actions.collapseSidebar',
-  )
-  const showFold = shows(foldLabel)
+  // All areas: the directory of every page the top bar does not name as a place.
+  const areasLabel = t('nav:shell.allAreas')
+  const showAreas = shows(areasLabel)
   const anyAction =
     besideSessions.length > 0 ||
     actionItems.length > 0 ||
     showStartSession ||
     showLight ||
     showDark ||
-    showFold ||
+    showBlack ||
+    showAreas ||
     showSignOut
   const visibleSearch = commandOnly
     ? []
@@ -711,20 +708,33 @@ function PaletteBody() {
                 </span>
               </CommandItem>
             ) : null}
-            {showFold ? (
+            {showBlack ? (
               <CommandItem
-                value={`sidebar:fold ${foldLabel}`}
+                value={`theme:black ${themeLabel} ${blackLabel}`}
                 onSelect={() => {
+                  setTheme('black')
                   setOpen(false)
-                  foldOrOverlay(
-                    window.location.pathname,
-                    useCommandStore.getState().opener,
-                  )
                 }}
               >
-                {unfolds ? <PanelLeftOpen /> : <PanelLeftClose />}
+                <Circle />
                 <span className="truncate" data-slot="palette-name">
-                  {markMatch(foldLabel, matchQuery)}
+                  {markMatch(blackLabel, matchQuery)}
+                </span>
+              </CommandItem>
+            ) : null}
+            {showAreas ? (
+              <CommandItem
+                value={`areas:all ${areasLabel}`}
+                onSelect={() => {
+                  // The palette's opener, not the palette input that is about to unmount.
+                  const opener = useCommandStore.getState().opener
+                  setOpen(false)
+                  useAreasSheet.getState().show(opener)
+                }}
+              >
+                <LayoutGrid />
+                <span className="truncate" data-slot="palette-name">
+                  {markMatch(areasLabel, matchQuery)}
                 </span>
               </CommandItem>
             ) : null}

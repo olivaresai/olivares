@@ -185,7 +185,7 @@ const (
 
 // policy_revision columns (an immutable authored-policy revision).
 const (
-	colRevSurface   = "surface"   // managed-settings|hooks|managed-mcp|sandbox|cedar|cedar-managed|cedar-ddil|opa
+	colRevSurface   = "surface"   // managed-*|cedar|cedar-managed|cedar-ddil|opa (managedSurfaceNames)
 	colRevNumber    = "revision"  // monotonic per (tenant, surface)
 	colRevContent   = "content"   // the authored document (JSON / Cedar / Rego source)
 	colRevAuthor    = "author"    // audit-actor string — provenance only, never a secret
@@ -198,7 +198,7 @@ const (
 // rendered bytes are stored verbatim so a pull serves the EXACT bytes that were
 // signed (never a re-derivation that a later canonicalization change could break).
 const (
-	colDistSurface  = "surface"         // managed-settings|hooks|managed-mcp|sandbox
+	colDistSurface  = "surface"         // managed-* (managedSurfaceNames)
 	colDistRevision = "revision"        // the policy_revision this artifact distributes
 	colDistRendered = "rendered"        // the exact distributed bytes (canonical for managed-settings)
 	colDistSHA      = "artifact_sha256" // hex SHA-256 of the rendered bytes
@@ -828,7 +828,9 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Table: observedTable,
 		Fields: []model.FieldSpec{
 			{Name: colObsSurface, Kind: model.KindText, Indexed: true, Principal: pdeclManagedSurface},
-			{Name: colObsScope, Kind: model.KindText, Indexed: true, Principal: model.None("a host or distribution name, validated at claudepolicy_truth.go:628-636 and used as the upsert key: claudepolicy_truth.go:709")},
+			// The check-in self-asserts the host id, which can carry a person's login or name:
+			// scanned like workstation_tool.scope (the same value).
+			{Name: colObsScope, Kind: model.KindText, Indexed: true, Principal: model.Scan(model.ClassEvidence)},
 			// A host's observed copy of a policy document, compared for drift only.
 			{Name: colObsContent, Kind: model.KindText, Principal: model.Scan(model.ClassEvidence)},
 			{Name: colObsContentSHA, Kind: model.KindText, Principal: model.None("a hex digest of the stored content: claudepolicy_truth.go:725, claudepolicy_truth.go:954")},

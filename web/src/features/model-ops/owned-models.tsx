@@ -156,7 +156,8 @@ export function OwnedModelsTab() {
       title={t('owned.title')}
       description={t('owned.description')}
       actions={
-        canWrite ? (
+        canWrite &&
+        !(query.isSuccess && (query.data?.items?.length ?? 0) === 0) ? (
           <Button
             variant="primary"
             size="sm"

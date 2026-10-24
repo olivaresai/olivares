@@ -8,6 +8,8 @@ import { WorkComposer } from '@/components/layout/work-composer'
 import { COMPOSER_INPUT_ID } from '@/components/layout/work-composer-id'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PaneResizeHandle } from '@/components/ui/pane-resize'
+import { usePaneVars } from '@/components/ui/pane-vars'
 import { isTypingTarget, resolveBinding } from '@/lib/keybindings/model'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { cn } from '@/lib/utils'
@@ -20,17 +22,21 @@ import {
   type UnifiedSession,
 } from './provenance'
 import {
+  addressOf,
   WORK_PANES,
   type EvidenceBlock,
   type SessionAddress,
   type WorkPane,
 } from './session-address'
 import { SessionContextPane } from './session-context-pane'
-import { isPinnable, isPinned } from './session-pins'
+import { useSessionMenu } from './session-menu'
+import { isPinnable, isPinned, preferenceStorageKey } from './session-pins'
+import { useAuth } from '@/lib/auth/context'
 import { IconTip } from './icon-tip'
 import { FILTER_FROM, filterSessions } from './session-filter'
 import { groupOf } from './session-groups'
 import { SessionNarrative } from './session-narrative'
+import { BESIDE_PANE, CONTEXT_PANE, LIST_PANE } from './surface-resize'
 import type { SessionResolution } from './use-session-resolution'
 import { WorkRail } from './work-rail'
 import './i18n'
@@ -57,6 +63,8 @@ export interface WorkSurfaceProps {
   onPanel?: (panel: string) => void
   /** The 48 px head of the list column: name, count, New session and the views menu. */
   listHeader?: React.ReactNode
+  /** The foot of the list: what it does not show, and Load more (dev#3120). */
+  listFooter?: React.ReactNode
 }
 
 const paneId = (pane: WorkPane) => `work-pane-${pane}`
@@ -66,31 +74,66 @@ function focusColumn(column: HTMLElement | null) {
   ;(field && !field.disabled ? field : column)?.focus()
 }
 
-/** Where this browser remembers whether the side pane is open. */
+/** The name under which this browser remembers, per person, whether the side pane is open. */
 const PANEL_OPEN_KEY = 'olivares.sessions.sidePane'
-/** The widest screen on which the side pane starts closed. */
-const PANEL_OPEN_MIN_WIDTH = 1441
 
-function storedPanelOpen(): boolean {
+/** Whether this person left the side pane open. CLOSED BY DEFAULT at every width
+ * (dev#3162): the conversation is the page, and the pane opens on demand. A
+ * principal with no partition (a token) is never remembered. */
+function storedPanelOpen(key: string | null): boolean {
+  if (!key) return false
   try {
-    const stored = window.localStorage.getItem(PANEL_OPEN_KEY)
-    if (stored === 'open') return true
-    if (stored === 'closed') return false
+    // A person with no choice yet keeps the one this browser saved for everyone before.
+    const stored =
+      window.localStorage.getItem(key) ??
+      window.localStorage.getItem(PANEL_OPEN_KEY)
+    return stored === 'open'
   } catch {
     // A browser that refuses storage keeps the default.
+    return false
   }
-  return (
-    typeof window !== 'undefined' && window.innerWidth >= PANEL_OPEN_MIN_WIDTH
-  )
 }
 
-function rememberPanelOpen(open: boolean) {
+function rememberPanelOpen(key: string | null, open: boolean) {
+  if (!key) return
   try {
-    window.localStorage.setItem(PANEL_OPEN_KEY, open ? 'open' : 'closed')
+    window.localStorage.setItem(key, open ? 'open' : 'closed')
   } catch {
     // Not remembered: the pane still opens and closes.
   }
 }
+
+/**
+ * WHERE THE SIDE PANE SITS BESIDE THE CONVERSATION: only where the conversation keeps its
+ * 760 px (dev#3162). One column needs the 360 px list, 760 px and the 320 px pane: 1441 px;
+ * two columns need 2 × 760 px: 2201 px. Narrower, the open pane takes the conversation's
+ * place instead of squeezing it, and the list stays beside it; on a phone (below 761 px) it
+ * is the one pane in front.
+ */
+const BESIDE = {
+  one: {
+    grid: 'min-[1441px]:grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)_min(var(--ctx-w),35%)]',
+    toggle: 'min-[1441px]:inline-flex',
+    narrowButton: 'min-[1441px]:hidden',
+    column: 'min-[1441px]:flex',
+    pane: 'max-[760px]:col-span-full min-[1441px]:border-l',
+    paneOpen: 'min-[1441px]:block',
+    paneClosed: 'min-[1441px]:hidden',
+    back: 'min-[1441px]:hidden',
+    close: 'max-[1440px]:hidden',
+  },
+  two: {
+    grid: 'min-[2201px]:grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)_min(var(--ctx-w),35%)]',
+    toggle: 'min-[2201px]:inline-flex',
+    narrowButton: 'min-[2201px]:hidden',
+    column: 'min-[2201px]:flex',
+    pane: 'max-[760px]:col-span-full min-[2201px]:border-l',
+    paneOpen: 'min-[2201px]:block',
+    paneClosed: 'min-[2201px]:hidden',
+    back: 'min-[2201px]:hidden',
+    close: 'max-[2200px]:hidden',
+  },
+} as const
 
 export function WorkSurface({
   sessions,
@@ -109,6 +152,7 @@ export function WorkSurface({
   onOpenDetail,
   emptyAction,
   listHeader,
+  listFooter,
   onPanel,
 }: WorkSurfaceProps) {
   const { t } = useTranslation('sessions')
@@ -116,6 +160,13 @@ export function WorkSurface({
   const split = !!address.beside && !!besideResolution?.target
   const primaryColumn = useRef<HTMLElement>(null)
   const besideColumn = useRef<HTMLElement>(null)
+  // The grids and panes the resize handles measure; each pane's stored width reaches its
+  // grid as a custom property (the stylesheet default applies until one is stored).
+  const surfaceGrid = useRef<HTMLDivElement>(null)
+  const threadsGrid = useRef<HTMLDivElement>(null)
+  const contextColumn = useRef<HTMLElement>(null)
+  const surfaceVars = usePaneVars(LIST_PANE, CONTEXT_PANE)
+  const threadsVars = usePaneVars(BESIDE_PANE)
   const focusedColumn = address.pane === 'beside' ? 'beside' : 'narrative'
   const [inspected, setInspected] = useState<ConversationItem | null>(null)
   const [frameCwd, setFrameCwd] = useState<string | null>(null)
@@ -125,18 +176,35 @@ export function WorkSurface({
   }, [onCloseBeside])
 
   // Keep all panes mounted; the URL selects the visible pane on narrow screens.
-  // THE SIDE PANE IS CLOSED BY DEFAULT up to 1440 px, where the thread needs the width, and
-  // open from there; once a person has opened or closed it, that choice is remembered in
-  // this browser. The address naming it (`?pane=context`) opens it either way.
+  // THE SIDE PANE IS CLOSED BY DEFAULT (dev#3162); once a person has opened or closed it,
+  // that choice is remembered for that person in this browser. The address naming it
+  // (`?pane=context`) opens it either way.
+  const { principal, activeTenant } = useAuth()
+  const panelKey =
+    typeof window === 'undefined'
+      ? null
+      : preferenceStorageKey(
+          PANEL_OPEN_KEY,
+          window.location.origin,
+          principal ?? null,
+          activeTenant ?? null,
+        )
   const [contextOpen, setContextOpenState] = useState(
-    () => address.pane === 'context' || storedPanelOpen(),
+    () => address.pane === 'context' || storedPanelOpen(panelKey),
   )
+  // Another person or organization: read that person's choice, never carry the last one.
+  const [seenPanelKey, setSeenPanelKey] = useState(panelKey)
+  if (seenPanelKey !== panelKey) {
+    setSeenPanelKey(panelKey)
+    setContextOpenState(address.pane === 'context' || storedPanelOpen(panelKey))
+  }
   const setContextOpen = (open: boolean | ((was: boolean) => boolean)) =>
     setContextOpenState((was) => {
       const next = typeof open === 'function' ? open(was) : open
-      rememberPanelOpen(next)
+      rememberPanelOpen(panelKey, next)
       return next
     })
+  const beside = split ? BESIDE.two : BESIDE.one
   const [seenPane, setSeenPane] = useState(address.pane)
   if (seenPane !== address.pane) {
     setSeenPane(address.pane)
@@ -173,7 +241,7 @@ export function WorkSurface({
         aria-label={t('surface.pane.context')}
         data-testid="context-toggle"
         onClick={() => setContextOpen((open) => !open)}
-        className="hidden aria-pressed:bg-active xl:inline-flex"
+        className={cn('hidden aria-pressed:bg-active', beside.toggle)}
       >
         <PanelRight />
       </Button>
@@ -188,7 +256,7 @@ export function WorkSurface({
         aria-label={t('surface.pane.context')}
         data-testid="pane-button-context"
         onClick={() => onPane('context')}
-        className="max-[760px]:hidden xl:hidden"
+        className={cn('max-[760px]:hidden', beside.narrowButton)}
       >
         <PanelRight />
       </Button>
@@ -290,6 +358,17 @@ export function WorkSurface({
     [showFilter, sessions, query, t],
   )
   const noMatch = showFilter && query.trim() !== '' && shown.length === 0
+  const railSection = useRef<HTMLElement>(null)
+  const menu = useSessionMenu(resolution.grants, (address) => {
+    // Back to the row the dialog acted on; a row that left the list (archived, deleted)
+    // hands focus to the rail's own tab stop instead of the page.
+    const rail = railSection.current
+    const row =
+      rail?.querySelector<HTMLElement>(
+        `[role="option"][data-address="${CSS.escape(address)}"]`,
+      ) ?? rail?.querySelector<HTMLElement>('[role="option"][tabindex="0"]')
+    row?.focus()
+  })
   const rail = (
     <WorkRail
       sessions={shown}
@@ -298,6 +377,15 @@ export function WorkSurface({
       onOpenBeside={selected ? onOpenBeside : undefined}
       pinned={pinned}
       onTogglePin={onTogglePin}
+      rowMenu={(s) =>
+        menu.items(s, {
+          pinned: isPinned(pinned, s),
+          onTogglePin:
+            onTogglePin && isPinnable(s)
+              ? () => onTogglePin(addressOf(s), s)
+              : null,
+        })
+      }
       emptyAction={emptyAction}
       loading={loading}
     />
@@ -382,6 +470,7 @@ export function WorkSurface({
           <div className="grid min-h-0 flex-1 place-items-center overflow-y-auto">
             {rail}
           </div>
+          {listFooter}
         </section>
       </div>
     )
@@ -392,27 +481,32 @@ export function WorkSurface({
       data-testid="work-surface"
     >
       <div
+        ref={surfaceGrid}
         data-context={contextOpen ? 'open' : 'closed'}
+        style={surfaceVars}
         className={cn(
           // The list is 360 px wide, 280 px at 1360 px and below; the thread takes the rest
           // and the context pane (20 rem) joins them only on a wide screen. A row spends
           // 161 px on the icon, padding, state and time, and a title like "Claude Code ·
           // billing-api" or "Claude Code" with a session tail needs 163 to 181 px of text:
           // measured at 1440 px, the title had 103 px at 300 and 179 at 340.
-          'grid min-h-0 flex-1 [--list-w:360px] max-[1360px]:[--list-w:280px]',
-          'min-[761px]:grid-cols-[var(--list-w)_minmax(0,1fr)]',
-          contextOpen &&
-            'xl:grid-cols-[var(--list-w)_minmax(0,1fr)_var(--console-inspector-width)]',
+          // A person can drag either edge (--list-w, --ctx-w are then set inline); each
+          // pane stops at 35% of the surface, so a width stored on a wide screen never
+          // squeezes the thread on a narrow one.
+          'relative grid min-h-0 flex-1 [--ctx-w:var(--console-inspector-width)] [--list-w:360px] max-[1360px]:[--list-w:280px]',
+          'min-[761px]:grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)]',
+          contextOpen && beside.grid,
         )}
       >
         <section
+          ref={railSection}
           id={paneId('rail')}
           aria-label={t('surface.pane.rail')}
           className={cn(
             'flex min-h-0 min-w-0 flex-col border-line min-[761px]:border-r',
-            (address.pane === 'narrative' || address.pane === 'beside') &&
-              'hidden min-[761px]:flex',
-            address.pane === 'context' && 'hidden xl:flex',
+            // The list stays beside whatever is in front from 761 px: the thread, the
+            // thread beside it, or the side pane that took the thread's place.
+            address.pane !== 'rail' && 'hidden min-[761px]:flex',
           )}
         >
           {listHeader}
@@ -442,13 +536,26 @@ export function WorkSurface({
               rail
             )}
           </div>
+          {listFooter}
+          {menu.dialogs}
         </section>
+        {/* Where the list ends: below 761 px the list is a screen of its own; from there it
+            stays beside whatever is in front, so its edge does too. */}
+        <PaneResizeHandle
+          pane={LIST_PANE}
+          container={surfaceGrid}
+          target={railSection}
+          grow={1}
+          label={t('surface.resize.rail')}
+          style={{ left: 'min(var(--list-w), 35%)' }}
+          className="-translate-x-1/2 max-[760px]:hidden"
+        />
 
         <div
           className={cn(
             'flex min-h-0 min-w-0 flex-col overflow-hidden',
             address.pane === 'rail' && 'hidden min-[761px]:flex',
-            address.pane === 'context' && 'hidden xl:flex',
+            address.pane === 'context' && ['hidden', beside.column],
           )}
         >
           {split ? (
@@ -491,9 +598,14 @@ export function WorkSurface({
             </div>
           ) : null}
           <div
+            ref={threadsGrid}
+            style={threadsVars}
             className={cn(
-              'grid min-h-0 min-w-0 flex-1',
-              split && 'min-[1280px]:grid-cols-2',
+              'relative grid min-h-0 min-w-0 flex-1',
+              // Two threads split the width evenly until a person drags the divider
+              // (--beside-w, the second thread's width), within 30% to 70%.
+              split &&
+                '[--beside-w:50%] min-[1280px]:grid-cols-[minmax(0,1fr)_clamp(30%,var(--beside-w),70%)]',
             )}
           >
             <section
@@ -514,7 +626,7 @@ export function WorkSurface({
                 split &&
                   'outline-none focus-within:ring-1 focus-within:ring-focus focus-within:ring-inset',
                 address.pane === 'rail' && 'hidden min-[761px]:flex',
-                address.pane === 'context' && 'hidden xl:flex',
+                address.pane === 'context' && ['hidden', beside.column],
                 split &&
                   address.pane === 'beside' &&
                   'hidden min-[1280px]:flex',
@@ -540,16 +652,42 @@ export function WorkSurface({
                 {column(besideResolution, true)}
               </section>
             ) : null}
+            {split && besideResolution ? (
+              <PaneResizeHandle
+                pane={BESIDE_PANE}
+                container={threadsGrid}
+                target={besideColumn}
+                grow={-1}
+                label={t('surface.resize.beside')}
+                style={{ right: 'clamp(30%, var(--beside-w), 70%)' }}
+                className="translate-x-1/2 max-[1279px]:hidden"
+              />
+            ) : null}
           </div>
         </div>
 
+        {/* Only beside the thread (where it keeps 760 px, pane open): below that the pane
+            replaces it. */}
+        {contextOpen ? (
+          <PaneResizeHandle
+            pane={CONTEXT_PANE}
+            container={surfaceGrid}
+            target={contextColumn}
+            grow={-1}
+            label={t('surface.resize.context')}
+            style={{ right: 'min(var(--ctx-w), 35%)' }}
+            className={cn('translate-x-1/2', beside.close)}
+          />
+        ) : null}
         <section
+          ref={contextColumn}
           id={paneId('context')}
           aria-label={t('surface.pane.context')}
           className={cn(
-            'min-h-0 overflow-y-auto border-line p-4 max-xl:col-span-full xl:border-l',
+            'min-h-0 min-w-0 overflow-y-auto border-line p-4',
+            beside.pane,
             address.pane !== 'context' && 'hidden',
-            contextOpen ? 'xl:block' : 'xl:hidden',
+            contextOpen ? beside.paneOpen : beside.paneClosed,
           )}
         >
           <div className="mb-2 flex items-center justify-between">
@@ -563,7 +701,7 @@ export function WorkSurface({
               title={t('surface.backTo', { pane: t('surface.pane.narrative') })}
               data-testid="pane-button-narrative"
               onClick={() => onPane('narrative')}
-              className="xl:hidden"
+              className={beside.back}
             >
               <ArrowLeft />
             </Button>
@@ -574,7 +712,7 @@ export function WorkSurface({
               aria-label={t('surface.closeContext')}
               title={t('surface.closeContext')}
               data-testid="context-close"
-              className="ml-auto max-xl:hidden"
+              className={cn('ml-auto', beside.close)}
             >
               <X />
             </Button>

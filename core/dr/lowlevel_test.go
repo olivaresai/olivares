@@ -105,7 +105,7 @@ func TestBundleRoundTrip(t *testing.T) {
 	tn := src.newTenant(t)
 	src.appendN(t, tn, 2)
 	b := makeBundle(t, src)
-	dir, m, kek := extractBundle(t, b)
+	dir, m, kek := extractBundleRaw(t, b)
 	if m.Format != dr.ManifestFormat {
 		t.Fatalf("format = %q", m.Format)
 	}
@@ -136,12 +136,14 @@ func TestBundleIntegrityRejectsAlteredDigestAndPayload(t *testing.T) {
 	tn := src.newTenant(t)
 	src.appendN(t, tn, 2)
 	b := makeBundle(t, src)
-	dir, m, kek := extractBundle(t, b)
+	dir, m, kek := extractBundleRaw(t, b)
 	cipher, err := dr.OpenCipher([]byte(testPass), kek)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := dr.VerifyBundleIntegrity(dir, m, kek, cipher, false); err != nil {
+	// Positive control on a second extraction: opening the snapshot consumes the sealed member.
+	okDir, okM, _ := extractBundleRaw(t, b)
+	if err := dr.VerifyBundleIntegrity(okDir, okM, kek, cipher, false); err != nil {
 		t.Fatalf("positive control: %v", err)
 	}
 
@@ -152,7 +154,7 @@ func TestBundleIntegrityRejectsAlteredDigestAndPayload(t *testing.T) {
 	}
 	m.Files[0].SHA256 = original
 
-	snapshot := filepath.Join(dir, m.Store.File)
+	snapshot := filepath.Join(dir, m.Store.File+".enc")
 	f, err := os.OpenFile(snapshot, os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -174,12 +176,33 @@ func TestBundleIntegrityRequiresExplicitLegacyException(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := &dr.Manifest{Format: dr.ManifestFormat}
+	m := &dr.Manifest{Format: dr.ManifestFormatV1}
 	if err := dr.VerifyBundleIntegrity(t.TempDir(), m, cipher.Params(), cipher, false); err == nil || !strings.Contains(err.Error(), "unsigned") {
 		t.Fatalf("unsigned legacy bundle was not refused: %v", err)
 	}
 	if err := dr.VerifyBundleIntegrity(t.TempDir(), m, cipher.Params(), cipher, true); err != nil {
 		t.Fatalf("explicit legacy exception did not work: %v", err)
+	}
+}
+
+// The legacy exception is for pre-v2 bundles. An unsigned manifest proves nothing about
+// itself, so it must not be able to claim the sealed format and skip the opening of
+// a snapshot nothing would then check.
+func TestBundleIntegrityLegacyExceptionRefusesAnUnsignedManifestClaimingTheSealedFormat(t *testing.T) {
+	cipher, err := dr.NewRawKeyCipher(make([]byte, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, m := range map[string]*dr.Manifest{
+		"v2 format":         {Format: dr.ManifestFormat},
+		"v1 format, sealed": {Format: dr.ManifestFormatV1, Store: dr.StoreSnapshot{Encryption: "aes-256-gcm-chunked-v1"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := dr.VerifyBundleIntegrity(t.TempDir(), m, cipher.Params(), cipher, true)
+			if err == nil || !strings.Contains(err.Error(), "only accepts a pre-v2 bundle") {
+				t.Fatalf("an unsigned manifest claiming the sealed format passed the legacy exception: %v", err)
+			}
+		})
 	}
 }
 

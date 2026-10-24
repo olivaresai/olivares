@@ -192,6 +192,17 @@ describe('AlertingView', () => {
     expect(api.listRoutes).not.toHaveBeenCalled()
   })
 
+  // A routes list that could not be read is not an empty one: the page-level
+  // New route stays in place, because the error state offers no action.
+  it('keeps the page-level New route while the routes could not be read', async () => {
+    api.listRoutes.mockRejectedValue(new Error('down'))
+    wrap(<AlertingView />)
+    await screen.findByRole('alert')
+    expect(
+      await screen.findByRole('button', { name: /new route/i }),
+    ).toBeInTheDocument()
+  })
+
   it('keeps route History available with read permission alone', async () => {
     authState.can = (permission) => permission === 'notify:route:read'
     const user = userEvent.setup()
@@ -1038,4 +1049,22 @@ describe('AlertingView · dead letters', () => {
       expect(api.listDestinations).toHaveBeenCalled()
     },
   )
+})
+
+/**
+ * ONE ORANGE PER FIRST SCREEN (dev#2673's console rule 2026-10-17): while a
+ * read list is empty, the page header's verb steps aside and the empty state
+ * carries the verb's single fill (main e601803a8, dfff8c3ad).
+ */
+describe('AlertingView — one orange control on an empty route list', () => {
+  it('offers the verb in the empty state only, never as a page-level New route button', async () => {
+    api.listRoutes.mockResolvedValue({ items: [], has_more: false })
+    wrap(<AlertingView />)
+    expect(await screen.findByText('No routes yet')).toBeInTheDocument()
+    const buttons = await screen.findAllByRole('button', {
+      name: 'New route',
+    })
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0].className).toContain('bg-accent')
+  })
 })

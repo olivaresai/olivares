@@ -31,6 +31,7 @@ import { useAuth } from '@/lib/auth/context'
 import { usePendingCommandAction } from '@/features/navigation/command-actions'
 import { agentOpsKeys } from '@/features/agentops/api'
 import { consoleApi, consoleKeys } from '@/features/console/api'
+import { governanceKeys } from '@/features/governance/api'
 import { killswitchApi, killswitchKeys } from './api'
 import './i18n'
 import type { EngageKillSwitchRequest } from './types'
@@ -49,11 +50,16 @@ function useEngage(close: () => void, clear: () => void) {
   const { activeTenant } = useAuth()
   const queryClient = useQueryClient()
 
-  // The stop's own state is awaited; the session list refreshes in the background, so a
-  // slow runs read never holds the confirmation open after the stop landed.
+  // The stop's own state is awaited; the session list and the approvals refresh in the
+  // background, so a slow read never holds the confirmation open after the stop landed.
+  // The approvals: the stop cancels the pending requests of the sessions it ends, and Now
+  // and Rules read them under this key; they drop them now, not at their next poll.
   const invalidate = () => {
     void queryClient.invalidateQueries({
       queryKey: agentOpsKeys.runs(activeTenant),
+    })
+    void queryClient.invalidateQueries({
+      queryKey: governanceKeys.approvals(activeTenant),
     })
     return queryClient.invalidateQueries({
       queryKey: killswitchKeys.all(activeTenant),
@@ -64,8 +70,9 @@ function useEngage(close: () => void, clear: () => void) {
     mutationFn: (input: EngageKillSwitchRequest) => killswitchApi.engage(input),
     onSuccess: async (dto) => {
       await invalidate()
+      // What the stop canceled, as the engine counted it.
       toast.success(t('engage.done'), {
-        description: t('engage.doneBody', { id: dto.id }),
+        description: `${t('engage.doneBody', { id: dto.id })} ${t('banner.revoked', { count: dto.revoked_approvals })}`,
       })
       close()
       clear()
@@ -115,14 +122,24 @@ function ReasonField({
   )
 }
 
-/** THE verb of the kill-switch screen: stop every agent, after one confirmation. */
-export function StopAllAction({ estateStopped }: { estateStopped: boolean }) {
+/**
+ * The Stop all confirmation, opened by the kill switch's own button and by the status
+ * bar's (#3161). `running`, when the opener knows it, says how many sessions stop.
+ */
+export function StopAllConfirm({
+  open,
+  onOpenChange,
+  running,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  running?: number
+}) {
   const { t } = useTranslation(['killswitch', 'common'])
   const { activeTenant } = useAuth()
-  const [open, setOpen] = useState(false)
   const [reason, setReason] = useState('')
   const { engage, reasonOrDefault } = useEngage(
-    () => setOpen(false),
+    () => onOpenChange(false),
     () => setReason(''),
   )
   // HU 047 (09b, one-admin install): starting the estate again needs two OTHER admin
@@ -138,6 +155,48 @@ export function StopAllAction({ estateStopped }: { estateStopped: boolean }) {
     (m) => m.status === 'active' && (m.role === 'admin' || m.role === 'owner'),
   ).length
   const fewAdmins = !roster.isSuccess || activeAdmins < 3
+
+  return (
+    <ConfirmDialog
+      open={open}
+      onOpenChange={(o) => !engage.isPending && onOpenChange(o)}
+      title={t('engage.confirmTitleEstate')}
+      description={
+        // With the two-admin line below, the body drops its own restart sentence: one
+        // clear sentence about starting again, not two (Root, 047 review).
+        fewAdmins
+          ? t('engage.confirmBodyEstateNoRestart')
+          : t('engage.confirmBodyEstate')
+      }
+      tone="danger"
+      confirmLabel={t('engage.stopAll')}
+      pending={engage.isPending}
+      onConfirm={() =>
+        engage.mutate({
+          scope_kind: 'estate',
+          reason: reasonOrDefault(reason),
+        })
+      }
+    >
+      {running ? (
+        <p className="text-body font-semibold" data-slot="stops-running">
+          {t('engage.stopsRunning', { count: running })}
+        </p>
+      ) : null}
+      {fewAdmins ? (
+        <p className="text-body text-warning" data-slot="restart-needs-admins">
+          {t('engage.restartNeedsAdmins')}
+        </p>
+      ) : null}
+      <ReasonField value={reason} onChange={setReason} />
+    </ConfirmDialog>
+  )
+}
+
+/** THE verb of the kill-switch screen: stop every agent, after one confirmation. */
+export function StopAllAction({ estateStopped }: { estateStopped: boolean }) {
+  const { t } = useTranslation(['killswitch', 'common'])
+  const [open, setOpen] = useState(false)
   // ⌘K "Stop all agents" (registry `killswitch.engage`, governance:killswitch:admin):
   // open the confirmation. Nothing is engaged here — the stop still needs its confirm.
   usePendingCommandAction('killswitch', 'engage', () => setOpen(true))
@@ -146,44 +205,14 @@ export function StopAllAction({ estateStopped }: { estateStopped: boolean }) {
     <>
       <Button
         variant="destructive"
-        disabled={estateStopped || engage.isPending}
+        disabled={estateStopped}
         title={estateStopped ? t('banner.estateTitle') : undefined}
         onClick={() => setOpen(true)}
       >
         <OctagonAlert aria-hidden />
         {t('engage.stopAll')}
       </Button>
-      <ConfirmDialog
-        open={open}
-        onOpenChange={(o) => !engage.isPending && setOpen(o)}
-        title={t('engage.confirmTitleEstate')}
-        description={
-          // With the two-admin line below, the body drops its own restart sentence: one
-          // clear sentence about starting again, not two (Root, 047 review).
-          fewAdmins
-            ? t('engage.confirmBodyEstateNoRestart')
-            : t('engage.confirmBodyEstate')
-        }
-        tone="danger"
-        confirmLabel={t('engage.stopAll')}
-        pending={engage.isPending}
-        onConfirm={() =>
-          engage.mutate({
-            scope_kind: 'estate',
-            reason: reasonOrDefault(reason),
-          })
-        }
-      >
-        {fewAdmins ? (
-          <p
-            className="text-body text-warning"
-            data-slot="restart-needs-admins"
-          >
-            {t('engage.restartNeedsAdmins')}
-          </p>
-        ) : null}
-        <ReasonField value={reason} onChange={setReason} />
-      </ConfirmDialog>
+      <StopAllConfirm open={open} onOpenChange={setOpen} />
     </>
   )
 }

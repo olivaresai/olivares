@@ -60,6 +60,11 @@ SystemCallFilter=capset
 # namespace-local capability. The engine keeps no host capability, so a mount
 # outside that namespace still fails.
 SystemCallFilter=mount
+# The session helper raises each tool's nice value (+10) before it executes the
+# tool. setpriority is in @resources; raising one's own nice value needs no
+# privilege, and lowering it needs CAP_SYS_NICE, which the bounding set below
+# never grants.
+SystemCallFilter=setpriority
 @STATE_DIRECTORY_LINE@
 ReadWritePaths=@DATA_DIR@
 CapabilityBoundingSet=

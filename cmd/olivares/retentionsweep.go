@@ -50,6 +50,10 @@ type retentionSweepLoop struct {
 	interval time.Duration
 	log      *slog.Logger
 	skips    enumerationSkips
+	// active says the compliance module runs now. The sweep is scheduled before the
+	// engine starts and compliance can be turned on or off later, so the tick asks;
+	// nil means always.
+	active func() bool
 }
 
 // newRetentionSweepLoop builds the loop from the environment. nil when the
@@ -100,6 +104,9 @@ func (l *retentionSweepLoop) register(rt *runtime.Runtime) error {
 // idempotent: the next run re-counts by the same age predicate). Logged fields
 // are COUNTS ONLY — never row content (docs/SECURITY-HARDENING.md).
 func (l *retentionSweepLoop) runOnce(ctx context.Context) error {
+	if l.active != nil && !l.active() {
+		return nil
+	}
 	if !l.st.Leader().Active() {
 		l.log.Debug("retention-sweep skipped: this node is a standby, not the active writer")
 		return nil

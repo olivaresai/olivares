@@ -291,3 +291,11 @@ path = ["appliance/images/toolchain/almalinux10/RPM-GPG-KEY-EPEL-10"]
 precedence = "override"
 SPDX-FileCopyrightText = "The Fedora Project (EPEL 10 public signing key, unmodified)"
 SPDX-License-Identifier = "LicenseRef-Third-Party-Public-Key"
+
+# Docker's release key, with which the stage step checks Docker's RPMs before the image takes them. Published by Docker,
+# Inc., kept byte for byte and pinned by sha256 and fingerprint in the recipe's lock; it is not Olivares code.
+[[annotations]]
+path = ["appliance/images/kiwi/RPM-GPG-KEY-docker"]
+precedence = "override"
+SPDX-FileCopyrightText = "Docker, Inc. (Docker Release (CE rpm) public signing key, unmodified)"
+SPDX-License-Identifier = "LicenseRef-Third-Party-Public-Key"

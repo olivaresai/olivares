@@ -106,14 +106,14 @@
     "execute": "Execute",
     "executeConfirm": "Execute and spend",
     "input": "Input",
-    "executeHint": "Resolve is free. Execute calls the provider and spends against your budget.",
-    "executeWarning": "This runs the resolved model chain against the real provider and records a cost sample. It is not a simulation — use Resolve to preview the decision without spending.",
+    "executeHint": "La résolution est gratuite. Exécuter appelle le fournisseur et dépense sur votre budget.",
+    "executeWarning": "Ceci exécute la chaîne de modèles résolue contre le vrai fournisseur et enregistre un échantillon de coût. Ce n’est pas une simulation — utilisez Résoudre pour prévisualiser la décision sans dépenser.",
     "noExecutor": "Aucun exécuteur n’est provisionné. Ce n’est pas une panne : le plan de contrôle résout les décisions de routage mais ne dépense jamais auprès d’un fournisseur tant qu’un opérateur n’a pas configuré d’exécuteur.",
-    "budgetDenied": "A FinOps budget denied the spend BEFORE any provider call. The governance gate worked — raise or review the budget rather than retrying.",
+    "budgetDenied": "Un budget FinOps a refusé la dépense AVANT tout appel au fournisseur. Le verrou de gouvernance a fonctionné — augmentez ou révisez le budget plutôt que de réessayer.",
     "fallbackUsed": "fallback used",
     "refusal": "provider refusal",
-    "tokens": "{{in}} in · {{out}} out",
-    "outputNotStored": "The output is returned to you and stored nowhere: only a redacted cost sample reaches the ledger.",
+    "tokens": "{{in}} entrée · {{out}} sortie",
+    "outputNotStored": "La sortie vous est renvoyée et n’est stockée nulle part : seul un échantillon de coût expurgé atteint le registre.",
     "truncated": "{{n}} politiques chargées ; il y en a d'autres",
     "truncatedHint": "Il y a plus de politiques de routage que celles affichées ; cette page prend des lignes par id. Une politique absente ici ne démontre pas qu'aucune ne route une requête donnée."
   },
@@ -178,7 +178,7 @@
       "copyright_policy": "Politique de droit d'auteur enregistrée",
       "downstream_info": "Informations en aval fournies",
       "systemic_risk": "GPAI présentant un risque systémique",
-      "safety_report": "Safety & Security Model Report"
+      "safety_report": "Rapport sécurité et sûreté du modèle"
     },
     "states": {
       "recorded": "Enregistrée",
@@ -225,7 +225,7 @@
   "empty": {
     "keyRefs": {
       "title": "Aucune référence de clé de fournisseur ajoutée",
-      "description": "Ajoutez une référence de clé API ou d’espace de travail à partir de son identifiant chez le fournisseur ; la console n’accepte ni ne stocke la valeur du secret."
+      "description": "Ajoutez une référence de clé d’API ou d’espace de travail à partir de son identifiant chez le fournisseur ; la console n’accepte ni ne stocke la valeur du secret."
     },
     "models": {
       "title": "Aucun modèle gouverné observé",
@@ -233,29 +233,29 @@
     }
   },
   "residency": {
-    "title": "Résidence par workspace",
-    "description": "Où chaque workspace traite l'inférence et où ses données reposent, tel que le fournisseur le rapporte.",
-    "empty": "Aucun workspace ne rapporte de paramètres de résidence",
+    "title": "Résidence par espace de travail",
+    "description": "Où chaque espace de travail traite l’inférence et où ses données reposent, tel que le fournisseur le rapporte.",
+    "empty": "Aucun espace de travail ne rapporte de paramètres de résidence",
     "emptyHint": "Les paramètres de résidence indiquent dans quelles régions un espace de travail peut appeler des modèles. Aucun espace n’en a déclaré.",
     "unrestricted": "Le fournisseur ne rapporte aucune restriction",
     "allowed": "Autorisées : {{geos}}",
     "unreported": "non rapporté",
     "defaultGeo": "par défaut : {{geo}}",
     "atRest": "au repos : {{geo}}",
-    "truncated": "{{n}} workspaces chargés ; il y en a d'autres",
-    "truncatedHint": "Il y a plus d'enregistrements de résidence que ceux affichés ; cette page prend des lignes par id — attribué à la création —, les suivantes manquent. Un workspace absent ici ne démontre pas que son traitement est sans restriction : il peut simplement se trouver au-delà de cette page."
+    "truncated": "{{n}} espaces de travail chargés ; il y en a d’autres",
+    "truncatedHint": "Il y a plus d’enregistrements de résidence que ceux affichés ; cette page prend des lignes par id — attribué à la création —, les suivantes manquent. Un espace de travail absent ici ne démontre pas que son traitement est sans restriction : il peut simplement se trouver au-delà de cette page."
   },
   "access": {
     "title": "Model access rules",
-    "description": "Who may use which model, and where.",
-    "empty": "No access rules — every subject is unrestricted",
+    "description": "Qui peut utiliser quel modèle, et où.",
+    "empty": "Aucune règle d’accès — chaque sujet est sans restriction",
     "emptyHint": "Une règle d’accès indique quels sujets peuvent appeler quels modèles. Sans règle, chaque sujet peut appeler tous les modèles du parc.",
     "groupsTitle": "Model groups",
-    "groupsDescription": "Named sets a rule can target instead of a single model.",
+    "groupsDescription": "Ensembles nommés qu’une règle peut cibler au lieu d’un seul modèle.",
     "groupsEmpty": "No model groups",
     "groupsEmptyHint": "Un groupe de modèles nomme un ensemble de modèles pour qu’une seule règle les gouverne tous. Créez-en un pour commencer.",
     "members": "{{n}} members",
-    "confinementNotice": "⛔ An allow is not only additive. A subject NAMED by any allow is CONFINED to its allows — everything else becomes denied for them. A subject named by no rule is unrestricted. So creating the FIRST allow for someone TAKES AWAY the rest of the catalogue from them.",
+    "confinementNotice": "⛔ Une autorisation n’est pas seulement additive. Un sujet NOMMÉ par une autorisation est CONFINÉ à ses autorisations — tout le reste lui devient interdit. Un sujet qu’aucune règle ne nomme est sans restriction. Créer la PREMIÈRE autorisation pour quelqu’un lui RETIRE donc le reste du catalogue.",
     "effect": {
       "allow": "allow",
       "forbid": "forbid"
@@ -264,8 +264,8 @@
     "inWorkspace": "in {{ws}}",
     "allSurfaces": "all surfaces",
     "onSurfaces": "on {{list}}",
-    "forbidSubtracts": "This forbid SUBTRACTS: it overrides any allow naming the same subject.",
-    "confinedSubject": "{{subject}} is confined to its allows — anything not listed is denied for them.",
+    "forbidSubtracts": "Cette interdiction SOUSTRAIT : elle prime toute autorisation nommant le même sujet.",
+    "confinedSubject": "{{subject}} est confiné à ses autorisations — tout ce qui n’est pas listé lui est interdit.",
     "readOnlyNote": "Lecture seule : modifier qui peut utiliser un modèle exige l’administration de l’accès aux modèles, un niveau au-dessus de la modification d’une politique de routage.",
     "truncated": "{{n}} règles chargées ; il y en a d'autres",
     "truncatedHint": "Il y a plus de règles d'accès que celles affichées ; cette page prend des lignes par id. Les marques de ces lignes ne reflètent QUE les règles chargées : des allow qui introduiraient un confinement ou ajouteraient des cibles autorisées peuvent manquer, et des forbid qui retirent de l'accès aussi — cette page peut donc paraître plus large OU plus étroite que la réalité, et un sujet sans aucune règle chargée n'apparaît même pas. N'en déduis pas l'accès effectif : le moteur parcourt toutes les pages avant de décider, et résout un principal par utilisateur, rôle et groupe à la fois, ce qu'une ligne ne peut pas montrer.",

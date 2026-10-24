@@ -4,7 +4,7 @@
 //
 // A session's lifecycle actions (interrupt the turn, stop, resume, clean up, delete), shared
 // by the session card and the session header, and driven by the same capability model the
-// card shows.
+// card shows. Delete's question is shared with a session row's menu too.
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowRightLeft,
@@ -145,25 +145,12 @@ export function RunActions({
     },
     onError: onErr,
   })
-  const del = useMutation({
-    // A stopped or failed session is cleaned up first: the server deletes only a
-    // cleaned record, and "Delete" is one action for the person asking.
-    mutationFn: async () => {
-      const ref = run?.run_ref as string
-      if (run?.state !== 'cleaned')
-        await agentOpsApi.cleanup(ref, discardWorktree)
-      return agentOpsApi.deleteRun(ref)
-    },
-    onSuccess: () => {
-      closeConfirm()
-      invalidate()
-      onClose()
-    },
-    onError: onErr,
-  })
 
   const allow = (id: Capability['id']) =>
     (!only || only.includes(id)) && caps.some((c) => c.id === id && c.available)
+  // A Stop question whose session stopped meanwhile is dropped, so it cannot come back
+  // by itself the next time Stop is offered.
+  if (confirm === 'stop' && !allow('stop')) setConfirm(null)
   if (!run) return null
   if (
     !allow('interrupt') &&
@@ -173,6 +160,20 @@ export function RunActions({
     !allow('delete')
   )
     return null
+
+  // ONE STOP QUESTION FOR BOTH FORMS: the header's icon and the card's labelled button
+  // both ask first while the person's Stop setting says so (#2549).
+  const stopConfirm = (
+    <ConfirmDialog
+      open={confirm === 'stop'}
+      onOpenChange={(o) => !o && setConfirm(null)}
+      title={tSettings('stopConfirm.title')}
+      description={tSettings('stopConfirm.description')}
+      confirmLabel={tSettings('stopConfirm.confirm')}
+      pending={stop.isPending}
+      onConfirm={() => stop.mutate()}
+    />
+  )
 
   if (compact)
     return (
@@ -244,15 +245,7 @@ export function RunActions({
               )}
             </>
           )}
-        <ConfirmDialog
-          open={confirm === 'stop'}
-          onOpenChange={(o) => !o && setConfirm(null)}
-          title={tSettings('stopConfirm.title')}
-          description={tSettings('stopConfirm.description')}
-          confirmLabel={tSettings('stopConfirm.confirm')}
-          pending={stop.isPending}
-          onConfirm={() => stop.mutate()}
-        />
+        {stopConfirm}
       </div>
     )
 
@@ -278,7 +271,7 @@ export function RunActions({
         <Button
           variant="secondary"
           size="sm"
-          onClick={() => stop.mutate()}
+          onClick={() => (confirmStop ? setConfirm('stop') : stop.mutate())}
           disabled={stop.isPending}
         >
           <Square className="size-3.5" />
@@ -339,6 +332,7 @@ export function RunActions({
           {t('card.actions.delete')}
         </Button>
       )}
+      {stopConfirm}
       <ConfirmDialog
         open={confirm === 'cleanup'}
         onOpenChange={(o) => !o && closeConfirm()}
@@ -356,24 +350,96 @@ export function RunActions({
           />
         )}
       </ConfirmDialog>
-      <ConfirmDialog
+      <DeleteRunDialog
+        // A cleanup made for one run says nothing about the next one the card shows.
+        key={run.run_ref}
+        run={run}
         open={confirm === 'delete'}
         onOpenChange={(o) => !o && closeConfirm()}
-        tone="danger"
-        title={t('card.actions.delete')}
-        description={t('card.actions.deleteHint')}
-        confirmLabel={t('card.actions.delete')}
-        pending={del.isPending}
-        onConfirm={() => del.mutate()}
-      >
-        {run.worktree_branch && run.state !== 'cleaned' && (
-          <DiscardWorktreeOption
-            branch={run.worktree_branch}
-            checked={discardWorktree}
-            onCheckedChange={setDiscardWorktree}
-          />
-        )}
-      </ConfirmDialog>
+        onDeleted={onClose}
+      />
     </div>
+  )
+}
+
+/**
+ * Delete, asked first: the session card's button and a session row's menu (#2795). A
+ * stopped or failed session is cleaned up first: the server deletes only a cleaned
+ * record, and "Delete" is one action for the person asking.
+ */
+export function DeleteRunDialog({
+  run,
+  open,
+  onOpenChange,
+  onDeleted,
+  onCloseAutoFocus,
+}: {
+  run: RunDTO
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onDeleted?: () => void
+  /** Where focus goes on close, for a dialog opened from a menu (no trigger). */
+  onCloseAutoFocus?: (e: Event) => void
+}) {
+  const { t } = useTranslation('sessions')
+  const { activeTenant } = useAuth()
+  const qc = useQueryClient()
+  // The person's confirmation to discard the session's git worktree and branch with
+  // unmerged or uncommitted work; asked only of a session that has one.
+  const [discardWorktree, setDiscardWorktree] = useState(false)
+  // Released is the run's state NOW, or a cleanup this dialog already made: the card keeps
+  // the dialog mounted while the run changes under it, and a retry after a cleanup that
+  // went through must not clean up again (refused: state=cleaned).
+  const [cleanedHere, setCleanedHere] = useState(false)
+  const cleaned = run.state === 'cleaned' || cleanedHere
+  const close = () => {
+    setDiscardWorktree(false)
+    onOpenChange(false)
+  }
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: agentOpsKeys.all(activeTenant) })
+    void qc.invalidateQueries({ queryKey: sessionsKeys.all(activeTenant) })
+  }
+  const del = useMutation({
+    mutationFn: async () => {
+      if (!cleaned) {
+        await agentOpsApi.cleanup(run.run_ref, discardWorktree)
+        setCleanedHere(true)
+      }
+      return agentOpsApi.deleteRun(run.run_ref)
+    },
+    onSuccess: () => {
+      close()
+      invalidate()
+      onDeleted?.()
+    },
+    onError: (err: unknown) => {
+      // Released but not deleted is a state of its own: the lists must show it.
+      invalidate()
+      toast.error(
+        err instanceof ApiError ? err.message : t('card.actionFailed'),
+      )
+    },
+  })
+  return (
+    <ConfirmDialog
+      open={open}
+      onOpenChange={(o) => (o ? onOpenChange(true) : close())}
+      tone="danger"
+      title={t('card.actions.delete')}
+      description={t('card.actions.deleteHint')}
+      confirmLabel={t('card.actions.delete')}
+      pending={del.isPending}
+      onConfirm={() => del.mutate()}
+      onCloseAutoFocus={onCloseAutoFocus}
+    >
+      {run.worktree_branch && !cleaned && (
+        <DiscardWorktreeOption
+          branch={run.worktree_branch}
+          checked={discardWorktree}
+          onCheckedChange={setDiscardWorktree}
+        />
+      )}
+    </ConfirmDialog>
   )
 }

@@ -590,6 +590,12 @@ const VIEWS: {
     settle: 1500,
     heading: /^Access map$/,
   },
+  {
+    id: 'reach',
+    path: '/reach',
+    settle: 1500,
+    heading: /^Reach$/,
+  },
   { id: 'inventory', path: '/inventory', heading: /^Inventory$/ },
   {
     id: 'communications-protocol-bindings',
@@ -969,12 +975,12 @@ const VIEWS: {
   {
     id: 'areas-deployment',
     path: '/areas/deployment',
-    heading: /^Deployment$/,
+    heading: /^Delivery$/,
   },
   {
     id: 'areas-observation',
     path: '/areas/observation',
-    heading: /^Observability & evidence$/,
+    heading: /^Oversight$/,
   },
   {
     id: 'areas-system',
@@ -1065,30 +1071,30 @@ const VIEWS: {
     },
   },
   { id: 'mcpServers', path: '/mcp-servers', heading: /^MCP servers$/ },
+  // The API key, profile, binding and account pages are doors into Tools (#2552).
   {
     id: 'providers',
     path: '/providers',
     settle: 1000,
-    heading: /^Providers$/,
+    heading: /^AI tools$/,
   },
-  // Each administration route opens its corresponding tab.
   {
     id: 'provider-profiles',
     path: '/provider-profiles',
     settle: 1000,
-    heading: /^Provider profiles$/,
+    heading: /^AI tools$/,
   },
   {
     id: 'provider-bindings',
     path: '/provider-bindings',
     settle: 1000,
-    heading: /^Source bindings$/,
+    heading: /^AI tools$/,
   },
   {
     id: 'provider-accounts',
     path: '/provider-accounts',
     settle: 1000,
-    heading: /^Provider accounts$/,
+    heading: /^AI tools$/,
   },
   {
     id: 'agent-artifacts',
@@ -1541,15 +1547,13 @@ test.describe('Docs captures over real seeded data', () => {
               await page.keyboard.press('Escape')
               await expect(page.getByRole('dialog')).toBeHidden()
             }
-            // Use the theme control so store-driven charts update too. Header-free
-            // views use the CSS-class fallback.
-            const conmutador = page.getByRole('button', {
-              name: 'Toggle theme',
-            })
-            if ((await conmutador.count()) > 0) {
-              await conmutador.click()
+            // Use the theme control so store-driven charts update too: the account
+            // menu's Theme submenu (#3161). Header-free views use the CSS-class fallback.
+            const cuenta = page.getByRole('button', { name: /, Account$/ })
+            if ((await cuenta.count()) > 0) {
+              await cuenta.click()
               await page
-                .getByRole('menuitem', { name: 'Dark', exact: true })
+                .getByRole('menuitemradio', { name: 'Dark', exact: true })
                 .click()
             } else {
               // This fallback applies to CSS-token views without a theme control. The

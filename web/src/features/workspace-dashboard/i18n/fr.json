@@ -1,8 +1,8 @@
 {
   "truncation": {
     "label": "{{n}} lignes chargées ; il y en a d'autres",
-    "hint": "Cet aperçu du workspace est plafonné. Utilisez Tout afficher pour parcourir un inventaire plus large.",
-    "hintCapped": "Cet aperçu du workspace est plafonné."
+    "hint": "Cet aperçu de l’espace de travail est plafonné. Utilisez Tout afficher pour parcourir un inventaire plus large.",
+    "hintCapped": "Cet aperçu de l’espace de travail est plafonné."
   },
   "title": "Vue de l'espace de travail",
   "selectTitle": "Aucun espace de travail sélectionné",

@@ -2,11 +2,11 @@
   "doors": {
     "catalog": {
       "title": "Communications",
-      "description": "Les canaux du workspace sélectionné que vous pouvez lire maintenant, les avis directs envoyés par eux et votre boîte de réception. Le moteur décide de chaque lecture et de chaque action."
+      "description": "Les canaux de l’espace de travail sélectionné que vous pouvez lire maintenant, les avis directs envoyés par eux et votre boîte de réception. Le moteur décide de chaque lecture et de chaque action."
     },
     "inbox": {
       "title": "Boîte de réception des communications",
-      "description": "Les messages qui vous sont adressés dans le workspace sélectionné : ouvrez et accusez réception de chacun."
+      "description": "Les messages qui vous sont adressés dans l’espace de travail sélectionné : ouvrez et accusez réception de chacun."
     },
     "new": {
       "title": "Nouveau canal",
@@ -14,11 +14,11 @@
     },
     "administration": {
       "title": "Administration des canaux",
-      "description": "Les canaux que vous pouvez administrer dans le workspace sélectionné : configuration et historique des droits. Chaque modification ne s’applique qu’à la version lue. Administrer un canal n’exige ni n’accorde le droit de lire son contenu."
+      "description": "Les canaux que vous pouvez administrer dans l’espace de travail sélectionné : configuration et historique des droits. Chaque modification ne s’applique qu’à la version lue. Administrer un canal n’exige ni n’accorde le droit de lire son contenu."
     },
     "handoffs": {
       "title": "Transferts",
-      "description": "Les offres de travail qui vous sont adressées dans le workspace sélectionné. La liste n’affiche pas le contenu des offres ; en ouvrir une lit son contexte, et le moteur décide de chaque acceptation ou refus."
+      "description": "Les offres de travail qui vous sont adressées dans l’espace de travail sélectionné. La liste n’affiche pas le contenu des offres ; en ouvrir une lit son contexte, et le moteur décide de chaque acceptation ou refus."
     }
   },
   "tabs": {
@@ -490,7 +490,7 @@
     "openById": "Administrer un canal par ID",
     "openByIdHint": "La fiche est lue via l'historique des droits sous channel:admin ; elle n'utilise jamais la lecture de canal du niveau lecture.",
     "emptyTitle": "Aucun canal administrable",
-    "emptyBody": "Aucun canal de ce workspace n'accorde à ce principal un bit admin en vigueur, ou aucun ne correspond à l'état persisté sélectionné. Un droit local admin et la permission channel:admin en font apparaître un ici.",
+    "emptyBody": "Aucun canal de cet espace de travail n’accorde à ce principal un bit admin en vigueur, ou aucun ne correspond à l’état persisté sélectionné. Un droit local admin et la permission channel:admin en font apparaître un ici.",
     "truncated": "D'autres canaux administrables existent au-delà de cette page",
     "truncatedHint": "Le serveur a signalé d'autres canaux administrables. Chargez-en plus pour continuer depuis sa continuation."
   },
@@ -515,7 +515,7 @@
     "readFailedBody": "Rien de ce qui était affiché pour ce canal n'est conservé : l'écran doit montrer ce que le moteur autorise maintenant. Relisez une fois la cause résolue."
   },
   "config": {
-    "immutable": "Slug, type, tenant, workspace et les compteurs de génération sont informatifs et immuables ici ; le moteur refuse une modification qui les franchit.",
+    "immutable": "Slug, type, tenant, espace de travail et les compteurs de génération sont informatifs et immuables ici ; le moteur refuse une modification qui les franchit.",
     "advanced": "Options avancées",
     "archivedNote": "Ce canal est archivé. Son état ne peut pas redevenir actif ; sa configuration peut encore être modifiée.",
     "stateHint": "L'archivage est irréversible : un canal archivé ne redevient jamais actif.",
@@ -593,7 +593,6 @@
     "emptyTitle": "Aucune génération",
     "emptyBody": "Aucune génération de droit stockée ne correspond à l'état et au sujet sélectionnés. Un nouveau droit en ajoute une.",
     "temporalHint": "« État stocké » est ce que le moteur a persisté ; « à l'observation » indique si la ligne était en vigueur à l'instant observé. Une expiration passée est signalée, pas matérialisée : elle ne révoque pas la ligne, et un successeur pour ce sujet exige d'abord une révocation explicite.",
-    "snapshotChanged": "Le canal a changé entre deux pages de cet historique ; toutes les pages lues ont été écartées et la liste a redémarré depuis le début (redémarrée {{count}} fois).",
     "detail": {
       "title": "Détail de la génération",
       "id": "ID du droit",
@@ -641,7 +640,10 @@
       "revoked": "Révoqués (stocké)",
       "expired": "Expirés (stocké)",
       "all": "Tous (stocké)"
-    }
+    },
+    "snapshotChanged_one": "Le canal a changé entre deux pages de cet historique ; toutes les pages lues ont été écartées et la liste a redémarré depuis le début ({{count}} redémarrage).",
+    "snapshotChanged_many": "Le canal a changé entre deux pages de cet historique ; toutes les pages lues ont été écartées et la liste a redémarré depuis le début ({{count}} redémarrages).",
+    "snapshotChanged_other": "Le canal a changé entre deux pages de cet historique ; toutes les pages lues ont été écartées et la liste a redémarré depuis le début ({{count}} redémarrages)."
   },
   "cursor": {
     "title": "Marquer vu jusqu'ici",
@@ -662,7 +664,7 @@
     "fields": {
       "scope": "Portée",
       "scopeValue": "page {{page}} de la chaîne chargée ({{count}} remises)",
-      "workspace": "Workspace",
+      "workspace": "Espace de travail",
       "recipient": "Destinataire",
       "lastSubject": "Dernier objet",
       "lastDelivery": "Dernière remise",

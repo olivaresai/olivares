@@ -39,7 +39,37 @@ export interface ConversationItem {
   toolId?: string
   /** How long the tool has been running, from Claude Code's `tool_progress`. */
   toolElapsedSeconds?: number
+  /** When the tool answered (RFC 3339), where the engine said; `at` is when it was called. */
+  toolEndAt?: string
+  /** The call runs in the background (Claude Code `is_backgrounded`): its answer is a
+   * receipt, and its outcome comes with the task's notification. */
+  toolBackground?: boolean
+  /** Where the call stands when the tool says so: still running (an ACP or Codex call
+   * in progress), completed, failed or stopped (Claude Code's task frames). */
+  toolStatus?: 'running' | 'completed' | 'failed' | 'stopped'
+  /** Claude Code's id of the task the call started: a task update names only it. */
+  taskId?: string
+  /** What an edit changed: lines added and removed, and the first lines of its diff, each
+   * marked `+`, `-` or ` ` (unchanged). */
+  toolDiff?: { added: number; removed: number; lines: string[] }
+  /** The Agent call a subagent's call or reply belongs to (Claude Code
+   * `parent_tool_use_id`). */
+  parentToolId?: string
+  /** The limit that stopped the turn (systemKind `rate_limit`): its window
+   * (`five_hour`, `seven_day`…), when it resets (RFC 3339) and how much of it was used (0-1). */
+  limitWindow?: string
+  limitResetsAt?: string
+  limitUtilization?: number
   model?: string
+  /** The model a change of model left (systemKind `model`); `model` is the new one. */
+  fromModel?: string
+  /** When the engine read the frame (RFC 3339), where it said. */
+  at?: string
+  /** The attach sequence number of the frame that started this item; absent for an item
+   * of the stored history, which comes before every frame. */
+  seq?: number
+  /** A subagent's reply (Claude Code `parent_tool_use_id`), not the session's own turn. */
+  subagent?: boolean
   inputTokens?: number
   outputTokens?: number
   costUsd?: number
@@ -49,7 +79,8 @@ export interface ConversationItem {
   /** Init frame's tool count: `systemText` words the session-start line from it. */
   toolCount?: number
   systemKind?: string
-  /** The ACP message a streamed reply belongs to (`agent_message_chunk.messageId`). */
+  /** The message a reply belongs to: ACP `agent_message_chunk.messageId`, Claude Code
+   * `message.id`. */
   messageId?: string
   /** How an ACP turn stopped, when it did not simply finish (`stopReason` other than
    * end_turn): cancelled, refusal, max_tokens, max_turn_requests, or what the agent sent. */
@@ -115,17 +146,150 @@ function summariseUnknown(value: unknown): string {
   }
 }
 
-function summariseArgs(value: unknown): string {
-  const rec = asRecord(value)
-  if (!rec) return summariseUnknown(value)
-  const entries = Object.entries(rec)
-  if (entries.length === 0) return ''
-  if (entries.length === 1) {
-    const [key, val] = entries[0]
-    const shown = typeof val === 'string' ? val : summariseUnknown(val)
-    return truncateSummary(`${key} ${shown}`)
+const PATH_CAP = 56
+
+/** A long path cut in the middle: its first folder and its file stay, and as many folders
+ * before the file as fit ("web/src/…/sessions/x.tsx"). Anything else is cut in the middle. */
+export function cutMiddle(value: string, cap = PATH_CAP): string {
+  if (value.length <= cap) return value
+  const parts = value.split('/')
+  if (parts.length > 2) {
+    const absolute = parts[0] === ''
+    const head = absolute ? `/${parts[1]}` : parts[0]!
+    let tail = parts[parts.length - 1]!
+    for (let i = parts.length - 2; i >= (absolute ? 2 : 1); i--) {
+      if (`${head}/…/${parts[i]}/${tail}`.length > cap) break
+      tail = `${parts[i]}/${tail}`
+    }
+    const cut = `${head}/…/${tail}`
+    if (cut.length <= cap) return cut
   }
-  return summariseUnknown(rec)
+  const keep = cap - 1
+  return `${value.slice(0, Math.ceil(keep / 2))}…${value.slice(value.length - Math.floor(keep / 2))}`
+}
+
+/** A path inside the working folder is read from there; any other path is read whole. */
+function insideFolder(path: string, cwd: string | undefined): string {
+  const folder = cwd?.replace(/\/+$/, '')
+  return folder && path.startsWith(`${folder}/`)
+    ? path.slice(folder.length + 1)
+    : path
+}
+
+/**
+ * A TOOL CALL IN THE TOOL'S OWN SHORT FORM (dev#3119): what it acts on, never its JSON
+ * (0.3 read `Write {"file_path":"/home/…`). A command is the command, a file tool its
+ * path inside the working folder, a search its pattern, a subagent its description; any
+ * other tool its plain fields.
+ */
+function toolTarget(input: unknown, cwd: string | undefined): string {
+  const rec = asRecord(input)
+  if (!rec) return summariseUnknown(input)
+  const path = (key: string) => {
+    const value = asString(rec[key])
+    return value ? cutMiddle(insideFolder(value, cwd)) : undefined
+  }
+  const command = Array.isArray(rec.command)
+    ? rec.command.filter((part) => typeof part === 'string').join(' ')
+    : asString(rec.command)
+  if (command) return truncateSummary(command)
+  const file = path('file_path') ?? path('notebook_path')
+  if (file) return file
+  const pattern = asString(rec.pattern)
+  if (pattern) {
+    const where = path('path')
+    return truncateSummary(where ? `${pattern} · ${where}` : pattern)
+  }
+  for (const key of ['url', 'query', 'description', 'skill']) {
+    const value = asString(rec[key])
+    if (value) return truncateSummary(value)
+  }
+  const where = path('path')
+  if (where) return where
+  return truncateSummary(
+    Object.entries(rec)
+      .flatMap(([key, value]) =>
+        ['string', 'number', 'boolean'].includes(typeof value)
+          ? [`${key} ${String(value)}`]
+          : [],
+      )
+      .join(' · '),
+  )
+}
+
+/** The lines of a diff excerpt: an edit is shown by its first few changed lines. */
+const EXCERPT_LINES = 6
+
+type ToolDiff = NonNullable<ConversationItem['toolDiff']>
+
+function linesOf(text: string): string[] {
+  return text === '' ? [] : text.replace(/\n$/, '').split('\n')
+}
+
+function diffOf(removed: string[], added: string[]): ToolDiff {
+  return {
+    added: added.length,
+    removed: removed.length,
+    lines: [
+      ...removed.map((line) => `-${line}`),
+      ...added.map((line) => `+${line}`),
+    ].slice(0, EXCERPT_LINES),
+  }
+}
+
+/** An edit told by its own input, until the tool answers with its diff. */
+function inputDiff(
+  name: string,
+  input: Record<string, unknown> | null,
+): ToolDiff | undefined {
+  const tool = name.toLowerCase()
+  if (tool === 'write' && typeof input?.content === 'string')
+    return diffOf([], linesOf(input.content))
+  if (
+    tool === 'edit' &&
+    typeof input?.old_string === 'string' &&
+    typeof input.new_string === 'string'
+  )
+    return diffOf(linesOf(input.old_string), linesOf(input.new_string))
+  return undefined
+}
+
+/** The diff the tool answered with (Claude Code `tool_use_result.structuredPatch`, or the
+ * content of a file it created): its counts, and its lines from the first change on, with
+ * the unchanged line before it. */
+function answeredDiff(outcome: unknown): ToolDiff | undefined {
+  const rec = asRecord(outcome)
+  if (!rec) return undefined
+  const lines = (Array.isArray(rec.structuredPatch) ? rec.structuredPatch : [])
+    .flatMap((hunk) => {
+      const hunkLines = asRecord(hunk)?.lines
+      return Array.isArray(hunkLines) ? hunkLines : []
+    })
+    .filter(
+      (line): line is string =>
+        typeof line === 'string' && !line.startsWith('\\'),
+    )
+  const first = lines.findIndex((line) => line[0] === '+' || line[0] === '-')
+  if (first < 0)
+    return rec.type === 'create' && typeof rec.content === 'string'
+      ? diffOf([], linesOf(rec.content))
+      : undefined
+  const start = Math.max(0, first - 1)
+  return {
+    added: lines.filter((line) => line[0] === '+').length,
+    removed: lines.filter((line) => line[0] === '-').length,
+    lines: lines.slice(start, start + EXCERPT_LINES),
+  }
+}
+
+/** The answer to a call started in the background is a receipt (an id and where its output
+ * goes), not the call's result. */
+function isReceipt(outcome: unknown): boolean {
+  const rec = asRecord(outcome)
+  return (
+    asString(rec?.backgroundTaskId) !== undefined ||
+    asString(rec?.status) === 'async_launched'
+  )
 }
 
 function contentBlocks(value: unknown): Record<string, unknown>[] {
@@ -268,27 +432,45 @@ function foldQuiet(
 }
 
 /**
- * A rate limit report with nothing in it to act on: allowed, well under the window, and not
- * on overage. Utilization near the limit and any overage state are news, whatever `status`
- * says, so they stay rows.
+ * THE LIMIT THAT STOPPED THE TURN IS ONE SENTENCE; ANY OTHER LIMIT STATE IS NO ROW (dev#3119).
+ * A refusal (`rejected`) stopped the turn: its row says which window, how much was used and
+ * when it resets. A warning, a window nearly used or an overage did not: that is the usage
+ * meter beside the account (dev#2817), and 0.3's "allowed warning · seven day · 93%" row
+ * read as an event of the conversation.
  */
-const QUIET_UTILIZATION = 0.9
-function rateLimitIsQuiet(frame: Record<string, unknown>): boolean {
+function rateLimitStop(
+  items: ConversationItem[],
+  frame: Record<string, unknown>,
+  trimmed: string,
+): ConversationItem[] {
   const info = asRecord(frame.rate_limit_info)
-  if (asString(info?.status) !== 'allowed') return false
-  if (info?.isUsingOverage === true) return false
-  const overage = asString(info?.overageStatus)
-  if (overage !== undefined && overage !== 'allowed') return false
-  if (asString(info?.rateLimitType) === 'overage') return false
-  // the top-level figure is the limiting window; every other window counts too
-  const windows = Object.values(asRecord(info?.unifiedWindows) ?? {})
-  const used = [
-    info?.utilization,
-    ...windows.map((w) => asRecord(w)?.utilization),
+  const status = asString(info?.status) ?? ''
+  if (status === 'allowed' || status === 'allowed_warning')
+    return foldQuiet(items, trimmed, rateLimitSummary(frame))
+  const window = asString(info?.rateLimitType)
+  const reset = new Date((asNumber(info?.resetsAt) ?? Number.NaN) * 1000)
+  const used =
+    asNumber(info?.utilization) ??
+    (window
+      ? asNumber(
+          asRecord(asRecord(info?.unifiedWindows)?.[window])?.utilization,
+        )
+      : undefined)
+  return [
+    ...items,
+    {
+      kind: 'system',
+      id: nextId('system', items.length, asString(frame.uuid)),
+      summary: rateLimitSummary(frame),
+      systemKind: 'rate_limit',
+      ...(window ? { limitWindow: window } : {}),
+      ...(Number.isNaN(reset.getTime())
+        ? {}
+        : { limitResetsAt: reset.toISOString() }),
+      ...(used !== undefined ? { limitUtilization: used } : {}),
+      raw: [trimmed],
+    },
   ]
-    .map(asNumber)
-    .filter((n): n is number => n !== undefined)
-  return used.every((n) => n < QUIET_UTILIZATION)
 }
 
 function resultFields(
@@ -448,12 +630,22 @@ function codexItem(
     }
     if (kind === 'commandExecution') {
       const command = asString(item?.command) ?? ''
+      const exit = asNumber(item?.exitCode)
       return {
         kind: 'tool',
         id: nextId('tool', n, id),
         summary: truncateSummary(command),
         toolName: 'command',
         toolArgsSummary: truncateSummary(command),
+        ...(command ? { toolCommand: command } : {}),
+        // A command in progress (a stored running turn) still runs; one declined, failed or
+        // with a non-zero exit code failed; any other has completed.
+        ...(asString(item?.status) === 'inProgress'
+          ? { toolStatus: 'running' as const }
+          : (exit !== undefined && exit !== 0) ||
+              ['failed', 'declined'].includes(asString(item?.status) ?? '')
+            ? { toolFailed: true, toolStatus: 'failed' as const }
+            : { toolStatus: 'completed' as const }),
         raw: [raw],
       }
     }
@@ -598,11 +790,7 @@ function foldAcp(
         summary: name,
         toolName: name,
         ...(input
-          ? {
-              toolArgsSummary: command
-                ? truncateSummary(command)
-                : summariseArgs(input),
-            }
+          ? { toolArgsSummary: toolTarget(input, conversationCwd(items)) }
           : {}),
         ...(command
           ? {
@@ -611,8 +799,17 @@ function foldAcp(
             }
           : {}),
         ...(output ? { toolResultSummary: truncateSummary(output) } : {}),
-        // A status is not output, but a failure is never hidden (SR2C on e2083ea8).
-        ...(asString(update.status) === 'failed' ? { toolFailed: true } : {}),
+        // A status is not output, but a failure is never hidden (SR2C on e2083ea8), and a
+        // call that completed without output has ended all the same.
+        ...(asString(update.status) === 'failed'
+          ? { toolFailed: true, toolStatus: 'failed' as const }
+          : {}),
+        ...(asString(update.status) === 'completed'
+          ? { toolStatus: 'completed' as const }
+          : {}),
+        ...(['pending', 'in_progress'].includes(asString(update.status) ?? '')
+          ? { toolStatus: 'running' as const }
+          : {}),
       }
       if (at >= 0) {
         const item = items[at]!
@@ -689,16 +886,12 @@ function foldRetry(
   return [...items, item]
 }
 
-function progressSummary(name: string, seconds: number | undefined): string {
-  return seconds === undefined
-    ? `${name} running`
-    : `${name} running · ${Math.round(seconds)} s`
-}
-
 /**
- * Claude Code reports a running tool every few seconds (`tool_progress`). It is the
- * tool's clock, not a new event: it folds into its tool call. Progress for a tool
- * this view has not seen (a sub-agent's) is one quiet line that keeps the latest time.
+ * Claude Code reports a running tool every 30 s (`tool_progress`). It is the tool's clock,
+ * not a new event: it folds into its tool call, and is never a row (dev#3119: 0.3 painted
+ * "Bash running · 30 s … 180 s", six rows for one command). Claude Code 2.1.3xx names the
+ * beat `<call>-heartbeat-<n>` under the call as its parent. Progress for a call this view
+ * has not seen joins the line before it.
  */
 function foldToolProgress(
   items: ConversationItem[],
@@ -706,60 +899,189 @@ function foldToolProgress(
   raw: string,
 ): ConversationItem[] {
   const toolId = asString(frame.tool_use_id)
+  const parent = asString(frame.parent_tool_use_id)
+  const beat =
+    parent !== undefined &&
+    (frame.heartbeat === true || !!toolId?.startsWith(`${parent}-heartbeat`))
   const seconds = asNumber(frame.elapsed_time_seconds)
-  let at = -1
-  for (let i = items.length - 1; toolId && i >= 0; i--) {
-    if (items[i]?.kind === 'tool' && items[i]?.toolId === toolId) {
-      at = i
-      break
-    }
+  const at = items.findLastIndex(
+    (item) =>
+      item.kind === 'tool' &&
+      item.toolId !== undefined &&
+      (item.toolId === toolId || (beat && item.toolId === parent)),
+  )
+  if (at < 0) return foldQuiet(items, raw, 'tool progress')
+  const item = items[at]!
+  return [
+    ...items.slice(0, at),
+    {
+      ...item,
+      toolElapsedSeconds: seconds ?? item.toolElapsedSeconds,
+      raw: [...item.raw, raw],
+    },
+    ...items.slice(at + 1),
+  ]
+}
+
+const TASK_FRAMES = new Set([
+  'task_started',
+  'task_progress',
+  'task_updated',
+  'task_notification',
+])
+
+function taskOutcome(
+  status: string | undefined,
+): ConversationItem['toolStatus'] {
+  switch (status) {
+    case 'completed':
+      return 'completed'
+    case 'failed':
+    case 'error':
+      return 'failed'
+    case 'killed':
+    case 'stopped':
+    case 'cancelled':
+      return 'stopped'
+    case undefined:
+    case 'running':
+    case 'pending':
+    case 'in_progress':
+      return undefined
+    // An end this console does not know is not hidden as a success.
+    default:
+      return 'failed'
   }
-  if (at >= 0) {
-    const item = items[at]!
-    return [
-      ...items.slice(0, at),
-      {
-        ...item,
-        toolElapsedSeconds: seconds ?? item.toolElapsedSeconds,
-        raw: [...item.raw, raw],
-      },
-      ...items.slice(at + 1),
-    ]
+}
+
+/**
+ * CLAUDE CODE'S TASK FRAMES ARE THE SIDE PANE'S ACTIVITY, NEVER A CONVERSATION ROW (dev#3119,
+ * dev#1861: the engine reads them into Activity). 0.3 painted "task started", "task progress",
+ * "task updated" and "task notification" between the turns. Each joins the call it belongs
+ * to (by its call id, or a task update by its task id), which keeps the line for the
+ * inspector and learns from it whether the call runs in the background and how it ended.
+ */
+function foldTask(
+  items: ConversationItem[],
+  frame: Record<string, unknown>,
+  raw: string,
+): ConversationItem[] {
+  const subtype = asString(frame.subtype)
+  const toolId = asString(frame.tool_use_id)
+  const taskId = asString(frame.task_id)
+  const at = items.findLastIndex(
+    (item) =>
+      item.kind === 'tool' &&
+      (toolId
+        ? item.toolId === toolId
+        : taskId !== undefined && item.taskId === taskId),
+  )
+  if (at < 0)
+    return foldQuiet(items, raw, (subtype ?? 'task').replace(/_/g, ' '))
+  const item = items[at]!
+  const started = subtype === 'task_started'
+  const status = taskOutcome(
+    asString(frame.status) ?? asString(asRecord(frame.patch)?.status),
+  )
+  return [
+    ...items.slice(0, at),
+    {
+      ...item,
+      ...(started && taskId ? { taskId } : {}),
+      ...(started && frame.is_backgrounded === true
+        ? { toolBackground: true }
+        : {}),
+      ...(status ? { toolStatus: status } : {}),
+      ...(status === 'failed' ? { toolFailed: true } : {}),
+      raw: [...item.raw, raw],
+    },
+    ...items.slice(at + 1),
+  ]
+}
+
+/** One model, whatever the tool's `[1m]` context suffix or a dated snapshot of the id says. */
+export function sameModel(a: string, b: string): boolean {
+  const base = (id: string) =>
+    id.replace(/\[1m\]$/i, '').replace(/-\d{4}-?\d{2}-?\d{2}$/, '')
+  return base(a) === base(b)
+}
+
+/** The model the session's own turns run on now: its last change, its start, or its last
+ * own reply, whichever came last. A subagent's reply does not move it. */
+export function conversationModel(
+  items: readonly ConversationItem[],
+): string | undefined {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i]!
+    // A message the tool wrote itself names `<synthetic>`, not a model.
+    if (!item.model || item.model.startsWith('<')) continue
+    if (
+      item.kind === 'system' &&
+      (item.systemKind === 'model' || item.systemKind === 'init')
+    )
+      return item.model
+    if (item.kind === 'assistant' && !item.subagent) return item.model
   }
-  const name = asString(frame.tool_name) ?? 'Tool'
-  const last = items[items.length - 1]
+  return undefined
+}
+
+// dev#2786: a session that started on claude-opus-5-5 went on on claude-opus-4-8 and
+// nothing said so. A reply of the session's own, or a resume, on another model is
+// told before it.
+function withModelChange(
+  items: ConversationItem[],
+  frame: Record<string, unknown>,
+  model: string | undefined,
+  raw: string,
+  at: string | undefined,
+): ConversationItem[] {
+  // A message the tool wrote itself names `<synthetic>`, not a model.
   if (
-    last?.kind === 'system' &&
-    last.systemKind === 'tool_progress' &&
-    last.toolId === toolId
-  ) {
-    return [
-      ...items.slice(0, -1),
-      {
-        ...last,
-        summary: progressSummary(name, seconds ?? last.toolElapsedSeconds),
-        toolElapsedSeconds: seconds ?? last.toolElapsedSeconds,
-        raw: [...last.raw, raw],
-      },
-    ]
-  }
+    !model ||
+    model.startsWith('<') ||
+    typeof frame.parent_tool_use_id === 'string'
+  )
+    return items
+  const from = conversationModel(items)
+  if (!from || sameModel(from, model)) return items
   return [
     ...items,
     {
       kind: 'system',
-      id: nextId('system', items.length, toolId),
-      summary: progressSummary(name, seconds),
-      systemKind: 'tool_progress',
-      toolId,
-      toolElapsedSeconds: seconds,
+      id: nextId(
+        'system',
+        items.length,
+        asString(frame.uuid) && `model-${asString(frame.uuid)}`,
+      ),
+      summary: `Model changed: ${from} → ${model}`,
+      systemKind: 'model',
+      fromModel: from,
+      model,
+      ...(at ? { at } : {}),
       raw: [raw],
     },
   ]
 }
 
+/** Folds one line, and marks each item it starts with the line's frame `seq`. */
 export function foldConversationLine(
   items: ConversationItem[],
   line: string,
+  at?: string,
+  seq?: number,
+): ConversationItem[] {
+  const next = foldLine(items, line, at, seq)
+  if (seq === undefined || next === items) return next
+  for (let i = items.length; i < next.length; i++)
+    if (next[i]!.seq === undefined) next[i] = { ...next[i]!, seq }
+  return next
+}
+
+function foldLine(
+  items: ConversationItem[],
+  line: string,
+  at?: string,
+  seq?: number,
 ): ConversationItem[] {
   const trimmed = line.trimEnd()
   if (!trimmed) return items
@@ -858,8 +1180,13 @@ export function foldConversationLine(
     const entity = asRecord(params?.item ?? params?.turn)
     if (asString(entity?.id)) {
       const existing = items.findIndex((item) => item.id === codex.id)
-      if (existing >= 0)
-        return items.map((item, index) => (index === existing ? codex : item))
+      if (existing >= 0) {
+        // It keeps the first frame that showed it; an item the stored history restored
+        // takes this frame's (review of #2855).
+        const first = items[existing]!.seq ?? seq
+        const replay = first === undefined ? codex : { ...codex, seq: first }
+        return items.map((item, index) => (index === existing ? replay : item))
+      }
     }
     return foldRetry(items, codex)
   }
@@ -887,25 +1214,20 @@ export function foldConversationLine(
     ]
   }
 
-  if (type === 'rate_limit_event') {
-    // `allowed` far from the limit says nothing to act on. A warning, a refusal, a window
-    // nearly used or an overage does, and nothing else in the console shows it: rows.
-    if (rateLimitIsQuiet(frame))
-      return foldQuiet(items, trimmed, rateLimitSummary(frame))
-    return [
-      ...items,
-      {
-        kind: 'system',
-        id: nextId('system', items.length, asString(frame.uuid)),
-        summary: rateLimitSummary(frame),
-        systemKind: 'rate_limit',
-        raw: [trimmed],
-      },
-    ]
-  }
+  if (type === 'rate_limit_event') return rateLimitStop(items, frame, trimmed)
 
   if (type === 'system' && asString(frame.subtype) === 'thinking_tokens')
     return foldQuiet(items, trimmed, 'thinking tokens')
+
+  if (type === 'system' && TASK_FRAMES.has(asString(frame.subtype) ?? ''))
+    return foldTask(items, frame, trimmed)
+
+  // The list of tasks running in the background: the side pane's, not a row (dev#3119).
+  if (
+    type === 'system' &&
+    asString(frame.subtype) === 'background_tasks_changed'
+  )
+    return foldQuiet(items, trimmed, 'background tasks')
 
   // Claude Code retrying the provider call (HU2-13): one line that counts the retries,
   // with the category (`error`) and the HTTP status (`error_status`) each frame carries.
@@ -923,6 +1245,8 @@ export function foldConversationLine(
 
   if (type === 'system') {
     const sys = systemSummary(frame)
+    if (sys.systemKind === 'init')
+      items = withModelChange(items, frame, sys.model, trimmed, at)
     return [
       ...items,
       {
@@ -944,12 +1268,17 @@ export function foldConversationLine(
 
   if (type === 'result') {
     const fields = resultFields(frame)
+    // The turn is named after the model of its own replies: the costliest model of a
+    // turn can be a subagent's.
+    const model =
+      asString(frame.model) ?? conversationModel(items) ?? fields.model
     return [
       ...items,
       {
         kind: 'result',
         id: nextId('result', items.length, asString(frame.uuid)),
         ...fields,
+        ...(model ? { model } : {}),
         raw: [trimmed],
       },
     ]
@@ -996,28 +1325,42 @@ export function foldConversationLine(
 
   if (type === 'assistant') {
     const message = messageOf(frame)
+    items = withModelChange(
+      items,
+      frame,
+      asString(asRecord(message)?.model),
+      trimmed,
+      at,
+    )
+    // A subagent's reply and calls belong to the Agent call that started it (dev#3119).
+    const parent = asString(frame.parent_tool_use_id)
+    const subagent = parent ? { subagent: true, parentToolId: parent } : {}
+    const messageId = asString(asRecord(message)?.id)
     const uses = toolUses(message)
     if (uses.length > 0) {
+      const cwd = conversationCwd(items)
       const added: ConversationItem[] = uses.map((use, i) => {
         const name = asString(use.name) ?? 'tool'
         const toolId = asString(use.id)
         const input = asRecord(use.input)
         const command = asString(input?.command)
+        const diff = inputDiff(name, input)
         return {
           kind: 'tool' as const,
           id: nextId('tool', items.length + i, toolId ?? name),
           summary: name,
           toolName: name,
           toolId,
-          toolArgsSummary: command
-            ? truncateSummary(command)
-            : summariseArgs(use.input),
+          toolArgsSummary: toolTarget(use.input, cwd),
           ...(command
             ? {
                 toolCommand: command,
                 toolDescription: asString(input?.description),
               }
             : {}),
+          ...(diff ? { toolDiff: diff } : {}),
+          ...(parent ? { parentToolId: parent } : {}),
+          ...(at ? { at } : {}),
           raw: [trimmed],
         }
       })
@@ -1031,6 +1374,8 @@ export function foldConversationLine(
             text,
             summary: truncateSummary(text),
             model: asString(asRecord(message)?.model),
+            ...(messageId ? { messageId } : {}),
+            ...subagent,
             raw: [trimmed],
           },
           ...added,
@@ -1039,8 +1384,40 @@ export function foldConversationLine(
       return [...items, ...added]
     }
     const text = textFromContent(message)
+    // A FRAME THAT HOLDS ONLY THINKING IS NO ROW (dev#3119): Claude Code sends the thinking of
+    // a reply as a frame of its own, with no words, and 0.3 painted a bare "Assistant"
+    // heading for each. The line joins the one before it, for the inspector.
+    if (!text.trim()) {
+      const blocks = contentBlocks(message).map((b) => asString(b.type) ?? '')
+      if (
+        blocks.every((b) =>
+          ['thinking', 'redacted_thinking', 'text'].includes(b),
+        )
+      )
+        return foldQuiet(items, trimmed, 'thinking')
+      // Content this console does not read (a server tool, an error with no words) is
+      // never dropped: it stays a row that says what it holds.
+      return [
+        ...items,
+        {
+          kind: 'unknown',
+          id: nextId('unknown', items.length, asString(frame.uuid)),
+          summary: truncateSummary(
+            blocks.filter(Boolean).join(', ') || 'assistant',
+          ),
+          ...subagent,
+          raw: [trimmed],
+        },
+      ]
+    }
     const last = items[items.length - 1]
-    if (last?.kind === 'assistant' && text) {
+    // A frame joins the reply it continues: the same speaker (the session, or the same
+    // subagent) and the same message, where both name one.
+    if (
+      last?.kind === 'assistant' &&
+      last.parentToolId === parent &&
+      (!messageId || !last.messageId || last.messageId === messageId)
+    ) {
       const merged = `${last.text ?? ''}${last.text ? '\n' : ''}${text}`
       return [
         ...items.slice(0, -1),
@@ -1057,9 +1434,11 @@ export function foldConversationLine(
       {
         kind: 'assistant',
         id: nextId('assistant', items.length, asString(frame.uuid)),
-        text: text || undefined,
-        summary: text ? truncateSummary(text) : 'Assistant',
+        text,
+        summary: truncateSummary(text),
         model: asString(asRecord(message)?.model),
+        ...(messageId ? { messageId } : {}),
+        ...subagent,
         raw: [trimmed],
       },
     ]
@@ -1069,6 +1448,9 @@ export function foldConversationLine(
     const message = messageOf(frame)
     const results = toolResults(message)
     if (results.length > 0) {
+      // What the tool did, beside its words (Claude Code `tool_use_result`; its own
+      // transcript calls it `toolUseResult`): an edit's diff, a background receipt.
+      const outcome = frame.tool_use_result ?? frame.toolUseResult
       let next = items
       for (const result of results) {
         const toolId = asString(result.tool_use_id)
@@ -1077,19 +1459,33 @@ export function foldConversationLine(
             ? result.content
             : textFromContent(result.content) ||
               summariseUnknown(result.content)
-        const at = next.findIndex(
+        const failed = result.is_error === true ? { toolFailed: true } : {}
+        const index = next.findIndex(
           (item) => item.kind === 'tool' && toolId && item.toolId === toolId,
         )
-        if (at >= 0) {
-          const item = next[at]
+        if (index >= 0) {
+          const item = next[index]!
+          const diff = results.length === 1 ? answeredDiff(outcome) : undefined
+          // The answer to a call started in the background is its receipt, not its result:
+          // the outcome comes with the task's notification (dev#3119: 0.3 showed
+          // "Async agent launched successfully… internal metadata, never quote").
+          const receipt =
+            item.toolBackground || (results.length === 1 && isReceipt(outcome))
           next = [
-            ...next.slice(0, at),
+            ...next.slice(0, index),
             {
               ...item,
-              toolResultSummary: truncateSummary(body),
+              ...(receipt ? { toolBackground: true } : {}),
+              // A receipt is not shown; a failure is, with its reason.
+              ...(!receipt || result.is_error === true
+                ? { toolResultSummary: truncateSummary(body) }
+                : {}),
+              ...failed,
+              ...(diff ? { toolDiff: diff } : {}),
+              ...(at ? { toolEndAt: at } : {}),
               raw: [...item.raw, trimmed],
             },
-            ...next.slice(at + 1),
+            ...next.slice(index + 1),
           ]
         } else {
           next = [
@@ -1100,6 +1496,7 @@ export function foldConversationLine(
               summary: 'Tool result',
               toolId,
               toolResultSummary: truncateSummary(body),
+              ...failed,
               raw: [trimmed],
             },
           ]
@@ -1110,6 +1507,30 @@ export function foldConversationLine(
     const text =
       textFromContent(message) ||
       (typeof frame.message === 'string' ? frame.message : '')
+    // NOT THE PERSON'S TURN (dev#3119): a subagent's own prompt (it has a parent call), or a
+    // notice the tool feeds itself and replays on stdout (a finished background task, as
+    // `<task-notification>` markup). 0.3 painted the markup as the person's message.
+    if (asString(frame.parent_tool_use_id) !== undefined)
+      return foldQuiet(items, trimmed, 'subagent prompt')
+    if (
+      asString(asRecord(frame.origin)?.kind) === 'task-notification' ||
+      text.trimStart().startsWith('<task-notification>')
+    ) {
+      // Its markup names the call and how it ended: the call learns it, as from the
+      // task frame, should that frame be missing.
+      const tag = (name: string) =>
+        new RegExp(`<${name}>([^<]*)</${name}>`).exec(text)?.[1]?.trim()
+      return foldTask(
+        items,
+        {
+          subtype: 'task_notification',
+          tool_use_id: tag('tool-use-id'),
+          task_id: tag('task-id'),
+          status: tag('status'),
+        },
+        trimmed,
+      )
+    }
     const attachments = attachmentsOf(frame)
     return [
       ...items,
@@ -1176,9 +1597,14 @@ export function foldConversationLine(
 /** Map every attach line into conversation items, in order. */
 export function mapConversationFrames(
   lines: readonly string[],
+  /** When the engine read each line, where it said; same order as `lines`. */
+  times?: readonly (string | undefined)[],
+  /** Each line's attach `seq`, where it has one; same order as `lines`. */
+  seqs?: readonly (number | undefined)[],
 ): ConversationItem[] {
   return lines.reduce<ConversationItem[]>(
-    (items, line) => foldConversationLine(items, line),
+    (items, line, i) =>
+      foldConversationLine(items, line, times?.[i], seqs?.[i]),
     [],
   )
 }

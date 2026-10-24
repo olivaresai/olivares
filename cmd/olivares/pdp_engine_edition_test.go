@@ -72,7 +72,8 @@ func TestCommunityServeRefusesExternalPDPEngine(t *testing.T) {
 				t.Fatalf("exit code = %d, want %d (Edition): %v", code, exitcode.Edition, err)
 			}
 			msg := err.Error()
-			for _, want := range []string{"OLIVARES_PDP_ENGINE", "Business", pricingURL} {
+			// The key may come from the environment or from the activation manifest: the remedy names both.
+			for _, want := range []string{"OLIVARES_PDP_ENGINE", "Business", pricingURL, "from the environment", "activation manifest"} {
 				if !strings.Contains(msg, want) {
 					t.Errorf("refusal %q does not name %q", msg, want)
 				}

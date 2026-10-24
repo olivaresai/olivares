@@ -7,6 +7,7 @@ package toolinstall
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -14,6 +15,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
+	"unicode/utf8"
 
 	"github.com/olivaresai/olivares/cmd/olivares/internal/toolinstall/toolinstalltest"
 )
@@ -22,8 +25,6 @@ import (
 type probeChild struct {
 	rw, ro  []string
 	program string
-	// libs is whether the read-only grants existed when the probe was built.
-	libs bool
 }
 
 // recordChildren wires a ChildCommand that records each child and starts it
@@ -31,21 +32,15 @@ type probeChild struct {
 func recordChildren(e *Engine) *[]probeChild {
 	var got []probeChild
 	e.SetChildCommand(func(ctx context.Context, rw, ro []string, program string, args ...string) (*exec.Cmd, error) {
-		c := probeChild{rw: rw, ro: ro, program: program, libs: true}
-		for _, path := range ro {
-			if _, err := os.Stat(path); err != nil {
-				c.libs = false
-			}
-		}
-		got = append(got, c)
+		got = append(got, probeChild{rw: rw, ro: ro, program: program})
 		return exec.CommandContext(ctx, program, args...), nil
 	})
 	return &got
 }
 
 // An install's version probe is built by the engine's ChildCommand (#1430): it
-// may write only its scratch home, and a release archive's probe reads the
-// runtime its program loads from lib/<driver>.
+// may write only its scratch home and names no readable path of its own: the
+// release's lib/<program> comes from the shared confinement policy (#2900).
 func TestInstallProbeIsBuiltByTheEngineChildCommand(t *testing.T) {
 	t.Run("release archive (ollama)", func(t *testing.T) {
 		engine, req, _ := archiveEngine(t, DriverOllama, archiveFixture(t, DriverOllama, nil), false)
@@ -68,8 +63,8 @@ func TestInstallProbeIsBuiltByTheEngineChildCommand(t *testing.T) {
 		if !slices.Equal(c.rw, []string{filepath.Join(staging, ".probe")}) {
 			t.Errorf("probe writable %v, want only its scratch %s", c.rw, filepath.Join(staging, ".probe"))
 		}
-		if !slices.Equal(c.ro, []string{filepath.Join(staging, "lib", "ollama")}) || !c.libs {
-			t.Errorf("probe readable %v (present %v), want the staged lib/ollama", c.ro, c.libs)
+		if len(c.ro) != 0 {
+			t.Errorf("probe readable %v, want nothing beyond its program", c.ro)
 		}
 	})
 	t.Run("single binary (claude)", func(t *testing.T) {
@@ -159,5 +154,62 @@ func TestInstallProbeThatCannotBeConfinedDoesNotRun(t *testing.T) {
 	}
 	if n := f.ran(); n != 0 {
 		t.Errorf("the staged executable ran %d times without its ChildCommand", n)
+	}
+}
+
+// A probe that fails must show the tool's whole message: Node prints the
+// error, its stack and its code on separate lines, and the first line alone
+// ("node:internal/modules/run_main:76") named no cause (#2900).
+func TestProbeRefusalKeepsTheToolsWholeMessage(t *testing.T) {
+	script := "echo 'node:fs:441'; echo \"Error: EACCES: permission denied, open '/lib/gemini/gemini.js'\"; " +
+		"echo '    at Object.readFileSync (node:fs:441:20)'; echo \"  code: 'EACCES',\"; echo 'Node.js v24.15.0'; exit 1"
+	_, err := runProbe(t.Context(), probeSpec{Exe: "/bin/sh", Args: []string{"-c", script}, Env: []string{"PATH=/usr/bin:/bin"}, Budget: 10 * time.Second, Grace: time.Second})
+	requireKind(t, err, KindProbeFailed)
+	for _, want := range []string{"Error: EACCES: permission denied", "code: 'EACCES'", "Node.js v24.15.0"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal %q lacks %q", err, want)
+		}
+	}
+	long := "head-marker\n" + strings.Repeat("noise line\n", 2000) + "code: 'ELAST'\n"
+	_, err = runProbe(t.Context(), probeSpec{Exe: "/bin/sh", Args: []string{"-c", "printf '%s' \"$0\"; exit 1", long}, Env: []string{"PATH=/usr/bin:/bin"}, Budget: 10 * time.Second, Grace: time.Second})
+	if err == nil || len(err.Error()) > 4096 || !strings.Contains(err.Error(), "head-marker") || !strings.Contains(err.Error(), "code: 'ELAST'") {
+		t.Errorf("a long output must keep its head and its tail within 4 KiB: %d bytes %q", len(fmt.Sprint(err)), err)
+	}
+}
+
+func TestProbeOutputExcerptBounds(t *testing.T) {
+	whole := strings.Repeat("a", probeRefusalBytes)
+	over := whole + "b"
+	// A multi-byte rune straddling the head cut must not leave a broken byte.
+	split := strings.Repeat("a", probeRefusalHead-1) + "\u00e9" + strings.Repeat("z", probeRefusalBytes)
+	for name, tc := range map[string]struct {
+		in      string
+		want    string
+		wantCut bool
+	}{
+		"empty":                 {in: " \n", want: ""},
+		"trimmed":               {in: "\n  Node.js v24\n", want: "Node.js v24"},
+		"exactly the bound":     {in: whole, want: whole},
+		"one byte over":         {in: over, wantCut: true},
+		"rune across the split": {in: split, wantCut: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := probeOutputExcerpt(tc.in)
+			if !utf8.ValidString(got) {
+				t.Fatalf("excerpt is not valid UTF-8: %q", got)
+			}
+			if !tc.wantCut {
+				if got != tc.want {
+					t.Fatalf("excerpt %q, want %q", got, tc.want)
+				}
+				return
+			}
+			if !strings.Contains(got, "\n…\n") || len(got) > probeRefusalBytes+len("\n…\n") {
+				t.Fatalf("a long output must be cut to its head and tail: %d bytes", len(got))
+			}
+			if !strings.HasPrefix(got, "aaa") || !strings.HasSuffix(got, tc.in[len(tc.in)-8:]) {
+				t.Fatalf("the excerpt lost its head or its tail: %.20q … %.20q", got, got[len(got)-20:])
+			}
+		})
 	}
 }

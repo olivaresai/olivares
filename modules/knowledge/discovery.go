@@ -243,6 +243,7 @@ func loadDocLabels(ctx context.Context, sc store.Scope, kbID model.ID) (map[stri
 type scanOutcome struct {
 	docsScanned     int
 	chunksScanned   int
+	docsWithoutACL  int // documents with no ACL of their own: denied unless the source is public
 	docsWithHits    int
 	redactedMarkers int
 	summary         map[string]int        // class -> total count
@@ -279,6 +280,9 @@ type scanResponse struct {
 	HitSummary      map[string]int `json:"hit_summary"`
 	RedactedMarkers int            `json:"redacted_markers"`
 	DetectorVersion string         `json:"detector_version"`
+	// DocumentsWithoutACL counts the scanned documents that carry no ACL: they are
+	// denied at retrieval unless their source is declared public.
+	DocumentsWithoutACL int `json:"documents_without_acl"`
 }
 
 // persistScan writes the labels + the append-only scan row + the self-audit in
@@ -438,6 +442,9 @@ func (m *Module) handleScanKB(w http.ResponseWriter, r *http.Request, mc api.Mod
 	hashes := make(map[string]string, len(docs))
 	for _, doc := range docs {
 		docID := doc.String(model.ColID)
+		if len(unmarshalStrings(doc, colACL)) == 0 {
+			outcome.docsWithoutACL++
+		}
 		chunks := chunksByD[docID]
 		sort.Slice(chunks, func(i, j int) bool { return chunks[i].Int(colChunkIndex) < chunks[j].Int(colChunkIndex) })
 		texts := make([]string, len(chunks))
@@ -470,6 +477,7 @@ func (m *Module) handleScanKB(w http.ResponseWriter, r *http.Request, mc api.Mod
 		DocsScanned: outcome.docsScanned, ChunksScanned: outcome.chunksScanned,
 		DocsWithHits: outcome.docsWithHits, HitSummary: orEmptySummary(outcome.summary),
 		RedactedMarkers: outcome.redactedMarkers, DetectorVersion: m.classifier.Version(),
+		DocumentsWithoutACL: outcome.docsWithoutACL,
 	})
 }
 
@@ -504,6 +512,9 @@ func (m *Module) handleScanSource(w http.ResponseWriter, r *http.Request, mc api
 	outcome := &scanOutcome{docsScanned: len(docs)}
 	hashes := make(map[string]string, len(docs))
 	for _, d := range docs {
+		if len(d.ACL) == 0 {
+			outcome.docsWithoutACL++
+		}
 		hits, _, err := m.classify(d.Body)
 		if err != nil {
 			writeJSON(w, http.StatusBadGateway, errorBody("classification failed: "+err.Error()))
@@ -526,7 +537,7 @@ func (m *Module) handleScanSource(w http.ResponseWriter, r *http.Request, mc api
 		ScanID: scanID.String(), ScopeKind: scanScopeSource, ScopeRef: name, Basis: basisRaw,
 		DocsScanned: outcome.docsScanned, ChunksScanned: 0,
 		DocsWithHits: outcome.docsWithHits, HitSummary: orEmptySummary(outcome.summary),
-		DetectorVersion: m.classifier.Version(),
+		DetectorVersion: m.classifier.Version(), DocumentsWithoutACL: outcome.docsWithoutACL,
 	})
 }
 

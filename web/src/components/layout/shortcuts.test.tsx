@@ -36,6 +36,7 @@ vi.mock('@/lib/auth/context', () => ({
 }))
 
 import { GlobalShortcuts, NAV_SHORTCUTS } from './shortcuts'
+import { modKeyName } from '@/lib/keybindings/model'
 import { FEATURE_VIEWS } from '@/features/registry'
 import { useSessionStore } from '@/stores/session'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -87,6 +88,26 @@ describe('GlobalShortcuts', () => {
     expect(navigateMock).not.toHaveBeenCalled()
   })
 
+  it('never steals the letters typed in an open menu: they find its items', () => {
+    // A menu's typeahead is typing: "Ren" picks Rename. Read as shell keys, its `n`
+    // started a new session and `g e` navigated away (#2795).
+    renderIntel(
+      <>
+        <div role="menu">
+          <div role="menuitem" tabIndex={-1}>
+            Rename
+          </div>
+        </div>
+        <GlobalShortcuts />
+      </>,
+    )
+    const item = screen.getByRole('menuitem', { name: 'Rename' })
+    item.focus()
+    fireEvent.keyDown(item, { key: 'g' })
+    fireEvent.keyDown(item, { key: 'e' })
+    expect(navigateMock).not.toHaveBeenCalled()
+  })
+
   it('does not navigate to a feature RBAC hides, and hides it from the overlay', () => {
     canMock.mockImplementation(
       (p: string) => p !== 'eventing:subscription:read',
@@ -98,6 +119,19 @@ describe('GlobalShortcuts', () => {
     fireEvent.keyDown(window, { key: 'g' })
     fireEvent.keyDown(window, { key: 'e' })
     expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it('claims the letter after g even when it names no place offered here, so a page key never fires on it', () => {
+    // `g a` must not approve on the queue (#2548): the letter is the sequence's.
+    canMock.mockImplementation(
+      (p: string) => p !== 'eventing:subscription:read',
+    )
+    renderIntel(<GlobalShortcuts />)
+    fireEvent.keyDown(window, { key: 'g' })
+    // fireEvent answers false when a listener marked the event handled.
+    expect(fireEvent.keyDown(window, { key: 'e' })).toBe(false)
+    // Without the leader the letter stays the page's.
+    expect(fireEvent.keyDown(window, { key: 'e' })).toBe(true)
   })
 
   it('toggles the help overlay with ? (open and close)', () => {
@@ -189,6 +223,28 @@ describe('GlobalShortcuts — the declared table', () => {
     expect(
       screen.getByTestId('keybinding-launcher.startBackground'),
     ).toBeInTheDocument()
+  })
+
+  it('prints Mod as the key this platform has: Ctrl on Linux, ⌘ on a Mac (#3121)', () => {
+    for (const [platform, mod] of [
+      ['Linux x86_64', 'Ctrl'],
+      ['MacIntel', '⌘'],
+    ]) {
+      Object.defineProperty(window.navigator, 'platform', {
+        value: platform,
+        configurable: true,
+      })
+      const { unmount } = renderIntel(<GlobalShortcuts />)
+      try {
+        fireEvent.keyDown(window, { key: '?' })
+        const keys = screen.getByTestId('keybinding-palette.open')
+        expect(keys).toHaveTextContent(mod)
+        if (mod !== '⌘') expect(document.body.textContent).not.toContain('⌘')
+      } finally {
+        unmount()
+        delete (window.navigator as { platform?: string }).platform
+      }
+    }
   })
 
   it('states the precedence rule, because two rows can share keys', () => {
@@ -390,7 +446,7 @@ describe('previous opened session', () => {
       const row = screen.getByTestId(`keybinding-${rule.command}`)
       for (const token of rule.keys.split('+'))
         expect(
-          within(row).getByText(token === 'Mod' ? '⌘' : token, {
+          within(row).getByText(token === 'Mod' ? modKeyName() : token, {
             selector: 'kbd',
           }),
         ).toBeInTheDocument()

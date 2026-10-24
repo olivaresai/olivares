@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -30,6 +31,7 @@ import (
 	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/secret"
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
 // Signing a tool in runs the tool's OWN login on this node, as the engine's OS
@@ -48,11 +50,15 @@ import (
 // documents its device login in its own binary (1.0.46: "grok login --device-auth
 // (or --device-code): no browser needed on the target machine"; the session token
 // in ~/.grok/auth.json, refreshed by signing in again after 7 days).
-// OpenCode v1.18.30 uses `auth login --provider openai --method
-// "ChatGPT Pro/Plus (headless)"`; the tool polls its device authorization and
-// stores it under HOME/.local/share/opencode/auth.json. Only that native
-// headless method is relayed; API-key entry and loopback browser methods are not.
-// Docs: opencode.ai/docs/cli/ (auth login flags, auth list, auth.json).
+// OpenCode signs in to its own providers with `auth login --provider opencode`
+// (the OpenCode console key: Zen and the free models) or `--provider
+// opencode-go` (the Go subscription): the tool prints its key prompt, the person
+// types the key in the console or the CLI, and the engine hands it to the tool's
+// stdin (needs_key) without keeping, logging or returning it. Its ChatGPT method
+// is `auth login --provider openai --method "ChatGPT Pro/Plus (headless)"`: the
+// tool polls its device authorization. Either way the tool stores the login
+// under HOME/.local/share/opencode/auth.json; loopback browser methods are not
+// relayed. Docs: opencode.ai/docs/cli/ (auth login flags, auth list, auth.json).
 
 const (
 	signInTimeout   = 15 * time.Minute
@@ -117,13 +123,18 @@ type SignIn struct {
 	configDir   string
 	geminiStage int    // expected native ACP response id; only the output reader advances it
 	lastLine    string // the tool's last non-empty output line, raw: never shown as is
+	keyPrompt   string // the line on which the tool waits for a typed API key; empty for other methods
+	keyURL      string // the page that issues that key, when the tool prints none
+	login       string // the status method this sign-in must leave listed (OpenCode); empty: any login
 }
 
 // Sign-in states. needs_code: Claude waits for the code its page shows;
+// needs_key: the tool's own prompt waits for the API key its vendor issues;
 // waiting: Codex waits for the operator to enter its code on the link.
 const (
 	signInStarting = "starting"
 	signInNeedCode = "needs_code"
+	signInNeedKey  = "needs_key"
 	signInWaiting  = "waiting"
 	signInChecking = "checking"
 	signInDone     = "signed_in"
@@ -549,13 +560,19 @@ func (m *Module) runNativeStatus(ctx context.Context, out SignInStatus, program,
 			return out, &probeError{cmdLine(program, args...), commandFailure(ctx, runErr)}
 		}
 		// auth list prints provider + credential type, never the credential. A
-		// file's mere presence (including an empty auth.json) is not a login.
+		// file's mere presence (including an empty auth.json) is not a login, nor
+		// is a key for a provider the sign-in does not offer.
+		listed := map[string]bool{}
 		for _, line := range strings.Split(ansiEscape.ReplaceAllString(string(raw), ""), "\n") {
-			if strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(line), "│●")) == "OpenAI oauth" {
-				out.SignedIn, out.Method = true, "ChatGPT"
-				break
+			listed[strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(line), "│●"))] = true
+		}
+		var methods []string
+		for _, login := range openCodeLogins {
+			if listed[login.line] {
+				methods = append(methods, login.method)
 			}
 		}
+		out.SignedIn, out.Method = len(methods) > 0, strings.Join(methods, ", ")
 		return out, nil
 	}
 	var st struct {
@@ -575,11 +592,46 @@ func (m *Module) runNativeStatus(ctx context.Context, out SignInStatus, program,
 	return out, nil
 }
 
+// keyPromptWait bounds how long a key method's login may run before the tool
+// shows its key prompt: a prompt the engine does not recognize fails the sign-in
+// with a reason instead of leaving it "starting" until it expires.
+var keyPromptWait = time.Minute
+
+// openCodeLogins are the `auth list` lines of the logins OpenCode's sign-in offers
+// (provider name and credential type, measured on v1.18.34), OpenCode's own
+// providers first, with the method a person reads.
+var openCodeLogins = []struct{ id, line, method string }{
+	{"opencode", "OpenCode api", "OpenCode Zen"}, {"opencode-go", "OpenCode Go api", "OpenCode Go"}, {"chatgpt-headless", "OpenAI oauth", "ChatGPT"},
+}
+
+// openCodeLoginFor is the status method an OpenCode sign-in with the login method
+// id must leave listed (the default method for an empty id); empty for other tools.
+func openCodeLoginFor(driver, id string) string {
+	if driver != "opencode" {
+		return ""
+	}
+	if id == "" {
+		facts, _ := driverfacts.Lookup(driver)
+		for _, m := range facts.LoginMethodList() {
+			if m.Default {
+				id = m.ID
+			}
+		}
+	}
+	for _, login := range openCodeLogins {
+		if login.id == id {
+			return login.method
+		}
+	}
+	return id // a method without a known auth list line never counts as signed in
+}
+
 // LoginStatus reports whether a driver's tool is installed on this node and, for
 // a tool with its own login, whether the tenant's own login is signed in: the
 // answer GET sign-in gives, for the sessions module's rule that picks a new
 // session's profile.
-// OpenCode reports its ChatGPT OAuth credential through its native auth list.
+// OpenCode reports its own provider keys and its ChatGPT OAuth credential through
+// its native auth list.
 func (m *Module) LoginStatus(ctx context.Context, tenant model.TenantID, driver string) (installed, signedIn bool, err error) {
 	return m.LoginStatusForProfile(ctx, tenant, driver, "")
 }
@@ -643,7 +695,7 @@ func (m *Module) build() ChildCommand {
 // key in it), and a private temporary directory (TMPDIR) that release removes once
 // the child has exited.
 func (m *Module) command(ctx context.Context, driver, program, configDir string, env []string, args ...string) (*exec.Cmd, func(), error) {
-	tmp, err := os.MkdirTemp("", "olivares-tool-")
+	tmp, err := confine.ChildTempDir()
 	if err != nil {
 		return nil, nil, fmt.Errorf("the tool's temporary directory: %w", err)
 	}
@@ -776,7 +828,7 @@ func (m *Module) handleSignInStart(w http.ResponseWriter, r *http.Request, mc ap
 				return
 			}
 		}
-		s, err := m.startSignIn(tenant, in.Driver, in.AccountRef, configDir, program, args, env)
+		s, err := m.startSignIn(tenant, in.Driver, in.AccountRef, configDir, program, args, env, in.Method)
 		if err != nil {
 			fail(w, 503, "unavailable", "The tool's sign-in could not be started on this node.")
 			return
@@ -809,9 +861,10 @@ func (m *Module) handleSignInGet(w http.ResponseWriter, r *http.Request, mc api.
 	})(w, r, mc)
 }
 
-// handleSignInCode hands the code shown on Claude's sign-in page to the waiting
-// login and answers once the tool says whether it is signed in. The code is
-// never logged or stored.
+// handleSignInCode hands the code shown on Claude's sign-in page, or the API key
+// a needs_key login waits for, to the waiting login and answers once the tool says
+// whether it is signed in. The code or key is never logged, stored or returned:
+// the tool's own login reads it on stdin and keeps it where it keeps its logins.
 func (m *Module) handleSignInCode(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	m.guard(true, func(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 		var in struct {
@@ -822,14 +875,18 @@ func (m *Module) handleSignInCode(w http.ResponseWriter, r *http.Request, mc api
 		}
 		code := strings.TrimSpace(in.Code)
 		if code == "" || len(code) > maxPastedCode || strings.ContainsAny(code, "\r\n") {
-			fail(w, 400, "bad_request", "Paste the code the sign-in page shows.")
+			fail(w, 400, "bad_request", "Paste the code the sign-in page shows, or the API key, on one line.")
 			return
 		}
 		id := model.ID(chi.URLParam(r, "id"))
 		m.mu.Lock()
 		s, ok := m.signIns[id]
 		var stdin io.WriteCloser
-		if ok && s.State == signInNeedCode {
+		end := "\n"
+		if ok && (s.State == signInNeedCode || s.State == signInNeedKey) {
+			if s.State == signInNeedKey {
+				end = "\r" // OpenCode's key prompt takes the key at a carriage return, as a terminal's Enter sends
+			}
 			stdin = s.stdin
 			s.State, s.Message = signInChecking, ""
 		}
@@ -842,7 +899,7 @@ func (m *Module) handleSignInCode(w http.ResponseWriter, r *http.Request, mc api
 			fail(w, 409, "not_waiting", "This sign-in is not waiting for a code.")
 			return
 		}
-		if _, err := io.WriteString(stdin, code+"\n"); err != nil {
+		if _, err := io.WriteString(stdin, code+end); err != nil {
 			m.finishSignIn(id, signInFailed, "The tool stopped before it read the code. Start the sign-in again.")
 		}
 		write(w, 202, m.waitForOutcome(r.Context(), id, 20*time.Second))
@@ -860,7 +917,7 @@ func (m *Module) handleSignInCancel(w http.ResponseWriter, r *http.Request, mc a
 
 // startSignIn starts the tool's login. A new start replaces a pending login in
 // the same tenant, driver and configuration home; other accounts keep theirs.
-func (m *Module) startSignIn(tenant model.TenantID, driver, accountRef, configDir, program string, args, env []string) (*SignIn, error) {
+func (m *Module) startSignIn(tenant model.TenantID, driver, accountRef, configDir, program string, args, env []string, method string) (*SignIn, error) {
 	ctx, cancel := context.WithTimeout(m.ctx, signInTimeout)
 	cmd, release, err := m.command(ctx, driver, program, configDir, env, args...)
 	if err != nil {
@@ -885,7 +942,9 @@ func (m *Module) startSignIn(tenant model.TenantID, driver, accountRef, configDi
 		release()
 		return nil, err
 	}
-	s := &SignIn{ID: model.NewID(), Driver: driver, AccountRef: accountRef, tenant: tenant, configDir: configDir, State: signInStarting, stdin: stdin, cancel: cancel, expires: time.Now().Add(signInTimeout)}
+	s := &SignIn{ID: model.NewID(), Driver: driver, AccountRef: accountRef, tenant: tenant, configDir: configDir, State: signInStarting, stdin: stdin, cancel: cancel, expires: time.Now().Add(signInTimeout), login: openCodeLoginFor(driver, method)}
+	facts, _ := driverfacts.Lookup(driver)
+	s.keyPrompt, s.keyURL = facts.KeyPromptFor(method)
 	m.mu.Lock()
 	if m.signIns == nil {
 		m.signIns = map[model.ID]*SignIn{}
@@ -911,6 +970,16 @@ func (m *Module) startSignIn(tenant model.TenantID, driver, accountRef, configDi
 		}
 	}
 
+	if s.keyPrompt != "" {
+		time.AfterFunc(keyPromptWait, func() {
+			m.mu.Lock()
+			defer m.mu.Unlock()
+			if cur, ok := m.signIns[s.ID]; ok && cur.State == signInStarting {
+				slog.Warn("tool sign-in failed", "driver", driver, "status", "no key prompt", "reason", signInReason(cur.lastLine, ""))
+				m.finishLocked(cur, signInFailed, facts.Name+" did not ask for the API key within "+keyPromptWait.String()+". Start the sign-in again; if this repeats, update "+facts.Name+" or choose another sign-in method.")
+			}
+		})
+	}
 	m.wg.Add(2)
 	read := make(chan struct{})
 	go func() { // read the tool's output: the link, and Codex's one-time code
@@ -937,11 +1006,18 @@ func (m *Module) startSignIn(tenant model.TenantID, driver, accountRef, configDi
 				if deviceSignIn(driver) && cur.UserCode == "" && cur.URL != "" {
 					cur.UserCode = userCodeIn(driver, line)
 				}
-				prompted := cur.State == signInStarting && cur.URL != "" && (pasteSignIn(driver) || cur.UserCode != "")
+				prompted := cur.State == signInStarting && cur.keyPrompt == "" && cur.URL != "" && (pasteSignIn(driver) || cur.UserCode != "")
 				if prompted {
 					cur.State = signInNeedCode
 					if deviceSignIn(driver) {
 						cur.State = signInWaiting
+					}
+				}
+				// A key method waits at the tool's own key prompt, with or without a link.
+				if cur.State == signInStarting && cur.keyPrompt != "" && strings.Contains(line, cur.keyPrompt) {
+					prompted, cur.State = true, signInNeedKey
+					if cur.URL == "" {
+						cur.URL = cur.keyURL
 					}
 				}
 				// The reason is the last line after the prompt that relays the link
@@ -991,7 +1067,17 @@ func (m *Module) startSignIn(tenant model.TenantID, driver, accountRef, configDi
 			}
 		}
 		if err == nil && driver != "gemini-cli" {
-			if st, serr := m.readStatus(m.ctx, tenant, driver, accountRef); serr == nil && st.SignedIn {
+			// A tool that lists several logins signs in only with the one this
+			// sign-in started: a key login that stored no key is not signed in
+			// because the home holds another login.
+			st, serr := m.readStatus(m.ctx, tenant, driver, accountRef)
+			listed := serr == nil && st.SignedIn
+			if listed && s.login != "" && !slices.Contains(strings.Split(st.Method, ", "), s.login) {
+				slog.Warn("tool sign-in failed", "driver", driver, "status", "exit status 0", "want", s.login, "listed", st.Method)
+				m.finishSignIn(s.ID, signInFailed, "The tool ended without storing the "+s.login+" login. Check the key and start the sign-in again.")
+				return
+			}
+			if listed {
 				m.finishSignIn(s.ID, signInDone, "")
 				m.mu.Lock()
 				signedIn := m.signedIn
@@ -1021,7 +1107,14 @@ func (m *Module) startSignIn(tenant model.TenantID, driver, accountRef, configDi
 func (m *Module) finishSignIn(id model.ID, state, msg string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if s, ok := m.signIns[id]; ok && s.State != signInDone && s.State != signInFailed {
+	if s, ok := m.signIns[id]; ok {
+		m.finishLocked(s, state, msg)
+	}
+}
+
+// finishLocked ends a sign-in that has not ended yet; the caller holds m.mu.
+func (m *Module) finishLocked(s *SignIn, state, msg string) {
+	if s.State != signInDone && s.State != signInFailed {
 		s.State, s.Message = state, msg
 		_ = s.stdin.Close()
 		s.cancel()
@@ -1064,7 +1157,7 @@ func (m *Module) pendingSignIn(tenant model.TenantID, driver, accountRef string)
 			continue
 		}
 		switch s.State {
-		case signInStarting, signInNeedCode, signInWaiting, signInChecking:
+		case signInStarting, signInNeedCode, signInNeedKey, signInWaiting, signInChecking:
 			view := publicSignIn(s)
 			return &view
 		}

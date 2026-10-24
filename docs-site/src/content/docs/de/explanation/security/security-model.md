@@ -155,7 +155,7 @@ Enterprise-Auditor verlangt, und es ist das, was native Telemetrie nicht liefert
 :::note[Zwei Wege off-box: Pull und ein echter Push]
 Das verifizierbare Ledger erreicht ein SIEM auf zwei Wegen. Der **Pull**-Export
 (`GET /v1/audit/export`) erfordert Business und ist das Artefakt, das ein Betreiber
-archiviert. Ein **Push** ist real, sobald er konfiguriert ist: ein
+archiviert. Ein **Push** erfordert ebenfalls Business und ist real, sobald er konfiguriert ist: ein
 `audit.recorded`-Eventing-Abonnement startet eine Ledger-Pumpe pro Tenant, die jeden
 versiegelten Datensatz **mindestens einmal** über den dauerhaften, SSRF-geschützten
 Transport mit Retry/Dead-Letter zustellt (`modules/siemforward/forwarder.go`,

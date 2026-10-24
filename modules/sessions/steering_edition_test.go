@@ -71,6 +71,9 @@ var steeringCalls = []steeringCall{
 	{"input", "POST", "/input", map[string]any{"line": `{"type":"user","message":{"role":"user","content":"continue"}}`}},
 	{"resume", "POST", "/resume", nil},
 	{"peers", "PUT", "/peers", map[string]any{"peers": []string{}}},
+	{"rename", "PUT", "/name", map[string]any{"name": "x"}},
+	{"archive", "POST", "/archive", nil},
+	{"unarchive", "DELETE", "/archive", nil},
 }
 
 func (f *steeringFixture) do(token, ref string, c steeringCall) resp {

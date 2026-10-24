@@ -298,6 +298,97 @@ func TestNpmLauncherRunsItsSiblingPackageUnderANonSystemPrefix(t *testing.T) {
 	}
 }
 
+// A managed release is <tools>/<driver>/<version>/bin/<program> with its runtime
+// in lib/<program> beside bin (Gemini's lib/gemini, Ollama's lib/ollama). The
+// tools directory is not a system directory, so every confined launch of the
+// program gets its own lib/<program> from the shared policy, also when it is
+// started through a link. A sibling lib/<other>, a protected path inside the
+// bundle, and a lib or lib/<program> that is a link stay closed.
+func TestManagedReleaseProgramReadsItsOwnLibDirectory(t *testing.T) {
+	requireLandlock(t)
+	const program = `#!/bin/sh
+here=$(dirname "$(readlink -f "$0")")
+for f in gemini/gemini.js other/other.js gemini/.protected/key; do
+  if cat "$here/../lib/$f" >/dev/null 2>&1; then echo "READ $f"; else echo "DENIED $f"; fi
+done
+`
+	granted := []string{"READ gemini/gemini.js", "DENIED other/other.js", "DENIED gemini/.protected/key"}
+	closed := []string{"DENIED gemini/gemini.js", "DENIED other/other.js", "DENIED gemini/.protected/key"}
+	for _, tc := range []struct {
+		name, layout string
+		want         []string
+	}{
+		{"real directory", "", granted},
+		{"program started through a link", "program link", granted},
+		{"lib/gemini is a link", "bundle link", closed},
+		{"lib is a link", "lib link", closed},
+		{"program is not under bin", "sbin", closed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t)
+			release := filepath.Join(f.root, "tools", "gemini-cli", "0.65.0")
+			lib := filepath.Join(release, "lib")
+			bundle := filepath.Join(lib, "gemini")
+			switch tc.layout {
+			case "bundle link":
+				bundle = filepath.Join(f.root, "elsewhere", "gemini")
+			case "lib link":
+				lib = filepath.Join(f.root, "elsewhere", "lib")
+				bundle = filepath.Join(lib, "gemini")
+			}
+			binDir := "bin"
+			if tc.layout == "sbin" {
+				binDir = "sbin"
+			}
+			for path, body := range map[string]string{
+				filepath.Join(release, binDir, "gemini"):   program,
+				filepath.Join(bundle, "gemini.js"):         "bundle",
+				filepath.Join(bundle, ".protected", "key"): "protected",
+				filepath.Join(lib, "other", "other.js"):    "sibling",
+			} {
+				if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte(body), 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			started := filepath.Join(release, binDir, "gemini")
+			links := map[string][2]string{
+				"bundle link":  {bundle, filepath.Join(release, "lib", "gemini")},
+				"lib link":     {lib, filepath.Join(release, "lib")},
+				"program link": {started, filepath.Join(f.root, "links", "gemini")},
+			}
+			if link, ok := links[tc.layout]; ok {
+				if err := os.MkdirAll(filepath.Dir(link[1]), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(link[0], link[1]); err != nil {
+					t.Fatal(err)
+				}
+				if tc.layout == "program link" {
+					started = link[1]
+				}
+			}
+			policy := Policy{ReadWrite: []string{f.folder}, Protect: []string{f.data, filepath.Join(bundle, ".protected")}}
+			cmd, _, err := Command(context.Background(), policy, started)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cmd.Dir = f.folder
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("the managed program did not run: %v\n%s", err, out)
+			}
+			for _, want := range tc.want {
+				if !strings.Contains(string(out), want) {
+					t.Fatalf("want %q in:\n%s", want, out)
+				}
+			}
+		})
+	}
+}
+
 func TestUnconfinedSameUserReadsTheKey(t *testing.T) {
 	f := newFixture(t)
 	if b, err := os.ReadFile(f.key); err != nil || string(b) != "sealing-key-fixture" {

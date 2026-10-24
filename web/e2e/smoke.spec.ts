@@ -86,8 +86,9 @@ test('first-boot setup → login → shell, in light and dark', async ({
   await page.screenshot({ path: 'playwright-report/shell-light.png' })
 
   // Toggle to dark and confirm the theme applies to <html>.
-  await page.getByRole('button', { name: /toggle theme/i }).click()
-  await page.getByRole('menuitem', { name: /^dark$/i }).click()
+  // The theme is chosen in the account menu (#3161).
+  await page.getByRole('button', { name: /, Account$/ }).click()
+  await page.getByRole('menuitemradio', { name: /^dark$/i }).click()
   await expect(page.locator('html')).toHaveClass(/dark/)
   await page.screenshot({ path: 'playwright-report/shell-dark.png' })
 })

@@ -35,13 +35,16 @@ func TestCarvingSkipsDanglingSymlinksWithoutWeakeningNamedGrants(t *testing.T) {
 		}
 	})
 	for _, tc := range []struct {
-		name                      string
-		held, named, loop, starts bool
+		name                                   string
+		held, named, loop, unreachable, starts bool
 	}{
 		{name: "carved dangling without handles", starts: true},
 		{name: "carved dangling with held handle", held: true, starts: true},
 		{name: "ordinary named missing path skipped", named: true, starts: true},
 		{name: "carved symlink loop still refused", loop: true},
+		// /etc/grub2-efi.cfg on an AlmaLinux UEFI host points into /boot/efi, which only root may search: the engine
+		// cannot resolve it, and neither can a tool, so the carve has nothing to grant.
+		{name: "carved symlink to an unreachable target skipped", unreachable: true, starts: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
@@ -57,6 +60,23 @@ func TestCarvingSkipsDanglingSymlinksWithoutWeakeningNamedGrants(t *testing.T) {
 			target := "default/keyboard"
 			if tc.loop {
 				target = "vconsole.conf"
+			}
+			if tc.unreachable {
+				if os.Geteuid() == 0 {
+					t.Fatal("this case needs a non-root test user: root searches a mode-0 directory")
+				}
+				locked := filepath.Join(root, "locked")
+				if err := os.Mkdir(locked, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(locked, "grub.cfg"), []byte("unreachable-fixture"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Chmod(locked, 0); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
+				target = "locked/grub.cfg"
 			}
 			if err := os.Symlink(target, missing); err != nil {
 				t.Fatal(err)

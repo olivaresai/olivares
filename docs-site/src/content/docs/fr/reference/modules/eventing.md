@@ -15,6 +15,8 @@ module est la **frontière de durabilité** : une fois qu'un événement est cap
 dans la transaction de capture, la livraison est durable et auditable. Ses routes
 sont montées sous `/v1/m/eventing/`.
 
+**Édition :** Les abonnements webhook signés sont Community. Les puits SIEM (`sink_kind` renseigné) nécessitent Business : un serveur Community répond `501 business_required` à une création ou une mise à jour qui en porte un. Un puits enregistré auparavant ne livre rien ; une mise à jour qui l'omet désactive ou efface le puits de l'abonnement, et `DELETE` supprime l'abonnement.
+
 ## À quoi vous vous abonnez
 
 Un **abonnement** enregistre les types d'événements souhaités, un filtre de source

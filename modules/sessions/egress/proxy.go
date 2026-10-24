@@ -51,6 +51,10 @@ type Policy struct {
 	// Offline retains the same OS network boundary without granting any endpoint.
 	// Local session tools such as Git use it even after the agent has stopped.
 	Offline bool
+	// LoopbackPorts are ports on 127.0.0.1, in the session's own network, that the
+	// tool reaches directly: the proxy environment's NO_PROXY names exactly them. A
+	// tool that calls its own local server (OpenCode's ACP mode) needs one.
+	LoopbackPorts []int `json:",omitempty"`
 	// CredentialSHA256 is the digest of the one key the session is bound to; the
 	// key itself never enters the proxy. All zero means no key is checked. Only the
 	// first provider, the bound endpoint, is checked: later ones (package

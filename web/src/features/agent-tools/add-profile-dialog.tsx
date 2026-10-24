@@ -30,7 +30,10 @@ import { ProviderCreateDialog } from '@/features/providers/provider-create-dialo
 import { PROVIDER_KINDS, recordServesDriver } from '@/features/providers/kinds'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
-import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
+import {
+  failureText,
+  usePrivilegedMutation,
+} from '@/lib/hooks/use-privileged-mutation'
 import { ADD_KEY, KeySelect } from './key-select'
 import { PHONE_SHEET } from './phone-sheet'
 import { isProfileName, nextFreeName, profileStem } from './profile-names'
@@ -44,9 +47,6 @@ interface Created {
   /** The profile exists, but its key could not be set: said in the dialog. */
   bindError?: string
 }
-
-const errorText = (err: unknown) =>
-  err instanceof Error && err.message ? err.message : undefined
 
 export function AddProfileDialog({
   driver,
@@ -126,7 +126,7 @@ export function AddProfileDialog({
         )
         return { account }
       } catch (err) {
-        return { account, bindError: errorText(err) ?? t('add.bindFailed') }
+        return { account, bindError: failureText(err) ?? t('add.bindFailed') }
       }
     },
     successMessage: (made) => t('add.created', { name: made.account.name }),
@@ -142,7 +142,7 @@ export function AddProfileDialog({
       else onOpenChange(false)
     },
     onError: (err) => {
-      setError(errorText(err) ?? t('add.failed'))
+      setError(failureText(err) ?? t('add.failed'))
       return true
     },
   })

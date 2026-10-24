@@ -37,7 +37,7 @@ The tools report the account, plan, models and usage windows they expose.
 An unavailable value is not a zero balance; a failed refresh shows the last
 snapshot as stale with the command that failed.
 
-To use an API key instead, open **Providers** (`/providers`), add the provider,
+To use an API key instead, open **Tools**, add the provider under **API keys**,
 and test the connection. For a local model, add an Ollama endpoint reachable
 from the engine; no API key is needed. See
 [Add a provider](/how-to/add-a-provider/). For a tool that requires a model,
@@ -61,15 +61,16 @@ project directory, not your whole home directory.
 
 Ask the tool to explain the project. Read its reply in the conversation.
 If **Start** cannot proceed, the form names what is missing. Follow that
-instruction in **AI tools** or **Providers**, then return to the session.
+instruction in **Tools**, then return to the session.
 
 ## 4. Approve an action
 
 To try an approval, choose **More options → Ask before each action** when
 starting the session. Ask the tool to run a harmless command in the project.
-When it requests permission, open **Approvals**, inspect the requested action,
-and choose **Approve** or **Deny**. Confirm your decision and return to the
-conversation to read the result. An organization policy can also require
+When it requests permission, open **Rules**. The request waiting for you is
+marked in orange and open beside the queue, with the command, what it reaches
+and the rule that asked. Choose **Approve once** (or press `A`), or **Deny**
+(`D`) and add a note. Return to the conversation to read the result. An organization policy can also require
 approval before a session launches; an approver must accept that request first.
 
 ## 5. Stop and resume

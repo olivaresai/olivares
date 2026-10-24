@@ -137,13 +137,20 @@ func TestUninstallMigrationRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m, _, err := dr.ExtractBundle(f, extracted)
+	m, kek, err := dr.ExtractBundle(f, extracted)
 	_ = f.Close()
 	if err != nil {
 		t.Fatalf("inspect export: %v", err)
 	}
 	if m.Authentication.Value == "" || len(m.Files) == 0 {
 		t.Fatal("export has no authenticated per-file inventory")
+	}
+	cipher, err := dr.OpenCipher([]byte("0123456789abcdef0123456789abcdef"), kek)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dr.VerifyBundleIntegrity(extracted, m, kek, cipher, false); err != nil {
+		t.Fatalf("open the sealed export: %v", err)
 	}
 	exportedDigest, _, err := dr.FileSHA256(filepath.Join(extracted, m.Store.File))
 	if err != nil || exportedDigest != m.Store.SHA256 {

@@ -151,6 +151,9 @@ func TestVerifyBundleScratchLegacyShortPassphrase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open legacy bundle cipher: %v", err)
 	}
+	if err := dr.VerifyBundleIntegrity(tmp, m, kek, cipher, false); err != nil {
+		t.Fatalf("open the sealed snapshot: %v", err)
+	}
 	rep, err := verifyBundleScratch(ctx, tmp, m, cipher, nil)
 	if err != nil {
 		t.Fatalf("verify legacy bundle: %v", err)
@@ -169,10 +172,13 @@ func TestVerifyBundleScratchOK(t *testing.T) {
 
 	tmp := t.TempDir()
 	f, _ := os.Open(bundlePath)
-	m, _, err := dr.ExtractBundle(f, tmp)
+	m, kek, err := dr.ExtractBundle(f, tmp)
 	_ = f.Close()
 	if err != nil {
 		t.Fatalf("extract: %v", err)
+	}
+	if err := dr.VerifyBundleIntegrity(tmp, m, kek, cipher, false); err != nil {
+		t.Fatalf("open the sealed snapshot: %v", err)
 	}
 	rep, err := verifyBundleScratch(ctx, tmp, m, cipher, nil)
 	if err != nil {

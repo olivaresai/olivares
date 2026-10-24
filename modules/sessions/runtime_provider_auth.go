@@ -160,6 +160,9 @@ type ProviderApprovalRequest struct {
 	Method string
 	// Kind is the codec family the answer will be encoded with.
 	Kind string
+	// ToolKind is the kind of tool an ACP agent says is asking (toolCall.kind: read,
+	// search, edit, execute, ...), set by the agent's own code for its built-in tools.
+	ToolKind string
 	// Requested names the permission entries the provider asked for. Grants are
 	// intersected with it: an authority cannot widen a request it was shown.
 	Requested []string

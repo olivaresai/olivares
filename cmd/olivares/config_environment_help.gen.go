@@ -384,15 +384,15 @@ const configEnvironmentHelp = "Environment variables (process values override ac
 	"  OLIVARES_ONBOARDING_CONFIG\n" +
 	"    Path to the JSON configuration of the onboarding readiness assessor. Read by the Business edition each time `olivares enterprise readiness` runs, not when the engine starts. `{}` selects the standard profile. Unset, or a file that cannot be read or parsed, makes that command report that onboarding readiness is not configured.\n" +
 	"  OLIVARES_ORCH_CADENCE_INTERVAL\n" +
-	"    How often the orchestration cadence loop runs, as a Go duration. `0` disables it.\n" +
+	"    How often the orchestration cadence loop runs, as a Go duration. `0` disables it. Read only by the Business edition; a Community binary refuses to serve while it is set.\n" +
 	"  OLIVARES_ORCH_DISPATCH_CONFIG\n" +
 	"    Path to the JSON configuration for orchestration dispatch targets.\n" +
 	"  OLIVARES_ORCH_WORKFLOW_INTERVAL\n" +
-	"    How often the orchestration workflow loop advances waiting runs, as a Go duration. Default: 15s.\n" +
+	"    How often the orchestration workflow loop advances waiting runs, as a Go duration. Read only by the Business edition; a Community binary refuses to serve while it is set. Default: 15s.\n" +
 	"  OLIVARES_ORCH_WORKFLOW_MAX\n" +
-	"    Upper bound on concurrently advancing workflow runs.\n" +
+	"    Upper bound on concurrently advancing workflow runs. Read only by the Business edition; a Community binary refuses to serve while it is set.\n" +
 	"  OLIVARES_ORCH_WORKFLOW_STEPS_MAX\n" +
-	"    Upper bound on the steps one workflow run may take, which stops a loop from running forever.\n" +
+	"    Upper bound on the steps one workflow run may take, which stops a loop from running forever. Read only by the Business edition; a Community binary refuses to serve while it is set.\n" +
 	"  OLIVARES_OTA_PUBKEY\n" +
 	"    Public key the engine verifies a downloaded update bundle against.\n" +
 	"  OLIVARES_OTEL_*\n" +
@@ -526,7 +526,7 @@ const configEnvironmentHelp = "Environment variables (process values override ac
 	"  OLIVARES_SERVER_URL\n" +
 	"    Base URL of the engine the CLI talks to, when `--server` is not given.\n" +
 	"  OLIVARES_SESSIONS_AGENT_LINK_LISTEN\n" +
-	"    Listen address of the agent link, as `host:port`: the mutual-TLS endpoint an edition built on this tree serves for its node agents. Read at startup; empty, the default, means no listener. The Community build does not read it.\n" +
+	"    Listen address of the agent link, as `host:port`: the mutual-TLS endpoint an edition built on this tree serves for its node agents. Read at startup; empty, the default, means no listener. Read only by the Business edition; a Community binary refuses to serve while it is set.\n" +
 	"  OLIVARES_SESSIONS_MANAGED_STOP_ADMISSION_TIMEOUT\n" +
 	"    Maximum time to admit a managed Stop request, as a positive Go duration with units. Read at startup; invalid or nonpositive values prevent startup. This does not bound process teardown. Default: 10s.\n" +
 	"  OLIVARES_SESSION_BUDGET_AVAILABILITY\n" +
@@ -570,7 +570,7 @@ const configEnvironmentHelp = "Environment variables (process values override ac
 	"  OLIVARES_SESSION_WORKTREE_DIR\n" +
 	"    Directory that holds the git worktrees of sessions started with a new worktree; the default is session-worktrees in the data directory.\n" +
 	"  OLIVARES_SIEM_FORWARD_INTERVAL\n" +
-	"    How often signed ledger records are forwarded to the configured SIEM, as a Go duration.\n" +
+	"    How often signed ledger records are forwarded to the configured SIEM, as a Go duration. Read only by the Business edition; a Community binary refuses to serve while it is set.\n" +
 	"  OLIVARES_SOURCES_CONFIG\n" +
 	"    Path to the JSON file that wires real observation sources and identity roster providers before the engine starts.\n" +
 	"  OLIVARES_SSO_PROTOCOL\n" +

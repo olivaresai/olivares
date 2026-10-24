@@ -32,8 +32,16 @@ import { sessionDisplayState } from './session-display-state'
 export const WORK_GROUPS = ['attention', 'active', 'settled'] as const
 export type WorkGroupId = (typeof WORK_GROUPS)[number]
 
-/** The rail's sections: the person's own pinned sessions first, then the three above. */
-export type RailGroupId = 'pinned' | WorkGroupId
+/** The rail's sections: the person's own pinned sessions first, then the three above, then
+ * the sessions they snoozed and the archived ones, which the rail keeps folded until asked. */
+/** The rail's sections: what ended today is apart from what ended before (dev#3162). */
+export type RailGroupId =
+  | 'pinned'
+  | Exclude<WorkGroupId, 'settled'>
+  | 'today'
+  | 'settled'
+  | 'snoozed'
+  | 'archived'
 
 /** One rendered section: its id and the rows in it, already ordered. */
 export interface WorkGroup {
@@ -50,6 +58,28 @@ export function groupOf(s: UnifiedSession): WorkGroupId {
 }
 
 /**
+ * Whether the person snoozed this session (#2480). The engine sends `snoozed_until` on a
+ * run only while that person's snooze is still to end, so its presence IS the rule: no
+ * clock here, and the session comes back on the read after its moment.
+ */
+export function isSnoozed(s: Pick<UnifiedSession, 'runs'>): boolean {
+  return s.runs.some((run) => !!run.snoozed_until)
+}
+
+/**
+ * Whether the session is archived (#2795). Unlike a snooze it is the session's own mark,
+ * the same for everyone who reads it; the rail folds it away the same way.
+ */
+export function isArchived(s: Pick<UnifiedSession, 'runs'>): boolean {
+  return s.runs.some((run) => !!run.archived_at)
+}
+
+/** Whether the person marked this session done (#2480): it is filed under Settled. */
+export function isMarkedDone(s: Pick<UnifiedSession, 'runs'>): boolean {
+  return s.runs.some((run) => run.done === true)
+}
+
+/**
  * The page size of each half (observed rows, runs) that the Sessions view reads and
  * the dashboard's Active agents card joins, so the card counts over the rows the list
  * lists. A page with more behind it is flagged on both (`has_more`), never silently
@@ -60,10 +90,18 @@ export const WORKING_SET_PAGE_LIMIT = 200
 /**
  * How many sessions are Working. The ONE figure the Sessions header ("N working") and
  * the dashboard's Active agents card both print, so the card and the list cannot
- * disagree: it is the size of the Working section, and nothing else.
+ * disagree: it is the size of the Working section, and nothing else. A session the
+ * person snoozed or marked done (#2480), or an archived one (#2795), is not in that
+ * section, so it is not counted.
  */
 export function workingCount(sessions: readonly UnifiedSession[]): number {
-  return sessions.filter((s) => groupOf(s) === 'active').length
+  return sessions.filter(
+    (s) =>
+      !isArchived(s) &&
+      !isSnoozed(s) &&
+      !isMarkedDone(s) &&
+      groupOf(s) === 'active',
+  ).length
 }
 
 /**
@@ -77,31 +115,67 @@ export function workingCount(sessions: readonly UnifiedSession[]): number {
  * sections below. The other three keep the order the join produced, most recent
  * activity first, and a session is in exactly one section.
  *
+ * THE PERSON'S OWN MARKS (#2480) come before every other rule, because they are what the
+ * person said about the row. A snoozed session leaves every section, a pinned one too, for
+ * the Snoozed section at the end, which the rail keeps folded: "not in my list until then".
+ * A session marked done is filed under Settled whatever it is doing, unless it is pinned,
+ * which still keeps it first. An archived session (#2795) leaves every section before any
+ * of that, for the Archived section after Snoozed, folded the same way.
+ *
  * Sections with no rows are RETURNED, empty. The rail draws only the ones that have rows,
  * so nothing is drawn for "Pinned" until something is pinned.
  */
 export function groupSessions(
   sessions: readonly UnifiedSession[],
   pinned: ReadonlySet<string> = new Set(),
+  now: number = Date.now(),
 ): WorkGroup[] {
+  // "Done today" is the person's day, in their own time zone.
+  const midnight = new Date(now)
+  midnight.setHours(0, 0, 0, 0)
+  const today = (s: UnifiedSession) => s.lastActivityMs >= midnight.getTime()
   const pinOrder = new Map([...pinned].map((key, index) => [key, index]))
   const pinnedRows: UnifiedSession[] = []
+  const snoozedRows: UnifiedSession[] = []
+  const archivedRows: UnifiedSession[] = []
+  const doneToday: UnifiedSession[] = []
   const byGroup = new Map<WorkGroupId, UnifiedSession[]>(
     WORK_GROUPS.map((id) => [id, []]),
   )
   for (const s of sessions) {
-    if (pinned.has(s.key)) pinnedRows.push(s)
-    else byGroup.get(groupOf(s))?.push(s)
+    const group = isMarkedDone(s) ? 'settled' : groupOf(s)
+    if (isArchived(s)) archivedRows.push(s)
+    else if (isSnoozed(s)) snoozedRows.push(s)
+    else if (pinned.has(s.key)) pinnedRows.push(s)
+    else if (group === 'settled' && today(s)) doneToday.push(s)
+    else byGroup.get(group)?.push(s)
   }
   const rank = (s: UnifiedSession) => pinOrder.get(s.key) ?? 0
   return [
     // A STABLE sort: two rows of one rank keep the incoming order.
     { id: 'pinned', sessions: pinnedRows.sort((a, b) => rank(a) - rank(b)) },
-    ...WORK_GROUPS.map((id) => ({ id, sessions: byGroup.get(id) ?? [] })),
+    { id: 'attention', sessions: byGroup.get('attention') ?? [] },
+    { id: 'active', sessions: byGroup.get('active') ?? [] },
+    { id: 'today', sessions: doneToday },
+    { id: 'settled', sessions: byGroup.get('settled') ?? [] },
+    { id: 'snoozed', sessions: snoozedRows },
+    { id: 'archived', sessions: archivedRows },
   ]
 }
 
-/** Every row in rail order, which is what an arrow key walks. */
-export function railOrder(groups: readonly WorkGroup[]): UnifiedSession[] {
-  return groups.flatMap((g) => g.sessions)
+/** Every row in rail order, which is what an arrow key walks. The snoozed and archived
+ * rows are not in it unless the rail is showing them: a session out of the list is not
+ * where the screen opens either. */
+export function railOrder(
+  groups: readonly WorkGroup[],
+  withSnoozed = false,
+  withArchived = false,
+): UnifiedSession[] {
+  return groups
+    .filter(
+      (g) =>
+        (withSnoozed || g.id !== 'snoozed') &&
+        (withArchived || g.id !== 'archived'),
+    )
+    .flatMap((g) => g.sessions)
 }

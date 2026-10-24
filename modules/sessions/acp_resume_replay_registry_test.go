@@ -33,6 +33,13 @@ type acpReplayTool struct {
 	// fixture configures the tool's peer: its conversation id, what a resume replays
 	// and where its record goes.
 	fixture func(t *testing.T, prof ProviderProfile, conversation string, replayText string, replayed int)
+	// registry is the package registry the journey declares (acmeRegistry when zero).
+	// A confined session's network pins its registry's address at launch, so its
+	// host must resolve.
+	registry SessionRegistry
+	// confined is set for a tool whose sessions are held to their provider's hosts:
+	// a git_read credential is refused for them, since git could not reach its host.
+	confined bool
 }
 
 func acpReplayTools() []acpReplayTool {
@@ -58,6 +65,9 @@ func acpReplayTools() []acpReplayTool {
 				return m, tenant, prof
 			},
 			launch: openCodeLaunch,
+			// An own-login OpenCode session is held to its sign-in's hosts (#3082).
+			registry: SessionRegistry{Kind: acmeRegistry.Kind, URL: "https://registry.npmjs.org/", Scope: acmeRegistry.Scope, Secret: acmeRegistry.Secret},
+			confined: true,
 			fixture: func(t *testing.T, prof ProviderProfile, conversation, replayText string, replayed int) {
 				setOpenCodeFixture(t, prof, openCodeFixture{
 					SessionID: conversation, ReplayUpdates: replayed, ReplayText: replayText,
@@ -99,7 +109,11 @@ func newReplayJourney(t *testing.T, tool acpReplayTool, declareFirst bool) *repl
 
 func (j *replayJourney) declareRegistry() {
 	j.t.Helper()
-	registries, programs := []SessionRegistry{acmeRegistry}, []string{}
+	registry := acmeRegistry
+	if j.tool.registry.URL != "" {
+		registry = j.tool.registry
+	}
+	registries, programs := []SessionRegistry{registry}, []string{}
 	if _, err := j.m.PatchProfile(context.Background(), j.tenant, j.prof.Ref, ProfilePatch{
 		SessionRegistries: &registries, SessionPrograms: &programs, MayUseSecretEnv: true,
 	}); err != nil {

@@ -36,6 +36,7 @@ import { AAL, StepUpPanel } from './assurance'
 import { queryKeys } from '@/lib/api/query'
 import type { Whoami } from '@/lib/api/types'
 import { useSessionStore } from '@/stores/session'
+import { BUSINESS_BUILD } from '@/features/business-build'
 const actor: Whoami = {
   kind: 'user',
   user_id: 'u1',
@@ -65,7 +66,8 @@ const wrap = (onElevated?: () => void, qc = client()) =>
 
 const boton = () => screen.queryByRole('button', { name: /PIV\/CAC/i })
 
-describe('Community smart-card edition boundary', () => {
+// A Business console offers the smart card: its own tests are features/piv/.
+describe.skipIf(BUSINESS_BUILD)('Community smart-card edition boundary', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     authState.principal = {

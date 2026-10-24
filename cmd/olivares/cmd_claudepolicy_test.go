@@ -59,7 +59,7 @@ func TestClaudePolicyVerbsReachTheRoutesTheEngineRegisters(t *testing.T) {
 
 // TestClaudePolicyRejectsAnUnknownSurfaceBeforeAnyRequest. The engine is
 // authoritative, but a typo should cost exit 2 and no request — and the message
-// must list the four, because "unknown surface" without them sends the operator
+// must list them, because "unknown surface" without them sends the operator
 // to the source.
 func TestClaudePolicyRejectsAnUnknownSurfaceBeforeAnyRequest(t *testing.T) {
 	srv := newLot3Server(t, lot3OK(`{"ok":true}`))
@@ -74,7 +74,8 @@ func TestClaudePolicyRejectsAnUnknownSurfaceBeforeAnyRequest(t *testing.T) {
 		t.Fatalf("%d request(s) were sent for an unknown surface", n)
 	}
 
-	// THE CONTROL: all four real surfaces are accepted.
+	// THE CONTROL: the Claude Code surfaces are accepted (every managed surface is in
+	// TestClaudePolicyAcceptsEveryManagedSurface).
 	for _, surface := range []string{"managed-settings", "hooks", "managed-mcp", "sandbox"} {
 		if _, _, err := execRoot(t, lot3Args(srv.URL, "claude-policy", "versions", "ls", surface)...); err != nil {
 			t.Fatalf("surface %s must be accepted, got %v", surface, err)

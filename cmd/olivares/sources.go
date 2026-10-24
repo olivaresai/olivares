@@ -531,10 +531,15 @@ type contentSourceMode interface {
 
 type modeContentSource struct {
 	contentsource.Source
-	mode string
+	mode   string
+	public bool
 }
 
 func (s modeContentSource) Mode() string { return normalizeContentSourceMode(s.mode) }
+
+// Public reports the operator's explicit decision that this source's documents
+// with no ACL are visible to the whole tenant (the "public" setting).
+func (s modeContentSource) Public() bool { return s.public }
 
 // ListingComplete and ListPage forward the wrapped source's completeness / bounded-pagination
 // capabilities (the wrapper embeds the Source INTERFACE, which erases the concrete type, so
@@ -551,10 +556,14 @@ func (s modeContentSource) ListPage(ctx context.Context, cursor string, maxItems
 
 type modeLiveContentSource struct {
 	contentsource.LiveSource
-	mode string
+	mode   string
+	public bool
 }
 
 func (s modeLiveContentSource) Mode() string { return normalizeContentSourceMode(s.mode) }
+
+// Public: see modeContentSource.Public.
+func (s modeLiveContentSource) Public() bool { return s.public }
 
 func (s modeLiveContentSource) ListingComplete() bool { return wrappedListingComplete(s.LiveSource) }
 
@@ -594,6 +603,35 @@ func wrapContentSourceMode(src contentsource.Source, mode string) contentsource.
 	return modeContentSource{Source: src, mode: mode}
 }
 
+// wrapContentSourceConfig wraps a configured document source with its mode and its
+// operator-declared "public" setting. Only the literal "true" makes the source
+// public: a document it reports without an ACL is then stored as "anyone", and
+// every ingest or sync that does so leaves a knowledge.source.public ledger entry.
+// Any other value, or none, leaves such documents denied.
+func wrapContentSourceConfig(src contentsource.Source, settings map[string]string) contentsource.Source {
+	wrapped := wrapContentSourceMode(src, settings["mode"])
+	if strings.TrimSpace(settings["public"]) != "true" {
+		return wrapped
+	}
+	switch w := wrapped.(type) {
+	case modeLiveContentSource:
+		w.public = true
+		return w
+	case modeContentSource:
+		w.public = true
+		return w
+	}
+	return wrapped
+}
+
+// warnUnrecognizedPublic says why a source stays non-public when "public" is set
+// to anything but the literal "true": a typo must not deny without a word.
+func warnUnrecognizedPublic(log *slog.Logger, name string, settings map[string]string) {
+	if v := strings.TrimSpace(settings["public"]); v != "" && v != "true" {
+		log.Warn("knowledge: document source setting public must be the literal \"true\"; the source stays non-public and its documents without an ACL are denied", "name", name)
+	}
+}
+
 func normalizeContentSourceMode(mode string) string {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "live":
@@ -631,6 +669,7 @@ func knowledgeContentSources(cfg sourcesConfig, log *slog.Logger) []pendingConte
 			log.Warn("knowledge: document source has no name; not wired", "kind", d.Kind)
 			continue
 		}
+		warnUnrecognizedPublic(log, name, d.Config)
 		if d.Plugin != nil {
 			digest, refusal := admitExternalPlugin(*d.Plugin, cfg.ConnectorTrust)
 			if refusal != "" {
@@ -645,7 +684,7 @@ func knowledgeContentSources(cfg sourcesConfig, log *slog.Logger) []pendingConte
 			log.Warn("knowledge: unknown or unsupported document source kind; not wired", "name", name, "kind", d.Kind, "reason", unsupportedSourceKindReason(d.Kind))
 			continue
 		}
-		src = wrapContentSourceMode(src, d.Config["mode"])
+		src = wrapContentSourceConfig(src, d.Config)
 		// Defer: boot resolves this source's secret references (a credential_ref) and
 		// OPENS it once the store exists (deferredSecretWiring.openAll) — the
 		// source must be opened before it can List/Fetch (ingest.go documents that

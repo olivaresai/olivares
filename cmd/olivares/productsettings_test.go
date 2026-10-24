@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -186,10 +187,12 @@ type fakeActivation struct {
 	api.ActivationService
 	dir string
 	m   *ActivationManifest
+	// live says the edition applied the change itself and needs no restart.
+	live bool
 }
 
 func (f fakeActivation) ActivationApply(context.Context, api.ActivationApplyRequest) (api.ActivationStatusDTO, error) {
-	return api.ActivationStatusDTO{Edition: "business", RestartRequired: true}, SaveActivationManifest(f.dir, f.m, productSettingsT)
+	return api.ActivationStatusDTO{Edition: "business", RestartRequired: !f.live}, SaveActivationManifest(f.dir, f.m, productSettingsT)
 }
 
 // A console activation is recorded for the deployment and restarts the engine.
@@ -197,7 +200,7 @@ func TestConsoleActivationIsRecordedAndRestartsTheEngine(t *testing.T) {
 	_, p := bootForSettings(t)
 	var reason string
 	svc := recordingActivation(fakeActivation{dir: p.dataDir, m: activationWith(reportingActive, rtbfActive)}, p,
-		func(r string) error { reason = r; return nil }, slog.Default())
+		func(r string) error { reason = r; return nil }, nil, slog.Default())
 	dto, err := svc.ActivationApply(context.Background(), api.ActivationApplyRequest{Action: "enable", Preset: "full"})
 	if err != nil || !dto.Restarting || reason != "license activation: enable" {
 		t.Fatalf("apply = %+v %v, restart reason %q", dto, err, reason)
@@ -206,7 +209,7 @@ func TestConsoleActivationIsRecordedAndRestartsTheEngine(t *testing.T) {
 	if !sameActivation(got, activationWith(reportingActive, rtbfActive)) {
 		t.Fatalf("record = %+v", got)
 	}
-	if recordingActivation(nil, p, nil, slog.Default()) != nil {
+	if recordingActivation(nil, p, nil, nil, slog.Default()) != nil {
 		t.Fatal("the community build must keep a nil activation service")
 	}
 }
@@ -215,12 +218,94 @@ func TestConsoleActivationIsRecordedAndRestartsTheEngine(t *testing.T) {
 func TestConsoleActivationReportsARestartItCannotDo(t *testing.T) {
 	_, p := bootForSettings(t)
 	svc := recordingActivation(fakeActivation{dir: p.dataDir, m: activationWith(reportingActive)}, p,
-		func(string) error { return errors.New("not serving") }, slog.Default())
+		func(string) error { return errors.New("not serving") }, nil, slog.Default())
 	if _, err := svc.ActivationApply(context.Background(), api.ActivationApplyRequest{Action: "enable"}); !errors.Is(err, api.ErrActivationRestartUnavailable) {
 		t.Fatalf("apply = %v, want ErrActivationRestartUnavailable", err)
 	}
-	svc = recordingActivation(fakeActivation{dir: p.dataDir, m: activationWith(reportingActive)}, p, nil, slog.Default())
+	svc = recordingActivation(fakeActivation{dir: p.dataDir, m: activationWith(reportingActive)}, p, nil, nil, slog.Default())
 	if _, err := svc.ActivationApply(context.Background(), api.ActivationApplyRequest{Action: "enable"}); !errors.Is(err, api.ErrActivationRestartUnavailable) {
 		t.Fatalf("apply without a restarter = %v", err)
+	}
+}
+
+// A change the edition applied itself needs no restart: the record is written and
+// the running engine follows it, so nothing stops and no session is cut.
+func TestConsoleActivationThatNeedsNoRestartIsAppliedLive(t *testing.T) {
+	_, p := bootForSettings(t)
+	var restarted, applied bool
+	svc := recordingActivation(fakeActivation{dir: p.dataDir, m: activationWith(reportingActive), live: true}, p,
+		func(string) error { restarted = true; return nil },
+		func(context.Context) error { applied = true; return nil }, slog.Default())
+	dto, err := svc.ActivationApply(context.Background(), api.ActivationApplyRequest{Action: "enable", Preset: "business"})
+	if err != nil || restarted || dto.Restarting || dto.RestartRequired || !applied {
+		t.Fatalf("apply = %+v %v, restarted=%v applied=%v: want applied live, no restart", dto, err, restarted, applied)
+	}
+	got, _ := p.Activation(context.Background())
+	if !sameActivation(got, activationWith(reportingActive)) {
+		t.Fatalf("record = %+v", got)
+	}
+}
+
+// A live application that fails falls back to the restart, which rebuilds the
+// engine from the record: the console is never told "applied" for a change the
+// engine does not follow.
+func TestConsoleActivationFallsBackToTheRestartWhenLiveApplyFails(t *testing.T) {
+	_, p := bootForSettings(t)
+	var reason string
+	svc := recordingActivation(fakeActivation{dir: p.dataDir, m: activationWith(reportingActive), live: true}, p,
+		func(r string) error { reason = r; return nil },
+		func(context.Context) error { return errors.New("module did not start") }, slog.Default())
+	dto, err := svc.ActivationApply(context.Background(), api.ActivationApplyRequest{Action: "enable"})
+	if err != nil || !dto.Restarting || reason != "license activation: enable" {
+		t.Fatalf("apply = %+v %v, restart reason %q: want the restart fallback", dto, err, reason)
+	}
+}
+
+// An edition that says the change needs a restart gets one, even when a live path exists:
+// the live path is only for changes the edition applied itself.
+func TestConsoleActivationThatNeedsARestartIsNotAppliedLive(t *testing.T) {
+	_, p := bootForSettings(t)
+	var reason string
+	appliedLive := false
+	svc := recordingActivation(fakeActivation{dir: p.dataDir, m: activationWith(reportingActive)}, p,
+		func(r string) error { reason = r; return nil },
+		func(context.Context) error { appliedLive = true; return nil }, slog.Default())
+	dto, err := svc.ActivationApply(context.Background(), api.ActivationApplyRequest{Action: "enable"})
+	if err != nil || !dto.Restarting || appliedLive || reason == "" {
+		t.Fatalf("apply = %+v %v, live=%v, restart reason %q: want the restart and no live apply", dto, err, appliedLive, reason)
+	}
+}
+
+// When the live path fails and the engine cannot restart itself, the console is told both
+// facts: the change is recorded, and why it is not running.
+func TestConsoleActivationReportsALiveFailureThatCannotRestart(t *testing.T) {
+	_, p := bootForSettings(t)
+	svc := recordingActivation(fakeActivation{dir: p.dataDir, m: activationWith(reportingActive), live: true}, p, nil,
+		func(context.Context) error { return errors.New("compliance did not start") }, slog.Default())
+	_, err := svc.ActivationApply(context.Background(), api.ActivationApplyRequest{Action: "enable"})
+	if !errors.Is(err, api.ErrActivationRestartUnavailable) || !strings.Contains(err.Error(), "compliance did not start") {
+		t.Fatalf("apply = %v, want ErrActivationRestartUnavailable naming the live failure", err)
+	}
+}
+
+// A manifest that something other than the running engine wrote is not what the engine
+// reads: nothing applied it.
+func TestActivationOverlayMatchesOnlyWhatTheEngineWasGiven(t *testing.T) {
+	t.Cleanup(func() { setActivationOverlayForTest(nil) })
+	m := activationWith(reportingActive)
+	setActivationOverlayForTest(nil)
+	if activationOverlayMatches(m) {
+		t.Fatal("an overlay that is empty matched a manifest with an active add-on")
+	}
+	publishActivationOverlay(m)
+	if !activationOverlayMatches(m) {
+		t.Fatal("the overlay the engine published did not match its own manifest")
+	}
+	if activationOverlayMatches(&ActivationManifest{}) {
+		t.Fatal("an empty manifest matched an overlay with an add-on")
+	}
+	publishActivationOverlay(&ActivationManifest{})
+	if !activationOverlayMatches(&ActivationManifest{}) {
+		t.Fatal("an empty overlay did not match an empty manifest")
 	}
 }

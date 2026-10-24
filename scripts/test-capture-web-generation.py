@@ -94,7 +94,10 @@ if mode == 'empty':
         self.env = dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ["PATH"],
                         RUNNER_TEMP=str(self.runner), GITHUB_SHA=self.head,
                         PR_HEAD=self.head, GITHUB_REPOSITORY="olivaresai/olivares",
-                        GITHUB_RUN_ID="123", GITHUB_RUN_ATTEMPT="2")
+                        GITHUB_RUN_ID="123", GITHUB_RUN_ATTEMPT="2",
+                        # The embed step reads the producing attempt from pr-web's output
+                        # (#2749), so the extracted script needs the same environment.
+                        GENERATION_ATTEMPT="2", CONSOLE_REBUILT_IN_THIS_JOB="false")
         # Ignore the invoking shell's git overrides; only this fixture is in scope.
         for name in list(self.env):
             if name.startswith("GIT_"):
@@ -250,6 +253,11 @@ else:
                             body.index('run: python3 scripts/capture-web-generation.py'))
             self.assertLess(body.index('run: python3 scripts/capture-web-generation.py'),
                             body.index('name: embed the verified console output'))
+            # The embed step's local-rebuild branch must fire on exactly the runs that
+            # rebuild locally (#2749): same condition as the rebuild/download steps above.
+            embed = next(step for step in steps
+                         if step.startswith('name: embed the verified console output\n'))
+            self.assertIn('CONSOLE_REBUILT_IN_THIS_JOB: ${{ ' + local + ' }}', embed)
         producer = workflow.split('  pr-web:\n', 1)[1].split('\n  userspace-compat:', 1)[0]
         upload = next(step for step in producer.split('      - ')
                       if step.startswith('name: retain the generated console bundle\n'))
@@ -277,7 +285,8 @@ else:
                                             cwd=self.repo,
                                             env=dict(self.env, FIXTURE_MODE=mode,
                                                      GITHUB_WORKSPACE=str(self.repo),
-                                                     GITHUB_REPOSITORY='fixture/development'),
+                                                     GITHUB_REPOSITORY='fixture/development',
+                                                     CONSOLE_REBUILT_IN_THIS_JOB='true'),
                                             capture_output=True, text=True, timeout=10)
                     self.assertEqual(result.returncode == 0, mode == 'good',
                                      result.stdout + result.stderr)
@@ -340,6 +349,99 @@ else:
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn('/assets/new.js', destination.read_text())
                 self.git('checkout', '--detach', self.env['GITHUB_SHA'])
+
+    def embed_step(self, job):
+        workflow = SOURCE.parent.parent / '.github/workflows/pr-ci.yml'
+        body = workflow.read_text().split(f'  {job}:\n', 1)[1]
+        body = re.split(r'\n  [a-z][a-z0-9-]*:', body, maxsplit=1)[0]
+        return body.split('      - name: embed the verified console output\n', 1)[1] \
+                  .split('      - ', 1)[0]
+
+    def test_consumer_embeds_the_attempt_the_generation_job_reported(self):
+        # #2749: "re-run failed jobs" re-runs a failed consumer at attempt 2 while pr-web's
+        # attempt-1 success keeps its artifact, so the identity check must read the
+        # PRODUCING attempt — pr-web's own output on the download path, this job's own
+        # attempt after a local rebuild — never the consumer's GITHUB_RUN_ATTEMPT, or
+        # every such rerun fails at the embed step before a test runs.
+        # pr-web uploaded the console at attempt 1; only the consumer re-runs, at 2.
+        self.env["GITHUB_RUN_ATTEMPT"] = "1"
+        result = self.capture()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        manifest = self.runner / 'web-generation-artifact' / 'manifest.json'
+        self.assertEqual(json.loads(manifest.read_text())["run_attempt"], "1")
+        destination = self.repo / DIST / 'index.html'
+        for job in ['pr-build', 'pr-test-shard']:
+            script = self.consumer_script(job)
+            for label, attempt, rebuilt, accepted in [
+                ('a rerun embeds the retained attempt-1 artifact', '1', 'false', True),
+                ('an artifact of another producing attempt is still refused', '2', 'false', False),
+                ('a rebuild flag over an artifact this job did not rebuild is refused', '1', 'true', False),
+                ('a missing producing attempt is refused loudly', '', 'false', False),
+            ]:
+                with self.subTest(job=job, case=label):
+                    destination.write_text('consumer sentinel')
+                    result = subprocess.run(
+                        ['bash', '-e', '-o', 'pipefail', '-c', script], cwd=self.repo,
+                        env=dict(self.env, GITHUB_WORKSPACE=str(self.repo),
+                                 GITHUB_RUN_ATTEMPT="2", GENERATION_ATTEMPT=attempt,
+                                 CONSOLE_REBUILT_IN_THIS_JOB=rebuilt),
+                        capture_output=True, text=True, timeout=10)
+                    if label == 'a missing producing attempt is refused loudly':
+                        self.assertIn('::error::', result.stdout + result.stderr)
+                    if accepted:
+                        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                        self.assertIn('/assets/new.js', destination.read_text())
+                    else:
+                        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                        self.assertEqual(destination.read_text(), 'consumer sentinel')
+
+        # A development self-hosted runner rebuilt the console in THIS rerun job: the
+        # manifest carries this job's attempt 2 while pr-web's output still says 1.
+        self.env["GITHUB_RUN_ATTEMPT"] = "2"
+        result = self.capture()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(json.loads(manifest.read_text())["run_attempt"], "2")
+        for job in ['pr-build', 'pr-test-shard']:
+            with self.subTest(job=job, case='a local rebuild at the rerun attempt'):
+                destination.write_text('consumer sentinel')
+                result = subprocess.run(
+                    ['bash', '-e', '-o', 'pipefail', '-c', self.consumer_script(job)],
+                    cwd=self.repo,
+                    env=dict(self.env, GITHUB_WORKSPACE=str(self.repo),
+                             GENERATION_ATTEMPT="1", CONSOLE_REBUILT_IN_THIS_JOB="true"),
+                    capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn('/assets/new.js', destination.read_text())
+
+        # The workflow shape that makes both paths read the producing attempt: pr-web
+        # exports its own attempt, the embed steps take theirs from that output, and
+        # neither compares the manifest against the consumer's GITHUB_RUN_ATTEMPT.
+        workflow = (SOURCE.parent.parent / '.github/workflows/pr-ci.yml').read_text()
+        self.assertIn('bundle-attempt: ${{ github.run_attempt }}',
+                      workflow.split('  pr-web:\n', 1)[1])
+        for job in ['pr-build', 'pr-test-shard']:
+            with self.subTest(job=job, case='embed reads the producing attempt'):
+                step = self.embed_step(job)
+                self.assertIn('GENERATION_ATTEMPT: ${{ needs.pr-web.outputs.bundle-attempt }}', step)
+                self.assertIn('CONSOLE_REBUILT_IN_THIS_JOB: ${{ github.repository'
+                              " != 'olivaresai/olivares'", step)
+                self.assertNotIn('--arg attempt "$GITHUB_RUN_ATTEMPT"', step)
+
+    def test_userspace_compat_binds_the_attempt_pr_build_reported(self):
+        # #2749, second consumer: userspace-compat downloads pr-build's artifact by name and
+        # must check it against the attempt pr-build reported, not its own GITHUB_RUN_ATTEMPT
+        # (scripts/userspace/test_extract_build.py runs the check itself).
+        workflow = (SOURCE.parent.parent / '.github/workflows/pr-ci.yml').read_text()
+        build = re.split(r'\n  [a-z][a-z0-9-]*:', workflow.split('  pr-build:\n', 1)[1], maxsplit=1)[0]
+        self.assertIn('    outputs:\n', build.split('steps:', 1)[0])
+        self.assertIn('      build-attempt: ${{ github.run_attempt }}\n', build.split('steps:', 1)[0])
+        compat = workflow.split('  userspace-compat:\n', 1)[1]
+        compat = re.split(r'\n  [a-z][a-z0-9-]*:', compat, maxsplit=1)[0]
+        self.assertIn('    needs: pr-build\n', compat.split('steps:', 1)[0])
+        step = compat.split('      - name: bind the existing binary to this candidate\n', 1)[1]
+        step = step.split('      - ', 1)[0]
+        self.assertIn('BUILD_ATTEMPT: ${{ needs.pr-build.outputs.build-attempt }}', step)
+        self.assertIn('scripts/userspace/extract_build.py', step)
 
     def test_failed_and_partial_generation_never_publish(self):
         for mode in ["failed", "partial", "empty", "missing"]:

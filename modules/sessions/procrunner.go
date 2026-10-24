@@ -139,6 +139,9 @@ func (pr *procRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, err
 	}
 	p.confinement = state
 	p.previewSocket = preview
+	if spec.OnStart != nil {
+		spec.OnStart(p.PID())
+	}
 	if waitReady != nil {
 		if err := waitReady(); err != nil {
 			stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

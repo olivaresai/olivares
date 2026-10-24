@@ -17,3 +17,9 @@ import (
 func readHiddenLine(*os.File, *bufio.Reader) (string, error) {
 	return "", errors.New("this platform cannot hide typed input")
 }
+
+// hideEcho cannot turn echo off on this platform; a caller refuses to read a
+// secret visibly.
+func hideEcho(*os.File) (func(), error) {
+	return nil, errors.New("this platform cannot hide typed input")
+}

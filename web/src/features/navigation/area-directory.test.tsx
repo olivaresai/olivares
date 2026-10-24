@@ -39,13 +39,10 @@ describe('AreaDirectoryView on a new installation', () => {
   it('lists every page of an area from the first sign-in', () => {
     renderIntel(<AreaDirectoryView areaId="ai" />)
     expect(hrefs()).toEqual(
-      expect.arrayContaining([
-        '/sessions',
-        '/agent-tools',
-        '/providers',
-        '/models',
-      ]),
+      expect.arrayContaining(['/sessions', '/agent-tools', '/models']),
     )
+    // The API keys are on Tools (#2552): their own page is a door, never a second entry.
+    expect(hrefs()).not.toContain('/providers')
   })
 
   it('lists the pages of the security area from the first sign-in', () => {

@@ -161,8 +161,8 @@
     "confirmOverride": "ゲートを上書き",
     "overrideDone": "ゲートを上書きしました",
     "cancel": "キャンセル",
-    "correctedRate": "Bias-corrected pass rate {{rate}} (judge sensitivity {{sens}}, specificity {{spec}}) — shown alongside the raw rate, never instead of it.",
-    "noCorrection": "No bias-corrected estimate: there is no trusted calibration to correct with, so the raw rate is unadjusted — that is not the same as the two agreeing."
+    "correctedRate": "バイアス補正後の合格率 {{rate}}（ジャッジの感度 {{sens}}、特異度 {{spec}}）— 生の合格率と並べて表示しており、置き換えるものではありません。",
+    "noCorrection": "バイアス補正後の推定値はありません。補正に使える信頼できる較正がないため、生の合格率は未補正です。これは両者が一致していることを意味しません。"
   },
   "calibration": {
     "title": "ジャッジ較正",
@@ -182,12 +182,12 @@
   },
   "calibItems": {
     "title": "Reference set",
-    "description": "The human labels the judge is measured against — and the reason a report can or cannot certify.",
+    "description": "ジャッジの測定基準となる人手のラベルです。レポートが証明できるかどうかは、これで決まります。",
     "run": "Run calibration",
     "empty": "No labelled items yet",
     "emptyHint": "ラベル付き項目とは、キャリブレーションレポートの採点基準となる人手の判定です。ケースにラベルを付けると 1 件目が追加されます。",
-    "distribution": "{{pass}} labelled pass · {{fail}} labelled fail",
-    "degenerate": "⛔ Every label is the same, so kappa CANNOT be computed and no report from this set can certify. Label cases of the other kind.",
+    "distribution": "合格ラベル {{pass}} 件 · 不合格ラベル {{fail}} 件",
+    "degenerate": "⛔ すべてのラベルが同じため、カッパを計算できず、このセットからのレポートは証明できません。もう一方の種類のケースにラベルを付けてください。",
     "humanPass": "human: pass",
     "humanFail": "human: fail",
     "unscored": "unscored",
@@ -197,8 +197,8 @@
     "pin": "Pin as baseline",
     "confirm": "Replace the baseline",
     "pinned": "Baseline pinned",
-    "replaceWarning": "⛔ There is ONE baseline per suite and subject, and it is mutable. Pinning does not add — it REPLACES whatever is currently the baseline for {{suite}} / {{subject}}. Every future regression is measured against it.",
+    "replaceWarning": "⛔ ベースラインは、スイートと対象ごとに「1 つだけ」で、変更可能です。固定しても追加されず、{{suite}} / {{subject}} の現在のベースラインを「置き換えます」。今後の回帰はすべてこれを基準に測定されます。",
     "thisRunScores": "This run passed {{score}} over n={{n}}.",
-    "cannotShowCurrent": "The console cannot show what this replaces: POST /baselines is the only route the engine exposes, and the previous reference is recorded in the self-audit rather than in a readable endpoint. Pinning a WORSE run lowers the bar, which is how a quality gate stops firing without anyone disabling it."
+    "cannotShowCurrent": "置き換えられる内容はコンソールに表示できません。エンジンが公開しているのは POST /baselines だけで、以前の基準は読み取り可能なエンドポイントではなく自己監査に記録されます。より悪い実行を固定すると基準が下がり、誰も無効にしていないのに品質ゲートが働かなくなります。"
   }
 }

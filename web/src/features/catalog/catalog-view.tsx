@@ -260,18 +260,21 @@ export default function CatalogView() {
         </TabsList>
 
         <TabsContent value="entries">
-          {canWriteEntry && (
-            <PagePrimaryAction>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setEditorOpen(true)}
-              >
-                <Plus />
-                {t('entries.newEntry')}
-              </Button>
-            </PagePrimaryAction>
-          )}
+          {canWriteEntry &&
+            !(
+              entries.isSuccess && (entries.data?.items?.length ?? 0) === 0
+            ) && (
+              <PagePrimaryAction>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setEditorOpen(true)}
+                >
+                  <Plus />
+                  {t('entries.newEntry')}
+                </Button>
+              </PagePrimaryAction>
+            )}
           <ListTruncationBadge
             query={entries}
             label={t('entries.truncated', {

@@ -16,7 +16,7 @@
   },
   "validation": {
     "ok": "스키마가 유효합니다.",
-    "summary": "검증 참고 {{count}}개 — 오류 {{errors}}개.",
+    "summary_other": "검증 참고 {{count}}개 — 오류 {{errors}}개.",
     "listLabel": "스키마 검증 결과"
   },
   "form": {
@@ -291,6 +291,6 @@
     "verified": "검증됨",
     "unverified": "검증되지 않음",
     "contentUnknown": "내용 알 수 없음(증명만 있음)",
-    "openFindings": "열린 발견 {{count}}개"
+    "openFindings_other": "열린 발견 {{count}}개"
   }
 }

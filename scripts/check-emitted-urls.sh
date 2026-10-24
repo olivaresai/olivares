@@ -331,6 +331,7 @@ https://github.com/olivaresai/olivares/tree/main/examples/govern-claude-code 200
 https://licenses.olivares.ai 200 2026-09-24
 https://licenses.olivares.ai/apt/v1/ 400 2026-10-01 credential-audience-not-a-location
 https://licenses.olivares.ai/dnf/v1/ 400 2026-10-01 credential-audience-not-a-location
+https://licenses.olivares.ai/portal/downloads 200 2026-10-22
 https://olivares.ai 200 2026-09-24
 https://olivares.ai/compliance/assessment-plan/ 200 2026-09-24
 https://olivares.ai/compliance/capabilities 200 2026-09-24
@@ -350,6 +351,7 @@ https://olivares.ai/demo 200 2026-09-24
 https://olivares.ai/changelog 200 2026-09-24
 https://olivares.ai/olivares/install.sh 200 2026-09-24
 https://olivares.ai/brand 200 2026-09-24
+https://olivares.ai/business 200 2026-10-22
 https://olivares.ai/press 200 2026-09-24
 https://olivares.ai/status 200 2026-09-24
 https://olivares.ai/roadmap 200 2026-09-24
@@ -1048,24 +1050,29 @@ def selftest():
                 for ext in ("apk", "deb", "rpm")] + \
                [f"https://github.com/olivaresai/olivares/releases/tag/{ver}"]
 
+    # The family follows the canon, never a literal version: a cut moves RELEASE-VERSION and these
+    # fixtures move with it (dev#2951). `other` is the one version that is not the canon, for the
+    # cases that name a release the canon does not declare.
+    canon = canon_version("the selftest's canon")
+    other = next(v for v in ("0.8", "0.9") if v != canon)
     pkg_t = "https://github.com/olivaresai/olivares/releases/download/\\${RELEASE}/olivares_\\${RELEASE}_linux_amd64."
     tag_t = "https://github.com/olivaresai/olivares/releases/tag/\\${RELEASE}"
     templates = "\n".join(pkg_t + ext + f" 200 {day}" for ext in ("apk", "deb", "rpm"))
     templates += "\n" + tag_t + f" 200 {day}"
-    rc, out = fixture_run("hub", family("0.2"), inline=templates, hub_record="# empty\n")
+    rc, out = fixture_run("hub", family(canon), inline=templates, hub_record="# empty\n")
     expect("a ${RELEASE} row expands against the canon and declares the emitted family -> OK",
            rc == 0 and "OK check-emitted-urls" in out)
-    rc, out = fixture_run("hub", family("0.3"), inline=templates, hub_record="# empty\n", release="0.3")
+    rc, out = fixture_run("hub", family(other), inline=templates, hub_record="# empty\n", release=other)
     expect("a canon bump stays green off the SAME rows: no per-cut record edit",
            rc == 0 and "OK check-emitted-urls" in out)
-    rc, out = fixture_run("hub", family("0.3") + ["https://github.com/olivaresai/olivares/releases/tag/0.9"],
-                          inline=templates, hub_record="# empty\n", release="0.3")
+    rc, out = fixture_run("hub", family(canon) + [f"https://github.com/olivaresai/olivares/releases/tag/{other}"],
+                          inline=templates, hub_record="# empty\n", release=canon)
     expect("an unknown versioned URL still fails: the template widened nothing",
-           rc == 1 and "releases/tag/0.9 is emitted" in out and "not in the record" in out)
-    rc, out = fixture_run("hub", family("0.2")[:1], inline=templates, hub_record="# empty\n")
+           rc == 1 and f"releases/tag/{other} is emitted" in out and "not in the record" in out)
+    rc, out = fixture_run("hub", family(canon)[:1], inline=templates, hub_record="# empty\n")
     expect("an expanded row nothing emits is still refused as 'declared and nothing emits it'",
            rc == 1 and "declared and nothing emits it" in out)
-    rc, out = fixture_run("hub", family("0.2"), inline=templates, hub_record="# empty\n", release=None)
+    rc, out = fixture_run("hub", family(canon), inline=templates, hub_record="# empty\n", release=None)
     expect("a template row with no RELEASE-VERSION canon is UNVERIFIED, exit 2, never a guess",
            rc == 2 and "UNVERIFIED" in out and "RELEASE-VERSION" in out
            and "OK check-emitted-urls" not in out)
@@ -1083,25 +1090,25 @@ def selftest():
     # expansion against a guess. A canon bumped without re-stamping README is red both ways at
     # once, and a literal row colliding with a template's expansion is refused, not last-wins
     # (a silent last-wins would let the template erase a known-broken row and its owner).
-    rc, out = fixture_run("hub", family("0.3"), inline=templates, hub_record="# empty\n", release="0.3.1")
+    rc, out = fixture_run("hub", family(canon), inline=templates, hub_record="# empty\n", release=canon + ".1")
     expect("a canon that is not one bare MAJOR.MINOR record is UNVERIFIED, exit 2",
            rc == 2 and "UNVERIFIED" in out and "bare MAJOR.MINOR" in out)
-    rc, out = fixture_run("hub", family("0.3"), inline=templates, hub_record="# empty\n",
-                          release="0.3\n1.0")
+    rc, out = fixture_run("hub", family(canon), inline=templates, hub_record="# empty\n",
+                          release=canon + "\n1.0")
     expect("a canon holding two records is UNVERIFIED, exit 2",
            rc == 2 and "UNVERIFIED" in out and "bare MAJOR.MINOR" in out)
     if os.geteuid() == 0:
         expect("an unreadable canon: the mode-000 staging needs a non-root uid; not applicable at uid 0", True)
     else:
-        rc, out = fixture_run("hub", family("0.2"), inline=templates, hub_record="# empty\n",
+        rc, out = fixture_run("hub", family(canon), inline=templates, hub_record="# empty\n",
                               unreadable=["RELEASE-VERSION"])
         expect("an unreadable canon is UNVERIFIED, exit 2, never an expansion",
                rc == 2 and "UNVERIFIED" in out and "RELEASE-VERSION cannot be read" in out)
-    rc, out = fixture_run("hub", family("0.2"), inline=templates, hub_record="# empty\n", release="0.3")
+    rc, out = fixture_run("hub", family(other), inline=templates, hub_record="# empty\n", release=canon)
     expect("a canon bumped without re-stamping README is red in both directions at once",
            rc == 1 and "not in the record" in out and "declared and nothing emits it" in out)
-    dup = templates + "\nhttps://github.com/olivaresai/olivares/releases/tag/0.2 404 2026-09-01 selftest-dup-owner"
-    rc, out = fixture_run("hub", family("0.2"), inline=dup, hub_record="# empty\n")
+    dup = templates + f"\nhttps://github.com/olivaresai/olivares/releases/tag/{canon} 404 2026-09-01 selftest-dup-owner"
+    rc, out = fixture_run("hub", family(canon), inline=dup, hub_record="# empty\n")
     expect("a literal row and a template row expanding to the same URL are refused, never last-wins",
            rc == 2 and "declared twice" in out)
 
@@ -1111,13 +1118,13 @@ def selftest():
     # owner is kept only while the URL still does not answer 200: a resolved act must not stay
     # named against a healthy URL, and an annotation pasted into the owner column would corrupt
     # it, so it rides its own line.
-    rc, out = fixture_run("hub", family("0.2"), inline=templates, hub_record="# empty\n", probe=True)
+    rc, out = fixture_run("hub", family(canon), inline=templates, hub_record="# empty\n", probe=True)
     expect("probe hands an inline template back shell-escaped, never the expanded literal",
            rc == 0 and "record line: https://github.com/olivaresai/olivares/releases/tag/\\${RELEASE} 200"
-           in out and "record line: https://github.com/olivaresai/olivares/releases/tag/0.2" not in out
+           in out and f"record line: https://github.com/olivaresai/olivares/releases/tag/{canon}" not in out
            and "paste-ready for the inline record" in out)
     owned = pkg_t + "deb" + f" 404 {day} selftest-resolved-owner"
-    rc, out = fixture_run("hub", family("0.2")[:2], inline=owned, hub_record="# empty\n", probe=True)
+    rc, out = fixture_run("hub", family(canon)[:2], inline=owned, hub_record="# empty\n", probe=True)
     expect("a template row's owner is dropped the day the URL answers 200",
            rc == 0 and "record line: https://github.com/olivaresai/olivares/releases/download/\\${RELEASE}/"
            "olivares_\\${RELEASE}_linux_amd64.deb 200" in out
@@ -1133,7 +1140,7 @@ def selftest():
     expect("probe hands an excluded-record template back plain, owner kept while it is still 404",
            rc == 1 and "record line: " + hub_t404 + " 404" in out
            and "selftest-fixture-owner" in out and "paste-ready for " + HUB_RECORD in out)
-    rc, out = fixture_run("hub", family("0.2"), inline=templates, hub_record="# empty\n",
+    rc, out = fixture_run("hub", family(canon), inline=templates, hub_record="# empty\n",
                           release=None, probe=True)
     expect("probe with template rows and no canon refuses before measuring anything",
            rc == 2 and "UNVERIFIED" in out and "record line:" not in out)

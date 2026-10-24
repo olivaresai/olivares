@@ -7,129 +7,30 @@
 // `olivares upgrade` (signed, verified, atomic) and restarts itself on the new binary, so
 // this screen asks, applies, waits for the engine to come back and reads the result.
 import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Spinner } from '@/components/ui/spinner'
-import { waitForEngineRestart } from '@/features/console/engine-restart'
-import { http, queryKeys } from '@/lib/api'
-import { ApiError, isOpenCoreSeam } from '@/lib/api/errors'
+import { isOpenCoreSeam } from '@/lib/api/errors'
 import { formatDate } from '@/lib/format'
-import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
+import { EditionSwitchView } from './edition-switch'
+import { UpdateProgress } from './update-progress'
+import { useEngineUpdate } from './use-engine-update'
 
-/** GET /v1/console/updates and POST /v1/console/updates/apply (core/api/updates.go). */
-export interface EngineUpdate {
-  edition: string
-  /** The version the engine runs now; after an apply it stays the old one until the engine restarts. */
-  version: string
-  channel?: string
-  /** The newest release in the channel, when the check reached it. */
-  available?: string
-  update_available: boolean
-  released_at?: string
-  notes?: string
-  security?: boolean
-  advisories?: string[]
-  /** Why the channel could not be checked, in the words `olivares upgrade` uses. */
-  check_error?: string
-  /** A newer binary than the running one is already installed; the engine runs the old version until it restarts. */
-  restart_required?: boolean
-  restarting?: boolean
-  /** Sessions the engine runs now; the restart that applies an update stops them. */
-  running_sessions: number
-}
-
-export const updatesApi = {
-  get: () => http.get<EngineUpdate>('/v1/console/updates'),
-  apply: () => http.post<EngineUpdate>('/v1/console/updates/apply', {}),
-}
-
-const updatesKey = ['settings', 'updates'] as const
-
-/** The version the engine answers with now, or undefined while it does not answer. */
-async function engineVersion(): Promise<string | undefined> {
-  try {
-    const info = await http.get<{ version?: string }>('/v1/server-info', {
-      anonymous: true,
-    })
-    return info.version
-  } catch {
-    return undefined
-  }
-}
-
-/**
- * An apply whose answer never arrived (a dropped connection, or a proxy that gave up
- * on a long request): the engine keeps installing and restarts, so the page waits for
- * it instead of calling the update refused. The engine's own refusals carry `update_*`.
- */
-function answerLost(err: unknown): boolean {
-  if (!(err instanceof ApiError)) return true
-  return err.status >= 502 && !err.code.startsWith('update_')
-}
-
-type Phase = 'idle' | 'waiting' | 'stuck'
+export { updatesApi, type EngineUpdate } from './use-engine-update'
 
 /** Mounted for a system administrator only; the engine checks system:admin and the step-up itself. */
 export function UpdatesSettings() {
   const { t } = useTranslation('settings')
-  const queryClient = useQueryClient()
-  const query = useQuery({
-    queryKey: updatesKey,
-    queryFn: () => updatesApi.get(),
-    retry: false,
-    refetchOnWindowFocus: false,
-  })
+  const update = useEngineUpdate()
+  const { query, apply, phase, refusal, clearRefusal, busy } = update
   const [confirming, setConfirming] = useState(false)
-  const [phase, setPhase] = useState<Phase>('idle')
-  const [refusal, setRefusal] = useState<string | null>(null)
-
-  // The engine is back when it answers on a version other than the one it ran.
-  const waitForNewVersion = (from: string) => {
-    setPhase('waiting')
-    void waitForEngineRestart({
-      probe: async () => {
-        const now = await engineVersion()
-        return now !== undefined && now !== from
-      },
-    }).then((ready) => {
-      setPhase(ready ? 'idle' : 'stuck')
-      void queryClient.invalidateQueries({ queryKey: updatesKey })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.serverInfo })
-    })
-  }
-
-  const apply = usePrivilegedMutation<void, EngineUpdate>({
-    mutationFn: () => updatesApi.apply(),
-    successMessage: (status) =>
-      status.restarting ? t('updates.applied') : t('updates.alreadyCurrent'),
-    stepUpAction: 'updates',
-    onError: (err) => {
-      if (answerLost(err)) {
-        waitForNewVersion(query.data?.version ?? '')
-        return true
-      }
-      setRefusal(err instanceof Error ? err.message : t('updates.failed'))
-      void queryClient.invalidateQueries({ queryKey: updatesKey })
-      return true
-    },
-    onDone: (status) => {
-      if (!status.restarting) {
-        void queryClient.invalidateQueries({ queryKey: updatesKey })
-        return
-      }
-      // No read until the engine is back: the page keeps showing what it knew, with the
-      // install disabled, and the answer to the apply (running version old, newest new)
-      // would read as "up to date" if it were shown as a status.
-      waitForNewVersion(status.version)
-    },
-  })
 
   const data = query.data
-  const waiting = phase === 'waiting'
-  const busy = apply.isPending || waiting
+  // The engine says console_action when its Install is the licensed switch (EditionSwitchView has
+  // that button); without it Install stays the public-channel update, with the step beside it.
+  const installIsTheSwitch = data?.edition_switch?.console_action === true
   const status = data?.check_error
     ? 'unchecked'
     : data?.update_available
@@ -147,14 +48,14 @@ export function UpdatesSettings() {
           size="sm"
           disabled={busy || query.isFetching}
           onClick={() => {
-            setRefusal(null)
+            clearRefusal()
             void query.refetch()
           }}
         >
           {query.isFetching ? <Spinner size="sm" aria-hidden /> : null}
           {t('updates.check')}
         </Button>
-        {data?.update_available && !data.check_error ? (
+        {data?.update_available && !data.check_error && !installIsTheSwitch ? (
           <Button
             variant="primary"
             size="sm"
@@ -167,26 +68,7 @@ export function UpdatesSettings() {
         ) : null}
       </div>
 
-      {waiting ? (
-        <p
-          role="status"
-          className="flex items-center gap-2 text-caption text-text-2"
-          data-slot="engine-restarting"
-        >
-          <Spinner size="sm" aria-hidden />
-          {t('updates.restarting')}
-        </p>
-      ) : null}
-      {phase === 'stuck' ? (
-        <p role="status" className="text-caption text-warning">
-          {t('updates.stillRestarting')}
-        </p>
-      ) : null}
-      {refusal ? (
-        <p role="alert" className="text-caption text-danger">
-          {refusal}
-        </p>
-      ) : null}
+      <UpdateProgress phase={phase} refusal={refusal} />
 
       {query.isLoading ? (
         <div className="flex justify-center py-6">
@@ -218,7 +100,10 @@ export function UpdatesSettings() {
               <Badge variant="warning">{t('updates.security')}</Badge>
             ) : null}
           </div>
-          {data.check_error ? (
+          {data.edition_switch ? (
+            <EditionSwitchView update={update} progress={false} />
+          ) : null}
+          {data.check_error && !data.edition_switch ? (
             <p className="text-caption text-text-2">{data.check_error}</p>
           ) : null}
           {data.restart_required ? (
@@ -284,7 +169,7 @@ export function UpdatesSettings() {
         confirmLabel={t('updates.confirm.confirm')}
         onConfirm={() => {
           setConfirming(false)
-          setRefusal(null)
+          clearRefusal()
           apply.mutate()
         }}
       />

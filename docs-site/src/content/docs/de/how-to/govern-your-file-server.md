@@ -82,7 +82,9 @@ Principal-Namen werden über den Namensdienst des Hosts aufgelöst (der **LDAP**
 einschließen kann, sodass `uid`→Benutzername Ihrem Verzeichnis entspricht).
 Eine nicht auflösbare uid/gid fällt auf ihre **numerische** ID zurück. Eine
 Datei **ohne ableitbare ACL** erbt die Standard-ACL der Knowledge Base, die
-beim Retrieval weiterhin erzwungen wird. Der Connector **erfindet niemals**
+beim Retrieval weiterhin erzwungen wird; ohne Standard-ACL wird die Datei
+**verweigert**, außer die Quelle ist mit `"public": "true"` in ihrer Konfiguration
+als öffentlich deklariert. Die Einstellung gilt für danach gespeicherte Dokumente; um bereits gespeicherte Zeilen zu ändern, erneut ingestieren. Der Connector **erfindet niemals**
 eine ACL, die eine Datei nicht trägt.
 
 ### Klassifizierung

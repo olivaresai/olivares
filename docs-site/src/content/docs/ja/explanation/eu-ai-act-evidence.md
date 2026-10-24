@@ -20,6 +20,8 @@ EU AI Act の文書化義務は一度きりではありません。Annex IV は�
 
 Olivares AI はすでにエステートを観測して、その [read/write access map](/ja/explanation/#アクセスマップ-read-firstminimal-datapermitted-vs-observed) と、追記専用でハッシュチェーン化され Ed25519 で署名された [監査台帳](/ja/reference/glossary/#audit-ledger監査台帳) を構築しています。コンプライアンスモジュールは、それと同じ観測を**監査人が消費可能な証拠パッケージ**に変えます。シール済み、台帳アンカー付き、JSON、CSV、または **OSCAL** としてエクスポート可能で、ライブな整合性証明を伴います。文書は、意図されたことについて主張されるのではなく、*起きたことから導出されます*。
 
+フレームワークマッピング、評価、DORA ビュー、OSCAL エクスポート、レポートは **Business**（Compliance Packs）です。Community サーバーはそれらのルートに `501` で応答します。Community では署名付き台帳、レコード管理、保存済み証拠の JSON/CSV エクスポートを引き続き利用できます。
+
 2 つの誠実さのルールが製品に配線され、まっすぐ証拠に引き継がれます。
 
 - 唯一の裏付けがアーキテクチャ的であるコントロールは、`satisfied` ではなく **`by_design`** と報告されます。「Satisfied」には、リンクされた実際のテナント証拠が必要です。

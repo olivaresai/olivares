@@ -16,8 +16,23 @@ test('provider dialog explains each kind and captures its missing fields', async
     )
     localStorage.setItem('olivares.theme', 'light')
   })
+  // /providers opens the Tools place, whose install side a superadmin reads: the engine
+  // always sends `pins`, `inventory` and readiness `tools`, and the catch-all would throw
+  // into the error boundary.
+  const toolsPlace: Record<string, unknown> = {
+    '/v1/m/agenttools/pins': { pins: [] },
+    '/v1/m/sessions/provider-profiles/readiness': { tools: [] },
+    '/v1/m/agenttools/inventory': {
+      drivers: [],
+      verification_levels: {},
+      inventory: { installed: [], leftovers: [] },
+      read_only: false,
+      jobs: [],
+    },
+  }
   await page.route('**/v1/**', async (route) => {
     const path = new URL(route.request().url()).pathname
+    if (path in toolsPlace) return route.fulfill({ json: toolsPlace[path] })
     const body = path.endsWith('/killswitch/state')
       ? { estate_stopped: false, active: [] }
       : path.endsWith('/auth/browser-session')

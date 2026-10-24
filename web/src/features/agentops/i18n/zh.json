@@ -48,6 +48,8 @@
     "running": "运行中",
     "idle": "空闲",
     "stopped": "已停止",
+    "done": "已完成",
+    "ended": "已结束",
     "failed": "已失败",
     "cleaned": "已清理"
   },
@@ -250,7 +252,7 @@
     "noOutput": "暂无输出。",
     "waiting": "正在等待输出……",
     "ended": "会话 I/O 流已结束。",
-    "lag": "丢弃了 {{count}} 帧（缓冲区溢出）——下方输出在间隔之后继续。",
+    "lag_other": "丢弃了 {{count}} 帧（缓冲区溢出）——下方输出在间隔之后继续。",
     "remoteControl": "这是一个 remote-control 会话：其 I/O 被中继至 Anthropic 云端，未在此桥接。Olivares 仅管理其生命周期。",
     "notLive": "此会话未处于实时状态（当前为 {{state}}）。请恢复它以接入其 I/O。",
     "ioUnavailableNotLiveOnNode": "此节点没有桥接的 I/O。",
@@ -268,7 +270,7 @@
     "interruptUnknown": "中断结果未知。再次尝试前，请先检查会话。",
     "interruptWorkConflict": "会话当前的任务状态不允许此次中断。请刷新运行以检查其状态。",
     "blocked": {
-      "notLive": "请启动或恢复会话以发送。",
+      "notLive": "请恢复会话以发送消息。",
       "approval": "启动正在等待审批；审批通过后即可发送。",
       "sending": "正在发送……请等待会话接受。",
       "uploading": "正在保存图片… 附上后即可发送。",
@@ -440,7 +442,6 @@
     "title": "提供商配置文件",
     "subtitle": "会话中工具的运行方式：使用哪个工具，以及它从哪个设置文件夹登录。配置文件指向此服务器上已有的工具安装；它不会安装任何内容，也不会登录。",
     "register": "登记配置文件",
-    "nextAction": "登记一个配置文件",
     "rowMenu": "{{name}} 的行操作",
     "search": "搜索配置文件…",
     "allStates": "所有状态",
@@ -547,7 +548,8 @@
       "created": "创建时间",
       "updated": "更新时间",
       "retiredAt": "退役时间",
-      "loadFailed": "无法读取此配置文件。"
+      "loadFailed": "无法读取此配置文件。",
+      "loading": "正在读取配置文件…"
     },
     "configuration": {
       "title": "配置",
@@ -634,13 +636,8 @@
     "view": {
       "profilesTitle": "提供商配置文件",
       "bindingsTitle": "来源绑定",
-      "accountsTitle": "提供商账户",
-      "tabProfiles": "配置文件",
-      "tabBindings": "绑定",
-      "tabAccounts": "账户",
-      "openProfiles": "打开提供商配置文件页面",
-      "openBindings": "打开来源绑定页面",
-      "crossHint": "配置文件和绑定也各有专属页面，分别以各自的读取权限进入。"
+      "openProfiles": "打开工具",
+      "crossHint": "每个账户及其配置文件和来源绑定也在“工具”中。"
     },
     "authority": {
       "lost": "以您当前的权限，此操作不再被允许；未发送任何内容。",

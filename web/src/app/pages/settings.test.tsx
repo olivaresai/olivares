@@ -8,6 +8,7 @@ import i18n from 'i18next'
 import { LANGUAGE_CODES } from '@/lib/i18n'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { RAIL_KEYS } from '@/features/navigation/rail-keys'
+import { SETTINGS_SECTIONS } from '@/features/settings/sections'
 import { expectNoRawI18nKeys } from '@/test/i18n-keys'
 import {
   readStoredThemeForTest,
@@ -36,14 +37,33 @@ vi.mock('@/features/settings/updates-settings', () => ({
   UpdatesSettings: () => <section aria-label="Updates panel" />,
 }))
 
+// The Session idle form has its own tests (features/settings/session-idle-settings.test.tsx);
+// here it only has to be where a system administrator finds it.
+vi.mock('@/features/settings/session-idle-settings', () => ({
+  SessionIdleSettings: () => <section aria-label="Session idle panel" />,
+}))
+
 const auth = vi.hoisted(() => ({
   denied: new Set<string>(),
   isSuperadmin: true,
 }))
 const location = vi.hoisted(() => ({ search: undefined as string | undefined }))
+const router = vi.hoisted(() => ({ navigate: vi.fn() }))
 vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => router.navigate,
   useRouterState: () => location.search,
+}))
+
+// AI tools, Workspaces and Setup are rooms with their own tests; here they only have to
+// open INSIDE Settings (#2905).
+vi.mock('@/features/agent-tools/agent-tools-view', () => ({
+  AgentToolsView: () => <section aria-label="AI tools room" />,
+}))
+vi.mock('@/features/workspace-dashboard/workspace-dashboard-view', () => ({
+  WorkspaceDashboardView: () => <section aria-label="Workspaces room" />,
+}))
+vi.mock('@/features/onboarding/index', () => ({
+  OnboardingView: () => <section aria-label="Setup wizard" />,
 }))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
@@ -83,6 +103,7 @@ const businessDeploy = FEATURE_VIEWS.some((view) => view.id === 'deploy')
 beforeEach(async () => {
   badgeFixture.edition = null
   vi.restoreAllMocks()
+  router.navigate.mockClear()
   location.search = undefined
   server.license = { status: 'none', licensee: '' }
   auth.denied.clear()
@@ -108,7 +129,7 @@ beforeEach(async () => {
   )
   useModulesStore.setState({ off: new Set() })
   localStorage.clear()
-  document.documentElement.classList.remove('dark')
+  document.documentElement.classList.remove('dark', 'black')
   // A fresh profile: whatever the store reads with nothing stored (#478).
   const fresh = readStoredThemeForTest()
   useThemeStore.setState({
@@ -216,10 +237,12 @@ describe('Settings', () => {
     expect(
       screen.queryByRole('button', { name: 'Session defaults' }),
     ).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Setup' })).toHaveAttribute(
-      'href',
-      '/onboarding',
-    )
+    // Setup is a section of Settings, never a link out of it (#2905).
+    expect(screen.queryByRole('link', { name: 'Setup' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Setup' }))
+    expect(
+      await screen.findByRole('region', { name: 'Setup wizard' }),
+    ).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Keyboard' }))
     expect(screen.getByText('New session')).toBeInTheDocument()
     expect(screen.queryByText(/keys\.command\./)).not.toBeInTheDocument()
@@ -284,6 +307,9 @@ describe('Settings', () => {
       expect(document.documentElement.classList.contains('dark')).toBe(
         resolveDark(code),
       )
+      expect(document.documentElement.classList.contains('black')).toBe(
+        code === 'black',
+      )
     }
     await chooseTheme(
       'light',
@@ -291,6 +317,7 @@ describe('Settings', () => {
       'settings theme/light Fired: setTheme did not receive light',
     )
     await chooseTheme('dark', 'Dark')
+    await chooseTheme('black', 'Black')
     await chooseTheme('system', 'System')
 
     await user.click(screen.getByRole('radio', { name: 'Compact' }))
@@ -389,6 +416,29 @@ describe('Settings', () => {
     )
   })
 
+  it('moves over the four themes with the arrows, Home and End, focus following', async () => {
+    const user = userEvent.setup()
+    render(<SettingsPage />)
+    await user.click(screen.getByRole('radio', { name: 'Dark' }))
+    await user.keyboard('{ArrowRight}')
+    expect(useThemeStore.getState().theme).toBe('black')
+    expect(screen.getByRole('radio', { name: 'Black' })).toHaveFocus()
+    expect(screen.getByRole('radio', { name: 'Black' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+    // Past the last it wraps to the first.
+    await user.keyboard('{ArrowRight}')
+    expect(useThemeStore.getState().theme).toBe('system')
+    await user.keyboard('{End}')
+    expect(useThemeStore.getState().theme).toBe('black')
+    await user.keyboard('{ArrowLeft}')
+    expect(useThemeStore.getState().theme).toBe('dark')
+    await user.keyboard('{Home}')
+    expect(useThemeStore.getState().theme).toBe('system')
+    expect(screen.getByRole('radio', { name: 'System' })).toHaveFocus()
+  })
+
   it('treats System as the theme default: no marker, and reset returns to it (#478)', async () => {
     const user = userEvent.setup()
     render(<SettingsPage />)
@@ -397,7 +447,9 @@ describe('Settings', () => {
       screen.queryByRole('button', { name: /Changed · reset/ }),
     ).not.toBeInTheDocument()
     expect(
-      screen.getByText('Follows the system unless you choose light or dark.'),
+      screen.getByText(
+        'Follows the system unless you choose light, dark or black.',
+      ),
     ).toBeInTheDocument()
     await user.click(screen.getByRole('radio', { name: 'Dark' }))
     await user.click(screen.getByRole('button', { name: /Changed · reset/ }))
@@ -428,6 +480,23 @@ describe('Settings', () => {
     expect(
       screen.queryByRole('button', { name: /Changed · reset/ }),
     ).not.toBeInTheDocument()
+  })
+
+  it('keeps Restore all in the General header, never portaled into a top bar', () => {
+    // The top bar has no page slot since #2544; a stray one must not pull the button out.
+    const bar = document.createElement('header')
+    bar.dataset.slot = 'topbar'
+    bar.innerHTML = '<div data-slot="page-actions"></div>'
+    document.body.append(bar)
+    try {
+      render(<SettingsPage />)
+      const button = screen.getByRole('button', {
+        name: 'Restore all defaults',
+      })
+      expect(bar.contains(button)).toBe(false)
+    } finally {
+      bar.remove()
+    }
   })
 
   it('names the edition once, and on Community lists what a Business build adds', async () => {
@@ -497,16 +566,96 @@ describe('Settings', () => {
     },
   )
 
-  it('links only to pages this installation runs and this principal may open (#474)', () => {
-    const href = (name: string) =>
-      screen.queryByRole('link', { name })?.getAttribute('href')
+  it('opens AI tools and Workspaces as sections of Settings, never as a link out of it (#2905)', async () => {
+    const user = userEvent.setup()
+    render(<SettingsPage />)
+    const list = screen.getByRole('navigation', { name: 'Settings sections' })
+    // No row of the list leaves /settings.
+    expect(within(list).queryAllByRole('link')).toHaveLength(0)
+
+    await user.click(within(list).getByRole('button', { name: 'AI tools' }))
+    expect(
+      await screen.findByRole('region', { name: 'AI tools room' }),
+    ).toBeInTheDocument()
+    expect(
+      within(list).getByRole('button', { name: 'AI tools' }),
+    ).toHaveAttribute('aria-current', 'page')
+    // The section is a place: Back returns to the one before it, inside Settings.
+    const toAiTools = router.navigate.mock.calls.at(-1)![0]
+    expect(toAiTools.replace).toBe(false)
+    expect(toAiTools.search({})).toEqual({ section: 'aiTools' })
+
+    await user.click(within(list).getByRole('button', { name: 'Workspaces' }))
+    expect(
+      await screen.findByRole('region', { name: 'Workspaces room' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'AI tools room' })).toBeNull()
+    expect(
+      within(list).getByRole('button', { name: 'Workspaces' }),
+    ).toHaveAttribute('aria-current', 'page')
+    expect(
+      within(list).getByRole('button', { name: 'General' }),
+    ).not.toHaveAttribute('aria-current')
+    expect(router.navigate.mock.calls.at(-1)![0].search({})).toEqual({
+      section: 'workspaces',
+    })
+  })
+
+  it('leaves the AI tools wizard address behind when the section changes (#2905)', async () => {
+    // `?add=<kind>&returnTo=` opens the add-a-key form each time the AI tools room mounts:
+    // kept in the address across a section change, it reopens on every return to AI tools.
+    location.search = '?section=aiTools&add=anthropic&returnTo=%2Fonboarding'
+    const user = userEvent.setup()
+    render(<SettingsPage />)
+    await user.click(screen.getByRole('button', { name: 'Workspaces' }))
+    expect(
+      router.navigate.mock.calls.at(-1)![0].search({
+        section: 'aiTools',
+        add: 'anthropic',
+        returnTo: '/onboarding',
+      }),
+    ).toEqual({ section: 'workspaces' })
+  })
+
+  it('leaves the AI tools wizard address behind when a search starts, which unmounts the room (#2905)', async () => {
+    location.search = '?section=aiTools&add=anthropic&returnTo=%2Fonboarding'
+    const user = userEvent.setup()
+    render(<SettingsPage />)
+    await user.type(screen.getByRole('searchbox'), 't')
+    expect(
+      router.navigate.mock.calls.at(-1)![0].search({
+        section: 'aiTools',
+        add: 'anthropic',
+        returnTo: '/onboarding',
+      }),
+    ).toEqual({ section: 'aiTools', q: 't' })
+  })
+
+  it.each([
+    ['aiTools', 'AI tools room', 'AI tools'],
+    ['workspaces', 'Workspaces room', 'Workspaces'],
+    ['setup', 'Setup wizard', 'Setup'],
+  ])(
+    'opens ?section=%s on load, with its row marked current (#2905)',
+    async (section, room, row) => {
+      location.search = `?section=${section}`
+      render(<SettingsPage />)
+      expect(await screen.findByRole('region', { name: room })).toBeVisible()
+      expect(screen.getByRole('button', { name: row })).toHaveAttribute(
+        'aria-current',
+        'page',
+      )
+    },
+  )
+
+  it('offers a section only where its page opens, and an address to one that is not falls back to General (#474, #2905)', async () => {
+    const row = (name: string) => screen.queryByRole('button', { name })
     const { unmount } = render(<SettingsPage />)
-    // Deployment is a Business page: Community has no page to link.
-    expect(href('Deploy and updates')).toBe(
-      businessDeploy ? '/deploy' : undefined,
-    )
-    expect(href('AI tools')).toBe('/providers')
-    expect(href('Workspaces')).toBe('/workspace')
+    // Deployment is a Business page: Community has no page to host.
+    expect(row('Deploy and updates') !== null).toBe(businessDeploy)
+    expect(row('AI tools')).not.toBeNull()
+    expect(row('Workspaces')).not.toBeNull()
+    expect(row('Setup')).not.toBeNull()
     expect(screen.getByText('Work')).toBeInTheDocument()
     unmount()
 
@@ -514,30 +663,80 @@ describe('Settings', () => {
       // A fresh install leaves deploy off (modulespec standard=false).
       useModulesStore.getState().setOff(['deploy'])
       const off = render(<SettingsPage />)
-      expect(href('Deploy and updates')).toBeUndefined()
-      expect(href('AI tools')).toBe('/providers')
+      expect(row('Deploy and updates')).toBeNull()
+      expect(row('AI tools')).not.toBeNull()
       off.unmount()
 
       // Module on, permission not held.
       useModulesStore.getState().setOff([])
       auth.denied.add('deploy:deployment:read')
       const denied = render(<SettingsPage />)
-      expect(href('Deploy and updates')).toBeUndefined()
+      expect(row('Deploy and updates')).toBeNull()
       denied.unmount()
     }
 
-    // One link left keeps its group; none left drops the heading too.
+    // One section left keeps its group; none left drops the heading too.
     auth.denied.add('tenant:read')
     const one = render(<SettingsPage />)
-    expect(href('Workspaces')).toBeUndefined()
-    expect(href('AI tools')).toBe('/providers')
+    expect(row('Workspaces')).toBeNull()
+    expect(row('AI tools')).not.toBeNull()
     expect(screen.getByText('Work')).toBeInTheDocument()
     one.unmount()
+
+    // An address to a section the person may not open shows General, not an empty pane.
+    location.search = '?section=workspaces'
+    const address = render(<SettingsPage />)
+    expect(screen.queryByRole('region', { name: 'Workspaces room' })).toBeNull()
+    expect(screen.getByRole('radiogroup', { name: 'Theme' })).toBeVisible()
+    address.unmount()
+
+    location.search = undefined
     auth.denied.add('sessions:provider:read')
+    auth.denied.add('system:admin')
     render(<SettingsPage />)
-    expect(href('AI tools')).toBeUndefined()
-    expect(href('Workspaces')).toBeUndefined()
+    expect(row('AI tools')).toBeNull()
+    expect(row('Workspaces')).toBeNull()
+    expect(row('Setup')).toBeNull()
     expect(screen.queryByText('Work')).toBeNull()
+  })
+
+  it('follows the address between hosted sections, as Back and Forward move it (#2905)', async () => {
+    location.search = '?section=aiTools'
+    const view = render(<SettingsPage />)
+    expect(
+      await screen.findByRole('region', { name: 'AI tools room' }),
+    ).toBeVisible()
+    location.search = '?section=workspaces'
+    view.rerender(<SettingsPage />)
+    expect(
+      await screen.findByRole('region', { name: 'Workspaces room' }),
+    ).toBeVisible()
+    expect(screen.queryByRole('region', { name: 'AI tools room' })).toBeNull()
+    location.search = '?section=aiTools'
+    view.rerender(<SettingsPage />)
+    expect(
+      await screen.findByRole('region', { name: 'AI tools room' }),
+    ).toBeVisible()
+    // The address before any section is General.
+    location.search = ''
+    view.rerender(<SettingsPage />)
+    expect(screen.getByRole('radiogroup', { name: 'Theme' })).toBeVisible()
+    expect(screen.queryByRole('region', { name: 'AI tools room' })).toBeNull()
+  })
+
+  it('shows search results, not the hosted section, while the search holds a query (#2905)', async () => {
+    location.search = '?section=aiTools&q=theme'
+    const view = render(<SettingsPage />)
+    expect(
+      await screen.findByRole('radiogroup', { name: 'Theme' }),
+    ).toBeVisible()
+    expect(screen.queryByRole('region', { name: 'AI tools room' })).toBeNull()
+    // The room is there once the query is cleared: the absence above is not a missing section.
+    location.search = '?section=aiTools'
+    view.rerender(<SettingsPage />)
+    expect(
+      await screen.findByRole('region', { name: 'AI tools room' }),
+    ).toBeVisible()
   })
 
   it('offers as a start page only pages this installation runs (#474)', async () => {
@@ -614,5 +813,89 @@ describe('Settings > Updates', () => {
     render(<SettingsPage />)
     expect(screen.queryByRole('button', { name: 'Updates' })).toBeNull()
     expect(screen.queryByRole('region', { name: 'Updates panel' })).toBeNull()
+    // An address to a section the person is not offered shows General, not an empty pane.
+    expect(screen.getByRole('radiogroup', { name: 'Theme' })).toBeVisible()
   })
+})
+
+describe('Settings > section list', () => {
+  const label = (id: string) => i18n.t(`nav.${id}`, { ns: 'settings' })
+  // A hosted page is listed only where that page opens: those rows are tested above.
+  const own = SETTINGS_SECTIONS.filter((s) => !('view' in s))
+
+  it.each(own.map((s) => s.id))('lists %s for an administrator', (id) => {
+    render(<SettingsPage />)
+    expect(screen.getByRole('button', { name: label(id) })).toBeVisible()
+  })
+
+  it.each(own.map((s) => [s.id, s.adminOnly] as const))(
+    'lists %s for anyone else only when it is not administrator-only',
+    (id, adminOnly) => {
+      auth.isSuperadmin = false
+      render(<SettingsPage />)
+      const row = screen.queryByRole('button', { name: label(id) })
+      if (adminOnly) expect(row).toBeNull()
+      else expect(row).toBeVisible()
+    },
+  )
+
+  it('opens Session idle by its row, under the section title', async () => {
+    const user = userEvent.setup()
+    render(<SettingsPage />)
+    await user.click(screen.getByRole('button', { name: label('sessionIdle') }))
+    expect(
+      screen.getByRole('region', { name: 'Session idle panel' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { level: 1, name: label('sessionIdle') }),
+    ).toBeInTheDocument()
+  })
+
+  it('opens Session idle from its address for an administrator', () => {
+    location.search = '?section=sessionIdle'
+    render(<SettingsPage />)
+    expect(
+      screen.getByRole('region', { name: 'Session idle panel' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: label('sessionIdle') }),
+    ).toHaveAttribute('aria-current', 'page')
+  })
+
+  it.each(SETTINGS_SECTIONS.filter((s) => s.adminOnly).map((s) => s.id))(
+    'opens General, not an empty page, for the address of %s when the person is not an administrator',
+    (id) => {
+      auth.isSuperadmin = false
+      location.search = `?section=${id}`
+      render(<SettingsPage />)
+      expect(
+        screen.getByRole('heading', {
+          name: i18n.t('general.title', { ns: 'settings' }),
+        }),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: label('general') }),
+      ).toHaveAttribute('aria-current', 'page')
+      expect(
+        screen.queryByRole('region', { name: 'Session idle panel' }),
+      ).toBeNull()
+      expect(screen.queryByRole('region', { name: 'Updates panel' })).toBeNull()
+    },
+  )
+
+  it.each(['notifications', 'sessionDefaults', 'nothing-here'])(
+    'opens General for the unknown address ?section=%s',
+    (id) => {
+      location.search = `?section=${id}`
+      render(<SettingsPage />)
+      expect(
+        screen.getByRole('heading', {
+          name: i18n.t('general.title', { ns: 'settings' }),
+        }),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: label('general') }),
+      ).toHaveAttribute('aria-current', 'page')
+    },
+  )
 })

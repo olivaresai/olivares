@@ -34,6 +34,12 @@ func TestStoreErrorStatusMapsTheCanonicalSet(t *testing.T) {
 		{"cursor with sort", store.ErrCursorWithSort, http.StatusBadRequest, "invalid query"},
 		{"unknown entity", store.ErrUnknownEntity, http.StatusBadRequest, "invalid query"},
 		{"audit spool full", store.ErrAuditSpoolFull, http.StatusServiceUnavailable, "audit spool full"},
+		// #2774: the backend-availability sentinel. statusFor had no arm for it, so
+		// storeErrorAnswer fell to its 500 fallback and every module route answered
+		// "internal error" for a dead database while core/api did the same.
+		{"store unavailable", store.ErrStoreUnavailable, http.StatusServiceUnavailable, "store backend unavailable"},
+		// NOTE: commit_outcome_unknown is deliberately absent from this set — see
+		// the refuses-to-answer test below for the pinned reason.
 		{"workspace confinement", store.ErrWorkspaceConfinement, http.StatusForbidden, "workspace confined"},
 		{"workspace lineage required", store.ErrWorkspaceLineageRequired, http.StatusForbidden, "workspace confined"},
 
@@ -84,6 +90,18 @@ func TestStoreErrorStatusRefusesToAnswerForWhatItDoesNotMap(t *testing.T) {
 		// which is why moduleErrorMessage deliberately has no bad_request entry.
 		{"an invalid role is not a bad query", auth.ErrInvalidRole},
 		{"a step-up demand is not the module family's to answer", auth.ErrStepUpRequired},
+		// An undetermined commit is the WORK vocabulary's to word, not the module
+		// family's: modules/sessions classifyWorkStoreError + writeWorkError answer
+		// it with their own verdict shape (HP-9/E9, pinned by
+		// TestWorkStoreErrorCommitOutcomePreserved), so a module that receives it
+		// raw keeps the shared 500 internal_error rather than a 503 that reads as
+		// retryable. statusFor maps it for core REST/gRPC; this family must not.
+		{"an undetermined commit is the work seam's to word", store.ErrCommitOutcomeUnknown},
+		// The real producer shape carries the availability sentinel too. A flipped
+		// statusFor order would answer it ok=true with the store_unavailable message,
+		// a retryable-sounding answer for a write that may be durable.
+		{"an undetermined commit over a lost connection is the work seam's to word",
+			fmt.Errorf("%w: %w", store.ErrCommitOutcomeUnknown, store.ErrStoreUnavailable)},
 		// nil is a caller bug, and it fails closed rather than manufacturing a 200.
 		{"nil", nil},
 	} {
@@ -107,6 +125,7 @@ func TestStoreErrorStatusRefusesToAnswerForWhatItDoesNotMap(t *testing.T) {
 func TestStoreErrorStatusNeverDisagreesWithStatusFor(t *testing.T) {
 	for _, err := range []error{
 		store.ErrNotFound, store.ErrConflict, store.ErrAuditSpoolFull,
+		store.ErrStoreUnavailable,
 		store.ErrWorkspaceConfinement, store.ErrWorkspaceLineageRequired,
 		store.ErrNotLeader, store.ErrResidencyViolation,
 		store.ErrTenantSuspended, store.ErrTenantNotInService,
@@ -195,6 +214,7 @@ func TestStoreErrorBodyCarriesTheCodeCoreAnswers(t *testing.T) {
 	// Every code the module family maps is statusFor's code for the same sentinel.
 	for _, err := range []error{
 		store.ErrNotFound, store.ErrConflict, store.ErrAuditSpoolFull,
+		store.ErrStoreUnavailable,
 		store.ErrWorkspaceConfinement, store.ErrWorkspaceLineageRequired,
 		store.ErrNotLeader, store.ErrResidencyViolation,
 		store.ErrTenantSuspended, store.ErrTenantNotInService,

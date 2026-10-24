@@ -10,7 +10,7 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
-[![Next release: 0.3](https://img.shields.io/badge/release-0.3-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.3)<!-- /release -->
+[![Next release: 0.4](https://img.shields.io/badge/release-0.4-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.4)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
@@ -68,6 +68,8 @@ Il fonctionne avec vos outils actuels : Claude Code, Codex, Grok, Cursor, gemini
 
 Community conserve l’observabilité locale, les paramètres enregistrés et l’export des sauvegardes. L’envoi SIEM/ITSM, la télémétrie externe et l’export de posture sont inclus dans l’édition de base Business.
 
+**L’isolation réseau des sessions couvre les sessions Claude Code, Codex et OpenCode liées à une clé de fournisseur, ainsi que les sessions OpenCode utilisant la connexion propre de l’outil.** Une telle session n’atteint que le point de terminaison de son fournisseur, ou les hôtes de sa connexion, via un proxy propre à la session dans son propre espace de noms réseau, ou elle ne démarre pas. Pour OpenCode avec une clé de fournisseur, les hôtes reposent sur un inventaire antérieur, et non sur un tour démontré derrière le proxy. Les sessions Grok Build et les sessions à connexion de compte des autres outils peuvent encore atteindre tout hôte que le réseau autorise. Consultez [l’isolation réseau des sessions](SECURITY.md#session-network-isolation) avant d’exécuter des charges qui exigent un accès exclusif à un seul fournisseur.
+
 ## Installation
 
 Choisissez une méthode et copiez son bloc. À la fin, `olivares quickstart` affiche l'adresse de la console et un jeton à usage unique pour créer le premier administrateur. Chaque version est signée, et chaque méthode vérifie le téléchargement avant de l'installer ([vérifier vous-même un téléchargement](INSTALL.md#verifying-a-release)).
@@ -85,7 +87,7 @@ olivares quickstart
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares:0.3 \
+  docker.io/olivaresai/olivares:0.4 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->
@@ -103,8 +105,8 @@ Les sessions travaillent dans un dossier de l’hôte : définissez `OLIVARES_PR
 
 <!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.deb
-sudo dpkg -i olivares_0.3_linux_amd64.deb && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.4/olivares_0.4_linux_amd64.deb
+sudo dpkg -i olivares_0.4_linux_amd64.deb && sudo systemctl enable --now olivares
 ```
 <!-- /release -->
 
@@ -112,8 +114,8 @@ sudo dpkg -i olivares_0.3_linux_amd64.deb && sudo systemctl enable --now olivare
 
 <!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.rpm
-sudo rpm -i olivares_0.3_linux_amd64.rpm && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.4/olivares_0.4_linux_amd64.rpm
+sudo rpm -i olivares_0.4_linux_amd64.rpm && sudo systemctl enable --now olivares
 ```
 <!-- /release -->
 
@@ -121,12 +123,12 @@ sudo rpm -i olivares_0.3_linux_amd64.rpm && sudo systemctl enable --now olivares
 
 <!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.apk
-sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk && sudo rc-service olivares start
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.4/olivares_0.4_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.4_linux_amd64.apk && sudo rc-service olivares start
 ```
 <!-- /release -->
 
-Sur les serveurs ARM, utilisez `arm64` à la place de `amd64`. Tous les fichiers de la version : la <!-- release -->[page de la version](https://github.com/olivaresai/olivares/releases/tag/0.3)<!-- /release -->.
+Sur les serveurs ARM, utilisez `arm64` à la place de `amd64`. Tous les fichiers de la version : la <!-- release -->[page de la version](https://github.com/olivaresai/olivares/releases/tag/0.4)<!-- /release -->.
 
 **Homebrew.** macOS et Linux.
 

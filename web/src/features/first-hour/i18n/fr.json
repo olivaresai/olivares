@@ -12,7 +12,7 @@
     "signedIn": "Connecté",
     "signedInAs": "Connecté en tant que {{account}}",
     "notSignedIn": "Non connecté",
-    "usesKey": "Utilise votre clé API : {{name}}",
+    "usesKey": "Utilise votre clé d’API : {{name}}",
     "usesLocal": "Utilise le serveur de modèles local : {{name}}",
     "keyRefused": "La clé d’API {{name}} a été refusée. Remplacez-la dans Fournisseurs.",
     "noSignIn": "Cet outil n'a pas de connexion officielle à lancer ici. Utilisez la commande de terminal sous Autres moyens."
@@ -24,15 +24,18 @@
     "cancel": "Annuler",
     "signInClaude": "Se connecter avec Claude",
     "signInChatGPT": "Se connecter avec ChatGPT",
-    "useApiKey": "Utiliser plutôt une clé API",
+    "useApiKey": "Utiliser plutôt une clé d’API",
     "signInGrok": "Se connecter avec votre compte xAI",
     "signInGoogle": "Se connecter avec Google",
     "signIn": "Se connecter"
   },
   "signIn": {
     "openLink": "Ouvrir la page de connexion",
+    "openKeyPage": "Ouvrir la page de la clé",
     "codeLabel": "Code de la page de connexion",
     "codeHint": "Une fois l’accès autorisé, la page affiche un code. Collez-le ici.",
+    "keyLabel": "Clé d’API",
+    "keyHint": "Créez une clé sur la page ci-dessus, puis collez-la ici. {{name}} la conserve sur ce serveur ; Olivares ne la garde pas.",
     "continue": "Continuer",
     "enterCode": "Sur la page de connexion, saisissez ce code :",
     "waiting": "En attente de la fin de votre connexion sur la page…",
@@ -40,7 +43,13 @@
     "copy": "Copier",
     "copied": "Copié",
     "starting": "Démarrage de la connexion…",
-    "lostTouch": "Contact avec le serveur perdu. La connexion peut encore être en cours."
+    "lostTouch": "Contact avec le serveur perdu. La connexion peut encore être en cours.",
+    "method": "Méthode de connexion",
+    "methods": {
+      "opencode": "OpenCode Zen et modèles gratuits (clé d’API)",
+      "opencode-go": "OpenCode Go (clé d’API)",
+      "chatgpt-headless": "ChatGPT Pro/Plus (sans navigateur)"
+    }
   },
   "errors": {
     "status": "L’état de l’outil n’a pas pu être lu.",
@@ -53,8 +62,8 @@
     "install": {
       "title": "Installer un outil d’agent",
       "body": "Olivares exécute la version officielle de Claude Code ou de Codex sur ce serveur. Un seul suffit.",
-      "orUse": "Ou utilisez plutôt une clé API ou un modèle local :",
-      "addKey": "Ajouter une clé API",
+      "orUse": "Ou utilisez plutôt une clé d’API ou un modèle local :",
+      "addKey": "Ajouter une clé d’API",
       "addLocal": "Ajouter un modèle local"
     },
     "signIn": {

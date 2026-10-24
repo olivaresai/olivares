@@ -16,6 +16,7 @@ import (
 	"reflect"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/olivaresai/olivares/cmd/olivares/internal/inferencepep"
@@ -24,6 +25,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/inferenceproxy"
+	"github.com/olivaresai/olivares/sdk"
 )
 
 type contentFirewallStubInspector struct{}
@@ -402,4 +404,35 @@ func contentFirewallRecordArg(call *ast.CallExpr) (string, bool) {
 		return "", false
 	}
 	return types.ExprString(call.Args[0]), true
+}
+
+// switchableInspector is a content inspector that can be turned off while the engine runs.
+type switchableInspector struct {
+	contentFirewallStubInspector
+	on *atomic.Bool
+}
+
+func (s switchableInspector) CapabilityEnabled() bool { return s.on.Load() }
+
+// The recorded decider is read each time, so the status follows the firewall being turned
+// on and off, and a decoy engine alone is never reported as the firewall.
+func TestInferenceProxyContentFirewallStateFollowsTheFirewall(t *testing.T) {
+	var on atomic.Bool
+	b := &messagesInspectorBinding{}
+	b.record(&inferencepep.Decider{Inspector: switchableInspector{on: &on}})
+	if got := b.ContentFirewallState(); got != inferenceproxy.ContentFirewallInspectorAbsent {
+		t.Fatalf("firewall off: state = %s, want inspector_absent", got)
+	}
+	on.Store(true)
+	if got := b.ContentFirewallState(); got != inferenceproxy.ContentFirewallInspectorAttached {
+		t.Fatalf("firewall on: state = %s, want inspector_attached", got)
+	}
+	chain := chainInspectors(switchableInspector{on: new(atomic.Bool)}, switchableInspector{on: &on})
+	if !sdk.CapabilityEnabled(chain) {
+		t.Fatal("a chain with an inspector that is on must be in use")
+	}
+	on.Store(false)
+	if sdk.CapabilityEnabled(chain) {
+		t.Fatal("a chain whose inspectors are all off must not be in use")
+	}
 }

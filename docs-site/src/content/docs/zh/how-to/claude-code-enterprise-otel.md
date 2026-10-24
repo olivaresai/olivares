@@ -3,7 +3,7 @@ title: "为 Claude Code 配置企业级 OpenTelemetry"
 description: >-
   面向 Claude Code 机群的推荐企业级遥测姿态：通过受管设置（managed-settings）的 env
   开启经认可的 OTel 导出，借助 OTEL_RESOURCE_ATTRIBUTES 设置成为 FinOps 维度的运维标签，
-  用于子代理层级的 tracing beta，以及隐私开关——并逐一说明它们各自带来的责任。
+  用于子智能体层级的 tracing beta，以及隐私开关——并逐一说明它们各自带来的责任。
 ---
 
 Claude Code 的 OpenTelemetry 导出是受治理机群的**经认可观测路径**：它不受套餐门槛限制、
@@ -24,7 +24,7 @@ MCP 服务器）；在 tracing 处于活动状态时，只有 `TRACEPARENT` 会�
 |---|---|---|
 | 受管遥测 `env` | 每个会话都将 OTLP 导出到你的采集器——这种观测能在开发者自己的配置之外存续 | 无——默认即结构化遥测 |
 | `OTEL_RESOURCE_ATTRIBUTES` | 在**每个指标数据点和事件记录**上附加组织自定义标签（团队、项目、成本中心）；control plane 将它们路由进 FinOps 支出维度 | 保持标签值非敏感；连接器会对其做白名单过滤并清洗 |
-| Tracing beta | `claude_code.llm_request` / `claude_code.tool` span 携带 `agent_id` / `parent_agent_id`——access map 中的**每实例子代理层级** | Beta 表面：升级时需核验 |
+| Tracing beta | `claude_code.llm_request` / `claude_code.tool` span 携带 `agent_id` / `parent_agent_id`——access map 中的**每实例子智能体层级** | Beta 表面：升级时需核验 |
 | `OTEL_LOG_TOOL_DETAILS=1` | 工具事件上的 `tool_parameters`——包括在拒绝某次工具决策时**哪条命令被拒绝** | 工具输入会离开主机：这是一项你必须承担的驻留/脱敏责任 |
 | `OTEL_METRICS_INCLUDE_ENTRYPOINT=true` | `app.entrypoint`（cli / sdk-ts / claude-vscode …）——是哪个表面启动了每个会话 | 无（低基数标签） |
 
@@ -57,17 +57,17 @@ OTEL_RESOURCE_ATTRIBUTES=team=payments,project=atlas,cost_center=cc-42
 FinOps 将 `team` 和 `project` 提升为一等的支出维度，因此“按团队切分 Claude Code 支出”可端到端工作。
 不在白名单上的键会被丢弃——默认最小化数据。
 
-## 第 3 步——子代理层级（tracing beta）
+## 第 3 步——子智能体层级（tracing beta）
 
-在受管 env 中启用增强遥测 beta 并加上 traces 导出器即可获得 span。子代理身份属性
+在受管 env 中启用增强遥测 beta 并加上 traces 导出器即可获得 span。子智能体身份属性
 （`agent_id`、`parent_agent_id`）是**仅 span 的**——它们不出现在任何指标和任何日志事件上——
 且存在于 `claude_code.llm_request`（自 2.1.139 起）和 `claude_code.tool`（自 2.1.145 起）span 上。
 连接器将它们映射进 access map，形式为：
 
-- `session → identity.subagent`——实际发生动作的子代理**实例**，以及
-- `parent agent → identity.subagent`——**谁孵化了它**（对于由主会话直接孵化的代理则缺失）。
+- `session → identity.subagent`——实际发生动作的子智能体**实例**，以及
+- `parent agent → identity.subagent`——**谁孵化了它**（对于由主会话直接孵化的智能体则缺失）。
 
-这正是使同一类型的两个并发子代理可区分的关键——`Agent` 工具的 `subagent_type` 本身只是一个
+这正是使同一类型的两个并发子智能体可区分的关键——`Agent` 工具的 `subagent_type` 本身只是一个
 类型标签，而非实例。
 
 ## 第 4 步——可选的精度开关
@@ -85,7 +85,7 @@ FinOps 将 `team` 和 `project` 提升为一等的支出维度，因此“按团
   （参见 [连接 Claude Code](/zh/how-to/connect-claude-code/)）。
 - **子进程未被覆盖。** OTEL_* 不会到达 Bash/hook/MCP 子进程；在 tracing 下只有 `TRACEPARENT`
   会被继承。
-- **admin-plane 馈送看不到第三方提供方。** Claude Code Analytics API 只追踪 Claude API 上的用量——
+- **admin-plane 馈送看不到第三方提供商。** Claude Code Analytics API 只追踪 Claude API 上的用量——
   Claude Platform on AWS、Microsoft Foundry、Amazon Bedrock 和 Gemini Enterprise Agent Platform (formerly Vertex AI) 都不在其中。对于运行在
   这些表面上的机群，**这条 OTel 路径是你拥有的唯一观测**，而 admin 馈送上的影子认证检测器无法
   为它们清账。

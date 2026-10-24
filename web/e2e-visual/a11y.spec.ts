@@ -70,10 +70,8 @@ for (const route of ROUTES) {
 
     // Surface detail in the test output for any non-clean result.
     for (const v of [...critical, ...serious]) {
-      // eslint-disable-next-line no-console
       console.log(`[axe ${route}] ${v.impact}: ${v.id} — ${v.help}`)
       for (const n of v.nodes) {
-        // eslint-disable-next-line no-console
         console.log(`    ${n.target.join(' ')} :: ${n.html.slice(0, 140)}`)
       }
     }

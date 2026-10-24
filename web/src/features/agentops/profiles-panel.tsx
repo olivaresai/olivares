@@ -35,10 +35,6 @@ import {
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Field } from '@/components/ui/field'
-import {
-  PagePrimaryAction,
-  PageSecondaryActions,
-} from '@/components/ui/page-actions'
 import { Input } from '@/components/ui/input'
 import { KvList, KvRow } from '@/components/ui/kv'
 import {
@@ -62,7 +58,6 @@ import { useAuth } from '@/lib/auth/context'
 import { formatDateTime } from '@/lib/format'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { HIDDEN_ON_PHONE } from '@/lib/hooks/use-is-phone'
-import { cn } from '@/lib/utils'
 import { agentOpsApi, agentOpsKeys, PROFILE_PAGE } from './api'
 import { AuthorityLostError, useAuthBoundary } from './auth-boundary'
 import { BindingsTable } from './bindings-table'
@@ -105,38 +100,17 @@ const STATES = ['active', 'disabled', 'retired'] as const
  * `operable` is the legacy enablement flag, not a launch guarantee; the sheet
  * loads the selected profile's launch-readiness point read.
  */
-export function ProfilesPanel({
-  describe = true,
-  pageSurface = false,
-}: {
-  describe?: boolean
-  /** When this panel IS the page (the `/provider-profiles` room), the register
-   *  verb and the filters belong on the title line, not in a band above the
-   *  table. The sessions workspace embeds this panel and leaves them in place. */
-  pageSurface?: boolean
-}) {
+export function ProfilesPanel() {
   const boundary = useAuthBoundary()
   // Remount on the AUTHORITY BOUNDARY — principal, tenant, credential. The query keys
   // are tenant-scoped, which isolates the CACHE; the remount is what clears what is
   // on SCREEN — an open sheet, a revealed configuration, a pending confirmation, a
   // selection, a filter — so nothing read for one operator is painted, or acted on,
   // under the next.
-  return (
-    <ProfilesPanelInner
-      key={boundary.key}
-      describe={describe}
-      pageSurface={pageSurface}
-    />
-  )
+  return <ProfilesPanelInner key={boundary.key} />
 }
 
-function ProfilesPanelInner({
-  describe,
-  pageSurface,
-}: {
-  describe: boolean
-  pageSurface: boolean
-}) {
+function ProfilesPanelInner() {
   const { t } = useTranslation(['agentops', 'common'])
   const { activeTenant, can } = useAuth()
   const boundary = useAuthBoundary()
@@ -257,28 +231,13 @@ function ProfilesPanelInner({
 
   return (
     <div className="flex flex-col gap-3">
-      {pageSurface ? (
-        <>
-          {registerButton ? (
-            <PagePrimaryAction>{registerButton}</PagePrimaryAction>
-          ) : null}
-          <PageSecondaryActions>{pageFilters}</PageSecondaryActions>
-        </>
-      ) : (
-        <>
-          <div className="flex items-start justify-between gap-3">
-            {describe ? (
-              <p className="text-body text-muted-foreground">
-                {t('profiles.subtitle')}
-              </p>
-            ) : (
-              <span />
-            )}
-            {registerButton}
-          </div>
-          <div className="flex items-center gap-2">{pageFilters}</div>
-        </>
-      )}
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-body text-muted-foreground">
+          {t('profiles.subtitle')}
+        </p>
+        {registerButton}
+      </div>
+      <div className="flex items-center gap-2">{pageFilters}</div>
 
       {query.isLoading ? (
         <div className="flex justify-center py-8">
@@ -299,9 +258,8 @@ function ProfilesPanelInner({
            decision did not cover. `TableRegion` is that same piece, not a copy of its
            height: with it, the empty page measures 770 inside 772. */
         state === ALL ? (
-          <TableRegion fill={pageSurface}>
+          <TableRegion fill={false}>
             <EmptyState
-              className={cn(pageSurface && 'flex-1')}
               icon={<Fingerprint />}
               title={t('profiles.empty.title')}
               description={
@@ -314,9 +272,8 @@ function ProfilesPanelInner({
             />
           </TableRegion>
         ) : (
-          <TableRegion fill={pageSurface}>
+          <TableRegion fill={false}>
             <EmptyState
-              className={cn(pageSurface && 'flex-1')}
               icon={<Fingerprint />}
               title={t('profiles.filteredEmpty.title')}
               description={t('profiles.filteredEmpty.description', {
@@ -335,9 +292,8 @@ function ProfilesPanelInner({
           </TableRegion>
         )
       ) : visible.length === 0 ? (
-        <TableRegion fill={pageSurface}>
+        <TableRegion fill={false}>
           <EmptyState
-            className={cn(pageSurface && 'flex-1')}
             icon={<Fingerprint />}
             title={t('common:states.noResults')}
             description={t('common:states.noResultsHint')}
@@ -350,9 +306,6 @@ function ProfilesPanelInner({
           hasMore={!!query.hasNextPage}
           onLoadMore={() => void query.fetchNextPage()}
           isFetchingMore={query.isFetchingNextPage}
-          fill={pageSurface}
-          canWrite={canWrite}
-          onCreate={() => setCreateOpen(true)}
         />
       )}
 
@@ -385,50 +338,19 @@ function ProfilesTable({
   hasMore,
   onLoadMore,
   isFetchingMore,
-  fill,
-  canWrite,
-  onCreate,
 }: {
   profiles: ProviderProfileDTO[]
   onOpen: (profile: ProviderProfileDTO) => void
   hasMore: boolean
   onLoadMore: () => void
   isFetchingMore: boolean
-  fill: boolean
-  canWrite: boolean
-  onCreate: () => void
 }) {
   const { t, i18n } = useTranslation(['agentops', 'common'])
   return (
     <FillingTable
-      fill={fill}
+      fill={false}
       oneLine
       colSpan={7}
-      // ⛔ THE QUIET LINE BELONGS TO THE PAGE SURFACE. Embedded as a tab inside the
-      //    sessions workspace this panel already declares `Register` as that screen's
-      //    verb, through the header's own slot — a second offer of the same verb three
-      //    centimetres below it is the "two firsts and therefore none" the work-first
-      //    pass closed elsewhere on this very screen.
-      nextAction={
-        fill && canWrite ? (
-          /* ⛔ IT IS A BUTTON, AND IT USED TO BE `<a href="#register-profile">` WITH THE
-             NAVIGATION CANCELLED. No element in the document carries that id — so the
-             address bar, "copy link", a middle-click and a new tab all led to a fragment
-             that resolves to nothing, and a reader was offered a destination that does
-             not exist. The line does not GO anywhere: it opens the same dialog the
-             header's verb opens, in place. A control that acts is a button, and the
-             difference is not vocabulary — a button answers Space as well as Enter, and
-             it is announced as a command instead of as a link to somewhere. */
-          <button
-            type="button"
-            data-testid="profiles-next-action"
-            className="text-accent-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={onCreate}
-          >
-            {t('profiles.nextAction')}
-          </button>
-        ) : undefined
-      }
       after={
         hasMore ? (
           <div className="flex justify-center border-t border-border p-2">
@@ -585,7 +507,17 @@ function OperableBadge({ profile }: { profile: ProviderProfileDTO }) {
   )
 }
 
-function ProfileSheetBody({ initial }: { initial: ProviderProfileDTO }) {
+/** A profile's detail: its settings, launch readiness and the sources bound to it. In
+ * its own sheet it carries its header; `embedded` inside an account's detail (an account
+ * IS a named profile, one reference) it drops the header and the rows the account
+ * already shows. */
+export function ProfileSheetBody({
+  initial,
+  embedded = false,
+}: {
+  initial: ProviderProfileDTO
+  embedded?: boolean
+}) {
   const { t, i18n } = useTranslation('agentops')
   const { activeTenant, can } = useAuth()
   const boundary = useAuthBoundary()
@@ -659,9 +591,12 @@ function ProfileSheetBody({ initial }: { initial: ProviderProfileDTO }) {
       }
       return agentOpsApi.patchProfile(ref, body)
     },
+    // An account IS a named profile: its list and detail read the same row.
     invalidateKeys: () => [
       agentOpsKeys.profiles(activeTenant, boundary.epoch),
       agentOpsKeys.profile(activeTenant, boundary.epoch, ref),
+      agentOpsKeys.accounts(activeTenant, boundary.epoch),
+      agentOpsKeys.account(activeTenant, boundary.epoch, ref),
     ],
     successMessage: (_data, vars) =>
       vars.state === 'disabled'
@@ -690,6 +625,8 @@ function ProfileSheetBody({ initial }: { initial: ProviderProfileDTO }) {
       agentOpsKeys.profiles(activeTenant, boundary.epoch),
       agentOpsKeys.profile(activeTenant, boundary.epoch, ref),
       agentOpsKeys.bindings(activeTenant, boundary.epoch),
+      agentOpsKeys.accounts(activeTenant, boundary.epoch),
+      agentOpsKeys.account(activeTenant, boundary.epoch, ref),
     ],
     successMessage: t('profiles.retire.success'),
     onDone: () => setRetireOpen(false),
@@ -721,18 +658,20 @@ function ProfileSheetBody({ initial }: { initial: ProviderProfileDTO }) {
 
   return (
     <>
-      <SheetHeader>
-        <SheetTitle className="flex items-center gap-2">
-          <Fingerprint className="size-4 text-accent-text" />
-          <ProviderAccent accent={profile.accent} />
-          <span className="truncate">
-            {profileName(profile) ?? profile.profile_ref}
-          </span>
-        </SheetTitle>
-        <SheetDescription className="font-mono text-caption">
-          {profile.profile_ref}
-        </SheetDescription>
-      </SheetHeader>
+      {!embedded && (
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2">
+            <Fingerprint className="size-4 text-accent-text" />
+            <ProviderAccent accent={profile.accent} />
+            <span className="truncate">
+              {profileName(profile) ?? profile.profile_ref}
+            </span>
+          </SheetTitle>
+          <SheetDescription className="font-mono text-caption">
+            {profile.profile_ref}
+          </SheetDescription>
+        </SheetHeader>
+      )}
 
       {detail.isError && (
         <p className="text-caption text-warning">
@@ -741,27 +680,39 @@ function ProfileSheetBody({ initial }: { initial: ProviderProfileDTO }) {
       )}
 
       <KvList>
-        <KvRow label={t('profiles.details.ref')} mono>
-          {profile.profile_ref}
-        </KvRow>
-        <KvRow label={t('profiles.details.driver')} mono>
-          {profile.driver}
-        </KvRow>
-        <KvRow label={t('profiles.details.environment')}>
-          <EnvironmentCell profile={profile} />
-        </KvRow>
-        <KvRow label={t('profiles.details.state')}>
-          <StateBadge state={profile.state} />
-        </KvRow>
+        {!embedded && (
+          <>
+            <KvRow label={t('profiles.details.ref')} mono>
+              {profile.profile_ref}
+            </KvRow>
+            <KvRow label={t('profiles.details.driver')} mono>
+              {profile.driver}
+            </KvRow>
+          </>
+        )}
+        {!embedded && (
+          <>
+            <KvRow label={t('profiles.details.environment')}>
+              <EnvironmentCell profile={profile} />
+            </KvRow>
+            <KvRow label={t('profiles.details.state')}>
+              <StateBadge state={profile.state} />
+            </KvRow>
+          </>
+        )}
         <KvRow label={t('profiles.details.launch')}>
           <OperableBadge profile={profile} />
         </KvRow>
-        <KvRow label={t('profiles.details.created')}>
-          {formatDateTime(profile.created_at, i18n.language)}
-        </KvRow>
-        <KvRow label={t('profiles.details.updated')}>
-          {formatDateTime(profile.updated_at, i18n.language)}
-        </KvRow>
+        {!embedded && (
+          <>
+            <KvRow label={t('profiles.details.created')}>
+              {formatDateTime(profile.created_at, i18n.language)}
+            </KvRow>
+            <KvRow label={t('profiles.details.updated')}>
+              {formatDateTime(profile.updated_at, i18n.language)}
+            </KvRow>
+          </>
+        )}
         {profile.retired_at && (
           <KvRow label={t('profiles.details.retiredAt')}>
             {formatDateTime(profile.retired_at, i18n.language)}

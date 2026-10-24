@@ -49,9 +49,18 @@ session's model or effort.
 
 Launch choices (`POST /v1/m/sessions/runs`):
 
-- `model` is passed to the tool as written; the tool validates it. Enabling
-  Fast mode checks the reported capability and pins the checked model selector,
-  including the catalog's default when no model was chosen.
+- `model` is passed to the tool as written, and the tool validates it, with one
+  exception. A Claude Code launch on the tool's own sign-in never hands the tool
+  an alias: Claude Code resolves an alias, or picks its default when no model is
+  named, in each process it starts, and the result was measured to differ
+  between sessions of one account. The engine launches and records the exact id
+  instead: `default` or no model is `claude-opus-5-5`, `opus` is
+  `claude-opus-5-5`, `sonnet` is `claude-sonnet-5-5`, `haiku` is
+  `claude-haiku-5-5` and `fable` is `claude-fable-5-1`, keeping a `[1m]`
+  suffix. An alias stays accepted on input and the run's `model_ref` is the id.
+  A provider-bound launch keeps the provider's model names. Enabling Fast mode
+  checks the reported capability of the chosen selector, including the catalog's
+  default when no model was chosen, and pins its exact id.
 - `effort` is an open term for Codex and the other drivers. Claude Code
   accepts only `low`, `medium`, `high`, `xhigh` and `max`; a vendor effort
   outside that set can be listed here but is refused at launch with 400. This

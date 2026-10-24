@@ -10,7 +10,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -54,22 +56,30 @@ import (
 
 const claudePolicyModule = "claude-policy"
 
-// claudePolicySurfaces are the four managed-* surfaces the console authors. The
+// claudePolicySurfaces are the managed-* surfaces the console authors: the four Claude Code
+// files and one per native managed file of Codex, Grok Build, OpenCode and Gemini CLI. The
 // engine is authoritative (surfaceOf, claudepolicy.go:256); this list only turns
 // a typo into a usage error before a request is sent, and it is stated in the
 // same words the engine uses so the two cannot disagree quietly.
-var claudePolicySurfaces = []string{"managed-settings", "hooks", "managed-mcp", "sandbox"}
+var claudePolicySurfaces = []string{
+	"managed-settings", "hooks", "managed-mcp", "sandbox",
+	"codex-requirements", "codex-managed-config", "grok-requirements", "opencode-config", "gemini-cli-settings",
+}
 
 func newClaudePolicyCmd() *cobra.Command {
 	var flags authClientFlags
 	root := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "read"},
 		Use:         "claude-policy",
-		Short:       "Author, publish and track the Claude Code managed-* policy surfaces",
-		Long: "claude-policy is the authoring console for the four managed surfaces —\n" +
-			"managed-settings, hooks, managed-mcp and sandbox — over the same API the web\n" +
-			"console calls: validate a document, dry-run it against what hosts actually\n" +
+		Short:       "Author, publish and track the managed policy files of Claude Code, Codex, Grok Build, OpenCode and Gemini CLI",
+		Long: "claude-policy is the authoring console for the managed surfaces — Claude Code's\n" +
+			"managed-settings, hooks, managed-mcp and sandbox, and the managed file of Codex\n" +
+			"(codex-requirements, codex-managed-config), Grok Build (grok-requirements),\n" +
+			"OpenCode (opencode-config) and Gemini CLI (gemini-cli-settings) — over the same API\n" +
+			"the web console calls: validate a document, dry-run it against what hosts actually\n" +
 			"report, publish a revision, and see where the signed artifact landed.\n\n" +
+			"On a workstation, `pull` fetches the signed artifact, verifies it against a pinned\n" +
+			"key, writes the file and attests it.\n\n" +
 			"It is NOT `olivares agent managed-settings`, which renders a managed-settings\n" +
 			"file on THIS host. This authors the tenant's versioned policy on the control\n" +
 			"plane.\n\n" +
@@ -88,9 +98,44 @@ func newClaudePolicyCmd() *cobra.Command {
 		newClaudePolicyVersionsCmd(&flags),
 		newClaudePolicyArtifactCmd(&flags),
 		newClaudePolicyCheckinCmd(&flags),
+		newClaudePolicyPullCmd(&flags),
 		newClaudePolicyDistributionCmd(&flags),
 	)
+	if thisEdition.name == "community" {
+		claudePolicyCommunityHelp(root)
+	}
 	return root
+}
+
+// claudePolicyBusinessVerbs are the verbs a Community build cannot serve: the fleet routes answer
+// HTTP 501 there (modules/governance/claudepolicy_fleet_noenterprise.go), and `pull` reads the
+// artifact route. The Business build keeps every help text as written.
+var claudePolicyBusinessVerbs = []string{"publish", "versions", "distribution", "artifact", "checkin", "pull"}
+
+const (
+	claudePolicyBusinessNote     = "Requires Business. Community does not serve this verb: " + pricingURL
+	claudePolicyCommunityShort   = "Validate and dry-run the managed policy files of Claude Code, Codex, Grok Build, OpenCode and Gemini CLI (publishing and tracking require Business)"
+	claudePolicyCommunityExample = "  olivares claude-policy validate managed-settings --content-file settings.json\n" +
+		"  olivares claude-policy dry-run managed-mcp --content-file settings.json"
+)
+
+// claudePolicyCommunityHelp says, in a Community build, which verbs need Business. The root Short
+// and Long name them, the root example leads with the two verbs that work here, and each Business
+// verb (and its subcommands) says so in its own help. Only the help changes; the commands still run
+// and answer as before.
+func claudePolicyCommunityHelp(root *cobra.Command) {
+	root.Short = claudePolicyCommunityShort
+	root.Long += "\n\nIn Community these verbs require Business: " + strings.Join(claudePolicyBusinessVerbs, ", ") + "."
+	root.Example = claudePolicyCommunityExample
+	for _, verb := range root.Commands() {
+		if !slices.Contains(claudePolicyBusinessVerbs, verb.Name()) {
+			continue
+		}
+		walkCommands(verb, func(c *cobra.Command) {
+			c.Short += " (requires Business)"
+			c.Long = strings.TrimSpace(claudePolicyBusinessNote + "\n\n" + c.Long)
+		})
+	}
 }
 
 // claudePolicySurface validates the positional surface argument locally so a typo
@@ -102,7 +147,7 @@ func claudePolicySurface(name string) (string, error) {
 		}
 	}
 	return "", exitcode.New(exitcode.Usage, fmt.Errorf(
-		"unknown surface %q (want managed-settings, hooks, managed-mcp or sandbox)", name))
+		"unknown surface %q (want %s)", name, strings.Join(claudePolicySurfaces, ", ")))
 }
 
 // claudePolicyReportIssues renders a validate/dry-run report and decides the exit
@@ -499,26 +544,7 @@ func newClaudePolicyCheckinCmd(flags *authClientFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			var out struct {
-				Verified bool `json:"verified"`
-				Drift    []struct {
-					Severity string `json:"severity"`
-				} `json:"drift"`
-			}
-			decodeErr := res.decode(&out)
-			if rerr := renderAgentExecObject(cmd, flags, res, nil); rerr != nil {
-				return rerr
-			}
-			if decodeErr != nil {
-				return exitcode.New(exitcode.Degraded, fmt.Errorf(
-					"the check-in verdict could not be parsed (%w); this is NOT a verified check-in", decodeErr))
-			}
-			if !out.Verified {
-				return exitcode.New(exitcode.Degraded, fmt.Errorf(
-					"check-in recorded but NOT VERIFIED: the artifact this scope reports does not match what was signed "+
-						"(a tampered or stale artifact); %d drift finding(s) were raised", len(out.Drift)))
-			}
-			return nil
+			return claudePolicyReportCheckin(cmd, flags, res)
 		},
 	}
 	cmd.Flags().StringVar(&scope, "scope", "", "the host id / distribution name this check-in reports for (required)")
@@ -528,6 +554,31 @@ func newClaudePolicyCheckinCmd(flags *authClientFlags) *cobra.Command {
 	cmd.Flags().StringVar(&observedFile, "observed-file", "", "the config observed on the host, '-' for stdin")
 	_ = cmd.MarkFlagRequired("scope")
 	return cmd
+}
+
+// claudePolicyReportCheckin renders a check-in answer and decides the exit code from its
+// `verified` verdict: the route answers 200 either way, so an unverified artifact exits 7.
+func claudePolicyReportCheckin(cmd *cobra.Command, flags *authClientFlags, res agentExecResult) error {
+	var out struct {
+		Verified bool `json:"verified"`
+		Drift    []struct {
+			Severity string `json:"severity"`
+		} `json:"drift"`
+	}
+	decodeErr := res.decode(&out)
+	if rerr := renderAgentExecObject(cmd, flags, res, nil); rerr != nil {
+		return rerr
+	}
+	if decodeErr != nil {
+		return exitcode.New(exitcode.Degraded, fmt.Errorf(
+			"the check-in verdict could not be parsed (%w); this is NOT a verified check-in", decodeErr))
+	}
+	if !out.Verified {
+		return exitcode.New(exitcode.Degraded, fmt.Errorf(
+			"check-in recorded but NOT VERIFIED: the artifact this scope reports does not match what was signed "+
+				"(a tampered or stale artifact); %d drift finding(s) were raised", len(out.Drift)))
+	}
+	return nil
 }
 
 func newClaudePolicyDistributionCmd(flags *authClientFlags) *cobra.Command {

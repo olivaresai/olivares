@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/olivaresai/olivares/core/api"
@@ -489,4 +490,82 @@ func findCookie(cookies []*http.Cookie, name string) *http.Cookie {
 		}
 	}
 	return nil
+}
+
+// overageFed is a provider whose IdP did not send the user's full group list (Entra group
+// overage): the identity carries no groups and says so.
+type overageFed struct{ fakeFed }
+
+func (f *overageFed) ValidateAssertion(ctx context.Context, a auth.Assertion) (auth.FederatedIdentity, error) {
+	id, err := f.fakeFed.ValidateAssertion(ctx, a)
+	id.GroupsIndeterminate = true
+	return id, err
+}
+
+// noopGroupMapper wires the enterprise capability without mapping anything.
+type noopGroupMapper struct{}
+
+func (noopGroupMapper) MapAssertedGroups([]string, []model.UserGroup) []model.ID { return nil }
+
+// TestSSOCallback_GroupOverageIsRefusedWithTheFix drives the real callback (flow cookie,
+// CSRF state, CompleteSSO, writeError) for a tenant-scoped login whose groups are
+// indeterminate, with the group mapper wired: no credential reaches the browser or the
+// CLI, and the person reads the code and the fix in Entra.
+func TestSSOCallback_GroupOverageIsRefusedWithTheFix(t *testing.T) {
+	ctx := context.Background()
+	var svc *auth.FederationService
+	h := newHarnessOpts(t, func(o *api.Options) {
+		build := func(context.Context, auth.FederationParams) (auth.Federation, error) {
+			return &overageFed{fakeFed{proto: auth.ProtocolOIDC}}, nil
+		}
+		svc = auth.NewFederationService(o.Store, fakeSealer{}, build, auth.NoFederation{}, fakeMultiIDP{})
+		o.FederationService = svc
+	})
+	h.authr.WithGroupMapper(noopGroupMapper{})
+	admin := h.adminLogin()
+	tenantX := h.createOrg(admin, "tenant-x")
+	actor := auth.Principal{Kind: auth.KindUser, Superadmin: true, UserID: model.NewID(), CredID: model.NewID()}
+	if _, err := svc.PutConfig(ctx, actor, tenantX, auth.FederationConfigInput{
+		Protocol: auth.ProtocolOIDC, Enabled: true,
+		OIDCIssuer: "https://idp-x.example", OIDCClientID: "client-x", OIDCClientSecret: "secret-x",
+		ClaimedDomains: []string{"acme.com"},
+	}); err != nil {
+		t.Fatalf("store per-tenant config: %v", err)
+	}
+
+	start := h.raw("GET", "/v1/auth/federation/start?tenant="+tenantX.String(), nil)
+	if start.Code != http.StatusFound {
+		t.Fatalf("start = %d, want 302", start.Code)
+	}
+	loc, err := url.Parse(start.Header().Get("Location"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie := findCookie(start.Result().Cookies(), "olv_sso")
+	if cookie == nil {
+		t.Fatal("start set no olv_sso flow cookie")
+	}
+
+	cb := h.raw("GET", "/v1/auth/federation/callback?code=good-code&state="+url.QueryEscape(loc.Query().Get("state")), []*http.Cookie{cookie})
+	if cb.Code != http.StatusForbidden {
+		t.Fatalf("callback = %d %s, want 403", cb.Code, cb.Body.String())
+	}
+	var body struct {
+		Error struct{ Code, Message string }
+		Token string
+	}
+	if err := json.Unmarshal(cb.Body.Bytes(), &body); err != nil {
+		t.Fatalf("callback body is not JSON: %v: %s", err, cb.Body.String())
+	}
+	if body.Error.Code != "sso_groups_indeterminate" || !strings.Contains(body.Error.Message, "emit only the groups assigned to the application") {
+		t.Fatalf("callback error = %+v, want sso_groups_indeterminate naming the Entra fix", body.Error)
+	}
+	if body.Token != "" {
+		t.Fatalf("a refused callback returned a token: %q", body.Token)
+	}
+	for _, c := range cb.Result().Cookies() {
+		if c.Value != "" { // the one-time flow cookie is cleared (empty); nothing else may be set
+			t.Fatalf("a refused callback set cookie %s", c.Name)
+		}
+	}
 }

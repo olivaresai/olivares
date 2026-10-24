@@ -4,7 +4,8 @@
 # The INSTALL.md "Manual binary (tarball)" block, run verbatim against the published release in
 # an empty directory with cosign on PATH, as a reader has it. Its verify step once pointed at a
 # path that exists only in a source checkout and exited 127. The block ends in `sudo install`,
-# so this needs a hosted runner (the self-hosted pool has no sudo).
+# so this needs a hosted runner (the self-hosted pool has no sudo); a private repository runs it on the
+# pool, where that step cannot pass.
 # It runs when the block changes, which includes each release's bump of `ver=`. That bump lands
 # before the release exists: on that pull request the script reports NOT VERIFIED without running
 # the block. Once the release is published it runs the block verbatim, and there a 404 is red.
@@ -47,7 +48,7 @@ jobs:
       (github.event_name != 'workflow_run' ||
         (github.event.workflow_run.event == 'workflow_dispatch' &&
          github.event.workflow_run.conclusion == 'success'))
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.repository.private && (vars.CI_RUNNER || 'hetzner') || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

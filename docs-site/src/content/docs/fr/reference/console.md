@@ -17,18 +17,19 @@ permission nécessaire à un principal pour y accéder et l'endroit où en savoi
 
 La console a **une seule structure de navigation : neuf domaines avec des sections**.
 Chaque écran se trouve dans un domaine et dans l’une de ses sections, et tout ce qui indique
-où se trouve un écran nomme le même endroit : Tous les domaines (dans la barre latérale, et Plus sur
-un téléphone), les pages d’annuaire de domaine, le fil d’Ariane, la palette de commandes et
-la rangée de liens au-dessus d’un écran, qui liste les autres écrans de sa section. La barre
-latérale épingle une courte liste d’écrans, le premier travail d’abord (Accueil, Sessions, Outils d’IA, Approbations), puis Travail, et un écran
-épinglé reste marqué sur les autres écrans de sa section. Un filtre de navigation remplace
+où se trouve un écran nomme le même endroit : Tous les domaines (dans le menu du compte et
+dans la palette de commandes, et Plus sur un téléphone), les pages d’annuaire de domaine, la
+palette de commandes et la rangée de liens au-dessus d’un écran, qui liste les autres écrans
+de sa section. La barre supérieure nomme cinq lieux, le
+premier travail d’abord (Accueil, Sessions, Outils, Règles, Registre ; Business ajoute
+Organisation), et un lieu reste marqué sur les autres écrans de sa section. Tous les domaines liste chaque domaine et ses écrans, sur deux niveaux, sans les lieux que la barre montre déjà. Un filtre de navigation remplace
 l’arbre groupé par une liste classée des correspondances autorisées ; la palette de
 commandes utilise le même index, le même classement et la même projection de permissions.
 Un annuaire de domaine est une page de liens — les entrées que vos permissions autorisent —
 et non une lecture en direct de capacité, de disponibilité ou d’état de préparation.
 
-Une nouvelle installation n’affiche que le premier travail : Accueil, Sessions, Outils d’IA
-avec Fournisseurs, Approbations, l’assistant de configuration et Paramètres. Tout autre
+Une nouvelle installation n’affiche que le premier travail : Accueil, Sessions, Outils d’IA,
+Approbations, l’assistant de configuration et Paramètres. Tout autre
 écran y est un aperçu : son adresse, son API et sa CLI continuent de fonctionner, et la
 navigation, la palette de commandes et les raccourcis ne l’affichent pas. Une installation
 qui existait avant la mise à niveau affiche tous les écrans qu’elle affichait, de même
@@ -39,7 +40,7 @@ Elle est **générée**. La liste provient de `web/src/features/route-census.jso
 recensement append-only que `registry.route-conservation.test.ts` compare au routeur compilé ;
 un écran ne peut donc être ajouté, déplacé ou perdu sans que cette page change avec lui. Le
 nom et la description en une ligne de chaque écran sont **les propres chaînes de la console**,
-tirées du même catalogue de traduction que la barre latérale : ce que vous lisez ici est ce
+tirées du même catalogue de traduction que la console : ce que vous lisez ici est ce
 que vous voyez dans le produit. Les tableaux ci-dessous regroupent ces lignes par domaine, après Accueil (la vue d’ensemble)
 et avant connexion, configuration et compte. Les neuf pages d’annuaire de domaine figurent
 parmi les routes montées hors du registre de fonctionnalités.
@@ -54,7 +55,7 @@ Consultez [Rôles et permissions](/fr/reference/modules/vi-governance/).
 
 ## Comment lire cette page
 
-- **Écran** — le nom employé par la barre latérale, les annuaires de domaine et la palette
+- **Écran** — le nom employé par Tous les domaines, les annuaires de domaine et la palette
   de commandes.
 - **Chemin** — l'URL sous l'origine de la console de votre déploiement. C'est un contrat
   publié : un favori, un lien profond de runbook et une référence croisée de la documentation
@@ -66,11 +67,11 @@ Consultez [Rôles et permissions](/fr/reference/modules/vi-governance/).
 
 Les titres suivants sont les domaines, dans l’ordre où Tous les domaines les liste :
 Infrastructure, IA, Données & contexte, Travail & communications, Automatisation,
-Sécurité & identité, Déploiement, Observabilité & preuves, puis Système & paramètres.
+Sécurité & identité, Livraison, Supervision, puis Système & paramètres.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-La console publie **73 routes**. Elles figurent toutes dans les tableaux ci-dessous, avec la
+La console publie **74 routes**. Elles figurent toutes dans les tableaux ci-dessous, avec la
 permission requise et la page de référence ouverte par leur lien d'aide dans le produit.
 
 ### Accueil
@@ -83,7 +84,7 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
-| Environnement | `/estate` | Consultez les ressources configurées et leurs relations, y compris les dépendances des éléments de travail. | `sessions:run:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
+| Parc | `/estate` | Consultez les ressources configurées et leurs relations, y compris les dépendances des éléments de travail. | `sessions:run:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Inventaire | `/inventory` | Découvrez et cataloguez les agents, serveurs MCP et modèles que les connecteurs ont observés. | `inventory:catalog:read` | [reference/modules/i-inventory](/fr/reference/modules/i-inventory/) |
 | Espace de travail | `/workspace` | Agents, sessions, ressources et activité limités à un espace de travail | `tenant:read` | [reference/modules/xx-multi-tenancy](/fr/reference/modules/xx-multi-tenancy/) |
 
@@ -91,7 +92,7 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
-| Outils des agents | `/agent-tools` | Détectez, installez et mettez à jour les outils des agents sur cet hôte et suivez chaque installation ; réservé aux administrateurs du déploiement | `system:admin` | [how-to/add-a-provider](/fr/how-to/add-a-provider/) |
+| Outils des agents | `/agent-tools` | Voir les comptes et clés d’API avec lesquels les sessions s’exécutent ; installer et connecter les outils revient aux administrateurs du déploiement | `sessions:account:read` | [how-to/add-a-provider](/fr/how-to/add-a-provider/) |
 | Opérer les sessions | `/agentops` | Lancer des sessions et suivre ce que fait chacune, y compris celles qu’Olivares trouve | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/fr/how-to/run-claude-code-with-olivares/) |
 | Serveurs MCP | `/mcp-servers` | Connectez des serveurs MCP distants à cette organisation, testez-les et choisissez les outils que les sessions peuvent utiliser | `tenant:admin` | [how-to/connectors/mcp-governance](/fr/how-to/connectors/mcp-governance/) |
 | Opérations sur les modèles | `/model-operations` | Modèles détenus, admission et déploiements | `models:registry:read` | [reference/modules/xxiii-model-operations](/fr/reference/modules/xxiii-model-operations/) |
@@ -102,10 +103,11 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Profils de fournisseur | `/provider-profiles` | Enregistrez et administrez les répertoires de fournisseur sous lesquels les sessions se lancent, et lisez leur configuration à la demande | `sessions:profile:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Fournisseurs | `/providers` | Enregistrez les clés d'API et les points de terminaison avec lesquels les sessions démarrent ; testez-les, changez-les et révoquez-les | `sessions:provider:read` | [how-to/add-a-provider](/fr/how-to/add-a-provider/) |
 | Limites de débit | `/rate-limits` | Inventaire des limites de débit Anthropic (lecture seule) | `models:ratelimits:read` | [reference/modules/x-models](/fr/reference/modules/x-models/) |
+| Portée | `/reach` | Voyez quelles destinations chaque outil peut atteindre et lesquelles attendent une approbation. | `accessmap:graph:read` | [reference/modules/iii-access-map](/fr/reference/modules/iii-access-map/) |
 | Bac à sable | `/sandbox` | Test isolé des agents et relecture | `sandbox:run:read` | [reference/modules/xvii-sandbox](/fr/reference/modules/xvii-sandbox/) |
 | Sessions | `/sessions` | Lancer des sessions et suivre ce que fait chacune, y compris celles qu’Olivares trouve | `sessions:live:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Voix | `/voice` | Sessions vocales et en temps réel | `voice:session:read` | [reference/modules/xvi-voice](/fr/reference/modules/xvi-voice/) |
-| Modèles de workspace | `/workspace-templates` | Instantanés réutilisables de configuration de session : hooks, settings, connectors et policies. | `sessions:template:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
+| Modèles d’espace de travail | `/workspace-templates` | Instantanés réutilisables de configuration de session : hooks, paramètres, connecteurs et politiques. | `sessions:template:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 
 ### Données & contexte
 
@@ -141,8 +143,8 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
 | Carte des accès | `/access-map` | Ce que chaque agent lit et écrit (R/RW) | `accessmap:graph:read` | [reference/modules/iii-access-map](/fr/reference/modules/iii-access-map/) |
-| Export AgentCore | `/agentcore-export` | Planifier, relire et appliquer la projection des règles de gouvernance de ce tenant sur AWS AgentCore sous forme de politiques Cedar ; la planification n’écrit rien | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
-| Gouvernance de Claude Code | `/claude-policy` | Politique gérée, hooks, MCP, bac à sable et policy-as-code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/fr/how-to/connectors/claude-code-hooks-pep/) |
+| Export des politiques | `/agentcore-export` | Planifier, relire et appliquer la projection des règles de gouvernance de ce tenant sur AWS AgentCore sous forme de politiques Cedar ; la planification n’écrit rien | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
+| Politique gérée | `/claude-policy` | Politique gérée, hooks, MCP, bac à sable et policy-as-code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/fr/how-to/connectors/claude-code-hooks-pep/) |
 | Identité et accès | `/identity` | SSO, SCIM et les identités qu’utilisent vos agents | `governance:identity:read` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
 | Proxy d'inférence | `/inference-proxy` | Gates du proxy, règles DLP de sortie et approbations d'appareils | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/fr/reference/modules/inferenceproxy/) |
 | Coupe-circuit | `/killswitch` | Arrêt d'urgence, reprise en double contrôle et confinement par gardien | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/fr/how-to/cookbook/kill-switch-drill/) |
@@ -151,17 +153,17 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Sécurité | `/security` | Garde-fous, investigation et anomalies | `security:finding:read` | [reference/modules/ix-security](/fr/reference/modules/ix-security/) |
 | Coffre-fort | `/vault` | Vos mots de passe, notes et codes d’authentification | `tenant:read` | [reference/console](/fr/reference/console/) |
 
-### Déploiement
+### Livraison
 
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
 | Publication Git | `/git-publication` | Pousser des commits, ouvrir des pull requests et fusionner via des cibles Git approuvées | `gitpublish:target:read` | [reference/modules/gitpublish](/fr/reference/modules/gitpublish/) |
 
-### Observabilité & preuves
+### Supervision
 
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
-| Adoption de Claude Code | `/adoption` | Productivité, acceptation et répartition des modèles | `adoption:metrics:read` | [reference/modules/claudeadoption](/fr/reference/modules/claudeadoption/) |
+| Adoption | `/adoption` | Productivité, acceptation et répartition des modèles | `adoption:metrics:read` | [reference/modules/claudeadoption](/fr/reference/modules/claudeadoption/) |
 | Chaîne d'approvisionnement | `/attestation` | Attestation de version : SLSA, SBOM, VEX et Scorecard | `observability:attestation:read` | [how-to/verify-a-release](/fr/how-to/verify-a-release/) |
 | Registre d'audit | `/audit` | Registre de preuves à altération détectable | `audit:read` | [reference/modules/ix-security](/fr/reference/modules/ix-security/) |
 | Tableaux de bord | `/dashboards` | Indicateurs clés et reporting pour la direction | tout utilisateur connecté | [reference/modules/xxi-executive-dashboards](/fr/reference/modules/xxi-executive-dashboards/) |
@@ -190,13 +192,13 @@ console dans ce cas.
 
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
-| Accepter une invitation | `/accept-invite` | Destination d'un lien d'invitation envoyé par e-mail : l'invité définit un mot de passe et rejoint le workspace, sans session préalable. | **sans connexion** | — |
+| Accepter une invitation | `/accept-invite` | Destination d'un lien d'invitation envoyé par e-mail : l'invité définit un mot de passe et rejoint l'espace de travail, sans session préalable. | **sans connexion** | — |
 | IA | `/areas/ai` | Répertoire du domaine IA : observation et gestion des sessions, profils et environnements des fournisseurs, modèles, exécution spécialisée et référence des fournisseurs. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
 | Automatisation | `/areas/automation` | Répertoire du domaine Automatisation : flux et orchestration, événements et notifications. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
 | Données & contexte | `/areas/data-context` | Répertoire du domaine Données & contexte : capacités, connaissances et artefacts. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
-| Déploiement | `/areas/deployment` | Répertoire du domaine Déploiement : préparation et contrôle des déploiements. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
+| Livraison | `/areas/deployment` | Répertoire du domaine Livraison : préparation et contrôle des déploiements. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
 | Infrastructure | `/areas/infrastructure` | Répertoire du domaine Infrastructure : inventaire et espaces de travail de l’environnement. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
-| Observabilité & preuves | `/areas/observation` | Répertoire du domaine Observabilité & preuves : état et activité, coûts et adoption, audit, évaluation et preuves. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
+| Supervision | `/areas/observation` | Répertoire du domaine Supervision : état et activité, coûts et adoption, audit, évaluation et preuves. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
 | Sécurité & identité | `/areas/security-identity` | Répertoire du domaine Sécurité & identité : identité et accès, politiques et frontières de gouvernance, protection et réponse. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
 | Système & paramètres | `/areas/system` | Répertoire du domaine Système & paramètres : administration, installation et maintenance, outils de développement et préférences personnelles. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
 | Travail & communications | `/areas/work-communications` | Répertoire du domaine Travail & communications : travail persistant entre sessions et communications gouvernées. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |

@@ -646,3 +646,26 @@ describe('EventingView delivery filters (E3d)', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })
+
+/**
+ * ONE ORANGE PER FIRST SCREEN (dev#2673's console rule 2026-10-17): the section
+ * header already carries "New subscription" in orange, so the empty list repeats the
+ * verb in the secondary style.
+ */
+describe('EventingView — one orange control on an empty subscription list', () => {
+  it('offers the empty-state verb in the secondary style; the header keeps the orange', async () => {
+    api.subscriptions.mockResolvedValue({ items: [], has_more: false })
+    wrap(<EventingView />)
+    const emptyState = (await screen.findByText('No subscriptions')).closest(
+      '[data-slot="empty-state"]',
+    ) as HTMLElement
+    const inEmpty = within(emptyState).getByRole('button', {
+      name: 'New subscription',
+    })
+    expect(inEmpty.className).not.toContain('bg-accent')
+    const inHeader = screen
+      .getAllByRole('button', { name: 'New subscription' })
+      .find((button) => button !== inEmpty)
+    expect(inHeader?.className).toContain('bg-accent')
+  })
+})

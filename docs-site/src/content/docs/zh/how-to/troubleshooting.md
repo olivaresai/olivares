@@ -177,7 +177,8 @@ olivares audit verify --tenant $TENANT --data-dir /var/lib/olivares --strict \
 ### 某个目的地始终收不到任何东西
 
 带有未知 kind 的目的地会被 **跳过并记录日志**
-（`notify: destination has unknown connector kind; skipped` — 检查 `kind` 的拼写）。对于事件 sink，`POST …/subscriptions/{id}/test`
+（`notify: destination has unknown connector kind; skipped` — 检查 `kind` 的拼写）。Community 二进制中属于 Business 类型的目标（`siem`、`pagerduty`、`servicenow`、`teamsbot` 及其他
+Business connector）会被跳过，并记录 `notify: destination connector kind is a Business capability; skipped`。对于事件 sink，`POST …/subscriptions/{id}/test`
 会发送一次你可以观察的投递，且端点必须为 HTTPS
 （[推送到 SIEM](/zh/how-to/cookbook/push-to-siem/)）。
 

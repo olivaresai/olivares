@@ -15,7 +15,7 @@
     "usesKey": "Verwendet Ihren API-Schlüssel: {{name}}",
     "usesLocal": "Verwendet den lokalen Modellserver: {{name}}",
     "keyRefused": "Der API-Schlüssel {{name}} wurde abgelehnt. Ersetzen Sie ihn unter Anbieter.",
-    "noSignIn": "Dieses Tool hat hier keine offizielle Anmeldung zum Ausführen. Nutze den Terminalbefehl unter Andere Wege."
+    "noSignIn": "Dieses Werkzeug hat hier keine offizielle Anmeldung zum Ausführen. Nutzen Sie den Terminalbefehl unter Andere Wege."
   },
   "actions": {
     "install": "Installieren",
@@ -31,8 +31,11 @@
   },
   "signIn": {
     "openLink": "Anmeldeseite öffnen",
+    "openKeyPage": "Schlüsselseite öffnen",
     "codeLabel": "Code von der Anmeldeseite",
     "codeHint": "Nachdem Sie den Zugriff genehmigt haben, zeigt die Seite einen Code an. Fügen Sie ihn hier ein.",
+    "keyLabel": "API-Schlüssel",
+    "keyHint": "Erstellen Sie oben einen Schlüssel und fügen Sie ihn hier ein. {{name}} speichert ihn auf diesem Server; Olivares behält ihn nicht.",
     "continue": "Weiter",
     "enterCode": "Geben Sie auf der Anmeldeseite diesen Code ein:",
     "waiting": "Es wird gewartet, bis Sie auf der Anmeldeseite fertig sind…",
@@ -40,7 +43,13 @@
     "copy": "Kopieren",
     "copied": "Kopiert",
     "starting": "Anmeldung wird gestartet …",
-    "lostTouch": "Verbindung zum Server verloren. Die Anmeldung läuft möglicherweise noch."
+    "lostTouch": "Verbindung zum Server verloren. Die Anmeldung läuft möglicherweise noch.",
+    "method": "Anmeldemethode",
+    "methods": {
+      "opencode": "OpenCode Zen und kostenlose Modelle (API-Schlüssel)",
+      "opencode-go": "OpenCode Go (API-Schlüssel)",
+      "chatgpt-headless": "ChatGPT Pro/Plus (ohne Browser)"
+    }
   },
   "errors": {
     "status": "Der Status des Werkzeugs konnte nicht gelesen werden.",
@@ -64,7 +73,7 @@
     },
     "start": {
       "title": "Eine Sitzung starten",
-      "body": "Wählen Sie ein Tool und sagen Sie, wenn Sie möchten, was zuerst zu tun ist."
+      "body": "Wählen Sie ein Werkzeug und sagen Sie, wenn Sie möchten, was zuerst zu tun ist."
     },
     "progress": "{{done}} von 3 erledigt"
   },
@@ -85,7 +94,7 @@
     "starting": "Wird gestartet…",
     "needTool": "Installieren Sie zuerst ein Werkzeug und melden Sie es an.",
     "dialogTitle": "Neue Sitzung",
-    "dialogDescription": "Wählen Sie ein Tool und sagen Sie, was zu tun ist.",
+    "dialogDescription": "Wählen Sie ein Werkzeug und sagen Sie, was zu tun ist.",
     "advanced": "Erweiterte Startoptionen",
     "secrets": "Geheimnisse als Umgebungsvariablen",
     "secretsHint": "Die Sitzung liest jedes gewählte Tresor-Geheimnis aus der Variablen, die Sie angeben. Der Wert wird nie angezeigt, protokolliert oder in den Ordner geschrieben.",

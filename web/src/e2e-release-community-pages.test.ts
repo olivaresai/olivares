@@ -25,8 +25,8 @@ function addressesIn(src: string): string[] {
 }
 
 /** The addresses of `src` that a Community console answers with the Business notice, which
- * paints no sidebar: the release gate reads the version from the sidebar, so a stage that
- * opens one fails with "release version must be visible in the console identity". */
+ * paints no top bar: the release gate reads the version from the top bar's identity, so a
+ * stage that opens one fails with "release version must be visible in the console identity". */
 function businessAddressesIn(src: string): string[] {
   return addressesIn(src).filter((address) =>
     BUSINESS.some((pattern) => pattern.test(address)),

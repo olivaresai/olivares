@@ -19,7 +19,7 @@ OpenAPI, который движок отдаёт, а [справочник API]
 
 :::note[Статус распространения]
 SDK находятся в репозитории продукта в каталоге `clients/` и версионируются вместе
-с ним. Эта страница не утверждает, что клиенты Olivares <!-- release -->0.3<!-- /release --> есть в pkg.go.dev,
+с ним. Эта страница не утверждает, что клиенты Olivares <!-- release -->0.4<!-- /release --> есть в pkg.go.dev,
 Maven Central, PyPI или npm. Берите их из репозитория (путь модуля Go выше,
 `mvn -f clients/java install`, `pip install ./clients/python`,
 `npm install ./clients/typescript`), если вы сами не проверили пакет реестра

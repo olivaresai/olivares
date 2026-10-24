@@ -56,6 +56,20 @@ const ITEM = /^( *)([-*+]|\d{1,9}[.)])\s+([\s\S]*)$/
 const isSpace = (ch: string | undefined) => ch === undefined || /\s/.test(ch)
 const isPunct = (ch: string | undefined) => ch !== undefined && PUNCT.test(ch)
 const indentOf = (line: string) => /^ */.exec(line)![0].length
+// A leading tab reads as four spaces where indentation is measured; the line itself keeps
+// it, so a code block keeps its tabs (a Makefile recipe needs them, dev#2788).
+const spaced = (line: string) =>
+  line.replace(/^\t+/, (tabs) => '    '.repeat(tabs.length))
+
+/** The line without `n` columns of indentation. A leading tab wider than what is left to
+ * drop stays: it belongs to the text, a code line's tab most of all. */
+function dropIndent(line: string, n: number): string {
+  const tabs = /^\t*/.exec(line)![0].length
+  const whole = Math.min(tabs, Math.floor(n / 4))
+  if (whole < tabs) return line.slice(whole)
+  const rest = line.slice(whole)
+  return rest.slice(Math.min(n - whole * 4, indentOf(rest)))
+}
 
 /** The address a link may point at, or null: only web and mail addresses are links. */
 export function safeHref(url: string): string | null {
@@ -217,6 +231,14 @@ function wordsOf(nodes: Inline[]): string {
     .join('')
 }
 
+const hostOf = (href: string) => {
+  try {
+    return new URL(href).hostname
+  } catch {
+    return ''
+  }
+}
+
 /**
  * A label that reads as an address must not hide where the link goes: when it names a
  * different host than the link does, the real host is added in the words. The destination is
@@ -226,12 +248,7 @@ function showRealHost(children: Inline[], href: string): Inline[] {
   const label = wordsOf(children).trim()
   const named = /^(?:https?:\/\/|www\.)([^\s/?#:]+)/i.exec(label)?.[1]
   if (!named) return children
-  let host: string
-  try {
-    host = new URL(href).hostname
-  } catch {
-    return children
-  }
+  const host = hostOf(href)
   const bare = (h: string) => h.toLowerCase().replace(/^www\./, '')
   return host && bare(host) !== bare(named)
     ? [...children, ` (${host})`]
@@ -389,6 +406,7 @@ function headingText(raw: string): string {
 }
 
 function parseList(
+  raw: string[],
   lines: string[],
   start: number,
   depth: number,
@@ -420,7 +438,7 @@ function parseList(
       }
       const indent = indentOf(line)
       if (indent <= base) break
-      content.push(line.slice(Math.min(contentIndent, indent)))
+      content.push(dropIndent(raw[i]!, contentIndent))
       i++
     }
     items.push(parseBlocks(content, depth + 1, resolveHref))
@@ -436,11 +454,13 @@ function parseList(
   }
 }
 
+/** `raw` lines as written; a fence body keeps them, everything else reads them spaced. */
 function parseBlocks(
-  lines: string[],
+  raw: string[],
   depth: number,
   resolveHref: HrefResolver,
 ): Block[] {
+  const lines = raw.map(spaced)
   if (depth > MAX_DEPTH)
     return [{ kind: 'paragraph', inline: [lines.join('\n')] }]
   const blocks: Block[] = []
@@ -456,7 +476,7 @@ function parseBlocks(
       const body: string[] = []
       i++
       while (i < lines.length && !closesFence(lines[i]!, fence[1]!))
-        body.push(lines[i++]!)
+        body.push(raw[i++]!)
       i++ // the closing fence; a block still streaming runs to the end
       blocks.push({ kind: 'code', text: body.join('\n') })
       continue
@@ -487,7 +507,7 @@ function parseBlocks(
       continue
     }
     if (ITEM.test(line)) {
-      const list = parseList(lines, i, depth, resolveHref)
+      const list = parseList(raw, lines, i, depth, resolveHref)
       blocks.push(list.block)
       i = list.end
       continue
@@ -538,9 +558,56 @@ export function parseMarkdown(
   text: string,
   resolveHref: HrefResolver = safeHref,
 ): Block[] {
-  const lines = text
-    .replace(/\r\n?/g, '\n')
-    .split('\n')
-    .map((line) => line.replace(/^\t+/, (tabs) => '    '.repeat(tabs.length)))
-  return parseBlocks(lines, 0, resolveHref)
+  return parseBlocks(text.replace(/\r\n?/g, '\n').split('\n'), 0, resolveHref)
+}
+
+/** A reply as the person reads it, for a copy (dev#2788): no markers, a list item keeps
+ * its bullet or number, a code block its text exactly, a link its address. */
+export function plainText(blocks: readonly Block[], gap = '\n\n'): string {
+  const inline = (nodes: readonly Inline[]): string =>
+    nodes
+      .map((node) => {
+        if (typeof node === 'string') return node
+        if (node.kind === 'code') return node.text
+        if (node.kind !== 'link') return inline(node.children)
+        // the real host `showRealHost` added gives way to the whole address
+        const shown = node.children
+        const label = inline(
+          shown.at(-1) === ` (${hostOf(node.href)})`
+            ? shown.slice(0, -1)
+            : shown,
+        )
+        return label === node.href || `mailto:${label}` === node.href
+          ? label
+          : `${label} (${node.href})`
+      })
+      .join('')
+  const block = (b: Block): string => {
+    switch (b.kind) {
+      case 'paragraph':
+      case 'heading':
+        return inline(b.inline)
+      case 'code':
+        return b.text
+      case 'quote':
+        return plainText(b.blocks)
+      case 'list':
+        return b.items
+          .map((item, i) => {
+            const mark = b.ordered ? `${b.start + i}.` : '-'
+            return `${mark} ${plainText(item, '\n').replace(/\n/g, '\n  ')}`
+          })
+          .join('\n')
+      case 'table':
+        return [b.head, ...b.rows]
+          .map((row) => row.map(inline).join('\t'))
+          .join('\n')
+      case 'rule':
+        return ''
+    }
+  }
+  return blocks
+    .map(block)
+    .filter((text) => text !== '')
+    .join(gap)
 }

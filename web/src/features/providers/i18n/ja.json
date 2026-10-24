@@ -2,11 +2,10 @@
   "title": "プロバイダー",
   "subtitle": "エージェントツールが使うクラウドの認証情報またはローカルモデルのエンドポイント。",
   "nav": "プロバイダー",
-  "add": "プロバイダーを追加",
   "rowMenu": "{{name}} の行操作",
   "empty": {
     "title": "まだプロバイダーが登録されていません",
-    "description": "API キーで Anthropic、OpenAI、xAI に接続するか、キー不要のローカル Ollama を追加して、接続をテストします。",
+    "description": "APIキーで Anthropic、OpenAI、xAI に接続するか、キー不要のローカル Ollama を追加して、接続をテストします。",
     "action": "最初のプロバイダーを追加"
   },
   "emptyFiltered": {
@@ -37,9 +36,9 @@
     "anthropic": "Claude Code。ANTHROPIC_API_KEY を注入します。",
     "openai": "Codex。OPENAI_API_KEY を注入します。",
     "xai": "Grok。XAI_API_KEY を注入します。",
-    "gemini": "Google の公式 API を使う Gemini CLI。Gemini API キーを使用します。",
+    "gemini": "Google の公式 API を使う Gemini CLI。Gemini APIキーを使用します。",
     "openai_compatible": "OpenAI 形式の任意のエンドポイント。OPENAI_API_KEY と OPENAI_BASE_URL を注入します。エンドポイントは必須です。",
-    "ollama": "OpenCode 用のローカルモデル。API キーは不要です。Ollama のネイティブエンドポイントを使用し、テストではモデルのメタデータを読み取ります。"
+    "ollama": "OpenCode 用のローカルモデル。APIキーは不要です。Ollama のネイティブエンドポイントを使用し、テストではモデルのメタデータを読み取ります。"
   },
   "states": {
     "active": "有効",
@@ -83,7 +82,7 @@
     "baseURLHint": "空のままにするとプロバイダーの公式エンドポイントを使います。https である必要があります。",
     "baseURLLocalHint": "空のままにするとプロバイダーの公式エンドポイントを使います。指定する場合は https を使うか、ループバックまたはプライベートネットワークのアドレスでは http を使えます。",
     "baseURLPlaceholder": "https://llm.example.com",
-    "apiKey": "API キー",
+    "apiKey": "APIキー",
     "apiKeyHint": "一度だけ送信され、エンジンが封印し、このブラウザーには二度と返されません。",
     "apiKeyPlaceholder": "キーを貼り付け",
     "submit": "プロバイダーを追加",
@@ -162,5 +161,9 @@
     "failed": "プロバイダーは保存されました。セッションの準備に失敗しました: {{error}}",
     "retry": "準備を再試行",
     "incomplete": "ツールのインストール状態は {{state}} です。AI ツールを確認して再試行してください。"
+  },
+  "section": {
+    "title": "APIキー",
+    "add": "APIキーを追加"
   }
 }

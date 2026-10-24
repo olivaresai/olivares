@@ -26,9 +26,10 @@ func (r *recordingRegistry) Register(d model.EntityDescriptor) error {
 	return r.ExtensionRegistry.Register(d)
 }
 
-// The tool inventory has one table in the Community schema (lint:schema-parity), one
-// row per (host, driver), no secret and no account column. Community never writes it.
-func TestWorkstationToolTableIsInTheCommunitySchema(t *testing.T) {
+// registeredGovernanceSchema opens a real store with the governance schema and returns
+// every descriptor the module registered, by kind.
+func registeredGovernanceSchema(t *testing.T) map[model.Kind]model.EntityDescriptor {
+	t.Helper()
 	rec := &recordingRegistry{got: map[model.Kind]model.EntityDescriptor{}}
 	st, err := engine.Open(context.Background(), store.Config{Engine: store.EngineSQLite, DSN: ":memory:", Debug: true},
 		func(reg store.ExtensionRegistry) error {
@@ -39,8 +40,15 @@ func TestWorkstationToolTableIsInTheCommunitySchema(t *testing.T) {
 		t.Fatalf("open a store with the governance schema: %v", err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
+	return rec.got
+}
 
-	d, ok := rec.got["governance.workstation_tool"]
+// The tool inventory has one table in the Community schema (lint:schema-parity), one
+// row per (host, driver), no secret and no account column. Community never writes it.
+func TestWorkstationToolTableIsInTheCommunitySchema(t *testing.T) {
+	got := registeredGovernanceSchema(t)
+
+	d, ok := got["governance.workstation_tool"]
 	if !ok {
 		t.Fatal("governance.workstation_tool is not registered")
 	}

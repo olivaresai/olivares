@@ -99,7 +99,7 @@ connector **只映射 row 实际表达的内容**。它从声明的 `acl_columns
 | 情况 | Connector 的行为 |
 |---|---|
 | `owner_group` / role column | 把每个值映射到 ACL ref（`<acl_prefix><value>`）。 |
-| 未声明 `acl_columns` | 文档继承知识库的**默认 ACL**，retrieval 仍会强制执行。 |
+| 未声明 `acl_columns` | 文档继承知识库的**默认 ACL**。若也没有默认 ACL，则对所有人**拒绝**；请在知识库上设置默认 ACL，或在 source 配置中用 `"public": "true"` 将其声明为公开（每次把行存为对整个 tenant 可见的 ingest 或 sync 都会留下 `knowledge.source.public` 审计记录）。 该设置只适用于之后存储的文档；要更改已存储的行，请重新 ingest。 |
 | table 上的 **row-level security（RLS）** | 隐式遵守：connector role 恰好只能看到 RLS 允许它看到的 row。connector 不重新实现 RLS，而是继承它。 |
 | table **未**以 column 建模的权限 | **无法推导** → 不映射。若要强制该权限，请把它建模为 column（或通过 `query` join ACL table）。 |
 

@@ -6,7 +6,7 @@ description: >-
 draft: false
 ---
 
-Das nächste Release ist <!-- release -->`0.3`<!-- /release -->; es ist noch nicht auf GitHub veröffentlicht. Die folgenden Befehle beschreiben die geplanten Artefakte. Bauen Sie bis zur Veröffentlichung aus dem Quellcode und prüfen Sie danach jedes Artefakt vor der Verwendung. Der beobachtete Veröffentlichungsstand steht in <!-- release -->`docs/releases/0.3-install-surfaces.json`<!-- /release -->.
+Das nächste Release ist <!-- release -->`0.4`<!-- /release -->; es ist noch nicht auf GitHub veröffentlicht. Die folgenden Befehle beschreiben die geplanten Artefakte. Bauen Sie bis zur Veröffentlichung aus dem Quellcode und prüfen Sie danach jedes Artefakt vor der Verwendung. Der beobachtete Veröffentlichungsstand steht in <!-- release -->`docs/releases/0.4-install-surfaces.json`<!-- /release -->.
 
 Das ist der macOS-Pfad, den `INSTALL.md` als empfohlen nennt. Er installiert
 die signierte `olivares`-Binärdatei über das Homebrew-Cask und hebt die

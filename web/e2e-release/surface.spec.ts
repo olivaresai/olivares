@@ -25,7 +25,6 @@ const workingSessions = renderToStaticMarkup(
       createElement(StatusChip, {
         key: name,
         tone: 'ok',
-        working: true,
         children: `${name} working`,
       }),
     ),
@@ -79,7 +78,7 @@ test('first-hour guard still rejects a skeleton alongside live working sessions'
 test('release identity is read from the visible shell, including behind a dialog', async ({
   page,
 }) => {
-  await page.setContent(`<aside aria-label="Primary" aria-hidden="true"><span>0.1</span></aside>
+  await page.setContent(`<p data-testid="deployment-identity" aria-hidden="true"><span>0.1</span></p>
     <div role="dialog" aria-label="New session">Start a session</div>`)
   await expectReleaseVersion(page, '0.1')
   await page.setContent(
@@ -91,10 +90,11 @@ test('release identity is read from the visible shell, including behind a dialog
 test('release identity waits for the server version to render', async ({
   page,
 }) => {
-  await page.setContent('<aside aria-label="Primary"></aside>')
+  await page.setContent('<p data-testid="deployment-identity"></p>')
   await page.evaluate(() => {
     setTimeout(() => {
-      document.querySelector('aside')!.innerHTML = '<span>0.1</span>'
+      document.querySelector('[data-testid="deployment-identity"]')!.innerHTML =
+        '<span>0.1</span>'
     }, 100)
   })
   await expectReleaseVersion(page, '0.1')
@@ -103,16 +103,24 @@ test('release identity waits for the server version to render', async ({
 // A MAJOR.MINOR release is a substring of many other versions: the match is exact.
 for (const [name, identity, release] of [
   ['missing', '', '0.1'],
-  ['mismatched', '<aside aria-label="Primary"><span>0.2</span></aside>', '0.1'],
   [
-    'hidden',
-    '<aside aria-label="Primary" hidden><span>0.1</span></aside>',
+    'mismatched',
+    '<p data-testid="deployment-identity"><span>0.2</span></p>',
     '0.1',
   ],
-  ['longer', '<aside aria-label="Primary"><span>10.1</span></aside>', '0.1'],
+  [
+    'hidden',
+    '<p data-testid="deployment-identity" hidden><span>0.1</span></p>',
+    '0.1',
+  ],
+  [
+    'longer',
+    '<p data-testid="deployment-identity"><span>10.1</span></p>',
+    '0.1',
+  ],
   [
     'three-part',
-    '<aside aria-label="Primary"><span>1.0.1</span></aside>',
+    '<p data-testid="deployment-identity"><span>1.0.1</span></p>',
     '1.0',
   ],
 ] as const) {
@@ -593,7 +601,7 @@ test('first-hour guard detects the recorded defects, including replaced loaders'
   await page.exposeFunction('__firstHourFinding', (message: string) =>
     findings.push(message),
   )
-  await page.setContent(`<aside aria-label="Primary"><span>0.2</span></aside><p>keys.command.session.new</p>
+  await page.setContent(`<p data-testid="deployment-identity"><span>0.2</span></p><p>keys.command.session.new</p>
     <p>Plan and Apply answer 503</p><label>Configuration home<input placeholder="/home/user" /></label>
     <button type="submit" disabled>Start</button><div id="loading"><i class="animate-pulse"></i></div>`)
   // A 5 s bound here keeps this test short; the release bound is READY_MS.
@@ -624,7 +632,7 @@ test('first-hour guard accepts translated copy and a visible disabled reason', a
   await page.exposeFunction('__firstHourFinding', (message: string) =>
     findings.push(message),
   )
-  await page.setContent(`<aside aria-label="Primary"><span>0.1</span></aside><p>New session</p>
+  await page.setContent(`<p data-testid="deployment-identity"><span>0.1</span></p><p>New session</p>
     <p>github.com docs.example.com release.tar.gz 127.0.0.1</p>
     <p>https://settings.example.com user@workspaces.example.com</p>
     <p>https://example.com/setup.title?next=login.subtitle user@setup.title</p>
@@ -664,7 +672,7 @@ async function watch(
 }
 
 const shell = (version: string) =>
-  `<aside aria-label="Primary"><span>${version}</span></aside>`
+  `<p data-testid="deployment-identity"><span>${version}</span></p>`
 const deployment = (version: string) =>
   `<p data-testid="deployment-identity"><span>127.0.0.1:8443</span> · <span>${version}</span></p>`
 const stale = (release: string, other: string) => [
@@ -748,7 +756,7 @@ for (const [place, identity] of [
 test('first-hour guard names a stale shell behind a dialog', async ({
   page,
 }) => {
-  const behind = `<aside aria-label="Primary" aria-hidden="true"><span>0.2</span></aside>
+  const behind = `<p data-testid="deployment-identity" aria-hidden="true"><span>0.2</span></p>
     <div role="dialog" aria-label="New session">Start a session</div>`
   const { findings } = await watch(page, behind, '0.1')
   expect(findings).toEqual(stale('0.1', '0.2'))
@@ -761,11 +769,12 @@ test('first-hour guard names an identity that is painted after it started', asyn
   await page.exposeFunction('__firstHourFinding', (message: string) =>
     findings.push(message),
   )
-  await page.setContent('<aside aria-label="Primary"></aside>')
+  await page.setContent('<p data-testid="deployment-identity"></p>')
   await page.evaluate(watchSurface, surfaceOptions('0.1'))
   await page.evaluate(() => {
     setTimeout(() => {
-      document.querySelector('aside')!.innerHTML = '<span>0.2</span>'
+      document.querySelector('[data-testid="deployment-identity"]')!.innerHTML =
+        '<span>0.2</span>'
     }, 300)
   })
   await expect
@@ -787,7 +796,7 @@ test('first-hour guard reads a bare IP host as a host, not as a version', async 
 test('first-hour guard compares only an identity the user can see', async ({
   page,
 }) => {
-  const hidden = `<aside aria-label="Primary" hidden><span>0.2</span></aside>`
+  const hidden = `<p data-testid="deployment-identity" hidden><span>0.2</span></p>`
   expect(await watch(page, `${hidden}${deployment('0.1')}`, '0.1')).toEqual({
     findings: [],
     versions: ['0.1'],

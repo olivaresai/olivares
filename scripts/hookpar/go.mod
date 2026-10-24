@@ -1,3 +1,3 @@
 module github.com/olivaresai/olivares/scripts/hookpar
 
-go 1.26.9
+go 1.26.10

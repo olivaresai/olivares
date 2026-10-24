@@ -68,8 +68,29 @@ if _lib is None:
           % _ETIQUETA, file=sys.stderr)
     sys.exit(2)
 sys.path.insert(0, _lib)
-from redaccion import abre  # noqa: E402
+from redaccion import Redactor, abre, instala_excepthook  # noqa: E402
 from demo_edition import keeps_action  # noqa: E402
+
+# Every byte this script prints crosses this redactor: the engine's error bodies are written by the
+# server and can echo a header or a credential the script never meant to publish.
+_R = Redactor()
+DEMO_PASSWORD = "olivares-demo-estate"
+
+
+class _RedactedStream:
+    """A text stream that runs the redactor before a byte reaches the terminal or a capture log."""
+
+    def __init__(self, stream):
+        self._stream = stream
+
+    def write(self, text):
+        return self._stream.write(_R(text))
+
+    def flush(self):
+        self._stream.flush()
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
 
 
 # El estate de demo cuenta una historia para que la captura enseñe estados DISTINTOS (badges,
@@ -163,7 +184,8 @@ def pedir(base, token, tenant, metodo, ruta, cuerpo=None, cabeceras=None):
             cuerpo_txt = r.read().decode()
             return r.status, (json.loads(cuerpo_txt) if cuerpo_txt else {})
     except urllib.error.HTTPError as e:
-        return e.code, {"error": e.read().decode()[:400]}
+        # The body is written by the server: it may echo the request's Authorization header back.
+        return e.code, {"error": _R(e.read().decode())[:400]}
 
 
 def sembrar_decisiones(base, token, tenant, work_item_id, version, cantidad):
@@ -605,7 +627,7 @@ def sembrar_consola(base, token, tenant):
             continue                      # Pending invitations use the real invitation ceremony.
         code, u = pedir(base, token, tenant, "POST", "/v1/users",
                         {"email": p["email"], "display_name": p["nombre"],
-                         "password": "olivares-demo-estate", "superadmin": False,
+                         "password": DEMO_PASSWORD, "superadmin": False,
                          "tenant": tenant, "role": p["rol"]})
         if code not in (200, 201):
             print("ERROR: create user %s -> %s %s" % (p["email"], code, u), file=sys.stderr)
@@ -1031,6 +1053,10 @@ def main():
     parser.add_argument(
         "--decision-count", type=int, default=DEFAULT_DECISION_COUNT, metavar="N",
         help="effective heads (default: one console page plus one row)")
+    parser.add_argument(
+        "--canonical-estate", action="store_true",
+        help="the demo dataset (seed-demo-dataset.py) already seeded the people, the approvals and "
+             "the recorded sessions; seed only the work-console surfaces")
     args = parser.parse_args()
     if args.token == "-":
         args.token = os.environ.get("OLIVARES_TOKEN", "")
@@ -1040,6 +1066,14 @@ def main():
         parser.error("--decision-count must exceed the page size (%d)"
                      % DECISION_PAGE_SIZE)
     base, token, tenant = args.base_url, args.token, args.tenant
+    # The token and the demo password are known secrets: remember them so a server body that echoes
+    # either one is masked even when its shape is unfamiliar.
+    _R.recuerda(token, DEMO_PASSWORD)
+    instala_excepthook(_R, _ETIQUETA)
+    # The output boundary, applied once: every print and every traceback below crosses the redactor,
+    # not just the call sites that remembered to.
+    sys.stdout = _RedactedStream(sys.stdout)
+    sys.stderr = _RedactedStream(sys.stderr)
 
     code, ws = pedir(base, token, tenant, "GET", "/v1/workspaces")
     if code != 200 or not ws.get("items"):
@@ -1156,24 +1190,48 @@ def main():
     rc = sembrar_catalogo(base, token, tenant)
     if rc:
         return rc
-    rc = sembrar_deploy(base, token, tenant)
-    if rc:
-        return rc
-    rc = sembrar_health(base, token, tenant)
-    if rc:
-        return rc
-    rc = sembrar_coste(base, token, tenant)
-    if rc:
-        return rc
-    rc = sembrar_consola(base, token, tenant)
-    if rc:
-        return rc
-    rc = sembrar_permisos(base, token, tenant)
-    if rc:
-        return rc
+    if args.canonical_estate:
+        # A deployment definition needs a real agent subject, and the canonical estate has none:
+        # its people, sessions and approvals are the recorded Northwind ones. The volume
+        # seeder creates the agents afterwards, so it fills the deploy surface from those.
+        print("canonical estate: no agents, so no deployment definitions; the volume seeder fills them")
+    else:
+        rc = sembrar_deploy(base, token, tenant)
+        if rc:
+            return rc
+    if args.canonical_estate:
+        # A health check needs a real monitoring subject, and the canonical estate has none: its
+        # people, sessions and approvals are the recorded Northwind ones. Inventing agents
+        # here would add rows the estate does not have, so /health keeps its honest Unknown rows.
+        print("canonical estate: no agents, so no health checks; /health keeps its Unknown rows")
+    else:
+        rc = sembrar_health(base, token, tenant)
+        if rc:
+            return rc
+    if args.canonical_estate:
+        # The demo dataset is the one source of the people, the approval queue and the recorded
+        # sessions. The month's $186.40 would need thirty days of cost samples; the dataset writes
+        # only today's runs, so this mode leaves that series unseeded instead of inventing it on top
+        # of the $400 monthly budget.
+        print("canonical estate: people, approvals and sessions come from seed-demo-dataset.py; "
+              "the month's spend is not seeded")
+    else:
+        rc = sembrar_coste(base, token, tenant)
+        if rc:
+            return rc
+        rc = sembrar_consola(base, token, tenant)
+        if rc:
+            return rc
+        rc = sembrar_permisos(base, token, tenant)
+        if rc:
+            return rc
     rc = sembrar_politica(base, token, tenant)
     if rc:
         return rc
+    if args.canonical_estate:
+        # The canonical estate is exactly the sixteen recorded Northwind runs; the workspace
+        # run this seeder would add is a seventeenth, and the home and Sessions figures stop matching.
+        return 0
     return sembrar_workspace_y_run(base, token, tenant, args.workspace_root)
 
 

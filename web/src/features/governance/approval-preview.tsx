@@ -10,10 +10,13 @@
 // one line; the stored `reason` is never cut up to fake it. The references go behind
 // Details.
 import { useQuery } from '@tanstack/react-query'
+import type { TFunction } from 'i18next'
+import { CircleCheck, Waypoints } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { KvList, KvRow } from '@/components/ui/kv'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
+import type { RunDTO } from '@/features/agentops/types'
 import { sessionNameLadder } from '@/features/home/work-line'
 import { sessionsApi, sessionsKeys } from '@/features/sessions/api'
 import { runAwaitedApproval } from '@/features/sessions/provenance'
@@ -85,7 +88,103 @@ export function useApprovalSession(approval: ApprovalDTO) {
         ? sessionNameLadder(owner?.name, row, t('preview.untitled')).text
         : undefined,
     folder: workspace.data?.root_path,
+    /** What the session reaches, as the run read reports it (#2545). */
+    reaches: owner?.reaches,
   }
+}
+
+/** The rule that asked, as one sentence: the approval policy the engine matched (by name
+ * when this person may read the rules), or the default when none matched. Null while the
+ * name is being read, so the line never flashes a wrong answer; a failed read says so and
+ * is never shown as a rule they may not read. */
+export function useMatchedRule(approval: ApprovalDTO): string | null {
+  const { t } = useTranslation('governance')
+  const { activeTenant, can } = useAuth()
+  const readable = can('governance:policy:read')
+  const ref = approval.policy_ref
+  const policy = useQuery({
+    queryKey: governanceKeys.policy(activeTenant, ref ?? ''),
+    queryFn: () => governanceApi.getPolicy(ref as string),
+    enabled: !!ref && readable,
+    staleTime: 60_000,
+  })
+  if (!ref) return t('preview.matchedDefault')
+  if (!readable) return t('preview.matchedUnreadable')
+  if (policy.isPending) return null
+  return policy.data?.name
+    ? t('preview.matched', { rule: policy.data.name })
+    : t('preview.matchedUnknown')
+}
+
+/** Request subjects that are themselves a destination: a new network host, an MCP server.
+ * What such a request reaches is the subject it names. */
+const DESTINATION_SUBJECTS = new Set(['network_destination', 'mcp_server'])
+
+/** What a request reaches, as a person reads it: the destination it names, else the
+ * folders and hosts of the session that asks. Empty when neither is known: nothing is
+ * guessed. */
+export function approvalReaches(
+  approval: ApprovalDTO,
+  reaches: RunDTO['reaches'],
+  t: TFunction<'governance'>,
+): string[] {
+  if (
+    approval.subject_kind &&
+    approval.subject_ref &&
+    DESTINATION_SUBJECTS.has(approval.subject_kind)
+  )
+    return [approval.subject_ref]
+  if (!reaches) return []
+  const known = [
+    ...reaches.folders.map((f) =>
+      t(`preview.reachFolder.${f.access}`, { path: f.path }),
+    ),
+    ...reaches.hosts,
+  ]
+  // A part the engine could not read is said, never left out as if the list were whole.
+  return reaches.reason ? [...known, t('preview.reachIncomplete')] : known
+}
+
+/** Why a request needs a person and what it would reach: the two lines every request
+ * carries, in the queue's row and in the open request. */
+export function ApprovalWhy({
+  approval,
+  reaches,
+  className,
+}: {
+  approval: ApprovalDTO
+  reaches: RunDTO['reaches']
+  className?: string
+}) {
+  const { t } = useTranslation('governance')
+  const matched = useMatchedRule(approval)
+  const reach = approvalReaches(approval, reaches, t)
+  return (
+    <span
+      className={cn('flex min-w-0 flex-col gap-0.5 text-caption', className)}
+      data-slot="approval-why"
+    >
+      {matched ? (
+        <span className="flex min-w-0 items-center gap-1.5 text-text-2">
+          <CircleCheck aria-hidden className="size-3.5 shrink-0" />
+          <span className="min-w-0 truncate" title={matched}>
+            {matched}
+          </span>
+        </span>
+      ) : null}
+      {reach.length > 0 ? (
+        <span className="flex min-w-0 items-center gap-1.5 text-text-2">
+          <Waypoints aria-hidden className="size-3.5 shrink-0" />
+          <span
+            className="min-w-0 truncate"
+            title={t('preview.reaches', { list: reach.join(', ') })}
+          >
+            {t('preview.reaches', { list: reach.join(', ') })}
+          </span>
+        </span>
+      ) : null}
+    </span>
+  )
 }
 
 /** Who asks, in words: the session itself, or the actor the engine recorded. */
@@ -180,6 +279,11 @@ export function approvalExpectsCommand(approval: ApprovalDTO): boolean {
   )
 }
 
+/** Reviewed text this long is cut to a few lines until the person opens it in full. */
+export function reviewIsLong(text: string): boolean {
+  return text.split('\n').length > 4 || text.length > 320
+}
+
 /** The reviewed text, verbatim and monospace; long text opens in full on demand. */
 export function ReviewText({
   text,
@@ -190,7 +294,7 @@ export function ReviewText({
 }) {
   const { t } = useTranslation('governance')
   const [all, setAll] = useState(false)
-  const long = text.split('\n').length > 4 || text.length > 320
+  const long = reviewIsLong(text)
   if (compact)
     return (
       <span
@@ -226,24 +330,54 @@ export function ReviewText({
   )
 }
 
+/** What will run, as the engine stored it for review: the reviewed text verbatim, a note
+ * when the tool's request names no command, or the request's own words otherwise. */
+export function ApprovalWhatRuns({ approval }: { approval: ApprovalDTO }) {
+  const { t } = useTranslation('governance')
+  const review = approval.review
+  const toolCall = approval.subject_kind?.endsWith('.tool')
+  if (approvalCommandUnknown(approval))
+    return (
+      <p
+        className="text-body text-warning"
+        data-slot="approval-command-unknown"
+      >
+        {t('preview.commandUnknown')}
+      </p>
+    )
+  if (review?.text)
+    return (
+      <div className="flex min-w-0 flex-col gap-1">
+        <span className="text-overline text-text-3">
+          {t('preview.willRun')}
+        </span>
+        <ReviewText text={review.text} />
+      </div>
+    )
+  return (
+    <div className="flex flex-col gap-1 text-body">
+      {!toolCall && approval.reason ? (
+        <p className="break-words font-medium">{approval.reason}</p>
+      ) : !toolCall && approval.action ? (
+        <p className="font-medium">{readableAction(approval.action)}</p>
+      ) : null}
+      {approvalExpectsCommand(approval) ? (
+        <p className="text-text-2" data-slot="approval-no-review">
+          {t('preview.noReview')}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 /** One request, as a person reviews it: session, folder, who asks, tool, then what runs. */
 export function ApprovalPreview({ approval }: { approval: ApprovalDTO }) {
   const { t } = useTranslation('governance')
   const session = useApprovalSession(approval)
   const members = useMemberNames()
-  const { principal, activeTenant, can } = useAuth()
+  const { principal, can } = useAuth()
   const requester = approval.launched_by || approval.requested_by
-  const policies = useQuery({
-    queryKey: governanceKeys.policies(activeTenant),
-    queryFn: () => governanceApi.listPolicies(),
-    enabled: !!approval.policy_ref && can('governance:policy:read'),
-    staleTime: 60_000,
-  })
-  const policyName = can('governance:policy:read')
-    ? policies.data?.items.find((p) => p.id === approval.policy_ref)?.name
-    : undefined
   const review = approval.review
-  const unknown = approvalCommandUnknown(approval)
   const toolCall = approval.subject_kind?.endsWith('.tool')
   return (
     <section
@@ -252,9 +386,6 @@ export function ApprovalPreview({ approval }: { approval: ApprovalDTO }) {
       data-slot="approval-preview"
     >
       <KvList>
-        {policyName ? (
-          <KvRow label={t('detail.policyRef')}>{policyName}</KvRow>
-        ) : null}
         {session.name ? (
           <KvRow label={t('preview.session')}>{session.name}</KvRow>
         ) : null}
@@ -277,35 +408,8 @@ export function ApprovalPreview({ approval }: { approval: ApprovalDTO }) {
           <KvRow label={t('preview.tool')}>{review.tool}</KvRow>
         ) : null}
       </KvList>
-      {unknown ? (
-        <p
-          className="text-body text-warning"
-          data-slot="approval-command-unknown"
-        >
-          {t('preview.commandUnknown')}
-        </p>
-      ) : review?.text ? (
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-overline text-text-3">
-            {t('preview.willRun')}
-          </span>
-          <ReviewText text={review.text} />
-        </div>
-      ) : (
-        <div className="flex flex-col gap-1 text-body">
-          {!toolCall && approval.action ? (
-            <p className="font-medium">{readableAction(approval.action)}</p>
-          ) : null}
-          {!toolCall && approval.reason ? (
-            <p className="break-words text-text-2">{approval.reason}</p>
-          ) : null}
-          {approvalExpectsCommand(approval) ? (
-            <p className="text-text-2" data-slot="approval-no-review">
-              {t('preview.noReview')}
-            </p>
-          ) : null}
-        </div>
-      )}
+      <ApprovalWhatRuns approval={approval} />
+      <ApprovalWhy approval={approval} reaches={session.reaches} />
     </section>
   )
 }
@@ -371,13 +475,18 @@ export function ApprovalRequestCell({
   const session = useApprovalSession(approval)
   const review = approval.review
   const toolCall = approval.subject_kind?.endsWith('.tool')
+  // A request a person raised leads with their own words; the kind of request
+  // ("Killswitch release") names it only when they wrote none (#2548, audit finding 8).
   const head =
     [review?.tool, session.name].filter(Boolean).join(' · ') ||
-    (!toolCall && approval.action ? readableAction(approval.action) : '')
+    (!toolCall && approval.action && !approval.reason
+      ? readableAction(approval.action)
+      : '')
   return (
     // A fixed width with every line cut to one: a long folder widened the column and
     // pushed Approve and Reject off the right edge at 1280 (Root, 09b capture review).
-    <div
+    // A span, because the queue's row is a button and holds phrasing content only.
+    <span
       className={cn(
         'flex w-[20rem] min-w-0 max-w-[20rem] flex-col gap-0.5',
         className,
@@ -400,7 +509,12 @@ export function ApprovalRequestCell({
         <>
           {!toolCall && approval.reason ? (
             <span
-              className="truncate text-caption text-text-2"
+              className={cn(
+                'truncate',
+                head
+                  ? 'text-caption text-text-2'
+                  : 'font-medium text-foreground',
+              )}
               title={approval.reason}
             >
               {approval.reason}
@@ -431,53 +545,23 @@ export function ApprovalRequestCell({
           {t('preview.openToDecide')}
         </span>
       ) : null}
-    </div>
+    </span>
   )
 }
 
-/** Who asks, for the list's column. The engine's handle remains in Details. */
-export function AskedBy({ approval }: { approval: ApprovalDTO }) {
+/** Who asks, as words only: the queue's row names the person and opens nothing inside
+ * itself. The engine's handle stays in Details. */
+export function AskedByName({ approval }: { approval: ApprovalDTO }) {
   const { t } = useTranslation('governance')
   const members = useMemberNames()
   const { principal, can } = useAuth()
   const requester = approval.launched_by || approval.requested_by
-  return (
-    <div className="min-w-0">
-      <span
-        className={cn(
-          'block max-w-[12rem] truncate text-caption',
-          'text-foreground',
-        )}
-        title={requester}
-      >
-        {askedBy(
-          approval,
-          t,
-          can('user:read') && requester?.startsWith('user:')
-            ? members.nameOf(requester)
-            : null,
-          principal?.actor,
-        )}
-      </span>
-      <details
-        onClick={(event) => event.stopPropagation()}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ')
-            event.stopPropagation()
-        }}
-      >
-        <summary className="cursor-pointer text-caption text-text-2">
-          {t('preview.details')}
-        </summary>
-        {approval.launched_by ? (
-          <span className="block break-all font-mono text-caption">
-            {approval.launched_by}
-          </span>
-        ) : null}
-        <span className="block break-all font-mono text-caption">
-          {approval.requested_by}
-        </span>
-      </details>
-    </div>
+  return askedBy(
+    approval,
+    t,
+    can('user:read') && requester?.startsWith('user:')
+      ? members.nameOf(requester)
+      : null,
+    principal?.actor,
   )
 }

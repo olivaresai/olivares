@@ -102,7 +102,7 @@ export function AdoptionView() {
                 <SectionCard
                   title={t('lenses.analytics.title')}
                   description={t('lenses.analytics.description', {
-                    developers: summary.developers,
+                    count: summary.developers,
                   })}
                 >
                   <LensSection lens={summary.analytics} />
@@ -110,7 +110,7 @@ export function AdoptionView() {
                 <SectionCard
                   title={t('lenses.telemetry.title')}
                   description={t('lenses.telemetry.description', {
-                    teams: summary.teams,
+                    count: summary.teams,
                   })}
                 >
                   <LensSection lens={summary.telemetry} />

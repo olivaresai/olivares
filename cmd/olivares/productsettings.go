@@ -418,23 +418,27 @@ func activationTime(m *ActivationManifest) time.Time {
 }
 
 // settingsRecordingActivation records every activation the console applies in
-// the deployment settings, then restarts the engine so its modules follow it.
-// The edition's service writes this node's file as before; nothing else changes
-// for it.
+// the deployment settings, then makes the engine follow it: live when the
+// edition says the change needs no restart (RestartRequired false) and live
+// applies it, otherwise by restarting. The edition's service writes this node's
+// file as before; nothing else changes for it.
 type settingsRecordingActivation struct {
 	api.ActivationService
 	settings *productSettings
 	restart  func(reason string) error
-	log      *slog.Logger
+	// live makes the running engine follow the recorded settings; nil restarts
+	// for every change.
+	live func(context.Context) error
+	log  *slog.Logger
 }
 
 // recordingActivation wraps svc; nil (the community build) stays nil, so the
 // routes keep answering 501.
-func recordingActivation(svc api.ActivationService, settings *productSettings, restart func(string) error, log *slog.Logger) api.ActivationService {
+func recordingActivation(svc api.ActivationService, settings *productSettings, restart func(string) error, live func(context.Context) error, log *slog.Logger) api.ActivationService {
 	if svc == nil {
 		return nil
 	}
-	return settingsRecordingActivation{ActivationService: svc, settings: settings, restart: restart, log: log}
+	return settingsRecordingActivation{ActivationService: svc, settings: settings, restart: restart, live: live, log: log}
 }
 
 func (s settingsRecordingActivation) ActivationApply(ctx context.Context, req api.ActivationApplyRequest) (api.ActivationStatusDTO, error) {
@@ -455,7 +459,20 @@ func (s settingsRecordingActivation) ActivationApply(ctx context.Context, req ap
 		s.log.Error("activation: applied to this node's file but not recorded in the deployment settings", "err", err)
 		return api.ActivationStatusDTO{}, fmt.Errorf("%w: %v", api.ErrActivationNotRecorded, err)
 	}
+	var liveErr error
+	if !dto.RestartRequired && s.live != nil {
+		if liveErr = s.live(ctx); liveErr == nil {
+			return dto, nil
+		}
+		// The record is durable and a restart rebuilds the engine from it, so a
+		// change the engine could not follow live is applied by restarting.
+		s.log.Warn("activation: recorded, but the running engine could not follow it live; restarting to apply it", "err", liveErr)
+		dto.RestartRequired = true
+	}
 	if s.restart == nil {
+		if liveErr != nil {
+			return api.ActivationStatusDTO{}, fmt.Errorf("%w: the running engine could not follow the change live (%v)", api.ErrActivationRestartUnavailable, liveErr)
+		}
 		return api.ActivationStatusDTO{}, api.ErrActivationRestartUnavailable
 	}
 	if err := s.restart("license activation: " + req.Action); err != nil {

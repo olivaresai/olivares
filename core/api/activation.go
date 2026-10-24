@@ -15,12 +15,12 @@ import (
 // ENTERPRISE-ONLY — the community build wires nil and every /v1/console/activation
 // route answers 501 (the honest not-wired seam, like the DR / log-broker surfaces).
 //
-// Applying a preset stages the governed activation manifest; because add-ons are
-// wired at boot (the module graph is built once, unlike a license which hot-applies
-// for seats), the change takes effect on the next RESTART. RestartRequired is
-// therefore always true, and the console says so plainly rather than implying a
-// live flip. The DTOs are plain structs owned here, so core/api never imports the
-// commercial catalog — the enterprise implementation maps its types onto these.
+// Applying a preset or a family stages the governed activation manifest. A change
+// the edition applies to the running engine needs no restart; one it cannot (an
+// add-on wired into the engine's foundations at boot) says so through
+// RestartRequired, and the console tells the administrator plainly. The DTOs are
+// plain structs owned here, so core/api never imports the commercial catalog — the
+// enterprise implementation maps its types onto these.
 type ActivationService interface {
 	// ActivationStatus reports the build edition, the enabled preset, and every
 	// add-on's state (active / pending / available / console) for the table.
@@ -33,10 +33,15 @@ type ActivationService interface {
 	ActivationApply(ctx context.Context, req ActivationApplyRequest) (ActivationStatusDTO, error)
 }
 
+// ActivationFamilyPrefix starts the selection that names one family rather than a
+// preset: "family:regulated" is the regulated family alone, while the preset
+// "regulated" is that family together with the business one.
+const ActivationFamilyPrefix = "family:"
+
 // ActivationApplyRequest is an enable/disable/promote instruction.
 type ActivationApplyRequest struct {
 	Action string // enable | disable | promote
-	Preset string // for enable / disable
+	Preset string // for enable / disable: a preset name, or ActivationFamilyPrefix + a family key
 	Addon  string // for promote
 	Actor  string // resolved from the authenticated principal by the handler
 }
@@ -48,6 +53,9 @@ type ActivationStatusDTO struct {
 	RestartRequired bool                  `json:"restart_required"`
 	Addons          []ActivationAddonDTO  `json:"addons"`
 	Presets         []ActivationPresetDTO `json:"presets"`
+	// Families are the groups the edition sells add-ons in; an administrator turns
+	// each on or off as a whole.
+	Families []ActivationFamilyDTO `json:"families,omitempty"`
 
 	// Restarting says the engine is restarting itself to apply the change; the
 	// console waits for it and reconnects.
@@ -60,8 +68,9 @@ type ActivationAddonDTO struct {
 	Title       string `json:"title"`
 	Summary     string `json:"summary"`
 	Env         string `json:"env"`
-	Preset      string `json:"preset"` // the tier that introduces it
-	State       string `json:"state"`  // active | pending | available | console
+	Preset      string `json:"preset"`           // the tier that introduces it
+	Family      string `json:"family,omitempty"` // the family that sells it (ActivationFamilyDTO.Key)
+	State       string `json:"state"`            // active | pending | available | console
 	Reason      string `json:"reason,omitempty"`
 	NeedsSecret bool   `json:"needs_secret,omitempty"`
 	// InBuild and LicenseCovered are independent facts from the edition's
@@ -69,6 +78,16 @@ type ActivationAddonDTO struct {
 	// an observed absence. Neither field asserts operational readiness.
 	InBuild        *bool `json:"in_build,omitempty"`
 	LicenseCovered *bool `json:"license_covered,omitempty"`
+}
+
+// ActivationFamilyDTO is one family: its key, its English title, the keys of the
+// add-ons it holds and the keys of those that are on now. An add-on that is linked in
+// the build but not turned on is not in Active.
+type ActivationFamilyDTO struct {
+	Key    string   `json:"key"`
+	Title  string   `json:"title"`
+	Addons []string `json:"addons"`
+	Active []string `json:"active"`
 }
 
 // ActivationPresetDTO lists a preset's add-on keys for the "enable" chooser.

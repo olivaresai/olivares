@@ -5,6 +5,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -49,16 +50,18 @@ func (s *Server) handleActivationPreview(w http.ResponseWriter, r *http.Request,
 	}
 	var in struct {
 		Preset string `json:"preset"`
+		Family string `json:"family"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
 		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
-	if strings.TrimSpace(in.Preset) == "" {
-		s.badRequest(w, r, "preset is required")
+	selection, err := activationSelection(in.Preset, in.Family)
+	if err != nil {
+		s.badRequest(w, r, err.Error())
 		return
 	}
-	plan, err := svc.ActivationPreview(r.Context(), in.Preset)
+	plan, err := svc.ActivationPreview(r.Context(), selection)
 	if err != nil {
 		s.writeError(w, r, err)
 		return
@@ -78,16 +81,19 @@ func (s *Server) handleActivationApply(w http.ResponseWriter, r *http.Request, m
 	var in struct {
 		Action string `json:"action"`
 		Preset string `json:"preset"`
+		Family string `json:"family"`
 		Addon  string `json:"addon"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
 		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
+	selection := in.Preset
 	switch in.Action {
 	case "enable", "disable":
-		if strings.TrimSpace(in.Preset) == "" {
-			s.badRequest(w, r, "preset is required for "+in.Action)
+		var err error
+		if selection, err = activationSelection(in.Preset, in.Family); err != nil {
+			s.badRequest(w, r, err.Error()+" for "+in.Action)
 			return
 		}
 	case "promote":
@@ -100,13 +106,37 @@ func (s *Server) handleActivationApply(w http.ResponseWriter, r *http.Request, m
 		return
 	}
 	st, err := svc.ActivationApply(r.Context(), ActivationApplyRequest{
-		Action: in.Action, Preset: in.Preset, Addon: in.Addon, Actor: activationActor(p),
+		Action: in.Action, Preset: selection, Addon: in.Addon, Actor: activationActor(p),
 	})
 	if err != nil {
 		s.writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, st)
+}
+
+// activationSelection is what the service is asked to enable, disable or preview:
+// a preset name, or one family as ActivationFamilyPrefix + its key. A request names
+// exactly one of them.
+func activationSelection(preset, family string) (string, error) {
+	preset, family = strings.TrimSpace(preset), strings.TrimSpace(family)
+	switch {
+	case preset != "" && family != "":
+		return "", errors.New("name a preset or a family, not both")
+	case family != "":
+		// One family: a name, never a list (the selection language splits on commas,
+		// plus signs and spaces).
+		if strings.IndexFunc(family, func(r rune) bool {
+			return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-')
+		}) >= 0 {
+			return "", errors.New("a family is named by lowercase letters, digits and hyphens")
+		}
+		return ActivationFamilyPrefix + family, nil
+	case preset != "":
+		return preset, nil
+	default:
+		return "", errors.New("a preset or a family is required")
+	}
 }
 
 // activationActor resolves a display actor from the authenticated principal for

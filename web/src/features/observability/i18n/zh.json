@@ -113,7 +113,7 @@
     },
     "detail": {
       "title": "Span 详情",
-      "spanId": "Span ID",
+      "spanId": "跨度 ID",
       "name": "名称",
       "timing": "时序",
       "actor": "参与者",

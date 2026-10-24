@@ -72,10 +72,6 @@
       "$type": "cubicBezier",
       "$value": "cubic-bezier(0.4, 0, 1, 1)"
     },
-    "animate-pulse-live": {
-      "$type": "duration",
-      "$value": "pulse-live 2s ease-in-out infinite"
-    },
     "default-transition-duration": {
       "$type": "duration",
       "$value": "140ms"

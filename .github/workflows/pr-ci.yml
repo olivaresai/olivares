@@ -214,6 +214,10 @@ jobs:
 
   pr-build:
     needs: pr-web
+    outputs:
+      # The attempt that produced and uploaded cli-development-verification. userspace-compat
+      # compares the manifest against THIS attempt (#2749), not its own.
+      build-attempt: ${{ github.run_attempt }}
     if: always() && (github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod' || vars.OLIVARES_DEV_CI == 'true')
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 45
@@ -255,13 +259,28 @@ jobs:
       - name: embed the verified console output
         env:
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          # The manifest's attempt is the PRODUCING job's, never this job's GITHUB_RUN_ATTEMPT:
+          # "re-run failed jobs" re-runs a failed consumer at attempt 2 while pr-web's earlier
+          # success keeps attempt 1's artifact, and requiring them equal made every such rerun
+          # fail here before a test ran (#2749). A development self-hosted runner downloads
+          # nothing: it rebuilt the console in THIS job, where this attempt produced it.
+          GENERATION_ATTEMPT: ${{ needs.pr-web.outputs.bundle-attempt }}
+          CONSOLE_REBUILT_IN_THIS_JOB: ${{ github.repository != 'olivaresai/olivares' && runner.environment == 'self-hosted' }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$PR_HEAD"
+          generation_attempt="$GENERATION_ATTEMPT"
+          if [[ "$CONSOLE_REBUILT_IN_THIS_JOB" == 'true' ]]; then
+            generation_attempt="$GITHUB_RUN_ATTEMPT"
+          fi
+          [[ -n "$generation_attempt" ]] || {
+            echo "::error::pr-web reported no attempt for the console artifact"
+            exit 1
+          }
           cd "$RUNNER_TEMP/web-generation-artifact"
           sha256sum -c SHA256SUMS
           jq -e --arg head "$PR_HEAD" --arg repository "$GITHUB_REPOSITORY" \
-            --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" '
+            --arg run "$GITHUB_RUN_ID" --arg attempt "$generation_attempt" '
             .schema == "olivares.web-generation/v1" and
             .checkout_sha == $head and .pr_head_sha == $head and
             .repository == $repository and .run_id == $run and .run_attempt == $attempt
@@ -650,13 +669,28 @@ jobs:
       - name: embed the verified console output
         env:
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          # The manifest's attempt is the PRODUCING job's, never this job's GITHUB_RUN_ATTEMPT:
+          # "re-run failed jobs" re-runs a failed consumer at attempt 2 while pr-web's earlier
+          # success keeps attempt 1's artifact, and requiring them equal made every such rerun
+          # fail here before a test ran (#2749). A development self-hosted runner downloads
+          # nothing: it rebuilt the console in THIS job, where this attempt produced it.
+          GENERATION_ATTEMPT: ${{ needs.pr-web.outputs.bundle-attempt }}
+          CONSOLE_REBUILT_IN_THIS_JOB: ${{ github.repository != 'olivaresai/olivares' && runner.environment == 'self-hosted' }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$PR_HEAD"
+          generation_attempt="$GENERATION_ATTEMPT"
+          if [[ "$CONSOLE_REBUILT_IN_THIS_JOB" == 'true' ]]; then
+            generation_attempt="$GITHUB_RUN_ATTEMPT"
+          fi
+          [[ -n "$generation_attempt" ]] || {
+            echo "::error::pr-web reported no attempt for the console artifact"
+            exit 1
+          }
           cd "$RUNNER_TEMP/web-generation-artifact"
           sha256sum -c SHA256SUMS
           jq -e --arg head "$PR_HEAD" --arg repository "$GITHUB_REPOSITORY" \
-            --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" '
+            --arg run "$GITHUB_RUN_ID" --arg attempt "$generation_attempt" '
             .schema == "olivares.web-generation/v1" and
             .checkout_sha == $head and .pr_head_sha == $head and
             .repository == $repository and .run_id == $run and .run_attempt == $attempt
@@ -768,6 +802,10 @@ jobs:
   pr-web:
     outputs:
       bundle-artifact: web-generation-${{ github.run_id }}-${{ github.run_attempt }}
+      # The attempt that produced and uploaded the artifact above. Consumers compare the
+      # manifest against THIS attempt (#2749): "re-run failed jobs" re-runs a failed
+      # consumer at a new attempt while this job's earlier success keeps its artifact.
+      bundle-attempt: ${{ github.run_attempt }}
     if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod' || vars.OLIVARES_DEV_CI == 'true'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     # 30 + OpenAPI freshness (15) + the two generated-reference gates (15 + 10).
@@ -864,6 +902,7 @@ jobs:
         timeout-minutes: 2
         env:
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          BUILD_ATTEMPT: ${{ needs.pr-build.outputs.build-attempt }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$PR_HEAD"

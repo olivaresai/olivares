@@ -143,6 +143,20 @@ class Redactor:
 
 # ── La frontera tambien es de TRANSPORTE, no solo de texto ────────────────────────────────────
 _ABRIDOR = None
+_ABRIDOR_CON_PROXY = None
+
+
+def _es_loopback(url):
+    """True when the request stays on this host, where a proxy only adds a hop."""
+    import ipaddress
+    import urllib.parse
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 def abre(pet, timeout=30):
@@ -171,7 +185,7 @@ def abre(pet, timeout=30):
 
     import urllib.parse
 
-    global _ABRIDOR
+    global _ABRIDOR, _ABRIDOR_CON_PROXY
     if _ABRIDOR is None:
         def _origen(u):
             """(esquema, host, puerto EFECTIVO). El puerto por defecto se resuelve a proposito:
@@ -194,8 +208,19 @@ def abre(pet, timeout=30):
                     "origin. Destination: %s" % (msg, Redactor()(destino)),
                     headers, fp)
 
-        _ABRIDOR = urllib.request.build_opener(_SoloMismoOrigen)
-    return _ABRIDOR.open(pet, timeout=timeout)
+        # ⛔ A PROXY IS A BOUNDARY TOO. These scripts talk to a loopback engine, which needs no proxy;
+        #   with an inherited `http_proxy`, urllib sends every request to the proxy BEFORE it reaches the
+        #   engine, carrying `Authorization: Bearer ...` and the login body. An empty `ProxyHandler({})`
+        #   closes that path even when the environment is polluted.
+        #
+        #   A REMOTE engine is the opposite case: behind a mandatory egress proxy, removing the proxy
+        #   would make the script unable to reach it at all. So the choice follows the destination host:
+        #   loopback uses no proxy, anything else keeps the environment's proxy. Redirect refusal applies
+        #   to both openers.
+        _ABRIDOR = urllib.request.build_opener(urllib.request.ProxyHandler({}), _SoloMismoOrigen)
+        _ABRIDOR_CON_PROXY = urllib.request.build_opener(_SoloMismoOrigen)
+    abridor = _ABRIDOR if _es_loopback(pet.full_url) else _ABRIDOR_CON_PROXY
+    return abridor.open(pet, timeout=timeout)
 
 
 def instala_excepthook(redactor, etiqueta="olivares"):

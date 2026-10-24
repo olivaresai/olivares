@@ -274,3 +274,27 @@ describe('Los estados vacíos de /voice llevan su siguiente acción', () => {
     ).toBeInTheDocument()
   })
 })
+
+/**
+ * ONE ORANGE PER FIRST SCREEN (dev#2673's console rule 2026-10-17): the policies
+ * section header already carries "New policy" in orange, so the empty list repeats the
+ * verb in the secondary style.
+ */
+describe('VoiceView — one orange control on an empty policy list', () => {
+  it('offers the empty-state verb in the secondary style; the header keeps the orange', async () => {
+    const user = userEvent.setup()
+    renderIntel(<VoiceView />)
+    await user.click(await screen.findByRole('tab', { name: 'Policies' }))
+    const emptyState = (await screen.findByText('No voice policies')).closest(
+      '[data-slot="empty-state"]',
+    ) as HTMLElement
+    const inEmpty = within(emptyState).getByRole('button', {
+      name: 'New policy',
+    })
+    expect(inEmpty.className).not.toContain('bg-accent')
+    const inHeader = screen
+      .getAllByRole('button', { name: 'New policy' })
+      .find((button) => button !== inEmpty)
+    expect(inHeader?.className).toContain('bg-accent')
+  })
+})

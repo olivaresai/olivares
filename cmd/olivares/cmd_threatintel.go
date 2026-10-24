@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/connectors/threatfeed"
+	"github.com/olivaresai/olivares/sdk"
 )
 
 // cmd_threatintel.go is the operator CLI for the AI threat-intel feed add-on:
@@ -38,7 +39,7 @@ var errThreatIntelNotActive = notInEdition()
 // returns an honest error when the add-on is not available in this build/config.
 func resolveThreatIntelSource() (threatIntelSource, error) {
 	src := thisEdition.threatIntelSource.get(envconfig.Get, slog.Default())
-	if src == nil {
+	if !sdk.CapabilityEnabled(src) {
 		return nil, errThreatIntelNotActive
 	}
 	return src, nil

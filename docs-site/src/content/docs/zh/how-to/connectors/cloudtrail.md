@@ -74,7 +74,7 @@ S3 存储桶和对象会带着 clean 层徽标加入**访问图（Access map）*
 - **由多个调用者共享的承担角色无法指明真实调用者。**
   CloudTrail 把调用归属到角色会话；如果该角色被共享，那条边会被刻意标为 `approximate`。
   在 `shared_accounts` 中声明该角色会使其变得明确。持久的修复方式是按 agent
-  的身份（[身份依赖](/zh/how-to/connect-a-source/#硬性依赖每代理身份)）。
+  的身份（[身份依赖](/zh/how-to/connect-a-source/#硬性依赖每智能体身份)）。
 - **你未启用的数据事件并不存在。** CloudTrail 只记录 trail 被配置为记录的内容；
   如果某个存储桶的数据事件已关闭，缺少一条边并不等于不存在访问。
 - **投递延迟是 CloudTrail 的。** 数据事件按 CloudTrail 的投递时间表到达

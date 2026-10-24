@@ -16,7 +16,7 @@
 //      /agenttools/providers), only for a run on the organization's own login of
 //      its tool, and only for a viewer who may read that page.
 import { useQuery } from '@tanstack/react-query'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { agentToolsApi, agentToolsKeys } from '@/features/agent-tools/api'
 import { EDITS_AND_COMMANDS_TEMPLATE } from '@/features/agentops/session-launch'
@@ -26,6 +26,7 @@ import { toolName } from '@/features/agentops/tool-names'
 import { useAuth } from '@/lib/auth/context'
 import { COST_VIEW } from '@/features/registry'
 import { useViewAccess } from '@/features/navigation/authorization'
+import { viewById } from '@/features/navigation/model'
 import {
   formatDateTime,
   formatMicroUsd,
@@ -58,11 +59,11 @@ const CODEX_MODE_JOINER = ' · '
  * sandbox word is never said: Olivares confines the session from outside, so that sandbox
  * is not the session's boundary. */
 const TOOL_WORDS: Record<string, string> = {
-  bypassPermissions: 'bypassPermissions',
+  bypassPermissions: 'unasked',
   untrusted: 'untrusted',
   'on-failure': 'onFailure',
   'on-request': 'onRequest',
-  never: 'never',
+  never: 'unasked',
   granular: 'granular',
 }
 
@@ -90,6 +91,47 @@ function permissionChoice(
     : undefined
 }
 
+/** The run's launch template, when its mode is worded from it: dontAsk is the built-in
+ * "Edit files and run commands" allowlist, or any template a person wrote under that mode.
+ * One query for the Context pane's chip and the composer's access picker. */
+function useLaunchTemplate(run: RunDTO | null | undefined) {
+  const tenant = useTenantStore((s) => s.activeTenant)
+  const choice = run
+    ? permissionChoice(run.tool_mode ?? '', run.permission_mode)
+    : undefined
+  const templateId =
+    choice === 'editsAndCommands' ? run?.template_id : undefined
+  const template = useQuery({
+    queryKey: templatesKeys.detail(tenant, templateId ?? ''),
+    queryFn: () => templatesApi.get(templateId ?? ''),
+    enabled: !!templateId,
+    staleTime: 60_000,
+  })
+  const builtin =
+    template.data?.builtin === true &&
+    template.data.name === EDITS_AND_COMMANDS_TEMPLATE
+  return { choice, templateId, template, builtin }
+}
+
+/**
+ * The session's access in a few words, for the composer's access picker (dev#3162), as
+ * SessionMode words it: the permission New session offers, the run's template read first;
+ * a template a person wrote, by its name; else the tool's word said plainly; else the
+ * tool's word as it said it. A run that reports no mode says so.
+ */
+export function useAccessWords(run: RunDTO): string {
+  const { t } = useTranslation(['sessions', 'firstHour'])
+  const { choice, templateId, template, builtin } = useLaunchTemplate(run)
+  const toolMode = run.tool_mode ?? ''
+  if (choice && (choice !== 'editsAndCommands' || builtin))
+    return t(`firstHour:permission.${choice}`)
+  if (templateId && template.data?.name) return template.data.name
+  const plain = toolWord(toolMode)
+  if (plain === 'unasked') return t('sessions:meter.unaskedShort')
+  if (plain) return t(`sessions:meter.toolWord.${plain}`)
+  return toolMode || run.permission_mode || t('sessions:meter.accessUnknown')
+}
+
 /**
  * The session's permission in the words New session offers, with the tool's own word for
  * it one hover away. A tool's mode that is one of those permission modes (Claude Code's)
@@ -100,47 +142,57 @@ function permissionChoice(
  */
 export function SessionMode({ run }: { run: RunDTO | null | undefined }) {
   const { t } = useTranslation(['sessions', 'firstHour'])
-  const tenant = useTenantStore((s) => s.activeTenant)
+  const access = useViewAccess()
   const toolMode = run?.tool_mode ?? ''
-  const choice = run
-    ? permissionChoice(toolMode, run.permission_mode)
-    : undefined
-  // dontAsk is the built-in "Edit files and run commands" allowlist, or any template a
-  // person wrote under that mode: the wording is the built-in's, so the run's template
-  // is read before the chip claims it.
-  const templateId =
-    choice === 'editsAndCommands' ? run?.template_id : undefined
-  const template = useQuery({
-    queryKey: templatesKeys.detail(tenant, templateId ?? ''),
-    queryFn: () => templatesApi.get(templateId ?? ''),
-    enabled: !!templateId,
-    staleTime: 60_000,
-  })
+  // The wording is the built-in's, so the run's template is read before the chip claims it.
+  const { choice, templateId, template, builtin } = useLaunchTemplate(run)
   if (!run || !toolMode) return null
   const tool = run.provider_driver ? toolName(run.provider_driver) : ''
-  const builtin =
-    template.data?.builtin === true &&
-    template.data.name === EDITS_AND_COMMANDS_TEMPLATE
   // Not worded until the template answers: the chip never flashes the tool's private
   // names, and a template that cannot be read keeps the tool's word, never a guess.
   if (templateId && template.isPending) return null
   const worded =
     choice && (choice !== 'editsAndCommands' || builtin) ? choice : undefined
   const plain = worded ? undefined : toolWord(toolMode)
+  // A tool that never asks still runs inside Olivares' confinement and policy: the words
+  // say what the person gets, not an alarm (dev#3120), and name the policy that holds it.
+  const policyView =
+    run.provider_driver === 'claude' ? viewById('claudePolicy') : undefined
   return (
     <Badge
       variant="outline"
+      // A mode is a sentence ("Runs without asking: confined by Olivares policy"): it
+      // wraps in the Context pane instead of pushing it sideways.
+      className="max-w-full whitespace-normal leading-snug"
       title={t('sessions:meter.modeTitle', {
         tool: tool || t('sessions:meter.theTool'),
         mode: toolMode,
       })}
       data-testid="narrative-mode"
     >
-      {worded
-        ? t(`firstHour:permission.${worded}`)
-        : t('sessions:meter.mode', {
-            mode: plain ? t(`sessions:meter.toolWord.${plain}`) : toolMode,
-          })}
+      {worded ? (
+        t(`firstHour:permission.${worded}`)
+      ) : plain === 'unasked' ? (
+        <Trans
+          t={t}
+          i18nKey="sessions:meter.unasked"
+          components={{
+            policy:
+              policyView && access.navigable(policyView) ? (
+                <a
+                  href={policyView.path}
+                  className="rounded-sm underline decoration-text-3 underline-offset-2 hover:decoration-current focus-visible:outline-2 focus-visible:outline-ring"
+                />
+              ) : (
+                <span />
+              ),
+          }}
+        />
+      ) : (
+        t('sessions:meter.mode', {
+          mode: plain ? t(`sessions:meter.toolWord.${plain}`) : toolMode,
+        })
+      )}
     </Badge>
   )
 }

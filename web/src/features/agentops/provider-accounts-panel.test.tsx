@@ -42,6 +42,7 @@ const api = vi.hoisted(() => ({
   createAccount: vi.fn(),
   patchAccountMetadata: vi.fn(),
   listProfiles: vi.fn(),
+  getProfile: vi.fn(),
   listBindings: vi.fn(),
   listRuns: vi.fn(),
 }))
@@ -349,6 +350,98 @@ describe('ProviderAccountsPanel — one account', () => {
     const sheet = await screen.findByRole('dialog')
     await within(sheet).findByText('From an existing profile')
     expect(within(sheet).queryByText(/tenant-1\/xenv_1/)).toBeNull()
+  })
+
+  it("carries the profile it is and that profile's bindings, each under its own read tier", async () => {
+    // An account IS a named profile (one reference): its settings and the sources bound
+    // to it are part of its detail, not a page of their own.
+    grant(AR, PR, 'sessions:profile-binding:read')
+    api.getProfile.mockResolvedValue(profile('ppf_a', 'work-claude'))
+    api.listBindings.mockResolvedValue(page([]))
+    const user = userEvent.setup()
+    wrap()
+    await user.click(await screen.findByRole('button', { name: 'work-claude' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(
+      await within(sheet).findByRole('heading', { name: 'Source bindings' }),
+    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(api.listBindings).toHaveBeenCalledWith(
+        expect.objectContaining({ profile_ref: 'ppf_a' }),
+        expect.anything(),
+      ),
+    )
+    expect(api.getProfile).toHaveBeenCalledWith(
+      'ppf_a',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
+  })
+
+  it('shows the profile once: its own title and reference rows stay with the account', async () => {
+    grant(AR, PR)
+    api.getProfile.mockResolvedValue(profile('ppf_a', 'work-claude'))
+    api.listBindings.mockResolvedValue(page([]))
+    const user = userEvent.setup()
+    wrap()
+    await user.click(await screen.findByRole('button', { name: 'work-claude' }))
+    const sheet = await screen.findByRole('dialog')
+    await within(sheet).findByText('Enabled here')
+    expect(
+      within(sheet).getAllByRole('heading', { name: /work-claude/ }),
+    ).toHaveLength(1)
+    // The account names its server once; the profile does not repeat it.
+    expect(within(sheet).getAllByText('Server')).toHaveLength(1)
+    // Without the binding tier no binding is asked for.
+    expect(api.listBindings).not.toHaveBeenCalled()
+  })
+
+  it('a failed profile read says so with Retry, and Retry reads again', async () => {
+    grant(AR, PR)
+    api.getProfile.mockRejectedValueOnce(new Error('down'))
+    api.getProfile.mockResolvedValue(profile('ppf_a', 'work-claude'))
+    const user = userEvent.setup()
+    wrap()
+    await user.click(await screen.findByRole('button', { name: 'work-claude' }))
+    const sheet = await screen.findByRole('dialog')
+    await user.click(
+      await within(sheet).findByRole('button', { name: /retry/i }),
+    )
+    expect(await within(sheet).findByText('Enabled here')).toBeInTheDocument()
+    expect(api.getProfile.mock.calls.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('a failed refetch keeps the profile detail it already shows', async () => {
+    grant(AR, PR, 'sessions:profile-binding:read')
+    api.getProfile.mockResolvedValueOnce(profile('ppf_a', 'work-claude'))
+    api.getProfile.mockRejectedValue(new Error('down'))
+    api.listBindings.mockResolvedValue(page([]))
+    const user = userEvent.setup()
+    const { qc } = wrap()
+    await user.click(await screen.findByRole('button', { name: 'work-claude' }))
+    const sheet = await screen.findByRole('dialog')
+    await within(sheet).findByRole('heading', { name: 'Source bindings' })
+    await act(async () => {
+      await qc.invalidateQueries()
+    })
+    await waitFor(() =>
+      expect(api.getProfile.mock.calls.length).toBeGreaterThan(1),
+    )
+    expect(
+      within(sheet).getByRole('heading', { name: 'Source bindings' }),
+    ).toBeInTheDocument()
+  })
+
+  it('without the profile read tier the detail reads no profile and shows no bindings', async () => {
+    grant(AR)
+    const user = userEvent.setup()
+    wrap()
+    await user.click(await screen.findByRole('button', { name: 'work-claude' }))
+    const sheet = await screen.findByRole('dialog')
+    await within(sheet).findByText('From an existing profile')
+    expect(
+      within(sheet).queryByRole('heading', { name: 'Source bindings' }),
+    ).toBeNull()
+    expect(api.getProfile).not.toHaveBeenCalled()
   })
 
   it('an account that is gone says so and shows no stale field', async () => {

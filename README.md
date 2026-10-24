@@ -10,7 +10,7 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
-[![Next release: 0.3](https://img.shields.io/badge/release-0.3-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.3)<!-- /release -->
+[![Next release: 0.4](https://img.shields.io/badge/release-0.4-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.4)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
@@ -67,10 +67,12 @@ It works with the tools you already have: Claude Code, Codex, Grok, Cursor, gemi
 
 Community keeps local observability, stored settings and backup export. SIEM/ITSM push, external telemetry delivery, posture export, active-passive HA leader routing and the edge collector are included in the Business base edition.
 
-**Session network isolation covers Claude Code and Codex sessions bound to a provider
-key.** Such a session reaches only its provider's endpoint, through a per-session proxy
-in its own network namespace, or it does not start. Grok Build, OpenCode and
-account-login sessions can still reach any host the network permits. See
+**Session network isolation covers Claude Code, Codex and OpenCode sessions bound to a
+provider key, and OpenCode sessions on the tool's own sign-in.** Such a session reaches
+only its provider's endpoint, or its sign-in's hosts, through a per-session proxy in its
+own network namespace, or it does not start. For OpenCode on a provider key, the hosts
+rest on an earlier inventory, not on a turn shown behind the proxy. Grok Build sessions
+and account-login sessions of other tools can still reach any host the network permits. See
 [session network isolation](SECURITY.md#session-network-isolation) before running
 workloads that require exclusive access to one provider.
 
@@ -91,7 +93,7 @@ olivares quickstart
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares:0.3 \
+  docker.io/olivaresai/olivares:0.4 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->
@@ -109,8 +111,8 @@ Sessions work on one host folder: set `OLIVARES_PROJECT_DIR` to its absolute pat
 
 <!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.deb
-sudo dpkg -i olivares_0.3_linux_amd64.deb && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.4/olivares_0.4_linux_amd64.deb
+sudo dpkg -i olivares_0.4_linux_amd64.deb && sudo systemctl enable --now olivares
 ```
 <!-- /release -->
 
@@ -118,8 +120,8 @@ sudo dpkg -i olivares_0.3_linux_amd64.deb && sudo systemctl enable --now olivare
 
 <!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.rpm
-sudo rpm -i olivares_0.3_linux_amd64.rpm && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.4/olivares_0.4_linux_amd64.rpm
+sudo rpm -i olivares_0.4_linux_amd64.rpm && sudo systemctl enable --now olivares
 ```
 <!-- /release -->
 
@@ -127,12 +129,12 @@ sudo rpm -i olivares_0.3_linux_amd64.rpm && sudo systemctl enable --now olivares
 
 <!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.apk
-sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk && sudo rc-service olivares start
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.4/olivares_0.4_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.4_linux_amd64.apk && sudo rc-service olivares start
 ```
 <!-- /release -->
 
-On ARM servers, use `arm64` instead of `amd64`. Every file of the release: the <!-- release -->[release page](https://github.com/olivaresai/olivares/releases/tag/0.3)<!-- /release -->.
+On ARM servers, use `arm64` instead of `amd64`. Every file of the release: the <!-- release -->[release page](https://github.com/olivaresai/olivares/releases/tag/0.4)<!-- /release -->.
 
 **Homebrew.** macOS and Linux.
 

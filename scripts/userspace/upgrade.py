@@ -31,6 +31,10 @@ RECORDING_EDITION_ROUTES = frozenset(('/v1/m/recording/sessions',))
 # The boot naming of provider profiles that predate account names (AdoptUnnamedProfiles):
 # it fills these three empty columns of an unnamed profile and never rewrites a set one.
 PROFILE_NAMING = ('account_name', 'home_mode', 'isolation_level')
+# How long an engine has to answer /v1/server-info after it starts. The published binary's fresh-PostgreSQL bootstrap
+# took more than 120 s on a loaded runner (73 s and 23 s store steps, then a restart before serving); a published binary
+# cannot be made faster.
+READY_SECONDS = 300
 
 
 def digest(value):
@@ -199,7 +203,7 @@ class Upgrade:
         with raw.open('wb') as log:
             self.process = subprocess.Popen(argv, env=self.env, stdout=log, stderr=log, start_new_session=True)
         (self.out / 'process.json').write_text(json.dumps({'pid': self.process.pid, 'pgid': self.process.pid}))
-        deadline = time.monotonic() + 120
+        deadline = time.monotonic() + READY_SECONDS
         while time.monotonic() < deadline:
             if self.process.poll() is not None:
                 raise RuntimeError(label + ': engine exited ' + str(self.process.returncode))

@@ -4,6 +4,12 @@
 # CI-only negative fixture for DIST-24-12. Layer after the base and Postgres
 # files. The first engine takes the advisory lock; this second process stays up
 # as a healthy-store standby and therefore answers 503 from /readyz.
+#
+# It takes the same two pools as the leader. Without --admin-dsn a Postgres engine
+# has no cross-tenant read pool and opens the store only through a closed inventory
+# routine this Compose Postgres does not provision, so the process exits before it
+# serves anything: /readyz is never answered, the healthcheck never sees HTTP 503
+# and the negative step fails on every tag.
 services:
   olivares-standby:
     image: ${OLIVARES_IMAGE:?set OLIVARES_IMAGE to the locally built candidate}
@@ -15,8 +21,10 @@ services:
       - --checkpoint-interval=0
       - --engine=postgres
       - --dsn=env:OLIVARES_DSN
+      - --admin-dsn=env:OLIVARES_ADMIN_DSN
     environment:
       OLIVARES_DSN: postgres://olivares_app:${OLIVARES_DB_PASSWORD:?set OLIVARES_DB_PASSWORD}@postgres:5432/olivares?sslmode=disable
+      OLIVARES_ADMIN_DSN: postgres://olivares_admin:${OLIVARES_ADMIN_PASSWORD:?set OLIVARES_ADMIN_PASSWORD}@postgres:5432/olivares?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy
@@ -46,7 +54,7 @@ services:
         - /usr/local/bin/olivares
         - readyz
         - --server=https://127.0.0.1:8443
-        - --ca-cert=/var/lib/olivares/tls.crt
+        - --ca-cert=/var/lib/olivares/public/tls.crt
         - --timeout=3s
       interval: 2s
       timeout: 5s

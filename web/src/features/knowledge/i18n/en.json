@@ -129,7 +129,7 @@
     "noDocs": "No inline documents",
     "confirm": "Ingest",
     "done": "Content ingested",
-    "doneSummary": "{{documents}} document(s), {{chunks}} chunk(s) · {{redactions}} secret(s) redacted before indexing"
+    "doneSummary": "Documents: {{documents}} · chunks: {{chunks}} · secrets redacted before indexing: {{redactions}}"
   },
   "reindex": {
     "title": "Reindex pending chunks?",

@@ -148,16 +148,13 @@ test.describe('the first screens', () => {
 
       // The next action. The demo operator is a superadmin and may start a session, so
       // the front door shows the start line read from the tools themselves: one named
-      // button (New session, or the setup step the tools still need). The generic
-      // offers (`home-next-step`) are only for a principal who cannot start a session,
-      // so showing both would be two answers to "what do I do next".
+      // button (New session, or the setup step the tools still need).
       const start = page.getByTestId('now-start')
       await expect(start).toBeVisible()
       const action = start.getByRole('button')
       await expect(action).toHaveCount(1)
       // A button with no accessible name is a control a screen reader cannot offer.
       await expect(action).not.toHaveText('')
-      await expect(page.getByTestId('home-next-step')).toHaveCount(0)
 
       // The work narrative: the seeded estate has sessions, so cards or rows, not the
       // empty state. Live sessions are cards and ended ones rows (#2245); which appear
@@ -288,12 +285,14 @@ test.describe('the first screens', () => {
       await page.waitForLoadState('networkidle').catch(() => {})
       if (lang === 'ko') {
         // After auth the shell must be Korean too: a raw-key probe passes on the
-        // English fallback, so name the sidebar controls the catalogs supply.
-        const sidebar = page.locator('[data-sidebar-mode]')
-        await expect(sidebar).toBeVisible()
+        // English fallback, so name the top bar places the catalogs supply.
+        const bar = page.locator('header[data-slot="topbar"]')
+        await expect(bar).toBeVisible()
+        // The place's name is its label, then its live count and "needs you" when the
+        // estate has sessions to show ("세션 , 2 , 확인 필요"), so it is matched from its start.
         await expect(
-          sidebar.getByRole('link', { name: '설정', exact: true }),
-        ).toBeVisible()
+          bar.locator('a[data-place="sessions"]'),
+        ).toHaveAccessibleName(/^세션(\s*,|$)/)
       }
       const rawOnHome = await page.evaluate(rawKeyProbe)
       expect(rawOnHome, `raw i18n keys on / in ${lang}`).toEqual([])

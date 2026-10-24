@@ -336,6 +336,12 @@ func TestHandoff_ARunningSessionIsNotStoppedByARefusal(t *testing.T) {
 	}
 	setRunColumn(t, f, colState, stateRunning)
 	still("a session that has not started")
+
+	// A handoff name the rename refuses is refused before the source is stopped.
+	if r := f.post(t, "handoff", map[string]any{"provider_profile_ref": f.b, "name": "zero​width"}); r.code != http.StatusBadRequest || !strings.Contains(r.raw, "invisible") {
+		t.Fatalf("handoff name with an invisible character = %d %s", r.code, r.raw)
+	}
+	still("a handoff name the rename refuses")
 }
 
 // The conversation is read once the tool has exited, not before: what it writes on its

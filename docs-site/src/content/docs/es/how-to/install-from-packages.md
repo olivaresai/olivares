@@ -8,10 +8,10 @@ description: >-
 draft: false
 ---
 
-La próxima release es <!-- release -->`0.3`<!-- /release -->; todavía no está publicada en GitHub. Los comandos siguientes describen los artefactos previstos. Compila desde el código fuente hasta su publicación y verifica cada artefacto antes de usarlo. El estado observado está en <!-- release -->`docs/releases/0.3-install-surfaces.json`<!-- /release -->.
+La próxima release es <!-- release -->`0.4`<!-- /release -->; todavía no está publicada en GitHub. Los comandos siguientes describen los artefactos previstos. Compila desde el código fuente hasta su publicación y verifica cada artefacto antes de usarlo. El estado observado está en <!-- release -->`docs/releases/0.4-install-surfaces.json`<!-- /release -->.
 
 :::note[Nombres de paquete publicados]
-La release <!-- release -->0.3<!-- /release --> de GitHub publica artefactos `.deb`, `.rpm` y `.apk` para `amd64` y
+La release <!-- release -->0.4<!-- /release --> de GitHub publica artefactos `.deb`, `.rpm` y `.apk` para `amd64` y
 `arm64`, con `checksums.txt`, `checksums.txt.sig` y `checksums.txt.pem`. Los comandos
 de abajo usan los nombres literales `amd64` de esa release; sustituye `amd64` por
 `arm64` en un host ARM de 64 bits. Instala desde esos artefactos de release verificados.
@@ -85,13 +85,13 @@ adaptadores de servicio: `scripts/install-service.sh` y `packaging/service/`.
 <!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_0.3_linux_amd64.deb
+sudo dpkg -i olivares_0.4_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_0.3_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.4_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.4_linux_amd64.apk
 ```
 <!-- /release -->
 
@@ -314,18 +314,29 @@ concesión deliberada tuya, no algo que el paquete haga por ti.
 
 ## 6. Actualizar
 
-`olivares upgrade` sustituye el binario en el sitio, y las propiedades de seguridad son
-la razón para preferirlo a reinstalar el paquete a mano: **nunca sustituye el binario
-hasta que el candidato descargado se ha sondeado con éxito mediante exec**, conserva
-una copia de seguridad con marca de tiempo y **vuelve a esa copia si el sondeo
-posterior al intercambio falla**.
+Usa un único actualizador por host. Un host instalado desde un paquete o desde el repositorio
+se actualiza con su gestor de paquetes (`apt`, `dnf`, `apk` o un paquete más nuevo);
+`olivares upgrade` se niega a sustituir el binario que pertenece al paquete.
+
+El gestor de paquetes es el dueño de `/usr/bin/olivares` en toda instalación por paquete (deb,
+rpm, apk, AUR). Sustituir ese fichero en el sitio dejaría la base de datos de paquetes
+describiendo un fichero que ya no existe tal cual, así que `olivares upgrade` se niega: termina
+con 2 antes de descargar nada y nombra la vía del paquete. Actualiza con el gestor de paquetes.
+`olivares upgrade --check` sigue funcionando; muestra el plan y no cambia nada:
 
 ```bash
 sudo olivares upgrade --check    # what would change, without changing anything
-sudo olivares upgrade --yes      # do it
 ```
 
-Tres flags importan de forma específica en una instalación empaquetada:
+Donde ningún gestor de paquetes es dueño del binario (uno colocado por `install.sh` o a mano),
+`olivares upgrade` lo sustituye en el sitio, y las propiedades de seguridad son la razón para
+usarlo allí: **nunca sustituye el binario hasta que el candidato descargado se ha sondeado con
+éxito mediante exec**, conserva una copia de seguridad con marca de tiempo y **vuelve a esa
+copia si el sondeo posterior al intercambio falla**. `--target <ruta>` es la anulación del
+operador: sustituye el fichero que nombras, incluido `/usr/bin/olivares`, y desde entonces la
+base de datos de paquetes ya no coincide con ese fichero.
+
+Tres flags importan para `--check` y para una ejecución con `--target`:
 
 - **`--endpoint`** — toma actualizaciones de un repositorio de GitHub que controlas en
   vez del predeterminado. Es la vía de escape para un espejo o una bifurcación.
@@ -333,6 +344,9 @@ Tres flags importan de forma específica en una instalación empaquetada:
 - **`--install-timer`** — emite un temporizador y un servicio **systemd opcionales**
   que comprueban actualizaciones según una programación. Nada lo instala por ti; véase
   [lo que el paquete no hace](#8-lo-que-el-paquete-no-hace). Es un generador systemd.
+  En una instalación por paquete se niega: `/usr/bin/olivares` pertenece al gestor de paquetes,
+  así que `--install-timer` termina con 2 y no escribe ninguna unidad. Actualiza con el gestor de
+  paquetes (en el appliance de Olivares: `systemctl start olivares-appliance-update.service`).
 
 Ten en cuenta que la puesta en escena y el sondeo exec ocurren **en el directorio de
 instalación, junto al destino — no en `/tmp`**, así que el montaje `noexec` comentado
@@ -380,8 +394,8 @@ instalación:
 
 - **No añade un repositorio.** No se escribe nada en `/etc/apt/sources.list.d`,
   `/etc/yum.repos.d` ni `/etc/apk/repositories`. Instalaste un fichero; solo ese
-  fichero se instaló. Las actualizaciones las disparas tú — con un paquete nuevo, o
-  con `olivares upgrade`.
+  fichero se instaló. Las actualizaciones las disparas tú — con un paquete nuevo;
+  `olivares upgrade` se niega a sustituir un binario que pertenece al paquete.
 - **No arranca ni habilita el servicio.** Los paquetes systemd recargan systemd cuando
   `systemctl` está presente e imprimen `systemctl enable --now`. Los paquetes OpenRC
   imprimen `rc-service olivares start` y no ejecutan `rc-update add`. Arrancar sigue

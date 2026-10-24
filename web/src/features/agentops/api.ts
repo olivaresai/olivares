@@ -49,6 +49,7 @@ import type {
   RunMessagesDTO,
   RunMessagesParams,
   RunDTO,
+  RunMarkDTO,
   RunPinDTO,
   RunEventDTO,
   HandoffPreviewDTO,
@@ -384,6 +385,21 @@ export const agentOpsApi = {
   pin: (r: string, opts?: Pick<RequestOptions, 'tenant'>) =>
     http.post<RunPinDTO>(`${RUNS}/${ref(r)}/pin`, undefined, opts),
   unpin: (r: string) => http.delete<RunPinDTO>(`${RUNS}/${ref(r)}/pin`),
+  /** Snooze the session for the signed-in person until `until` (RFC 3339), or end the
+   * snooze; mark it done, or not done. Their own marks, kept on the engine like the pin. */
+  snooze: (r: string, until: string) =>
+    http.post<RunMarkDTO>(`${RUNS}/${ref(r)}/snooze`, { until }),
+  unsnooze: (r: string) => http.delete<RunMarkDTO>(`${RUNS}/${ref(r)}/snooze`),
+  markDone: (r: string) =>
+    http.post<RunMarkDTO>(`${RUNS}/${ref(r)}/done`, undefined),
+  unmarkDone: (r: string) => http.delete<RunMarkDTO>(`${RUNS}/${ref(r)}/done`),
+  /** The session's name, kept by the engine and shown wherever it is listed; an empty
+   * one gives the session back the name the console derives. */
+  rename: (r: string, name: string) =>
+    http.put<RunDTO>(`${RUNS}/${ref(r)}/name`, { name }),
+  /** Files the session under Archived, out of the default list, or brings it back. */
+  archive: (r: string) => http.post<RunDTO>(`${RUNS}/${ref(r)}/archive`),
+  unarchive: (r: string) => http.delete<RunDTO>(`${RUNS}/${ref(r)}/archive`),
   /** Rebinds a stopped session to another profile of its tool, carrying the tool's own
    * conversation state. Starts nothing; the next resume is the ordinary one. */
   move: (r: string, profileRef: string) =>

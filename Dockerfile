@@ -12,7 +12,7 @@
 
 # ---- web stage: build the React/Vite UI into the Go embed dir -----------------
 # Pinned by digest; Dependabot's docker entry keeps the digest current.
-FROM node:26-bookworm-slim@sha256:86f07bc9c5dce4578cf37e5a418b7bfc7f817cda25cde66e2b66e95ed86c4567 AS web
+FROM node:26-bookworm-slim@sha256:28147155d47dc31abe0a46e0d12b59b2fb3d0a2dcc5dc65fce76a074180b16fe AS web
 WORKDIR /src
 # Node.js stopped bundling corepack in version 25, so this stage installs a pinned
 # corepack and enables its pnpm shims only; corepack then runs the pnpm that
@@ -29,7 +29,7 @@ RUN cd web && pnpm run build
 # ---- go stage: compile the single static binary with the UI embedded ----------
 # Dependabot ignores golang (see .github/dependabot.yml), so a toolchain bump moves this tag
 # and its digest together; with both present, docker pulls the digest.
-FROM golang:1.26.9-bookworm@sha256:d9c68c2c51161e12fd77e4c6320687c9cd86e1af1e3ad6e6cd63ff970641453c AS build
+FROM golang:1.26.10-bookworm@sha256:632dff7351799a5a9954a48dc06670ade72ee44e8c351cdc0e5a57af2fea21af AS build
 WORKDIR /src
 ENV CGO_ENABLED=0 GOFLAGS=-mod=readonly
 # The full source comes in BEFORE `go mod download`. The go command reads go.work
@@ -61,19 +61,26 @@ RUN VERSION_LDFLAGS="$(sh scripts/build-ldflags.sh "${VERSION}" "${COMMIT}")" &&
 # ---- final stage: non-root agent runtime ----------------------------------
 # Runtime support only; agent CLIs are installed by Olivares into the data volume.
 # Node 24 is LTS; this official image uses Debian 13 (trixie) and includes npm/npx.
-FROM node:24-trixie-slim@sha256:173f125896c3b47ddf056734c7ea789d04595a6a08769a8f78e0df642781fb66
+FROM node:24-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea
 # hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends ca-certificates git python3 python3-venv \
        vim less procps curl jq iproute2 tar gzip \
-    && npm install --global --ignore-scripts npm@11.21.0 \
+    && npm install --global --ignore-scripts npm@11.21.1 \
     && npm cache clean --force \
     && rm -rf /var/lib/apt/lists/* /usr/local/include/node \
     && groupadd --gid 65532 nonroot \
     && useradd --uid 65532 --gid 65532 --home-dir /var/lib/olivares/home --no-create-home nonroot \
     && install -d -o 65532 -g 65532 -m 0700 /var/lib/olivares /var/lib/olivares/home
-COPY --from=ghcr.io/astral-sh/uv:0.12.21@sha256:a7aed3216253ee804de3e2d8afa5073baa1a177335345d43845cd4165e43b711 /uv /uvx /usr/local/bin/
+# The apt layer above must carry the Debian security updates of its build day. A cached layer
+# from before DSA-6572-1 (2026-10-20, ca-certificates, trixie 20250419+deb13u1) fails here
+# instead of shipping; raise the floor with the next ca-certificates DSA.
+RUN v="$(dpkg-query -W -f='${Version}' ca-certificates)"; \
+    if ! dpkg --compare-versions "$v" ge 20250419+deb13u1; then \
+      echo "ca-certificates $v is older than 20250419+deb13u1 (DSA-6572-1): rebuild without a cached apt layer" >&2; exit 1; \
+    fi
+COPY --from=ghcr.io/astral-sh/uv:0.13.5@sha256:32a7bb39b496babbd997b0a39a4d66c126bdaf5661b302bf6f06abda8deca6ff /uv /uvx /usr/local/bin/
 COPY packaging/container/uv-LICENSE-MIT.txt /usr/share/doc/uv/LICENSE-MIT
 COPY packaging/container/bashrc.sh /etc/olivares-bashrc
 RUN sed -i '1i . /etc/olivares-bashrc' /etc/bash.bashrc

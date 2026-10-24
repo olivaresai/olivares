@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   act,
@@ -18,10 +20,11 @@ import i18n from '@/lib/i18n'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import type { RunDTO } from '@/features/agentops/types'
 import { SessionConversation } from './session-conversation'
-import { sentTurnsPartition, useSentTurns } from './sent-turns'
+import { sentPlace, sentTurnsPartition, useSentTurns } from './sent-turns'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 import nativeHistory from './fixtures/codex-native-history.json'
+import claudeStream from './fixtures/claude-2.1.309-subagents.jsonl?raw'
 import './i18n'
 
 const attachStatus = vi.hoisted(() => ({
@@ -29,7 +32,8 @@ const attachStatus = vi.hoisted(() => ({
 }))
 const onFrameRef = vi.hoisted(() => ({
   current: null as
-    ((f: { seq: number; stream: string; line: string }) => void) | null,
+    | ((f: { seq: number; stream: string; line: string; at?: string }) => void)
+    | null,
 }))
 const onHistoryRef = vi.hoisted(() => ({
   current: null as ((line: string) => void) | null,
@@ -83,23 +87,21 @@ function wrap(overrides: Partial<RunDTO> = {}) {
   )
 }
 
-function push(line: string, seq = 1) {
-  onFrameRef.current?.({ seq, stream: 'stdout', line })
+function push(line: string, seq = 1, at?: string) {
+  onFrameRef.current?.({ seq, stream: 'stdout', line, ...(at ? { at } : {}) })
 }
 
 beforeEach(() => {
   attachStatus.value = 'open'
   onFrameRef.current = null
-  useSentTurns.setState({ byRun: {} })
+  useSentTurns.setState({ byRun: {}, seen: {}, said: {} })
 })
 
 describe('SessionConversation', () => {
   it('keeps the empty conversation prompt for a retryable failure', () => {
     attachStatus.value = 'closed'
     wrap({ state: 'failed', reason: 'provider temporarily unavailable' })
-    expect(
-      screen.getByText('No turns yet. Send a sentence below.'),
-    ).toBeInTheDocument()
+    expect(screen.getByText('No messages yet.')).toBeInTheDocument()
   })
   it('does not ask for a sentence after a host isolation refusal', () => {
     attachStatus.value = 'closed'
@@ -108,9 +110,7 @@ describe('SessionConversation', () => {
       reason:
         'the session was not started because its network boundary could not be set up: the host or container must allow unprivileged user and network namespaces and Landlock: operation not permitted',
     })
-    expect(
-      screen.queryByText('No turns yet. Send a sentence below.'),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByText('No messages yet.')).not.toBeInTheDocument()
     act(() => onHistoryRef.current?.(JSON.stringify(nativeHistory)))
     expect(screen.getByText('initial CLI prompt')).toBeInTheDocument()
   })
@@ -179,7 +179,9 @@ describe('SessionConversation', () => {
     )
     expect(screen.getByText('Read')).toBeInTheDocument()
     expect(screen.queryByText(/tool_use/)).toBeNull()
-    expect(screen.getAllByText(/file_path/).length).toBeGreaterThan(0)
+    // The call reads as what it acts on, never as its JSON (dev#3119).
+    expect(screen.queryByText(/file_path/)).toBeNull()
+    expect(screen.getAllByText('README.md').length).toBeGreaterThan(0)
   })
 
   it('a Bash row shows its command in one line, the whole command and its description when opened', async () => {
@@ -300,7 +302,7 @@ describe('SessionConversation', () => {
   })
 
   // The first line of the thread is worded by the catalog of the console's language, not
-  // by the frame mapper: in German it reads "Sitzung gestartet · <model> · 4 Tools".
+  // by the frame mapper: in German it reads "Sitzung gestartet · <model> · 4 Werkzeuge".
   it('words the session-start line in the console language', async () => {
     await i18n.changeLanguage('de')
     try {
@@ -318,7 +320,9 @@ describe('SessionConversation', () => {
         )
       })
       expect(
-        await screen.findByText('Sitzung gestartet · claude-opus-5 · 4 Tools'),
+        await screen.findByText(
+          'Sitzung gestartet · Claude Opus 5 · 4 Werkzeuge',
+        ),
       ).toBeInTheDocument()
       expect(screen.queryByText(/Session started/)).toBeNull()
     } finally {
@@ -400,7 +404,9 @@ describe('SessionConversation', () => {
       )
     })
     const line = await screen.findByText('The turn failed: model not found')
-    expect(line.closest('button')).toHaveClass('text-danger')
+    expect(line.closest('[data-testid="conversation-item"]')).toHaveClass(
+      'text-danger',
+    )
     expect(screen.queryByText('Result')).toBeNull()
   })
 
@@ -423,7 +429,9 @@ describe('SessionConversation', () => {
     const line = await screen.findByText(
       'The provider refused the API key. Replace it under Providers.',
     )
-    expect(line.closest('button')).toHaveClass('text-danger')
+    expect(line.closest('[data-testid="conversation-item"]')).toHaveClass(
+      'text-danger',
+    )
     expect(screen.queryByText(/api retry/i)).toBeNull()
   })
 
@@ -472,7 +480,9 @@ describe('SessionConversation', () => {
     ).toBeInTheDocument()
     expect(screen.queryByText('Unrecognised frame')).toBeNull()
     const failure = screen.getByText('Internal error: Cannot connect to API')
-    expect(failure.closest('button')).toHaveClass('text-danger')
+    expect(failure.closest('[data-testid="conversation-item"]')).toHaveClass(
+      'text-danger',
+    )
   })
 
   // HU2-27: one raw row with "\u001b[2m…\u001b[31mERROR\u001b[0m" in it.
@@ -646,7 +656,7 @@ describe('SessionConversation', () => {
     })
     const notice = await screen.findByText(message)
     expect(notice).not.toHaveClass('truncate')
-    const row = notice.closest('button')!
+    const row = notice.closest('[data-testid="conversation-item"]')!
     expect(row).toHaveClass('text-warning')
     // The turn's start is protocol bookkeeping (no row): the notice, then the turn's end.
     const rows = screen.getAllByTestId('conversation-item')
@@ -818,36 +828,39 @@ describe('SessionConversation — the thread reads as a thread', () => {
     expect(summary.querySelector('svg.lucide-check')).not.toBeNull()
   })
 
-  it('folds the older tool calls of a long run under "+N tool calls", and keeps them one click away', async () => {
+  it('folds the calls between two replies into one closed row that keeps them one click away (dev#3119)', async () => {
     const userEv = userEvent.setup()
     wrap()
     await screen.findByTestId('session-conversation')
     act(() => {
-      for (let i = 1; i <= 5; i++)
-        push(toolUse(`t${i}`, 'Read', { file_path: `f${i}.py` }), i)
+      for (let i = 1; i <= 5; i++) {
+        push(toolUse(`t${i}`, 'Read', { file_path: `f${i}.py` }), 2 * i)
+        push(toolResult(`t${i}`), 2 * i + 1)
+      }
     })
-    const fold = await screen.findByTestId('conversation-tools-fold')
-    expect(fold).toHaveTextContent('+2 tool calls')
+    const fold = await screen.findByTestId('conversation-work')
+    expect(fold.querySelector('summary')).toHaveTextContent(/^Read 5 files$/)
     expect(fold.hasAttribute('open')).toBe(false)
-    // The latest three are on the page; the first two are inside the fold.
-    expect(within(fold).getAllByTestId('conversation-item')).toHaveLength(2)
-    expect(item('tool')).toHaveLength(5)
+    expect(within(fold).getAllByTestId('conversation-item')).toHaveLength(5)
     await userEv.click(fold.querySelector('summary') as HTMLElement)
     expect(fold.hasAttribute('open')).toBe(true)
   })
 
-  it('does not fold three tool calls or fewer', async () => {
+  it('folds a single call too: the reply is not cut by a lone tool row (dev#3119)', async () => {
     wrap()
     await screen.findByTestId('session-conversation')
     act(() => {
-      for (let i = 1; i <= 3; i++)
-        push(toolUse(`t${i}`, 'Read', { file_path: `f${i}.py` }), i)
+      push(assistant('I will read it.'), 1)
+      push(toolUse('t1', 'Read', { file_path: 'f1.py' }), 2)
+      push(toolResult('t1'), 3)
+      push(assistant('It defines add.'), 4)
     })
-    await waitFor(() => expect(item('tool')).toHaveLength(3))
-    expect(screen.queryByTestId('conversation-tools-fold')).toBeNull()
+    const fold = await screen.findByTestId('conversation-work')
+    expect(fold.querySelector('summary')).toHaveTextContent(/^Read 1 file$/)
+    expect(screen.getAllByTestId('conversation-work')).toHaveLength(1)
   })
 
-  it('ends a turn with a centered "Worked for" divider that opens the same content', async () => {
+  it('ends a turn with a centered "Finished in" divider that opens the same content', async () => {
     const userEv = userEvent.setup()
     wrap()
     await screen.findByTestId('session-conversation')
@@ -870,7 +883,7 @@ describe('SessionConversation — the thread reads as a thread', () => {
       return found
     })
     const summary = divider.querySelector('summary') as HTMLElement
-    expect(summary).toHaveTextContent('Worked for 8.0s')
+    expect(summary).toHaveTextContent('Finished in 8s')
     expect(summary.className).toContain('text-overline')
     expect(summary.className).toContain('items-center')
     expect(divider.hasAttribute('open')).toBe(false)
@@ -948,7 +961,7 @@ describe('SessionConversation — the thread reads as a thread', () => {
       expect(found).toHaveLength(1)
       return found
     })
-    expect(divider.querySelector('summary')).toHaveTextContent('Result · 8.0s')
+    expect(divider.querySelector('summary')).toHaveTextContent('Result · 8s')
   })
 })
 
@@ -963,7 +976,7 @@ it('shows an initial attach failure while a sent turn is pending', async () => {
   expect(await screen.findByTestId('conversation-link')).toHaveTextContent(
     'Reconnecting…',
   )
-  expect(screen.queryByText('No turns yet. Send a sentence below.')).toBeNull()
+  expect(screen.queryByText('No messages yet.')).toBeNull()
 })
 
 // #1784: the released 0.1 painted two "thinking tokens" rows before the answer and an
@@ -1011,11 +1024,40 @@ describe('SessionConversation — the tool’s bookkeeping stays out of the thre
     expect(screen.queryByText(/five hour/i)).toBeNull()
   })
 
-  it('still tells the person that a rate limit refused the turn', async () => {
+  it('tells the person, in words, that a limit stopped the turn and when it resets (dev#3119)', async () => {
     wrap()
     await screen.findByTestId('session-conversation')
     act(() => push(rateLimit('rejected'), 1))
-    expect(await screen.findByText(/rejected · five hour/i)).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        /^Claude Code reached its 5-hour limit; it resets .+$/,
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/rejected|five hour/i)).toBeNull()
+  })
+
+  it('says how much of the window was used when the tool said so (dev#3119)', async () => {
+    wrap()
+    await screen.findByTestId('session-conversation')
+    act(() =>
+      push(
+        JSON.stringify({
+          type: 'rate_limit_event',
+          rate_limit_info: {
+            status: 'rejected',
+            resetsAt: 1760270400,
+            rateLimitType: 'seven_day',
+            utilization: 0.93,
+          },
+        }),
+        1,
+      ),
+    )
+    expect(
+      await screen.findByText(
+        /^Claude Code reached its weekly limit \(93% used\); it resets .+$/,
+      ),
+    ).toBeInTheDocument()
   })
 })
 
@@ -1326,6 +1368,10 @@ describe('SessionConversation — the message navigator', () => {
     })
     const marks = await screen.findAllByTestId('message-mark')
     expect(marks).toHaveLength(2)
+    // The column keeps clear of the rail, so a message's Copy is never under it (#2856).
+    expect(
+      document.querySelector('[data-slot="conversation-column"]'),
+    ).toHaveClass('pe-12')
     expect(marks[0]).toHaveAccessibleName(/Message 1, .*fix the failing test/)
 
     await userEvents.click(marks[0]!)
@@ -1351,6 +1397,9 @@ describe('SessionConversation — the message navigator', () => {
     await waitFor(() => expect(asked).toHaveBeenCalled())
     await waitFor(() => expect(qcIdle()).toBe(true))
     expect(screen.queryByTestId('message-rail')).not.toBeInTheDocument()
+    expect(
+      document.querySelector('[data-slot="conversation-column"]'),
+    ).not.toHaveClass('pe-12')
     expect(screen.queryByTestId('message-bar')).not.toBeInTheDocument()
     expect(screen.queryByTestId('message-problem')).not.toBeInTheDocument()
   })
@@ -1395,6 +1444,16 @@ describe('SessionConversation — the message navigator', () => {
       })
       wrap({ provider_driver })
       await waitFor(() => expect(asked).toHaveBeenCalledTimes(1))
+      // The rail marks messages the conversation shows (dev#3120).
+      act(() =>
+        push(
+          JSON.stringify({
+            type: 'user',
+            message: { role: 'user', content: 'fix the failing test' },
+          }),
+          1,
+        ),
+      )
       expect(await screen.findAllByTestId('message-mark')).toHaveLength(1)
     },
   )
@@ -1420,5 +1479,830 @@ describe('SessionConversation — the message navigator', () => {
     expect(asked).toHaveBeenCalledTimes(2)
     send('user', 'now the linter', 3)
     await waitFor(() => expect(asked).toHaveBeenCalledTimes(3))
+  })
+})
+
+// dev#2786: a session that started on claude-opus-5-5 went on on claude-opus-4-8 silently.
+describe('SessionConversation — the model in use', () => {
+  const reply = (model: string, text: string) =>
+    JSON.stringify({
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: { model, content: [{ type: 'text', text }] },
+    })
+  const result = JSON.stringify({
+    type: 'result',
+    subtype: 'success',
+    duration_ms: 1200,
+  })
+
+  it('names each turn after its model and tells a change in the conversation, with its time', () => {
+    const onModel = vi.fn()
+    const qc = new QueryClient()
+    render(
+      <QueryClientProvider client={qc}>
+        {/* the session page always passes onInspect (work-surface.tsx) */}
+        <SessionConversation run={run} onModel={onModel} onInspect={() => {}} />
+      </QueryClientProvider>,
+    )
+    act(() => {
+      push(reply('claude-opus-5-5', 'one'), 1)
+      push(result, 2)
+      push(reply('claude-opus-4-8', 'two'), 3, '2026-10-21T12:03:46Z')
+    })
+    expect(
+      screen.getByText(/Finished in .+ · Claude Opus 5\.5/),
+    ).toBeInTheDocument()
+    const notice = screen
+      .getAllByTestId('conversation-item')
+      .find((el) => el.getAttribute('data-kind') === 'system')
+    expect(notice).toHaveTextContent(
+      /^Model changed at .+: Claude Opus 5\.5 → Claude Opus 4\.8$/,
+    )
+    expect(onModel).toHaveBeenLastCalledWith('claude-opus-4-8')
+  })
+})
+
+// dev#2787: a message the person sends shows at once, and once, even when its words
+// repeat an earlier message the tool already showed.
+describe('SessionConversation — a sent message', () => {
+  const echo = (text: string) =>
+    JSON.stringify({ type: 'user', message: { role: 'user', content: text } })
+
+  it('forgets a message once the tool shows it, so a later window cannot show it again', async () => {
+    wrap()
+    act(() => {
+      useSentTurns
+        .getState()
+        .note(sentTurnsPartition(), 'run_1', { text: 'Look up the readme' })
+    })
+    await screen.findByTestId('conversation-sent')
+    act(() => push(echo('Look up the readme'), 1))
+    await waitFor(() => expect(useSentTurns.getState().byRun.run_1).toEqual([]))
+  })
+
+  it('says a message was never taken when the session ended first', async () => {
+    useSentTurns
+      .getState()
+      .note(sentTurnsPartition(), 'run_1', { text: 'Look up the readme' })
+    wrap({ state: 'stopped' })
+    expect(await screen.findByTestId('conversation-sent')).toHaveTextContent(
+      'The session ended before the tool took it.',
+    )
+  })
+
+  it('places a message sent right after a remount after what the session showed before', async () => {
+    const first = wrap()
+    act(() => {
+      push(echo('continue'), 1)
+      push(echo('next'), 2)
+    })
+    await screen.findByText('next')
+    first.unmount()
+    wrap()
+    // Sent before the replay of the session's frames reaches the new view.
+    act(() => {
+      useSentTurns.getState().note(sentTurnsPartition(), 'run_1', {
+        text: 'continue',
+        after: useSentTurns.getState().seen.run_1,
+      })
+    })
+    act(() => {
+      push(echo('continue'), 1)
+      push(echo('next'), 2)
+    })
+    expect(screen.getByTestId('conversation-sent')).toHaveTextContent(
+      'continue',
+    )
+    act(() => push(echo('continue'), 3))
+    expect(screen.queryByTestId('conversation-sent')).toBeNull()
+  })
+
+  it('shows a repeated message at once and once when the tool shows it', async () => {
+    wrap()
+    act(() => push(echo('continue'), 1))
+    await screen.findByText('continue')
+    // Sent as the message bar sends: placed after the newest frame shown.
+    act(() => {
+      useSentTurns.getState().note(sentTurnsPartition(), 'run_1', {
+        text: 'continue',
+        after: useSentTurns.getState().seen.run_1,
+      })
+    })
+    expect(screen.getByTestId('conversation-sent')).toHaveTextContent(
+      'continue',
+    )
+    act(() => push(echo('continue'), 2))
+    expect(screen.queryByTestId('conversation-sent')).toBeNull()
+    expect(
+      screen
+        .getAllByTestId('conversation-item')
+        .filter((el) => el.getAttribute('data-kind') === 'operator'),
+    ).toHaveLength(2)
+  })
+
+  // Review round 2 of #2855: a Codex view that remounts restores the stored thread first,
+  // then the ring replays the same items (seq 1-6 here: two turns of message, answer, end).
+  const codexFrames = nativeHistory.turns.flatMap((turn) => [
+    ...turn.items.map((item) =>
+      JSON.stringify({
+        method: 'item/completed',
+        params: { item, turnId: turn.id },
+      }),
+    ),
+    JSON.stringify({ method: 'turn/completed', params: { turn } }),
+  ])
+  // The person saw the first turn (frames 1-3), sent this as the message bar does, and
+  // looked elsewhere before the tool took it.
+  const sentAfterFirstTurn = (text: string) => {
+    const first = wrap()
+    act(() => codexFrames.slice(0, 3).forEach((line, i) => push(line, i + 1)))
+    act(() =>
+      useSentTurns.getState().note(sentTurnsPartition(), 'run_1', {
+        text,
+        ...sentPlace('run_1', text),
+      }),
+    )
+    first.unmount()
+  }
+
+  it('settles a Codex message on a remount, when the stored thread and the ring both show it', () => {
+    sentAfterFirstTurn('earlier console prompt')
+    wrap()
+    act(() => {
+      onHistoryRef.current?.(JSON.stringify(nativeHistory))
+      codexFrames.forEach((line, i) => push(line, i + 1))
+    })
+    expect(screen.queryByTestId('conversation-sent')).toBeNull()
+  })
+
+  it('settles a Codex message whose echo only the stored thread still shows', () => {
+    sentAfterFirstTurn('earlier console prompt')
+    wrap()
+    // The ring no longer holds frames 4-4099: the echo was one of them.
+    act(() => {
+      onHistoryRef.current?.(JSON.stringify(nativeHistory))
+      push(codexFrames[5]!, 4100)
+    })
+    expect(screen.queryByTestId('conversation-sent')).toBeNull()
+  })
+
+  it('settles a message on an ended session whose stored thread shows it', () => {
+    sentAfterFirstTurn('earlier console prompt')
+    // The run left this node: the stored thread comes, and no frame.
+    wrap({ state: 'stopped' })
+    act(() => onHistoryRef.current?.(JSON.stringify(nativeHistory)))
+    expect(screen.queryByTestId('conversation-sent')).toBeNull()
+  })
+
+  it('never settles a message with a stored row from before it was sent', () => {
+    sentAfterFirstTurn('initial CLI prompt')
+    wrap({ state: 'stopped' })
+    // The stored thread first, then the frames after the send (4-6): none is its echo.
+    act(() => onHistoryRef.current?.(JSON.stringify(nativeHistory)))
+    expect(screen.getByTestId('conversation-sent')).toHaveTextContent(
+      'The session ended before the tool took it.',
+    )
+    act(() => codexFrames.slice(3).forEach((line, i) => push(line, i + 4)))
+    expect(screen.getByTestId('conversation-sent')).toHaveTextContent(
+      'initial CLI prompt',
+    )
+  })
+
+  it('never settles a message with a stored row while the ring no longer holds its frames', () => {
+    sentAfterFirstTurn('initial CLI prompt')
+    wrap()
+    act(() => {
+      onHistoryRef.current?.(JSON.stringify(nativeHistory))
+      push(codexFrames[5]!, 4100)
+    })
+    expect(screen.getByTestId('conversation-sent')).toHaveTextContent(
+      'initial CLI prompt',
+    )
+  })
+
+  it('keeps the second of two same messages until the tool shows it too', () => {
+    wrap()
+    act(() => push(echo('Look up the readme'), 1))
+    const send = () =>
+      useSentTurns.getState().note(sentTurnsPartition(), 'run_1', {
+        text: 'continue',
+        ...sentPlace('run_1', 'continue'),
+      })
+    act(() => {
+      send()
+      send()
+    })
+    act(() => push(echo('continue'), 2))
+    expect(screen.getAllByTestId('conversation-sent')).toHaveLength(1)
+    act(() => push(echo('continue'), 3))
+    expect(screen.queryByTestId('conversation-sent')).toBeNull()
+  })
+
+  it('keeps the second of two same Codex messages the stored thread shows once', () => {
+    sentAfterFirstTurn('earlier console prompt')
+    sentAfterFirstTurn('earlier console prompt')
+    wrap()
+    act(() => {
+      onHistoryRef.current?.(JSON.stringify(nativeHistory))
+      push(codexFrames[5]!, 4100)
+    })
+    expect(screen.getAllByTestId('conversation-sent')).toHaveLength(1)
+  })
+})
+
+// dev#2788: no message could be copied, neither the person's nor the tool's.
+describe('SessionConversation — copying a message', () => {
+  const asked = JSON.stringify({
+    type: 'user',
+    message: { role: 'user', content: 'Look up the readme' },
+  })
+  const answered = JSON.stringify({
+    type: 'assistant',
+    parent_tool_use_id: null,
+    message: {
+      content: [
+        {
+          type: 'text',
+          text: 'Two things:\n\n- **One** thing\n\n```sh\nmake test\n```',
+        },
+      ],
+    },
+  })
+
+  it('leaves every message selectable: none of its words sit in a button', async () => {
+    wrap()
+    act(() => {
+      push(asked, 1)
+      push(answered, 2)
+    })
+    for (const words of ['Look up the readme', 'One', 'make test'])
+      expect((await screen.findByText(words)).closest('button')).toBeNull()
+  })
+
+  it('offers no Copy for a message without words, and paints no reply without words (dev#3119)', async () => {
+    wrap()
+    act(() => {
+      push(
+        JSON.stringify({
+          type: 'user',
+          message: { role: 'user', content: [] },
+        }),
+        1,
+      )
+      push(
+        JSON.stringify({
+          type: 'assistant',
+          parent_tool_use_id: null,
+          message: { content: [{ type: 'text', text: '' }] },
+        }),
+        2,
+      )
+      push(asked, 3)
+    })
+    await screen.findByText('Look up the readme')
+    const kinds = screen
+      .getAllByTestId('conversation-item')
+      .map((el) => el.getAttribute('data-kind'))
+    expect(kinds).toEqual(['operator', 'operator'])
+    expect(
+      screen.getAllByRole('button', { name: 'Copy message' }),
+    ).toHaveLength(1)
+  })
+
+  it('copies the exact text of a message, a reply and a code block, by pointer and by keyboard', async () => {
+    const writeText = vi
+      .spyOn(navigator.clipboard, 'writeText')
+      .mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    wrap()
+    act(() => {
+      push(asked, 1)
+      push(answered, 2)
+    })
+    const [mine, theirs] = await screen.findAllByRole('button', {
+      name: 'Copy message',
+    })
+    await user.click(mine!)
+    expect(writeText).toHaveBeenLastCalledWith('Look up the readme')
+    theirs!.focus()
+    await user.keyboard('{Enter}')
+    expect(writeText).toHaveBeenLastCalledWith(
+      'Two things:\n\n- One thing\n\nmake test',
+    )
+    await user.click(screen.getByRole('button', { name: 'Copy code' }))
+    expect(writeText).toHaveBeenLastCalledWith('make test')
+    expect(await screen.findAllByText('Copied')).not.toHaveLength(0)
+  })
+})
+
+describe('SessionConversation — copying a message, review', () => {
+  const asked = JSON.stringify({
+    type: 'user',
+    message: { role: 'user', content: 'Look up the readme' },
+  })
+
+  it('says so where it can be seen when the copy fails', async () => {
+    vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(
+      new Error('not allowed'),
+    )
+    const user = userEvent.setup()
+    wrap()
+    act(() => push(asked, 1))
+    await user.click(
+      await screen.findByRole('button', { name: 'Copy message' }),
+    )
+    // Shown, not only announced: jsdom has no CSS, so the class is the check.
+    expect(
+      await screen.findByText('Could not copy. Select the text and copy it.'),
+    ).not.toHaveClass('sr-only')
+  })
+
+  it('opens the inspector from a message by click and by keyboard', async () => {
+    const onInspect = vi.fn()
+    const user = userEvent.setup()
+    const qc = new QueryClient()
+    render(
+      <QueryClientProvider client={qc}>
+        <SessionConversation run={run} onInspect={onInspect} />
+      </QueryClientProvider>,
+    )
+    act(() => push(asked, 1))
+    await user.click(await screen.findByText('Look up the readme'))
+    expect(onInspect).toHaveBeenCalledTimes(1)
+    const row = screen
+      .getAllByTestId('conversation-item')
+      .find((el) => el.getAttribute('data-kind') === 'operator')!
+    // the row holds only its words: Inspect sits beside it, not in it (review of #2856)
+    expect(row).toHaveTextContent(/^Look up the readme$/)
+    within(row.closest('li')!)
+      .getByRole('button', { name: /inspect/i })
+      .focus()
+    await user.keyboard('{Enter}')
+    expect(onInspect).toHaveBeenCalledTimes(2)
+  })
+
+  it('copies a message the console sent before the tool shows it', async () => {
+    const writeText = vi
+      .spyOn(navigator.clipboard, 'writeText')
+      .mockResolvedValue(undefined)
+    useSentTurns
+      .getState()
+      .note(sentTurnsPartition(), 'run_1', { text: 'Say hi.', refused: 'no' })
+    const user = userEvent.setup()
+    wrap()
+    await user.click(
+      await screen.findByRole('button', { name: 'Copy message' }),
+    )
+    expect(writeText).toHaveBeenLastCalledWith('Say hi.')
+  })
+})
+
+describe('SessionConversation — copying, second review', () => {
+  it('shows a failed code copy under the code, not over it', async () => {
+    vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(
+      new Error('not allowed'),
+    )
+    const user = userEvent.setup()
+    wrap()
+    act(() =>
+      push(
+        JSON.stringify({
+          type: 'assistant',
+          parent_tool_use_id: null,
+          message: {
+            content: [{ type: 'text', text: '```sh\nmake test\n```' }],
+          },
+        }),
+        1,
+      ),
+    )
+    await user.click(await screen.findByRole('button', { name: 'Copy code' }))
+    const failure = await screen.findByText(
+      'Could not copy. Select the text and copy it.',
+    )
+    expect(failure).not.toHaveClass('sr-only')
+    expect(failure.closest('.absolute')).toBeNull()
+  })
+})
+
+// THE CONVERSATION READS LIKE A CHAT, NOT AN EVENT LOG (dev#3119). Built from a real
+// Claude Code 2.1.309 stream (fixtures/claude-2.1.309-subagents.jsonl, how it was recorded
+// is in conversation-frames.test.ts): subagent, background command, task frames, heartbeats,
+// thinking-only frames, an edit and a failing command. Each frame is pushed with the time
+// the tool stamped on the frames around it, as the engine stamps when it reads a frame.
+describe('SessionConversation — the work folds, one live line, nested subagents (dev#3119)', () => {
+  const REAL = claudeStream.trim().split('\n')
+  const stamps = (() => {
+    let last = '2026-10-23T11:32:07.000Z'
+    return REAL.map((line) => {
+      const at = (JSON.parse(line) as { timestamp?: string }).timestamp
+      if (at) last = at
+      return last
+    })
+  })()
+  const pushReal = (upTo = REAL.length) =>
+    act(() => {
+      for (let i = 0; i < upTo; i++) push(REAL[i]!, i + 1, stamps[i])
+    })
+
+  it('folds the work between the prompt and the reply into one row that says what it did', async () => {
+    wrap()
+    await screen.findByTestId('session-conversation')
+    pushReal()
+    const work = await screen.findByTestId('conversation-work')
+    expect(screen.getAllByTestId('conversation-work')).toHaveLength(1)
+    expect(work.hasAttribute('open')).toBe(false)
+    expect(work.querySelector('summary')).toHaveTextContent(
+      /^Worked for 1m \d+s · ran 3 commands, edited 1 file · 1 failed$/,
+    )
+    const kinds = screen
+      .getAllByTestId('conversation-item')
+      .filter((el) => !work.contains(el))
+      .map((el) => el.getAttribute('data-kind'))
+    expect(kinds).toEqual(['system', 'operator', 'assistant', 'result'])
+    for (const noise of [
+      /task (started|progress|updated|notification)/,
+      /background tasks/,
+      /running · \d+ s/i,
+      /allowed/,
+      /<task-notification>/,
+      /^Assistant$/,
+      /Async agent launched/,
+      /\{"file_path"/,
+    ])
+      expect(screen.queryByText(noise)).toBeNull()
+  })
+
+  it("nests a subagent's calls under its Agent row, folded, with its name and one-line result", async () => {
+    wrap()
+    await screen.findByTestId('session-conversation')
+    pushReal()
+    const agent = await screen.findByTestId('conversation-agent')
+    const summary = agent.querySelector('summary') as HTMLElement
+    expect(summary).toHaveTextContent('Count entries')
+    expect(summary).toHaveTextContent(/There are 4 entries/)
+    expect(agent.hasAttribute('open')).toBe(false)
+    const calls = within(agent)
+      .getAllByTestId('conversation-item')
+      .map((el) => el.getAttribute('data-kind'))
+    expect(calls).toEqual(['tool', 'tool', 'tool'])
+  })
+
+  it('names a failed call and never counts it as done', async () => {
+    wrap()
+    await screen.findByTestId('session-conversation')
+    pushReal()
+    const work = await screen.findByTestId('conversation-work')
+    const failed = within(work)
+      .getAllByTestId('conversation-item')
+      .find((el) => el.textContent?.includes('&& false')) as HTMLElement
+    expect(failed.querySelector('summary')).toHaveTextContent('Failed')
+    expect(failed.querySelector('svg.lucide-check')).toBeNull()
+  })
+
+  it('shows an edit with its +N −M and a short excerpt of its diff', async () => {
+    wrap()
+    await screen.findByTestId('session-conversation')
+    pushReal()
+    const work = await screen.findByTestId('conversation-work')
+    const edit = within(work)
+      .getAllByTestId('conversation-item')
+      .find((el) =>
+        el.querySelector('summary')?.textContent?.startsWith('Edit'),
+      )
+    expect(edit?.querySelector('summary')).toHaveTextContent(
+      /^Editnotes\.txt\+3−2$/,
+    )
+    const excerpt = within(work).getAllByTestId('conversation-diff')[1]
+    expect(excerpt?.textContent).toBe('alpha-beta-gamma+delta+zeta+eta')
+  })
+
+  it('shows one live line while a call runs, with its elapsed time, and no heartbeat rows', async () => {
+    wrap()
+    await screen.findByTestId('session-conversation')
+    // Up to the heartbeat of the 35 s command (frame 8), stamped now.
+    act(() => {
+      for (let i = 0; i <= 8; i++)
+        push(REAL[i]!, i + 1, new Date().toISOString())
+    })
+    const live = await screen.findByTestId('conversation-live')
+    expect(live).toHaveTextContent(/^Running 1 shell command · 30s$/)
+    // Outside a pane with its composer (the session sheet is a dialog whose Escape closes
+    // it) no Escape hint is offered.
+    expect(live).not.toHaveTextContent('Esc')
+    expect(screen.getAllByTestId('conversation-work')).toHaveLength(1)
+    // The command answers: the live line becomes the work row.
+    act(() => push(REAL[9]!, 10, new Date().toISOString()))
+    act(() => push(REAL[10]!, 11, new Date().toISOString()))
+    await waitFor(() =>
+      expect(screen.queryByTestId('conversation-live')).toBeNull(),
+    )
+    expect(
+      screen.getByTestId('conversation-work').querySelector('summary'),
+    ).toHaveTextContent(/[Rr]an 1 command$/)
+  })
+
+  it('leaves Escape in the conversation to the side pane: it interrupts nothing there', async () => {
+    const interrupt = vi
+      .spyOn(agentOpsApi, 'interrupt')
+      .mockResolvedValue(undefined as never)
+    wrap()
+    await screen.findByTestId('session-conversation')
+    act(() => {
+      for (let i = 0; i <= 8; i++)
+        push(REAL[i]!, i + 1, new Date().toISOString())
+    })
+    const log = await screen.findByRole('log')
+    log.focus()
+    fireEvent.keyDown(log, { key: 'Escape' })
+    expect(interrupt).not.toHaveBeenCalled()
+    interrupt.mockRestore()
+  })
+
+  it('says no live line once the session has ended', async () => {
+    wrap({ state: 'stopped' })
+    await screen.findByTestId('session-conversation')
+    act(() => {
+      for (let i = 0; i <= 8; i++)
+        push(REAL[i]!, i + 1, new Date().toISOString())
+    })
+    await screen.findByTestId('conversation-work')
+    expect(screen.queryByTestId('conversation-live')).toBeNull()
+  })
+})
+
+// A CODEX STREAM DOES NOT READ WORSE (dev#3119): the recorded follow stream of the CLI tests
+// (protocol replies, two answers, two completed turns) and the real Codex 0.162.1 history
+// keep their rows.
+describe('SessionConversation — Codex keeps its rows (dev#3119)', () => {
+  // The CLI tests' recorded stream, read where it lives (one copy for both).
+  const codexFollow = readFileSync(
+    join(
+      __dirname,
+      '../../../../cmd/olivares/testdata/codex-follow-recorded.ndjson',
+    ),
+    'utf8',
+  )
+
+  it('reads the recorded app-server stream as two answers and two turn ends', async () => {
+    wrap()
+    await screen.findByTestId('session-conversation')
+    act(() => {
+      codexFollow
+        .trim()
+        .split('\n')
+        .forEach((line, i) => push(line, i + 1))
+    })
+    await screen.findByText(/You asked: 'hello codex'/)
+    expect(
+      screen
+        .getAllByTestId('conversation-item')
+        .map((el) => el.getAttribute('data-kind')),
+    ).toEqual(['assistant', 'result', 'assistant', 'result'])
+  })
+
+  it('folds a command between two answers, and keeps the stored real history', async () => {
+    wrap()
+    await screen.findByTestId('session-conversation')
+    act(() => onHistoryRef.current?.(JSON.stringify(nativeHistory)))
+    const item = (type: string, id: string, extra: object) =>
+      JSON.stringify({
+        method: 'item/completed',
+        params: { turnId: 'turn-3', item: { type, id, ...extra } },
+      })
+    act(() => {
+      push(
+        item('commandExecution', 'c1', {
+          command: 'go test ./...',
+          exitCode: 0,
+        }),
+        1,
+      )
+      push(item('agentMessage', 'm1', { text: 'Tests pass.' }), 2)
+    })
+    expect(await screen.findByText('Tests pass.')).toBeInTheDocument()
+    expect(screen.getByText('initial CLI prompt')).toBeInTheDocument()
+    expect(
+      screen.getByTestId('conversation-work').querySelector('summary'),
+    ).toHaveTextContent(/^Ran 1 command$/)
+  })
+})
+
+// dev#3119, the branches the real stream does not reach.
+describe('SessionConversation — the work row in its other states (dev#3119)', () => {
+  const REAL = claudeStream.trim().split('\n')
+  const use = (id: string, name: string, input: object) =>
+    JSON.stringify({
+      type: 'assistant',
+      message: { content: [{ type: 'tool_use', id, name, input }] },
+    })
+  const answer = (id: string, isError = false) =>
+    JSON.stringify({
+      type: 'user',
+      message: {
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: id,
+            content: 'ok',
+            is_error: isError,
+          },
+        ],
+      },
+    })
+  const summary = () =>
+    screen.getByTestId('conversation-work').querySelector('summary')
+
+  it('interrupts from the composer of its own pane, and only while a call runs', async () => {
+    const interrupt = vi
+      .spyOn(agentOpsApi, 'interrupt')
+      .mockResolvedValue(undefined as never)
+    const qc = new QueryClient()
+    render(
+      <QueryClientProvider client={qc}>
+        <section data-focused="true">
+          <SessionConversation run={run} />
+          <textarea aria-label="composer" />
+        </section>
+        <section data-focused="false">
+          <textarea aria-label="other pane" />
+        </section>
+      </QueryClientProvider>,
+    )
+    await screen.findByTestId('session-conversation')
+    const composer = screen.getByRole('textbox', { name: 'composer' })
+    // Nothing runs yet: Escape is the composer's own.
+    fireEvent.keyDown(composer, { key: 'Escape' })
+    act(() => push(use('t1', 'Bash', { command: 'make test' }), 1))
+    expect(await screen.findByTestId('conversation-live')).toHaveTextContent(
+      'Esc to interrupt',
+    )
+    // Another pane's field, and an Escape a control already took, interrupt nothing.
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'other pane' }), {
+      key: 'Escape',
+    })
+    composer.addEventListener('keydown', (e) => e.preventDefault(), {
+      once: true,
+    })
+    fireEvent.keyDown(composer, { key: 'Escape' })
+    expect(interrupt).not.toHaveBeenCalled()
+    fireEvent.keyDown(composer, { key: 'Escape' })
+    await waitFor(() => expect(interrupt).toHaveBeenCalledTimes(1))
+    interrupt.mockRestore()
+  })
+
+  it('names files only when it knows them, and a tool it cannot class as a tool', async () => {
+    wrap()
+    await screen.findByTestId('session-conversation')
+    act(() => {
+      push(use('e1', 'Edit', {}), 1)
+      push(answer('e1'), 2)
+      push(use('m1', 'mcp__db__query', { sql: 'select 1' }), 3)
+      push(answer('m1'), 4)
+    })
+    await waitFor(() =>
+      expect(summary()).toHaveTextContent(/^Edited files, used 1 tool$/),
+    )
+  })
+
+  it('counts a Codex command that exited non-zero as failed, never as run', async () => {
+    wrap()
+    await screen.findByTestId('session-conversation')
+    act(() =>
+      push(
+        JSON.stringify({
+          method: 'item/completed',
+          params: {
+            turnId: 't',
+            item: {
+              type: 'commandExecution',
+              id: 'c1',
+              command: 'go vet ./...',
+              exitCode: 1,
+            },
+          },
+        }),
+        1,
+      ),
+    )
+    await waitFor(() => expect(summary()).toHaveTextContent(/^1 failed$/))
+    expect(
+      screen.getByTestId('conversation-item').querySelector('summary'),
+    ).toHaveTextContent('Failed')
+  })
+
+  it('shows no diff for an edit that failed', async () => {
+    wrap()
+    await screen.findByTestId('session-conversation')
+    act(() => {
+      push(
+        use('e1', 'Edit', {
+          file_path: 'a.ts',
+          old_string: 'a',
+          new_string: 'b',
+        }),
+        1,
+      )
+      push(answer('e1', true), 2)
+    })
+    await waitFor(() => expect(summary()).toHaveTextContent(/1 failed$/))
+    expect(screen.queryByTestId('conversation-diff')).toBeNull()
+    expect(screen.queryByText('+1')).toBeNull()
+  })
+
+  it('says a background command runs in the background until its task ends', async () => {
+    wrap()
+    await screen.findByTestId('session-conversation')
+    // Up to the receipt of the background command (frames 11 to 14).
+    act(() => {
+      for (let i = 0; i <= 14; i++) push(REAL[i]!, i + 1)
+    })
+    const background = (await screen.findAllByTestId('conversation-item')).find(
+      (el) =>
+        el.getAttribute('data-kind') === 'tool' &&
+        el.textContent?.includes('sleep(4)'),
+    ) as HTMLElement
+    expect(background.querySelector('summary')).toHaveTextContent(
+      'In the background',
+    )
+    expect(background.textContent).not.toMatch(/running in background with ID/)
+  })
+
+  it('tells what a running edit or subagent does in the live line', async () => {
+    wrap()
+    await screen.findByTestId('session-conversation')
+    act(() =>
+      push(
+        use('e1', 'Edit', {
+          file_path: 'notes.txt',
+          old_string: 'a',
+          new_string: 'b',
+        }),
+        1,
+      ),
+    )
+    expect(await screen.findByTestId('conversation-live')).toHaveTextContent(
+      /^Editing notes\.txt/,
+    )
+    act(() => {
+      push(answer('e1'), 2)
+      push(use('a1', 'Agent', { description: 'Count entries', prompt: 'x' }), 3)
+    })
+    await waitFor(() =>
+      expect(screen.getByTestId('conversation-live')).toHaveTextContent(
+        /^Count entries is working/,
+      ),
+    )
+  })
+})
+
+describe('SessionConversation — a stream that repeats a call id (dev#3119 review)', () => {
+  it('paints a call that names itself as its own parent once, and stops', async () => {
+    wrap()
+    await screen.findByTestId('session-conversation')
+    const call = (parent?: string) =>
+      JSON.stringify({
+        type: 'assistant',
+        ...(parent ? { parent_tool_use_id: parent } : {}),
+        message: {
+          content: [
+            {
+              type: 'tool_use',
+              id: 'dup',
+              name: 'Agent',
+              input: { description: 'Loop' },
+            },
+          ],
+        },
+      })
+    act(() => {
+      push(call(), 1)
+      push(call('dup'), 2)
+    })
+    await waitFor(() =>
+      expect(
+        screen.getAllByTestId('conversation-agent').length,
+      ).toBeGreaterThan(0),
+    )
+    expect(
+      screen.getAllByTestId('conversation-agent').length,
+    ).toBeLessThanOrEqual(2)
+  })
+})
+
+describe('SessionConversation — a work row always says something (dev#3119 review)', () => {
+  it('tells calls that only run in the background in words', async () => {
+    wrap()
+    await screen.findByTestId('session-conversation')
+    const REAL = claudeStream.trim().split('\n')
+    act(() => {
+      for (let i = 0; i <= 14; i++) push(REAL[i]!, i + 1)
+    })
+    await waitFor(() =>
+      expect(
+        screen.getAllByTestId('conversation-work')[0]?.querySelector('summary'),
+      ).toHaveTextContent(/1 in the background/),
+    )
   })
 })

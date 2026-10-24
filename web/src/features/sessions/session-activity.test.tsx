@@ -329,9 +329,9 @@ describe('SessionActivity', () => {
     expect(files[0]).toHaveTextContent('1 added, 1 removed')
 
     const context = screen.getByTestId('activity-context')
-    expect(
-      within(context).getByText('claude-haiku-5-5 · medium'),
-    ).toBeInTheDocument()
+    // The model by its name, its id on the hover (dev#3120).
+    const model = within(context).getByText('Claude Haiku 5.5 · medium')
+    expect(model).toHaveAttribute('title', 'claude-haiku-5-5')
     expect(
       within(context).getByText('78,582 tokens · window unknown'),
     ).toBeInTheDocument()
@@ -408,7 +408,7 @@ describe('SessionActivity', () => {
       new ApiError(
         409,
         'conflict',
-        'this session was given vault secrets or a repository credential',
+        'this session was given vault secrets, a repository credential or a managed credential',
       ),
     )
     show()

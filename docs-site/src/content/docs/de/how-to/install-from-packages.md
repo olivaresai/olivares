@@ -9,10 +9,10 @@ description: >-
 draft: false
 ---
 
-Das nächste Release ist <!-- release -->`0.3`<!-- /release -->; es ist noch nicht auf GitHub veröffentlicht. Die folgenden Befehle beschreiben die geplanten Artefakte. Bauen Sie bis zur Veröffentlichung aus dem Quellcode und prüfen Sie danach jedes Artefakt vor der Verwendung. Der beobachtete Veröffentlichungsstand steht in <!-- release -->`docs/releases/0.3-install-surfaces.json`<!-- /release -->.
+Das nächste Release ist <!-- release -->`0.4`<!-- /release -->; es ist noch nicht auf GitHub veröffentlicht. Die folgenden Befehle beschreiben die geplanten Artefakte. Bauen Sie bis zur Veröffentlichung aus dem Quellcode und prüfen Sie danach jedes Artefakt vor der Verwendung. Der beobachtete Veröffentlichungsstand steht in <!-- release -->`docs/releases/0.4-install-surfaces.json`<!-- /release -->.
 
 :::note[Veröffentlichte Paketnamen]
-Die GitHub-Release <!-- release -->0.3<!-- /release --> veröffentlicht `.deb`-, `.rpm`- und `.apk`-Artefakte für
+Die GitHub-Release <!-- release -->0.4<!-- /release --> veröffentlicht `.deb`-, `.rpm`- und `.apk`-Artefakte für
 `amd64` und `arm64`, zusammen mit `checksums.txt`, `checksums.txt.sig` und
 `checksums.txt.pem`. Die Befehle unten verwenden die wörtlichen `amd64`-Namen dieser
 Release; ersetzen Sie `amd64` auf einem 64-Bit-ARM-Host durch `arm64`. Installieren
@@ -88,13 +88,13 @@ tragen dieselben Dienst-Adapter: `scripts/install-service.sh` und `packaging/ser
 <!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_0.3_linux_amd64.deb
+sudo dpkg -i olivares_0.4_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_0.3_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.4_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.4_linux_amd64.apk
 ```
 <!-- /release -->
 
@@ -326,18 +326,30 @@ eine bewusste Freigabe von Ihnen, nichts, was das Paket für Sie tut.
 
 ## 6. Aktualisieren
 
-`olivares upgrade` ersetzt die Binärdatei an Ort und Stelle, und die
-Sicherheitseigenschaften sind der Grund, das dem manuellen Neuinstallieren des Pakets
-vorzuziehen: es **ersetzt die Binärdatei erst, wenn der heruntergeladene Kandidat
-erfolgreich per Exec geprüft wurde**, behält eine zeitgestempelte Sicherung und
-**kehrt zu dieser Sicherung zurück, wenn die Prüfung nach dem Tausch fehlschlägt**.
+Nutzen Sie einen einzigen Updater pro Host. Ein aus einem Paket oder aus dem Repository
+installierter Host wird mit seinem Paketmanager aktualisiert (`apt`, `dnf`, `apk` oder ein
+neueres Paket); `olivares upgrade` weigert sich, die vom Paket verwaltete Binärdatei zu
+ersetzen.
+
+Der Paketmanager besitzt `/usr/bin/olivares` bei jeder Paketinstallation (deb, rpm, apk,
+AUR). Würde man diese Datei an Ort und Stelle ersetzen, beschriebe die Paketdatenbank eine
+Datei, die so nicht mehr existiert; deshalb verweigert `olivares upgrade` das: Es endet mit 2,
+bevor es etwas herunterlädt, und nennt den Paketweg. Aktualisieren Sie mit dem Paketmanager.
+`olivares upgrade --check` funktioniert weiterhin; es zeigt den Plan und ändert nichts:
 
 ```bash
 sudo olivares upgrade --check    # what would change, without changing anything
-sudo olivares upgrade --yes      # do it
 ```
 
-Drei Flags sind für eine paketierte Installation besonders relevant:
+Wo kein Paketmanager die Binärdatei besitzt (eine von `install.sh` oder von Hand abgelegte),
+ersetzt `olivares upgrade` sie an Ort und Stelle, und die Sicherheitseigenschaften sind der
+Grund, es dort zu nutzen: es **ersetzt die Binärdatei erst, wenn der heruntergeladene Kandidat
+erfolgreich per Exec geprüft wurde**, behält eine zeitgestempelte Sicherung und **kehrt zu
+dieser Sicherung zurück, wenn die Prüfung nach dem Tausch fehlschlägt**. `--target <Pfad>` ist
+die Ausnahme des Operators: Es ersetzt die Datei, die Sie nennen, auch `/usr/bin/olivares`, und
+die Paketdatenbank passt danach nicht mehr zu dieser Datei.
+
+Drei Flags sind für `--check` und für einen Lauf mit `--target` relevant:
 
 - **`--endpoint`** — Updates aus einem GitHub-Repository, das Sie kontrollieren, statt
   der Vorgabe. Das ist der Ausweg für einen Spiegel oder einen Fork.
@@ -345,6 +357,9 @@ Drei Flags sind für eine paketierte Installation besonders relevant:
 - **`--install-timer`** — gibt einen **optionalen systemd**-Timer und -Dienst aus, der
   nach Plan nach Updates sucht. Nichts installiert das für Sie; siehe
   [was das Paket nicht tut](#8-was-das-paket-nicht-tut). Es ist ein systemd-Generator.
+  Bei einer Paketinstallation verweigert er das: `/usr/bin/olivares` gehört dem Paketmanager,
+  daher endet `--install-timer` mit dem Exit-Code 2 und schreibt keine Unit. Aktualisieren Sie mit dem
+  Paketmanager (auf der Olivares-Appliance: `systemctl start olivares-appliance-update.service`).
 
 Beachten Sie, dass Staging und Exec-Prüfung **im Installationsverzeichnis, neben dem
 Ziel — nicht in `/tmp`** stattfinden, sodass der [oben](#ausführbares-scratch-dateisystem)
@@ -393,7 +408,8 @@ verdient:
 - **Es fügt kein Repository hinzu.** Nichts wird nach `/etc/apt/sources.list.d`,
   `/etc/yum.repos.d` oder `/etc/apk/repositories` geschrieben. Sie haben eine Datei
   installiert; nur diese Datei wurde installiert. Updates lösen Sie aus — durch ein
-  neues Paket oder durch `olivares upgrade`.
+  neues Paket; `olivares upgrade` weigert sich, eine vom Paket verwaltete Binärdatei
+  zu ersetzen.
 - **Es startet oder aktiviert den Dienst nicht.** systemd-Pakete laden systemd neu,
   wenn `systemctl` vorhanden ist, und drucken `systemctl enable --now`. OpenRC-Pakete
   drucken `rc-service olivares start` und führen kein `rc-update add` aus. Starten

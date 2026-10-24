@@ -164,19 +164,19 @@ func (m *Module) refuseSecretBearing(ctx context.Context, tenant model.TenantID,
 	return nil
 }
 
-// givenSecrets reports whether the run was given vault secrets or a repository
-// credential. A value that cannot be decoded counts as given.
+// givenSecrets reports whether the run was given vault secrets, a repository
+// credential or a managed credential. A value that cannot be decoded counts as given.
 func givenSecrets(rec model.Record) bool {
 	secrets, err := decodeSecretEnv(rec.String(colRunSecretEnv))
-	return err != nil || len(secrets) != 0 || rec.String(colRunGitRead) != ""
+	return err != nil || len(secrets) != 0 || rec.String(colRunGitRead) != "" || rec.String(colRunCredentials) != ""
 }
 
-// refuseGivenSecrets refuses a session that was given vault secrets or a repository
-// credential. Current vault values cannot redact what an earlier generation of the
+// refuseGivenSecrets refuses a session that was given vault secrets, a repository
+// credential or a managed credential. Current vault values cannot redact what an earlier generation of the
 // session printed, and a read token expires, so these are refused live or not.
 func refuseGivenSecrets(rec model.Record, did string) error {
 	if givenSecrets(rec) {
-		return conflictErr("this session was given vault secrets or a repository credential; " +
+		return conflictErr("this session was given vault secrets, a repository credential or a managed credential; " +
 			"what it printed cannot be proven free of them, so it is not " + did + " to another account or tool")
 	}
 	return nil

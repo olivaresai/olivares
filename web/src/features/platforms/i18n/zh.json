@@ -26,7 +26,7 @@
     "columns": {
       "surface": "面",
       "operator": "运营方",
-      "baseUrl": "Base URL",
+      "baseUrl": "基础 URL",
       "sigv4": "SigV4 服务",
       "workspaceHeader": "工作区标头",
       "modelIdForm": "模型 ID 形式",

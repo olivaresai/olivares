@@ -242,6 +242,18 @@ describe('DeployView — definitions list', () => {
     expect(screen.getByText('Declared, never applied')).toBeInTheDocument()
   })
 
+  // A definitions list that could not be read is not an empty one: the header
+  // keeps the page-level Declare until the engine answers with an empty list.
+  it('keeps the page-level Declare deployment while the list could not be read', async () => {
+    api.listDefinitions.mockRejectedValue(new Error('down'))
+    wrap(<DeployView />)
+    await screen.findByRole('alert')
+    expect(
+      await screen.findByRole('button', { name: /declare deployment/i }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('No deployments declared yet')).toBeNull()
+  })
+
   it('hides the declare button and wirings tab when the role cannot', async () => {
     authState.can = (p) =>
       p !== 'deploy:deployment:write' && p !== 'deploy:wiring:read'
@@ -265,18 +277,15 @@ describe('DeployView — definitions list', () => {
       name: 'Operate sessions',
     })
     expect(link).toHaveAttribute('href', '/agentops')
-    // The screen's own verb stays the PRIMARY action, in the empty state and in the
-    // page header; the way out to the sessions is the quieter one.
+    // The screen's own verb lives in the empty state only; the page header
+    // claims nothing while the list is empty, and the way out to the sessions
+    // is the quieter one.
     expect(
       within(empty as HTMLElement).getByRole('button', {
         name: /declare deployment/i,
       }),
     ).toBeInTheDocument()
-    expect(
-      within(primarySlot()).getByRole('button', {
-        name: /declare deployment/i,
-      }),
-    ).toBeInTheDocument()
+    expect(within(primarySlot()).queryByRole('button')).toBeNull()
     // A status code is engine vocabulary: the console never shows one.
     expect(document.body).not.toHaveTextContent(/\b503\b|\bHTTP\b/)
   })
@@ -378,10 +387,10 @@ describe('DeployView — without a runtime executor', () => {
       await screen.findByText('No deployments declared yet'),
     ).toBeInTheDocument()
     expect(screen.queryByText('Deploying needs a runtime executor')).toBeNull()
+    // The header claims nothing; the verb stays reachable in the empty state.
+    expect(within(primarySlot()).queryByRole('button')).toBeNull()
     expect(
-      within(primarySlot()).getByRole('button', {
-        name: /declare deployment/i,
-      }),
+      screen.getByRole('button', { name: /declare deployment/i }),
     ).toBeInTheDocument()
   })
 })

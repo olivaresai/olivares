@@ -11,9 +11,7 @@
   },
   "nav": {
     "general": "一般",
-    "notifications": "通知",
     "keyboard": "キーボード",
-    "sessionDefaults": "セッションの既定",
     "aiTools": "AI ツール",
     "workspaces": "ワークスペース",
     "deploy": "デプロイと更新",
@@ -31,7 +29,7 @@
     "title": "一般",
     "scope": "あなた自身の設定です。このインストールのすべてのワークスペースに付いていきます。",
     "theme": "テーマ",
-    "themeHint": "ライトかダークを選ぶまで、システムに従います。",
+    "themeHint": "ライト、ダーク、ブラックのいずれかを選ぶまで、システムに従います。",
     "density": "密度",
     "densityHint": "コンパクトは行を多く表示し、ゆったりは読みやすくなります。",
     "language": "言語",
@@ -46,10 +44,6 @@
     "confirmStopHint": "作業中のセッションを停止が終える前に、一度確認します。",
     "reduceMotion": "動きを減らす",
     "reduceMotionHint": "動きをフェードに置き換えます。システムが求めたときにオンになります。"
-  },
-  "unavailable": {
-    "notifications": "通知の設定は、このインストールにはまだ保存されません。",
-    "sessionDefaults": "セッションの既定は、このインストールにはまだ保存されません。"
   },
   "sessionNotifications": {
     "title": "セッション通知",
@@ -71,8 +65,8 @@
     "licenseAlias": "ライセンス",
     "unknown": "このエンジンは報告していません",
     "editions": {
-      "community": "コミュニティ",
-      "enterprise": "ビジネス"
+      "community": "Community",
+      "enterprise": "Business"
     },
     "businessAdds": "Business で追加されるもの",
     "adds": {
@@ -334,9 +328,17 @@
       "title": "{{version}} に更新しますか？",
       "stop_other": "実行中のセッション {{count}} 件が停止します。再起動後にそれぞれ再開できます。",
       "none": "エンジンは新しいバージョンで一度だけ再起動します。",
-      "confirm": "インストールして再起動"
+      "switchNone": "エンジンはライセンスされたエディションで一度だけ再起動します。データはそのまま残ります。",
+      "confirm": "インストールして再起動",
+      "switchTitle": "{{edition}} に切り替えますか？",
+      "switchConfirm": "切り替えて再起動"
     },
     "alreadyCurrent": "すでに最新リリースです。何もインストールしていません。",
-    "restartRequired": "より新しいバージョンがインストールされています。実行するには、サービスマネージャーでエンジンを再起動してください。"
+    "restartRequired": "より新しいバージョンがインストールされています。実行するには、サービスマネージャーでエンジンを再起動してください。",
+    "switch": "{{edition}} に切り替える",
+    "switchTitle": "{{edition}} に切り替える",
+    "switched": "切り替えをインストールしました。",
+    "terminal": "サーバーのターミナルでも同じことができます",
+    "orTerminal": "またはサーバーのターミナルで"
   }
 }

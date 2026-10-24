@@ -6,7 +6,10 @@
 // Recent work, which keeps the sessions that did. The cards read the sessions `home-view`
 // already merged (no second read) and tell each one with the parts the Sessions list uses:
 // its tool, its folder, its name, what it is doing and what it cost. Every part is a fact
-// the engine sent; one it did not send is left out. A card opens its session.
+// the engine sent; one it did not send is left out. A card opens its session in the
+// Estate sheet, over this page (#2549).
+import { Fragment } from 'react'
+import type { ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import { ArrowRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -23,12 +26,14 @@ import {
   type UnifiedSession,
 } from '@/features/sessions/provenance'
 import { addressOf, SESSION_PARAM } from '@/features/sessions/session-address'
+import { opensInSheet } from '@/features/sessions/opens-in-sheet'
 import {
   sessionModelRef,
   sessionUsage,
 } from '@/features/sessions/session-usage'
 import { workFacts } from '@/features/sessions/work-facts'
 import { RelTime } from '@/features/shared/rel-time'
+import { tickLive, useSecondClock } from '@/features/shared/use-second-clock'
 import { formatDuration, formatMicroUsd } from '@/lib/format'
 import { LIVE_CARDS } from './now-sessions'
 import { workLine } from './work-line'
@@ -37,9 +42,13 @@ import './i18n'
 function LiveCard({
   session,
   shared,
+  nowMs,
+  onOpen,
 }: {
   session: UnifiedSession
   shared: ReadonlySet<string>
+  nowMs: number
+  onOpen?: (address: string) => void
 }) {
   const { t } = useTranslation(['home', 'sessions'])
   const { t: ts } = useTranslation('sessions')
@@ -53,27 +62,49 @@ function LiveCard({
   const name = naming.name === sessionPlace(session) ? null : naming.name
   const doing = live ? workLine(live) : null
   const cost = sessionUsage(session.runs, live)?.costMicroUsd
-  const facts = [
-    ...(live
-      ? workFacts(
-          live,
-          ts,
-          { duration: (ms) => formatDuration(ms) },
-          sessionModelRef(run, live),
-        )
-      : []),
-    cost != null ? formatMicroUsd(cost, { compact: true }) : null,
-  ].filter((f): f is string => !!f)
+  // C2-DESIGN §3: an active session's elapsed figure ticks each second, extrapolated
+  // from its last engine event; every other session keeps the engine's figure.
+  const tickedLive = live && tickLive(live, nowMs)
+  const tickedSeconds = tickedLive?.duration_seconds
+  const elapsed =
+    tickedSeconds != null && tickedSeconds > 0
+      ? formatDuration(tickedSeconds * 1000)
+      : null
+  // The elapsed and cost figures leave the facts line: they tick as their own tabular
+  // figures (data-elapsed / data-cost), so the line keeps the rest.
+  const facts = tickedLive
+    ? workFacts(tickedLive, ts, {}, sessionModelRef(run, tickedLive))
+    : []
+  const costText = cost != null ? formatMicroUsd(cost, { compact: true }) : null
   const at =
     session.lastActivityMs > 0
       ? new Date(session.lastActivityMs).toISOString()
       : live?.last_event_at
+  const lineParts: ReactNode[] = []
+  if (elapsed)
+    lineParts.push(
+      <span key="elapsed" data-elapsed>
+        {elapsed}
+      </span>,
+    )
+  for (const f of facts) lineParts.push(<span key={`f:${f}`}>{f}</span>)
+  if (costText)
+    lineParts.push(
+      <span key="cost" data-cost>
+        {costText}
+      </span>,
+    )
 
   return (
     <li className="min-w-0">
       <Link
         to={'/sessions' as never}
         search={{ [SESSION_PARAM]: addressOf(session) } as never}
+        onClick={(e) => {
+          if (!onOpen || !opensInSheet(e)) return
+          e.preventDefault()
+          onOpen(addressOf(session))
+        }}
         data-testid="now-live-card"
         // No aria-label: the card's own text (tool, state, folder, name, cost) names the
         // link, so what a screen reader says starts with what the card shows (WCAG 2.5.3).
@@ -88,7 +119,7 @@ function LiveCard({
           </span>
           <span data-testid="now-live-card-state" className="shrink-0">
             {run ? (
-              <RunStateBadge state={run.state} className="whitespace-nowrap" />
+              <RunStateBadge run={run} className="whitespace-nowrap" />
             ) : live ? (
               <CcStateBadge
                 state={live.cc_state}
@@ -115,10 +146,15 @@ function LiveCard({
             {doing.text}
           </span>
         ) : null}
-        {facts.length > 0 || at ? (
+        {lineParts.length > 0 || at ? (
           <span className="mt-auto flex min-w-0 items-center gap-2 pt-1 text-caption text-text-3">
             <span className="min-w-0 flex-1 truncate tabular-nums">
-              {facts.join(' · ')}
+              {lineParts.map((part, i) => (
+                <Fragment key={i}>
+                  {i > 0 ? <span aria-hidden> · </span> : null}
+                  {part}
+                </Fragment>
+              ))}
             </span>
             {at ? (
               <RelTime ts={at} className="shrink-0 whitespace-nowrap" />
@@ -133,19 +169,25 @@ function LiveCard({
 export function LiveCards({
   sessions,
   showAll,
+  onOpen,
 }: {
   /** The live sessions, most recent first; the first `LIVE_CARDS` are cards. */
   sessions: UnifiedSession[]
   /** The link to every session, when no Recent work list below carries it. */
   showAll: boolean
+  /** Opens a card's session in place (Estate's sheet); without it a card goes to Sessions. */
+  onOpen?: (address: string) => void
 }) {
   const { t } = useTranslation('home')
   const cards = sessions.slice(0, LIVE_CARDS)
+  // One clock for the row of cards: the ticking figures all move on the same second,
+  // and run only while a card shows an active session.
+  const nowMs = useSecondClock(cards.some((s) => s.live?.cc_state === 'active'))
   const shared = sharedNames(cards, t('recent.untitled'))
   return (
     <section aria-labelledby="now-live-heading" data-testid="now-live">
-      {/* No count beside the title: the Live sessions tile counts them, over the whole
-          live page, and a second number over this merged list could disagree with it. */}
+      {/* No count beside the title: Estate's sentence counts the sessions open, and a
+          second number over the cards shown here could disagree with it. */}
       <h2
         id="now-live-heading"
         className="mb-1.5 text-heading font-semibold text-text"
@@ -154,7 +196,13 @@ export function LiveCards({
       </h2>
       <ul data-testid="now-live-cards" className="grid gap-2 sm:grid-cols-2">
         {cards.map((s) => (
-          <LiveCard key={s.key} session={s} shared={shared} />
+          <LiveCard
+            key={s.key}
+            session={s}
+            shared={shared}
+            nowMs={nowMs}
+            onOpen={onOpen}
+          />
         ))}
       </ul>
       {showAll ? (

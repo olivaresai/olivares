@@ -24,6 +24,8 @@ const SPEC_DIRS = readdirSync(WEB, { withFileTypes: true })
 
 /** The nav catalogue read the other way round: the address a name is reached at. */
 const NAV_NAME_BY_SEGMENT = nav.items as Record<string, string>
+/** The overview's place in the top bar: the first link a sign-in paints. */
+const ESTATE = nav.shell.journeys.home
 
 /**
  * THE FIRST LINK A SPEC WAITS FOR AFTER SIGNING IN, AND WHETHER IT CAN BE PAINTED.
@@ -31,9 +33,9 @@ const NAV_NAME_BY_SEGMENT = nav.items as Record<string, string>
  * ⛔ AND WHAT THIS DOES NOT SEE, SAID PLAINLY, because a guard read as more than it is
  *    becomes the reason nobody checks the real thing. It reads SOURCE TEXT — the spec
  *    files as characters — and it knows two facts: the English nav catalogue, and that
- *    a sign-in leaves the console on the root, which belongs to no area, so the sidebar
- *    paints the areas and the overview above them and nothing inside a closed area.
- *    It does not render the sidebar, does not read the feature registry, and cannot say
+ *    a sign-in leaves the console on the root, which belongs to no area, so the top bar
+ *    paints the places, the overview (Now) first, and no page of an area.
+ *    It does not render the top bar, does not read the feature registry, and cannot say
  *    which area any given leaf belongs to. So the exemption is narrow ON PURPOSE: a
  *    navigation exempts the wait that the navigation's own address names in the nav
  *    catalogue, and nothing else. A spec that goes to one address and waits for a
@@ -42,7 +44,7 @@ const NAV_NAME_BY_SEGMENT = nav.items as Record<string, string>
  *    stop. Widening it means teaching it the registry, not loosening the match.
  */
 function waitsASignInCannotPaint(file: string, src: string): string[] {
-  const overview = `name: '${nav.items.home}', exact: true`
+  const overview = `name: '${ESTATE}', exact: true`
   const found: string[] = []
   for (const signIn of src.matchAll(/name: \/\^sign in\$\/i \}\)/g)) {
     const after = src.slice((signIn.index ?? 0) + signIn[0].length)
@@ -71,17 +73,18 @@ function waitsASignInCannotPaint(file: string, src: string): string[] {
 /**
  * THE OVERVIEW LINK READ OUTSIDE THE JOURNEYS NAVIGATION.
  *
- * ⛔ THE TOP BAR'S CURRENT-PAGE CRUMB IS A LINK TOO (`BreadcrumbPage` is `role="link"`
- *    with `aria-current`), named like the page it marks. A sign-in lands on the root,
- *    whose page is Now, so a page-level `getByRole('link', { name: 'Now', exact: true })`
- *    matches the journey link AND the crumb, and Playwright's strict mode rejects it
- *    before the assertion it was written for. Measured on the supported demo run
+ * ⛔ THE TOP BAR'S CURRENT-PAGE CRUMB WAS A LINK TOO (`BreadcrumbPage` is `role="link"`
+ *    with `aria-current`), named like the page it marked, so a page-level
+ *    `getByRole('link', { name, exact: true })` matched the place AND the crumb, and
+ *    Playwright's strict mode rejected it before the assertion it was written for. The
+ *    crumb went with the sidebar (#2544); a page's own links still share names with the
+ *    places, so the wait stays scoped. Measured on the supported demo run
  *    (#1181): nine cases failed at their sign-in helper. The wait is read inside the
  *    Journeys navigation, as the specs that already passed read it.
  */
 function overviewLinksOutsideJourneys(file: string, src: string): string[] {
   const label = nav.shell.journeysLabel
-  const link = `getByRole('link', { name: '${nav.items.home}', exact: true })`
+  const link = `getByRole('link', { name: '${ESTATE}', exact: true })`
   const inJourneys = [
     `getByRole('navigation', { name: '${label}', exact: true }).`,
     `getByLabel('${label}').`,
@@ -103,8 +106,8 @@ describe('live end-to-end specs name what the console paints', () => {
   it('the operate portal is reached by its nav name and its heading', () => {
     // Read as one line: the formatter may wrap a locator's options over several lines.
     const src = spec('sessions-unified.spec.ts').replace(/\s+/g, ' ')
-    // The sidebar has one Sessions destination, and /agentops is its second door: the
-    // spec reads the destination, which is what the sidebar paints for either door.
+    // The top bar has one Sessions place, and /agentops is its second door: the spec
+    // reads the place, which is what the top bar paints for either door.
     const destination = nav.shell.journeys.sessions
     expect(src).toContain(`getByRole('link', { name: '${destination}'`)
     // The entry lives inside a nav AREA, and a fresh sign-in leaves the console at
@@ -123,7 +126,7 @@ describe('live end-to-end specs name what the console paints', () => {
   it('signed-in waits use the overview link and the Playwright base URL', () => {
     const four = spec('four-tabs-live.spec.ts')
     const rid = spec('request-id-live.spec.ts')
-    const overview = `getByRole('link', { name: '${nav.items.home}'`
+    const overview = `getByRole('link', { name: '${ESTATE}'`
     expect(four).toContain(overview)
     expect(four).not.toContain("name: 'Inventory'")
     expect(rid).toContain(overview)
@@ -133,9 +136,9 @@ describe('live end-to-end specs name what the console paints', () => {
   })
 
   // ⛔ WHAT A FRESH SIGN-IN PAINTS IS ONE LINK, AND EIGHT SPECS WAITED FOR ANOTHER.
-  //    Sign-in lands on the root, which belongs to no navigation area; the sidebar
-  //    renders every area but the active one with its panel hidden, so the only
-  //    entries painted are the areas themselves and the overview above them. A wait
+  //    Sign-in lands on the root, which belongs to no navigation area; the top bar
+  //    paints the places and no page of an area (the sidebar that preceded it painted
+  //    the areas with every panel but the active one hidden). A wait
   //    on a leaf of a closed area — "Inventory" was the one they all used — can only
   //    pass by a substring accident, and three of them did pass that way.
   it('every spec file waits first for the overview link, or for the one its navigation names', () => {
@@ -150,7 +153,7 @@ describe('live end-to-end specs name what the console paints', () => {
   it('the shared overview locator names the exact link inside Journeys', () => {
     const src = spec('browser-session.ts').replace(/\s+\./g, '.')
     expect(src).toContain(
-      `getByRole('navigation', { name: '${nav.shell.journeysLabel}', exact: true }).getByRole('link', { name: '${nav.items.home}', exact: true })`,
+      `getByRole('navigation', { name: '${nav.shell.journeysLabel}', exact: true }).getByRole('link', { name: '${ESTATE}', exact: true })`,
     )
   })
 
@@ -245,13 +248,13 @@ describe('live end-to-end specs name what the console paints', () => {
     const src = spec('deploy-executor.spec.ts')
     const after = src.slice(src.indexOf('name: /^sign in$/i'))
     const link = /getByRole\(\s*'link',\s*\{([^}]*)\}/.exec(after)
-    expect(link?.[1].trim()).toBe(`name: '${nav.items.home}', exact: true`)
+    expect(link?.[1].trim()).toBe(`name: '${ESTATE}', exact: true`)
     expect(link?.index).toBeLessThan(after.indexOf('async function openDeploy'))
   })
 
   it.each([
     ['a closed leaf', '', `name: '${nav.items.inventory}', exact: true`],
-    ['an inexact overview', '', `name: '${nav.items.home}'`],
+    ['an inexact overview', '', `name: '${ESTATE}'`],
     [
       'an arbitrary help link',
       "await page.goto('/deploy')",

@@ -44,11 +44,17 @@ const { api, auth, signIn, launch, navigate } = vi.hoisted(() => ({
   auth: {
     isSuperadmin: true,
     // Provider-read access is enabled by the provider readiness cases below.
-    can: vi.fn(() => false),
+    can: vi.fn((_permission: string) => false),
     activeTenant: null,
     principal: { user_id: 'root' },
   },
-  signIn: { status: vi.fn(), start: vi.fn(), get: vi.fn(), cancel: vi.fn() },
+  signIn: {
+    status: vi.fn(),
+    start: vi.fn(),
+    get: vi.fn(),
+    code: vi.fn(),
+    cancel: vi.fn(),
+  },
 }))
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => navigate }))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => auth }))
@@ -86,7 +92,8 @@ const flow = {
 beforeEach(() => {
   useTenantStore.setState({ activeTenant: 'tenant-a' })
   vi.clearAllMocks()
-  auth.can.mockReturnValue(false)
+  // Only the key form's own gate (#2551); these cases read no providers.
+  auth.can.mockImplementation((p: string) => p === 'sessions:provider:write')
   vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(readinessOf({}))
   api.inventory.mockResolvedValue({
     drivers: ['opencode'],
@@ -126,14 +133,174 @@ it('offers OpenCode its own ChatGPT sign-in and relays the link and the code', a
   expect(
     within(dialog).getByRole('link', { name: /open the sign-in page/i }),
   ).toHaveAttribute('href', 'https://auth.openai.example/device')
+  // HU2-18, #2551: the key form opens in this same dialog, on OpenAI — a button in
+  // the sheet, not a page link that reloads and loses the dialog.
   expect(
-    within(dialog).getByRole('link', {
+    within(dialog).queryByRole('link', {
       name: 'Use an API key instead',
       hidden: true,
     }),
-  ).toHaveAttribute(
-    'href',
-    expect.stringMatching(/^\/providers\?add=openai&returnTo=/),
+  ).not.toBeInTheDocument()
+  await userEvent.click(within(dialog).getByText('Other ways'))
+  await userEvent.click(
+    within(dialog).getByRole('button', { name: 'Use an API key instead' }),
+  )
+  expect(within(dialog).getByText('OpenAI')).toBeInTheDocument()
+  expect(within(dialog).getByLabelText(/^API key/)).toBeInTheDocument()
+})
+
+// #2567: the engine lists OpenCode's own providers first. The dialog offers them
+// before ChatGPT and starts nothing until one is chosen; a key method shows the page
+// that issues the key and a hidden field, and the typed key goes to the tool's own
+// login (the code route) and is not kept on the page.
+const methods = [
+  {
+    id: 'opencode',
+    label: 'OpenCode Zen and free models (API key)',
+    key: true,
+  },
+  { id: 'opencode-go', label: 'OpenCode Go (API key)', key: true },
+  {
+    id: 'chatgpt-headless',
+    label: 'ChatGPT Pro/Plus (headless)',
+    default: true,
+  },
+]
+
+it("offers OpenCode's own key first and hands the typed key to the tool", async () => {
+  const key = 'fixture-console-key-0123456789'
+  signIn.status.mockImplementation((driver: string) =>
+    Promise.resolve({ driver, installed: true, signed_in: false, methods }),
+  )
+  const keyFlow = {
+    id: 'si-k',
+    driver: 'opencode',
+    state: 'needs_key',
+    url: 'https://opencode.ai/auth',
+  }
+  signIn.start.mockResolvedValue(keyFlow)
+  signIn.get.mockResolvedValue(keyFlow)
+  signIn.code.mockResolvedValue({
+    ...keyFlow,
+    state: 'signed_in',
+    url: undefined,
+  })
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={qc}>
+      <AgentToolsView />
+    </QueryClientProvider>,
+  )
+  const card = await screen.findByTestId('tool-opencode')
+  await userEvent.click(
+    await within(card).findByRole('button', { name: /^Sign in/ }),
+  )
+  const dialog = await screen.findByRole('dialog', { name: /Sign in OpenCode/ })
+  const choices = await within(dialog).findAllByRole('radio')
+  expect(choices.map((c) => c.getAttribute('value'))).toEqual([
+    'opencode',
+    'opencode-go',
+    'chatgpt-headless',
+  ])
+  expect(choices[0]).toBeChecked()
+  expect(signIn.start).not.toHaveBeenCalled()
+  await userEvent.click(
+    within(dialog).getByRole('button', { name: 'Continue' }),
+  )
+  await waitFor(() =>
+    expect(signIn.start).toHaveBeenCalledWith(
+      'opencode',
+      'tenant-a',
+      undefined,
+      undefined,
+      'opencode',
+    ),
+  )
+  expect(
+    await within(dialog).findByRole('link', { name: /open the key page/i }),
+  ).toHaveAttribute('href', 'https://opencode.ai/auth')
+  const field = within(dialog).getByLabelText(/^API key/)
+  expect(field).toHaveAttribute('type', 'password')
+  await userEvent.type(field, key)
+  await userEvent.click(
+    within(dialog).getByRole('button', { name: 'Continue' }),
+  )
+  await waitFor(() => expect(signIn.code).toHaveBeenCalledWith('si-k', key))
+  expect(document.body.innerHTML).not.toContain(key)
+})
+
+it('clears the typed key when the tool refuses it', async () => {
+  const key = 'fixture-refused-key-0123456789'
+  signIn.status.mockImplementation((driver: string) =>
+    Promise.resolve({ driver, installed: true, signed_in: false, methods }),
+  )
+  const keyFlow = {
+    id: 'si-r',
+    driver: 'opencode',
+    state: 'needs_key',
+    url: 'https://opencode.ai/auth',
+  }
+  signIn.start.mockResolvedValue(keyFlow)
+  signIn.get.mockResolvedValue(keyFlow)
+  signIn.code.mockRejectedValue(
+    new Error('This sign-in is not waiting for a code.'),
+  )
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={qc}>
+      <AgentToolsView />
+    </QueryClientProvider>,
+  )
+  const card = await screen.findByTestId('tool-opencode')
+  await userEvent.click(
+    await within(card).findByRole('button', { name: /^Sign in/ }),
+  )
+  const dialog = await screen.findByRole('dialog', { name: /Sign in OpenCode/ })
+  await userEvent.click(
+    await within(dialog).findByRole('button', { name: 'Continue' }),
+  )
+  const field = await within(dialog).findByLabelText(/^API key/)
+  await userEvent.type(field, key)
+  await userEvent.click(
+    within(dialog).getByRole('button', { name: 'Continue' }),
+  )
+  await waitFor(() => expect(signIn.code).toHaveBeenCalledWith('si-r', key))
+  await waitFor(() => expect(field).toHaveValue(''))
+  expect(document.body.innerHTML).not.toContain(key)
+})
+
+it('still offers the ChatGPT device method as a further choice', async () => {
+  signIn.status.mockImplementation((driver: string) =>
+    Promise.resolve({ driver, installed: true, signed_in: false, methods }),
+  )
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={qc}>
+      <AgentToolsView />
+    </QueryClientProvider>,
+  )
+  const card = await screen.findByTestId('tool-opencode')
+  await userEvent.click(
+    await within(card).findByRole('button', { name: /^Sign in/ }),
+  )
+  const dialog = await screen.findByRole('dialog', { name: /Sign in OpenCode/ })
+  await userEvent.click(
+    await within(dialog).findByRole('radio', { name: /ChatGPT/ }),
+  )
+  await userEvent.click(
+    within(dialog).getByRole('button', { name: 'Continue' }),
+  )
+  await waitFor(() =>
+    expect(signIn.start).toHaveBeenCalledWith(
+      'opencode',
+      'tenant-a',
+      undefined,
+      undefined,
+      'chatgpt-headless',
+    ),
+  )
+  expect(await within(dialog).findByTestId('device-code')).toHaveTextContent(
+    'QW12-ER34',
   )
 })
 

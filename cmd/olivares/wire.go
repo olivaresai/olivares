@@ -46,6 +46,7 @@ import (
 	"github.com/olivaresai/olivares/modules/skills"
 	"github.com/olivaresai/olivares/modules/sourcescope"
 	"github.com/olivaresai/olivares/modules/voice"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -1025,8 +1026,8 @@ var (
 // errPDPEngineBusiness is the Community refusal of an external policy engine. Like the
 // errors above it is FIXED: it never carries the supplied engine string, path, URL or token.
 var errPDPEngineBusiness = errors.New("OLIVARES_PDP_ENGINE selects an external policy engine (a Cedar file or Open Policy Agent), " +
-	"which is a Business capability: run the Business edition, or unset OLIVARES_PDP_ENGINE (or set it to none) " +
-	"to use the native engine alone: " + pricingURL)
+	"which is a Business capability: run the Business edition, or remove OLIVARES_PDP_ENGINE from the environment " +
+	"and from the activation manifest (or set it to none) to use the native engine alone: " + pricingURL)
 
 // pdpEngineSelector is the trimmed OLIVARES_PDP_ENGINE, or "" when it is unset, blank or
 // a case-insensitive "none": the native ABAC engine alone, valid in every edition.
@@ -1077,28 +1078,67 @@ var businessProtectionKeys = []struct {
 	{"OLIVARES_NIS2INCIDENT_CONFIG", false},
 	{"OLIVARES_REPORTING_CONFIG", false},
 	{"OLIVARES_PII_TOKENS_CONFIG", false},
+	{"OLIVARES_CREDENTIAL_MINTER_CONFIG", false},
+	{"OLIVARES_ONBOARDING_CONFIG", false},
+	{"OLIVARES_PQC_POSTURE_CONFIG", false},
+	{"OLIVARES_SESSIONS_AGENT_LINK_LISTEN", false},
+	{"OLIVARES_SIEM_FORWARD_INTERVAL", false},
+	{"OLIVARES_ORCH_CADENCE_INTERVAL", false},
+	{"OLIVARES_ORCH_WORKFLOW_INTERVAL", false},
+	{"OLIVARES_ORCH_WORKFLOW_MAX", false},
+	{"OLIVARES_ORCH_WORKFLOW_STEPS_MAX", false},
 }
 
 // environmentWithActivationManifest is osGetenv as it will read after boot loads the
 // activation manifest (initActivationManifest), but available before: the process
 // environment first, then the active entries of the manifest in dataDir, read-only. A
 // Business add-on turned on with `olivares enterprise enable` lives only in that
-// manifest, so the downgrade check cannot wait for the overlay. A missing or unreadable
-// manifest is "nothing activated", as in boot. An empty dataDir resolves as checkCMEKInstall does.
-func environmentWithActivationManifest(dataDir string) func(string) string {
-	if dataDir == "" {
-		if resolved, err := defaultDataDir(); err == nil {
-			dataDir = resolved
-		}
-	}
+// manifest, so the downgrade check cannot wait for the overlay. A missing manifest is
+// "nothing activated", as in boot; a manifest that exists and cannot be read is returned
+// as the error, naming the file and its cause, with nothing overlaid, so the caller decides.
+// An empty dataDir resolves as checkCMEKInstall does.
+func environmentWithActivationManifest(dataDir string) (func(string) string, error) {
 	overlay := map[string]string{}
-	if dataDir != "" {
-		if manifest, err := LoadActivationManifest(dataDir); err == nil {
+	var loadErr error
+	if dir := activationManifestDir(dataDir); dir != "" {
+		manifest, err := LoadActivationManifest(dir)
+		if err != nil {
+			loadErr = err
+			// A read error is an *fs.PathError and already names the file; a parse error does not.
+			if !errors.As(err, new(*fs.PathError)) {
+				loadErr = fmt.Errorf("activation manifest %s: %w", ActivationManifestPath(dir), err)
+			}
+		} else {
 			overlay = manifest.activeOverlay()
 		}
 	}
 	reader := envconfig.Reader{Fallback: func(key string) string { return overlay[key] }}
-	return reader.Get
+	return reader.Get, loadErr
+}
+
+// activationManifestDir is the data directory whose activation manifest boot reads: dataDir,
+// or the default one when it is empty ("" when neither resolves).
+func activationManifestDir(dataDir string) string {
+	if dataDir != "" {
+		return dataDir
+	}
+	if resolved, err := defaultDataDir(); err == nil {
+		return resolved
+	}
+	return ""
+}
+
+// refuseUnreadableActivationManifestInCommunity refuses a Community serve over a manifest that
+// exists but cannot be read or parsed: loadErr is environmentWithActivationManifest's error,
+// which already names the manifest and carries the cause. Community cannot tell which
+// Business capabilities the manifest activates, so serving would drop them in silence. A
+// missing manifest is nothing activated, as in boot, and is not refused. A Business build
+// ignores loadErr, as boot does.
+func refuseUnreadableActivationManifestInCommunity(loadErr error) error {
+	if loadErr == nil || thisEdition.name != "community" {
+		return nil
+	}
+	return exitcode.New(exitcode.Edition, fmt.Errorf("%w: Community cannot tell which Business capabilities this manifest activates, so it refuses to serve: repair the file, or remove it once you know it activates nothing you need", loadErr))
 }
 
 // refuseBusinessProtectionsInCommunity makes a configured Business protection refuse the
@@ -1119,8 +1159,8 @@ func refuseBusinessProtectionsInCommunity(getenv func(string) string) error {
 		if on, _ := strconv.ParseBool(raw); k.switchKey && !on {
 			continue
 		}
-		return exitcode.New(exitcode.Edition, fmt.Errorf("%s configures a Business protection, which this Community binary does not enforce: "+
-			"run the Business edition, or unset %s: %s", k.env, k.env, pricingURL))
+		return exitcode.New(exitcode.Edition, fmt.Errorf("%s configures a Business capability, which this Community binary does not enforce: "+
+			"run the Business edition, or remove %s from the environment and from the activation manifest: %s", k.env, k.env, pricingURL))
 	}
 	return nil
 }

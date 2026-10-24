@@ -8,6 +8,11 @@ import {
   sessionPlace,
   sessionShortId,
 } from '@/features/sessions/provenance'
+import {
+  isArchived,
+  isMarkedDone,
+  isSnoozed,
+} from '@/features/sessions/session-groups'
 import type { RunDTO } from '@/features/agentops/types'
 import type { RailSources } from './session-rail-model'
 
@@ -68,13 +73,19 @@ export function isOnScreen(
   )
 }
 
-/** Use the rail's full reads, before the sidebar's row cap. */
+/** Use the rail's full reads, before the sidebar's row cap. A session the person snoozed
+ * or marked done (#2480), or an archived one (#2795), is not watched: it raises no
+ * notification and is not in the tab title's count, as it is not in Needs you. */
 export function attentionSnapshots(
   sources: RailSources,
   now: number,
 ): AttentionSnapshot[] {
-  return mergeSessions([...sources.live], [...(sources.runs ?? [])]).map(
-    (session) => {
+  return mergeSessions([...sources.live], [...(sources.runs ?? [])])
+    .filter(
+      (session) =>
+        !isSnoozed(session) && !isMarkedDone(session) && !isArchived(session),
+    )
+    .map((session) => {
       // This is the latest launch, even if an older run retained more control.
       const run = session.runs.reduce<
         (typeof session.runs)[number] | undefined
@@ -122,8 +133,7 @@ export function attentionSnapshots(
                 ? 'finished'
                 : 'quiet',
       }
-    },
-  )
+    })
 }
 
 function turnEnded(run: RunDTO, now: number): boolean {

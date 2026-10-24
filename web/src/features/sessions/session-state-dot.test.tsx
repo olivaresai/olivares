@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import type { RunDTO } from '@/features/agentops/types'
 import { mergeSessions } from './provenance'
 import { StateDot } from './session-state-dot'
+import '@/features/agentops/i18n'
 
 describe('session StateDot shares the chip system and preserves the engine state word', () => {
   it.each([
@@ -33,5 +34,30 @@ describe('session StateDot shares the chip system and preserves the engine state
     expect(container.querySelector('[data-slot="status-dot"]')).toHaveClass(
       color,
     )
+  })
+})
+
+// dev#3120: the rail reads no ledger, so a run whose row cannot say whether it finished
+// or was stopped is Ended, true of both; a stop that recorded why is Stopped.
+describe('StateDot words a run that ended', () => {
+  const base: RunDTO = {
+    run_ref: 'run-ended',
+    transport: 'stream-json',
+    permission_mode: 'default',
+    isolation: 'native',
+    state: 'stopped',
+    last_event_seq: 0,
+    pep_provisioned: true,
+    record_io: false,
+    critical: false,
+    exit_code: 0,
+  }
+  it.each([
+    ['exit 0', 'Ended'],
+    ['idle_policy', 'Stopped'],
+  ])('reason %s reads %s', (reason, word) => {
+    const [session] = mergeSessions([], [{ ...base, reason }])
+    render(<StateDot session={session!} />)
+    expect(screen.getByRole('img')).toHaveAttribute('aria-label', word)
   })
 })

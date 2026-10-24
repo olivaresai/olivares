@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { RunDTO } from '@/features/agentops/types'
+import { sameModel } from './conversation-frames'
 import type { LiveDTO } from './types'
 
 /**
@@ -15,6 +16,27 @@ export function sessionModelRef(
   live: LiveDTO | null | undefined,
 ): string | undefined {
   return run?.model_ref || run?.usage_model_ref || live?.model_ref || undefined
+}
+
+/**
+ * The model the launch asked for and the one its turns run on, when they differ
+ * (dev#2786). Only a Claude Code launch on its own sign-in is asked for an exact id;
+ * a provider names its models itself, so a provider-bound name is not held against it.
+ */
+export function modelMismatch(
+  run: RunDTO | null | undefined,
+  inUse: string | null | undefined,
+): { requested: string; inUse: string } | null {
+  const requested = run?.model_ref
+  if (
+    !requested ||
+    !inUse ||
+    run.provider_driver !== 'claude' ||
+    run.provider_auth_source === 'managed_injection' ||
+    sameModel(requested, inUse)
+  )
+    return null
+  return { requested, inUse }
 }
 
 /** This session's usage: tokens always, the cost only when one was reported. */

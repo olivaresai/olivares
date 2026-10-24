@@ -309,19 +309,20 @@ test('release container: a fresh administrator reaches a first answer and the co
         await page.waitForURL(/[?&]session=run(:|%3A)/)
         const session = page.url()
         // The tool asks before it runs the command; the administrator approves it
-        // in the queue the sidebar opens, on the row its first message named.
+        // in the queue the Rules place opens: the row its first message named opens
+        // beside the queue, and Approve once is the one action (#2548).
         await page
           .getByRole('navigation')
-          .getByRole('link', { name: /^Approvals\b/ })
+          .getByRole('link', { name: /^Rules\b/ })
           .click()
         await page
-          .getByRole('row')
+          .getByRole('list', { name: 'Approval queue' })
+          .getByRole('button')
           .filter({ hasText: `${tool.name}: run this command` })
-          .getByRole('button', { name: 'Approve', exact: true })
           .click({ timeout: 90_000 })
         await page
-          .getByRole('dialog')
-          .getByRole('button', { name: 'Approve', exact: true })
+          .getByRole('complementary', { name: 'Request' })
+          .getByRole('button', { name: 'Approve once', exact: true })
           .click()
         await expect(
           page.getByText('Decision recorded — approved'),
@@ -368,7 +369,9 @@ test('release container: a fresh administrator reaches a first answer and the co
           .getByRole('button', { name: label, exact: true })
           .click()
         await expect(
-          page.locator('.animate-spin:visible, .animate-pulse:visible'),
+          page.locator(
+            '.animate-spin:visible, .animate-pulse:visible, [aria-busy=true]:visible',
+          ),
         ).toHaveCount(0)
       })
     }

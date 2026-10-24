@@ -5,7 +5,7 @@
 // THE FACTS THE THREAD'S HEADER NO LONGER SAYS: the working folder in plain words, who
 // manages the session, its mode and what it did. A session with no conversation of its own
 // paints this block as the thread's body.
-import { screen } from '@testing-library/react'
+import { act, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
 import type { RunDTO } from '@/features/agentops/types'
@@ -67,11 +67,16 @@ function run(over: Partial<RunDTO> = {}): RunDTO {
   }
 }
 
-function renderOverview(r: RunDTO, frameCwd?: string | null) {
+function renderOverview(
+  r: RunDTO,
+  frameCwd?: string | null,
+  liveOver: Partial<LiveDTO> = {},
+) {
+  const liveRow = { ...live, ...liveOver }
   const resolution: SessionResolution = {
     target: { liveRef: 'lr-a' },
-    session: mergeSessions([live], [r])[0]!,
-    live,
+    session: mergeSessions([liveRow], [r])[0]!,
+    live: liveRow,
     runs: [r],
     related: [],
     streamStatus: 'open',
@@ -126,13 +131,69 @@ describe('SessionOverview — the working folder', () => {
     renderOverview(run())
     expect(screen.queryByTestId('conversation-folder')).toBeNull()
   })
+
+  it('ticks the elapsed figure of an active session once a second, past its last event', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-18T12:00:00Z'))
+    try {
+      renderOverview(run(), null, {
+        duration_seconds: 300,
+        last_event_at: new Date(Date.now() - 61_000).toISOString(),
+      })
+      // 300 engine seconds + the 61 that passed since the last event.
+      expect(screen.getByTestId('narrative-facts').textContent).toMatch(
+        /^worked for 6m 1s/,
+      )
+      act(() => {
+        vi.advanceTimersByTime(1000)
+      })
+      expect(screen.getByTestId('narrative-facts').textContent).toMatch(
+        /^worked for 6m 2s/,
+      )
+      act(() => {
+        vi.advanceTimersByTime(1000)
+      })
+      expect(screen.getByTestId('narrative-facts').textContent).toMatch(
+        /^worked for 6m 3s/,
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('never extrapolates an ended session past the engine figure', () => {
+    renderOverview(run(), null, {
+      cc_state: 'ended',
+      duration_seconds: 300,
+      last_event_at: new Date(Date.now() - 61_000).toISOString(),
+    })
+    expect(screen.getByTestId('narrative-facts').textContent).toMatch(
+      /^worked for 5m\b/,
+    )
+  })
 })
 
 describe('SessionOverview — the badges', () => {
-  it('says who manages the session and the mode the tool reported', () => {
+  // dev#3120: "Managed by Olivares" sat on every session Olivares started, the normal
+  // case, and explained nothing. A chip is shown only for a session that came another way.
+  it('says the mode the tool reported, and no chip for a session Olivares started', () => {
     renderOverview(run({ tool_mode: 'plan', provider_driver: 'claude' }))
-    expect(screen.getByText('Managed by Olivares')).toBeInTheDocument()
+    expect(screen.queryByText('Managed by Olivares')).toBeNull()
+    expect(screen.queryByText('Observed via source')).toBeNull()
     expect(screen.getByTestId('narrative-mode')).toHaveTextContent('Read only')
+  })
+})
+
+describe('SessionOverview — a session that came another way', () => {
+  it('keeps the chip that says where an observed session came from', () => {
+    renderOverview(
+      run({ tool_mode: 'plan', provider_driver: 'claude' }),
+      null,
+      {
+        attribution: 'observed',
+      },
+    )
+    expect(screen.getByText('Observed via source')).toBeInTheDocument()
   })
 })
 

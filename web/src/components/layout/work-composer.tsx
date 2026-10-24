@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useIsMutating, useMutation, useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { ArrowUp } from 'lucide-react'
+import { ArrowUp, ChevronDown } from 'lucide-react'
 import {
   useEffect,
   useId,
@@ -28,6 +28,9 @@ import { toast } from '@/components/ui/toaster'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { AttachButton, AttachmentTray } from '@/features/agentops/attachment-ui'
 import { imagesIn, useImageDraft } from '@/features/agentops/attachments'
+import { modelName } from '@/features/agentops/model-name'
+import { SessionMode, useAccessWords } from '@/features/sessions/session-meter'
+import { ContextRing } from '@/features/sessions/context-ring'
 import { toolName } from '@/features/agentops/tool-names'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import '@/features/agentops/i18n'
@@ -53,7 +56,17 @@ import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
 import { APPROVAL_READ } from '@/features/governance/use-pending-approvals'
 import { useViewAccess } from '@/features/navigation/authorization'
 import { viewById } from '@/features/navigation/model'
-import { runAwaitedApproval } from '@/features/sessions/provenance'
+import {
+  isResumableRun,
+  runAwaitedApproval,
+  startsAgain,
+} from '@/features/sessions/provenance'
+import {
+  sentPlace,
+  sentTurnsPartition,
+  useSentTurns,
+  type SentTurn,
+} from '@/features/sessions/sent-turns'
 import type { WorkGroupId } from '@/features/sessions/session-groups'
 import { useAuth } from '@/lib/auth/context'
 import {
@@ -81,6 +94,10 @@ import {
 import { COMPOSER_INPUT_ID } from './work-composer-id'
 
 const PAGE = 200
+
+/** A picker of the composer's footer: a quiet word and a chevron, its menu on click. */
+const PICKER =
+  'inline-flex min-w-0 max-w-48 shrink items-center gap-1 whitespace-nowrap rounded-[6px] px-1.5 py-0.5 text-overline font-normal text-text-2 outline-none hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-focus'
 /** Eight rows of 24 px and the field's own padding. */
 const MAX_FIELD_PX = 8 * 24 + 16
 
@@ -334,6 +351,10 @@ function SessionComposer({
       asWire: boolean
       draftSnapshot?: string | null
       attachments?: string[]
+      /** The sign-in and organization the message was sent under. */
+      partition?: string
+      /** Where the session's conversation stood when it was sent. */
+      place?: Pick<SentTurn, 'after' | 'shown'>
     }) => {
       const run = attached.run
       // A message with images is one body for every tool: the engine encodes it.
@@ -354,6 +375,18 @@ function SessionComposer({
     onSuccess: (_ok, payload) => {
       if (payload.asWire) setWire('')
       else {
+        // The conversation shows the message now; the tool shows it when it takes the
+        // turn, and then only its own row stays (dev#2787).
+        // A slash command is answered by the tool, not shown as a message.
+        if (
+          payload.partition &&
+          payload.value.trim() &&
+          !payload.value.trimStart().startsWith('/')
+        )
+          useSentTurns.getState().note(payload.partition, payload.run, {
+            text: payload.value,
+            ...payload.place,
+          })
         // A→B→A can remount the field while this send is pending. Retain newer edits.
         if (sessionDraftSnapshot(draftKey) === payload.draftSnapshot)
           changeTurn('')
@@ -486,6 +519,8 @@ function SessionComposer({
       asWire: false,
       draftSnapshot: sessionDraftSnapshot(draftKey),
       attachments: images.ids,
+      partition: sentTurnsPartition(),
+      place: sentPlace(attached.run.run_ref, value),
     })
   }
   const sendWire = () => {
@@ -589,14 +624,27 @@ function SessionComposer({
   const speedModel = attachedProfile?.provider_record_ref
     ? undefined
     : modelChoices.start
-  const speedUnavailable =
-    (chosenSpeed.fastMode === true &&
-      speedModel?.supports_fast_mode !== true) ||
-    (!!chosenSpeed.serviceTier &&
-      !speedModel?.service_tiers?.includes(chosenSpeed.serviceTier))
   const speedChanged =
     chosenSpeed.fastMode !== attached.run.fast_mode ||
     (chosenSpeed.serviceTier ?? '') !== (attached.run.service_tier ?? '')
+  // dev#2786: a Claude session records the exact id its catalog selector launched on
+  // (claude-opus-5-5 for a launch with no model), which the catalog does not list. Its
+  // own Fast mode was checked at that launch; whether the id takes Fast mode is unknown
+  // here, so Off stays offered and On waits for a listed model.
+  const ownModelUnlisted =
+    !!sessionModel &&
+    chosen.model === sessionModel &&
+    !!modelChoices.catalog &&
+    !modelChoices.catalog.models.some((m) => m.id === sessionModel)
+  const ownFastUnlisted =
+    ownModelUnlisted && chosenSpeed.fastMode === attached.run.fast_mode
+  const speedUnavailable =
+    (chosenSpeed.fastMode === true &&
+      !ownFastUnlisted &&
+      speedModel?.supports_fast_mode !== true) ||
+    (!!chosenSpeed.serviceTier &&
+      !speedModel?.service_tiers?.includes(chosenSpeed.serviceTier))
+  const accessText = useAccessWords(attached.run)
   // Read-only operators still see the scope declared by the run.
   if (!canWrite) {
     return <ScopeLine {...attachedScope} className="px-3 py-2" />
@@ -616,26 +664,49 @@ function SessionComposer({
       : null
   const hasText = turn.trim().length > 0
   const driver = attached.run.provider_driver
-  const toolModel = [
-    driver ? toolName(driver) : null,
-    sessionModel || null,
-    sessionEffort || null,
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  // Tool, model and effort are said once per pane, here (dev#3120): the model by the
+  // name every surface gives it ("Claude Opus 5.5"), with the id one hover away. The
+  // catalog's own names stay in the list it opens, so the chip does not change on open.
+  const chipParts = (model: string) =>
+    [driver ? toolName(driver) : null, model || null, sessionEffort || null]
+      .filter(Boolean)
+      .join(' · ')
+  const toolModel = chipParts(sessionModel && modelName(sessionModel))
   const chipText = toolModel || t('agentops:create.model')
+  const chipTitle = sessionModel ? chipParts(sessionModel) : chipText
+  // THREE PICKERS (dev#3162): the model by its name, the effort
+  // in a word, the access in the words New session offers. The tool is the pane header's.
+  const modelText = sessionModel
+    ? modelName(sessionModel)
+    : t('agentops:create.model')
+  const effortWord = sessionEffort
+    ? t(`agentops:effort.${sessionEffort}`, { defaultValue: sessionEffort })
+    : ''
+  const effortText =
+    effortWord.charAt(0).toLocaleUpperCase() + effortWord.slice(1)
   // A session that cannot take a turn says why where the sentence would go: the
   // placeholder is the one place a disabled field already is read.
+  // A session that is not running offers one step, named as the header's button names it:
+  // Resume, or Start again for a run that never got going. One the engine cannot resume
+  // has ended, and one still starting says so (dev#3120).
+  const notLive =
+    sendReason !== 'live.blocked.notLive'
+      ? null
+      : attached.run.state === 'pending'
+        ? t('nav:launcher.starting')
+        : !isResumableRun(attached.run)
+          ? t('nav:launcher.ended')
+          : startsAgain(attached.run)
+            ? t('nav:launcher.startAgain')
+            : null
   const blockedText =
-    sendReason === 'live.blocked.notLive' ||
+    notLive ??
+    (sendReason === 'live.blocked.notLive' ||
     sendReason === 'live.blocked.approval'
       ? t(`agentops:${sendReason}`)
-      : null
-  const placeholder =
-    blockedText ??
-    (attached.title
-      ? t('nav:launcher.messagePlaceholder', { title: attached.title })
-      : t('nav:launcher.turnPlaceholder'))
+      : null)
+  // The field teaches what can be typed (dev#3162): the pane header names the session.
+  const placeholder = blockedText ?? t('nav:launcher.askPlaceholder')
   const card = (
     <div
       data-testid="work-composer"
@@ -754,11 +825,12 @@ function SessionComposer({
             <button
               type="button"
               data-testid="composer-tool-model"
-              aria-label={t('nav:launcher.modelAria', { value: chipText })}
-              title={chipText}
-              className="min-w-0 max-w-64 shrink truncate rounded-[6px] bg-muted px-1.5 py-0.5 text-overline font-normal text-text-2 outline-none hover:text-text focus-visible:ring-2 focus-visible:ring-focus"
+              aria-label={t('nav:launcher.modelPicker', { value: modelText })}
+              title={chipTitle}
+              className={PICKER}
             >
-              {chipText}
+              <span className="truncate">{modelText}</span>
+              <ChevronDown aria-hidden className="size-3 shrink-0" />
             </button>
           </PopoverTrigger>
           <PopoverContent
@@ -800,6 +872,9 @@ function SessionComposer({
               <LaunchSpeedFields
                 driver={attached.run.provider_driver ?? ''}
                 model={speedModel}
+                supportUnknown={
+                  ownModelUnlisted && !attachedProfile?.provider_record_ref
+                }
                 fastMode={chosenSpeed.fastMode}
                 serviceTier={chosenSpeed.serviceTier}
                 onFastMode={(fastMode) =>
@@ -877,6 +952,63 @@ function SessionComposer({
             </div>
           </PopoverContent>
         </Popover>
+        {effortText ? (
+          <button
+            type="button"
+            data-testid="composer-effort"
+            aria-label={t('nav:launcher.effortPicker', { value: effortText })}
+            onClick={() => setModelOpen(true)}
+            // One short word: the model and the access give way before it.
+            className={cn(PICKER, 'shrink-0')}
+          >
+            <span className="truncate">{effortText}</span>
+            <ChevronDown aria-hidden className="size-3 shrink-0" />
+          </button>
+        ) : null}
+        {/* THE ACCESS THE SESSION RUNS WITH. The tool cannot change it inside a running
+            session either: the picker says what this one keeps and starts the other. */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              data-testid="composer-access"
+              aria-label={t('nav:launcher.accessPicker', { value: accessText })}
+              className={PICKER}
+            >
+              <span className="truncate">{accessText}</span>
+              <ChevronDown aria-hidden className="size-3 shrink-0" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            side="top"
+            align="start"
+            className="w-80 max-w-[calc(100vw-2rem)] p-3"
+          >
+            <div
+              data-testid="composer-access-panel"
+              className="flex flex-col items-start gap-2"
+            >
+              <SessionMode run={attached.run} />
+              <p className="text-caption text-muted-foreground">
+                {t('nav:launcher.accessKeeps')}
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  useNewSessionDialog.getState().openAdvanced({
+                    profileRef: attached.run.provider_profile_ref,
+                    model: attached.run.model_ref ?? '',
+                    effort: sessionEffort,
+                  })
+                }
+              >
+                {t('nav:launcher.startWithChoice')}
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
         {/* THE RAW LINE IS A DEVELOPER'S TOOL: one NDJSON line to the tool's stdin. A
             production console does not show it (the CLI and the API keep it), and it
             carries its own name, not "Advanced". */}
@@ -926,6 +1058,7 @@ function SessionComposer({
             dashed: a control that cannot act says so by being quiet, and why in its
             name. */}
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          <ContextRing run={attached.run} />
           <AttachButton
             disabled={!runLive || sendTurn.isPending}
             onFiles={images.add}
@@ -956,7 +1089,7 @@ function SessionComposer({
         </div>
         {sendReason ? (
           <span id={sendReasonId} className="sr-only">
-            {t(`agentops:${sendReason}`)}
+            {notLive ?? t(`agentops:${sendReason}`)}
           </span>
         ) : null}
       </div>

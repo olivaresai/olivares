@@ -4,40 +4,79 @@
 import type { TFunction } from 'i18next'
 import {
   Download,
+  Folder,
   Info,
   Keyboard,
   KeyRound,
   Package,
+  Play,
   Server,
   Shield,
   SlidersHorizontal,
+  Sparkles,
+  type LucideIcon,
 } from 'lucide-react'
-import { fold, type NavSearchEntry } from '@/features/navigation/model'
+import {
+  fold,
+  viewById,
+  type NavSearchEntry,
+  type ViewGate,
+} from '@/features/navigation/model'
+
+export interface SettingsSection {
+  id: string
+  icon: LucideIcon
+  adminOnly: boolean
+  /** The console page this section hosts (a registry id): Settings shows that page's own
+   * element inside itself, and offers the section only where the page opens (#2905). */
+  view?: string
+}
 
 /** Sections actually offered by Settings; the palette uses the same labels and gate. */
 export const SETTINGS_SECTIONS = [
   { id: 'general', icon: SlidersHorizontal, adminOnly: false },
   { id: 'keyboard', icon: Keyboard, adminOnly: false },
+  { id: 'aiTools', icon: Sparkles, adminOnly: false, view: 'providers' },
+  {
+    id: 'workspaces',
+    icon: Folder,
+    adminOnly: false,
+    view: 'workspaceDashboard',
+  },
+  { id: 'deploy', icon: Server, adminOnly: false, view: 'deploy' },
   { id: 'signIn', icon: Shield, adminOnly: false },
+  { id: 'setup', icon: Play, adminOnly: false, view: 'onboarding' },
   { id: 'edition', icon: Package, adminOnly: false },
   { id: 'updates', icon: Download, adminOnly: true },
   { id: 'sessionIdle', icon: Server, adminOnly: true },
   { id: 'tracing', icon: Server, adminOnly: true },
   { id: 'signing', icon: KeyRound, adminOnly: true },
   { id: 'about', icon: Info, adminOnly: false },
-] as const
+] as const satisfies readonly SettingsSection[]
 export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]['id']
 
-export function settingsSections(isSuperadmin: boolean) {
-  return SETTINGS_SECTIONS.filter((s) => !s.adminOnly || isSuperadmin)
+const ALL_SECTIONS: readonly SettingsSection[] = SETTINGS_SECTIONS
+
+/** What this person is offered: administrator sections for a system administrator, and a
+ * hosted page only where it opens (the gate the sidebar uses, #474). */
+export function settingsSections(
+  isSuperadmin: boolean,
+  navigable: ViewGate,
+): readonly SettingsSection[] {
+  return ALL_SECTIONS.filter((s) => {
+    if (s.adminOnly && !isSuperadmin) return false
+    const view = s.view ? viewById(s.view) : undefined
+    return !s.view || (view !== undefined && navigable(view))
+  })
 }
 
 export function settingsSearchEntries(
   t: TFunction,
   isSuperadmin: boolean,
+  navigable: ViewGate,
 ): NavSearchEntry[] {
   const context = t('settings:title')
-  return settingsSections(isSuperadmin).map((s, order) => {
+  return settingsSections(isSuperadmin, navigable).map((s, order) => {
     const label = t(`settings:nav.${s.id}`)
     const path = `/settings?section=${s.id}`
     return {

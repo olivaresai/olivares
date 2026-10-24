@@ -1130,7 +1130,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/console/activation/apply — Enable or disable a preset, or promote one add-on (AAL3 step-up; 501 without the activation service)
+   * POST /v1/console/activation/apply — Enable or disable a preset or one family, or promote one add-on (AAL3 step-up; 501 without the activation service)
    *
    * Stability: stable.
    */
@@ -2480,7 +2480,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/agenttools/sign-in/{id}/code — Hands the code shown on Claude's sign-in page to the waiting login and answers once the tool says whether it is signed in.
+   * POST /v1/m/agenttools/sign-in/{id}/code — Hands the code shown on Claude's sign-in page, or the API key a needs_key login waits for, to the waiting login and answers once the tool says whether it is signed in.
    *
    * Stability: beta.
    */
@@ -8829,6 +8829,24 @@ export class Client extends ClientCore {
   }
 
   /**
+   * POST /v1/m/sessions/runs/{ref}/archive — Archives the run for every reader, idempotently: an archived run keeps its first archived_at.
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsRunsByRefArchive(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/m/sessions/runs/{ref}/archive", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/archive`, undefined, opts);
+  }
+
+  /**
+   * DELETE /v1/m/sessions/runs/{ref}/archive — Unarchives the run, idempotently.
+   *
+   * Stability: beta.
+   */
+  deleteV1MSessionsRunsByRefArchive(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/m/sessions/runs/{ref}/archive", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/archive`, undefined, opts);
+  }
+
+  /**
    * GET /v1/m/sessions/runs/{ref}/attach — Streams a live session's bridged I/O as server-sent events, replaying from an optional ?from=<seq> cursor.
    *
    * Stability: beta.
@@ -8915,6 +8933,24 @@ export class Client extends ClientCore {
    */
   getV1MSessionsRunsByRefDiffFile(ref: string, opts?: RequestOptions): Promise<Json> {
     return this.do("GET", "/v1/m/sessions/runs/{ref}/diff/file", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/diff/file`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/runs/{ref}/done — Marks the run done for the caller, idempotently.
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsRunsByRefDone(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/m/sessions/runs/{ref}/done", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/done`, undefined, opts);
+  }
+
+  /**
+   * DELETE /v1/m/sessions/runs/{ref}/done — Removes the caller's done mark, idempotently.
+   *
+   * Stability: beta.
+   */
+  deleteV1MSessionsRunsByRefDone(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/m/sessions/runs/{ref}/done", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/done`, undefined, opts);
   }
 
   /**
@@ -9026,6 +9062,15 @@ export class Client extends ClientCore {
   }
 
   /**
+   * PUT /v1/m/sessions/runs/{ref}/name — Renames the run; an empty name clears it.
+   *
+   * Stability: beta.
+   */
+  putV1MSessionsRunsByRefName(ref: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("PUT", "/v1/m/sessions/runs/{ref}/name", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/name`, body, opts);
+  }
+
+  /**
    * PUT /v1/m/sessions/runs/{ref}/peers — Stores one operator choice on the existing run row.
    *
    * Stability: beta.
@@ -9077,6 +9122,24 @@ export class Client extends ClientCore {
    */
   postV1MSessionsRunsByRefResume(ref: string, opts?: RequestOptions): Promise<Json> {
     return this.do("POST", "/v1/m/sessions/runs/{ref}/resume", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/resume`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/runs/{ref}/snooze — Snoozes the run for the caller until a moment still to come, or moves the moment of a snooze already set.
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsRunsByRefSnooze(ref: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/sessions/runs/{ref}/snooze", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/snooze`, body, opts);
+  }
+
+  /**
+   * DELETE /v1/m/sessions/runs/{ref}/snooze — Ends the caller's snooze, idempotently.
+   *
+   * Stability: beta.
+   */
+  deleteV1MSessionsRunsByRefSnooze(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/m/sessions/runs/{ref}/snooze", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/snooze`, undefined, opts);
   }
 
   /**

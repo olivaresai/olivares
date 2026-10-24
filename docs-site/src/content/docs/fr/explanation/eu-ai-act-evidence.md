@@ -52,6 +52,8 @@ de preuves consommables par un auditeur** : scellés, ancrés au ledger, exporta
 en JSON, CSV ou **OSCAL**, avec une preuve d'intégrité en direct. Le document est
 *dérivé de ce qui s'est passé*, pas asserté sur ce qui était prévu.
 
+Le mapping des frameworks, les évaluations, la vue DORA, l'export OSCAL et les rapports relèvent de **Business** (Compliance Packs) : un serveur Community répond à ces routes par `501`. Community conserve le registre signé, la gestion des enregistrements et les exports JSON/CSV des preuves stockées.
+
 Deux règles d'honnêteté sont câblées dans le produit et se transmettent directement
 aux preuves :
 

@@ -16,8 +16,9 @@ launches it exactly as it launches the real tool and speaks the tool's own wire 
 
 Answers come from conversations.json, matched on the exact prompt text, so every finished
 conversation in a capture is a recorded transcript and no vendor, account or network is used.
-The status commands the engine runs (`auth status`, `login status`, `auth list`) answer "signed
-in" the way the real tool prints it. A tool never reads, writes or prints a credential.
+The status commands the engine runs answer as the real tool prints them: Claude and Codex are
+signed in, OpenCode holds an Anthropic API key rather than an OpenAI login. A tool never reads,
+writes or prints a credential.
 """
 import json
 import os
@@ -52,8 +53,7 @@ def offered_models(tool):
             embedded = json.load(fh)
     seen = []
     for s in embedded["sessions"]:
-        # OpenCode names a model of the local provider under the engine's own provider id.
-        model = "olivares_ollama/" + s["model"] if s.get("local") else s["model"]
+        model = s["model"]
         if s["tool"] == tool and model not in seen:
             seen.append(model)
     return seen
@@ -133,6 +133,8 @@ def claude(args):
         totals["out"] += usage.get("output", 0)
         totals["cache"] += usage.get("cache_read", 0)
         totals["cost"] += usage.get("cost_usd", 0.0)
+        if turn.get("hold"):
+            continue  # no result frame: the turn stays in flight and the run stays live
         last = [s["say"] for s in turn["steps"] if "say" in s][-1:]
         emit({"type": "result", "subtype": "success", "session_id": sid, "is_error": False,
               "result": last[0] if last else "", "duration_ms": 1800 * n, "model": model,
@@ -166,10 +168,13 @@ def codex(args):
             emit({"id": rid, "result": {"account": {"type": "chatgpt", "email": None, "planType": "pro"},
                                         "requiresOpenaiAuth": False}})
         elif method in ("thread/start", "thread/resume"):
+            # A bound session is told which provider to use (`olivares_record` for a managed
+            # injection) and the engine refuses input unless the thread confirms it.
+            provider = params.get("modelProvider") or "openai"
             emit({"id": rid, "result": {
                 "thread": {"id": thread, "parentThreadId": None, "agentRole": None, "model": default_model,
-                           "cliVersion": "0.153.4", "modelProvider": "openai"},
-                "model": params.get("model") or default_model, "modelProvider": "openai",
+                           "cliVersion": "0.153.4", "modelProvider": provider},
+                "model": params.get("model") or default_model, "modelProvider": provider,
                 "cwd": os.getcwd(), "approvalPolicy": "untrusted",
                 "sandbox": {"type": "readOnly", "networkAccess": False}, "approvalsReviewer": "user"}})
         elif method == "turn/start":
@@ -191,6 +196,8 @@ def codex(args):
             usage_total["in"] += usage.get("input", 0)
             usage_total["cached"] += usage.get("cache_read", 0)
             usage_total["out"] += usage.get("output", 0)
+            if turn.get("hold"):
+                continue  # no tokenUsage or turn/completed: the run stays live
 
             def breakdown(t):
                 return {"inputTokens": t["in"], "cachedInputTokens": t["cached"], "cacheWriteInputTokens": 0,
@@ -275,6 +282,8 @@ def acp(kind, args):
                     update({"sessionUpdate": "tool_call_update", "toolCallId": cid, "status": "completed",
                             "content": [{"type": "content", "content": {"type": "text", "text": call["output"]}}]})
                 pause()
+            if turn.get("hold"):
+                continue  # no stopReason: the turn stays in flight and the run stays live
             reply({"stopReason": "end_turn"})
             if turn.get("final"):
                 return
@@ -296,7 +305,7 @@ def main():
         codex(args)
     elif kind == "opencode":
         if args[:2] == ["auth", "list"]:
-            print("┌  Credentials\n│\n●  OpenAI oauth\n│\n└  1 credentials")
+            print("┌  Credentials\n│\n●  Anthropic api\n│\n└  1 credentials")
             return 0
         if args and args[0] == "acp":
             acp(kind, args)

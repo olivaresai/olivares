@@ -62,6 +62,13 @@ export interface RunPinDTO {
   pinned_at?: string
 }
 
+/** The answer of the snooze and done routes: the signed-in person's two marks. */
+export interface RunMarkDTO {
+  run_ref: string
+  snoozed_until?: string
+  done: boolean
+}
+
 /** One operated Claude Code session (GET /runs, /runs/{ref}). */
 export interface RunDTO {
   run_ref: string
@@ -73,7 +80,16 @@ export interface RunDTO {
    * resume), which is not "unpinned".
    */
   pinned?: boolean
+  /** When the session was archived: out of the default list, under Archived. */
+  archived_at?: string
   pinned_at?: string
+  /**
+   * THE CALLER'S OWN snooze and done marks, read like the pin. `snoozed_until` is
+   * present only while the snooze is still to end: the engine stops sending it at that
+   * moment, so the session comes back without a clock here.
+   */
+  snoozed_until?: string
+  done?: boolean
   transport: Transport
   permission_mode: PermissionMode | string
   effort?: Effort | string
@@ -164,6 +180,13 @@ export interface RunDTO {
   peers_rule?: 'same-template'
   /** A privileged launch (drove the HITL + mandatory recording floor). */
   critical: boolean
+  /** What the session reaches (#2545): its folders with their access, and the hosts it
+   * may connect to besides the engine. `reason` says why a part could not be read. */
+  reaches?: {
+    folders: { path: string; access: 'write' | 'read' | 'unknown' }[]
+    hosts: string[]
+    reason?: string
+  }
 
   // Provider-profile facts, persisted at launch. References only — the
   // homes live on the profile's authorized configuration read, never here. All
@@ -206,6 +229,30 @@ export interface RunDTO {
    * bridge proved the run owns its provider id. A profiled run is joined to its
    * session by THIS, never by the bare `claude_session_id` two homes may share. */
   live_ref?: string
+  /** The canonical session this run operates (`osn_…`): what an approval's
+   * `session_ref` names. */
+  canonical_sid?: string
+  /** Who the session acts for (the run read's session facts, #2545). Absent on an
+   * engine older than the facts. */
+  acts_for?: RunActsFor
+  /** The audit ledger's evidence for the session; `chain_verified` is the tenant's
+   * whole chain, read incrementally by the engine. */
+  proof?: RunProof
+}
+
+/** A person launched it, a work item or agent dispatched it, or it predates the record. */
+export interface RunActsFor {
+  kind: 'user' | 'automation' | 'unknown'
+  user_id?: string
+  name?: string
+  reason?: string
+}
+
+/** Null values come with a `reason`; null is never "no" or 0. */
+export interface RunProof {
+  ledger_entries: number | null
+  chain_verified: boolean | null
+  reason?: string
 }
 
 /** A limit a tool ended a turn on: the account's plan ran out (`usage`), or the
@@ -623,6 +670,8 @@ export interface RunMessageDTO {
   at?: string
   first_line: string
   text?: string
+  /** With `text`: the text was cut at 64 KiB and ends in " [...]". */
+  clipped?: boolean
   /** With `text`: how many later messages of the same sender repeat its first line. */
   later_same?: number
 }
@@ -650,6 +699,8 @@ export interface RunMessagesParams {
   cursor?: string
   limit?: number
   id?: number
+  /** Every message of the page carries its whole `text` (Copy transcript). */
+  text?: 1
 }
 
 export interface RunActivityDTO {
@@ -860,6 +911,8 @@ export interface AttachFrame {
   seq: number
   stream: 'stdout' | 'stderr' | string
   line: string
+  /** When the engine read the frame (RFC 3339); absent from an older engine. */
+  at?: string
 }
 
 /** A backpressure/gap sentinel (event: `lag`): the ring evicted frames below the cursor

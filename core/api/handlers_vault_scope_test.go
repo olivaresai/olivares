@@ -14,16 +14,17 @@ import (
 
 // Admitting every member to the tenant scope (so each keeps a vault) must give them
 // nothing of the organization's own secrets: a viewer and an editor are refused every
-// verb on mcp/ and env/ names, and what the admin stored is untouched afterwards.
+// verb on mcp/, env/ and credential/ names, and what the admin stored is untouched afterwards.
 func TestVaultMembersCannotTouchOrganizationSecrets(t *testing.T) {
 	f := newVaultFixture(t)
 	f.put(f.alice, "mcp/github", "org-mcp-secret-0451")
 	f.put(f.alice, "env/GITHUB_TOKEN", "org-env-secret-0451")
+	f.put(f.alice, "credential/prod-db", "org-credential-secret-0451")
 	f.put(f.alice, f.item(f.aliceID, "bank"), vaultLogin)
 
 	for role, email := range map[string]string{auth.RoleViewer: "viewer@vault.io", auth.RoleEditor: "editor@vault.io"} {
 		token := f.h.mkMember(f.root, email, "fixturepass1", role, f.tenant)
-		for _, name := range []string{"mcp/github", "env/GITHUB_TOKEN", "mcp/new"} {
+		for _, name := range []string{"mcp/github", "env/GITHUB_TOKEN", "mcp/new", "credential/prod-db", "credential/new"} {
 			for verb, got := range map[string]resp{
 				"put":    f.put(token, name, "member-value"),
 				"delete": f.h.do("DELETE", vaultScopePath, token, map[string]any{"name": name}, tenantHdr(f.tenant)),
@@ -41,8 +42,8 @@ func TestVaultMembersCannotTouchOrganizationSecrets(t *testing.T) {
 	}
 	// Nothing the admin stored changed.
 	adminView := listed(t, f.list(f.alice))
-	if len(adminView) != 3 {
-		t.Fatalf("admin list after the refusals = %v, want mcp/github, env/GITHUB_TOKEN and her item", adminView)
+	if len(adminView) != 4 {
+		t.Fatalf("admin list after the refusals = %v, want mcp/github, env/GITHUB_TOKEN, credential/prod-db and her item", adminView)
 	}
 }
 

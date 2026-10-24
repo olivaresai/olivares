@@ -3,8 +3,8 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
-import { Check, X } from 'lucide-react'
-import { useState } from 'react'
+import { Check } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,20 +14,19 @@ import { ForbiddenState } from '@/components/ui/error-state'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
 import { withInlineCommands } from '@/components/ui/inline-commands'
 import { KvList, KvRow } from '@/components/ui/kv'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StatusBadge } from '@/components/data/badges'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
+import {
+  isTypingTarget,
+  modalIsOpen,
+  navLeader,
+  resolveBinding,
+} from '@/lib/keybindings/model'
+import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { RelTimeLabel } from '@/features/shared'
 import { governanceApi, governanceKeys } from './api'
 import {
@@ -35,10 +34,10 @@ import {
   ApprovalPreview,
   approvalCommandUnknown,
 } from './approval-preview'
-import { DecisionDialog } from './decision-dialog'
+import { DenyDialog, useDecision } from './decision-dialog'
 import './i18n'
 import { canDecideOnRequest } from './types'
-import type { ApprovalDTO, DecisionDTO, DecisionVerb } from './types'
+import type { ApprovalDTO, DecisionDTO } from './types'
 
 /** A tool-call approval (claude.tool, provider.tool, mcp.tool …): its reason
  * names the command or path under review. */
@@ -49,225 +48,276 @@ function isToolCall(subjectKind?: string): boolean {
 /** The approval the engine opens to re-enable a stopped estate (dual control). */
 const REENABLE_ACTION = 'security.killswitch.reenable'
 
-export interface ApprovalDetailSheetProps {
-  approvalId: string | null
-  open: boolean
-  onOpenChange: (open: boolean) => void
+/** The region the queue's keys belong to: the queue and the open request. */
+export const APPROVAL_QUEUE_REGION = 'data-approval-queue'
+
+/** A bare key is the queue's only where the person is reading the queue: on the page
+ * itself or inside the queue and its panel. Never in a field, a modal, or a control that
+ * answers letters itself (a select's or a menu's typeahead), and never as the second half
+ * of a `g` sequence. */
+function queueOwnsKey(e: KeyboardEvent): boolean {
+  if (e.defaultPrevented || e.repeat || e.isComposing) return false
+  if (navLeader.armed()) return false
+  const target = e.target
+  if (isTypingTarget(target) || modalIsOpen()) return false
+  return (
+    target === document.body ||
+    (target instanceof Element &&
+      !!target.closest(`[${APPROVAL_QUEUE_REGION}]`) &&
+      !target.closest('[role="combobox"],[role="listbox"],[role="menu"]'))
+  )
 }
 
 /**
- * ApprovalDetailSheet is the drill-in / traceability-from-action-to-human view: the
- * full approval header plus the immutable, append-only decision trail (who decided
- * what, when, with what note). The trail is read-only — never an edit/delete
- * affordance. Approve / Reject (admin) and Cancel (requester-or-admin) live here too,
- * each gated by permission and routed through a confirm + privileged mutation.
+ * ApprovalDetailPanel is the open request beside the queue (#2548): what will run, the
+ * rule that asked and what it reaches, who may not decide it, the decision, and the
+ * immutable, append-only trail (read-only, never an edit or delete affordance).
  *
- * Poll-based freshness (no SSE): while open, the request + its trail refetch on a 12s
- * interval so a status change or a new decision shows without a manual refresh.
+ * APPROVE ONCE IS ONE ACTION. The command, the rule and the reach are on screen above the
+ * button, so a second confirmation would only repeat them; the engine records the one
+ * decision in the ledger. Deny keeps its dialog for the note a refusal usually wants.
+ * `A` and `D` do the same from the keyboard, outside a field and outside a modal.
+ *
+ * The list's row is shown at once; the request and its trail are then read and polled
+ * every 12 s (no SSE), so a status change or a new decision shows without a refresh.
  */
-export function ApprovalDetailSheet({
+export function ApprovalDetailPanel({
   approvalId,
-  open,
-  onOpenChange,
-}: ApprovalDetailSheetProps) {
+  approval,
+}: {
+  approvalId: string
+  /** The queue's row for it, shown while the engine's read arrives; absent for a linked
+   * request the queue does not list (decided, expired, or under another filter). */
+  approval?: ApprovalDTO
+}) {
   const { t } = useTranslation(['governance', 'common'])
   const { activeTenant, can, principal } = useAuth()
   const canDecide = can('governance:approval:admin')
   const canWrite = can('governance:approval:write')
 
-  const [decisionVerb, setDecisionVerb] = useState<DecisionVerb | null>(null)
-  const [decisionOpen, setDecisionOpen] = useState(false)
+  const [denyOpen, setDenyOpen] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
 
   const query = useQuery({
-    queryKey: governanceKeys.approval(activeTenant, approvalId ?? ''),
-    queryFn: () => governanceApi.getApproval(approvalId!),
-    enabled: open && !!approvalId,
-    refetchInterval: open ? 12_000 : false,
+    queryKey: governanceKeys.approval(activeTenant, approvalId),
+    queryFn: () => governanceApi.getApproval(approvalId),
+    placeholderData: approval,
+    refetchInterval: 12_000,
   })
   const detail = query.data
 
   const decisions = useQuery({
-    queryKey: governanceKeys.decisions(activeTenant, approvalId ?? ''),
-    queryFn: () => governanceApi.listDecisions(approvalId!),
-    enabled: open && !!approvalId,
-    refetchInterval: open ? 12_000 : false,
+    queryKey: governanceKeys.decisions(activeTenant, approvalId),
+    queryFn: () => governanceApi.listDecisions(approvalId),
+    refetchInterval: 12_000,
   })
 
+  const approve = useDecision(approvalId, 'approve')
+
   const cancel = usePrivilegedMutation({
-    mutationFn: () => governanceApi.cancelApproval(approvalId!),
+    mutationFn: () => governanceApi.cancelApproval(approvalId),
     invalidateKeys: () => [
       governanceKeys.approvals(activeTenant),
-      governanceKeys.approval(activeTenant, approvalId ?? ''),
+      governanceKeys.approval(activeTenant, approvalId),
     ],
     successMessage: t('cancel.done'),
     onDone: () => setConfirmCancel(false),
   })
 
   const isPending = detail?.status === 'pending'
-  // Separation of duties: hide Approve/Reject the engine would 403 (requester
+  // A request that needs more than one approver stays pending after this person's
+  // approval; the engine refuses a second decision from them (409), so it is not offered.
+  const decidedByMe =
+    !!principal?.actor &&
+    !!decisions.data?.items.some((d) => d.decider === principal.actor)
+  // Separation of duties: hide Approve/Deny the engine would 403 (requester
   // cannot decide their own; a token has no stable user id).
   const mayDecide =
+    isPending &&
+    !decidedByMe &&
     canDecide &&
     canDecideOnRequest(detail?.requested_by, principal?.actor, principal?.kind)
+  const { mutate: decide, isPending: deciding } = approve
+  // One decision per action: a second click or key that lands before the first one's
+  // render is dropped here, not sent and refused.
+  const inFlight = useRef(false)
+  useEffect(() => {
+    if (!deciding) inFlight.current = false
+  }, [deciding])
+  const approveOnce = useCallback(() => {
+    if (inFlight.current) return
+    inFlight.current = true
+    decide({ decision: 'approve' })
+  }, [decide])
 
-  function openDecision(verb: DecisionVerb) {
-    setDecisionVerb(verb)
-    setDecisionOpen(true)
-  }
+  useEffect(() => {
+    if (!mayDecide) return
+    const onKey = (e: KeyboardEvent) => {
+      if (!queueOwnsKey(e)) return
+      const command = resolveBinding(KEYBINDINGS, e, { approvalQueue: true })
+      if (command === 'approvals.approve') {
+        e.preventDefault()
+        approveOnce()
+      } else if (command === 'approvals.deny') {
+        e.preventDefault()
+        setDenyOpen(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [mayDecide, approveOnce])
+
+  const requesterIsPerson =
+    !!detail?.requested_by?.startsWith('user:') && !detail.launched_by
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl">
-        <SheetHeader>
-          <SheetTitle>{t('detail.title')}</SheetTitle>
-          {detail && (
-            <SheetDescription className="flex flex-wrap items-center gap-1.5">
+    <aside
+      aria-label={t('preview.requestSummary')}
+      className="flex min-w-0 flex-col gap-4 rounded-xl border border-line bg-surface p-4"
+      data-slot="approval-panel"
+    >
+      {query.error instanceof ApiError && query.error.isStepUpRequired ? (
+        // ⛔ ASSURANCE BEFORE ROLE, and here the engine really sends it:
+        // `modules/governance/approvals.go:579` answers 403 with `code: step_up_required`.
+        // `isForbidden` is ONLY the status (lib/api/errors.ts:59-61), so the approval's sheet
+        // was replaced by "you are not authorized" exactly when what was needed was to
+        // confirm the session.
+        <StepUpRequiredState
+          action="generic"
+          onElevated={() => void query.refetch()}
+        />
+      ) : query.error instanceof ApiError && query.error.isForbidden ? (
+        <ForbiddenState />
+      ) : !detail && query.isPending ? (
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full" />
+          ))}
+        </div>
+      ) : query.error || !detail ? (
+        <QueryErrorState error={query.error} retry={() => query.refetch()} />
+      ) : (
+        <>
+          {!isPending || detail.escalated ? (
+            <div className="flex flex-wrap items-center gap-1.5">
               <StatusBadge status={detail.status} />
               {detail.escalated && (
                 <Badge variant="warning" title={t('approvals.escalatedHint')}>
                   {t('approvals.escalatedBadge')}
                 </Badge>
               )}
-            </SheetDescription>
-          )}
-        </SheetHeader>
-
-        <ScrollArea className="-mr-4 flex-1 pr-4">
-          {query.isLoading ? (
-            <div className="flex flex-col gap-3">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full" />
-              ))}
             </div>
-          ) : query.error instanceof ApiError &&
-            query.error.isStepUpRequired ? (
-            // ⛔ ASEGURAMIENTO ANTES QUE ROL, y aquí el motor lo emite de verdad:
-            // `modules/governance/approvals.go:579` contesta 403 con `code: step_up_required`.
-            // `isForbidden` es SÓLO el status (lib/api/errors.ts:59-61), así que la hoja de la
-            // aprobación se sustituía por «no tienes autorización» justo cuando lo que hacía
-            // falta era confirmar la sesión.
-            <StepUpRequiredState
-              action="generic"
-              onElevated={() => void query.refetch()}
-            />
-          ) : query.error instanceof ApiError && query.error.isForbidden ? (
-            <ForbiddenState />
-          ) : query.error || !detail ? (
-            <QueryErrorState
-              error={query.error}
-              retry={() => query.refetch()}
-            />
-          ) : (
-            <div className="flex flex-col gap-5">
-              {/* What will run first; the engine's references behind Details. */}
-              <ApprovalPreview approval={detail} />
-              <ApprovalDetails approval={detail}>
-                <Overview detail={detail} />
-              </ApprovalDetails>
+          ) : null}
 
-              <Separator />
+          {/* What will run first, then why it needs a person and what it reaches. */}
+          <ApprovalPreview approval={detail} />
 
-              <section className="flex flex-col gap-2">
-                <h3 className="text-body font-medium text-foreground">
-                  {t('detail.trail')}
-                </h3>
-                <p className="text-caption text-muted-foreground">
-                  {t('detail.trailCaption')}
-                </p>
-                <DecisionTrail
-                  items={decisions.data?.items ?? []}
-                  loading={decisions.isLoading}
-                  error={decisions.error}
-                  onRetry={() => decisions.refetch()}
-                />
-              </section>
-            </div>
-          )}
-        </ScrollArea>
+          {isPending && decidedByMe ? (
+            <p className="text-body text-text-2" role="status">
+              {t('detail.decidedByYou')}
+            </p>
+          ) : isPending &&
+            detail.action !== REENABLE_ACTION &&
+            detail.requested_by === principal?.actor ? (
+            <p className="text-body text-text-2" role="status">
+              {t('detail.cannotDecideOwn')}
+            </p>
+          ) : isPending && requesterIsPerson ? (
+            <p className="text-caption text-text-2">
+              {t('detail.requesterCannotApprove')}
+            </p>
+          ) : null}
 
-        {detail &&
-        isPending &&
-        detail.action !== REENABLE_ACTION &&
-        detail.requested_by === principal?.actor ? (
-          <p
-            className="border-t border-border pt-3 text-body text-text-2"
-            role="status"
-          >
-            {t('detail.cannotDecideOwn')}
-          </p>
-        ) : null}
-
-        {/* HU 047: the requester of an estate re-enable cannot decide it, and the sheet
-            offered nothing else. It says what is needed and where to do it. */}
-        {detail &&
-        isPending &&
-        detail.action === REENABLE_ACTION &&
-        !canDecideOnRequest(
-          detail.requested_by,
-          principal?.actor,
-          principal?.kind,
-        ) ? (
-          <div
-            className="border-t border-border pt-3 text-body text-text-2"
-            data-slot="reenable-needs-admins"
-          >
-            {/* The command in the sentence reads as a command (the inline chip with Copy),
-                not as text between backticks (Root, 047 review). */}
-            {withInlineCommands(t('detail.reenableNeedsAdmins'))}{' '}
-            <a
-              href="/identity"
-              className="text-accent-text underline underline-offset-2"
+          {/* HU 047: the requester of an estate re-enable cannot decide it, and the panel
+              offered nothing else. It says what is needed and where to do it. */}
+          {isPending &&
+          detail.action === REENABLE_ACTION &&
+          !canDecideOnRequest(
+            detail.requested_by,
+            principal?.actor,
+            principal?.kind,
+          ) ? (
+            <div
+              className="text-body text-text-2"
+              data-slot="reenable-needs-admins"
             >
-              {t('detail.openIdentity')}
-            </a>
-          </div>
-        ) : null}
+              {/* The command in the sentence reads as a command (the inline chip with Copy),
+                  not as text between backticks (Root, 047 review). */}
+              {withInlineCommands(t('detail.reenableNeedsAdmins'))}{' '}
+              <a
+                href="/identity"
+                className="text-accent-text underline underline-offset-2"
+              >
+                {t('detail.openIdentity')}
+              </a>
+            </div>
+          ) : null}
 
-        {/* Actions footer — gated by permission + pending status. */}
-        {detail && isPending && (mayDecide || canWrite) && (
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
-            {canWrite && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setConfirmCancel(true)}
-              >
-                {t('approvals.cancel')}
-              </Button>
-            )}
-            {mayDecide && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => openDecision('reject')}
-              >
-                <X />
-                {t('approvals.reject')}
-              </Button>
-            )}
-            {mayDecide && (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => openDecision('approve')}
-              >
-                <Check />
-                {t('approvals.approve')}
-              </Button>
-            )}
-          </div>
-        )}
-      </SheetContent>
+          {isPending && (mayDecide || canWrite) ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {mayDecide && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={deciding}
+                  aria-keyshortcuts="A"
+                  onClick={approveOnce}
+                >
+                  <Check />
+                  {t('approvals.approveOnce')}
+                </Button>
+              )}
+              {mayDecide && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  aria-keyshortcuts="D"
+                  onClick={() => setDenyOpen(true)}
+                >
+                  {t('approvals.deny')}
+                </Button>
+              )}
+              {canWrite && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setConfirmCancel(true)}
+                >
+                  {t('approvals.cancel')}
+                </Button>
+              )}
+            </div>
+          ) : null}
 
-      {/* Approve / reject decision (HIGH risk, danger + note). */}
+          <ApprovalDetails approval={detail}>
+            <Overview detail={detail} />
+          </ApprovalDetails>
+
+          <Separator />
+
+          <section className="flex flex-col gap-2">
+            <h3 className="text-body font-medium text-foreground">
+              {t('detail.trail')}
+            </h3>
+            <p className="text-caption text-muted-foreground">
+              {t('detail.trailCaption')}
+            </p>
+            <DecisionTrail
+              items={decisions.data?.items ?? []}
+              loading={decisions.isLoading}
+              error={decisions.error}
+              onRetry={() => decisions.refetch()}
+            />
+          </section>
+        </>
+      )}
+
+      {/* Deny (HIGH risk, danger + note). */}
       {detail && (
-        <DecisionDialog
-          open={decisionOpen}
-          onOpenChange={setDecisionOpen}
-          approvalId={detail.id}
+        <DenyDialog
+          open={denyOpen}
+          onOpenChange={setDenyOpen}
           approval={detail}
-          verb={decisionVerb}
         />
       )}
 
@@ -284,7 +334,7 @@ export function ApprovalDetailSheet({
           onConfirm={() => cancel.mutate(undefined)}
         />
       )}
-    </Sheet>
+    </aside>
   )
 }
 
@@ -303,6 +353,11 @@ function Overview({ detail }: { detail: ApprovalDTO }) {
       {detail.subject_ref && (
         <KvRow label={t('detail.subjectRef')} mono align="start">
           {detail.subject_ref}
+        </KvRow>
+      )}
+      {detail.launched_by && (
+        <KvRow label={t('detail.launchedBy')} mono>
+          <span title={t('approvals.actorHint')}>{detail.launched_by}</span>
         </KvRow>
       )}
       {detail.requested_by && (

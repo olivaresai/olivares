@@ -118,8 +118,11 @@ var refuseTable = []struct {
 	{"https://my host.example", CodeControlCharacter},
 	{"https://panel.example.com\x00", CodeControlCharacter},
 	// The punycode prefix with nothing to decode. x/net returns "" for it with a
-	// NIL error — the one place it produces a host the browser refuses — so this
-	// is checked explicitly, in every spelling of the separator and either case.
+	// NIL error, so this is checked explicitly, in every spelling of the
+	// separator and either case. Node 24.15 refused all of these as well; Node
+	// 24.21 passes the two ASCII-dot literal spellings through, and those are
+	// recorded as library differences in browser-origins.json rather than a
+	// reason to accept a label nobody can decode.
 	{"https://xn--.example", CodeHostNotAName},
 	{"https://XN--.example", CodeHostNotAName},
 	{"https://xn--\u3002example", CodeHostNotAName},

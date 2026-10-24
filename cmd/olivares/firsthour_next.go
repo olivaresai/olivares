@@ -145,6 +145,7 @@ var topLevelNextCommands = map[string]string{
 	"sources":         "olivares sources ls",
 	"sourcescope":     "olivares sourcescope assignments ls",
 	"status":          "olivares doctor",
+	"ui":              "olivares status",
 	"superadmin":      "olivares superadmin status",
 	"support":         "olivares support bundle",
 	"tenants":         "olivares tenants ls",

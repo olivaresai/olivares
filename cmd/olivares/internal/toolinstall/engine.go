@@ -50,6 +50,8 @@ type Engine struct {
 	// verified, when set, keeps the releases List found installed until what
 	// they are made of changes (verified_cache.go).
 	verified *VerifiedCache
+	// placeRipgrep is EngineOptions.PlaceRipgrep.
+	placeRipgrep bool
 	// childCommand builds the version probe of a staged or detected tool
 	// (SetChildCommand); nil runs it unconfined, as the engine user.
 	childCommand atomic.Pointer[ChildCommand]
@@ -74,10 +76,13 @@ type EngineOptions struct {
 	Now              func() time.Time
 	// Verified is the process's cache of verified releases; nil checks every read.
 	Verified *VerifiedCache
+	// PlaceRipgrep makes an OpenCode install also place the pinned ripgrep its glob
+	// and grep run (ensureRipgrep). Only the engine that installs tools sets it.
+	PlaceRipgrep bool
 }
 
 func NewEngine(c *Catalog, o EngineOptions) *Engine {
-	e := &Engine{httpClient: o.HTTPClient, catalog: c, installerVersion: o.InstallerVersion, now: o.Now, verified: o.Verified}
+	e := &Engine{httpClient: o.HTTPClient, catalog: c, installerVersion: o.InstallerVersion, now: o.Now, verified: o.Verified, placeRipgrep: o.PlaceRipgrep}
 	if e.now == nil {
 		e.now = func() time.Time { return time.Now().UTC() }
 	}

@@ -6,14 +6,16 @@ package consoleviews
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+	"regexp"
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// A user's console interface state: sidebar width and edition badge visibility,
+// A user's console interface state: sidebar width, edition badge visibility and panel widths,
 // kept on the server so it follows the user to another browser, as favorites do.
 // One private saved-view row per user and tenant under its own reserved feature slug, beside
 // the favorites row, so no new table. Gated by the module's READ permission like favorites:
@@ -24,14 +26,27 @@ const (
 	uiStateName    = "ui-state"
 )
 
+// Panel widths: pixels by pane id. A save names only the panes it changes and a width of 0
+// puts a pane back to its default (the console then keeps no entry for it).
+const (
+	maxPanes     = 16
+	maxPaneWidth = 4000
+)
+
+var errTooManyPanes = errors.New("too many panes")
+
+var paneIDRE = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
+
 type uiStateBody struct {
-	Sidebar          string `json:"sidebar,omitempty"`
-	ShowEditionBadge *bool  `json:"show_edition_badge,omitempty"`
+	Sidebar          string         `json:"sidebar,omitempty"`
+	ShowEditionBadge *bool          `json:"show_edition_badge,omitempty"`
+	PaneWidths       map[string]int `json:"pane_widths,omitempty"`
 }
 
 type uiStateDTO struct {
-	Sidebar          string `json:"sidebar,omitempty"`
-	ShowEditionBadge bool   `json:"show_edition_badge"`
+	Sidebar          string         `json:"sidebar,omitempty"`
+	ShowEditionBadge bool           `json:"show_edition_badge"`
+	PaneWidths       map[string]int `json:"pane_widths,omitempty"`
 	// Stored is false when the caller has no row yet (the console may then move what it
 	// kept locally to the server once).
 	Stored    bool   `json:"stored"`
@@ -39,11 +54,22 @@ type uiStateDTO struct {
 }
 
 func (b uiStateBody) validate() string {
-	if b.Sidebar == "" && b.ShowEditionBadge == nil {
+	if b.Sidebar == "" && b.ShowEditionBadge == nil && len(b.PaneWidths) == 0 {
 		return "at least one interface setting is required"
 	}
 	if b.Sidebar != "" && b.Sidebar != "full" && b.Sidebar != "rail" {
 		return `sidebar must be "full" or "rail"`
+	}
+	if len(b.PaneWidths) > maxPanes {
+		return errTooManyPanes.Error()
+	}
+	for id, px := range b.PaneWidths {
+		if !paneIDRE.MatchString(id) {
+			return "pane_widths: a pane id is lowercase letters, digits and dashes, up to 32 characters"
+		}
+		if px < 0 || px > maxPaneWidth {
+			return "pane_widths: a width is 0 (the default) to 4000 pixels"
+		}
 	}
 	return ""
 }
@@ -71,7 +97,7 @@ func uiStateOf(rec *model.Record) uiStateDTO {
 		// A row that no longer validates is read as nothing stored rather than failing the shell.
 		return uiStateDTO{ShowEditionBadge: true}
 	}
-	return uiStateDTO{Sidebar: body.Sidebar, ShowEditionBadge: body.ShowEditionBadge == nil || *body.ShowEditionBadge, Stored: true, UpdatedAt: rec.String(model.ColUpdatedAt)}
+	return uiStateDTO{Sidebar: body.Sidebar, ShowEditionBadge: body.ShowEditionBadge == nil || *body.ShowEditionBadge, PaneWidths: body.PaneWidths, Stored: true, UpdatedAt: rec.String(model.ColUpdatedAt)}
 }
 
 // handleUIStateGet returns the caller's own console interface state; stored is false when
@@ -128,6 +154,25 @@ func (m *Module) handleUIStatePut(w http.ResponseWriter, r *http.Request, mc api
 		if state.ShowEditionBadge == nil {
 			state.ShowEditionBadge = &previous.ShowEditionBadge
 		}
+		// Panes merge: the ones the request names replace theirs (0 drops one), the rest stay.
+		widths := map[string]int{}
+		for id, px := range previous.PaneWidths {
+			widths[id] = px
+		}
+		for id, px := range in.PaneWidths {
+			if px == 0 {
+				delete(widths, id)
+			} else {
+				widths[id] = px
+			}
+		}
+		if len(widths) > maxPanes {
+			return errTooManyPanes
+		}
+		state.PaneWidths = nil
+		if len(widths) > 0 {
+			state.PaneWidths = widths
+		}
 		params, err := json.Marshal(state)
 		if err != nil {
 			return err
@@ -151,6 +196,10 @@ func (m *Module) handleUIStatePut(w http.ResponseWriter, r *http.Request, mc api
 		out = uiStateOf(&updated)
 		return nil
 	})
+	if errors.Is(err, errTooManyPanes) {
+		writeJSON(w, http.StatusBadRequest, errorBody(err.Error()))
+		return
+	}
 	if err != nil {
 		writeStoreError(w, err)
 		return

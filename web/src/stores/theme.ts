@@ -5,12 +5,12 @@ import { create } from 'zustand'
 
 /**
  * Theme store. The persisted value lives in localStorage under the RAW key
- * `olivares.theme` (a plain "light"|"dark"|"system" string, NOT JSON) so the
+ * `olivares.theme` (a plain "light"|"dark"|"black"|"system" string, NOT JSON) so the
  * no-FOUC bootstrap in index.html — which runs before any JS bundle — reads the
  * exact same key and applies `.dark` before first paint. This store mirrors that
  * logic for in-app toggling and keeps it in sync with the OS while in "system".
  */
-export type Theme = 'light' | 'dark' | 'system'
+export type Theme = 'light' | 'dark' | 'black' | 'system'
 export type ResolvedTheme = 'light' | 'dark'
 
 const STORAGE_KEY = 'olivares.theme'
@@ -32,7 +32,8 @@ export const DEFAULT_THEME: Theme = 'system'
 function readStored(): Theme {
   try {
     const v = localStorage.getItem(STORAGE_KEY)
-    if (v === 'light' || v === 'dark' || v === 'system') return v
+    if (v === 'light' || v === 'dark' || v === 'black' || v === 'system')
+      return v
   } catch {
     /* localStorage may be unavailable (private mode) */
   }
@@ -59,13 +60,20 @@ export function readStoredThemeForTest(): Theme {
 
 /** resolveDark mirrors the index.html bootstrap exactly. */
 export function resolveDark(theme: Theme): boolean {
-  return theme === 'dark' || (theme === 'system' && systemPrefersDark())
+  return (
+    theme === 'dark' ||
+    theme === 'black' ||
+    (theme === 'system' && systemPrefersDark())
+  )
 }
 
 function applyTheme(theme: Theme): ResolvedTheme {
   const dark = resolveDark(theme)
   const root = document.documentElement
   root.classList.toggle('dark', dark)
+  // Black is the dark theme on true black: both classes, so every dark style
+  // applies and the `.dark.black` tokens swap the values.
+  root.classList.toggle('black', theme === 'black')
   root.style.colorScheme = dark ? 'dark' : 'light'
   return dark ? 'dark' : 'light'
 }

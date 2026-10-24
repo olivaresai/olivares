@@ -41,8 +41,11 @@ vi.mock('@/lib/auth/context', () => ({
     principal: { user_id: 'operator' },
     isSuperadmin: state.admin,
     activeTenant: state.tenant,
+    // Tools opens on the account read tier (#2552), kept when restricted.
     can: (permission: string) =>
-      permission === 'system:admin' ? !state.denied : !state.restricted,
+      permission === 'sessions:account:read'
+        ? !state.denied
+        : !state.restricted,
   }),
 }))
 vi.mock('./use-session-rail', () => ({
@@ -189,7 +192,7 @@ it.each(['reader', 'permission', 'module'])(
     if (denial === 'reader') state.admin = false
     if (denial === 'permission') state.denied = true
     if (denial === 'module')
-      act(() => useModulesStore.setState({ off: new Set(['system']) }))
+      act(() => useModulesStore.setState({ off: new Set(['sessions']) }))
     view.rerender(<CommandMenu />)
     expect(
       screen.queryByRole('option', { name: /Codex/ }),

@@ -282,6 +282,8 @@ export interface ApprovalDTO {
   escalated: boolean
   /** Terminal-decision timestamp string. */
   decided_at?: string
+  /** When the request was made (RFC 3339); absent from an engine that does not send it. */
+  created_at?: string
 }
 
 /** A decision verb. */

@@ -46,6 +46,8 @@ export interface FavoritesResponse {
 export interface UiState {
   sidebar?: 'full' | 'rail'
   show_edition_badge?: boolean
+  /** Panel widths in px by pane id. A save merges the panes it names; 0 puts a pane back to its default. */
+  pane_widths?: Record<string, number>
 }
 
 export interface UiStateResponse extends Partial<UiState> {

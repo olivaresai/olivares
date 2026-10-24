@@ -28,8 +28,19 @@ func TestProxyEnvironmentReplacesTheHostWayOut(t *testing.T) {
 			"NODE_EXTRA_CA_CERTS=/run/ca.pem", "SSL_CERT_FILE=/run/ca.pem", "REQUESTS_CA_BUNDLE=/run/ca.pem", "CURL_CA_BUNDLE=/run/ca.pem",
 			"GIT_SSL_CAINFO=/run/ca.pem")},
 	} {
-		if got := proxyEnvironment(host, "http://127.0.0.1:9", tc.caFile); !slices.Equal(got, tc.want) {
+		if got := proxyEnvironment(host, "http://127.0.0.1:9", tc.caFile, nil); !slices.Equal(got, tc.want) {
 			t.Errorf("caFile %q:\n got %q\nwant %q", tc.caFile, got, tc.want)
 		}
+	}
+}
+
+// A tool that calls its own server on a loopback port reaches only that port
+// directly (#3082): NO_PROXY names it with its port, and the host's no_proxy is gone.
+func TestProxyEnvironmentExemptsOnlyTheNamedLoopbackPorts(t *testing.T) {
+	host := []string{"PATH=/usr/bin", "no_proxy=internal", "NO_PROXY=10.0.0.0/8"}
+	want := []string{"PATH=/usr/bin", "HTTP_PROXY=http://127.0.0.1:9", "HTTPS_PROXY=http://127.0.0.1:9", "http_proxy=http://127.0.0.1:9", "https_proxy=http://127.0.0.1:9",
+		"NO_PROXY=127.0.0.1:4096", "no_proxy=127.0.0.1:4096"}
+	if got := proxyEnvironment(host, "http://127.0.0.1:9", "", []int{4096}); !slices.Equal(got, want) {
+		t.Fatalf("got %q\nwant %q", got, want)
 	}
 }

@@ -149,7 +149,7 @@ export function LiveRunsSection({ active }: { active: KillSwitchDTO[] }) {
                   ts={isLiveRun(run) ? run.started_at : run.stopped_at}
                   className="whitespace-nowrap text-caption text-muted-foreground"
                 />
-                <RunStateBadge state={run.state} />
+                <RunStateBadge run={run} />
               </span>
             </li>
           ))}

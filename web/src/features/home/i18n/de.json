@@ -1,23 +1,4 @@
 {
-  "title": "Übersicht",
-  "description": "Was Ihre KI-Agenten in den letzten 30 Tagen getan haben, in den Bereichen, die Sie öffnen können.",
-  "aside": "Übersicht des Bestands",
-  "range": "letzte 30 Tage",
-  "next": {
-    "title": "Nächster Schritt",
-    "provider": {
-      "title": "Anbieter hinzufügen",
-      "description": "Verbinden Sie Claude, Codex oder eine andere Engine, damit deren Sitzungen zugeordnet und gesteuert werden."
-    },
-    "agent": {
-      "title": "Agent bereitstellen",
-      "description": "Bringen Sie einen Agenten in einen Workspace, mit seiner Richtlinie und seinem Revisionsverlauf."
-    },
-    "session": {
-      "title": "Sitzung starten",
-      "description": "Starten Sie einen gesteuerten Lauf und verfolgen Sie seine Tool-Aufrufe live."
-    }
-  },
   "recent": {
     "title": "Letzte Arbeit",
     "description": "Die fünf jüngsten Sitzungen, die diese Bereitstellung beobachtet hat.",
@@ -26,75 +7,10 @@
     "emptyDescription": "Hier erscheint jeder Lauf einer verbundenen Engine, mit dem, was er getan hat, wie lange er gedauert hat und was er gekostet hat.",
     "unavailableTitle": "Letzte Arbeit konnte nicht geladen werden",
     "unavailableDescription": "Der Sitzungs-Lesevorgang hat nicht geantwortet. Die Kennzahlen oben sind davon nicht betroffen.",
-    "open": "Sitzung öffnen: {{what}}",
     "untitled": "Unbenannte Sitzung"
   },
   "live": {
     "title": "Gerade aktiv"
-  },
-  "tiles": {
-    "today": {
-      "label": "Heute",
-      "caption_one": "Kosten der heute aktiven Sitzung",
-      "caption_other": "Kosten der {{count}} heute aktiven Sitzungen",
-      "unpriced_one": "{{count}} ohne gemeldete Kosten",
-      "unpriced_other": "{{count}} ohne gemeldete Kosten"
-    },
-    "inventory": {
-      "label": "Inventar",
-      "caption": "{{agents}} Agenten · {{active}} aktiv"
-    },
-    "sessions": {
-      "label": "Live-Sitzungen",
-      "caption": "{{idle}} jetzt untätig",
-      "silent": "{{count}} verstummt (mögliche Umgehung)"
-    },
-    "security": {
-      "label": "Sicherheit",
-      "caption": "{{count}} kritisch oder hoch",
-      "clear": "Keine offenen Befunde"
-    },
-    "compliance": {
-      "label": "Compliance",
-      "caption": "{{gap}} Lücken · {{unmapped}} nicht zugeordnet",
-      "noControls": "Noch keine Kontrollen zugeordnet"
-    },
-    "spend": {
-      "label": "Ausgaben",
-      "caption": "{{range}}",
-      "projected": "{{amount}} prognostiziert bei aktueller Laufrate",
-      "projectedOver": "{{amount}} prognostiziert bei aktueller Laufrate — über den bisherigen Ausgaben"
-    },
-    "health": {
-      "label": "Zustand & SLA",
-      "value": "{{healthy}}/{{total}} fehlerfrei",
-      "caption": "{{breaches}} SLA-Verletzungen · {{incidents}} offene Vorfälle",
-      "noChecks": "Noch keine Zustandsprüfungen"
-    },
-    "budgets": {
-      "label": "Budgets",
-      "none": "Noch keine Budgets",
-      "nonePartial": "Keines auf dieser Seite aktiviert; es gibt weitere",
-      "over_one": "{{count}} über dem Limit",
-      "over_other": "{{count}} über dem Limit",
-      "unknown_one": "{{count}} mit unbekanntem Betrag",
-      "unknown_other": "{{count}} mit unbekanntem Betrag",
-      "within": "Keines über dem Limit",
-      "partial": "{{n}} Budgets geladen; es gibt weitere"
-    }
-  },
-  "state": {
-    "unavailable": "Konnte nicht geladen werden — öffnen, um es erneut zu versuchen",
-    "pendingIdle": "Abfrage nicht gestartet — öffnen, um zu laden",
-    "pendingPaused": "Abfrage pausiert — wartet auf Fortsetzung"
-  },
-  "availability": {
-    "loading": "{{source}}: wird geladen.",
-    "pendingIdle": "{{source}}: Abfrage nicht gestartet.",
-    "pendingPaused": "{{source}}: Abfrage pausiert, wartet auf Fortsetzung.",
-    "unavailable": "{{source}}: konnte nicht geladen werden.",
-    "partial": "{{source}}: Zahlen verfügbar, Teildaten.",
-    "current": "{{source}}: Zahlen verfügbar."
   },
   "empty": {
     "title": "Noch nichts anzuzeigen",
@@ -102,10 +18,82 @@
   },
   "start": {
     "ready": "{{tool}} ist bereit.",
-    "signIn": "Melde {{tool}} an, um eine Sitzung zu starten.",
+    "signIn": "Melden Sie {{tool}} an, um eine Sitzung zu starten.",
     "signInAction": "Anmelden",
-    "install": "Installiere Claude Code oder Codex, um eine Sitzung zu starten.",
-    "installAction": "Tool einrichten",
+    "install": "Installieren Sie Claude Code oder Codex, um eine Sitzung zu starten.",
+    "installAction": "Werkzeug einrichten",
     "newSession": "Neue Sitzung"
+  },
+  "swimlane": {
+    "title": "Letzte Stunde",
+    "subtitle": "{{from}} bis {{to}}. Jeder Balken ist ein Lauf, kräftiger, wo er mehr Werkzeug-Aufrufe machte.",
+    "lanes": "Sitzungen der letzten Stunde",
+    "now": "Jetzt {{at}}",
+    "range": "{{from}} bis {{to}}",
+    "selectSlot": "{{from}} bis {{to}}",
+    "active": "Aktiv {{spans}}",
+    "noActivity": "Keine Aktivität in der letzten Stunde",
+    "unread": "Aktivität nicht gelesen",
+    "toolCalls_one": "{{n}} Werkzeug-Aufruf",
+    "toolCalls_other": "{{n}} Werkzeug-Aufrufe",
+    "runTip_one": "Lauf {{from}} bis {{to}}, {{count}} Werkzeug-Aufruf",
+    "runTip_other": "Lauf {{from}} bis {{to}}, {{count}} Werkzeug-Aufrufe",
+    "waitingSince": "Wartet seit {{at}} auf Genehmigung",
+    "needsYouSince": "Braucht Sie seit {{at}}",
+    "idleSince": "Untätig seit {{at}}",
+    "failedAt": "Fehlgeschlagen um {{at}}",
+    "failed": "Fehlgeschlagen",
+    "automation": "Zeitplan",
+    "hint": "Ziehen Sie über die Zeilen oder wählen Sie eine Uhrzeit, um diesen Zeitraum im Hauptbuch zu sehen.",
+    "openLedger": "Im Hauptbuch öffnen",
+    "clear": "Aufheben",
+    "legend": "Legende",
+    "legendRun": "Lauf, kräftiger mit mehr Werkzeug-Aufrufen",
+    "legendWait": "Wartet auf Genehmigung",
+    "legendIdle": "Untätig, wartet auf eine Eingabe",
+    "legendFailure": "Fehler",
+    "table": "Als Tabelle zeigen",
+    "colSession": "Sitzung",
+    "colActive": "Aktiv",
+    "colCalls": "Werkzeug-Aufrufe",
+    "colNow": "Jetzt",
+    "working": "Arbeitet",
+    "reading": "Aktivität wird gelesen",
+    "waiting": "Wartet auf Genehmigung",
+    "needsYou": "Braucht Sie",
+    "idle": "Untätig",
+    "approvalsUnread": "Die Genehmigungen konnten nicht gelesen werden, daher werden Wartezeiten auf Genehmigungen nicht gezeichnet."
+  },
+  "summary": {
+    "heading": "Zusammenfassung",
+    "nothingRunning": "Es läuft nichts",
+    "running_one": "{{count}} Sitzung offen",
+    "running_other": "{{count}} Sitzungen offen",
+    "runningFor_one": "{{count}} Sitzung offen für {{people}}",
+    "runningFor_other": "{{count}} Sitzungen offen für {{people}}",
+    "runningMore": "{{n}}+ Sitzungen offen",
+    "people_one": "{{count}} Person",
+    "people_other": "{{count}} Personen",
+    "today": "{{amount}} heute",
+    "todayFloor": "mindestens {{amount}} heute",
+    "needs_one": "{{count}} wartet auf Sie",
+    "needs_other": "{{count}} warten auf Sie",
+    "needsMore": "{{n}}+ warten auf Sie",
+    "yesterday": "Gestern {{amount}}",
+    "unpriced_one": "{{count}} ohne gemeldete Kosten",
+    "unpriced_other": "{{count}} ohne gemeldete Kosten",
+    "month": "{{spent}} von {{limit}} in diesem Monat",
+    "monthFloor": "mindestens {{spent}} von {{limit}} in diesem Monat",
+    "monthLabel": "Ausgaben in diesem Monat"
+  },
+  "state": {
+    "pendingIdle": "Abfrage nicht gestartet — öffnen, um zu laden",
+    "pendingPaused": "Abfrage pausiert — wartet auf Fortsetzung"
+  },
+  "proof": {
+    "verified": "Kette geprüft um {{time}}",
+    "entries_one": "{{n}} Eintrag",
+    "entries_other": "{{n}} Einträge",
+    "broken": "Kette gebrochen: Ledger öffnen"
   }
 }

@@ -32,8 +32,6 @@
     "viewAll": "Ver todo",
     "learnMore": "Más información",
     "openMenu": "Abrir menú",
-    "expandSidebar": "Expandir barra lateral",
-    "collapseSidebar": "Contraer barra lateral",
     "help": "Abrir la documentación de esta vista"
   },
   "states": {
@@ -50,6 +48,7 @@
     "label": "Tema",
     "light": "Claro",
     "dark": "Oscuro",
+    "black": "Negro",
     "system": "Sistema",
     "toggle": "Cambiar tema"
   },
@@ -117,7 +116,7 @@
   "status": {
     "active": "Activo",
     "inactive": "Inactivo",
-    "healthy": "Correcto",
+    "healthy": "En buen estado",
     "degraded": "Degradado",
     "pending": "Pendiente",
     "error": "Error",
@@ -164,9 +163,7 @@
     "email": "Introduce una dirección de correo válida."
   },
   "a11y": {
-    "breadcrumb": "Ruta de navegación",
     "skipToContent": "Saltar al contenido",
-    "primarySidebar": "Principal",
     "mainNavigation": "Navegación principal",
     "graphControls": "Controles del grafo",
     "graphMinimap": "Minimapa del grafo",
@@ -328,10 +325,8 @@
         "first": "Primera sesión",
         "last": "Última sesión",
         "open": "Abrir la sesión",
-        "pin": "Fijarla o dejar de fijarla"
-      },
-      "nav": {
-        "toggleRail": "Plegar o desplegar la barra de navegación"
+        "pin": "Fijarla o dejar de fijarla",
+        "menu": "Abrir el menú de acciones de la sesión"
       },
       "navRail": {
         "next": "Módulo siguiente",
@@ -351,6 +346,10 @@
         "previousFile": "Fichero anterior",
         "nextHunk": "Cambio siguiente",
         "previousHunk": "Cambio anterior"
+      },
+      "approvals": {
+        "approve": "Aprobar una vez la solicitud abierta",
+        "deny": "Rechazar la solicitud abierta"
       }
     },
     "when": {
@@ -358,10 +357,10 @@
       "launcherFocused": "en el campo del lanzador",
       "workSurface": "en la pantalla de sesiones",
       "sessionHistory": "cuando hay una sesión anterior",
-      "paletteRecent": "en los resultados de la paleta con la búsqueda vacía"
+      "paletteRecent": "en los resultados de la paleta con la búsqueda vacía",
+      "approvalQueue": "en la cola de aprobaciones"
     },
     "precedence": "Cuando dos filas comparten teclas, gana la última que aplica.",
-    "modNote": "⌘ es Control en Windows y Linux.",
     "problems_one": "No se ha podido leer {{count}} atajo y no funciona: {{commands}}",
     "problems_other": "No se han podido leer {{count}} atajos y no funcionan: {{commands}}",
     "problems_many": "No se han podido leer {{count}} atajos y no funcionan: {{commands}}",
@@ -413,6 +412,18 @@
       "copy": "Copiar comando",
       "copied": "Copiado",
       "copyFailed": "No se pudo copiar. Selecciona el comando y cópialo."
+    },
+    "copy": {
+      "message": "Copiar mensaje",
+      "code": "Copiar código",
+      "copied": "Copiado",
+      "failed": "No se pudo copiar. Selecciona el texto y cópialo."
     }
+  },
+  "resize": {
+    "hint": "Arrastra o usa las flechas. Doble clic o Intro para restablecer."
+  },
+  "panes": {
+    "saveFailed": "No se pudo guardar el ancho del panel. Solo se aplica en esta visita."
   }
 }

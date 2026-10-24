@@ -22,7 +22,12 @@ const auth = vi.hoisted(() => ({
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ ...auth, activeTenant: 't1', can: () => false }),
 }))
-vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }))
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => vi.fn(),
+  // The account menu's Help reads the page it is on.
+  useRouterState: ({ select }: { select: (s: unknown) => unknown }) =>
+    select({ location: { pathname: '/' } }),
+}))
 const server = vi.hoisted(() => ({ data: {} as { tls_pin_sha256?: string } }))
 vi.mock('@/lib/hooks/use-server-info', () => ({ useServerInfo: () => server }))
 
@@ -40,7 +45,7 @@ describe('Command line: how to get and use the olivares CLI, for every signed-in
   it('an editor opens it from the Account menu: install, sign in to THIS engine, start', async () => {
     const user = userEvent.setup()
     renderIntel(<UserMenu />)
-    await user.click(screen.getByRole('button', { name: 'Account' }))
+    await user.click(screen.getByRole('button', { name: /, Account$/ }))
     await user.click(screen.getByRole('menuitem', { name: 'Command line' }))
     const dialog = screen.getByRole('dialog', { name: 'Command line' })
     const origin = window.location.origin
@@ -65,7 +70,7 @@ describe('Command line: how to get and use the olivares CLI, for every signed-in
     server.data = { tls_pin_sha256: 'sha256-pin-of-this-engine' }
     const user = userEvent.setup()
     renderIntel(<UserMenu />)
-    await user.click(screen.getByRole('button', { name: 'Account' }))
+    await user.click(screen.getByRole('button', { name: /, Account$/ }))
     await user.click(screen.getByRole('menuitem', { name: 'Command line' }))
     expect(commands()[1]).toBe(
       `olivares login --server ${window.location.origin} --pin-sha256 sha256-pin-of-this-engine`,

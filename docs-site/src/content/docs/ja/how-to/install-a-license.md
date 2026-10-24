@@ -125,8 +125,19 @@ AI Runtime Security、Compliance Packs、Identity & Scale を 1 つのサブス�
 再インストールは不要で、データも移動しません。
 
 ```sh
-olivares upgrade --enterprise --token <TOKEN>
+export OLIVARES_UPGRADE_TOKEN=<TOKEN>   # not needed once this installation is connected
+olivares upgrade --edition business
 ```
+
+`olivares license install` と `olivares license status` は、このインストールの導入方法に合わせた正確なコマンドを表示します。コンソールの **Edition & license** ビューも同じ手順を 1 つのボタン **Business に切り替える** として表示します。エンジンがビルドをダウンロードして検証し、その場で置き換えて、そのビルドで再起動します。ダウンロードトークンは、ライセンス付きダウンロードポータルの **Downloads** ページ ([https://licenses.olivares.ai/portal/downloads](https://licenses.olivares.ai/portal/downloads)) にこれらのコマンドと並んで表示され、ライセンスのメールにも記載されています。上のように名前で渡すと、プロセス一覧に出ません。接続済みのインストール (`olivares license connect start`) にはトークンは不要です。`--enterprise` は同じルートの旧来の書き方です。コンソールのボタンには、エンジン自身の環境にあるトークンかこの接続のどちらかが必要です。どちらもない場合、ビューにはボタンの代わりにコマンドが表示されます。
+
+:::caution[パッケージインストール]
+deb、rpm、apk、AUR でインストールした場合、`/usr/bin/olivares` はパッケージマネージャが所有するため、
+このコマンドは拒否されます。何かをダウンロードする前に終了コード 2 で終わります。権利付きパッケージ
+チャネルが Business パッケージを配布するようになったら、それを使ってください。それまでは
+`--target /usr/bin/olivares --data-dir /var/lib/olivares` を付けて、そのファイルを自分で置き換えます。以後、パッケージデータベース
+はそのファイルと一致しなくなります。`--check` は引き続き計画を表示します。
+:::
 
 プラットフォーム用の署名済み商用ビルドを取得し、**署名をオフラインで
 検証します**。改ざんされたアーティファクトはアップグレードを中止させ、稼働中の
@@ -136,7 +147,7 @@ olivares upgrade --enterprise --token <TOKEN>
 `edition: community -> enterprise` と表示されます。
 
 ```sh
-olivares upgrade --enterprise --token <TOKEN> --check
+olivares upgrade --edition business --check
 ```
 
 サービスを再起動してから、モジュールを有効にします。
@@ -171,8 +182,8 @@ olivares enterprise enable <preset>     # starter | regulated | full
 
 ```sh
 export OLIVARES_UPGRADE_TOKEN=<TOKEN>
-docker compose exec -e OLIVARES_UPGRADE_TOKEN olivares olivares upgrade --enterprise --yes
-docker compose up -d --force-recreate olivares
+docker compose exec -e OLIVARES_UPGRADE_TOKEN olivares olivares upgrade --edition business --yes
+docker compose restart olivares
 ```
 
 リリースは、データディレクトリ配下の `ota/`（同梱イメージでは `/var/lib/olivares/ota`）に、

@@ -45,10 +45,14 @@ description: >-
   它是一个路由器，而非探针或计量器：它从不轮询基础设施，也从不进行测量。
 - **产出**通过一个分发接缝发出的出站通知，由输出 connector 支撑（Slack/Teams、
   PagerDuty/Opsgenie、签名 webhook，以及一个覆盖 Splunk/Elastic 的 SIEM 目的地，
-  经由 CEF/LEEF/syslog/OTLP）。一条通知只携带 finding 已经安全的展示字段——标题、kind、
+  经由 CEF/LEEF/syslog/OTLP）。Community 提供 Slack、Teams、电子邮件、SMS 和签名 webhook 目的地；
+  SIEM、ITSM 以及 PagerDuty/Opsgenie 目的地需要 Business，Community 服务器会拒绝打开其中任何一个，并指明需要 Business。
+  一条通知只携带 finding 已经安全的展示字段——标题、kind、
   严重程度、主体引用和一个关联哈希——**绝不**携带载荷、prompt、机密或 PII。
-  **最小数据是传输层的一项属性**，而非事后过滤。目的地机密只存在于运营方所置备的
-  connector 配置中，在此仅以一个非机密名称引用。
+  **最小数据是传输层的一项属性**，而非事后过滤。目的地机密只存在于 connector 配置中，
+  在此仅以一个非机密名称引用。管理员可在控制台（**告警 → 目标**）中添加 Slack 和 Microsoft Teams 目的地：
+  webhook URL 被密封在机密存储中，仅以其主机名显示，并在保存前用一条真实消息进行测试。
+  其他所有类型都由运营方在 `OLIVARES_NOTIFY_CONFIG` 所指定的文件中置备。
 
 :::caution[诚实的限制]
 - **默认二进制随附一个 deny-closed 的分发器。** 在运营方置备目的地之前，分发器已装配但为空：

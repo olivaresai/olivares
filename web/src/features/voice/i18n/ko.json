@@ -103,7 +103,7 @@
     "decisionsError": "결정을 읽지 못했습니다.",
     "noDecisions": "이 세션에 기록된 결정이 없습니다.",
     "noReason": "기록된 사유 없음",
-    "frames": "라이브 업데이트 {{count}}개",
+    "frames_other": "라이브 업데이트 {{count}}개",
     "open": "세션 열기(거버넌스됨)",
     "stream": {
       "connecting": "연결 중",

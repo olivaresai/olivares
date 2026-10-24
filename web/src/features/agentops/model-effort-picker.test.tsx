@@ -338,6 +338,31 @@ describe('fast mode', () => {
   })
 })
 
+// #2567: OpenCode's catalog is the tool's own list, free models among them, in the
+// provider/model form a session takes. The picker shows them and takes one as is.
+describe("OpenCode's own list", () => {
+  it('shows the free models and starts on the one chosen', async () => {
+    vi.mocked(agentOpsApi.profileModels).mockResolvedValue(
+      catalog(
+        [
+          model('opencode/deepseek-v4.1-flash-free'),
+          model('opencode/glm-5.3-flash-free'),
+          model('opencode/mimo-v2.6-flash-free'),
+        ],
+        { driver: 'opencode' },
+      ),
+    )
+    const user = userEvent.setup()
+    wrap({ driver: 'opencode' })
+    const list = await openModels(user)
+    expect(
+      await within(list).findByText('opencode/mimo-v2.6-flash-free'),
+    ).toBeInTheDocument()
+    await user.click(within(list).getByText('opencode/glm-5.3-flash-free'))
+    expect(last.model).toBe('opencode/glm-5.3-flash-free')
+  })
+})
+
 describe('a tool that cannot list its models', () => {
   it('says so once and takes a typed model', async () => {
     vi.mocked(agentOpsApi.profileModels).mockResolvedValue(

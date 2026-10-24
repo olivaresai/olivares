@@ -117,7 +117,7 @@
     "confirmPhrase": "RESTORE",
     "confirmLabel": "今すぐ復元",
     "confirmSummaryPrefix": "復元元:",
-    "confirmSummarySuffix": "{{count}} テナントを含みます。",
+    "confirmSummarySuffix_other": "{{count}} テナントを含みます。",
     "awaitingTitle": "2人目の承認者を待っています",
     "awaitingDescription": "デュアルコントロールが有効です。この復元は、別の管理者がバックアップタブから承認し、パスフレーズを入力するまで実行されません。",
     "requestId": "リクエスト ID",

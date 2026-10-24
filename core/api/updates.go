@@ -57,6 +57,24 @@ type UpdateStatusDTO struct {
 	// Restarting says the engine is restarting itself on the new version; the
 	// console waits for it and reconnects.
 	Restarting bool `json:"restarting,omitempty"`
+	// EditionSwitch is present on a Community build that holds a live Business or Enterprise
+	// license: the move to the licensed build, which the plan above then describes.
+	EditionSwitch *EditionSwitchDTO `json:"edition_switch,omitempty"`
+}
+
+// EditionSwitchDTO is the one next step from a Community build to the licensed build, for the
+// way this installation was installed.
+type EditionSwitchDTO struct {
+	// To is the edition the license entitles: business or enterprise (one licensed build).
+	To string `json:"to"`
+	// Install is how this engine was installed: binary, container, package or kubernetes.
+	Install string `json:"install"`
+	// Command is the exact command for this installation; empty where the manifest does it.
+	Command string `json:"command,omitempty"`
+	// Then says what follows the command.
+	Then string `json:"then"`
+	// ConsoleAction says the console's apply takes the step itself, so it shows a button.
+	ConsoleAction bool `json:"console_action"`
 }
 
 var (

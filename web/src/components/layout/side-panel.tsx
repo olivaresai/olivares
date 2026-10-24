@@ -16,12 +16,26 @@ import {
   useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
+import { PaneResizeHandle } from '@/components/ui/pane-resize'
+import {
+  upTo,
+  usePaneVars,
+  type ResizablePane,
+} from '@/components/ui/pane-vars'
 import { cn } from '@/lib/utils'
+
+/** The side panel's width, 380 px by default (340 px at or below 1360 px) until a person drags it: it stops at 50% of the work area so the page keeps room. */
+const PANEL_PANE: ResizablePane = {
+  id: 'side-panel',
+  cssVar: '--panel-w',
+  bounds: (w) => upTo(280, 720, 0.5, w),
+}
 
 /** Below this width the panel is an overlay sheet over the work. */
 const OVERLAY_QUERY = '(max-width: 1099px)'
@@ -89,6 +103,9 @@ export function SidePanelHost() {
   const panelId = panel?.panelId
   const setOpen = panel?.setOpen
   const setHost = panel?.setHost
+  const aside = useRef<HTMLElement>(null)
+  const area = useRef<HTMLElement | null>(null)
+  const vars = usePaneVars(PANEL_PANE)
   if (!title || !open || !setOpen || !setHost) return null
   const close = () => setOpen(false)
   return (
@@ -100,6 +117,11 @@ export function SidePanelHost() {
         className="absolute inset-0 z-10 hidden bg-scrim max-[1099px]:block"
       />
       <aside
+        ref={(el) => {
+          aside.current = el
+          area.current = el?.parentElement ?? null
+        }}
+        style={vars}
         id={panelId}
         aria-label={title}
         data-slot="side-panel"
@@ -107,10 +129,20 @@ export function SidePanelHost() {
           if (e.key === 'Escape') close()
         }}
         className={cn(
-          'flex min-h-0 w-[380px] shrink-0 flex-col border-l border-line bg-canvas max-[1360px]:w-[340px]',
-          'max-[1099px]:absolute max-[1099px]:inset-y-0 max-[1099px]:right-0 max-[1099px]:z-20 max-[1099px]:max-w-full max-[1099px]:shadow-pop',
+          'relative flex min-h-0 w-[min(var(--panel-w),50%)] shrink-0 flex-col border-l border-line bg-canvas [--panel-w:380px] max-[1360px]:[--panel-w:340px]',
+          'max-[1099px]:absolute max-[1099px]:inset-y-0 max-[1099px]:right-0 max-[1099px]:z-20 max-[1099px]:w-[340px] max-[1099px]:max-w-full max-[1099px]:shadow-pop',
         )}
       >
+        {/* Overlay sheets (below 1100 px) keep their width: the handle is for the column. */}
+        <PaneResizeHandle
+          pane={PANEL_PANE}
+          container={aside}
+          within={area}
+          target={aside}
+          grow={-1}
+          label={t('shell.panel.resize', { title })}
+          className="left-0 -translate-x-1/2 max-[1099px]:hidden"
+        />
         <div className="flex h-12 shrink-0 items-center gap-2 border-b border-line pr-2 pl-4">
           <h2 className="min-w-0 flex-1 truncate text-heading">{title}</h2>
           <button
@@ -136,15 +168,17 @@ export function SidePanelToggle() {
   const { t } = useTranslation('nav')
   const panel = useContext(SidePanelContext)
   if (!panel?.title) return null
+  const toggleName = t(panel.open ? 'shell.panel.hide' : 'shell.panel.show', {
+    title: panel.title,
+  })
   return (
     <button
       type="button"
       onClick={() => panel.setOpen(!panel.open)}
       aria-pressed={panel.open}
       aria-controls={panel.open ? panel.panelId : undefined}
-      aria-label={t(panel.open ? 'shell.panel.hide' : 'shell.panel.show', {
-        title: panel.title,
-      })}
+      aria-label={toggleName}
+      title={toggleName}
       className="grid size-8 shrink-0 place-items-center rounded-ctl text-text-2 outline-none hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-focus aria-pressed:bg-active aria-pressed:text-text"
     >
       <PanelRight aria-hidden className="size-4" />

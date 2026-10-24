@@ -5,11 +5,13 @@
 package main
 
 import (
+	"slices"
 	"sync/atomic"
 
 	"github.com/olivaresai/olivares/cmd/olivares/internal/inferencepep"
 	"github.com/olivaresai/olivares/modules/inferenceproxy"
 	"github.com/olivaresai/olivares/modules/sessions"
+	"github.com/olivaresai/olivares/sdk"
 )
 
 // messagesInspectorBinding records the startup content-inspector attachment of the
@@ -18,10 +20,12 @@ import (
 // buildClaudeMessagesProxyServer is its only writer; the module status route reads it.
 //
 // The builder runs once per serve process and nothing replaces its decider, so the first
-// record is final. A rebuild or hot reconfiguration must revise this contract instead of
-// recording a second decider here.
+// record is final. What is recorded is the decider, not an answer: the firewall can be
+// turned on and off while the engine runs, so the state is read from it each time.
 type messagesInspectorBinding struct {
-	state atomic.Pointer[inferenceproxy.ContentFirewallState]
+	recorded atomic.Bool
+	state    atomic.Pointer[inferenceproxy.ContentFirewallState]
+	decider  atomic.Pointer[inferencepep.Decider]
 }
 
 var _ inferenceproxy.ContentFirewallStatusSource = (*messagesInspectorBinding)(nil)
@@ -31,23 +35,37 @@ var _ inferenceproxy.ContentFirewallStatusSource = (*messagesInspectorBinding)(n
 // except that an inspector that is only the edition's decoy engine is not the content
 // firewall and is reported absent. Only the first record is kept.
 func (b *messagesInspectorBinding) record(dec *inferencepep.Decider) {
-	if b == nil {
+	if b == nil || !b.recorded.CompareAndSwap(false, true) {
 		return
 	}
-	state := inferenceproxy.ContentFirewallPEPNotComposed
-	if dec != nil {
-		state = inferenceproxy.ContentFirewallInspectorAbsent
-		if _, decoyOnly := dec.Inspector.(sessions.SessionDecoySource); dec.Inspector != nil && !decoyOnly {
-			state = inferenceproxy.ContentFirewallInspectorAttached
-		}
+	if dec == nil {
+		state := inferenceproxy.ContentFirewallPEPNotComposed
+		b.state.Store(&state)
+		return
 	}
-	b.state.CompareAndSwap(nil, &state)
+	b.decider.Store(dec)
+}
+
+// firewallAttached says the content firewall itself is in use: an inspector that is on
+// and is not the edition's decoy engine, looking through a chain of inspectors.
+func firewallAttached(in contentInspector) bool {
+	if chain, ok := in.(inspectorChain); ok {
+		return slices.ContainsFunc(chain, firewallAttached)
+	}
+	_, decoyOnly := in.(sessions.SessionDecoySource)
+	return in != nil && !decoyOnly && sdk.CapabilityEnabled(in)
 }
 
 // ContentFirewallState returns the recorded attachment, or unobserved before a record.
 func (b *messagesInspectorBinding) ContentFirewallState() inferenceproxy.ContentFirewallState {
 	if b == nil {
 		return inferenceproxy.ContentFirewallUnobserved
+	}
+	if dec := b.decider.Load(); dec != nil {
+		if firewallAttached(dec.Inspector) {
+			return inferenceproxy.ContentFirewallInspectorAttached
+		}
+		return inferenceproxy.ContentFirewallInspectorAbsent
 	}
 	if state := b.state.Load(); state != nil {
 		return *state

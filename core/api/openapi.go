@@ -985,17 +985,19 @@ func buildOpenAPI() map[string]any {
 			tagConsole, true,
 			jsonResp("OK", ref("ActivationPlan")),
 			body(obj("type", "object", "additionalProperties", false,
-				"required", arr("preset"),
-				"properties", obj("preset", obj("type", "string", "minLength", 1)))))),
+				"properties", obj(
+					"preset", obj("type", "string", "description", "A preset to preview; name this or family."),
+					"family", obj("type", "string", "description", "One family to preview; name this or preset.")))))),
 		"/v1/console/activation/apply", obj("post", op("applyActivation",
-			"Enable or disable a preset, or promote one add-on (AAL3 step-up; 501 without the activation service)",
+			"Enable or disable a preset or one family, or promote one add-on (AAL3 step-up; 501 without the activation service)",
 			tagConsole, true,
 			jsonResp("OK", ref("ActivationStatus")),
 			body(obj("type", "object", "additionalProperties", false,
 				"required", arr("action"),
 				"properties", obj(
 					"action", obj("type", "string", "enum", arr("enable", "disable", "promote")),
-					"preset", obj("type", "string", "description", "Required for enable/disable."),
+					"preset", obj("type", "string", "description", "For enable/disable: a preset; name this or family."),
+					"family", obj("type", "string", "description", "For enable/disable: one family on its own; name this or preset."),
 					"addon", obj("type", "string", "description", "Required for promote.")))))),
 		// ── Module selection: which optional modules the engine runs ───
 		"/v1/console/modules", obj(
@@ -2161,13 +2163,14 @@ func buildOpenAPI() map[string]any {
 		"ActivationStatus", obj("type", "object", "properties", obj(
 			"edition", obj("type", "string"),
 			"preset", obj("type", "string"),
-			"restart_required", obj("type", "boolean"),
+			"restart_required", obj("type", "boolean", "description", "A change already applied still needs an engine restart to take effect; false when the running engine follows it."),
 			"addons", obj("type", "array", "items", obj("type", "object", "properties", obj(
 				"key", obj("type", "string"),
 				"title", obj("type", "string"),
 				"summary", obj("type", "string"),
 				"env", obj("type", "string"),
 				"preset", obj("type", "string"),
+				"family", obj("type", "string", "description", "The key of the family that sells the add-on."),
 				"state", obj("type", "string", "enum", arr("active", "pending", "available", "console")),
 				"reason", obj("type", "string"),
 				"needs_secret", obj("type", "boolean"),
@@ -2178,6 +2181,12 @@ func buildOpenAPI() map[string]any {
 				"name", obj("type", "string"),
 				"addons", obj("type", "array", "items", obj("type", "string")),
 			), "required", arr("name", "addons"))),
+			"families", obj("type", "array", "description", "The groups the edition sells add-ons in; each is turned on or off as a whole.", "items", obj("type", "object", "properties", obj(
+				"key", obj("type", "string"),
+				"title", obj("type", "string"),
+				"addons", obj("type", "array", "items", obj("type", "string")),
+				"active", obj("type", "array", "description", "The add-ons of the family that are on now.", "items", obj("type", "string")),
+			), "required", arr("key", "title", "addons", "active"))),
 			"restarting", obj("type", "boolean"),
 		), "required", arr("edition", "restart_required", "addons", "presets")),
 		"ActivationPlan", obj("type", "object", "properties", obj(
@@ -2227,6 +2236,15 @@ func buildOpenAPI() map[string]any {
 			"restarting", obj("type", "boolean", "description", "The engine is restarting itself on the new version."),
 			"running_sessions", obj("type", "integer",
 				"description", "Sessions this engine runs now. The restart that applies an update stops every one of them; each can be resumed."),
+			"edition_switch", obj("type", "object", "additionalProperties", false,
+				"description", "Present on a Community build that holds a live Business or Enterprise license: the one next step to the licensed build for the way this engine was installed. The newest release above is then the licensed build.",
+				"required", arr("to", "install", "then", "console_action"),
+				"properties", obj(
+					"to", obj("type", "string", "enum", arr("business", "enterprise"), "description", "The edition the license entitles; both are one licensed build."),
+					"install", obj("type", "string", "enum", arr("binary", "container", "package", "kubernetes"), "description", "How this engine was installed."),
+					"command", obj("type", "string", "description", "The exact command for this installation; empty where the manifest does it."),
+					"then", obj("type", "string", "description", "What follows the command."),
+					"console_action", obj("type", "boolean", "description", "The apply operation takes the step itself, so the console offers a button."))),
 		), "required", arr("edition", "version", "update_available", "running_sessions")),
 
 		// ── Engine log buffer ───────────────────────────────────────

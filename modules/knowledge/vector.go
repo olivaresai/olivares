@@ -61,11 +61,13 @@ func classificationAllowed(chunkClass, clearance string) bool {
 }
 
 // aclAllows reports whether an identity in the given groups may see a chunk with
-// the given (already effective) ACL. An empty ACL or one containing "anyone" is
-// unrestricted; otherwise the identity must share at least one group reference.
+// the given (already effective) ACL. An empty ACL denies: a document nobody
+// decided about is not visible. An ACL containing "anyone" is unrestricted, and
+// "anyone" is only ever written by an explicit decision (effectiveACL); otherwise
+// the identity must share at least one group reference.
 func aclAllows(chunkACL, groups []string) bool {
 	if len(chunkACL) == 0 {
-		return true
+		return false
 	}
 	have := make(map[string]bool, len(groups))
 	for _, g := range groups {

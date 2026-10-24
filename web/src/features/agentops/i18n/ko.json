@@ -48,6 +48,8 @@
     "running": "작업 중",
     "idle": "유휴",
     "stopped": "중지됨",
+    "done": "완료",
+    "ended": "종료됨",
     "failed": "실패",
     "cleaned": "정리됨"
   },
@@ -250,7 +252,7 @@
     "noOutput": "아직 출력이 없습니다.",
     "waiting": "출력을 기다리는 중…",
     "ended": "세션 I/O 스트림이 종료되었습니다.",
-    "lag": "프레임 {{count}}개 유실(버퍼 오버플로) — 아래 출력은 공백 이후부터 이어집니다.",
+    "lag_other": "프레임 {{count}}개 유실(버퍼 오버플로) — 아래 출력은 공백 이후부터 이어집니다.",
     "remoteControl": "이것은 원격 제어 세션입니다: I/O가 Anthropic의 클라우드로 중계되어 여기서 브리지되지 않습니다. Olivares는 수명 주기만 관리합니다.",
     "notLive": "이 세션은 라이브가 아닙니다({{state}}). I/O에 연결하려면 재개하십시오.",
     "ioUnavailableNotLiveOnNode": "이 노드에는 브리지된 I/O가 없습니다.",
@@ -268,7 +270,7 @@
     "interruptUnknown": "중단 결과를 알 수 없습니다. 다시 시도하기 전에 세션을 확인하십시오.",
     "interruptWorkConflict": "현재 작업 상태에서는 세션이 이 중단을 수락할 수 없습니다. 실행을 새로 고쳐 상태를 확인하십시오.",
     "blocked": {
-      "notLive": "보내려면 세션을 시작하거나 재개하십시오.",
+      "notLive": "메시지를 보내려면 세션을 재개하십시오.",
       "approval": "시작이 승인을 기다립니다; 승인되면 보내기가 작동합니다.",
       "sending": "보내는 중… 세션이 수락할 때까지 기다리십시오.",
       "uploading": "이미지를 저장하는 중… 첨부되면 보내기가 작동합니다.",
@@ -440,7 +442,6 @@
     "title": "프로바이더 프로필",
     "subtitle": "세션에서 도구가 실행되는 방식: 어떤 도구이며 어느 설정 폴더에서 로그인하는지입니다. 프로필은 이 서버에 이미 존재하는 도구 설치를 가리킵니다; 아무것도 설치하거나 로그인하지 않습니다.",
     "register": "프로필 등록",
-    "nextAction": "프로필 등록",
     "rowMenu": "{{name}}의 행 작업",
     "search": "프로필 검색…",
     "allStates": "모든 상태",
@@ -547,7 +548,8 @@
       "created": "생성됨",
       "updated": "업데이트됨",
       "retiredAt": "폐기됨",
-      "loadFailed": "이 프로필을 읽을 수 없습니다."
+      "loadFailed": "이 프로필을 읽을 수 없습니다.",
+      "loading": "프로필을 읽는 중…"
     },
     "configuration": {
       "title": "구성",
@@ -634,13 +636,8 @@
     "view": {
       "profilesTitle": "프로바이더 프로필",
       "bindingsTitle": "소스 바인딩",
-      "accountsTitle": "프로바이더 계정",
-      "tabProfiles": "프로필",
-      "tabBindings": "바인딩",
-      "tabAccounts": "계정",
-      "openProfiles": "프로바이더 프로필 페이지 열기",
-      "openBindings": "소스 바인딩 페이지 열기",
-      "crossHint": "프로필과 바인딩에는 각자의 읽기 권한으로 들어가는 자체 페이지도 있습니다."
+      "openProfiles": "도구 열기",
+      "crossHint": "각 계정은 프로필 및 소스 바인딩과 함께 도구에도 있습니다."
     },
     "authority": {
       "lost": "현재 권한으로는 이 작업이 더 이상 허용되지 않습니다; 아무것도 전송되지 않았습니다.",

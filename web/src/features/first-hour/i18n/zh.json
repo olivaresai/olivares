@@ -31,8 +31,11 @@
   },
   "signIn": {
     "openLink": "打开登录页面",
+    "openKeyPage": "打开密钥页面",
     "codeLabel": "登录页面上的代码",
     "codeHint": "批准访问后，页面会显示一个代码。请粘贴到这里。",
+    "keyLabel": "API 密钥",
+    "keyHint": "在上面的页面创建密钥，然后粘贴到这里。{{name}} 将其保存在此服务器上；Olivares 不保留。",
     "continue": "继续",
     "enterCode": "在登录页面上输入此代码：",
     "waiting": "正在等待你在登录页面上完成操作…",
@@ -40,7 +43,13 @@
     "copy": "复制",
     "copied": "已复制",
     "starting": "正在启动登录…",
-    "lostTouch": "与服务器失去联系。登录可能仍在进行。"
+    "lostTouch": "与服务器失去联系。登录可能仍在进行。",
+    "method": "登录方式",
+    "methods": {
+      "opencode": "OpenCode Zen 和免费模型（API 密钥）",
+      "opencode-go": "OpenCode Go（API 密钥）",
+      "chatgpt-headless": "ChatGPT Pro/Plus（无浏览器）"
+    }
   },
   "errors": {
     "status": "无法读取该工具的状态。",

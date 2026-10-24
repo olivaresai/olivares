@@ -208,7 +208,7 @@ func TestCommunicationEffectsWaitForPumpCompletion(t *testing.T) {
 // K3 rows pending, then prove only the explicitly invoked pump publishes them.
 func TestCommunicationEffectsPreservePendingRecovery(t *testing.T) {
 	e := bootIncomingHandoffHTTPEstate(t, communicationHTTPTestSQLiteStore(t))
-	sessions.SetWorkOutboxNudge(nil)
+	e.eng.sessionsMod.SetWorkOutboxNudge(nil)
 	communicationHTTPTestSettleOutbox(t, e.eng)
 	e.offer(t, map[string]any{"kind": "user", "ref": e.recipient.id}, "pending recovery", time.Hour)
 	before := communicationHTTPTestOutboxStates(t, e.eng, e.tenant)

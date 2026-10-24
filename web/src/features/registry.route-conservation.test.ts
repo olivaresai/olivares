@@ -81,6 +81,7 @@ describe('route conservation', () => {
       '/red-team',
       '/session-viewer/$id',
       '/team-costs',
+      '/organization',
     ])
     expect(
       census.business_paths.every((path) => census.paths.includes(path)),

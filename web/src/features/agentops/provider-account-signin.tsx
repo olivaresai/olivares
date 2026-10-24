@@ -174,6 +174,7 @@ export function AccountSignIn({
           driver={driver}
           accountRef={account.account_ref}
           tenantId={tenant}
+          methods={status.data.methods}
           onSignedIn={refresh}
           mutationScope={queryKey}
           requestOptions={requestOptions}

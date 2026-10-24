@@ -17,11 +17,9 @@ export type StatusTone = keyof typeof DOT
 /** Decoration only: its chip or icon-only wrapper carries the state word. */
 export function StatusDot({
   tone = 'neutral',
-  working = false,
   className,
 }: {
   tone?: StatusTone
-  working?: boolean
   className?: string
 }) {
   return (
@@ -33,8 +31,6 @@ export function StatusDot({
         'size-1.5 shrink-0 rounded-full',
         'forced-colors:[background-color:CanvasText] forced-colors:[forced-color-adjust:none]',
         DOT[tone],
-        working &&
-          'animate-pulse-live [animation-duration:2s] motion-reduce:animate-none [[data-motion=reduce]_&]:animate-none',
         className,
       )}
     />
@@ -47,14 +43,12 @@ export interface StatusChipProps extends Omit<
 > {
   children: ReactNode
   tone?: StatusTone
-  working?: boolean
 }
 
 /** State = dot + word. Boxed Tag/Badge components are for facts. */
 export function StatusChip({
   children,
   tone = 'neutral',
-  working = false,
   className,
   ...props
 }: StatusChipProps) {
@@ -69,7 +63,7 @@ export function StatusChip({
       )}
       {...props}
     >
-      <StatusDot tone={tone} working={working} />
+      <StatusDot tone={tone} />
       {children}
     </span>
   )

@@ -87,7 +87,7 @@
       },
       "fence": {
         "label": "Fence",
-        "hint": "Le fence sur lequel tu agis. En dessous de 1 le moteur refuse ; un fence périmé perd face au détenteur actuel.",
+        "hint": "Le fence sur lequel vous agissez. En dessous de 1 le moteur refuse ; un fence périmé perd face au détenteur actuel.",
         "placeholder": "1"
       },
       "decision_id": {

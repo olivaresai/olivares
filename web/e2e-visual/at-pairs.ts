@@ -132,7 +132,7 @@ const TEXT_NON_COLOUR =
 
 /** `text-current`/`text-inherit` do not CHOOSE a colour, they keep the inherited
  *  one; treating them as a colour of their own measures the wrong pair (a
- *  checkbox tick is `text-current` and inherits `accent-foreground`, not the
+ *  checkbox tick is `text-current` and inherits `surface` when checked, not the
  *  document default). `text-transparent` paints no text at all — usually a
  *  background-clip technique — and has no contrast to measure. */
 const TEXT_INHERITS = /^text-(current|inherit)$/
@@ -221,9 +221,9 @@ function satisfies(atom: ClassAtom, g: Guard): boolean {
  *   - the sidebar's base `text-muted-foreground` loses to
  *     `data-[status=active]:text-foreground` the moment
  *     `data-[status=active]:bg-accent-soft` paints, so muted-on-soft never renders;
- *   - the checkbox's base `bg-surface` loses to `data-[state=checked]:bg-accent`
- *     the moment `data-[state=checked]:text-accent-foreground` paints, so
- *     accent-foreground-on-surface never renders either.
+ *   - the checkbox's base `bg-surface` loses to `data-[state=checked]:bg-foreground`
+ *     the moment `data-[state=checked]:text-surface` paints, so
+ *     surface-on-surface never renders either.
  *
  *  Without both, the derived set reports pairs the product cannot paint — the
  *  fastest way to make a gate ignorable. */

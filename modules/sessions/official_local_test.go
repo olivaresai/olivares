@@ -216,7 +216,12 @@ if [ -t 0 ]; then
   exit 1
 fi
 printf '{"type":"system","subtype":"init","session_id":"sess-home"}\n'
-printf 'HOME=%s\nCLAUDE_CONFIG_DIR=%s\n' "$HOME" "$CLAUDE_CONFIG_DIR" > "$CLAUDE_CONFIG_DIR/seen-env"
+# Publish by rename: waitFile returns once seen-env exists, so a file written in
+# place is read while it is still empty. The pause stands for a loaded host.
+: > "$CLAUDE_CONFIG_DIR/seen-env.tmp"
+sleep 0.2
+printf 'HOME=%s\nCLAUDE_CONFIG_DIR=%s\n' "$HOME" "$CLAUDE_CONFIG_DIR" > "$CLAUDE_CONFIG_DIR/seen-env.tmp"
+mv "$CLAUDE_CONFIG_DIR/seen-env.tmp" "$CLAUDE_CONFIG_DIR/seen-env"
 exec sleep 30
 `
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {

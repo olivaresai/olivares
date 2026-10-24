@@ -58,8 +58,8 @@
     "gone": "Esta entrada ya no está en el catálogo.",
     "noProjection": "No hay detalles adicionales disponibles para mostrar de esta entrada. Esto no permite determinar si tiene relaciones.",
     "aiDiscovery": {
-      "unregistered_at_discovery": "Sin registrar al descubrirlo. Este punto de acceso de IA era nuevo en el inventario; se desconoce su gobierno actual. La cobertura se limita al registro del proxy y los hosts de IA configurados.",
-      "unknown": "Punto de acceso de IA observado. Se desconoce su gobierno. La cobertura se limita al registro del proxy y los hosts de IA configurados."
+      "unregistered_at_discovery": "Sin registrar al descubrirlo. Este punto de acceso de IA era nuevo en el inventario; se desconoce su gobernanza actual. La cobertura se limita al registro del proxy y los hosts de IA configurados.",
+      "unknown": "Punto de acceso de IA observado. Se desconoce su gobernanza. La cobertura se limita al registro del proxy y los hosts de IA configurados."
     }
   },
   "freshness": {
@@ -107,7 +107,7 @@
     "malformed": "Esta página de observaciones no se puede mostrar. Una lista de elementos ausente, una continuación sin cursor utilizable o un cursor que no avanza es un error, no un historial vacío."
   },
   "topology": {
-    "note": "Composición del estate por tipo. El uso en runtime (qué agente usa qué modelo/MCP) está en Sesiones; el acceso a recursos (R/RW) en el Mapa de acceso.",
+    "note": "Composición del parque por tipo. El uso en runtime (qué agente usa qué modelo/MCP) está en Sesiones; el acceso a recursos (R/RW) en el Mapa de acceso.",
     "bands": {
       "origins": "Quién actúa",
       "capabilities": "Qué pueden usar",
@@ -115,15 +115,15 @@
       "other": "Otros tipos"
     },
     "emptyTitle": "Nada descubierto todavía",
-    "emptyHint": "A medida que los conectores reporten actividad, tu estate se cataloga aquí.",
+    "emptyHint": "A medida que los conectores reporten actividad, tu parque se cataloga aquí.",
     "truncated": "Mostrando las primeras {{n}} entidades",
-    "countsAreLoaded": "Los recuentos son de los elementos cargados en esta página, no de todo el estate.",
+    "countsAreLoaded": "Los recuentos son de los elementos cargados en esta página, no de todo el parque.",
     "loadedOnPage": "{{count}} cargados en esta página",
     "loadedCount": "{{count}} cargados"
   },
   "empty": {
     "catalog": {
-      "title": "Aún no se han descubierto entidades del estate",
+      "title": "Aún no se han descubierto entidades del parque",
       "description": "Las entidades aparecen conforme las observaciones de los conectores informan de agentes, sesiones, identidades, capacidades MCP, modelos, proveedores o recursos.",
       "action": "Abrir capacidades"
     }

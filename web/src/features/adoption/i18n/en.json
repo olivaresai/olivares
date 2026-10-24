@@ -26,11 +26,13 @@
   "lenses": {
     "analytics": {
       "title": "Per developer (admin Analytics)",
-      "description": "Authoritative per-developer/day totals from the admin Analytics feed across {{developers}} developer(s)."
+      "description_one": "Authoritative per-developer/day totals from the admin Analytics feed across {{count}} developer.",
+      "description_other": "Authoritative per-developer/day totals from the admin Analytics feed across {{count}} developers."
     },
     "telemetry": {
       "title": "Per session (live telemetry)",
-      "description": "Real-time per-session activity from the OTLP plane across {{teams}} team(s); includes active time."
+      "description_one": "Real-time per-session activity from the OTLP plane across {{count}} team; includes active time.",
+      "description_other": "Real-time per-session activity from the OTLP plane across {{count}} teams; includes active time."
     }
   },
   "comparison": {

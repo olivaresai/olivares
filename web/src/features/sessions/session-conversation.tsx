@@ -5,15 +5,7 @@
 // THE NARRATIVE AS A CONVERSATION. Attach frames are mapped before they are
 // painted: the default view is operator, assistant, tool, system, result. The
 // raw line is one click away (inspect), never the row itself.
-import { Check, Eye, Pencil, Terminal, Wrench } from 'lucide-react'
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type MouseEvent,
-} from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { TFunction } from 'i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -21,24 +13,44 @@ import { agentOpsKeys } from '@/features/agentops/api'
 import { MessageImages } from '@/features/agentops/attachment-ui'
 import { useRunAttach } from '@/features/agentops/attach'
 import { readsNativeRecord } from '@/features/agentops/provider-contract'
+import { modelName } from '@/features/agentops/model-name'
+import { useTurnInterrupt } from '@/features/agentops/turn-interrupt'
 import type { AttachFrame, RunDTO } from '@/features/agentops/types'
+import { CopyButton } from '@/components/ui/copy-button'
 import { formatDuration, formatInt } from '@/lib/format'
+import { isTypingTarget } from '@/lib/keybindings/model'
 import '@/features/shared/i18n'
 import { cn } from '@/lib/utils'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 import {
   conversationCwd,
+  conversationModel,
   isQuiet,
   mapConversationFrames,
   type ConversationItem,
 } from './conversation-frames'
 import { systemFailed, systemText } from './conversation-text'
+import {
+  InspectButton,
+  isRunning,
+  KeyboardInspect,
+  openOnWords,
+  threadParts,
+  WorkRow,
+} from './conversation-work'
 import { MarkdownText } from './markdown-text'
+import { parseMarkdown, plainText } from './markdown'
 import { MessageBar, MessageRail } from './message-navigator'
 import { useMessageNavigator } from './use-message-navigator'
-import { hostIsolationUnavailable } from './provenance'
-import { unechoedTurns, useRunSentTurns, type SentTurn } from './sent-turns'
+import { hostIsolationUnavailable, isLiveRun } from './provenance'
+import {
+  settleTurns,
+  useRunSentTurns,
+  useSentTurns,
+  wordsShown,
+  type SentTurn,
+} from './sent-turns'
 import './i18n'
 
 const MAX_FRAMES = 5000
@@ -67,12 +79,15 @@ export function SessionConversation({
   selectedId,
   onInspect,
   onFolder,
+  onModel,
 }: {
   run: RunDTO
   selectedId?: string | null
   onInspect?: (item: ConversationItem) => void
   /** The folder the tool's own first frame names, for the Context pane to say. */
   onFolder?: (cwd: string | null) => void
+  /** The model the session's own turns run on now, for the header to say. */
+  onModel?: (model: string | null) => void
 }) {
   const { t } = useTranslation('sessions')
   const { t: tShared } = useTranslation('shared')
@@ -144,16 +159,17 @@ export function SessionConversation({
   // away under "In a terminal" (`session follow -o json`); a protocol error is still shown.
   const items = useMemo(
     () =>
-      mapConversationFrames([
-        ...(history ? [history] : []),
-        ...frames.map((f) => f.line),
-      ]).filter((item) => item.systemKind !== 'protocol' && !isQuiet(item)),
+      mapConversationFrames(
+        [...(history ? [history] : []), ...frames.map((f) => f.line)],
+        [...(history ? [undefined] : []), ...frames.map((f) => f.at)],
+        [...(history ? [undefined] : []), ...frames.map((f) => f.seq)],
+      ).filter((item) => item.systemKind !== 'protocol' && !isQuiet(item)),
     [frames, history],
   )
   // The first message the console sent, until the tool shows it itself (HU2-27).
   const sent = useRunSentTurns(run.run_ref)
-  const pending = useMemo(
-    () => (sent ? unechoedTurns(items, sent) : []),
+  const { pending, echoed } = useMemo(
+    () => (sent ? settleTurns(items, sent) : { pending: [], echoed: [] }),
     [items, sent],
   )
   const frameCwd = conversationCwd(items)
@@ -161,6 +177,11 @@ export function SessionConversation({
     onFolder?.(frameCwd ?? null)
     return () => onFolder?.(null)
   }, [frameCwd, onFolder])
+  const frameModel = conversationModel(items)
+  useEffect(() => {
+    onModel?.(frameModel ?? null)
+    return () => onModel?.(null)
+  }, [frameModel, onModel])
 
   useEffect(() => {
     if (!autoscroll) return
@@ -181,6 +202,19 @@ export function SessionConversation({
     () => items.filter((item) => item.kind === 'operator').length,
     [items],
   )
+  // A note the tool has shown is forgotten: its own row tells it from now on (dev#2787).
+  useEffect(() => {
+    if (echoed.length) useSentTurns.getState().drop(runRef, echoed)
+  }, [echoed, runRef])
+  // A message sent from now on is echoed by a frame after the newest one shown here
+  // (dev#2787). Nothing is said before a frame arrives: after a remount, the newest frame
+  // the session showed before is still the right place.
+  const newestSeq = frames.length ? frames[frames.length - 1]!.seq : undefined
+  const said = useMemo(() => wordsShown(items), [items])
+  useEffect(() => {
+    if (newestSeq !== undefined)
+      useSentTurns.getState().see(runRef, newestSeq, said)
+  }, [runRef, newestSeq, said])
   const sentSeen = useRef({ runRef, sentCount })
   useEffect(() => {
     const seen = sentSeen.current
@@ -203,8 +237,46 @@ export function SessionConversation({
     onJump: stopFollowing,
   })
 
+  // THE THREAD AS IT READS (dev#3119): the calls between two replies fold into one row, a
+  // subagent's calls into its Agent row, and the calls of the last row, while they run,
+  // are one live line with their clock.
+  const parts = useMemo(() => threadParts(items), [items])
+  const live = isLiveRun(run) && !ended
+  const last = parts[parts.length - 1]
+  const runningNow =
+    live && last?.kind === 'work' ? last.items.filter(isRunning) : []
+  const turn = useTurnInterrupt(run)
+  // The pane this conversation is in, with its composer; the session sheet is a dialog,
+  // whose Escape closes it, so there is none there and Escape interrupts nothing.
+  const [pane, setPane] = useState<Element | null>(null)
+  const rootRef = useCallback((node: HTMLDivElement | null) => {
+    setPane(node?.closest('section[data-focused]') ?? null)
+  }, [])
+  const canInterrupt =
+    pane !== null && runningNow.length > 0 && turn.allowed && !turn.pending
+  const interruptRef = useRef(turn.interrupt)
+  useEffect(() => {
+    interruptRef.current = turn.interrupt
+  })
+  // ESCAPE INTERRUPTS THE TURN while a call runs, from a field of this pane (its composer),
+  // where the pane's own Escape does nothing; anywhere else Escape keeps closing the side
+  // pane. A dialog, a menu or the composer's own menu takes its Escape first.
+  useEffect(() => {
+    if (!canInterrupt || !pane) return
+    const onKey = (e: KeyboardEvent) => {
+      if (!interrupts(e) || !isTypingTarget(e.target)) return
+      if (!(e.target instanceof Node) || !pane.contains(e.target)) return
+      if (document.querySelector(OPEN_LAYER)) return
+      e.preventDefault()
+      interruptRef.current()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [canInterrupt, pane])
+
   return (
     <div
+      ref={rootRef}
       className="flex min-h-0 flex-1 flex-col gap-2"
       data-testid="session-conversation"
     >
@@ -225,7 +297,15 @@ export function SessionConversation({
         >
           {/* ONE CENTERED COLUMN, 760 px: the transcript is read, not scanned, and a line
             longer than that is a line nobody follows. */}
-          <div className="mx-auto w-full max-w-[760px] px-4 py-4">
+          {/* While the rail shows, the column keeps clear of it: a message's Copy sits at
+              its right edge on a narrow pane (dev#2788). */}
+          <div
+            data-slot="conversation-column"
+            className={cn(
+              'mx-auto w-full max-w-[760px] px-4 py-4',
+              messages.available && messages.marks.length > 0 && 'pe-12',
+            )}
+          >
             {/* A LINK THAT DROPPED OR IS COMING UP SAYS SO, ONCE, QUIETLY, while the turns
               already read stay on the page. Without it a stale transcript reads as a
               finished one. */}
@@ -250,28 +330,19 @@ export function SessionConversation({
               </p>
             ) : (
               <ol className="flex flex-col gap-1">
-                {foldTools(items).map((part) =>
-                  part.kind === 'fold' ? (
-                    <li key={`fold-${part.items[0]!.id}`}>
-                      <details data-testid="conversation-tools-fold">
-                        <summary className="flex min-h-8 cursor-pointer list-none items-center gap-2 rounded-ctl px-2 text-caption text-text-3 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus [&::-webkit-details-marker]:hidden">
-                          {t('conversation.toolsFolded', {
-                            count: part.items.length,
-                          })}
-                        </summary>
-                        <ol className="flex flex-col">
-                          {part.items.map((item) => (
-                            <ConversationRow
-                              key={item.id}
-                              item={item}
-                              runRef={run.run_ref}
-                              selected={selectedId === item.id}
-                              onInspect={onInspect}
-                            />
-                          ))}
-                        </ol>
-                      </details>
-                    </li>
+                {parts.map((part, index) =>
+                  part.kind === 'work' ? (
+                    <WorkRow
+                      key={`work-${part.items[0]!.id}`}
+                      items={part.items}
+                      nested={part.nested}
+                      runRef={run.run_ref}
+                      selectedId={selectedId}
+                      onInspect={onInspect}
+                      live={live}
+                      running={index === parts.length - 1 ? runningNow : []}
+                      canInterrupt={canInterrupt}
+                    />
                   ) : (
                     <ConversationRow
                       key={part.item.id}
@@ -283,7 +354,11 @@ export function SessionConversation({
                   ),
                 )}
                 {pending.map((turn, i) => (
-                  <SentTurnRow key={`sent-${i}`} turn={turn} />
+                  <SentTurnRow
+                    key={`sent-${i}`}
+                    turn={turn}
+                    ended={!isLiveRun(run) && run.state !== 'waiting_approval'}
+                  />
                 ))}
               </ol>
             )}
@@ -300,56 +375,16 @@ export function SessionConversation({
   )
 }
 
-/** Tool calls beyond the latest three in a row of them fold under "+N tool calls". */
-const VISIBLE_TOOL_CALLS = 3
+/** A dialog or a menu that is open takes the Escape key. */
+const OPEN_LAYER =
+  '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [role="menu"][data-state="open"]'
 
-type Part =
-  | { kind: 'item'; item: ConversationItem }
-  | { kind: 'fold'; items: ConversationItem[] }
-
-/**
- * The items as the thread paints them: a run of consecutive tool calls longer than
- * three keeps its latest three on the page, and the older ones fold into one line that
- * opens them. Nothing is dropped: every folded row is still in the document.
- */
-function foldTools(items: readonly ConversationItem[]): Part[] {
-  const parts: Part[] = []
-  let at = 0
-  while (at < items.length) {
-    if (items[at]!.kind !== 'tool') {
-      parts.push({ kind: 'item', item: items[at]! })
-      at += 1
-      continue
-    }
-    let end = at
-    while (end < items.length && items[end]!.kind === 'tool') end += 1
-    const run = items.slice(at, end)
-    const folded = run.length - VISIBLE_TOOL_CALLS
-    if (folded > 0) parts.push({ kind: 'fold', items: run.slice(0, folded) })
-    for (const item of folded > 0 ? run.slice(folded) : run)
-      parts.push({ kind: 'item', item })
-    at = end
-  }
-  return parts
-}
-
-/** The glyph of a tool call: what it does to the folder, not which tool does it. */
-function ToolGlyph({ name, command }: { name?: string; command?: string }) {
-  const cls = 'size-3.5 shrink-0 text-text-3'
-  if (command) return <Terminal aria-hidden className={cls} />
-  switch ((name ?? '').toLowerCase()) {
-    case 'read':
-    case 'grep':
-    case 'glob':
-    case 'search':
-      return <Eye aria-hidden className={cls} />
-    case 'edit':
-    case 'write':
-    case 'multiedit':
-      return <Pencil aria-hidden className={cls} />
-    default:
-      return <Wrench aria-hidden className={cls} />
-  }
+/** An Escape of its own: not one a control took, not one that ends an input method's
+ * composition, not a held key repeating. */
+function interrupts(e: KeyboardEvent): boolean {
+  return (
+    e.key === 'Escape' && !e.defaultPrevented && !e.isComposing && !e.repeat
+  )
 }
 
 function ConversationRow({
@@ -365,106 +400,28 @@ function ConversationRow({
 }) {
   const { t } = useTranslation('sessions')
   const inspect = () => onInspect?.(item)
-
-  if (item.kind === 'tool') {
-    const target = item.toolCommand ?? item.toolArgsSummary
-    return (
-      <li>
-        <details
-          data-testid="conversation-item"
-          data-item-id={item.id}
-          data-kind="tool"
-          className={cn('group rounded-ctl', selected && 'bg-active')}
-        >
-          {/* A TOOL CALL IS A 13 px ROW: the glyph, the verb, the target in the machine
-              face, and at the right the check once the tool answered. */}
-          <summary
-            className={cn(
-              'flex min-h-8 cursor-pointer list-none items-center gap-2 rounded-ctl px-2 py-1',
-              'text-caption text-text outline-none hover:bg-hover',
-              'focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset',
-              '[&::-webkit-details-marker]:hidden',
-            )}
-          >
-            <ToolGlyph name={item.toolName} command={item.toolCommand} />
-            <span className="shrink-0 font-medium">
-              {item.toolName ?? t('conversation.tool')}
-            </span>
-            {target ? (
-              <span
-                className="min-w-0 flex-1 truncate font-mono text-text-2"
-                title={item.toolCommand ?? target}
-              >
-                {target}
-              </span>
-            ) : (
-              <span className="flex-1" />
-            )}
-            {item.toolFailed ? (
-              <span className="shrink-0 text-danger">
-                {t('conversation.toolFailed')}
-              </span>
-            ) : item.toolElapsedSeconds !== undefined ? (
-              <span className="shrink-0 tabular-nums text-text-3">
-                {formatDuration(item.toolElapsedSeconds * 1000)}
-              </span>
-            ) : item.toolResultSummary !== undefined ? (
-              <Check aria-hidden className="size-3.5 shrink-0 text-text-3" />
-            ) : null}
-          </summary>
-          <div className="space-y-1 px-8 pb-2 text-caption text-muted-foreground">
-            {item.toolCommand ? (
-              <>
-                <pre
-                  data-slot="tool-command"
-                  className="m-0 whitespace-pre-wrap font-mono text-caption text-foreground [overflow-wrap:anywhere]"
-                >
-                  {item.toolCommand}
-                </pre>
-                {item.toolDescription ? <p>{item.toolDescription}</p> : null}
-              </>
-            ) : item.toolArgsSummary ? (
-              <p>
-                <span className="text-overline uppercase">
-                  {t('conversation.args')}{' '}
-                </span>
-                {item.toolArgsSummary}
-              </p>
-            ) : null}
-            {item.toolResultSummary ? (
-              <p>
-                <span className="text-overline uppercase">
-                  {t('conversation.toolResult')}{' '}
-                </span>
-                {item.toolResultSummary}
-              </p>
-            ) : null}
-            <InspectButton onClick={inspect} />
-          </div>
-        </details>
-      </li>
-    )
-  }
+  const openFromWords = openOnWords(inspect)
 
   if (item.kind === 'system') {
     return (
       <li>
-        <button
-          type="button"
+        <div
           data-testid="conversation-item"
           data-item-id={item.id}
           data-kind="system"
-          onClick={inspect}
+          onClick={openFromWords}
           className={cn(
             'flex min-h-7 w-full items-center gap-2 rounded-ctl px-2 py-0.5 text-left',
-            'text-caption outline-none',
+            'text-caption',
             // The engine's notice reads as the terminal's warning does (`session follow`).
             systemFailed(item)
               ? 'text-danger'
-              : item.systemKind === 'notice'
+              : item.systemKind === 'notice' ||
+                  item.systemKind === 'model' ||
+                  item.systemKind === 'rate_limit'
                 ? 'text-warning'
                 : 'text-muted-foreground',
-            'hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset',
+            'hover:bg-hover',
             selected && 'bg-active text-text',
           )}
         >
@@ -472,12 +429,24 @@ function ConversationRow({
           <span
             className={cn(
               'min-w-0',
-              item.systemKind === 'notice' ? 'whitespace-normal' : 'truncate',
+              item.systemKind === 'notice' ||
+                item.systemKind === 'model' ||
+                item.systemKind === 'rate_limit'
+                ? 'whitespace-normal'
+                : 'truncate',
             )}
+            title={
+              item.systemKind === 'model'
+                ? `${item.fromModel ?? ''} → ${item.model ?? ''}`
+                : item.systemKind === 'init'
+                  ? item.model
+                  : undefined
+            }
           >
             {systemText(t, item)}
           </span>
-        </button>
+        </div>
+        <KeyboardInspect onInspect={onInspect ? inspect : undefined} />
       </li>
     )
   }
@@ -485,7 +454,6 @@ function ConversationRow({
   if (item.kind === 'result') {
     const facts = [
       item.stopReason ? stopText(t, item.stopReason) : null,
-      item.model,
       item.inputTokens !== undefined || item.outputTokens !== undefined
         ? t('conversation.tokens', {
             input: formatInt(item.inputTokens ?? 0),
@@ -500,18 +468,24 @@ function ConversationRow({
           }).format(item.costUsd)
         : null,
     ].filter(Boolean)
-    // THE END OF A TURN IS A DIVIDER, not a bare "Result" button: "Worked for 8s" when
-    // the tool said how long, "Result" when it did not. It opens what the button showed
-    // inline: how the turn stopped, the model, the tokens, the cost and the raw frame.
-    // A failed turn keeps its duration: "Result · 8.0s", never a silent "Worked for".
-    const label =
+    // THE END OF A TURN IS A DIVIDER, not a bare "Result" button: "Finished in 8s" when
+    // the tool said how long, "Result" when it did not ("Worked for" is the work row's,
+    // dev#3119). It opens what the button showed inline: how the turn stopped, the model,
+    // the tokens, the cost and the raw frame. A failed turn keeps its duration:
+    // "Result · 8.0s", never a silent "Finished in". Every turn names the model that
+    // produced it (dev#2786).
+    const label = [
       item.durationMs === undefined
         ? t('conversation.result')
         : item.resultFailed
           ? `${t('conversation.result')} · ${formatDuration(item.durationMs)}`
-          : t('conversation.workedFor', {
+          : t('conversation.finishedIn', {
               duration: formatDuration(item.durationMs),
-            })
+            }),
+      item.model && modelName(item.model),
+    ]
+      .filter(Boolean)
+      .join(' · ')
     return (
       <li>
         <details
@@ -534,6 +508,7 @@ function ConversationRow({
                 'tabular-nums',
                 item.resultFailed && 'font-medium text-danger',
               )}
+              title={item.model}
             >
               {label}
             </span>
@@ -565,26 +540,28 @@ function ConversationRow({
   if (item.kind === 'operator')
     return (
       <li className="my-2">
-        <button
-          type="button"
+        <div
           data-testid="conversation-item"
           data-item-id={item.id}
           data-kind="operator"
-          onClick={inspect}
+          onClick={openFromWords}
           className={cn(
-            'w-full rounded-[12px] bg-muted px-4 py-3 text-left text-body-l text-text outline-none',
-            'focus-visible:ring-2 focus-visible:ring-focus',
+            'w-full rounded-[12px] bg-muted px-4 py-3 text-left text-body-l text-text',
             selected && 'ring-1 ring-line-strong',
           )}
         >
           <span className="whitespace-pre-wrap break-words">
             {item.text || item.summary}
           </span>
-        </button>
+        </div>
+        <KeyboardInspect onInspect={onInspect ? inspect : undefined} />
         {/* The images the person attached, from the engine's copy: they come back with
             the message after a reload. */}
         {item.attachments?.length ? (
           <MessageImages runRef={runRef} attachments={item.attachments} />
+        ) : null}
+        {item.text ? (
+          <MessageActions align="end" text={() => item.text ?? ''} />
         ) : null}
       </li>
     )
@@ -595,42 +572,26 @@ function ConversationRow({
         <span className="text-overline uppercase text-text-3">
           {t('conversation.unknown')}
         </span>
-        <button
-          type="button"
+        <div
           data-testid="conversation-item"
           data-item-id={item.id}
           data-kind="unknown"
-          onClick={inspect}
+          onClick={openFromWords}
           className={cn(
-            'w-full rounded-md border border-line px-2.5 py-1.5 text-left text-body text-text outline-none',
-            'focus-visible:ring-2 focus-visible:ring-focus',
+            'w-full rounded-md border border-line px-2.5 py-1.5 text-left text-body text-text',
             selected && 'bg-active',
           )}
         >
           <span className="whitespace-pre-wrap break-words">
             {item.text || item.summary}
           </span>
-        </button>
+        </div>
+        <KeyboardInspect onInspect={onInspect ? inspect : undefined} />
       </li>
     )
 
   // THE ASSISTANT'S WORDS ARE MARKDOWN (#1784): lists, code and bold are shown as such. A
-  // reply holds blocks and links, which a button cannot, so the row is the reply itself. A
-  // click on its words opens the inspector, but not on a link and not while the person is
-  // selecting text to copy it; "Inspect" is the keyboard's way in, shown when it has focus.
-  const openFromWords = (e: MouseEvent<HTMLElement>) => {
-    if ((e.target as Element).closest('a, button')) return
-    // the second click of a double click is picking a word, not asking for the frame
-    if (e.detail > 1) return
-    const selection = window.getSelection()
-    if (
-      selection &&
-      !selection.isCollapsed &&
-      e.currentTarget.contains(selection.anchorNode)
-    )
-      return
-    inspect()
-  }
+  // reply holds blocks and links, which a button cannot, so the row is the reply itself.
   return (
     <li className="py-1">
       <div
@@ -644,20 +605,23 @@ function ConversationRow({
         )}
       >
         <MarkdownText text={item.text || item.summary} />
-        {onInspect ? (
-          <div className="sr-only focus-within:not-sr-only focus-within:mt-1">
-            <InspectButton onClick={inspect} />
-          </div>
-        ) : null}
+        <KeyboardInspect onInspect={onInspect ? inspect : undefined} />
       </div>
+      {item.text ? (
+        <MessageActions
+          align="start"
+          text={() => plainText(parseMarkdown(item.text ?? ''))}
+        />
+      ) : null}
     </li>
   )
 }
 
 /** The person's message as the console sent it: there is no frame to inspect. A message
  * the engine refused says so, with the engine's reason, in the danger color; one held
- * for its launch's approval says it goes when the session runs. */
-function SentTurnRow({ turn }: { turn: SentTurn }) {
+ * for its launch's approval says it goes when the session runs; one the engine took says
+ * so until the tool shows it (dev#2787). */
+function SentTurnRow({ turn, ended }: { turn: SentTurn; ended: boolean }) {
   const { t } = useTranslation('sessions')
   return (
     <li className="my-2 flex flex-col gap-1" data-testid="conversation-sent">
@@ -672,21 +636,39 @@ function SentTurnRow({ turn }: { turn: SentTurn }) {
         <p className="px-1 text-caption text-muted-foreground">
           {t('conversation.waitingApproval')}
         </p>
-      ) : null}
+      ) : (
+        <p className="px-1 text-caption text-muted-foreground">
+          {t(ended ? 'conversation.sentNotTaken' : 'conversation.sentPending')}
+        </p>
+      )}
+      <MessageActions align="end" text={() => turn.text} />
     </li>
   )
 }
 
-function InspectButton({ onClick }: { onClick?: () => void }) {
-  const { t } = useTranslation('sessions')
-  if (!onClick) return null
+/** Under a message: Copy, its words as the person reads them (dev#2788). A message without
+ * words (only images, or a reply with no text) has none: its row shows a label, not words. */
+function MessageActions({
+  align,
+  text,
+}: {
+  align: 'start' | 'end'
+  text: () => string
+}) {
+  const { t } = useTranslation('common')
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="text-caption text-text-2 underline underline-offset-[3px] hover:text-text focus-visible:ring-2 focus-visible:ring-focus"
+    <div
+      className={cn(
+        'mt-0.5 flex items-center gap-2',
+        align === 'end' ? 'justify-end' : 'justify-start',
+      )}
     >
-      {t('conversation.inspect')}
-    </button>
+      <CopyButton
+        text={text}
+        label={t('ui.copy.message')}
+        copiedLabel={t('ui.copy.copied')}
+        failedLabel={t('ui.copy.failed')}
+      />
+    </div>
   )
 }

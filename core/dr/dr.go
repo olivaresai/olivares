@@ -43,8 +43,13 @@
 package dr
 
 // ManifestFormat is the versioned format tag of a DR manifest. A reader rejects
-// a manifest whose Format it does not recognize rather than guessing.
-const ManifestFormat = "olivares.dr.manifest.v1"
+// a manifest whose Format it does not recognize rather than guessing. v2 bundles
+// carry the store snapshot sealed under the KEK (StoreSnapshot.Encryption).
+const ManifestFormat = "olivares.dr.manifest.v2"
+
+// ManifestFormatV1 is the format of every bundle taken before the snapshot was
+// sealed. Readers still accept it so an old backup restores; no producer writes it.
+const ManifestFormatV1 = "olivares.dr.manifest.v1"
 
 // Snapshot methods recorded in a manifest's Store.Method. They document HOW the
 // store snapshot in the bundle was produced, so a restore uses the matching path.
@@ -145,15 +150,40 @@ type ManifestAuthentication struct {
 type StoreSnapshot struct {
 	// Method is one of MethodVacuumInto / MethodPgDump / MethodPITR.
 	Method string `json:"method"`
-	// File is the snapshot's path WITHIN the bundle (e.g. "store/olivares.db"),
-	// or, for MethodPITR, a human pointer to the external archive.
+	// File is where the snapshot lands once opened (e.g. "store/olivares.db"),
+	// or, for MethodPITR, a human pointer to the external archive. Without
+	// Encryption it is also the tar member; with it the member is File+".enc".
 	File string `json:"file"`
 	// SizeBytes is the snapshot size in bytes (0 for an external PITR archive).
+	// It is the plaintext size, whether or not the member is sealed.
 	SizeBytes int64 `json:"size_bytes"`
-	// SHA256 is the lowercase-hex SHA-256 of the snapshot bytes AS BUNDLED. Restore
-	// recomputes it on the extracted file and refuses to proceed on a mismatch
+	// SHA256 is the lowercase-hex SHA-256 of the plaintext snapshot. Restore
+	// recomputes it on the (opened) file and refuses to proceed on a mismatch
 	// (corruption/tamper of the bundle). Empty for an external PITR archive.
 	SHA256 string `json:"sha256,omitempty"`
+	// Encryption names how the snapshot member is sealed under the KEK:
+	// snapshotEncChunked, or "" for a pre-v2 bundle that carries it in the clear.
+	Encryption string `json:"encryption,omitempty"`
+}
+
+// sealed reports whether the snapshot member is sealed under the KEK.
+func (s StoreSnapshot) sealed() bool { return s.Encryption != "" }
+
+// memberPath is the snapshot's tar member: the file itself, or its sealed twin.
+func (s StoreSnapshot) memberPath() string {
+	if s.sealed() {
+		return s.File + snapshotSealedSuffix
+	}
+	return s.File
+}
+
+// UnsealedSnapshotWarning is the operator warning for a bundle whose store
+// snapshot travels in the clear (taken before v2), or "" when nothing is wrong.
+func (m *Manifest) UnsealedSnapshotWarning() string {
+	if m == nil || m.Store.Method == MethodPITR || m.Store.sealed() {
+		return ""
+	}
+	return "this bundle is in the old format: its store snapshot is NOT encrypted. It restores, but take a new backup to seal the snapshot under the KEK"
 }
 
 // TenantTip is one tenant chain's tip and backup-time verification result.

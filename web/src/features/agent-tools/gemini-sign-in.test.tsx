@@ -25,7 +25,7 @@ const { api, auth, signIn, launch, navigate } = vi.hoisted(() => ({
   auth: {
     isSuperadmin: true,
     // Provider-read access is enabled by the provider readiness cases below.
-    can: vi.fn(() => false),
+    can: vi.fn((_permission: string) => false),
     activeTenant: null,
     principal: { user_id: 'root' },
   },
@@ -72,7 +72,8 @@ const flow = {
 beforeEach(() => {
   useTenantStore.setState({ activeTenant: 'tenant-a' })
   vi.clearAllMocks()
-  auth.can.mockReturnValue(false)
+  // Only the key form's own gate (#2551); these cases read no providers.
+  auth.can.mockImplementation((p: string) => p === 'sessions:provider:write')
   vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(readinessOf({}))
   api.inventory.mockResolvedValue({
     drivers: ['gemini-cli'],
@@ -115,15 +116,20 @@ it('relays the native Google sign-in URL and pasted code from the Gemini row', a
   expect(
     await within(dialog).findByRole('link', { name: 'Open the sign-in page' }),
   ).toHaveAttribute('href', flow.url)
+  // HU2-18, #2551: the key form opens in this same dialog, on Gemini's own provider —
+  // a button in the sheet, not a page link that reloads and loses the dialog.
   expect(
-    within(dialog).getByRole('link', {
+    within(dialog).queryByRole('link', {
       name: 'Use an API key instead',
       hidden: true,
     }),
-  ).toHaveAttribute(
-    'href',
-    expect.stringMatching(/^\/providers\?add=gemini&returnTo=/),
+  ).not.toBeInTheDocument()
+  await user.click(within(dialog).getByText('Other ways'))
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Use an API key instead' }),
   )
+  expect(within(dialog).getByText('Gemini')).toBeInTheDocument()
+  expect(within(dialog).getByLabelText(/^API key/)).toBeInTheDocument()
   await user.type(
     within(dialog).getByLabelText('Code from the sign-in page'),
     'fixture-code',

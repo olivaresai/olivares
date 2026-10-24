@@ -56,6 +56,30 @@ type openCodeFixture struct {
 	// as an agent that echoes the person's message would.
 	EchoPrompt bool `json:"echo_prompt"`
 
+	// PromptUsage is the usage object each prompt result carries (ACP PromptResponse.usage,
+	// per turn), and UsageCost the cost each turn adds to the cumulative usage_update the
+	// peer sends before that result, in UsageCurrency ("USD" when empty). OpenCode 1.19.3
+	// sends both (measured on opencode/glm-5.3-flash-free: cost {"amount":0,"currency":"USD"}).
+	PromptUsage   map[string]int64 `json:"prompt_usage"`
+	UsageCost     *float64         `json:"usage_cost"`
+	UsageCurrency string           `json:"usage_currency"`
+	// HistoryCost is the cost a resumed conversation had already reached. As OpenCode
+	// 1.19.3 does (acp/usage.ts totalSessionCost; resumeSession sends no usage_update),
+	// the peer replays no cost on session/resume and counts it in every later total.
+	HistoryCost float64 `json:"history_cost"`
+	// UsageCostTotals, when set, are the cumulative totals the peer reports on its
+	// turns in order (a total may go down, as for a reverted message).
+	UsageCostTotals []float64 `json:"usage_cost_totals"`
+	// FailCall makes the peer behave as OpenCode 1.19.3 does when its model call fails
+	// upstream: it logs the error on stderr (with --print-logs, for the title helper
+	// and for the conversation) and never answers the prompt until it is cancelled.
+	FailCall string `json:"fail_call"`
+	// FailCallRecovers makes the peer go on after logging the failure, as a retry would:
+	// it sends output, then answers the turn after 2.5 s, or, with FailCallThen, logs that
+	// second failure and waits like the first.
+	FailCallRecovers bool   `json:"fail_call_recovers"`
+	FailCallThen     string `json:"fail_call_then"`
+
 	// WritePath makes the peer ask the client to write WriteContent to that path on
 	// the turn, as OpenCode does after an approved edit; a relative path is joined to
 	// the session folder the client named in session/new.
@@ -344,6 +368,33 @@ func (p *openCodeFixturePeer) handle(frame map[string]json.RawMessage) {
 }
 
 func (p *openCodeFixturePeer) onPrompt(id json.RawMessage) {
+	if p.cfg.FailCall != "" {
+		for _, line := range []string{
+			`timestamp=2026-10-22T12:55:57.309Z level=ERROR run=8d38203a message="stream error" providerID=opencode modelID=gpt-5.4-nano session.id=` +
+				p.session + ` small=true agent=title mode=primary error.error="AI_APICallError: Upstream request failed: Model access is disabled"`,
+			`timestamp=2026-10-22T12:55:57.836Z level=ERROR run=8d38203a message="stream error" providerID=opencode modelID=glm-5.3-flash-free session.id=` +
+				p.session + ` small=false agent=build mode=primary error.error="AI_APICallError: ` + p.cfg.FailCall + `"`,
+		} {
+			fmt.Fprintln(os.Stderr, line)
+		}
+		if p.cfg.FailCallRecovers {
+			// The retry's output comes soon, and the turn runs on past the grace a test sets.
+			time.Sleep(200 * time.Millisecond)
+			p.sendUpdate(p.session, "agent_message_chunk", "after a retry")
+			if p.cfg.FailCallThen == "" {
+				time.Sleep(2500 * time.Millisecond)
+				p.reply(id, map[string]any{"stopReason": "end_turn"})
+				return
+			}
+			time.Sleep(300 * time.Millisecond) // the second failure comes after the retry's output
+			fmt.Fprintln(os.Stderr, `timestamp=2026-10-22T12:55:59.000Z level=ERROR run=8d38203a message="stream error" providerID=opencode modelID=glm-5.3-flash-free session.id=`+
+				p.session+` small=false agent=build mode=primary error.error="AI_APICallError: `+p.cfg.FailCallThen+`"`)
+		}
+		p.mu.Lock()
+		p.heldPrompt = append(json.RawMessage(nil), id...)
+		p.mu.Unlock()
+		return
+	}
 	p.sendUpdate(p.session, "agent_message_chunk", "live output")
 	if p.cfg.ForeignUpdate {
 		p.sendUpdate("some-other-conversation", "agent_message_chunk", "not ours")
@@ -388,8 +439,44 @@ func (p *openCodeFixturePeer) onPrompt(id json.RawMessage) {
 			p.releaseHeldPrompt("end_turn")
 		}()
 	default:
-		p.reply(id, map[string]any{"stopReason": "end_turn"})
+		p.sendUsage()
+		result := map[string]any{"stopReason": "end_turn"}
+		if p.cfg.PromptUsage != nil {
+			result["usage"] = p.cfg.PromptUsage
+		}
+		p.reply(id, result)
 	}
+}
+
+// sendUsage sends the session's cumulative cost after this many prompts, as OpenCode's
+// usage_update does before the turn's result.
+func (p *openCodeFixturePeer) sendUsage() {
+	p.mu.Lock()
+	turns := len(p.rec.PromptTexts)
+	p.mu.Unlock()
+	switch {
+	case len(p.cfg.UsageCostTotals) >= turns && turns > 0:
+		p.sendCost(p.cfg.UsageCostTotals[turns-1])
+	case p.cfg.UsageCost != nil:
+		p.sendCost(p.cfg.HistoryCost + *p.cfg.UsageCost*float64(turns))
+	}
+}
+
+func (p *openCodeFixturePeer) sendCost(amount float64) {
+	currency := p.cfg.UsageCurrency
+	if currency == "" {
+		currency = "USD"
+	}
+	p.send(map[string]any{
+		"jsonrpc": "2.0", "method": acpNotifySessionUpdate,
+		"params": map[string]any{
+			"sessionId": p.session,
+			"update": map[string]any{
+				"sessionUpdate": "usage_update", "used": 2994, "size": 200000,
+				"cost": map[string]any{"amount": amount, "currency": currency},
+			},
+		},
+	})
 }
 
 func (p *openCodeFixturePeer) releaseHeldPrompt(reason string) {

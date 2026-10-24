@@ -265,6 +265,12 @@ const light = await load([
   'console/derived.tokens.json',
 ])
 const dark = await load(['console/theme.dark.tokens.json'])
+// Black is the dark theme on true black: the black file overrides some of dark's values,
+// and the roles re-resolve against them, so the block carries the whole dark plan.
+const black = await load([
+  'console/theme.dark.tokens.json',
+  'console/theme.black.tokens.json',
+])
 const primAll = await load(['console/primitives.tokens.json'])
 // Density and pace carry one value per variant under the same leaf name; they are read
 // by their group path and emitted in their own blocks, never through the @theme map.
@@ -312,6 +318,13 @@ const rootBlock = block(':root', light, [
 
 const darkBlock = block('.dark', dark, [
   ...PALETTE.map((s) => ({ ...s, comment: `${s.comment} — DARK` })),
+  ...ROLES,
+])
+
+// `.dark.black`: the html element carries both classes, so every dark style still applies
+// and this block, more specific than `.dark`, swaps the values.
+const blackBlock = block('.dark.black', black, [
+  ...PALETTE.map((s) => ({ ...s, comment: `${s.comment} — BLACK` })),
   ...ROLES,
 ])
 
@@ -386,7 +399,6 @@ themeLines.push('')
 themeLines.push('  /* Motion — one easing curve, no bounce */')
 themeLines.push(`  --ease-out: ${primMap.get('ease-out')};`)
 themeLines.push(`  --ease-in: ${primMap.get('ease-in')};`)
-themeLines.push(`  --animate-pulse-live: ${primMap.get('animate-pulse-live')};`)
 // The defaults every `transition`/`transition-colors` utility inherits. They are
 // emitted next to the curves they use so a reader sees the whole motion decision at
 // once, and `block()`'s orphan check (above) still guarantees nothing is dropped.
@@ -430,7 +442,8 @@ const header = `/* SPDX-FileCopyrightText: 2026 Olivares.AI */
  *
  * GENERATED FILE — DO NOT EDIT. Source of truth: web/tokens/console/*.tokens.json
  * (DTCG 2025.10). Regenerate with \`pnpm tokens\`; \`pnpm tokens:check\` guards drift in CI.
- * Blocks, in order: the LIGHT theme (:root), the DARK theme (.dark), the Tailwind 4
+ * Blocks, in order: the LIGHT theme (:root), the DARK theme (.dark), the BLACK theme
+ * (.dark.black, dark on true black), the Tailwind 4
  * @theme inline mapping, density (comfortable by default, compact by attribute) and
  * motion (stopped under prefers-reduced-motion and under the Reduce motion setting).
  * Each theme holds the palette — four neutrals, three text tones, the single brand
@@ -439,16 +452,16 @@ const header = `/* SPDX-FileCopyrightText: 2026 Olivares.AI */
  * palette. scripts/check-brand-parity.mjs pins the subset the website shares to this
  * file. Every text token is at least 4.5:1 and
  * every control boundary, focus ring and selection border at least 3:1 on every surface
- * of its theme (src/styles/tokens.test.ts measures the 500 pairs).
+ * of its theme (src/styles/tokens.test.ts measures the 750 pairs).
  */
 `
 
 writeFileSync(
   OUT,
-  `${header}\n${rootBlock}\n\n${darkBlock}\n\n${themeLines.join('\n')}\n\n` +
+  `${header}\n${rootBlock}\n\n${darkBlock}\n\n${blackBlock}\n\n${themeLines.join('\n')}\n\n` +
     `${comfortableBlock}\n\n${compactBlock}\n\n${motionBlock}\n\n` +
     `@media (prefers-reduced-motion: reduce) {\n${reducedMediaBlock}\n}\n\n${reducedBlock}\n`,
 )
 console.log(
-  `tokens.css written (${light.length} light, ${dark.length} dark, ${primAll.length} primitives)`,
+  `tokens.css written (${light.length} light, ${dark.length} dark, ${black.length} black, ${primAll.length} primitives)`,
 )

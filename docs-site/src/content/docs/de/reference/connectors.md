@@ -518,8 +518,11 @@ keine Coverage-Stufe. Sie werden separat von Quellen verdrahtet.
 
 In-process-Ziel-Kinds: `slack`, `teams`, `pagerduty`, `opsgenie`, `webhook`, `siem`,
 `splunkhec`, `syslog`, `servicenow`, `jira`, `email`, `twilio`, `chronicle`, `datadog`,
-`elastic`, `snmp`, `filelog`, `otlplog` (OTLP/HTTP-Logs) und `s3archive` (Business: Regulated Operations) (der S3-Object-
-Lock-WORM-Sink — ein unveränderliches, auf Lock geprüftes Objekt pro Benachrichtigung).
+`elastic`, `snmp`, `filelog`, `otlplog` (OTLP/HTTP-Logs), `s3archive` (Business: Regulated Operations) (der S3-Object-
+Lock-WORM-Sink — ein unveränderliches, auf Lock geprüftes Objekt pro Benachrichtigung) und
+`teamsbot` (Business: Regulated Operations, der Teams-Connector mit registriertem Bot für den
+Incident-Kreislauf; ein Community-Binary überspringt ein Ziel dieser Art mit einer Logzeile,
+die Business nennt).
 
 Drei Broker-Egress-Kinds laufen **out-of-process** als eingebettete Plugins (ihre Wire-Protocol-
 Abhängigkeitsbäume werden wie bei den Plugin-Quellen niemals in die Engine gelinkt): `kafka`,

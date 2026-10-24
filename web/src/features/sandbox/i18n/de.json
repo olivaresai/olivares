@@ -74,7 +74,7 @@
   },
   "stream": {
     "replayNote": "Die Engine spielt die bereits aufgezeichneten Schrittausgaben dieses Laufs über eine Verbindung ab und schließt sie danach. Ein Sandbox-Lauf wird beim Start synchron ausgeführt; dies sind also bereits aufgezeichnete Nachweise, die nach und nach eintreffen — nicht die Sicht auf einen noch laufenden Vorgang.",
-    "waiting": "Warte auf die erste Schrittausgabe; der Verbindungsstatus steht oben.",
+    "waiting": "Warten auf die erste Schrittausgabe; der Verbindungsstatus steht oben.",
     "connecting": "Verbindung wird aufgebaut…",
     "receiving": "Wiedergabe wird empfangen",
     "complete": "Wiedergabe abgeschlossen",
@@ -107,7 +107,7 @@
     "empty": "Noch keine Szenarien",
     "emptyHintAuthor": "Erfassen Sie die erste synthetische Testvorgabe: die Schritt-Eingaben, die ein Subjekt erhält, sowie die nachgebildeten Antworten, gegen die sie aufgelöst werden.",
     "emptyHintReadOnly": "Szenarien werden von einem Aufrufer mit der Schreibberechtigung für Sandbox-Szenarien erstellt. Ohne sie können Sie die vorhandenen und deren Läufe lesen.",
-    "emptyHintConfined": "Ihre Mitgliedschaft ist auf einen Workspace beschränkt. Ein Szenario ist eine Testvorgabe auf Mandantenebene, daher weigert sich die Engine, eines aus einer beschränkten Mitgliedschaft heraus zu erfassen — das muss ein mandantenweites Mitglied tun.",
+    "emptyHintConfined": "Ihre Mitgliedschaft ist auf einen Arbeitsbereich beschränkt. Ein Szenario ist eine Testvorgabe auf Mandantenebene, daher weigert sich die Engine, eines aus einer beschränkten Mitgliedschaft heraus zu erfassen — das muss ein mandantenweites Mitglied tun.",
     "columns": {
       "name": "Name",
       "subjectKind": "Subjekt",
@@ -181,8 +181,8 @@
     "scenarioRef": "Scenario ref (optional)",
     "baseline": "Baseline variant",
     "candidate": "Candidate variant",
-    "replayHint": "Re-executes a historical session deterministically against mocks. If the timeline cannot be reconstructed the replay comes back DEGRADED with zero steps — that is not a session that did nothing, it is a timeline that could not be rebuilt.",
-    "compareHint": "A comparison is pre/post-deploy DECISION evidence and is stored append-only, which is why it needs the admin tier rather than the one that merely runs.",
+    "replayHint": "Führt eine historische Sitzung deterministisch gegen Mocks erneut aus. Lässt sich die Zeitleiste nicht rekonstruieren, kommt die Wiedergabe DEGRADIERT mit null Schritten zurück — das ist keine Sitzung, die nichts getan hat, sondern eine Zeitleiste, die nicht wiederhergestellt werden konnte.",
+    "compareHint": "Ein Vergleich ist Entscheidungsnachweis vor und nach der Bereitstellung und wird nur anhängend gespeichert; deshalb braucht er die Administratorstufe statt der Stufe, die nur ausführt.",
     "liveRef": "Sitzungsinstanz-Referenz",
     "legacySessionRef": "Alte Sitzungsreferenz (alternativ)"
   }

@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// The account plane's lifetime inside the provider room, which is where the page is
-// mounted: its Accounts tab exists only while the account read tier does. The boundary
-// (principal, tenant, credential) never moves in this file; only a tier leaves and comes
-// back, which is the case the room's gating unmounts before anything inside it could
-// observe the loss.
+// The account plane's lifetime on Tools, which is where it is mounted: its Accounts part
+// exists only while the account read tier does. The boundary (principal, tenant,
+// credential) never moves in this file; only a tier leaves and comes back, which is the
+// case the section's gating unmounts before anything inside it could observe the loss.
 //
 // The client below keeps every inactive entry forever and never considers one stale. A
 // leftover byte would therefore stay in the cache and repaint on regrant without a read.
@@ -16,7 +15,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { PageActionsProvider } from '@/components/ui/page-actions'
 
 const auth = vi.hoisted(() => ({ perms: new Set<string>() }))
 vi.mock('@/lib/auth/context', () => ({
@@ -51,7 +49,7 @@ vi.mock('@/features/console/api', () => ({
 }))
 
 import { ApiError, NetworkError } from '@/lib/api/errors'
-import { ProviderAdminView } from './provider-admin-view'
+import { AccountsAndKeys } from '@/features/agent-tools/accounts-and-keys'
 import type { ProviderAccountDTO } from './types'
 
 const PR = 'sessions:profile:read'
@@ -102,7 +100,7 @@ function accountBytes(qc: QueryClient) {
     )
 }
 
-function wrap(entrance: 'profiles' | 'accounts') {
+function wrap() {
   const qc = new QueryClient({
     defaultOptions: {
       queries: { retry: false, gcTime: Infinity, staleTime: Infinity },
@@ -110,9 +108,7 @@ function wrap(entrance: 'profiles' | 'accounts') {
   })
   const tree = () => (
     <QueryClientProvider client={qc}>
-      <PageActionsProvider>
-        <ProviderAdminView entrance={entrance} />
-      </PageActionsProvider>
+      <AccountsAndKeys />
     </QueryClientProvider>
   )
   const ui = render(tree())
@@ -158,8 +154,7 @@ describe('account read leaves the room, same boundary', () => {
     const detail = deferred<ProviderAccountDTO>()
     api.getAccount.mockReturnValueOnce(detail.promise)
     const user = userEvent.setup()
-    const { qc, rerender } = wrap('profiles')
-    await user.click(await screen.findByRole('tab', { name: 'Accounts' }))
+    const { qc, rerender } = wrap()
     await user.click(await screen.findByRole('button', { name: 'work-claude' }))
     await waitFor(() => expect(api.getAccount).toHaveBeenCalledOnce())
     const pointRead = signalOf(api.getAccount.mock.calls[0])
@@ -168,7 +163,7 @@ describe('account read leaves the room, same boundary', () => {
     auth.perms = new Set([PR])
     rerender()
     await waitFor(() =>
-      expect(screen.queryByRole('tab', { name: 'Accounts' })).toBeNull(),
+      expect(screen.queryByRole('heading', { name: 'Accounts' })).toBeNull(),
     )
     expect(pointRead?.aborted).toBe(true)
     await waitFor(() => expect(accountBytes(qc)).toEqual([]))
@@ -200,8 +195,7 @@ describe('account read leaves the room, same boundary', () => {
   it('an answered list and an answered detail leave the cache with the tier', async () => {
     auth.perms = new Set([PR, AR])
     const user = userEvent.setup()
-    const { qc, rerender } = wrap('profiles')
-    await user.click(await screen.findByRole('tab', { name: 'Accounts' }))
+    const { qc, rerender } = wrap()
     await user.click(await screen.findByRole('button', { name: 'work-claude' }))
     const sheet = await screen.findByRole('dialog')
     expect(
@@ -221,7 +215,7 @@ describe('a submitted adoption outlives the loss of a tier, never its boundary',
     const answer = deferred<ProviderAccountDTO>()
     api.adoptAccount.mockReturnValue(answer.promise)
     const user = userEvent.setup()
-    const { rerender } = wrap('accounts')
+    const { rerender } = wrap()
     await submitAdoption(user, 'ppf_b')
 
     auth.perms = new Set([AR])
@@ -272,7 +266,7 @@ describe('a submitted adoption outlives the loss of a tier, never its boundary',
       )
       .mockResolvedValueOnce(adopted)
     const user = userEvent.setup()
-    const { rerender } = wrap('accounts')
+    const { rerender } = wrap()
     await submitAdoption(user, 'ppf_b')
     auth.perms = new Set([AR])
     rerender()
@@ -302,7 +296,7 @@ describe('a submitted adoption outlives the loss of a tier, never its boundary',
     const answer = deferred<ProviderAccountDTO>()
     api.adoptAccount.mockReturnValue(answer.promise)
     const user = userEvent.setup()
-    const { rerender } = wrap('accounts')
+    const { rerender } = wrap()
     await submitAdoption(user, 'ppf_b')
     auth.perms = new Set([AR])
     rerender()
@@ -322,14 +316,13 @@ describe('a submitted adoption outlives the loss of a tier, never its boundary',
     const answer = deferred<ProviderAccountDTO>()
     api.adoptAccount.mockReturnValue(answer.promise)
     const user = userEvent.setup()
-    const { qc, rerender } = wrap('profiles')
-    await user.click(await screen.findByRole('tab', { name: 'Accounts' }))
+    const { qc, rerender } = wrap()
     await submitAdoption(user, 'ppf_b')
 
     auth.perms = new Set([PR, AW])
     rerender()
     await waitFor(() =>
-      expect(screen.queryByRole('tab', { name: 'Accounts' })).toBeNull(),
+      expect(screen.queryByRole('heading', { name: 'Accounts' })).toBeNull(),
     )
     await act(async () => {
       answer.resolve(adopted)

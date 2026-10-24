@@ -1,24 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { formatDateTime, formatShortDateTime } from '@/lib/format'
 import { useQuery } from '@tanstack/react-query'
-import {
-  Check,
-  ListChecks,
-  Plus,
-  RefreshCw,
-  ShieldCheck,
-  X,
-} from 'lucide-react'
+import { ListChecks, Plus, RefreshCw, ShieldCheck } from 'lucide-react'
 import { useRouter } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Badge } from '@/components/ui/badge'
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ForbiddenState } from '@/components/ui/error-state'
+import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/ui/page-header'
 import {
   Select,
@@ -27,26 +20,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { DataTable, type TableColumn } from '@/components/data/data-table'
-import { StatusBadge } from '@/components/data/badges'
 import { useAuth } from '@/lib/auth/context'
+import { useMinWidth } from '@/lib/hooks/use-min-width'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { RecordingNotice } from '@/features/recordings/recording-notice'
-import { RelTimeLabel } from '@/features/shared'
 import { governanceApi, governanceKeys } from './api'
 import { AgentRiskView } from './agent-risk-view'
-import { ApprovalDetailSheet } from './approval-detail'
+import { APPROVAL_QUEUE_REGION, ApprovalDetailPanel } from './approval-detail'
+import { ApprovalQueue, flaggedApprovalId } from './approval-queue'
 import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { useOfferedPanels, type TabExtension } from '@/features/panels'
-import { DecisionDialog } from './decision-dialog'
-import { ApprovalRequestCell, AskedBy } from './approval-preview'
 import { IdentitiesView } from './identities-view'
 import { NewRequestDialog } from './new-request-dialog'
 import { PoliciesView } from './policies-view'
 import './i18n'
 import { APPROVAL_STATUSES, canDecideOnRequest } from './types'
-import type { ApprovalDTO, DecisionVerb, SweepReport } from './types'
+import type { ApprovalDTO, SweepReport } from './types'
 import {
   PagePrimaryAction,
   PageSecondaryActions,
@@ -177,24 +168,38 @@ function linkedApproval(): string | null {
   return v || null
 }
 
+/** The text a search matches in a request: what runs, why, and who asks. */
+function searchText(a: ApprovalDTO): string {
+  return [
+    a.review?.tool,
+    a.review?.text,
+    a.reason,
+    a.action,
+    a.subject_ref,
+    a.requested_by,
+    a.launched_by,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+}
+
 function ApprovalsTab({ active }: { active: boolean }) {
   const { t } = useTranslation(['governance', 'common'])
   const { activeTenant, can, principal } = useAuth()
   const canRead = can('governance:approval:read')
   const canDecide = can('governance:approval:admin')
   const canWrite = can('governance:approval:write')
+  // The panel sits beside the queue from `lg`; below it, under the queue, so picking a
+  // row brings the panel into view (the row says a tap opens the decision).
+  const wide = useMinWidth(1024)
+  const panelRef = useRef<HTMLDivElement>(null)
 
   const [statusFilter, setStatusFilter] = useState<string>('pending')
-  // ?approval=<id> opens that request: the notification bell links a waiting session's
-  // approval here, one click from the bell to the decision (Warp concept).
-  const [selected, setSelected] = useState<string | null>(linkedApproval)
-  const [detailOpen, setDetailOpen] = useState(() => linkedApproval() !== null)
-  const [decisionVerb, setDecisionVerb] = useState<DecisionVerb | null>(null)
-  const [decisionApproval, setDecisionApproval] = useState<ApprovalDTO | null>(
-    null,
-  )
-  const [decisionOpen, setDecisionOpen] = useState(false)
-  const [confirmCancel, setConfirmCancel] = useState<ApprovalDTO | null>(null)
+  const [search, setSearch] = useState('')
+  // ?approval=<id> opens that request: the notification bell and Estate's Needs you link
+  // a waiting request here, one click from there to the decision.
+  const [picked, setPicked] = useState<string | null>(linkedApproval)
   const [confirmSweep, setConfirmSweep] = useState(false)
   const [newOpen, setNewOpen] = useState(false)
 
@@ -205,13 +210,6 @@ function ApprovalsTab({ active }: { active: boolean }) {
     enabled: canRead && active,
     // Poll the live queue (no SSE). Only when this tab is active.
     refetchInterval: active ? APPROVALS_POLL_MS : false,
-  })
-
-  const cancel = usePrivilegedMutation({
-    mutationFn: () => governanceApi.cancelApproval(confirmCancel!.id),
-    invalidateKeys: () => [governanceKeys.approvals(activeTenant)],
-    successMessage: t('cancel.done'),
-    onDone: () => setConfirmCancel(null),
   })
 
   const sweep = usePrivilegedMutation<void, SweepReport>({
@@ -230,249 +228,154 @@ function ApprovalsTab({ active }: { active: boolean }) {
 
   if (!canRead) return <ForbiddenState />
 
-  function openDecision(approval: ApprovalDTO, verb: DecisionVerb) {
-    setDecisionApproval(approval)
-    setDecisionVerb(verb)
-    setDecisionOpen(true)
+  const query = search.trim().toLowerCase()
+  const items = (approvals.data?.items ?? []).filter(
+    (a) => !query || searchText(a).includes(query),
+  )
+  // Separation of duties decides the flag as it decides the buttons: the requester cannot
+  // decide their own, and a token has no stable user id.
+  const flaggedId = canDecide
+    ? flaggedApprovalId(items, (a) =>
+        canDecideOnRequest(a.requested_by, principal?.actor, principal?.kind),
+      )
+    : undefined
+  // THE REQUEST ON SCREEN STAYS ON SCREEN. The first one shown is the flagged one (or the
+  // first row), and from then on the panel shows what the person picked: a decision, a
+  // poll or another approver never swaps a different request in under their hand, where
+  // a click or `A` would decide what they have not read. A request the list no longer
+  // holds (decided, expired, or linked from elsewhere) is read by its id.
+  const defaultId = flaggedId ?? items[0]?.id
+  if (picked === null && defaultId) setPicked(defaultId)
+  const shownId = picked ?? defaultId
+
+  function select(id: string) {
+    setPicked(id)
+    if (!wide) panelRef.current?.scrollIntoView?.({ block: 'start' })
   }
 
-  const columns: TableColumn<ApprovalDTO, unknown>[] = [
-    {
-      // What will run comes first (SC sweep, 09b): session, tool, the reviewed text and
-      // the folder. The action and the references are in the review's Details.
-      id: 'request',
-      header: t('approvals.request'),
-      cell: ({ row }) => <ApprovalRequestCell approval={row.original} />,
-    },
-    {
-      accessorKey: 'requested_by',
-      header: t('approvals.requestedBy'),
-      cell: ({ row }) => <AskedBy approval={row.original} />,
-    },
-    {
-      id: 'progress',
-      header: t('approvals.progress'),
-      cell: ({ row }) => (
-        <span className="font-mono tabular-nums">
-          {t('approvals.progressOf', {
-            approved: row.original.approve_count,
-            required: row.original.required_approvals,
-          })}
-          {row.original.reject_count > 0 && (
-            <span className="ml-1.5 text-danger">
-              ·{' '}
-              {t('approvals.rejectedCount', {
-                count: row.original.reject_count,
-              })}
-            </span>
-          )}
-        </span>
-      ),
-    },
-    {
-      accessorKey: 'status',
-      header: t('approvals.status'),
-      cell: ({ row }) => (
-        <span className="flex items-center gap-1.5">
-          <StatusBadge status={row.original.status} />
-          {row.original.escalated && (
-            <Badge variant="warning" title={t('approvals.escalatedHint')}>
-              {t('approvals.escalatedBadge')}
-            </Badge>
-          )}
-        </span>
-      ),
-    },
-    {
-      id: 'age',
-      header: t('approvals.expires'),
-      cell: ({ row }) =>
-        // An expired request says so with the time the engine stored (HU 039: a
-        // no-expiry policy has no expires_at, but the bounded wait still ends it).
-        // The shortest absolute time that fits the column (09b capture: the full date and
-        // time was cut at 1280); the whole of it is the title.
-        row.original.status === 'expired' && row.original.decided_at ? (
-          <span title={formatDateTime(row.original.decided_at)}>
-            {t('approvals.expiredAt', {
-              time: formatShortDateTime(row.original.decided_at),
-            })}
-          </span>
-        ) : row.original.expires_at ? (
-          <RelTimeLabel ts={row.original.expires_at} />
-        ) : (
-          '—'
-        ),
-    },
-    {
-      id: 'actions',
-      header: '',
-      cell: ({ row }) => {
-        const isPending = row.original.status === 'pending'
-        if (!isPending) return null
-        // Hide Approve/Reject the engine would 403 (separation of duties): the
-        // requester cannot decide their own, and a token has no stable user id.
-        const mayDecide =
-          canDecide &&
-          canDecideOnRequest(
-            row.original.requested_by,
-            principal?.actor,
-            principal?.kind,
-          )
-        return (
-          <div className="flex items-center justify-end gap-1">
-            {canWrite && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setConfirmCancel(row.original)
-                }}
-              >
-                {t('approvals.cancel')}
-              </Button>
-            )}
-            {mayDecide && (
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={t('approvals.reject')}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  openDecision(row.original, 'reject')
-                }}
-              >
-                <X />
-              </Button>
-            )}
-            {mayDecide && (
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={t('approvals.approve')}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  openDecision(row.original, 'approve')
-                }}
-              >
-                <Check />
-              </Button>
-            )}
-          </div>
-        )
-      },
-    },
-  ]
+  const emptyNode = query ? (
+    <EmptyState
+      quiet
+      title={t('approvals.noMatch')}
+      description={t('approvals.noMatchHint')}
+    />
+  ) : statusFilter === 'pending' ? (
+    // ⛔ AN EMPTY QUEUE IS NOT A TASK. Nothing is owed here and nothing is
+    // wrong: the reader is told so in one line, with no icon panel and no
+    // manufactured button. `quiet` makes the second one impossible.
+    <EmptyState
+      quiet
+      title={t('approvals.emptyPending')}
+      description={t('approvals.emptyPendingHint')}
+    />
+  ) : (
+    <EmptyState
+      icon={<ListChecks />}
+      title={t('approvals.empty')}
+      description={t('approvals.emptyHint')}
+    />
+  )
 
-  const emptyNode =
-    statusFilter === 'pending' ? (
-      // ⛔ AN EMPTY QUEUE IS NOT A TASK. Nothing is owed here and nothing is
-      // wrong: the reader is told so in one line, with no icon panel and no
-      // manufactured button. `quiet` makes the second one impossible.
-      <EmptyState
-        quiet
-        title={t('approvals.emptyPending')}
-        description={t('approvals.emptyPendingHint')}
-      />
-    ) : (
-      <EmptyState
-        icon={<ListChecks />}
-        title={t('approvals.empty')}
-        description={t('approvals.emptyHint')}
-      />
-    )
+  const newRequest = (
+    <Button
+      variant={flaggedId ? 'secondary' : 'primary'}
+      size="sm"
+      onClick={() => setNewOpen(true)}
+    >
+      <Plus />
+      {t('approvals.newRequest')}
+    </Button>
+  )
 
   return (
     <div className="flex flex-col gap-3">
-      {canWrite && (
-        <PagePrimaryAction>
-          <Button variant="primary" size="sm" onClick={() => setNewOpen(true)}>
-            <Plus />
-            {t('approvals.newRequest')}
-          </Button>
-        </PagePrimaryAction>
+      {/* ONE ORANGE: while a request waits for this person, deciding it is the verb of
+          the screen (Approve once), and New request steps aside to a secondary control. */}
+      {canWrite && !flaggedId && (
+        <PagePrimaryAction>{newRequest}</PagePrimaryAction>
       )}
-      {canDecide && (
+      {(canDecide || (canWrite && flaggedId)) && (
         <PageSecondaryActions>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setConfirmSweep(true)}
-          >
-            <RefreshCw />
-            {t('approvals.runSweep')}
-          </Button>
+          {canWrite && flaggedId ? newRequest : null}
+          {canDecide && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setConfirmSweep(true)}
+            >
+              <RefreshCw />
+              {t('approvals.runSweep')}
+            </Button>
+          )}
         </PageSecondaryActions>
       )}
       <p className="text-caption text-muted-foreground">
         {t('approvals.caption')}
       </p>
 
-      <DataTable
-        columns={columns}
-        data={approvals.data?.items ?? []}
-        isLoading={approvals.isLoading}
-        error={approvals.error}
-        onRetry={() => approvals.refetch()}
-        searchable
-        searchPlaceholder={t('approvals.search')}
-        getRowId={(r) => r.id}
-        onRowClick={(r) => {
-          setSelected(r.id)
-          setDetailOpen(true)
-        }}
-        empty={emptyNode}
-        toolbar={
-          <>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger
-                className="w-40"
-                aria-label={t('approvals.filterStatus')}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">
-                  {t('approvals.statusAll')}
-                </SelectItem>
-                {APPROVAL_STATUSES.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {t(`status.${s}`, { defaultValue: s })}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </>
-        }
-      />
-
-      <ApprovalDetailSheet
-        approvalId={selected}
-        open={detailOpen}
-        onOpenChange={setDetailOpen}
-      />
-
-      {decisionApproval && (
-        <DecisionDialog
-          open={decisionOpen}
-          onOpenChange={setDecisionOpen}
-          approvalId={decisionApproval.id}
-          approval={decisionApproval}
-          verb={decisionVerb}
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          type="search"
+          className="w-64"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t('approvals.search')}
+          aria-label={t('approvals.search')}
         />
-      )}
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger
+            className="w-40"
+            aria-label={t('approvals.filterStatus')}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">{t('approvals.statusAll')}</SelectItem>
+            {APPROVAL_STATUSES.map((s) => (
+              <SelectItem key={s} value={s}>
+                {t(`status.${s}`, { defaultValue: s })}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-      {confirmCancel && (
-        <ConfirmDialog
-          open={!!confirmCancel}
-          onOpenChange={(o) => !o && setConfirmCancel(null)}
-          title={t('cancel.title')}
-          description={t('cancel.body')}
-          tone="danger"
-          confirmLabel={t('cancel.confirm')}
-          pending={cancel.isPending}
-          onConfirm={() => cancel.mutate(undefined)}
+      {approvals.isLoading ? (
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 w-full" />
+          ))}
+        </div>
+      ) : approvals.error ? (
+        <QueryErrorState
+          error={approvals.error}
+          retry={() => approvals.refetch()}
         />
+      ) : !shownId ? (
+        emptyNode
+      ) : (
+        <div
+          className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start"
+          {...{ [APPROVAL_QUEUE_REGION]: '' }}
+        >
+          {items.length > 0 ? (
+            <ApprovalQueue
+              items={items}
+              flaggedId={flaggedId}
+              selectedId={shownId}
+              onSelect={select}
+            />
+          ) : (
+            emptyNode
+          )}
+          <div ref={panelRef} className="min-w-0 scroll-mt-4">
+            <ApprovalDetailPanel
+              key={shownId}
+              approvalId={shownId}
+              approval={items.find((a) => a.id === shownId)}
+            />
+          </div>
+        </div>
       )}
 
       {confirmSweep && (

@@ -133,11 +133,12 @@ test.describe('keyboard on the named routes', () => {
       await page.goto(route)
       // The frame paints after the session is restored, and until then the page is a
       // splash with no skip link: a Tab pressed there moves nothing. Wait for the link,
-      // as the sign-in half above does, and for the sidebar to settle its one tab stop:
-      // that settling once moved the starting point of sequential focus into the sidebar,
-      // so a Tab sent before it would pass on the very defect this case exists to catch.
+      // as the sign-in half above does, and for the top bar's places to paint, so a Tab
+      // sent before the frame settles cannot pass on the very defect this case catches.
       await page.locator('a[href="#main-content"]').waitFor()
-      await page.locator('aside [data-nav-row][tabindex="0"]').waitFor()
+      await page
+        .getByRole('navigation', { name: 'Journeys', exact: true })
+        .waitFor()
       await page.keyboard.press('Tab')
       await expect(
         page.locator('a[href="#main-content"]'),

@@ -914,6 +914,36 @@ tasks:
       - pnpm --dir web install --frozen-lockfile
       - pnpm --dir web run at:gate
 
+  capture:gate:
+    desc: >-
+      Console capture gate (issue #2557): axe-core WCAG 2.2 A+AA plus the
+      heading/landmark structure and the THREE WEBC4 review checks — the
+      glow/backdrop scan and the at-most-one filled orange control per first
+      screen (orange.ts), the text-fit scan (textfit.ts) and the text overlap
+      scan (overlap.ts), all ported from the concept checks in concepts-c2/qa —
+      over every route at BOTH capture widths (1440 and 1024) in BOTH Warm
+      Terminal themes, exiting non-zero on any blocking issue. Control cases:
+      `capture:gate:selftest` proves each check reports its planted violation,
+      and `QA_PLANT=glow|second-orange|overlap|textfit pnpm --dir web run
+      capture:gate` proves the JOB fails on a planted violation end to end.
+      Needs the web deps + the Playwright chromium
+      (`pnpm --dir web run e2e:install`) once.
+    cmds:
+      - pnpm --dir web install --frozen-lockfile
+      - pnpm --dir web run capture:gate
+
+  capture:gate:selftest:
+    desc: >-
+      Control cases for capture:gate: plants a glow, a second filled orange
+      button, an overlapping text run and a clipped line on a fixture page
+      through the SAME payloads the gate's QA_PLANT mode injects, and asserts
+      each check reports its plant and that a clean page reports nothing. The
+      CI capture job runs this BEFORE the walk, so a check that stops detecting
+      its plant fails the job even while the walk is green.
+    cmds:
+      - pnpm --dir web install --frozen-lockfile
+      - pnpm --dir web run capture:selftest
+
   e2e:web:
     desc: >-
       Run the setup, login, and shell browser smoke test against the embedded binary. Rebuilds and replaces core/internal/webui/dist; use a disposable checkout.
@@ -943,7 +973,15 @@ tasks:
       install→value path or its drift numbers stop being true.
     deps: [build:bin]
     cmds:
+      - task: smoke:quickstart:selftest
       - bash scripts/quickstart-smoke.sh
+
+  smoke:quickstart:selftest:
+    desc: >-
+      Prove the quickstart smoke waits for a slow engine boot (25 s, past the old 20 s budget
+      that failed the nightly, dev#2775) and names an engine that exits during boot at once.
+    cmds:
+      - bash scripts/test-quickstart-smoke-boot.sh
 
   smoke:quickstart-argv:
     desc: >-
@@ -981,6 +1019,20 @@ tasks:
     deps: [build:bin]
     cmds:
       - bash scripts/session-journey-smoke.sh
+
+  smoke:upgrade-journey:
+    desc: >-
+      An upgrade keeps the data, and the documented rollback works (docs/UPGRADE-AND-ROLLBACK.md):
+      seed 2 accounts, 1 provider key and 3 sessions on the previous release's binary
+      (OLD_BIN=<path>), take its DR bundle, run the built binary over the same data directory,
+      check every row and that one session resumes and answers a turn, then roll back by
+      restoring the bundle with the previous binary. `-- --skip-turns` on a host that cannot
+      confine sessions (no Landlock). The Compose form is scripts/upgrade-journey.py compose.
+    requires:
+      vars: [OLD_BIN]
+    deps: [build:bin]
+    cmds:
+      - python3 -I scripts/upgrade-journey.py process --old '{{.OLD_BIN}}' --new bin/olivares --new-version "$(sh scripts/build-ldflags.sh --version)" {{.CLI_ARGS}}
 
   smoke:provider-onboarding:
     desc: >-
@@ -2498,10 +2550,14 @@ tasks:
 
   lint:ci-hosted-runners:
     desc: >-
-      Refuse a workflow job that names a GitHub-hosted runner on its own. Hosted minutes on a
-      private repository are billed and the Actions budget is for storage only. A job must read
-      vars.CI_RUNNER* (the hosted label only as the fallback) or name self-hosted; the rest is
-      listed with its reason in ci/hosted-runners.txt, and a stale entry is refused too.
+      Refuse a workflow job that can reach a GitHub-hosted runner while the repository is private.
+      Hosted minutes on a private repository are billed and the Actions budget is for storage only.
+      A job must read vars.CI_RUNNER* (the hosted label only as the fallback), name self-hosted, or
+      read the private split (our runner when private, the hosted label only in the public
+      repository) and be listed with its public-only condition in ci/hosted-runners.txt; a stale
+      entry and an unlisted split job are refused too. A job that calls a reusable workflow outside
+      the tree (the callee picks a hosted runner) is listed the same way and its own job-level
+      if must be one ${{ !github.event.repository.private && ... }} expression.
     cmds:
       # export-closure: hub-only scripts/check-ci-hosted-runners.sh — guarded by scripts/hub-leg.sh
       - bash scripts/hub-leg.sh lint:ci-hosted-runners scripts/check-ci-hosted-runners.sh
@@ -6291,6 +6347,7 @@ tasks:
         export OCI_IMAGE_REPO=ghcr.io/olivaresai/olivares
         export SOURCE_REPOSITORY_URL=https://github.com/olivaresai/olivares
         export COSIGN_MODE=keyless PUBLISH_HOMEBREW=auto
+        export HOMEBREW_TAP_OWNER=olivaresai HOMEBREW_TAP_NAME=homebrew-tap
         # Snapshot mode skips publishing but still runs configured signers and
         # Docker image builds unless they are explicitly skipped. A local binary
         # smoke must not require OIDC, write a transparency-log entry, or require

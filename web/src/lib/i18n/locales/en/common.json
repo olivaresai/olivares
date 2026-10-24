@@ -32,8 +32,6 @@
     "viewAll": "View all",
     "learnMore": "Learn more",
     "openMenu": "Open menu",
-    "expandSidebar": "Expand sidebar",
-    "collapseSidebar": "Collapse sidebar",
     "help": "Open documentation for this view"
   },
   "states": {
@@ -50,6 +48,7 @@
     "label": "Theme",
     "light": "Light",
     "dark": "Dark",
+    "black": "Black",
     "system": "System",
     "toggle": "Toggle theme"
   },
@@ -164,9 +163,7 @@
     "email": "Enter a valid email address."
   },
   "a11y": {
-    "breadcrumb": "Breadcrumb",
     "skipToContent": "Skip to content",
-    "primarySidebar": "Primary",
     "mainNavigation": "Main navigation",
     "graphControls": "Graph controls",
     "graphMinimap": "Graph minimap",
@@ -328,10 +325,8 @@
         "first": "First session",
         "last": "Last session",
         "open": "Open the session",
-        "pin": "Pin or unpin it"
-      },
-      "nav": {
-        "toggleRail": "Fold or unfold the navigation rail"
+        "pin": "Pin or unpin it",
+        "menu": "Open the session's actions menu"
       },
       "navRail": {
         "next": "Next module",
@@ -351,6 +346,10 @@
         "previousFile": "Previous file",
         "nextHunk": "Next change",
         "previousHunk": "Previous change"
+      },
+      "approvals": {
+        "approve": "Approve the open request once",
+        "deny": "Deny the open request"
       }
     },
     "when": {
@@ -358,10 +357,10 @@
       "launcherFocused": "in the launcher field",
       "workSurface": "on the sessions screen",
       "sessionHistory": "when a previous session is available",
-      "paletteRecent": "in palette results with an empty query"
+      "paletteRecent": "in palette results with an empty query",
+      "approvalQueue": "in the approvals queue"
     },
     "precedence": "When two rows share keys, the last one that applies wins.",
-    "modNote": "⌘ is Control on Windows and Linux.",
     "problems_one": "{{count}} binding could not be read and does not fire: {{commands}}",
     "problems_other": "{{count}} bindings could not be read and do not fire: {{commands}}",
     "navRailNote": "The rail is one tab stop. These keys work while it has focus."
@@ -411,6 +410,18 @@
       "copy": "Copy command",
       "copied": "Copied",
       "copyFailed": "Could not copy. Select the command and copy it."
+    },
+    "copy": {
+      "message": "Copy message",
+      "code": "Copy code",
+      "copied": "Copied",
+      "failed": "Could not copy. Select the text and copy it."
     }
+  },
+  "resize": {
+    "hint": "Drag or use the arrow keys. Double-click or press Enter to reset."
+  },
+  "panes": {
+    "saveFailed": "Could not save the panel width. It applies for this visit only."
   }
 }

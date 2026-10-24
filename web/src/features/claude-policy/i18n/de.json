@@ -16,7 +16,8 @@
   },
   "validation": {
     "ok": "Schema gültig.",
-    "summary": "{{count}} Validierungshinweis(e) – {{errors}} Fehler.",
+    "summary_one": "{{count}} Validierungshinweis – Fehler: {{errors}}",
+    "summary_other": "{{count}} Validierungshinweise – Fehler: {{errors}}",
     "listLabel": "Ergebnisse der Schema-Validierung"
   },
   "form": {
@@ -27,7 +28,7 @@
     "enabled": "Aktiviert",
     "unset": "Nicht gesetzt",
     "listPlaceholder": "kommagetrennte Werte",
-    "objectListInvalid": "Gib eine JSON-Liste von Objekten ein, zum Beispiel [{\"source\": \"github\", \"repo\": \"your-org/*\"}]."
+    "objectListInvalid": "Geben Sie eine JSON-Liste von Objekten ein, zum Beispiel [{\"source\": \"github\", \"repo\": \"your-org/*\"}]."
   },
   "panel": {
     "guided": "Geführt",
@@ -79,7 +80,7 @@
     "subject": "Subjekt",
     "fingerprint": "Fingerabdruck",
     "emptyTitle": "Keine Abweichungsbefunde",
-    "emptyBody": "Derzeit werden keine Richtlinienabweichungsbefunde für die Claude Code-Oberflächen gemeldet.",
+    "emptyBody": "Derzeit werden keine Richtlinienabweichungsbefunde für Ihre verwalteten KI-Werkzeuge gemeldet.",
     "truncated": "{{n}} Drift-Befunde geladen; es gibt weitere",
     "truncatedHint": "Es gibt mehr Policy-Drift-Befunde als angezeigt; diese Seite lädt Zeilen nach ID. Ein Fehlen hier belegt nicht, dass kein Drift vorliegt — der Befund kann schlicht jenseits dieser Seite liegen."
   },
@@ -172,7 +173,7 @@
     "liveBadge": "Live-API",
     "liveHint": "Validierung, Entscheidungserklärung, Probelauf, Revisionsverlauf, das Kompilier-/Validierungs-Gate, Veröffentlichung und Aktivierung werden alle von der Engine unter /v1/m/governance/pdp bereitgestellt.",
     "cedarSemantics": "Dreiwertige Durchsetzung: Ein permit GEWÄHRT die Anfrage innerhalb des aufgelösten Geltungsbaums — über die RBAC-Grundlinie hinaus, und eine RBAC-Ablehnung wird dabei übergangen; ein forbid SCHRÄNKT EIN und hat Vorrang vor jeder Gewährung; trifft nichts zu, wird ENTHALTEN und die RBAC-Entscheidung bleibt bestehen.",
-    "cedarSemanticsBounds": "Eine Gewährung reicht nie über den aufgelösten Geltungsbaum hinaus (Workspace / Agentengruppe / Ressource), und solange dieser Knoten offline und über seiner Policy-Veraltungsgrenze ist, fällt eine Gewährung auf Enthaltung zurück, statt weiter zu autorisieren — eine Einschränkung bleibt in Kraft.",
+    "cedarSemanticsBounds": "Eine Gewährung reicht nie über den aufgelösten Geltungsbaum hinaus (Arbeitsbereich / Agentengruppe / Ressource), und solange dieser Knoten offline und über seiner Policy-Veraltungsgrenze ist, fällt eine Gewährung auf Enthaltung zurück, statt weiter zu autorisieren — eine Einschränkung bleibt in Kraft.",
     "decisionFooter": "Dies ist ein Probelauf eines unveröffentlichten Kandidaten. Ein permit gewährt innerhalb seines Geltungsbaums, ein forbid schränkt ein und hat Vorrang vor jeder Gewährung, und trifft nichts zu, wird enthalten und die RBAC-Entscheidung bleibt bestehen; Bedingungen auf den Geltungsbaum werden erst nach Aktivierung der Revision gegen die lebende Hierarchie aufgelöst.",
     "decisionFooterOpa": "Für OPA wird in diesem Prozess nichts ausgewertet: Dieser Probelauf erzwingt keinerlei Einschränkung, und Ihr eigener OPA-Sidecar setzt Rego durch.",
     "publish": {
@@ -291,6 +292,7 @@
     "verified": "verifiziert",
     "unverified": "NICHT VERIFIZIERT",
     "contentUnknown": "Inhalt UNBEKANNT (nur Attestierung)",
-    "openFindings": "{{count}} offene(r) Befund(e)"
+    "openFindings_one": "{{count}} offener Befund",
+    "openFindings_other": "{{count}} offene Befunde"
   }
 }

@@ -42,7 +42,7 @@
       "providers": "プロバイダーの資格情報を登録または失効させる",
       "generic": "この操作",
       "console": "コネクターの管理",
-      "stepUpPolicy": "Changing the extra check for administrative actions",
+      "stepUpPolicy": "管理操作に対する追加確認の変更",
       "modules": "モジュールのオン・オフ",
       "signing": "レポート署名のオン・オフ"
     },
@@ -68,7 +68,7 @@
     "registrationUnknownElsewhere": "登録結果を確認できませんでした。パスキーは保存されている可能性があります。このダイアログを閉じてパスキーを確認してから、新しい登録を開始してください。",
     "code": {
       "title": "Sign in with your authenticator code",
-      "body": "{{action}} needs a sign-in with your authenticator code on this deployment. Sign in again and enter your code.",
+      "body": "{{action}}には、このデプロイでは認証アプリのコードを使ったサインインが必要です。もう一度サインインして、コードを入力してください。",
       "signInAgain": "Sign in again"
     }
   },

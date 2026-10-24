@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ComponentProps } from 'react'
@@ -61,7 +61,9 @@ vi.mock('@/lib/auth/context', () => ({
 
 import i18n from 'i18next'
 import { AreasSheet, AreasTree } from './sidebar'
+import { useAreasSheet } from './areas-sheet-store'
 import { NAV_AREAS } from '@/features/registry'
+import { BUSINESS_BUILD } from '@/features/business-build'
 import { FEATURE_EXTENSIONS } from '@/features/extensions'
 import { useModulesStore } from '@/stores/modules'
 import {
@@ -80,7 +82,6 @@ afterEach(() => {
   canMock.mockReturnValue(true)
   usePreferencesStore.setState({
     collapsedNavGroups: [],
-    sidebarCollapsed: false,
     navAreas: DEFAULT_AREA_EXPANSION,
   })
 })
@@ -102,7 +103,7 @@ const hrefs = () =>
   screen.getAllByRole('link').map((a) => a.getAttribute('href'))
 
 describe('the area directory (N1)', () => {
-  it('renders Overview, the nine areas in the ratified order, and the pinned Settings', () => {
+  it('renders the nine areas in the ratified order and the pinned Settings, with no Overview row', () => {
     renderIntel(<AreasTree />)
     const ids = [...document.querySelectorAll('[data-nav-area]')].map((e) =>
       e.getAttribute('data-nav-area'),
@@ -111,7 +112,9 @@ describe('the area directory (N1)', () => {
     // Not a single retired hub heading survives.
     expect(document.querySelector('[id^="nav-group-"]')).toBeNull()
     const links = hrefs()
-    expect(links[0]).toBe('/')
+    // Now is a place of the top bar, so the directory opens on its first area.
+    expect(links).not.toContain('/')
+    expect(links[0]).toBe('/areas/infrastructure')
     expect(links[links.length - 1]).toBe('/settings')
     // Every area row is a real link to its directory page.
     for (const a of NAV_AREAS) expect(links).toContain(a.path)
@@ -135,53 +138,32 @@ describe('the area directory (N1)', () => {
       'Show System & settings modules',
     )
     expect(areaPanel('system')).toHaveClass('hidden')
-    // Sections are grouping labels, never links, and the leaves sit under them.
-    const sections = within(areaPanel('ai')).getAllByRole('group')
+    // Two levels: the pages sit right under the area, in section order, with no section
+    // heading between them (#3121).
+    expect(within(areaPanel('ai')).queryAllByRole('group')).toEqual([])
+    // The list of pages carries its area's name for a screen reader.
     expect(
-      sections.map((g) =>
-        (g.getAttribute('aria-labelledby') ?? '').replace(/^.*nav-area-/, ''),
-      ),
-    ).toEqual([
-      'ai-sessions',
-      'ai-environments',
-      'ai-models',
-      'ai-execution',
-      'ai-provider-reference',
-    ])
-    // Every group label resolves to a heading INSIDE that group.
-    for (const g of sections) {
-      const heading = document.getElementById(
-        g.getAttribute('aria-labelledby') as string,
-      )
-      expect(heading).not.toBeNull()
-      expect(g.contains(heading)).toBe(true)
-    }
-    // One screen, one entry (the 26.10.1 review found three names for it): the
-    // /agentops door is not a second row for a principal who can open Sessions.
-    const leaves = within(sections[0]).getAllByRole('link')
-    // Edition extensions add their own screens beside the single Sessions entry.
-    const sessionExtensions = FEATURE_EXTENSIONS.filter(
-      (view) =>
-        !view.hideInNav &&
-        view.navigation.kind === 'feature' &&
-        view.navigation.areaId === 'ai' &&
-        view.navigation.sectionId === 'sessions',
+      within(areaPanel('ai')).getByRole('list', { name: 'AI' }),
+    ).toBeInTheDocument()
+    const leaves = within(areaPanel('ai'))
+      .getAllByRole('link')
+      .map((a) => a.getAttribute('href'))
+    // The places the top bar names are not listed again, nor the /agentops door into one.
+    expect(leaves).not.toContain('/sessions')
+    expect(leaves).not.toContain('/agent-tools')
+    expect(leaves).not.toContain('/agentops')
+    expect(leaves.indexOf('/mcp-servers')).toBeLessThan(
+      leaves.indexOf('/models'),
     )
-    expect(leaves.map((a) => a.getAttribute('href'))).toEqual([
-      '/sessions',
-      ...sessionExtensions.map((view) => view.path),
-    ])
-    expect(leaves[0]).toHaveTextContent('Sessions')
+    expect(leaves.indexOf('/models')).toBeLessThan(leaves.indexOf('/voice'))
   })
 
   it('marks exactly one link as the current page and the containing area as the active branch', () => {
-    routerState.pathname = '/agentops'
+    routerState.pathname = '/mcp-servers'
     renderIntel(<AreasTree />)
     const current = document.querySelectorAll('[aria-current="page"]')
     expect(current).toHaveLength(1)
-    // On the /agentops door the current page is the Sessions screen it opens, marked
-    // and styled the way the router marks an active link.
-    expect(current[0]).toHaveAttribute('href', '/sessions')
+    expect(current[0]).toHaveAttribute('href', '/mcp-servers')
     expect(current[0]).toHaveAttribute('data-status', 'active')
     expect(areaRow('ai')).toHaveAttribute('data-branch', 'active')
     expect(areaRow('system')).not.toHaveAttribute('data-branch')
@@ -204,7 +186,7 @@ describe('the area directory (N1)', () => {
   })
 
   it('folds and reopens one area with the button, persisting the choice, without changing the route', async () => {
-    routerState.pathname = '/agentops'
+    routerState.pathname = '/mcp-servers'
     const user = userEvent.setup()
     renderIntel(<AreasTree />)
     await user.click(toggleOf('ai'))
@@ -214,7 +196,7 @@ describe('the area directory (N1)', () => {
     // Still on the same page: the current-page marker did not move.
     expect(document.querySelector('[aria-current="page"]')).toHaveAttribute(
       'href',
-      '/sessions',
+      '/mcp-servers',
     )
     await user.click(toggleOf('ai'))
     expect(toggleOf('ai')).toHaveAttribute('aria-expanded', 'true')
@@ -223,17 +205,6 @@ describe('the area directory (N1)', () => {
     await user.click(toggleOf('system'))
     expect(toggleOf('system')).toHaveAttribute('aria-expanded', 'true')
     expect(toggleOf('ai')).toHaveAttribute('aria-expanded', 'true')
-  })
-
-  it('expands and collapses every area at once', async () => {
-    const user = userEvent.setup()
-    renderIntel(<AreasTree />)
-    await user.click(screen.getByRole('button', { name: 'Expand all areas' }))
-    for (const a of NAV_AREAS)
-      expect(toggleOf(a.id)).toHaveAttribute('aria-expanded', 'true')
-    await user.click(screen.getByRole('button', { name: 'Collapse all areas' }))
-    for (const a of NAV_AREAS)
-      expect(toggleOf(a.id)).toHaveAttribute('aria-expanded', 'false')
   })
 
   it('offers an area only when one of its leaves is authorized (the union), never by a parent gate', () => {
@@ -254,22 +225,25 @@ describe('the area directory (N1)', () => {
     //    told" as "you may not", which is the one conversion this lot exists to prevent.
     //    An ESTABLISHED `not_reachable` does remove it; that is asserted in
     //    features/navigation/authorization.causal.test.tsx.
+    // A Business console's console asks the engine too, and is in System.
     expect(ids).toEqual([
       'work-communications',
       'security-identity',
       'observation',
+      ...(BUSINESS_BUILD ? ['system'] : []),
     ])
     routerState.pathname = '/routine-policies'
     // The administration link is offered under the same unknown-keeps-the-link rule; its
     // route still refuses to load anything protected until the engine has answered.
     expect(hrefs()).toEqual([
-      '/',
       '/areas/work-communications',
       '/communications/administration',
       '/areas/security-identity',
       '/routine-policies',
       '/areas/observation',
       '/dashboards',
+      // A Business console's System area, open for its console on the same rule.
+      ...(BUSINESS_BUILD ? ['/areas/system', '/console'] : []),
       '/settings',
     ])
   })
@@ -297,7 +271,7 @@ describe('the area directory search folds a page whose module is off', () => {
     renderIntel(<AreasTree />)
     const shown = () =>
       screen.queryAllByRole('link').map((a) => a.getAttribute('href'))
-    expect(shown()).toContain('/audit')
+    expect(shown()).toContain('/dashboards')
     expect(shown()).not.toContain('/deploy')
     await user.type(screen.getByRole('searchbox'), 'deploy')
     expect(shown()).not.toContain('/deploy')
@@ -328,7 +302,7 @@ describe('the area directory search (P2-12, N1 index)', () => {
     expect(document.querySelector('[data-nav-ranked]')).not.toBeNull()
     expect(document.querySelector('[data-nav-area]')).toBeNull()
     expect(
-      screen.getByRole('link', { name: /Claude Code governance/ }),
+      screen.getByRole('link', { name: /Managed policy/ }),
     ).toHaveTextContent(
       'Security & identity › Policies and governance boundaries',
     )
@@ -372,7 +346,9 @@ describe('the area directory search (P2-12, N1 index)', () => {
     renderIntel(<AreasTree />)
     await user.type(filter(), 'admin')
     const shown = hrefs()
-    expect(shown).not.toContain('/console')
+    // The console is gated by tenant:admin in Community. A Business console asks the engine
+    // instead, and its installed link stays offered until the engine answers (G1-B).
+    expect(shown.includes('/console')).toBe(BUSINESS_BUILD)
     expect(shown.includes('/tenants')).toBe(
       FEATURE_EXTENSIONS.some((view) => view.id === 'tenants'),
     )
@@ -480,15 +456,15 @@ describe('the area directory search (P2-12, N1 index)', () => {
 describe('AreasSheet', () => {
   // ⛔ THE REVIEW'S finding 2 CONTROL. Two directories can be mounted at once (the bare tree and
   // the sheet): every aria-controls in the sheet must resolve to exactly one element,
-  // INSIDE the sheet, and every group label to a heading inside its own group — under
-  // normal id resolution, not by counting classes.
-  it('resolves every aria-controls and aria-labelledby to its own instance while the tree and the sheet are both mounted', async () => {
+  // INSIDE the sheet — under normal id resolution, not by counting classes.
+  it('resolves every aria-controls to its own instance while the tree and the sheet are both mounted', async () => {
     const user = userEvent.setup()
     routerState.pathname = '/agentops'
+    useAreasSheet.setState({ open: true, opener: null })
     renderIntel(
       <>
         <AreasTree />
-        <AreasSheet open onOpenChange={() => {}} />
+        <AreasSheet />
       </>,
     )
     const dialog = screen.getByRole('dialog')
@@ -506,23 +482,12 @@ describe('AreasSheet', () => {
       expect(dialog.contains(matches[0]), id).toBe(true)
       expect(aside.contains(matches[0]), id).toBe(false)
     }
-    // The desktop sidebar's toggles name the desktop panels, never the drawer's.
+    // The bare tree's toggles name its own panels, never the drawer's.
     for (const b of aside.querySelectorAll('button[aria-controls]')) {
       const id = b.getAttribute('aria-controls') as string
       const matches = document.querySelectorAll(`[id="${id}"]`)
       expect(matches, id).toHaveLength(1)
       expect(aside.contains(matches[0]), id).toBe(true)
-    }
-    // Group labels: each resolves to one heading inside that very group.
-    const groups = [
-      ...document.querySelectorAll('[role="group"][aria-labelledby]'),
-    ]
-    expect(groups.length).toBeGreaterThan(0)
-    for (const g of groups) {
-      const id = g.getAttribute('aria-labelledby') as string
-      const matches = document.querySelectorAll(`[id="${id}"]`)
-      expect(matches, id).toHaveLength(1)
-      expect(g.contains(matches[0]), id).toBe(true)
     }
     // Toggling in the drawer moves the drawer's own panel, and the two instances share
     // the preference (one store), so both reflect the fold.
@@ -533,15 +498,36 @@ describe('AreasSheet', () => {
   })
 
   it('projects the same areas and closes on navigation', async () => {
-    const onOpenChange = vi.fn()
     const user = userEvent.setup()
-    renderIntel(<AreasSheet open onOpenChange={onOpenChange} />)
+    useAreasSheet.setState({ open: true, opener: null })
+    renderIntel(<AreasSheet />)
     const ids = [...document.querySelectorAll('[data-nav-area]')].map((e) =>
       e.getAttribute('data-nav-area'),
     )
     expect(ids).toEqual(NAV_AREAS.map((a) => a.id))
     await user.click(screen.getByRole('link', { name: 'Infrastructure' }))
-    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(useAreasSheet.getState().open).toBe(false)
+  })
+
+  it('gives focus back to the control that opened it', async () => {
+    const user = userEvent.setup()
+    renderIntel(
+      <>
+        <button
+          type="button"
+          onClick={(e) => useAreasSheet.getState().show(e.currentTarget)}
+        >
+          opener
+        </button>
+        <AreasSheet />
+      </>,
+    )
+    const opener = screen.getByRole('button', { name: 'opener' })
+    await user.click(opener)
+    expect(screen.getByRole('dialog', { name: 'All areas' })).toBeVisible()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(opener).toHaveFocus())
+    expect(useAreasSheet.getState().open).toBe(false)
   })
 })
 

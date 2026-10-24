@@ -519,9 +519,11 @@ nivel de cobertura. Se cablean por separado de las fuentes.
 
 Kinds de destino en proceso: `slack`, `teams`, `pagerduty`, `opsgenie`, `webhook`,
 `siem`, `splunkhec`, `syslog`, `servicenow`, `jira`, `email`, `twilio`, `chronicle`,
-`datadog`, `elastic`, `snmp`, `filelog`, `otlplog` (logs OTLP/HTTP) y `s3archive` (Business: Regulated Operations)
+`datadog`, `elastic`, `snmp`, `filelog`, `otlplog` (logs OTLP/HTTP), `s3archive` (Business: Regulated Operations)
 (el sink WORM de S3 Object Lock: un objeto inmutable y con bloqueo verificado por
-notificación).
+notificación) y `teamsbot` (Business: Regulated Operations, el conector de Teams con bot
+registrado del ciclo de incidentes; un binario Community omite un destino de ese tipo con
+una línea de log que nombra Business).
 
 Tres kinds de egreso a brokers se ejecutan **fuera de proceso** como plugins embebidos
 (sus árboles de dependencias del protocolo de wire nunca se enlazan al motor, exactamente

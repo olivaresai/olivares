@@ -58,6 +58,7 @@ import type { AuditEventDTO } from '@/lib/api/types'
 import { useAuth } from '@/lib/auth/context'
 import { formatInt } from '@/lib/format'
 import { useUrlState } from '@/lib/hooks/use-url-state'
+import { useNewRowIds } from '@/lib/use-new-row-ids'
 import { AuditEventSheet } from './audit-detail'
 import { eventLabel } from './event-label'
 import { governanceApi, governanceKeys } from '@/features/governance/api'
@@ -241,6 +242,13 @@ export function AuditView() {
     [allRows, foldInternal],
   )
   const internalCount = allRows.length - rows.length
+  // C2-DESIGN §3: a row that just arrived at the head of the feed slides in 6 px
+  // (.feed-enter), once, then rests. The view (ledger, tenant, filters, fold) is the
+  // feed's scope: a row a filter or the fold reveals did not arrive.
+  const feedIds = useNewRowIds(
+    rows.map((r) => r.id),
+    JSON.stringify([scope, activeTenant, listParams, foldInternal]),
+  )
   const lastPage = listQuery.data?.pages[listQuery.data.pages.length - 1]
   const scannedThrough =
     filtersActive &&
@@ -526,6 +534,7 @@ export function AuditView() {
         error={headQuery.error ?? listQuery.error}
         onRetry={() => void listQuery.refetch()}
         getRowId={(r) => r.id}
+        rowClassName={(r) => (feedIds.has(r.id) ? 'feed-enter' : undefined)}
         onRowClick={(r) => setSelected(r)}
         stickyHeader
         hasMore={listQuery.hasNextPage}

@@ -28,8 +28,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 |---|---|---|---|
 | **2.4.1 Bypass Blocks** | A | **Supports** | A skip link ("Skip to content") is the first focusable element and targets `#main-content` (`app-layout.tsx`). |
 | **1.3.1 / 4.1.2 — grid semantics** | A | **Supports** | `DataTable` is a `role="grid"` with `aria-rowcount`/`aria-rowindex`/`aria-colcount`/`aria-colindex` (true totals under virtualization) and roving-tabindex arrow navigation. |
-| **4.1.2 — current location** | A | **Supports** | The active sidebar item sets `aria-current="page"` (`sidebar.tsx`). |
-| **1.3.1 — landmarks** | A | **Supports** | `<main>` (id'd), `<header>` banner, `<aside>` labelled "Primary", sidebar `<nav>` labelled "Main navigation", breadcrumb `<nav>` labelled. |
+| **4.1.2 — current location** | A | **Supports** | The current place in the top bar sets `aria-current="page"` (`places-nav.tsx`). |
+| **1.3.1 — landmarks** | A | **Supports** | `<main>` (id'd), `<header>` banner, the top bar's places `<nav>` labelled "Journeys", the All areas region labelled "Main navigation". |
 | **2.4.3 Focus Order / 2.1.2 No Keyboard Trap** | A | **Supports** | Radix dialog/sheet/popover trap focus while open, Escape closes, and focus RETURNS to the trigger (verified: `dialog.test.tsx`). The combobox keeps DOM focus on the input and moves `aria-activedescendant` (APG). |
 | **1.4.1 Use of Color / 1.1.1 Non-text Content** | A | **Supports** | Charts add a screen-reader summary + a data-table toggle + non-color encodings via the `AccessibleChart` primitive. |
 

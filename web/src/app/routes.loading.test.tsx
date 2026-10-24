@@ -68,7 +68,6 @@ vi.mock('./pages/settings', () => ({
 vi.mock('@/components/layout/app-frame', () => ({
   AppFrame: ({ children }: { children: ReactNode }) => <main>{children}</main>,
 }))
-vi.mock('@/components/layout/app-sidebar', () => ({ AppSidebar: () => null }))
 vi.mock('@/components/layout/sidebar', () => ({ AreasSheet: () => null }))
 vi.mock('@/components/layout/phone-bar', () => ({ PhoneBar: () => null }))
 vi.mock('@/components/layout/topbar', () => ({ Topbar: () => null }))
@@ -91,7 +90,7 @@ vi.mock('@/features/navigation/personal-navigation', () => ({
   PersonalNavigationProvider: ({ children }: { children: ReactNode }) => (
     <>{children}</>
   ),
-  // No provider state in this test: SidebarSync reads `personal?.scope`.
+  // No provider state in this test: the edition badge reads `personal?.scope`.
   usePersonalNavigation: () => null,
 }))
 vi.mock('@/features/navigation/permitted-visit', () => ({

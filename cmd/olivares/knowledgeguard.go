@@ -172,7 +172,7 @@ func (g *governanceRetrievalGuard) Resolve(ctx context.Context, tenant model.Ten
 // ACL grants). It walks the governance.collection_member edges (member_ref → the
 // parent collection_ref), bounded in depth and cycle-safe. A member belonging to no
 // collection — or a deployment without the governance module — yields no groups, so
-// only unrestricted (empty-ACL / "anyone") chunks are retrievable.
+// only unrestricted ("anyone") chunks are retrievable.
 func resolveIdentityGroups(ctx context.Context, sc store.Scope, identityExternalID string) ([]string, error) {
 	if strings.TrimSpace(identityExternalID) == "" {
 		return nil, nil
@@ -225,7 +225,7 @@ func drainEdges(ctx context.Context, repo store.GenericRepo, col, val string) ([
 }
 
 // publicOnly is the deny-closed grant: the KB read is permitted but only public,
-// unrestricted (empty-ACL) content survives the module's chunk filter.
+// unrestricted ("anyone") content survives the module's chunk filter.
 func publicOnly(reason string) knowledge.Grants {
 	return knowledge.Grants{Allowed: true, Clearance: "public", Reason: reason}
 }

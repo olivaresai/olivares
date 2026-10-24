@@ -254,9 +254,25 @@ jobs:
           name: ${{ needs.web-bundle.outputs.bundle-artifact }}
           path: ${{ runner.temp }}/web-generation-artifact
       - name: embed the verified console output
+        env:
+          # The manifest's attempt is the PRODUCING job's, never this job's GITHUB_RUN_ATTEMPT:
+          # "re-run failed jobs" re-runs a failed consumer at attempt 2 while web-bundle's
+          # earlier success keeps attempt 1's artifact (#2749).
+          GENERATION_ATTEMPT: ${{ needs.web-bundle.outputs.bundle-attempt }}
         run: |
+          set -euo pipefail
+          [[ -n "$GENERATION_ATTEMPT" ]] || {
+            echo "::error::web-bundle reported no attempt for the console artifact"
+            exit 1
+          }
           cd "$RUNNER_TEMP/web-generation-artifact"
           sha256sum -c SHA256SUMS
+          jq -e --arg head "$GITHUB_SHA" --arg repository "$GITHUB_REPOSITORY" \
+            --arg run "$GITHUB_RUN_ID" --arg attempt "$GENERATION_ATTEMPT" '
+            .schema == "olivares.web-generation/v1" and
+            .checkout_sha == $head and .pr_head_sha == $head and
+            .repository == $repository and .run_id == $run and .run_attempt == $attempt
+          ' manifest.json > /dev/null
           tar -xzf dist.tar.gz -C "$GITHUB_WORKSPACE/core/internal/webui"
       - name: Go caches under RUNNER_TEMP (this runner may have no $HOME)
         # Set Go paths before setup-go; required paths cannot depend on a runner home
@@ -1064,7 +1080,8 @@ jobs:
         id: lint-actions
         run: task lint:actions
       # Hosted minutes on a private repository are billed and the Actions budget is for storage
-      # only: a job reads vars.CI_RUNNER* or is listed, with its reason, in ci/hosted-runners.txt.
+      # only: a job reads vars.CI_RUNNER*, or reads the private split and is listed, with its
+      # public-only condition, in ci/hosted-runners.txt.
       - name: no job on a GitHub-hosted runner outside the allowlist
         id: lint-hosted-runners
         run: task lint:ci-hosted-runners lint:ci-hosted-runners:selftest
@@ -1823,9 +1840,25 @@ jobs:
           name: ${{ needs.web-bundle.outputs.bundle-artifact }}
           path: ${{ runner.temp }}/web-generation-artifact
       - name: embed the verified console output
+        env:
+          # The manifest's attempt is the PRODUCING job's, never this job's GITHUB_RUN_ATTEMPT:
+          # "re-run failed jobs" re-runs a failed consumer at attempt 2 while web-bundle's
+          # earlier success keeps attempt 1's artifact (#2749).
+          GENERATION_ATTEMPT: ${{ needs.web-bundle.outputs.bundle-attempt }}
         run: |
+          set -euo pipefail
+          [[ -n "$GENERATION_ATTEMPT" ]] || {
+            echo "::error::web-bundle reported no attempt for the console artifact"
+            exit 1
+          }
           cd "$RUNNER_TEMP/web-generation-artifact"
           sha256sum -c SHA256SUMS
+          jq -e --arg head "$GITHUB_SHA" --arg repository "$GITHUB_REPOSITORY" \
+            --arg run "$GITHUB_RUN_ID" --arg attempt "$GENERATION_ATTEMPT" '
+            .schema == "olivares.web-generation/v1" and
+            .checkout_sha == $head and .pr_head_sha == $head and
+            .repository == $repository and .run_id == $run and .run_attempt == $attempt
+          ' manifest.json > /dev/null
           tar -xzf dist.tar.gz -C "$GITHUB_WORKSPACE/core/internal/webui"
       - name: Go caches under RUNNER_TEMP (this runner may have no $HOME)
         run: |
@@ -2692,9 +2725,25 @@ jobs:
           name: ${{ needs.web-bundle.outputs.bundle-artifact }}
           path: ${{ runner.temp }}/web-generation-artifact
       - name: embed the verified console output
+        env:
+          # The manifest's attempt is the PRODUCING job's, never this job's GITHUB_RUN_ATTEMPT:
+          # "re-run failed jobs" re-runs a failed consumer at attempt 2 while web-bundle's
+          # earlier success keeps attempt 1's artifact (#2749).
+          GENERATION_ATTEMPT: ${{ needs.web-bundle.outputs.bundle-attempt }}
         run: |
+          set -euo pipefail
+          [[ -n "$GENERATION_ATTEMPT" ]] || {
+            echo "::error::web-bundle reported no attempt for the console artifact"
+            exit 1
+          }
           cd "$RUNNER_TEMP/web-generation-artifact"
           sha256sum -c SHA256SUMS
+          jq -e --arg head "$GITHUB_SHA" --arg repository "$GITHUB_REPOSITORY" \
+            --arg run "$GITHUB_RUN_ID" --arg attempt "$GENERATION_ATTEMPT" '
+            .schema == "olivares.web-generation/v1" and
+            .checkout_sha == $head and .pr_head_sha == $head and
+            .repository == $repository and .run_id == $run and .run_attempt == $attempt
+          ' manifest.json > /dev/null
           tar -xzf dist.tar.gz -C "$GITHUB_WORKSPACE/core/internal/webui"
       - name: resolve the ephemeral Postgres port into the test DSNs
         id: pg-port
@@ -3464,9 +3513,25 @@ jobs:
           name: ${{ needs.web-bundle.outputs.bundle-artifact }}
           path: ${{ runner.temp }}/web-generation-artifact
       - name: embed the verified console output
+        env:
+          # The manifest's attempt is the PRODUCING job's, never this job's GITHUB_RUN_ATTEMPT:
+          # "re-run failed jobs" re-runs a failed consumer at attempt 2 while web-bundle's
+          # earlier success keeps attempt 1's artifact (#2749).
+          GENERATION_ATTEMPT: ${{ needs.web-bundle.outputs.bundle-attempt }}
         run: |
+          set -euo pipefail
+          [[ -n "$GENERATION_ATTEMPT" ]] || {
+            echo "::error::web-bundle reported no attempt for the console artifact"
+            exit 1
+          }
           cd "$RUNNER_TEMP/web-generation-artifact"
           sha256sum -c SHA256SUMS
+          jq -e --arg head "$GITHUB_SHA" --arg repository "$GITHUB_REPOSITORY" \
+            --arg run "$GITHUB_RUN_ID" --arg attempt "$GENERATION_ATTEMPT" '
+            .schema == "olivares.web-generation/v1" and
+            .checkout_sha == $head and .pr_head_sha == $head and
+            .repository == $repository and .run_id == $run and .run_attempt == $attempt
+          ' manifest.json > /dev/null
           tar -xzf dist.tar.gz -C "$GITHUB_WORKSPACE/core/internal/webui"
       - name: resolve the ephemeral Postgres port into the test DSNs
         id: pg-port
@@ -3918,6 +3983,169 @@ jobs:
           if-no-files-found: warn
           retention-days: 1
 
+  capture-gate:
+    # Capture gate (issue #2557): over the SAME routes and themes as `at:gate` it adds the
+    # checks from the WEBC4 review that the automatic sweep was silent about — glow/backdrop
+    # and "at most one filled orange control in the first screen" (orange.ts), text-fit
+    # (textfit.ts) and text overlap (overlap.ts), ported from concepts-c2/qa — at BOTH
+    # capture widths (1440 and 1024) in BOTH themes. Its own job, for the reason written in
+    # `a11y`: the branch-protection required contexts do not absorb new minutes.
+    #
+    # Control cases INSIDE the job. The selftest step plants a glow, a second orange button,
+    # an overlap and a clipped line with the SAME payloads the gate's QA_PLANT mode injects,
+    # and requires each check to report its plant, a clean page to report nothing — including
+    # the decoys: a non-orange control and an orange one inside a .mc row, which do not
+    # count as filled — and the pure verdict to block on every entry: a check that stops
+    # seeing its plant (or a verdict that stops blocking it) reddens the job even when the
+    # sweep is green. The capture-plant step closes the loop end to end once per job with
+    # the four exit-criteria plants (glow, second orange button, overlap, clipped line):
+    # each one against the COMPLETE gate must end in rc=2 with its verdict in the log — if
+    # the gate does not fail on one of its control cases, the job fails.
+    needs: [classify]
+    if: needs.classify.outputs.code == 'true'
+    concurrency:
+      group: mainline-ci-capture-gate-${{ github.ref }}-${{ github.run_id }}
+      cancel-in-progress: true
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    # Ceiling > sum of step guards (5 + 45 + 5), with 20 for the unguarded steps
+    # (checkout, node, pnpm, deps, browser, evidence, upload): a cold-runner `pnpm install`
+    # sets the pace — the lesson of `lint:ci-timeout-arithmetic` and the `web` job.
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    steps:
+      # MUST GO BEFORE setup-node/setup-go, for the reason written in `a11y`: these runners
+      # may have no $HOME.
+      - name: caches under RUNNER_TEMP (this runner may have no $HOME)
+        run: |
+          echo "PNPM_HOME=$RUNNER_TEMP/pnpm" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/pnpm" >> "$GITHUB_PATH"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # NODE FIRST: pnpm/action-setup installs pnpm THROUGH npm (see `a11y`).
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          # EXPLICIT `dest`: without it the action self-installs into ~/setup-pnpm and the
+          # runner service runs with HOME=/root, where it already died twice (see `a11y`).
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - name: install web deps (frozen lockfile)
+        id: capture-deps
+        run: pnpm --dir web install --frozen-lockfile
+      # The exercised form, WITHOUT --with-deps (needs sudo; see the history in `a11y`).
+      - name: install the chromium playwright drivers (web/, pinned by the project)
+        id: capture-browser
+        run: pnpm --dir web exec playwright install chromium
+      - name: control cases — every planted violation must be reported
+        id: capture-selftest
+        # Step guard, same reason as in `a11y`: a JOB ceiling reports `cancelled` and
+        # reads as a flake. The selftest takes seconds; 5 is headroom.
+        timeout-minutes: 5
+        run: pnpm --dir web run capture:selftest
+      # `task capture:gate` is exactly this step, written here instead of installing
+      # go-task only to invoke it (same rule as `a11y`).
+      - name: capture gate — axe A+AA, glow, orange count, text-fit, overlap on every route
+        id: capture-gate-run
+        # STEP GUARD: if the sweep hangs, the red shows HERE and with a name.
+        # In --qa mode contrast is off, so the rc=3 split of `a11y` does not apply:
+        # here there is only green (0) or red (2 by verdict, 1 by crash).
+        timeout-minutes: 45
+        run: |
+          set +e
+          pnpm --dir web run capture:gate 2>&1 | tee "$RUNNER_TEMP/ci-fail-capture.log"
+          rc=${PIPESTATUS[0]}
+          set -e
+          if [ "$rc" = "0" ]; then
+            # rc=0 only certifies if BOTH themes wrote their clean report AND every
+            # walked route was measured at BOTH widths: per width, the number of
+            # `qa@<width>:` lines must equal the sum of the `routes=N` the walk
+            # headers announce, and each width must carry exactly one dark and one
+            # light header (two `dark` legs would otherwise count as both themes).
+            # A walk leg that skips, a lost --qa or a half-measured route would
+            # leave a half-green.
+            # Every count is hardened against a missing log: a failed grep cannot
+            # read "0 reports" as a pass.
+            log="$RUNNER_TEMP/ci-fail-capture.log"
+            clean_reports=$(grep -ac -- "— 0 blocking issue(s)" "$log" || true)
+            if [ "${clean_reports:-0}" != "2" ]; then
+              echo "::error title=capture gate::the walk exited 0 but wrote ${clean_reports:-0} clean reports, expected 2 (one per theme)"
+              exit 1
+            fi
+            for w in 1440 1024; do
+              dark_headers=$(grep -ac "^=== AT run: theme=dark width=$w routes=" "$log" || true)
+              light_headers=$(grep -ac "^=== AT run: theme=light width=$w routes=" "$log" || true)
+              expected=$(grep -a "^=== AT run: theme=.* width=$w routes=" "$log" | sed -E 's/.* routes=([0-9]+) .*/\1/' | awk '{s+=$1} END{print s+0}')
+              measured=$(grep -ac "^    qa@$w:" "$log" || true)
+              if [ "${dark_headers:-0}" != "1" ] || [ "${light_headers:-0}" != "1" ] || [ "${expected:-0}" -lt 1 ] || [ "${measured:-0}" != "$expected" ]; then
+                echo "::error title=capture gate::width $w: dark=$dark_headers light=$light_headers walk header(s) announce $expected route(s), $measured measured — both themes must measure every route"
+                exit 1
+              fi
+            done
+            rm -f "$RUNNER_TEMP/ci-fail-capture.log"
+            exit 0
+          fi
+          echo "::error title=capture gate::the console capture gate failed (rc=$rc); the log above names the routes and hits"
+          exit "$rc"
+      # End-to-end control, the FOUR exit-criteria plants: each one with the SAME payload
+      # as the QA_PLANT mode must bring the COMPLETE gate down with rc=2, and the log must
+      # carry the verdict of THAT plant (rc=2 for another cause — an unmeasured route, an
+      # axe failure — certifies nothing). A broken check or verdict, or a gate that ignores
+      # QA_PLANT, reddens the job even when the real sweep is green.
+      # (/login in dark, one route per plant: the control takes seconds.)
+      - name: planted violations must fail the gate (exit 2)
+        id: capture-plant
+        timeout-minutes: 5
+        working-directory: web
+        run: |
+          for kind in glow second-orange overlap textfit; do
+            case "$kind" in
+              glow) want='glow /login@' ;;
+              second-orange) want='orange-count /login@' ;;
+              overlap) want='overlap /login@' ;;
+              textfit) want='text-fit /login@' ;;
+            esac
+            set +e
+            env QA_PLANT="$kind" node --experimental-strip-types e2e-visual/at-run.ts dark /login capture-plant --gate --qa 2>&1 | tee "$RUNNER_TEMP/ci-fail-capture-plant.log"
+            rc=${PIPESTATUS[0]}
+            set -e
+            if [ "$rc" = "2" ] && grep -q "NOT MEASURED" "$RUNNER_TEMP/ci-fail-capture-plant.log"; then
+              echo "::error title=capture gate plant control::planted $kind exited 2 but the route was NOT MEASURED — rc=2 came from something else, not from the plant"
+              exit 1
+            fi
+            # the verdict of THIS plant at BOTH widths: a check broken at one width only
+            # still reddens the control
+            if [ "$rc" = "2" ] && grep -qF "${want}1440:" "$RUNNER_TEMP/ci-fail-capture-plant.log" && grep -qF "${want}1024:" "$RUNNER_TEMP/ci-fail-capture-plant.log"; then
+              continue
+            fi
+            echo "::error title=capture gate plant control::expected rc=2 and '$want' at 1440 and 1024 in the log for a planted $kind, got rc=$rc — the gate does not fail on its control case"
+            exit 1
+          done
+          rm -f "$RUNNER_TEMP/ci-fail-capture-plant.log"
+          exit 0
+      # The report is uploaded ALWAYS: it carries the per-route counts of glow, filled
+      # orange, text-fit and overlap at BOTH widths — the data the exit code does not
+      # reflect.
+      - name: Preserve evidence on the runner
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/ci-evidence
+        with:
+          name: capture-report-${{ github.run_id }}
+          path: web/e2e-visual/__at__/*.json
+      - name: keep the report (per-route WEBC4 counts at both capture widths)
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: capture-report-${{ github.run_id }}
+          path: web/e2e-visual/__at__/*.json
+          if-no-files-found: error
+          retention-days: 1
+
   web:
     # The console bundle is NOT built here (dev#2367). Its upload used to be the last step of
     # this job, behind the 20-minute permission check and the 48-minute vitest run, so a `web`
@@ -4127,6 +4355,10 @@ jobs:
   web-bundle:
     outputs:
       bundle-artifact: web-generation-${{ github.run_id }}-${{ github.run_attempt }}
+      # The attempt that produced and uploaded the artifact above. Consumers compare the
+      # manifest against THIS attempt (#2749): "re-run failed jobs" re-runs a failed
+      # consumer at a new attempt while this job's earlier success keeps its artifact.
+      bundle-attempt: ${{ github.run_attempt }}
     needs: [classify]
     if: needs.classify.outputs.code == 'true'
     concurrency:

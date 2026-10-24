@@ -477,7 +477,9 @@ grant の OBSERVED 対応物を出力する。
 プロセス内の出力先 kind: `slack`、`teams`、`pagerduty`、`opsgenie`、`webhook`、`siem`、
 `splunkhec`、`syslog`、`servicenow`、`jira`、`email`、`twilio`、`chronicle`、`datadog`、
 `elastic`、`snmp`、`filelog`、`otlplog`（OTLP/HTTP logs）、`s3archive` (Business: Regulated Operations)（S3 Object Lock WORM sink ——
-通知ごとに不変の lock-verified object を 1 つ）。
+通知ごとに不変の lock-verified object を 1 つ）、`teamsbot` (Business: Regulated Operations)（インシデント
+ループの登録済みボット型 Teams connector。Community バイナリはこの種類の宛先を、Business と記した
+ログ行を出してスキップします）。
 
 3 つの broker egress kind は組み込みプラグインとして**プロセス外**で実行する（プラグインソースと
 同様、wire-protocol 依存ツリーが engine に link されることはない）: `kafka`、`amqp`、`cloudqueue` ——

@@ -224,7 +224,7 @@ class PolicySeed(unittest.TestCase):
 class CaptureManifest(unittest.TestCase):
     def test_configured_held_views_survive_executed_skip_evidence(self):
         source = Path(__file__).with_name("docs-captures.sh").read_text()
-        merger = source.split('DOCS_DIR="$ROOT/web/playwright-report/docs" python3 - <<\'PY\' || true\n', 1)[1].split('\nPY\n', 1)[0]
+        merger = source.split('DOCS_DIR="$ROOT/web/playwright-report/docs" python3 -I - <<\'PY\' || true\n', 1)[1].split('\nPY\n', 1)[0]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "orchestration.evidence.json").write_text(json.dumps({
@@ -243,7 +243,7 @@ class CaptureManifest(unittest.TestCase):
 
     def test_only_executed_skips_are_named_and_not_counted_as_captures(self):
         source = Path(__file__).with_name("docs-captures.sh").read_text()
-        merger = source.split('DOCS_DIR="$ROOT/web/playwright-report/docs" python3 - <<\'PY\' || true\n', 1)[1].split('\nPY\n', 1)[0]
+        merger = source.split('DOCS_DIR="$ROOT/web/playwright-report/docs" python3 -I - <<\'PY\' || true\n', 1)[1].split('\nPY\n', 1)[0]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for theme in ("light", "dark"):

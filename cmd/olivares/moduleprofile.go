@@ -92,14 +92,26 @@ func activationModules(m *ActivationManifest) map[string][]string {
 	if thisEdition.activationModules == nil {
 		return out
 	}
-	for _, e := range m.Entries {
-		if !e.overlaid() {
-			continue
-		}
-		for _, name := range thisEdition.activationModules(e.Addon) {
-			if _, ok := moduleCatalog[name]; ok && !slices.Contains(out[name], e.Addon) {
-				out[name] = append(out[name], e.Addon)
+	add := func(addon string) {
+		for _, name := range thisEdition.activationModules(addon) {
+			if _, ok := moduleCatalog[name]; ok && !slices.Contains(out[name], addon) {
+				out[name] = append(out[name], addon)
 			}
+		}
+	}
+	hasRow := map[string]bool{}
+	for _, e := range m.Entries {
+		hasRow[normalizeAddonKey(e.Addon)] = true
+		if e.overlaid() {
+			add(e.Addon)
+		}
+	}
+	// An add-on that needs nothing materialized (a wired module) has no row; the
+	// module list says it is on. One whose row is not active (staged, waiting for
+	// input) is not on, whatever the list says.
+	for _, addon := range m.Modules {
+		if n := normalizeAddonKey(addon); !hasRow[n] {
+			add(n)
 		}
 	}
 	for name := range out {
@@ -249,17 +261,4 @@ func sessionRecorderOf(rec *recording.Module) api.SessionRecorder {
 		return nil
 	}
 	return rec
-}
-
-// notEnabledNamespaces are the namespaces of mods this node does not run, for
-// the API (they answer module_not_enabled) and the console (server-info).
-func notEnabledNamespaces(mods []api.Module, p moduleProfile) []string {
-	var out []string
-	for _, m := range mods {
-		if !p.Active(m.APINamespace()) {
-			out = append(out, m.APINamespace())
-		}
-	}
-	sort.Strings(out)
-	return out
 }

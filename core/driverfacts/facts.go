@@ -77,17 +77,23 @@ func NetworkEnv(name string) (proxy, trust bool) {
 
 // LoginMethod is one official way to sign a tool in: the arguments of the tool's
 // own login command, with the id a client names it by and a label for a person.
+// KeyPrompt, when set, is the line on which the tool's own login waits for an API
+// key the person types: the engine hands it to the tool's stdin and never keeps
+// it. KeyURL is the vendor's page that issues that key.
 type LoginMethod struct {
-	ID, Label string
-	Args      []string
+	ID, Label         string
+	Args              []string
+	KeyPrompt, KeyURL string
 }
 
 // LoginMethodInfo is what a client sees of a method. Default marks the one
-// LoginArgs runs, which is what a start without a method id does.
+// LoginArgs runs, which is what a start without a method id does; Key, a method
+// whose login waits for an API key (the sign-in reaches needs_key).
 type LoginMethodInfo struct {
 	ID      string `json:"id"`
 	Label   string `json:"label"`
 	Default bool   `json:"default,omitempty"`
+	Key     bool   `json:"key,omitempty"`
 }
 
 type Binding struct {
@@ -130,6 +136,10 @@ type Facts struct {
 // method, picked by the label the tool prints.
 var openCodeHeadlessLogin = []string{"auth", "login", "--provider", "openai", "--method", "ChatGPT Pro/Plus (headless)"}
 
+// openCodeKeyPrompt is the line OpenCode's own login prints when it waits for a
+// provider's API key (measured on v1.18.34 for --provider opencode and opencode-go).
+const openCodeKeyPrompt = "Enter your API key"
+
 var rows = []Facts{
 	{
 		Key: "claude", Name: "Claude Code", Program: "claude", Session: true,
@@ -171,22 +181,38 @@ var rows = []Facts{
 	},
 	{
 		Key: "opencode", Name: "OpenCode", Program: "opencode", Session: true,
-		SkillsDir:   ".agents/skills",
+		// Its own configuration folder: sessions turn the .agents/.claude scans off (#2997).
+		SkillsDir:   ".opencode/skills",
 		EnvPrefixes: []string{"OPENCODE_"},
 		ConfigDir:   ".config/opencode", ConfigHomeEnv: OpenCodeConfigHomeEnv, RuntimeBinEnv: OpenCodeRuntimeBinEnv,
 		Installer: InstallRelease, SignIn: SignInDevice,
 		LoginArgs: openCodeHeadlessLogin,
-		// Measured on the pinned binary (v1.18.30): `opencode auth login --provider
-		// openai` offers "ChatGPT Pro/Plus (browser)", "ChatGPT Pro/Plus (headless)"
-		// and "Manually enter API Key". Only the headless one is relayed: the browser
-		// method waits for a callback on the engine host, and the key method reads a
-		// secret from the tool's own prompt.
-		LoginMethods:       []LoginMethod{{ID: "chatgpt-headless", Label: "ChatGPT Pro/Plus (headless)", Args: openCodeHeadlessLogin}},
+		// OpenCode's own providers come first (#2567; opencode.ai/docs/cli, measured
+		// on v1.18.34): `auth login --provider opencode` takes the OpenCode console
+		// key (Zen and the free models), `--provider opencode-go` the Go
+		// subscription key; each prints openCodeKeyPrompt, reads the key on stdin
+		// and stores it in its auth.json. `--provider openai` offers "ChatGPT
+		// Pro/Plus (browser)", "(headless)" and "Manually enter API Key"; only the
+		// headless one is relayed, because the browser method waits for a callback
+		// on the engine host. The default stays the ChatGPT one: a start without a
+		// method runs what it always ran.
+		LoginMethods: []LoginMethod{
+			{ID: "opencode", Label: "OpenCode Zen and free models (API key)", Args: []string{"auth", "login", "--provider", "opencode"},
+				KeyPrompt: openCodeKeyPrompt, KeyURL: "https://opencode.ai/auth"},
+			{ID: "opencode-go", Label: "OpenCode Go (API key)", Args: []string{"auth", "login", "--provider", "opencode-go"},
+				KeyPrompt: openCodeKeyPrompt, KeyURL: "https://opencode.ai/console"},
+			{ID: "chatgpt-headless", Label: "ChatGPT Pro/Plus (headless)", Args: openCodeHeadlessLogin},
+		},
 		StatusArgs:         []string{"auth", "list"},
 		AuthFailures:       []string{"no provider", "api key", "unauthorized", "not authenticated"},
 		KeyPhrase:          "a key or a local model (Ollama)",
 		BindingDescription: "OpenCode runs only on an Anthropic, OpenAI or xAI key at the provider's own address, or on a local model (Ollama, or an OpenAI-compatible server at a local address)",
 		Bindings:           []Binding{{"anthropic", EgressVendor}, {"openai", EgressVendor}, {"xai", EgressVendor}, {"ollama", EgressConfigured}, {"openai_compatible", EgressLocal}},
+		// Record-bound turns reach only their provider's host: inventoried on 1.18.34
+		// with an egress probe (modules/sessions/driver_opencode.go). The own sign-in
+		// and OpenCode's local server port were measured behind the session proxy on
+		// 1.19.4 (#3082, #3094); a record-bound turn behind the proxy is not.
+		EgressMeasured: true,
 	},
 	// GEMINI_CLI_HOME names the home that holds .gemini, not .gemini itself.
 	{
@@ -240,6 +266,17 @@ func (f Facts) LoginArgsFor(id string) ([]string, bool) {
 	return nil, false
 }
 
+// KeyPromptFor returns the key prompt and the key's page of the login method id:
+// empty for the default and for a method that takes no typed key.
+func (f Facts) KeyPromptFor(id string) (prompt, keyURL string) {
+	for _, m := range f.LoginMethods {
+		if id != "" && m.ID == id {
+			return m.KeyPrompt, m.KeyURL
+		}
+	}
+	return "", ""
+}
+
 // LoginMethodIDs are the ids LoginArgsFor accepts besides the empty one.
 func (f Facts) LoginMethodIDs() []string {
 	ids := make([]string, 0, len(f.LoginMethods))
@@ -253,7 +290,7 @@ func (f Facts) LoginMethodIDs() []string {
 func (f Facts) LoginMethodList() []LoginMethodInfo {
 	var out []LoginMethodInfo
 	for _, m := range f.LoginMethods {
-		out = append(out, LoginMethodInfo{ID: m.ID, Label: m.Label, Default: slices.Equal(m.Args, f.LoginArgs)})
+		out = append(out, LoginMethodInfo{ID: m.ID, Label: m.Label, Default: slices.Equal(m.Args, f.LoginArgs), Key: m.KeyPrompt != ""})
 	}
 	return out
 }

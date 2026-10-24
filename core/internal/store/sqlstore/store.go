@@ -714,20 +714,15 @@ func (b *storePreparation) openPrepared(ctx context.Context, cfg store.Config, r
 	// The guard manifest is built ONCE, before the lock, from the registry that has just
 	// closed. It is this binary's declaration of which objects it manages, so it depends on
 	// nothing in the database — which is what lets the v6 bootstrap and the coordinator
-	// compute the same rollout identity from it at two different points in boot.
-	guardManifestForBoot, err := buildGuardManifest(reg.appendOnlyTables())
-	if err != nil {
-		return err
-	}
-	if err := requireCompleteGuardCurrentEdition(guardManifestForBoot); err != nil {
-		return fmt.Errorf("sqlstore: guard manifest: %w", err)
-	}
+	// compute the same rollout identity from it at two different points in boot. The one
+	// database fact it reads is which census the stored receipts are bound to: a directory a
+	// Business build wrote carries the three Business relations too (bootGuardCensus).
 	// ONE graph, built from the census that has just closed, before the lock. Every
 	// compiled edition and every authorized edge is derived here and nowhere else: a graph
 	// rebuilt from a partly migrated database could name an edge the binary does not carry.
-	guardGraphForBoot, err := guardEditionGraphFor(guardManifestForBoot)
+	guardCensus, guardManifestForBoot, guardGraphForBoot, err := bootGuardCensus(ctx, ownerDB, dia, reg.appendOnlyTables())
 	if err != nil {
-		return fmt.Errorf("sqlstore: guard edition graph: %w", err)
+		return err
 	}
 
 	// The reconcile-session provider, taken from the OWNER pool rather than from the
@@ -1111,7 +1106,7 @@ func (b *storePreparation) openPrepared(ctx context.Context, cfg store.Config, r
 		// It stays a SEPARATE leg from the append-only ACL reconcile below, on purpose: a row
 		// trigger cannot observe TRUNCATE, so the receipt of a trigger unit does not and cannot
 		// attest an ACL. Whatever this reports about guards says nothing about privileges.
-		if _, err := runGuardAdmissionUnits(ctx, mdb, dia, reg.appendOnlyTables(),
+		if _, err := runGuardAdmissionUnits(ctx, mdb, dia, guardCensus,
 			observerDSN(cfg), hardened, guardReconcileSession); err != nil {
 			return fmt.Errorf("sqlstore: append-only guard units: %w", err)
 		}

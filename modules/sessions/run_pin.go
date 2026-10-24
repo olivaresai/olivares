@@ -228,10 +228,18 @@ func unpinRun(ctx context.Context, sc store.Scope, caller, runRef string) error 
 	return repo.Delete(ctx, id)
 }
 
-// dropRunPins removes EVERY person's pin on one run: a session that is released
-// or deleted leaves every pinned group (#2130).
-func dropRunPins(ctx context.Context, sc store.Scope, runRef string) error {
-	repo, err := sc.Ext(runPinKind)
+// dropPersonalRunState removes EVERY person's pins (#2130) and snooze and done
+// marks (#2480, run_mark.go) on one run: a session that is released or deleted
+// leaves every person's list for good.
+func dropPersonalRunState(ctx context.Context, sc store.Scope, runRef string) error {
+	// Both kinds are tried: a failure on one must not leave the other's rows behind.
+	return errors.Join(dropRunRows(ctx, sc, runPinKind, runRef), dropRunRows(ctx, sc, runMarkKind, runRef))
+}
+
+// dropRunRows removes every row of one per-person kind on one run. Both kinds name
+// the run in the run_ref column.
+func dropRunRows(ctx context.Context, sc store.Scope, kind model.Kind, runRef string) error {
+	repo, err := sc.Ext(kind)
 	if err != nil {
 		return err
 	}
@@ -256,7 +264,7 @@ func dropRunPins(ctx context.Context, sc store.Scope, runRef string) error {
 		if page.Cursor == "" {
 			// An id-ordered page always carries one. Answering success here would
 			// leave pin rows for a run whose delete already committed.
-			return errors.New("sessions: run pin page has more rows and no cursor")
+			return errors.New("sessions: " + string(kind) + " page has more rows and no cursor")
 		}
 		q.Cursor = page.Cursor
 	}

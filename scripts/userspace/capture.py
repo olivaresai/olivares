@@ -54,13 +54,13 @@ def record_db_defaults(snapshot, preview):
                     flag['effective_default'] = values[flag['name']]
 
 
-def execute(argv, root, env):
+def execute(argv, root, env, timeout=600):
     return subprocess.run([str(a) for a in argv], cwd=root, env=env,
-                          capture_output=True, text=True, timeout=600)
+                          capture_output=True, text=True, timeout=timeout)
 
 
-def checked(argv, root, env):
-    result = execute(argv, root, env)
+def checked(argv, root, env, timeout=600):
+    result = execute(argv, root, env, timeout=timeout)
     if result.returncode:
         raise RuntimeError('capture command failed: ' + str(argv[0]) + '\n' + result.stderr)
     return result.stdout
@@ -75,10 +75,18 @@ def capture(root, binary, output):
     with tempfile.TemporaryDirectory(prefix='userspace-', dir=os.environ.get('TMPDIR')) as temporary:
         home = Path(temporary)
         env.update(HOME=str(home), XDG_CONFIG_HOME=str(home / '.config'))
+        # Go telemetry is per user: in this fresh home the first go command would write
+        # .config/go/telemetry/local, and a telemetry child can outlive it and write there while
+        # the home is removed (ENOTEMPTY). GOTELEMETRY in the environment does not turn
+        # it off; this file is what `go telemetry off` writes.
+        (home / '.config/go/telemetry').mkdir(parents=True)
+        (home / '.config/go/telemetry/mode').write_text('off')
         dump = home / 'cli.json'
+        # The published-source worktree compiles ./cmd/olivares cold and serialized
+        # (-p 1): 600 s measured too tight on the shared dev runners (dev#2708).
         checked(['go', 'test', '-p', '1', '-parallel', '2', '-count=1',
                  '-run', '^TestCLIRefDump$', './cmd/olivares'], root,
-                dict(env, OLIVARES_CLIREF_DUMP_OUT=str(dump)))
+                dict(env, OLIVARES_CLIREF_DUMP_OUT=str(dump)), timeout=1800)
         snapshot = {'schema': 'olivares.userspace/1', 'cli': json.loads(dump.read_text())}
         snapshot['classifications'] = json.loads(Path(__file__).with_name('classifications.json').read_text())
         snapshot['open_json_operations'] = generic_json_operations(root)

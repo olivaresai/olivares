@@ -27,6 +27,7 @@ import (
 	"github.com/olivaresai/olivares/core/secure"
 	"github.com/olivaresai/olivares/core/webaddr"
 	"github.com/olivaresai/olivares/core/webui"
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
 // serveOptions are the resolved knobs for running the engine. Both `serve` and
@@ -298,6 +299,11 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 		return err
 	}
 	defer func() { _ = eng.Close() }()
+	// Before any child starts: a previous engine's confined children are gone, and so is their need for the private
+	// TMPDIRs they left under <data>/tool-tmp.
+	if err := confine.SweepChildTemp(); err != nil {
+		log.Warn("sessions: the leftover temporary directories of an earlier run could not all be removed", "err", err)
+	}
 	// Before any listener starts: this node's activation and module profile must
 	// match the deployment settings record, or the engine restarts once to build
 	// its modules from the record (productsettings.go, moduleprofile_settings.go).
@@ -325,7 +331,7 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	// Ensure TLS material ONCE, up front, before any listener accepts — so
 	// both HTTP and gRPC use the same cert and neither falls back to plaintext.
 	if !opts.insecure {
-		created, fp, terr := secure.EnsureTLSCert(tlsCert, tlsKey, opts.tlsCert != "" || opts.tlsKey != "")
+		created, fp, terr := secure.EnsureTLSCertForHost(tlsCert, tlsKey, publicAddr.Host, opts.tlsCert != "" || opts.tlsKey != "")
 		if terr != nil {
 			return terr
 		}

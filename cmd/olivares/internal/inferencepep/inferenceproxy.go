@@ -931,7 +931,7 @@ func (d *Decider) runLocalGates(ctx context.Context, req claudeapi.MessageReques
 	// document, image, file_id, tool_result, web_search, …). The DLP gate and the content
 	// firewall both read it; skip the walk when neither needs it.
 	var reqContent claudeapi.CollectedContent
-	if (pol.GateDLPRequest && pol.DLPEnabled()) || d.Inspector != nil {
+	if (pol.GateDLPRequest && pol.DLPEnabled()) || sdk.CapabilityEnabled(d.Inspector) {
 		reqContent = claudeapi.CollectRequestContent(req)
 	}
 
@@ -969,7 +969,7 @@ func (d *Decider) runLocalGates(ctx context.Context, req claudeapi.MessageReques
 	//     its absence) once and returns the governed request with its accepted binding; the
 	//     snapshot rides on the session for the checks after the later gates.
 	var mcpSnap *claudeapi.MCPEgressSnapshot
-	if d.Egress != nil {
+	if sdk.CapabilityEnabled(d.Egress) {
 		gov, snap, deny, ok := d.governEgress(ctx, req, tenant, actor, sessionRef, unbindableAgent)
 		if !ok {
 			return nil, claudeapi.MessageRequest{}, deny, false
@@ -984,7 +984,7 @@ func (d *Decider) runLocalGates(ctx context.Context, req claudeapi.MessageReques
 	//     them) and BEFORE the budget gate. nil ⇒ the default AGPL build (no deep
 	//     inspection, unchanged). ActorRef is the (empty) proxy sessionRef — agent-scoped
 	//     policies need the NHI binding; tenant/global policies govern raw-token traffic.
-	if d.Inspector != nil {
+	if sdk.CapabilityEnabled(d.Inspector) {
 		inDec := d.runContentInspector(ctx, tenant, actor, claudeapi.InspectDirectionRequest, req.Model, reqContent, sessionRef, unbindableAgent)
 		if !inDec.Forward {
 			// Deny-closed on ANY non-forward (safer than the connector contract's "no
@@ -1011,7 +1011,7 @@ func (d *Decider) runLocalGates(ctx context.Context, req claudeapi.MessageReques
 	//     so it runs here — after the content firewall and BEFORE the budget gate. nil ⇒ the
 	//     default AGPL build: computer-use tools pass through ungoverned. It receives the
 	//     MCPGateTools view: every MCP slot is a fresh marker, never the request's own value.
-	if d.ComputerUse != nil && claudeapi.HasComputerUseTool(req.Tools) {
+	if sdk.CapabilityEnabled(d.ComputerUse) && claudeapi.HasComputerUseTool(req.Tools) {
 		cuDec := d.ComputerUse.GovernComputerUse(ctx, claudeapi.ComputerUseInput{
 			Tenant: tenant.String(), ActorRef: sessionRef, Tools: claudeapi.MCPGateTools(req.Tools),
 		})
@@ -1248,7 +1248,7 @@ func (d *Decider) Finalize(ctx context.Context, sessAny any, out claudeapi.Proxy
 	// web_search, …). Response DLP and the content firewall both read it.
 	var respContent claudeapi.CollectedContent
 	respDLPOn := !out.UpstreamErr && sess.pol.GateDLPResponse && sess.pol.ResponseDLPMode != inferenceproxy.ResponseDLPOff && sess.pol.DLPEnabled()
-	if respDLPOn || (d.Inspector != nil && !out.UpstreamErr) {
+	if respDLPOn || (sdk.CapabilityEnabled(d.Inspector) && !out.UpstreamErr) {
 		respContent = claudeapi.CollectResponseContent(out.Response)
 	}
 
@@ -1274,7 +1274,7 @@ func (d *Decider) Finalize(ctx context.Context, sessAny any, out claudeapi.Proxy
 	// exfiltration in the output, unsafe agentic actions in its tool calls. A Block is honored
 	// wherever the connector holds the full body (non-streaming always; streaming only in
 	// buffer mode — a streamed response cannot be un-sent, so it is detective otherwise).
-	if d.Inspector != nil && !out.UpstreamErr {
+	if sdk.CapabilityEnabled(d.Inspector) && !out.UpstreamErr {
 		inDec := d.runContentInspector(ctx, sess.tenant, sess.actor, claudeapi.InspectDirectionResponse, sess.modelRef, respContent, sess.sessionRef, sess.unbindableAgent)
 		if inDec.Block {
 			block = true

@@ -108,7 +108,7 @@
     "empty": "Aún no hay escenarios",
     "emptyHintAuthor": "Registra el primer fixture sintético: los pasos de entrada que recibe un sujeto, más las respuestas simuladas contra las que se resuelven.",
     "emptyHintReadOnly": "Los escenarios los crea un llamante con el permiso de escritura de escenarios de sandbox. Sin él puedes leer los que existan y sus ejecuciones.",
-    "emptyHintConfined": "Tu pertenencia está confinada a un workspace. Un escenario es un fixture de ámbito de tenant, así que el motor se niega a registrarlo desde una pertenencia confinada — tiene que crearlo un miembro con alcance de tenant.",
+    "emptyHintConfined": "Tu pertenencia está confinada a un espacio de trabajo. Un escenario es un fixture de ámbito de tenant, así que el motor se niega a registrarlo desde una pertenencia confinada — tiene que crearlo un miembro con alcance de tenant.",
     "columns": {
       "name": "Nombre",
       "subjectKind": "Sujeto",

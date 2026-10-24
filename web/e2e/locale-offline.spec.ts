@@ -37,18 +37,16 @@ test('an offline language keeps the console, and loads once chosen again online'
 
   await context.setOffline(true)
   await chooseLanguage(page, '日本語')
-  await expect(
-    page.getByRole('button', { name: 'Account', exact: true }),
-  ).toBeVisible()
+  await expect(page.getByRole('button', { name: /, Account$/ })).toBeVisible()
 
   await context.setOffline(false)
   await chooseLanguage(page, 'English')
   await chooseLanguage(page, '日本語')
-  await expect(
-    page.getByRole('button', { name: 'アカウント', exact: true }),
-  ).toBeVisible({
-    timeout: 15_000,
-  })
+  await expect(page.getByRole('button', { name: /, アカウント$/ })).toBeVisible(
+    {
+      timeout: 15_000,
+    },
+  )
   expect(navigations).toEqual([])
   expect(errors).toEqual([])
 })

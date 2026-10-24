@@ -150,6 +150,25 @@ export function formatDateTime(
   }).format(d)
 }
 
+/** One formatter per language and clock: a time axis formats hundreds of times. */
+const TIME_OF_DAY = new Map<string, Intl.DateTimeFormat>()
+
+/** Epoch milliseconds → the time of day alone, on the person's clock (12 or 24 hours):
+ * the marks of a time axis, "since 16:31". */
+export function formatTimeOfDay(
+  ms: number,
+  locale: string = currentLanguage(),
+): string {
+  const hourCycle = displayHourCycle()
+  const key = `${locale}|${hourCycle}`
+  let format = TIME_OF_DAY.get(key)
+  if (!format) {
+    format = new Intl.DateTimeFormat(locale, { timeStyle: 'short', hourCycle })
+    TIME_OF_DAY.set(key, format)
+  }
+  return format.format(ms)
+}
+
 /** RFC3339 timestamp → the shortest absolute time a table cell needs: the time alone
  * today, the day and time this year, the full date and time otherwise. `now` is for tests. */
 export function formatShortDateTime(
@@ -252,15 +271,27 @@ export function formatRelativeTime(
   return DASH
 }
 
-/** Milliseconds → a compact duration ("42.0s", "1m 02s", "110ms"). */
+/**
+ * Milliseconds → the console's one way to say how long: "300ms", "8.1s", "16s",
+ * "2m 23s", "1h 5m", "2d 4h" (at most two units). A tenth is kept only under ten
+ * seconds. The figure is rounded BEFORE it is split, so 16 min 59.6 s is "17m", never
+ * "16m 60s".
+ */
 export function formatDuration(ms: number | null | undefined): string {
-  if (isNil(ms) || Number.isNaN(ms)) return DASH
-  if (ms < 1000) return `${Math.round(ms)}ms`
-  const totalSeconds = ms / 1000
-  if (totalSeconds < 60) return `${totalSeconds.toFixed(1)}s`
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = Math.round(totalSeconds % 60)
-  return `${minutes}m ${String(seconds).padStart(2, '0')}s`
+  if (isNil(ms) || !Number.isFinite(ms)) return DASH
+  const v = Math.max(0, ms)
+  if (Math.round(v) < 1000) return `${Math.round(v)}ms`
+  const tenths = Math.round(v / 100)
+  if (tenths < 100) return `${tenths / 10}s`
+  const s = Math.round(v / 1000)
+  const pair = (big: number, unit: string, small: number, sub: string) =>
+    small ? `${big}${unit} ${small}${sub}` : `${big}${unit}`
+  if (s < 60) return `${s}s`
+  if (s < 3600) return pair(Math.floor(s / 60), 'm', s % 60, 's')
+  const m = Math.floor(s / 60)
+  if (m < 1440) return pair(Math.floor(m / 60), 'h', m % 60, 'm')
+  const h = Math.floor(m / 60)
+  return pair(Math.floor(h / 24), 'd', h % 24, 'h')
 }
 
 /** Latency in ms as a plain operator figure ("110 ms"). */

@@ -136,6 +136,32 @@ describe('RunActions — a session with a git worktree', () => {
     expect(agentOpsApi.cleanup).not.toHaveBeenCalled()
   })
 
+  it('deletes without a second clean up once the session it shows is released', async () => {
+    // The dialog stays mounted beside the card's buttons: Clean up first, then Delete,
+    // reads the run's state as it is NOW, not as it was when the card first drew. A
+    // second clean up of a released session is refused (state=cleaned), and Delete
+    // would never reach the engine.
+    const user = userEvent.setup()
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    const view = (run: RunDTO) => (
+      <QueryClientProvider client={qc}>
+        <RunActions run={run} caps={caps} onClose={vi.fn()} />
+      </QueryClientProvider>
+    )
+    const { rerender } = render(view(withWorktree as RunDTO))
+    rerender(view({ ...withWorktree, state: 'cleaned' } as RunDTO))
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    expect(dialog.queryByRole('checkbox')).not.toBeInTheDocument()
+    await user.click(dialog.getByRole('button', { name: 'Delete' }))
+    await waitFor(() =>
+      expect(agentOpsApi.deleteRun).toHaveBeenCalledWith('run_1'),
+    )
+    expect(agentOpsApi.cleanup).not.toHaveBeenCalled()
+  })
+
   it('offers nothing about worktrees to a session that has none', async () => {
     const user = userEvent.setup()
     show(stopped)

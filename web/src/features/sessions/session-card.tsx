@@ -40,6 +40,7 @@ import { sessionNameLadder } from '@/features/home/work-line'
 import { FEATURE_VIEWS } from '@/features/registry'
 import { LiveDot, RelTimeLabel, humanDurationSeconds } from '@/features/shared'
 import { NamedRef } from '@/features/shared/named-ref'
+import { tickLive, useSecondClock } from '@/features/shared/use-second-clock'
 import { formatInt, formatMicroUsd, formatTokens } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { AttributionChip } from './attribution-chip'
@@ -482,7 +483,7 @@ function ProvenanceBlock({
                     reference={r.run_ref}
                     fallback={naming.text}
                   />
-                  <RunStateBadge state={r.state} />
+                  <RunStateBadge run={r} />
                   <span className="text-muted-foreground">
                     {t(`card.transport.${r.transport}`, {
                       defaultValue: r.transport,
@@ -665,6 +666,10 @@ function RelatedObservations({
 /** The observed half: objective, running summary and live telemetry. */
 function Observed({ live, lang }: { live: LiveDTO; lang: string }) {
   const { t } = useTranslation('sessions')
+  const nowMs = useSecondClock(live.cc_state === 'active')
+  // C2-DESIGN §3: an active session's elapsed figure ticks each second, extrapolated
+  // from its last engine event; a session that is not active keeps the engine's figure.
+  const tickedSeconds = tickLive(live, nowMs).duration_seconds
   return (
     <div className="flex flex-col gap-3">
       {live.cc_state === 'silent_evasion' && (
@@ -715,7 +720,9 @@ function Observed({ live, lang }: { live: LiveDTO; lang: string }) {
           {formatTokens(live.output_tokens, lang)}
         </KvRow>
         <KvRow label={t('detail.cost')} mono>
-          {formatMicroUsd(live.cost_micro_usd, { locale: lang })}
+          <span data-cost>
+            {formatMicroUsd(live.cost_micro_usd, { locale: lang })}
+          </span>
         </KvRow>
         <KvRow label={t('detail.events')} mono>
           {formatInt(live.event_count, lang)}
@@ -724,7 +731,7 @@ function Observed({ live, lang }: { live: LiveDTO; lang: string }) {
           {formatInt(live.tool_call_count, lang)}
         </KvRow>
         <KvRow label={t('detail.duration')} mono>
-          {humanDurationSeconds(live.duration_seconds)}
+          <span data-elapsed>{humanDurationSeconds(tickedSeconds)}</span>
         </KvRow>
         <KvRow label={t('detail.firstSeen')}>
           <RelTimeLabel ts={live.first_event_at} />

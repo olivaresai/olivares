@@ -49,7 +49,7 @@ description: >-
 当它被构建时，其自然的接缝已经交付：一次被执行的微调将在
 [模型运维](/zh/reference/modules/xxiii-model-operations/)的注册表中产出一个模型**版本**，
 并像任何外部产出的工件一样通过同一个签名模型**准入**关卡；供应商栈的策略则仍留在
-[模型与提供方管理](/zh/reference/modules/x-models/)中。
+[模型与提供商管理](/zh/reference/modules/x-models/)中。
 
 :::caution[诚实的边界]
 - **治理面已交付，执行面未交付。** 不要把本页读成对注册表、准入、血缘记录、部署治理或
@@ -64,5 +64,5 @@ description: >-
 
 - [模块 XXIII——模型运维](/zh/reference/modules/xxiii-model-operations/)——已交付的自有模型治理面：注册表、准入、血缘、部署、AIBOM。
 - [模块目录](/zh/reference/modules/overview/)——30 个已交付模块，以及自有模型工作所处的位置。
-- [模块 X——模型与提供方管理](/zh/reference/modules/x-models/)——治理供应商模型栈的已交付近邻。
+- [模块 X——模型与提供商管理](/zh/reference/modules/x-models/)——治理供应商模型栈的已交付近邻。
 - [诚实声明与局限](/zh/start/honesty-and-limits/)——"广泛观测 / 在子集上行动"的契约，以及"规划中"的含义。

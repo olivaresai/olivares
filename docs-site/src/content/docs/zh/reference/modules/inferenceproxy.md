@@ -74,7 +74,7 @@ content gate 都通过后才会运行：被 DLP 或 firewall 拒绝的 prompt �
 
 ## 相关内容
 
-- [模块 X——模型与提供方管理](/zh/reference/modules/x-models/)——本代理所执行的模型访问
+- [模块 X——模型与提供商管理](/zh/reference/modules/x-models/)——本代理所执行的模型访问
   与按界面（per-surface）上下文窗口策略。
 - [用 Olivares 运行 Claude Code](/zh/how-to/run-claude-code-with-olivares/)——受治理的
   Claude Code 路径，由进程内钩子覆盖；本代理是该路径无法触及的调用方的后备 PEP。

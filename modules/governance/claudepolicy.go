@@ -15,7 +15,11 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olivaresai/olivares/connectors/claude"
+	codexmanagedconfig "github.com/olivaresai/olivares/connectors/codex-managed-config"
+	geminicli "github.com/olivaresai/olivares/connectors/gemini-cli"
+	"github.com/olivaresai/olivares/connectors/grok"
 	"github.com/olivaresai/olivares/connectors/managedsettings"
+	"github.com/olivaresai/olivares/connectors/opencode"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -124,8 +128,8 @@ func NewPolicyConsole(opts ...PolicyConsoleOption) *PolicyConsole {
 func (c *PolicyConsole) Descriptor() sdk.Descriptor {
 	return sdk.Descriptor{
 		Name: "olivares.claude-policy", Version: "0.1.0", APIVersion: sdk.APIVersion,
-		Type: sdk.TypeModule, Title: "Claude Code managed-policy authoring",
-		Description: "Versioned validate/dry-run/publish authoring for the Claude Code managed-* surfaces (managed-settings, hooks, managed-mcp, sandbox), over the same API the console calls.",
+		Type: sdk.TypeModule, Title: "Managed-policy authoring",
+		Description: "Versioned validate/dry-run/publish authoring for the managed-* surfaces: the four Claude Code files (managed-settings, hooks, managed-mcp, sandbox) and the managed files of Codex, Grok Build, OpenCode and Gemini CLI, over the same API the console calls.",
 	}
 }
 
@@ -207,12 +211,23 @@ func validSurface(s string) bool {
 	return ok && e.family == surfaceFamilyManaged
 }
 
+// managedSurfaceNames lists the managed-* authoring surfaces in registry order.
+func managedSurfaceNames() []string {
+	var names []string
+	for _, e := range surfaces.entries {
+		if e.family == surfaceFamilyManaged {
+			names = append(names, e.name)
+		}
+	}
+	return names
+}
+
 // surfaceOf resolves + validates the {surface} path param, writing a 400 on an
 // unknown surface and returning ok=false.
 func surfaceOf(w http.ResponseWriter, r *http.Request) (string, bool) {
 	s := chi.URLParam(r, "surface")
 	if !validSurface(s) {
-		writeJSON(w, http.StatusBadRequest, errorBody("unknown surface (want managed-settings|hooks|managed-mcp|sandbox)"))
+		writeJSON(w, http.StatusBadRequest, errorBody("unknown surface (want "+strings.Join(managedSurfaceNames(), "|")+")"))
 		return "", false
 	}
 	return s, true
@@ -256,46 +271,59 @@ func (c *PolicyConsole) handleDryRun(w http.ResponseWriter, r *http.Request, mc 
 		return
 	}
 	out := dryRunResult{Surface: surface, Changes: []dryRunChange{}, Notes: []string{}}
-	switch surface {
-	case surfaceManagedSettings:
+	if surface == surfaceManagedSettings {
 		nonEmpty := managedsettings.HasAnyKeys([]byte(in.Content))
 		out.Resolved = managedsettings.DeliveryPreview(nonEmpty)
 		if !nonEmpty {
 			out.Notes = append(out.Notes, "this document delivers no keys — it would leave the managed tier empty")
 		}
-		// Diff vs every observed host config when an observation source is wired.
-		if c.observed != nil {
-			observations, oerr := c.observed.Observed(r.Context(), mc.Tenant, surface)
-			switch {
-			case oerr != nil:
-				out.Notes = append(out.Notes, "observed-config source could not be read — precedence resolved, effect not diffed")
-			case len(observations) == 0:
-				out.Notes = append(out.Notes, "no observed host config available — precedence resolved, effect not diffed")
-			default:
-				at := c.clock.Now().Time()
-				diffed := 0
-				for _, obs := range observations {
-					findings, derr := managedsettings.VerifyDriftJSON(obs.Scope, []byte(in.Content), obs.Content, at)
-					if derr != nil {
-						// Only a malformed AUTHORED doc errs (unreachable after the
-						// validation above) — named per scope, never counted as diffed.
-						out.Notes = append(out.Notes, "diff not computed for scope "+obs.Scope+": "+derr.Error())
-						continue
-					}
-					diffed++
-					for _, f := range findings {
-						out.Changes = append(out.Changes, dryRunChange{Path: obs.Scope + " " + f.SubjectKind + ":" + f.Title})
-					}
-				}
-				out.Notes = append(out.Notes, "diff computed against "+itoa(diffed)+" observed scope(s) (no host was written)")
-			}
-		} else {
-			out.Notes = append(out.Notes, "no observed-config source in this edition — precedence resolved, effect not diffed")
-		}
-	default:
+	}
+	switch {
+	case !surfaceHasContentDiff(surface):
 		out.Notes = append(out.Notes, "validated structurally; "+surface+" is authored at the highest managed tier (above CLI/local/project/user). No host is written by a dry-run.")
+	case c.observed == nil:
+		out.Notes = append(out.Notes, "no observed-config source in this edition — "+resolvedOrValidated(surface)+", effect not diffed")
+	default:
+		c.dryRunDiff(r, mc, surface, in.Content, &out)
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// resolvedOrValidated is what a dry-run did before it could diff: managed-settings resolves
+// the managed-tier precedence, every other surface is validated.
+func resolvedOrValidated(surface string) string {
+	if surface == surfaceManagedSettings {
+		return "precedence resolved"
+	}
+	return "validated"
+}
+
+// dryRunDiff diffs the document against every observed host config (no host is written).
+func (c *PolicyConsole) dryRunDiff(r *http.Request, mc api.ModuleContext, surface, content string, out *dryRunResult) {
+	observations, err := c.observed.Observed(r.Context(), mc.Tenant, surface)
+	switch {
+	case err != nil:
+		out.Notes = append(out.Notes, "observed-config source could not be read — "+resolvedOrValidated(surface)+", effect not diffed")
+	case len(observations) == 0:
+		out.Notes = append(out.Notes, "no observed host config available — "+resolvedOrValidated(surface)+", effect not diffed")
+	default:
+		at := c.clock.Now().Time()
+		diffed := 0
+		for _, obs := range observations {
+			findings, _, derr := surfaceDrift(surface, obs.Scope, []byte(content), obs.Content, at)
+			if derr != nil {
+				// Only a malformed AUTHORED doc errs (unreachable after the
+				// validation above) — named per scope, never counted as diffed.
+				out.Notes = append(out.Notes, "diff not computed for scope "+obs.Scope+": "+derr.Error())
+				continue
+			}
+			diffed++
+			for _, f := range findings {
+				out.Changes = append(out.Changes, dryRunChange{Path: obs.Scope + " " + f.SubjectKind + ":" + f.Title})
+			}
+		}
+		out.Notes = append(out.Notes, "diff computed against "+itoa(diffed)+" observed scope(s) (no host was written)")
+	}
 }
 
 // --- per-surface validation (server-side authoritative, forward-compatible) ---
@@ -317,6 +345,16 @@ func validateSurfaceContent(surface, content string) (issues, notes []string) {
 		return validateMCPContent(content)
 	case surfaceSandbox:
 		return validateSandboxContent(content)
+	case surfaceCodexRequirements:
+		return codexmanagedconfig.ValidateRequirementsTOML([]byte(content)), nil
+	case surfaceCodexManagedConfig:
+		return codexmanagedconfig.ValidateManagedConfigTOML([]byte(content)), nil
+	case surfaceGrokRequirements:
+		return grok.ValidateRequirementsTOML([]byte(content)), nil
+	case surfaceOpenCodeConfig:
+		return opencode.ValidateConfigJSON([]byte(content)), nil
+	case surfaceGeminiCLISettings:
+		return geminicli.ValidateSettingsJSON([]byte(content)), nil
 	default:
 		return []string{"unknown surface"}, nil
 	}

@@ -129,7 +129,7 @@
     "noDocs": "Sin documentos en línea",
     "confirm": "Ingerir",
     "done": "Contenido ingerido",
-    "doneSummary": "{{documents}} documento(s), {{chunks}} fragmento(s) · {{redactions}} secreto(s) enmascarados antes de indexar"
+    "doneSummary": "Documentos: {{documents}} · fragmentos: {{chunks}} · secretos enmascarados antes de indexar: {{redactions}}"
   },
   "reindex": {
     "title": "¿Reindexar los fragmentos pendientes?",

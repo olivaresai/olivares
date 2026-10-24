@@ -528,8 +528,10 @@ no coverage tier. They are wired separately from sources.
 
 In-process destination kinds: `slack`, `teams`, `pagerduty`, `opsgenie`, `webhook`,
 `siem`, `splunkhec`, `syslog`, `servicenow`, `jira`, `email`, `twilio`, `chronicle`,
-`datadog`, `elastic`, `snmp`, `filelog`, `otlplog` (OTLP/HTTP logs) and `s3archive` (Business: Regulated Operations)
-(the S3 Object Lock WORM sink — one immutable, lock-verified object per notification).
+`datadog`, `elastic`, `snmp`, `filelog`, `otlplog` (OTLP/HTTP logs), `s3archive` (Business: Regulated Operations)
+(the S3 Object Lock WORM sink — one immutable, lock-verified object per notification) and `teamsbot` (Business:
+Regulated Operations, the registered-bot Teams connector of the incident loop; a Community binary skips a destination
+of that kind with a log line that names Business).
 
 Three broker egress kinds run **out-of-process** as embedded plugins (their wire-protocol
 dependency trees never link into the engine, exactly like the plugin sources): `kafka`,

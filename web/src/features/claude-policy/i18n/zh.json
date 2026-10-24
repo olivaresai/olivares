@@ -16,7 +16,7 @@
   },
   "validation": {
     "ok": "Schema 校验通过。",
-    "summary": "{{count}} 条校验提示 —— {{errors}} 个错误。",
+    "summary_other": "{{count}} 条校验提示 —— {{errors}} 个错误。",
     "listLabel": "Schema 校验结果"
   },
   "form": {
@@ -79,7 +79,7 @@
     "subject": "主体",
     "fingerprint": "指纹",
     "emptyTitle": "无漂移发现项",
-    "emptyBody": "当前未针对 Claude Code 各项界面报告任何策略漂移发现项。",
+    "emptyBody": "当前未针对您管理的 AI 工具报告任何策略漂移发现项。",
     "truncated": "已加载 {{n}} 条漂移发现；还有更多",
     "truncatedHint": "策略漂移发现多于所显示的；本页按 id 取行。此处没有并不能证明不存在漂移——该发现可能只是超出了本页范围。"
   },
@@ -291,6 +291,6 @@
     "verified": "已验证",
     "unverified": "未验证",
     "contentUnknown": "内容未知（仅证明）",
-    "openFindings": "{{count}} 个未处理发现项"
+    "openFindings_other": "{{count}} 个未处理发现项"
   }
 }

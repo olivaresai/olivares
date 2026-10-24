@@ -53,10 +53,12 @@ KEY_PURPOSE = "apt-rpm-apk-repository-metadata"
 # rpmsign(1) OPERATIONS and SIGN OPTIONS. The self-test matches this tuple.
 DOCUMENTED_SIGN_ARGV = ("rpmsign", "--addsign", "--key-id")
 FINGERPRINT = re.compile(r"[0-9A-F]{40}")
-SIGNATURE_QUERY = (
-    "%{RSAHEADER:pgpsig}\\n%{DSAHEADER:pgpsig}\\n"
-    "%{SIGPGP:pgpsig}\\n%{SIGGPG:pgpsig}\\n%{OPENPGP}\\n"
-)
+# The signature-header queries, oldest tag first: the four pgpsig tags rpm 4 answers and the
+# bare OPENPGP tag rpm 6.0 added. Not every rpm answers every tag: Debian 13's rpm 4.20.1
+# rejects %{OPENPGP} as unknown, yields nothing for the whole query, and a signed header read
+# as unsigned (measured 2026-10-20, dev#2711). The query is built from the tags the rpm's own
+# --querytags lists, so each generation is asked what it can answer.
+SIGNATURE_QUERY_TAGS = ("RSAHEADER", "DSAHEADER", "SIGPGP", "SIGGPG", "OPENPGP")
 
 
 def stderr(message: str) -> None:
@@ -261,8 +263,24 @@ def unlock_for_rpmsign(gpg: str, home: Path, env: dict[str, str], fingerprint: s
         blind("gpg cannot sign unattended with the repository key; rpmsign would stop at a passphrase prompt")
 
 
-def signature_text(rpm_bin: str, rpm_path: Path) -> str:
-    result = run([rpm_bin, "-qp", "--qf", SIGNATURE_QUERY, str(rpm_path)])
+def signature_query(rpm_bin: str) -> str:
+    """The signature-header query this rpm answers, from its own --querytags list."""
+    listed = run([rpm_bin, "--querytags"])
+    if listed.returncode != 0:
+        blind("rpm --querytags failed, so the signature tags it answers are unknown")
+    known = set(listed.stdout.decode("utf-8", "replace").split())
+    absent = [tag for tag in SIGNATURE_QUERY_TAGS if tag not in known]
+    if absent:
+        stderr(f"rpm does not answer {', '.join(absent)}; querying the signature header without them")
+    return "".join(
+        f"%{{{tag}}}\\n" if tag == "OPENPGP" else f"%{{{tag}:pgpsig}}\\n"
+        for tag in SIGNATURE_QUERY_TAGS
+        if tag in known
+    )
+
+
+def signature_text(rpm_bin: str, query: str, rpm_path: Path) -> str:
+    result = run([rpm_bin, "-qp", "--qf", query, str(rpm_path)])
     if result.returncode != 0:
         blind(f"rpm could not read the signature header of {rpm_path.name}")
     return result.stdout.decode("utf-8", "replace")
@@ -309,6 +327,7 @@ def sign_one(
     fingerprint: str,
     rpm_path: Path,
     public_key: Path,
+    query: str,
 ) -> None:
     original = rpm_body(rpm_path.read_bytes(), rpm_path.name)
     signed = run(sign_command(rpmsign, fingerprint, home, rpm_path), env)
@@ -316,7 +335,7 @@ def sign_one(
         refuse(f"rpmsign --addsign failed for {rpm_path.name}")
     if rpm_body(rpm_path.read_bytes(), rpm_path.name) != original:
         refuse(f"rpmsign changed {rpm_path.name} outside its signature header")
-    if not header_has_signature(signature_text(rpm_bin, rpm_path)):
+    if not header_has_signature(signature_text(rpm_bin, query, rpm_path)):
         refuse(f"{rpm_path.name} signature header has no OpenPGP signature after rpmsign --addsign")
     db = home.parent / f"rpmdb-{rpm_path.name}"
     db.mkdir(mode=0o700)
@@ -418,8 +437,9 @@ def main(argv: list[str]) -> int:
         unlock_for_rpmsign(gpg, home, env, fingerprint, passphrase)
         public_key = Path(temporary) / "public.asc"
         export_public(gpg, home, env, fingerprint, public_key)
+        query = signature_query(rpm_bin)
         for rpm_path in rpm_paths:
-            sign_one(rpmsign, rpm_bin, rpmkeys, gpg, home, env, fingerprint, rpm_path, public_key)
+            sign_one(rpmsign, rpm_bin, rpmkeys, gpg, home, env, fingerprint, rpm_path, public_key, query)
     print(f"rpm-payload-sign: signed {len(rpm_paths)} rpm signature header(s)")
     return 0
 

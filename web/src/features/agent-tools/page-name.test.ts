@@ -10,13 +10,18 @@ import ja from '@/lib/i18n/locales/ja/nav.json'
 import ru from '@/lib/i18n/locales/ru/nav.json'
 import zh from '@/lib/i18n/locales/zh/nav.json'
 
-// The page has one name: the pinned destination and the areas, the palette and the
-// directory (which read the item label) all call it the same.
+// The page has one name: the areas, the palette and the directory read the item label. The
+// top bar names the PLACE that opens it, Tools (#2544), and the page keeps its own name until
+// the Tools place issue (#2552) renames it; then this pin fails and goes back to equality.
 describe('the AI tools page name', () => {
   it.each(Object.entries({ de, en, es, fr, ja, ru, zh }))(
-    'is the same in the item list and the pinned destinations (%s)',
+    'is the page, and the top bar names its place, until #2552 renames the page (%s)',
     (_, nav) => {
-      expect(nav.items['agent-tools']).toBe(nav.shell.journeys['agent-tools'])
+      expect(nav.items['agent-tools']).toBeTruthy()
+      expect(nav.shell.journeys['agent-tools']).toBeTruthy()
+      expect(nav.items['agent-tools']).not.toBe(
+        nav.shell.journeys['agent-tools'],
+      )
     },
   )
 })

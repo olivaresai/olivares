@@ -32,8 +32,6 @@
     "viewAll": "すべて表示",
     "learnMore": "詳細を見る",
     "openMenu": "メニューを開く",
-    "expandSidebar": "サイドバーを展開",
-    "collapseSidebar": "サイドバーを折りたたむ",
     "help": "このビューのドキュメントを開く"
   },
   "states": {
@@ -50,6 +48,7 @@
     "label": "テーマ",
     "light": "ライト",
     "dark": "ダーク",
+    "black": "ブラック",
     "system": "システム",
     "toggle": "テーマを切り替え"
   },
@@ -164,9 +163,7 @@
     "email": "有効なメールアドレスを入力してください。"
   },
   "a11y": {
-    "breadcrumb": "パンくずリスト",
     "skipToContent": "コンテンツへスキップ",
-    "primarySidebar": "メイン",
     "mainNavigation": "メインナビゲーション",
     "graphControls": "グラフ操作",
     "graphMinimap": "グラフのミニマップ",
@@ -328,10 +325,8 @@
         "first": "最初のセッション",
         "last": "最後のセッション",
         "open": "セッションを開く",
-        "pin": "ピン留め／解除"
-      },
-      "nav": {
-        "toggleRail": "ナビゲーションレールを折りたたむ／展開する"
+        "pin": "ピン留め／解除",
+        "menu": "セッションの操作メニューを開く"
       },
       "navRail": {
         "next": "次のモジュール",
@@ -351,6 +346,10 @@
         "previousFile": "前のファイル",
         "nextHunk": "次の変更",
         "previousHunk": "前の変更"
+      },
+      "approvals": {
+        "approve": "開いているリクエストを今回だけ承認",
+        "deny": "開いているリクエストを却下"
       }
     },
     "when": {
@@ -358,10 +357,10 @@
       "launcherFocused": "ランチャー入力欄内",
       "workSurface": "セッション画面",
       "sessionHistory": "前のセッションがある場合",
-      "paletteRecent": "検索欄が空のパレットの結果で"
+      "paletteRecent": "検索欄が空のパレットの結果で",
+      "approvalQueue": "承認キュー内"
     },
     "precedence": "同じキーを持つ行が 2 つある場合、該当する最後の行が優先されます。",
-    "modNote": "Windows と Linux では ⌘ は Ctrl です。",
     "problems_other": "{{count}} 件のキー割り当てを読み取れず、動作しません: {{commands}}",
     "navRailNote": "レールはタブ停止点が 1 つです。フォーカスがある間、これらのキーが働きます。"
   },
@@ -409,6 +408,18 @@
       "copy": "コマンドをコピー",
       "copied": "コピーしました",
       "copyFailed": "コピーできませんでした。コマンドを選択してコピーしてください。"
+    },
+    "copy": {
+      "message": "メッセージをコピー",
+      "code": "コードをコピー",
+      "copied": "コピーしました",
+      "failed": "コピーできませんでした。テキストを選択してコピーしてください。"
     }
+  },
+  "resize": {
+    "hint": "ドラッグするか矢印キーで調整します。ダブルクリックまたは Enter で元に戻します。"
+  },
+  "panes": {
+    "saveFailed": "パネルの幅を保存できませんでした。今回の表示にのみ適用されます。"
   }
 }

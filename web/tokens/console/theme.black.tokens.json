@@ -1,0 +1,85 @@
+{
+  "$description": "Console BLACK theme: the dark theme on true black, for OLED screens and dark rooms. Built on top of theme.dark.tokens.json (tokens/build.mjs loads the two, this file second) and emitted to the .dark.black block of src/styles/tokens.css, so every dark style still applies and only these values change: the sheet is #000, surfaces rise one step at a time, hairlines stay faint, text is #ededed and muted text #8a8a8a, and the soft fills are darkened so every text token still holds at least 4.5:1 on them. The brand orange and the status colours are the dark theme's. Pinned by src/styles/tokens.test.ts with the same 250 required pairs as the other themes.",
+  "palette": {
+    "$type": "color",
+    "frame": {
+      "$value": "#000000",
+      "$description": "Window frame: black, as the sheet."
+    },
+    "canvas": {
+      "$value": "#000000",
+      "$description": "The sheet: true black."
+    },
+    "surface": {
+      "$value": "#0a0a0a",
+      "$description": "A panel on the sheet: one step up."
+    },
+    "raised": {
+      "$value": "#111111",
+      "$description": "Menus, popovers and cards that float: the second step."
+    },
+    "active": {
+      "$value": "#141414",
+      "$description": "The selected row's fill."
+    },
+    "line": {
+      "$value": "#1f1f1f",
+      "$description": "Hairline borders."
+    },
+    "line-strong": {
+      "$value": "#262626",
+      "$description": "The stronger hairline."
+    },
+    "scrim": {
+      "$value": "rgba(0, 0, 0, 0.7)",
+      "$description": "Behind a dialog or sheet."
+    },
+    "text": {
+      "$value": "#ededed",
+      "$description": "Primary text."
+    },
+    "text-2": {
+      "$value": "#8a8a8a",
+      "$description": "Muted text."
+    },
+    "text-3": {
+      "$value": "#8a8a8a",
+      "$description": "Tertiary text: as muted, the floor that keeps 4.5:1 on every fill."
+    },
+    "accent-soft": {
+      "$value": "#1f150a",
+      "$description": "The orange's soft fill, dark enough for muted text on it."
+    },
+    "ok-soft": {
+      "$value": "#0d1a10",
+      "$description": "The success soft fill."
+    },
+    "warn-soft": {
+      "$value": "#1a160b",
+      "$description": "The warning soft fill."
+    },
+    "bad-soft": {
+      "$value": "#1d0e10",
+      "$description": "The danger soft fill."
+    },
+    "info-soft": {
+      "$value": "#0c141c",
+      "$description": "The information soft fill."
+    },
+    "diff-add": {
+      "$value": "#0d1a10",
+      "$description": "An added line in a diff."
+    },
+    "diff-del": {
+      "$value": "#1d0e10",
+      "$description": "A removed line in a diff."
+    }
+  },
+  "roles": {
+    "$type": "color",
+    "muted": {
+      "$value": "#141414",
+      "$description": "The muted fill, as the selected row."
+    }
+  }
+}

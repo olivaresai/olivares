@@ -19,7 +19,7 @@
     "cancel": "Abbrechen",
     "truncated": "Die ersten 200 Dateien oder Branches werden angezeigt. Nach dem Eingrenzen der Änderungen aktualisieren.",
     "fileStatus": "Index: {{index}}; Arbeitsverzeichnis: {{worktree}}",
-    "commitHint": "Nur vorgemerkte Änderungen werden mit Name und E-Mail deines Profils committet.",
+    "commitHint": "Nur vorgemerkte Änderungen werden mit Name und E-Mail Ihres Profils committet.",
     "working": "Wird ausgeführt…"
   },
   "title": "Sitzungen",
@@ -123,13 +123,13 @@
     "table": "Tabelle"
   },
   "partial": {
-    "noLiveRead": "Beobachtete Sitzungen werden nicht angezeigt: Ihre Rolle kann sie nicht lesen. Die gestarteten unten sind der lesbare Teil, nicht das ganze Bild.",
-    "noRunRead": "Gestartete Sitzungen werden nicht angezeigt: Ihre Rolle kann sie nicht lesen. Eine unten als entdeckt geführte Sitzung kann dennoch von Olivares gestartet worden sein – diese Liste konnte es nicht prüfen.",
-    "truncated": "Dies ist die neueste Seite, nicht der gesamte Bestand. Die Herkunft wird hier über das Geladene verknüpft: Eine Sitzung, deren Lauf aus der Seite gefallen ist, kann als entdeckt erscheinen; öffnen Sie die Sitzung, damit die Engine antwortet.",
-    "runLookupFailed": "Die gestartete Hälfte konnte nicht gelesen werden: die Lauf-Abfrage schlug fehl. Die Zeilen unten sind, was die beobachtete Hälfte lieferte; die Herkunft wird als nicht gelesen ausgewiesen statt geraten.",
-    "liveLookupFailed": "Die beobachtete Hälfte konnte nicht gelesen werden: die Live-Abfrage schlug fehl. Die Zeilen unten sind die gestarteten; die Telemetriespalten sind leer, weil nichts gelesen werden konnte, nicht weil es nichts gibt.",
-    "noProfileRead": "Namen der Anbieterprofile werden nicht angezeigt: Ihre Rolle kann Profile nicht lesen. Die Spalte Instanz führt stattdessen die Profilreferenz jeder Zeile.",
-    "profileLookupFailed": "Die Namen der Anbieterprofile konnten nicht gelesen werden: die Profil-Abfrage schlug fehl. Die Spalte Instanz führt stattdessen die Profilreferenz jeder Zeile."
+    "noLiveRead": "Sitzungen, die außerhalb von Olivares gestartet wurden, werden nicht angezeigt: Ihre Rolle darf sie nicht sehen.",
+    "noRunRead": "Sitzungen, die in Olivares gestartet wurden, werden nicht angezeigt: Ihre Rolle darf sie nicht sehen.",
+    "truncated": "Nur die neuesten Sitzungen sind geladen, daher kann eine ältere hier als Entdeckt erscheinen. Öffnen Sie sie, um zu sehen, woher sie stammt.",
+    "runLookupFailed": "Sitzungen, die in Olivares gestartet wurden, konnten nicht geladen werden.",
+    "liveLookupFailed": "Sitzungen, die außerhalb von Olivares gestartet wurden, konnten nicht geladen werden.",
+    "noProfileRead": "Anbieternamen werden nicht angezeigt: Ihre Rolle darf Anbieterprofile nicht lesen.",
+    "profileLookupFailed": "Anbieternamen konnten nicht geladen werden."
   },
   "move": {
     "open": "Verschieben nach…",
@@ -137,7 +137,7 @@
     "mode": "Wie fortfahren",
     "modeMove": "Dasselbe Werkzeug, anderes Konto",
     "modeHandoff": "Anderes Werkzeug, als neue Sitzung",
-    "moveHint": "Dieselbe Sitzung läuft mit ihrer Konversation auf dem gewählten Konto weiter. Es startet nichts: Setzen Sie sie anschließend fort. Ab jetzt gelten die Limits und Freigaben dieses Kontos; keine Anmeldung wird kopiert.",
+    "moveHint": "Dieselbe Sitzung läuft mit ihrer Konversation auf dem gewählten Konto weiter. Es startet nichts: Setzen Sie sie anschließend fort. Ab jetzt gelten die Limits und Genehmigungen dieses Kontos; keine Anmeldung wird kopiert.",
     "handoffHint": "Eine neue Sitzung startet im gewählten Profil, mit dieser verknüpft, aus der Zusammenfassung unten und mit dem vollständigen Transkript im Anhang. Diese Sitzung bleibt unverändert.",
     "target": "Konto",
     "pick": "Konto wählen",
@@ -152,14 +152,14 @@
     "failed": "Die Aktion konnte nicht abgeschlossen werden.",
     "stateNotDelivered": "Die neue Sitzung wurde gestartet, aber ihre erste Nachricht ist nicht angekommen. Senden Sie den Text unten aus der Sitzung.",
     "stateUnknown": "Die neue Sitzung wurde gestartet und ihre erste Nachricht ist möglicherweise angekommen. Prüfen Sie die Sitzung, bevor Sie den Text unten erneut senden.",
-    "stateWaits": "Die neue Sitzung wartet auf eine Freigabe, und ihre erste Nachricht wird nicht automatisch gesendet. Senden Sie den Text unten, sobald sie läuft.",
+    "stateWaits": "Die neue Sitzung wartet auf eine Genehmigung, und ihre erste Nachricht wird nicht automatisch gesendet. Senden Sie den Text unten, sobald sie läuft.",
     "firstTurn": "Erste Nachricht",
     "close": "Schließen",
     "profilesFailed": "Die Konten konnten nicht aufgelistet werden.",
     "profilesDenied": "Sie dürfen Konten nicht auflisten, daher kann keines gewählt werden.",
     "stopsFirst": "Diese Sitzung läuft noch: Sie wird zuerst gestoppt und dann verschoben.",
     "handoffStopsFirst": "Diese Sitzung läuft noch: Sie wird zuerst gestoppt und dann übergeben.",
-    "stoppedNotMoved": "Die Sitzung wurde gestoppt, das Verschieben ist aber fehlgeschlagen. Versuche es erneut."
+    "stoppedNotMoved": "Die Sitzung wurde gestoppt, das Verschieben ist aber fehlgeschlagen. Versuchen Sie es erneut."
   },
   "card": {
     "tabs": {
@@ -233,7 +233,7 @@
     "observedNotRead": "Die beobachtete Hälfte wurde nicht gelesen: Ihre Rolle kann beobachtete Sitzungen nicht lesen.",
     "noObservationYet": "Noch keine Aktivität in dieser Sitzung.",
     "failureReasonMissing": "Diese Sitzung ist fehlgeschlagen. Der Server hat keinen Grund angegeben.",
-    "hostIsolationRemedy": "Bitte den Serveradministrator, unprivilegierte Benutzer- und Netzwerk-Namensräume sowie Landlock zu erlauben. Starte die Sitzung danach erneut.",
+    "hostIsolationRemedy": "Bitten Sie den Serveradministrator, unprivilegierte Benutzer- und Netzwerk-Namensräume sowie Landlock zu erlauben. Starten Sie die Sitzung danach erneut.",
     "actionFailed": "Die Aktion konnte nicht abgeschlossen werden.",
     "activeRun": "in Verwendung",
     "pickRun": "Mehrere Läufe steuern diese Sitzung. Wählen Sie einen aus, um sich aufzuschalten, ihn zu regeln oder zu stoppen.",
@@ -276,12 +276,12 @@
     "cleaned": "Aufgeräumt"
   },
   "address": {
-    "retired": "Die geöffnete Sitzung wurde geschlossen. Ihr Zugriff auf die Hälfte, aus der sie stammt, hat sich geändert. Wählen Sie eine Zeile, um eine Sitzung mit Ihrem aktuellen Zugriff zu öffnen."
+    "retired": "Die geöffnete Sitzung ist für Sie nicht mehr verfügbar. Wählen Sie eine andere aus der Liste."
   },
   "work": {
     "worked": "{{duration}} gearbeitet",
-    "toolCalls_one": "{{count}} Tool-Aufruf",
-    "toolCalls_other": "{{count}} Tool-Aufrufe",
+    "toolCalls_one": "{{count}} Werkzeug-Aufruf",
+    "toolCalls_other": "{{count}} Werkzeug-Aufrufe",
     "events_one": "{{count}} Ereignis",
     "events_other": "{{count}} Ereignisse"
   },
@@ -292,7 +292,14 @@
     "pinnedMark": "Angeheftet",
     "rowMenu": "Aktionen für {{name}}",
     "noObservation": "Für diese Sitzung ist noch keine Telemetrie eingetroffen.",
-    "pinFailed": "Das Anheften konnte nicht geändert werden."
+    "pinFailed": "Das Anheften konnte nicht geändert werden.",
+    "snoozeHour": "1 Stunde zurückstellen",
+    "snoozeDay": "1 Tag zurückstellen",
+    "snoozeWeek": "1 Woche zurückstellen",
+    "unsnooze": "Nicht mehr zurückstellen",
+    "markDone": "Als erledigt markieren",
+    "markNotDone": "Als nicht erledigt markieren",
+    "markFailed": "Die Markierung konnte nicht geändert werden."
   },
   "surface": {
     "openBeside": "Daneben öffnen",
@@ -306,6 +313,11 @@
       "rail": "Sitzungen",
       "narrative": "Arbeit",
       "context": "Kontext"
+    },
+    "resize": {
+      "rail": "Breite der Sitzungsliste ändern",
+      "context": "Breite des Kontextbereichs ändern",
+      "beside": "Breite der Sitzung daneben ändern"
     }
   },
   "narrative": {
@@ -318,19 +330,20 @@
   },
   "meter": {
     "mode": "Modus: {{mode}}",
+    "unasked": "Läuft ohne Rückfrage: begrenzt durch die <policy>Olivares-Richtlinie</policy>",
+    "unaskedShort": "Läuft ohne Rückfrage",
+    "accessUnknown": "Zugriff nicht gemeldet",
     "modeTitle": "{{tool}} meldet: {{mode}}",
-    "theTool": "das Tool",
+    "theTool": "das Werkzeug",
     "toolWord": {
-      "bypassPermissions": "Fragt nie nach Erlaubnis",
       "untrusted": "Fragt vor Befehlen, denen es nicht vertraut",
       "onFailure": "Fragt, wenn ein Befehl fehlschlägt",
       "onRequest": "Fragt, wenn es nötig ist",
-      "never": "Fragt nie nach Erlaubnis",
       "granular": "Fragt nach eigenen Regeln"
     },
     "usageLabel": "Verbrauch dieser Sitzung",
     "tokens": "{{input}} ein / {{output}} aus (Tokens)",
-    "costTitle": "Eine Schätzung, keine Rechnung: die eigene Zahl des Tools oder der Listenpreis eines Durchgangs, den es nicht bepreist hat",
+    "costTitle": "Eine Schätzung, keine Rechnung: die eigene Zahl des Werkzeugs oder der Listenpreis eines Durchgangs, den es nicht bepreist hat",
     "costUnknown": "Kosten nicht gemeldet",
     "costPartial": "{{cost}} (teilweise)",
     "viewCosts": "Kosten ansehen",
@@ -380,11 +393,11 @@
     "engine": "Agenten-Engine",
     "posture": "Governance-Haltung",
     "governance": "Was die Ebene aufgezeichnet hat",
-    "pepOn": "Tool-Aufrufe werden inline kontrolliert.",
-    "pepOff": "Tool-Aufrufe werden nicht inline kontrolliert.",
+    "pepOn": "Werkzeug-Aufrufe werden inline kontrolliert.",
+    "pepOff": "Werkzeug-Aufrufe werden nicht inline kontrolliert.",
     "recordOn": "Ein- und Ausgabe werden als Beleg verankert.",
     "recordOff": "Ein- und Ausgabe werden nicht aufgezeichnet.",
-    "approval": "Freigabe",
+    "approval": "Genehmigung",
     "none": "Keine",
     "notDeclared": "Nicht angegeben",
     "copy": "Kopieren",
@@ -434,9 +447,10 @@
   "conversation": {
     "log": "Unterhaltung",
     "waiting": "Warten auf die Sitzung…",
-    "empty": "Noch keine Züge. Senden Sie unten einen Satz.",
-    "ended": "Der E/A-Strom der Sitzung ist beendet.",
-    "lag": "{{count}} Rahmen verloren — die Ausgabe darunter setzt nach der Lücke fort.",
+    "empty": "Noch keine Nachrichten.",
+    "ended": "Die Sitzung ist beendet.",
+    "lag_one": "{{count}} Rahmen verloren — die Ausgabe darunter setzt nach der Lücke fort.",
+    "lag_other": "{{count}} Rahmen verloren — die Ausgabe darunter setzt nach der Lücke fort.",
     "tool": "Werkzeug",
     "result": "Ergebnis",
     "unknown": "Unbekannter Rahmen",
@@ -444,6 +458,7 @@
     "args": "Argumente",
     "toolResult": "Ergebnis",
     "toolFailed": "Fehlgeschlagen",
+    "toolStopped": "Gestoppt",
     "tokens": "{{input}} ein · {{output}} aus",
     "protocol": "Protokoll-Frames: {{count}}",
     "stop": {
@@ -455,17 +470,69 @@
     "turnFailed": "Der Durchgang ist fehlgeschlagen: {{message}}",
     "retrying": "Neuer Versuch ({{count}}): {{message}}",
     "keyRefused": "Der Anbieter hat den API-Schlüssel abgelehnt. Ersetzen Sie ihn unter Anbieter.",
-    "output": "Ausgabe des Tools ({{count}}): {{first}}",
+    "output": "Ausgabe des Werkzeugs ({{count}}): {{first}}",
     "started": "Sitzung gestartet",
-    "startedTools_one": "{{count}} Tool",
-    "startedTools_other": "{{count}} Tools",
+    "startedTools_one": "{{count}} Werkzeug",
+    "startedTools_other": "{{count}} Werkzeuge",
     "notSent": "Nicht gesendet: {{reason}}",
     "waitingApproval": "Wird gesendet, sobald der Start genehmigt ist und die Sitzung läuft.",
     "workingFolder": "Arbeitsordner: {{cwd}}",
     "temporaryFolder": "Arbeitsordner: temporärer Ordner dieser Sitzung",
     "workedFor": "Gearbeitet: {{duration}}",
-    "toolsFolded_one": "+{{count}} Tool-Aufruf",
-    "toolsFolded_other": "+{{count}} Tool-Aufrufe"
+    "modelChanged": "Modell gewechselt: {{from}} → {{to}}",
+    "modelChangedAt": "Modell um {{time}} gewechselt: {{from}} → {{to}}",
+    "sentPending": "Gesendet. Wartet darauf, dass das Werkzeug sie übernimmt.",
+    "sentNotTaken": "Die Sitzung endete, bevor das Werkzeug sie übernahm.",
+    "finishedIn": "Fertig in {{duration}}",
+    "escToInterrupt": "Esc zum Unterbrechen",
+    "background": "Im Hintergrund",
+    "agentWorking": "Arbeitet",
+    "work": {
+      "join": ", ",
+      "ran_one": "{{count}} Befehl ausgeführt",
+      "ran_other": "{{count}} Befehle ausgeführt",
+      "edited_one": "{{count}} Datei bearbeitet",
+      "edited_other": "{{count}} Dateien bearbeitet",
+      "editedSome": "Dateien bearbeitet",
+      "agents_one": "{{count}} Agent ausgeführt",
+      "agents_other": "{{count}} Agenten ausgeführt",
+      "read_one": "{{count}} Datei gelesen",
+      "read_other": "{{count}} Dateien gelesen",
+      "readSome": "Dateien gelesen",
+      "searched_one": "{{count}}-mal gesucht",
+      "searched_other": "{{count}}-mal gesucht",
+      "used_one": "{{count}} Werkzeug verwendet",
+      "used_other": "{{count}} Werkzeuge verwendet",
+      "failed_one": "{{count}} fehlgeschlagen",
+      "failed_other": "{{count}} fehlgeschlagen",
+      "background_one": "{{count}} im Hintergrund",
+      "background_other": "{{count}} im Hintergrund",
+      "stopped_one": "{{count}} gestoppt",
+      "stopped_other": "{{count}} gestoppt"
+    },
+    "running": {
+      "command_one": "{{count}} Shell-Befehl läuft",
+      "command_other": "{{count}} Shell-Befehle laufen",
+      "edit": "Bearbeitet {{target}}",
+      "read": "Liest {{target}}",
+      "search": "Sucht {{target}}",
+      "agent": "{{name}} arbeitet",
+      "tool": "{{tool}} läuft"
+    },
+    "limit": {
+      "reached": "Claude Code hat sein {{window}} erreicht",
+      "reachedUntil": "Claude Code hat sein {{window}} erreicht; Zurücksetzung {{time}}",
+      "reachedUsed": "Claude Code hat sein {{window}} erreicht ({{used}} % verbraucht)",
+      "reachedUsedUntil": "Claude Code hat sein {{window}} erreicht ({{used}} % verbraucht); Zurücksetzung {{time}}",
+      "window": {
+        "fiveHour": "5-Stunden-Limit",
+        "weekly": "Wochenlimit",
+        "weeklyOpus": "Opus-Wochenlimit",
+        "weeklySonnet": "Sonnet-Wochenlimit",
+        "extra": "Limit für zusätzliche Nutzung",
+        "usage": "Nutzungslimit"
+      }
+    }
   },
   "changes": {
     "title": "Änderungen in {{folder}}",
@@ -474,7 +541,7 @@
     "empty": "Noch keine Datei geändert.",
     "none": "Diese Sitzung hat keinen Ordner auf diesem Server.",
     "loading": "Ordner wird gelesen…",
-    "error": "Die Änderungen konnten nicht gelesen werden. Versuche es gleich noch einmal.",
+    "error": "Die Änderungen konnten nicht gelesen werden. Versuchen Sie es gleich noch einmal.",
     "back": "Alle Änderungen",
     "binary": "Binärdatei, {{size}}.",
     "fileTruncated": "Die ersten 256 KB werden angezeigt.",
@@ -482,11 +549,11 @@
   },
   "preview": {
     "title": "Vorschau",
-    "hint": "Die App, die diese Sitzung auf einem lokalen Port bereitstellt. Sie läuft in deinem Browser, von der Konsole isoliert und außerhalb der Netzwerkgrenzen der Sitzung.",
+    "hint": "Die App, die diese Sitzung auf einem lokalen Port bereitstellt. Sie läuft in Ihrem Browser, von der Konsole isoliert und außerhalb der Netzwerkgrenzen der Sitzung.",
     "loading": "Ports der Sitzung werden gesucht…",
     "none": "Diese Sitzung stellt nichts auf einem lokalen Port bereit.",
     "notRunning": "Die Sitzung läuft nicht und stellt daher nichts bereit.",
-    "error": "Die Ports der Sitzung konnten nicht gelesen werden. Versuche es gleich noch einmal.",
+    "error": "Die Ports der Sitzung konnten nicht gelesen werden. Versuchen Sie es gleich noch einmal.",
     "notAllowed": "Zum Öffnen einer Vorschau ist die Berechtigung nötig, diese Sitzung zu bedienen.",
     "port": "Port",
     "path": "Pfad",
@@ -532,17 +599,24 @@
       "pinned": "Angeheftet",
       "attention": "Braucht Sie",
       "active": "Läuft",
-      "settled": "Früher"
+      "today": "Heute erledigt",
+      "settled": "Früher",
+      "snoozed": "Zurückgestellt",
+      "archived": "Archiviert"
     },
     "more": "Mehr",
     "back": "Zurück zu den Sitzungen",
     "showTable": "Als Tabelle anzeigen",
     "filter": "Sitzungen filtern…",
+    "recent": "Die {{n}} neuesten werden angezeigt",
+    "loadMore": "Mehr laden",
     "noMatch": "Keine Sitzung passt."
   },
   "thread": {
     "copyReference": "Referenz kopieren",
-    "terminalHint": "Dieselbe Sitzung im Terminal."
+    "terminalHint": "Dieselbe Sitzung im Terminal.",
+    "modelMismatch": "Angefordert {{requested}}, läuft auf {{inUse}}",
+    "modelTitle": "Angefordert: {{requested}} · In Verwendung: {{inUse}}"
   },
   "activity": {
     "workflowPhases": "Phasen",
@@ -618,7 +692,7 @@
     "answer": "Antwort",
     "timeNone": "Keine Nachricht ab diesem Zeitpunkt.",
     "error": "Die Nachrichten konnten nicht gelesen werden.",
-    "pending": "Das Tool hat das Protokoll dieser Sitzung noch nicht geschrieben.",
+    "pending": "Das Werkzeug hat das Protokoll dieser Sitzung noch nicht geschrieben.",
     "missing": "Das Protokoll dieser Sitzung liegt nicht im Kontoordner, daher lassen sich ihre Nachrichten nicht anzeigen.",
     "jumped": "Zu Nachricht {{n}} gesprungen.",
     "farNotice": "Nachricht {{n}} steht unten: Sie ist älter als die Unterhaltung auf dem Bildschirm.",
@@ -631,6 +705,35 @@
   "limit": {
     "usageUntil": "Kontingent aufgebraucht bis {{time}}",
     "usage": "Kontingent aufgebraucht",
-    "rate": "Der Anbieter begrenzt gerade die Anfragen. Versuche es gleich noch einmal."
+    "rate": "Der Anbieter begrenzt gerade die Anfragen. Versuchen Sie es gleich noch einmal."
+  },
+  "sheet": {
+    "title": "Sitzung",
+    "open": "Sitzung öffnen"
+  },
+  "rowActions": {
+    "rename": "Umbenennen…",
+    "renameTitle": "Sitzung umbenennen",
+    "renameDescription": "Der Name wird auf dem Server gespeichert und überall angezeigt, wo diese Sitzung aufgeführt ist. Lassen Sie ihn leer, um zu dem Namen zurückzukehren, den Olivares ihr gibt.",
+    "renameLabel": "Name",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "archive": "Archivieren",
+    "unarchive": "Wiederherstellen",
+    "archived": "Archiviert. Sie steht unter „Archiviert“ am Ende der Liste.",
+    "unarchived": "Wieder in der Liste.",
+    "copyLink": "Link kopieren",
+    "copyId": "Sitzungs-ID kopieren",
+    "copyTranscript": "Transkript kopieren",
+    "noTranscript": "Das Werkzeug dieser Sitzung hat noch kein Transkript zum Kopieren geschrieben.",
+    "copyFailed": "Der Browser hat das Kopieren nicht erlaubt.",
+    "you": "Sie",
+    "assistant": "Assistent",
+    "delete": "Löschen…",
+    "stopFirst": "Erst stoppen",
+    "copiedPartial": "Kopiert. {{n}} Einträge des Transkripts konnten nicht gelesen werden und fehlen darin.",
+    "clipped": "Einige Nachrichten sind länger als 64 KiB und wurden in der Kopie gekürzt; jede endet mit [...].",
+    "noWholeText": "Die Engine hat nur die erste Zeile jeder Nachricht gesendet, daher wurde das Transkript nicht kopiert.",
+    "transcriptChanged": "Das Transkript hat sich beim Kopieren geändert. Versuchen Sie es erneut."
   }
 }

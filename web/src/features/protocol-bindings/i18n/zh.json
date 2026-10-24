@@ -7,10 +7,10 @@
     "activate": "激活",
     "disable": "停用",
     "reconcile": "协调",
-    "test": "Test remote state",
-    "recordObservation": "Record observation",
+    "test": "测试远端状态",
+    "recordObservation": "记录观测结果",
     "retrySameKey": "使用同一幂等键重试",
-    "rereadReplan": "Re-read and re-plan"
+    "rereadReplan": "重新读取并重新规划"
   },
   "common": {
     "back": "Back",
@@ -27,24 +27,24 @@
     "bindings": "实例"
   },
   "specs": {
-    "title": "Binding specifications",
+    "title": "绑定规范",
     "description": "不可变的期望代次，及其由服务器观测到的激活见证。",
-    "emptyTitle": "No binding specifications",
+    "emptyTitle": "暂无绑定规范",
     "emptyBody": "没有规范匹配此工作区和筛选条件。"
   },
   "bindings": {
-    "title": "Binding instances",
+    "title": "绑定实例",
     "description": "固定到某一确切规范代次的运行时实例。",
-    "emptyTitle": "No binding instances",
+    "emptyTitle": "暂无绑定实例",
     "emptyBody": "没有运行时实例匹配此工作区和筛选条件。"
   },
   "filters": {
-    "protocol": "Protocol filter",
-    "state": "State filter",
-    "verdict": "Evidence verdict filter",
-    "allProtocols": "All protocols",
-    "allStates": "All states",
-    "allVerdicts": "All verdicts"
+    "protocol": "协议筛选",
+    "state": "状态筛选",
+    "verdict": "证据结论筛选",
+    "allProtocols": "所有协议",
+    "allStates": "所有状态",
+    "allVerdicts": "所有结论"
   },
   "state": {
     "draft": "草稿",
@@ -70,7 +70,7 @@
   "composer": {
     "title": "编写协议绑定草稿",
     "description": "定义一个固定的、声明式的 A2A 或 MCP 代次。验证和规划不会写入状态。",
-    "progress": "Composer progress",
+    "progress": "编排进度",
     "steps": {
       "connection": "Connection",
       "resources": "Resources",
@@ -83,19 +83,19 @@
     "peerHelp": "使用已接入的对端授权。不要粘贴凭据或带有密钥的 URL。",
     "resourceHelp": "本地选择器以确切 ID 选择器的形式存储。远程引用保持不透明，且不包含凭据。",
     "ruleRefsHelp": "每行一条持久的规则引用。",
-    "intentKey": "Idempotency key",
+    "intentKey": "幂等键",
     "generationMode": {
-      "label": "Generation workflow",
+      "label": "生成流程",
       "help": "创建第 1 代，或从某个已激活的规范派生出不可变的后继。",
-      "initial": "Initial generation (generation 1)",
+      "initial": "初始生成（第 1 代）",
       "successor": "已激活代次的后继",
-      "predecessor": "Active predecessor",
+      "predecessor": "当前生效的前代",
       "predecessorHelp": "后继会复制确切的期望配置，递增代次，且绝不复制验证证据。",
       "partialCatalog": "这里只显示已加载的那一页已激活规范；若看不到前驱，请刷新列表。",
       "selectPredecessor": "选择一个已激活的规范"
     },
     "endpointCatalog": {
-      "label": "Known active-spec peer",
+      "label": "已知的生效规范对端",
       "help": "选项来自你可见的已激活规范。它们是引用，不是实时端点心跳。",
       "select": "复用已知的对端和远程资源",
       "none": "没有可用的已知对端"
@@ -103,78 +103,78 @@
     "resourceCatalog": {
       "label": "已授权的本地资源目录",
       "help": "选择器使用现有的、按权限过滤的产品 API。",
-      "loading": "Loading authorized resources…",
+      "loading": "正在加载已授权资源…",
       "unavailable": "此资源类型没有可用的列表 API 或有效的读取权限。",
       "truncated": "服务器报告的资源多于本页所含；下方仍可输入确切 ID。",
-      "select": "Select a local resource",
+      "select": "选择本地资源",
       "exactFallback": "确切 ID 仍由服务器验证检查，且不授予访问权限。"
     },
     "mapping": {
-      "title": "Typed mappings",
+      "title": "类型化映射",
       "help": "只能发送下方允许列表中的声明式转换；不接受可执行代码。",
-      "add": "Add mapping"
+      "add": "添加映射"
     },
     "losses": {
-      "title": "Known semantic losses",
+      "title": "已知语义损失",
       "help": "每项被接受的损失在激活前都需要明确的、持久的接受引用。",
-      "add": "Add loss",
+      "add": "添加损失",
       "none": "未声明任何已知的语义损失。"
     },
     "coverage": {
       "title": "映射与已接受损失对照表",
       "help": "每一行都来自可执行的映射目录。必需行必须已映射，或有已接受的损失引用作为支撑。",
       "route": "Route",
-      "field": "Catalog field",
+      "field": "目录字段",
       "result": "Coverage",
       "action": "Action",
       "source": "source",
       "target": "target",
       "required": "Required",
-      "declareLoss": "Declare loss",
+      "declareLoss": "声明损失",
       "status": {
         "mapped": "Mapped",
-        "accepted_loss": "Accepted loss",
-        "declared_loss": "Loss needs acceptance",
-        "missing": "Required coverage missing",
-        "optional": "Optional, unmapped"
+        "accepted_loss": "已接受的损失",
+        "declared_loss": "损失待确认",
+        "missing": "缺少必需覆盖",
+        "optional": "可选，未映射"
       }
     },
     "permissions": {
-      "title": "Effective permission preview",
+      "title": "有效权限预览",
       "help": "这些成员关系来自引擎签发的 whoami 权限集。确切的资源策略和能力仍由服务器验证决定。",
-      "granted": "In effective set",
+      "granted": "在有效集合中",
       "notGranted": "不在有效集合中",
-      "unknown": "Not observed",
-      "knownProfiles": "Known permission profiles",
+      "unknown": "未观测到",
+      "knownProfiles": "已知权限配置",
       "knownProfilesHelp": "权限配置只从可见的已激活规范中复用；确切引用仍可编辑。",
-      "selectProfile": "Select a known profile"
+      "selectProfile": "选择已知配置"
     },
     "review": {
       "unverifiedTitle": "此浏览器无法签发激活见证",
       "unverifiedBody": "浏览器省略只读见证。验证和计划显示服务器派生的结果；激活仍需要服务器持久化的带时间戳 CLEAN 证据。",
       "resources": "Resources",
       "mappings": "Mappings",
-      "losses": "Known losses",
-      "validation": "Server-derived validation",
-      "plan": "Planned write",
-      "result": "Apply result",
+      "losses": "已知损失",
+      "validation": "服务端推导的校验",
+      "plan": "计划写入",
+      "result": "应用结果",
       "exportJSON": "以 JSON 导出期望规范和服务器证据"
     },
     "diff": {
-      "title": "Plan → apply comparison",
+      "title": "计划与应用对比",
       "plannedHelp": "服务器计划在任何写入之前，就固定了这一确切的操作、谱系和哈希集合。",
       "appliedHelp": "返回的写入结果会逐字段与固定的计划比较。",
-      "match": "Matches plan",
-      "mismatch": "Returned value differs",
+      "match": "与计划一致",
+      "mismatch": "返回值不一致",
       "fields": {
         "operation": "Operation",
         "workspace_id": "工作区",
         "generation": "Generation",
-        "prior_active_id": "Prior active specification",
-        "plan_hash": "Plan hash",
-        "spec_hash": "Specification hash",
-        "mapping_hash": "Mapping hash",
-        "losses_hash": "Losses hash"
+        "prior_active_id": "前一生效规范",
+        "plan_hash": "计划哈希",
+        "spec_hash": "规范哈希",
+        "mapping_hash": "映射哈希",
+        "losses_hash": "损失哈希"
       }
     },
     "flow": {
@@ -182,47 +182,47 @@
       "planning": "正在计算规范计划和哈希…",
       "applying": "正在创建确切规划的草稿…",
       "failed": "请求失败。未声明任何草稿状态。",
-      "created": "Draft created",
+      "created": "草稿已创建",
       "createdVerified": "服务器返回了带时间戳的 CLEAN 见证。在单独激活成功之前，该资源仍是草稿。",
       "createdUnverified": "返回的资源是草稿，仍未验证；它尚未激活。",
-      "createDraft": "Create planned draft",
+      "createDraft": "创建计划草稿",
       "retrySameKey": "使用同一幂等键重试应用",
-      "inspect": "Validate and plan"
+      "inspect": "校验并规划"
     }
   },
   "fields": {
     "id": "ID",
-    "bindingKey": "Binding key",
+    "bindingKey": "绑定键",
     "generation": "Generation",
-    "supersedesId": "Supersedes specification ID",
+    "supersedesId": "被取代的规范 ID",
     "protocol": "Protocol",
-    "protocolVersion": "Protocol version",
+    "protocolVersion": "协议版本",
     "direction": "Direction",
-    "peerAuthority": "Peer authority",
-    "localKind": "Local resource kind",
-    "localRef": "Local resource ID",
-    "remoteResourceKind": "Remote resource kind",
-    "remoteResourceRef": "Remote resource reference",
-    "mappingSchema": "Mapping schema",
-    "source": "Source path",
-    "target": "Target path",
+    "peerAuthority": "对端权威方",
+    "localKind": "本地资源类型",
+    "localRef": "本地资源 ID",
+    "remoteResourceKind": "远端资源类型",
+    "remoteResourceRef": "远端资源引用",
+    "mappingSchema": "映射模式",
+    "source": "源路径",
+    "target": "目标路径",
     "cardinality": "Cardinality",
     "transform": "Transform",
-    "lossField": "Lost field",
-    "reasonCode": "Reason code",
-    "lossAccepted": "Loss explicitly accepted",
-    "acceptanceRef": "Acceptance reference",
-    "ruleRefs": "Rule references",
-    "permissionProfile": "Permission profile reference",
-    "currency": "Currency policy",
+    "lossField": "丢失的字段",
+    "reasonCode": "原因代码",
+    "lossAccepted": "已明确接受损失",
+    "acceptanceRef": "接受引用",
+    "ruleRefs": "规则引用",
+    "permissionProfile": "权限配置引用",
+    "currency": "币种策略",
     "code": "Code",
-    "planHash": "Plan hash",
-    "specHash": "Specification hash",
-    "mappingHash": "Mapping hash",
-    "lossesHash": "Losses hash",
+    "planHash": "计划哈希",
+    "specHash": "规范哈希",
+    "mappingHash": "映射哈希",
+    "lossesHash": "损失哈希",
     "etag": "版本",
-    "priorActive": "Prior active specification",
-    "bindingSpec": "Pinned specification"
+    "priorActive": "前一生效规范",
+    "bindingSpec": "固定的规范"
   },
   "direction": {
     "inbound": "Inbound",
@@ -230,15 +230,15 @@
     "bidirectional": "Bidirectional"
   },
   "localKind": {
-    "work_item": "Work item",
+    "work_item": "工作项",
     "agent": "智能体",
     "model": "Model",
     "channel": "Channel"
   },
   "cardinality": {
-    "one_to_one": "One to one",
-    "one_to_many": "One to many",
-    "many_to_one": "Many to one"
+    "one_to_one": "一对一",
+    "one_to_many": "一对多",
+    "many_to_one": "多对一"
   },
   "transform": {
     "identity": "Identity",
@@ -251,19 +251,19 @@
     "pinned": "Pinned"
   },
   "detail": {
-    "specTitle": "Binding specification",
+    "specTitle": "绑定规范",
     "specDescription": "期望代次、哈希、损失和激活证据。",
-    "bindingTitle": "Binding instance",
+    "bindingTitle": "绑定实例",
     "bindingDescription": "固定的运行时身份、状态和观测证据。",
-    "localResource": "Local resource",
-    "remoteResource": "Remote resource",
-    "validation": "Activation witness",
-    "notObserved": "No completed observation",
-    "mapping": "Typed mapping",
-    "losses": "Known losses",
+    "localResource": "本地资源",
+    "remoteResource": "远端资源",
+    "validation": "激活见证",
+    "notObserved": "尚无已完成的观测",
+    "mapping": "类型化映射",
+    "losses": "已知损失",
     "noLosses": "未声明任何已知损失。",
-    "accepted": "Accepted with evidence",
-    "notAccepted": "Not accepted",
+    "accepted": "已带证据接受",
+    "notAccepted": "未接受",
     "lifecycle": "Lifecycle"
   },
   "activation": {
@@ -277,22 +277,22 @@
   },
   "transition": {
     "activate": {
-      "title": "Activate specification",
+      "title": "激活规范",
       "description": "激活前，先重新读取、验证并规划这份确切的草稿。",
       "applied": "返回的规范已激活。"
     },
     "disable": {
-      "title": "Disable specification",
+      "title": "停用规范",
       "description": "停用前，先重新读取、验证并规划这份确切的规范。",
       "applied": "返回的规范已停用。"
     },
     "phase": {
       "refreshing": "正在读取最新的规范和版本…",
-      "validating": "Validating without writing…",
+      "validating": "正在校验，不写入…",
       "planning": "正在计算确切的转换计划…",
       "applying": "正在应用已批准的计划…"
     },
-    "plan": "Transition plan",
+    "plan": "状态转换计划",
     "broken": "转换的前置条件未满足。",
     "failed": "转换失败。此前的状态仍是唯一显示的状态。",
     "conflict": "规范在被读取之后发生了变化。请重新读取并查看新的计划。"
@@ -300,16 +300,16 @@
   "binding": {
     "terminal": "Terminal",
     "nonTerminal": "Non-terminal",
-    "external": "External identity",
-    "states": "Local / remote state",
-    "owner": "Owner / fence",
-    "evidenceTitle": "Observation evidence",
-    "created": "Instance created",
-    "lastObservation": "Last completed observation",
+    "external": "外部身份",
+    "states": "本地 / 远端状态",
+    "owner": "所有者 / 栅栏",
+    "evidenceTitle": "观测证据",
+    "created": "实例创建时间",
+    "lastObservation": "最近一次已完成的观测",
     "lastEvent": "最近一次持久事件 / 命令"
   },
   "reconcile": {
-    "title": "Reconcile binding instance",
+    "title": "协调绑定实例",
     "description": "在本地验证并规划，不写入地测试对端，然后记录确切的观测结果。",
     "phase": {
       "refreshing": "正在读取最新的实例和版本…",
@@ -318,13 +318,13 @@
       "testing": "正在读取远程状态，不更改本地状态…",
       "applying": "正在记录已测试的观测…"
     },
-    "plan": "Reconciliation plan",
-    "testResult": "Remote test result",
-    "recordedResult": "Recorded observation",
-    "rowEffects": "Planned row effects",
-    "externalCalls": "Remote reads",
+    "plan": "协调计划",
+    "testResult": "远端测试结果",
+    "recordedResult": "已记录的观测",
+    "rowEffects": "计划的数据行影响",
+    "externalCalls": "远端读取",
     "noExternalCalls": "未计划任何远程读取",
-    "checks": "Evidence checks",
+    "checks": "证据检查",
     "unknown": "无法完成远程观测。未将任何内容记录为正常或异常。",
     "broken": "本地验证或规划发现了被破坏的前置条件。",
     "failed": "协调失败。未声明任何新的观测。",

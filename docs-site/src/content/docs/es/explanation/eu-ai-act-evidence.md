@@ -48,6 +48,10 @@ anclados al ledger, exportables como JSON, CSV u **OSCAL**, con una prueba de in
 en vivo. El documento se *deriva de lo que pasó*, no se afirma sobre lo que se
 pretendía.
 
+El mapeo de marcos, las evaluaciones, la vista DORA, la exportación OSCAL y los informes son **Business**
+(Compliance Packs): un servidor Community responde esas rutas con `501`. Community conserva el
+ledger firmado, la gestión de registros y las exportaciones JSON/CSV de la evidencia almacenada.
+
 Dos reglas de honestidad están cableadas en el producto y se trasladan directamente a la evidencia:
 
 - Un control cuyo único respaldo es arquitectónico reporta **`by_design`**, nunca

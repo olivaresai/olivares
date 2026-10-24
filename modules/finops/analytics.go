@@ -6,7 +6,9 @@ package finops
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"time"
 
@@ -142,7 +144,9 @@ func aggregatePeriod(ctx context.Context, sc store.Scope, extra []model.Filter, 
 	return res, err
 }
 
-func aggregateGroupPeriod(ctx context.Context, sc store.Scope, userGroups func(string) ([]string, error), dimension, key string, pStart time.Time, hasLower bool, pEnd time.Time, bounded bool) (aggResult, error) {
+// aggregateGroupPeriod sums the spend of a group's members. log, when set, hears about a member
+// that is skipped (see agentGroupMemberRefs); the enforcement paths pass nil, a request must not log.
+func aggregateGroupPeriod(ctx context.Context, sc store.Scope, log *slog.Logger, userGroups func(string) ([]string, error), dimension, key string, pStart time.Time, hasLower bool, pEnd time.Time, bounded bool) (aggResult, error) {
 	var (
 		col  string
 		refs []string
@@ -151,11 +155,11 @@ func aggregateGroupPeriod(ctx context.Context, sc store.Scope, userGroups func(s
 	switch dimension {
 	case "agent_group":
 		col = colAgentRef
-		refs, err = agentGroupMemberRefs(ctx, sc, key)
+		refs, err = agentGroupMemberRefs(ctx, sc, log, key)
 	case "user_group":
 		col = colActor
 		if userGroups == nil {
-			return aggResult{}, fmt.Errorf("finops: user_group %q members were not resolved", key)
+			return aggResult{}, fmt.Errorf("finops: user_group %q members were not resolved: %w", key, errGroupUnresolved)
 		}
 		refs, err = userGroups(key)
 	default:
@@ -179,7 +183,12 @@ func aggregateGroupPeriod(ctx context.Context, sc store.Scope, userGroups func(s
 	return total, nil
 }
 
-func agentGroupMemberRefs(ctx context.Context, sc store.Scope, key string) ([]string, error) {
+// agentGroupMemberRefs lists the spend references of an agent group's members. A membership whose
+// agent was deleted is skipped: agents are deleted alone and agent_group_members has no foreign
+// key, so the row stays. The group is then counted over the members that are left, the same
+// floor every group figure is, instead of failing every read of the group (the Business
+// recommendations loop reads every budget) or letting CheckBudget fail open.
+func agentGroupMemberRefs(ctx context.Context, sc store.Scope, log *slog.Logger, key string) ([]string, error) {
 	g, err := agentGroupByKey(ctx, sc, key)
 	if err != nil {
 		return nil, err
@@ -192,6 +201,12 @@ func agentGroupMemberRefs(ctx context.Context, sc store.Scope, key string) ([]st
 	refs := make([]string, 0, len(members))
 	for _, member := range members {
 		a, err := sc.Agents().Get(ctx, member.AgentID)
+		if errors.Is(err, store.ErrNotFound) {
+			if log != nil {
+				log.Warn("finops: agent_group lists an agent that no longer exists; its spend is not counted", "agent_group", key, "agent", member.AgentID)
+			}
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -216,9 +231,13 @@ func agentGroupByKey(ctx context.Context, sc store.Scope, key string) (model.Age
 		return g, nil
 	}
 	if id, err := model.ParseID(key); err == nil {
-		return sc.AgentGroups().Get(ctx, id)
+		g, err := sc.AgentGroups().Get(ctx, id)
+		if errors.Is(err, store.ErrNotFound) {
+			return g, fmt.Errorf("finops: agent_group %q not found: %w: %w", key, errGroupUnresolved, err)
+		}
+		return g, err
 	}
-	return model.AgentGroup{}, fmt.Errorf("finops: agent_group %q not found", key)
+	return model.AgentGroup{}, fmt.Errorf("finops: agent_group %q not found: %w", key, errGroupUnresolved)
 }
 
 func listAgentGroupMembersByGroup(ctx context.Context, sc store.Scope, groupID model.ID) ([]model.AgentGroupMember, error) {

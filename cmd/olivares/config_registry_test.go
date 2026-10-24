@@ -70,6 +70,7 @@ func TestConfigRegistryCoversEngineCatalogKeys(t *testing.T) {
 		"OLIVARES_ENGINE":               "operator output; engine selection uses --engine",
 		"OLIVARES_PLUGIN":               "SDK plugin handshake cookie",
 		"OLIVARES_PORTAL_TLS_DIRECTORY": "appliance portal TLS directory",
+		"OLIVARES_CREDENTIAL_":          "session child-process output family: where the credential broker's helpers are",
 		"OLIVARES_WORK_":                "session child-process output family",
 		"OLIVARES_WORK_RUN_REF":         "session child-process output",
 	}
@@ -708,10 +709,11 @@ func isRegisteredPrefixStem(key string) bool {
 }
 
 // agentLinkListenKey is the listen address of the agent link, the mutual-TLS endpoint an
-// edition built on this tree serves for its node agents; empty means no listener. No source
-// of this package reads it, so the drift guard above cannot see it: unregistered, a boot that
-// sets it logs the key as ignored, and `config validate` and `config effective --strict`
-// refuse the deployment. Registering the NAME claims nothing more. The key has three places
+// edition built on this tree serves for its node agents; empty means no listener. Only a
+// Community serve reads it, to refuse it by name (businessProtectionKeys in wire.go), so the
+// drift guard above cannot see it: unregistered, a boot that sets it logs the key as ignored,
+// and `config validate` and `config effective --strict` refuse the deployment. Registering
+// the NAME claims nothing more. The key has three places
 // that move together — the registry, the catalog row the configuration reference is
 // generated from, and the row that reference publishes — so this pins all three.
 const agentLinkListenKey = "OLIVARES_SESSIONS_AGENT_LINK_LISTEN"

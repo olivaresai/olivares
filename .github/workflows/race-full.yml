@@ -52,6 +52,10 @@ jobs:
     timeout-minutes: 30
     outputs:
       bundle-artifact: web-generation-${{ github.run_id }}-${{ github.run_attempt }}
+      # The attempt that produced and uploaded the artifact above. Consumers compare the
+      # manifest against THIS attempt (#2749): "re-run failed jobs" re-runs a failed race job
+      # at a new attempt while this job's earlier success keeps its artifact.
+      bundle-attempt: ${{ github.run_attempt }}
       groups: ${{ steps.spec.outputs.groups }}
       cloud_group: ${{ steps.spec.outputs.cloud_group }}
       root_shards: ${{ steps.spec.outputs.root_shards }}
@@ -294,9 +298,27 @@ jobs:
           name: ${{ needs.setup.outputs.bundle-artifact }}
           path: ${{ runner.temp }}/web-generation-artifact
       - name: embed the verified console output
+        env:
+          PR_HEAD: ${{ github.sha }}
+          # The manifest's attempt is the PRODUCING job's (setup), never this job's
+          # GITHUB_RUN_ATTEMPT: requiring them equal refused every rerun of a failed race job
+          # before a test ran (#2749).
+          GENERATION_ATTEMPT: ${{ needs.setup.outputs.bundle-attempt }}
         run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PR_HEAD"
+          [[ -n "$GENERATION_ATTEMPT" ]] || {
+            echo "::error::setup reported no attempt for the console artifact"
+            exit 1
+          }
           cd "$RUNNER_TEMP/web-generation-artifact"
           sha256sum -c SHA256SUMS
+          jq -e --arg head "$PR_HEAD" --arg repository "$GITHUB_REPOSITORY" \
+            --arg run "$GITHUB_RUN_ID" --arg attempt "$GENERATION_ATTEMPT" '
+            .schema == "olivares.web-generation/v1" and
+            .checkout_sha == $head and .pr_head_sha == $head and
+            .repository == $repository and .run_id == $run and .run_attempt == $attempt
+          ' manifest.json > /dev/null
           tar -xzf dist.tar.gz -C "$GITHUB_WORKSPACE/core/internal/webui"
       - name: Prepare Go caches when the runner environment is unusable
         # setup-go runs go env itself, so cache fallback must precede it.
@@ -542,9 +564,27 @@ jobs:
           name: ${{ needs.setup.outputs.bundle-artifact }}
           path: ${{ runner.temp }}/web-generation-artifact
       - name: embed the verified console output
+        env:
+          PR_HEAD: ${{ github.sha }}
+          # The manifest's attempt is the PRODUCING job's (setup), never this job's
+          # GITHUB_RUN_ATTEMPT: requiring them equal refused every rerun of a failed race job
+          # before a test ran (#2749).
+          GENERATION_ATTEMPT: ${{ needs.setup.outputs.bundle-attempt }}
         run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PR_HEAD"
+          [[ -n "$GENERATION_ATTEMPT" ]] || {
+            echo "::error::setup reported no attempt for the console artifact"
+            exit 1
+          }
           cd "$RUNNER_TEMP/web-generation-artifact"
           sha256sum -c SHA256SUMS
+          jq -e --arg head "$PR_HEAD" --arg repository "$GITHUB_REPOSITORY" \
+            --arg run "$GITHUB_RUN_ID" --arg attempt "$GENERATION_ATTEMPT" '
+            .schema == "olivares.web-generation/v1" and
+            .checkout_sha == $head and .pr_head_sha == $head and
+            .repository == $repository and .run_id == $run and .run_attempt == $attempt
+          ' manifest.json > /dev/null
           tar -xzf dist.tar.gz -C "$GITHUB_WORKSPACE/core/internal/webui"
       - name: Prepare Go caches when the runner environment is unusable
         # setup-go runs go env itself, so cache fallback must precede it.

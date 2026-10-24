@@ -179,10 +179,14 @@ describe('SessionNarrative — work told as work', () => {
     ).not.toBeInTheDocument()
   })
   it('tells the sentence and the figures the engine sent', async () => {
-    renderNarrative({ live: live({ summary: 'Filed PR #7723' }) })
+    // Ended: the duration figure is the engine's final one, never extrapolated
+    // (an active session's ticking figure has its own tests).
+    renderNarrative({
+      live: live({ summary: 'Filed PR #7723', cc_state: 'ended' }),
+    })
     expect(await screen.findByText('Filed PR #7723')).toBeInTheDocument()
     const facts = screen.getByTestId('narrative-facts')
-    expect(facts).toHaveTextContent('worked for 15.0s')
+    expect(facts).toHaveTextContent('worked for 15s')
     expect(facts).toHaveTextContent('2 tool calls')
     expect(facts).toHaveTextContent('3 events')
   })

@@ -26,7 +26,8 @@ import { Card } from '@/components/ui/card'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { authApi } from '@/lib/api/endpoints'
-import { ApiError } from '@/lib/api/errors'
+import { ApiError, NetworkError } from '@/lib/api/errors'
+import { networkErrorText } from '@/lib/api/network-error-text'
 import { useAuth } from '@/lib/auth/context'
 
 /** Server-side MinPasswordLen (core/auth/accounts.go) mirrored client-side. */
@@ -86,7 +87,9 @@ export function AcceptInvitePage() {
       ? mutation.error.code === 'weak_password'
         ? t('invite.weakPassword')
         : t('invite.invalid')
-      : t('errors:network.title')
+      : mutation.error instanceof NetworkError
+        ? networkErrorText(t).line
+        : t('errors:network.title')
     : null
 
   return (

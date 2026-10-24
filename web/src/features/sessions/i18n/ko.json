@@ -122,13 +122,13 @@
     "table": "표"
   },
   "partial": {
-    "noLiveRead": "관측된 세션이 표시되지 않습니다: 귀하의 역할로는 읽을 수 없습니다. 아래 시작된 세션은 읽을 수 있었던 부분이며 전체 그림이 아닙니다.",
-    "noRunRead": "시작된 세션이 표시되지 않습니다: 귀하의 역할로는 읽을 수 없습니다. 아래에서 발견됨으로 표시된 세션이 Olivares에 의해 시작되었을 수 있지만 이 목록은 확인하지 못했습니다.",
-    "truncated": "이것은 가장 최근 페이지이며 전체 에스테이트가 아닙니다. 여기의 출처는 로드된 범위에 조인되므로 실행이 스크롤 밖으로 나간 세션은 발견됨으로 표시될 수 있습니다; 세션을 열면 엔진이 답합니다.",
-    "runLookupFailed": "시작된 절반을 읽을 수 없었습니다: 실행 조회가 실패했습니다. 아래 행은 관측된 절반이 반환한 것을 보여주며, 출처는 추측이 아니라 읽지 못함으로 보고됩니다.",
-    "liveLookupFailed": "관측된 절반을 읽을 수 없었습니다: 라이브 조회가 실패했습니다. 아래 행은 시작된 세션이며, 텔레메트리 열은 아무것도 읽지 못했기 때문에 비어 있는 것이지 없는 것이 아닙니다.",
-    "noProfileRead": "프로바이더 프로필 이름이 표시되지 않습니다: 귀하의 역할로는 프로필을 읽을 수 없습니다. 인스턴스 열은 대신 각 행의 프로필 참조를 담습니다.",
-    "profileLookupFailed": "프로바이더 프로필 이름을 읽을 수 없었습니다: 프로필 조회가 실패했습니다. 인스턴스 열은 대신 각 행의 프로필 참조를 담습니다."
+    "noLiveRead": "Olivares 밖에서 시작된 세션은 표시되지 않습니다: 귀하의 역할로는 볼 수 없습니다.",
+    "noRunRead": "Olivares에서 시작된 세션은 표시되지 않습니다: 귀하의 역할로는 볼 수 없습니다.",
+    "truncated": "최근 세션만 불러왔으므로 오래된 세션은 여기서 발견됨으로 표시될 수 있습니다. 세션을 열면 출처를 확인할 수 있습니다.",
+    "runLookupFailed": "Olivares에서 시작된 세션을 불러올 수 없었습니다.",
+    "liveLookupFailed": "Olivares 밖에서 시작된 세션을 불러올 수 없었습니다.",
+    "noProfileRead": "프로바이더 이름이 표시되지 않습니다: 귀하의 역할로는 프로바이더 프로필을 읽을 수 없습니다.",
+    "profileLookupFailed": "프로바이더 이름을 불러올 수 없었습니다."
   },
   "move": {
     "open": "다음으로 이동…",
@@ -275,7 +275,7 @@
     "cleaned": "정리됨"
   },
   "address": {
-    "retired": "열어 둔 세션이 닫혔습니다. 해당 절반에 대한 접근이 변경되었습니다. 현재 접근 권한으로 세션을 열려면 행을 선택하십시오."
+    "retired": "열어 둔 세션을 더 이상 사용할 수 없습니다. 목록에서 다른 세션을 선택하십시오."
   },
   "work": {
     "worked": "{{duration}} 동안 작업함",
@@ -289,7 +289,14 @@
     "pinnedMark": "고정됨",
     "rowMenu": "{{name}}의 작업",
     "noObservation": "이 세션에 아직 도착한 텔레메트리가 없습니다.",
-    "pinFailed": "고정을 변경할 수 없습니다."
+    "pinFailed": "고정을 변경할 수 없습니다.",
+    "snoozeHour": "1시간 미루기",
+    "snoozeDay": "1일 미루기",
+    "snoozeWeek": "1주 미루기",
+    "unsnooze": "미루기 해제",
+    "markDone": "완료로 표시",
+    "markNotDone": "미완료로 표시",
+    "markFailed": "표시를 변경할 수 없습니다."
   },
   "surface": {
     "openBeside": "옆에 열기",
@@ -303,6 +310,11 @@
       "rail": "세션",
       "narrative": "작업",
       "context": "컨텍스트"
+    },
+    "resize": {
+      "rail": "세션 목록 너비 조절",
+      "context": "컨텍스트 패널 너비 조절",
+      "beside": "옆 세션 너비 조절"
     }
   },
   "narrative": {
@@ -315,14 +327,15 @@
   },
   "meter": {
     "mode": "모드: {{mode}}",
+    "unasked": "묻지 않고 실행: <policy>Olivares 정책</policy>으로 제한됨",
+    "unaskedShort": "묻지 않고 실행",
+    "accessUnknown": "접근 권한 보고되지 않음",
     "modeTitle": "{{tool}} 보고: {{mode}}",
     "theTool": "도구",
     "toolWord": {
-      "bypassPermissions": "권한을 절대 묻지 않음",
       "untrusted": "신뢰하지 않는 명령 전에 물음",
       "onFailure": "명령이 실패하면 물음",
       "onRequest": "필요할 때 물음",
-      "never": "권한을 절대 묻지 않음",
       "granular": "자체 규칙에 따라 물음"
     },
     "usageLabel": "이 세션의 사용량",
@@ -429,9 +442,9 @@
   "conversation": {
     "log": "대화",
     "waiting": "세션을 기다리는 중…",
-    "empty": "아직 턴이 없습니다. 아래에 문장을 보내십시오.",
-    "ended": "세션 I/O 스트림이 종료되었습니다.",
-    "lag": "프레임 {{count}}개가 유실됨 — 아래 출력은 공백 이후부터 이어집니다.",
+    "empty": "아직 메시지가 없습니다.",
+    "ended": "세션이 종료되었습니다.",
+    "lag_other": "프레임 {{count}}개가 유실됨 — 아래 출력은 공백 이후부터 이어집니다.",
     "tool": "도구",
     "result": "결과",
     "unknown": "인식되지 않는 프레임",
@@ -439,6 +452,7 @@
     "args": "인수",
     "toolResult": "결과",
     "toolFailed": "실패",
+    "toolStopped": "중지됨",
     "tokens": "입력 {{input}} · 출력 {{output}}",
     "protocol": "프로토콜 프레임: {{count}}",
     "stop": {
@@ -458,7 +472,50 @@
     "workingFolder": "작업 폴더: {{cwd}}",
     "temporaryFolder": "작업 폴더: 이 세션의 임시 폴더",
     "workedFor": "{{duration}} 동안 작업함",
-    "toolsFolded_other": "도구 호출 +{{count}}개"
+    "modelChanged": "모델이 바뀌었습니다: {{from}} → {{to}}",
+    "modelChangedAt": "{{time}}에 모델이 바뀌었습니다: {{from}} → {{to}}",
+    "sentPending": "보냈습니다. 도구가 받기를 기다리는 중입니다.",
+    "sentNotTaken": "도구가 받기 전에 세션이 끝났습니다.",
+    "finishedIn": "{{duration}} 만에 완료",
+    "escToInterrupt": "Esc로 중단",
+    "background": "백그라운드",
+    "agentWorking": "작업 중",
+    "work": {
+      "join": ", ",
+      "ran_other": "명령 {{count}}개 실행",
+      "edited_other": "파일 {{count}}개 편집",
+      "editedSome": "파일 편집",
+      "agents_other": "에이전트 {{count}}개 실행",
+      "read_other": "파일 {{count}}개 읽음",
+      "readSome": "파일 읽음",
+      "searched_other": "{{count}}번 검색",
+      "used_other": "도구 {{count}}개 사용",
+      "failed_other": "{{count}}개 실패",
+      "background_other": "{{count}}개 백그라운드",
+      "stopped_other": "{{count}}개 중지됨"
+    },
+    "running": {
+      "command_other": "셸 명령 {{count}}개 실행 중",
+      "edit": "{{target}} 편집 중",
+      "read": "{{target}} 읽는 중",
+      "search": "{{target}} 검색 중",
+      "agent": "{{name}} 작업 중",
+      "tool": "{{tool}} 실행 중"
+    },
+    "limit": {
+      "reached": "Claude Code가 {{window}}에 도달했습니다",
+      "reachedUntil": "Claude Code가 {{window}}에 도달했습니다. {{time}}에 초기화됩니다",
+      "reachedUsed": "Claude Code가 {{window}}에 도달했습니다({{used}}% 사용)",
+      "reachedUsedUntil": "Claude Code가 {{window}}에 도달했습니다({{used}}% 사용). {{time}}에 초기화됩니다",
+      "window": {
+        "fiveHour": "5시간 한도",
+        "weekly": "주간 한도",
+        "weeklyOpus": "Opus 주간 한도",
+        "weeklySonnet": "Sonnet 주간 한도",
+        "extra": "추가 사용량 한도",
+        "usage": "사용량 한도"
+      }
+    }
   },
   "changes": {
     "title": "{{folder}}의 변경",
@@ -524,17 +581,24 @@
       "pinned": "고정됨",
       "attention": "확인 필요",
       "active": "작업 중",
-      "settled": "이전"
+      "today": "오늘 완료",
+      "settled": "이전",
+      "snoozed": "미뤄 둠",
+      "archived": "보관됨"
     },
     "more": "더 보기",
     "back": "세션으로 돌아가기",
     "showTable": "표로 표시",
     "filter": "세션 필터…",
+    "recent": "최근 {{n}}개 표시 중",
+    "loadMore": "더 불러오기",
     "noMatch": "일치하는 세션이 없습니다."
   },
   "thread": {
     "copyReference": "참조 복사",
-    "terminalHint": "터미널에서의 같은 세션."
+    "terminalHint": "터미널에서의 같은 세션.",
+    "modelMismatch": "{{requested}} 요청, {{inUse}} 실행 중",
+    "modelTitle": "요청: {{requested}} · 사용 중: {{inUse}}"
   },
   "activity": {
     "workflowPhases": "단계",
@@ -621,5 +685,34 @@
     "usageUntil": "{{time}}까지 할당량 소진",
     "usage": "할당량 소진",
     "rate": "프로바이더가 속도를 제한했습니다. 잠시 후 다시 시도하십시오."
+  },
+  "sheet": {
+    "title": "세션",
+    "open": "세션 열기"
+  },
+  "rowActions": {
+    "rename": "이름 바꾸기…",
+    "renameTitle": "세션 이름 바꾸기",
+    "renameDescription": "이름은 서버에 저장되며 이 세션이 표시되는 모든 곳에 나타납니다. 비워 두면 Olivares가 붙이는 이름으로 돌아갑니다.",
+    "renameLabel": "이름",
+    "save": "저장",
+    "cancel": "취소",
+    "archive": "보관",
+    "unarchive": "보관 해제",
+    "archived": "보관했습니다. 목록 끝의 보관됨에 있습니다.",
+    "unarchived": "목록으로 돌아왔습니다.",
+    "copyLink": "링크 복사",
+    "copyId": "세션 ID 복사",
+    "copyTranscript": "대화 기록 복사",
+    "noTranscript": "이 세션의 도구가 아직 복사할 대화 기록을 쓰지 않았습니다.",
+    "copyFailed": "브라우저가 복사를 허용하지 않았습니다.",
+    "you": "나",
+    "assistant": "어시스턴트",
+    "delete": "삭제…",
+    "stopFirst": "먼저 중지하세요",
+    "copiedPartial": "복사했습니다. 대화 기록 중 {{n}}개 항목은 읽을 수 없어 포함되지 않았습니다.",
+    "clipped": "64 KiB를 넘는 메시지는 복사본에서 잘렸으며 각각 [...]로 끝납니다.",
+    "noWholeText": "엔진이 각 메시지의 첫 줄만 보내서 대화 기록을 복사하지 않았습니다.",
+    "transcriptChanged": "복사하는 동안 대화 기록이 바뀌었습니다. 다시 시도하세요."
   }
 }

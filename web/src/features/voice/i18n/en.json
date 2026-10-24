@@ -103,7 +103,8 @@
     "decisionsError": "The decisions could not be read.",
     "noDecisions": "No decisions recorded for this session.",
     "noReason": "no reason recorded",
-    "frames": "{{count}} live update(s)",
+    "frames_one": "{{count}} live update",
+    "frames_other": "{{count}} live updates",
     "open": "Open session (governed)",
     "stream": {
       "connecting": "connecting",

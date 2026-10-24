@@ -266,10 +266,15 @@ func (s *sqlStore) mutateSelective(
 			return wrapUnavailableErr(err)
 		}
 	}
-	if err := tx.Commit(); err != nil {
+	err = tx.Commit()
+	if err == nil && s.selectiveMutationTestHook != nil {
+		// Test seam: COMMIT succeeded on the server, then its acknowledgement is lost.
+		err = s.selectiveMutationTestHook(ctx, tx, selectiveMutationAfterCommit)
+	}
+	if err != nil {
 		// Commit failure remains ambiguous. database/sql marks the Tx done, so the
 		// deferred ErrTxDone rollback is ignored rather than claiming rollback.
-		return wrapUnavailableErr(err)
+		return mutateCommitOutcomeErr(err)
 	}
 	committed = true
 	return nil
@@ -361,6 +366,7 @@ type selectiveMutationTestStage string
 const (
 	selectiveMutationAfterCallbackError selectiveMutationTestStage = "after_callback_error"
 	selectiveMutationBeforeCommit       selectiveMutationTestStage = "before_commit"
+	selectiveMutationAfterCommit        selectiveMutationTestStage = "after_commit"
 )
 
 type selectiveMutationState struct {

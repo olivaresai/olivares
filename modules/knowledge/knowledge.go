@@ -188,6 +188,12 @@ type Module struct {
 	// deny on the read path is never deduplicated.
 	tamperMu   sync.Mutex
 	tamperSeen map[string]struct{}
+
+	// aclStamped holds, per tenant, struct{} once this process has stamped the
+	// pre-#3030 direct uploads "anyone", or the time of a failed attempt
+	// (stampLegacyDirectACL). aclStampMu serializes the attempts.
+	aclStamped sync.Map
+	aclStampMu sync.Mutex
 }
 
 // Compile-time proof the module satisfies the SDK lifecycle, the API route/

@@ -73,10 +73,17 @@ import {
   type SessionTool,
   type SignInTool,
   type SignInFlow,
+  type SignInMethod,
   type ToolKey,
 } from './api'
 import { SessionSecrets } from './session-secrets'
 import { useReuseProfile, useSessionProfiles } from './session-profiles'
+import {
+  KeyInstead,
+  useKeyBeingStored,
+  useKeyKind,
+  useKeyTriggerFocus,
+} from './key-instead'
 import './i18n'
 
 function errorText(err: unknown): string {
@@ -96,19 +103,12 @@ const READINESS_STALE_MS = 10_000
 /** The engine's code for a tool whose only key was refused at its last test. */
 const KEY_REFUSED = 'key_refused'
 
-/** "Use an API key instead", and the wizard's "Add an API key" or "Add a local model":
- * the Providers form on that provider, which brings the person back to this page once
- * the new key passes its test. */
+/** The wizard's "Add an API key" or "Add a local model": a page link to the Providers
+ * form on that provider, which brings the person back to this page once the new key
+ * passes its test. The sign-in sheet's own "Use an API key instead" is KeyInstead. */
 function keyHref(kind: ProviderKind): string {
   const returnTo = window.location.pathname + window.location.search
   return `/providers?${new URLSearchParams({ add: kind, returnTo })}`
-}
-
-/** The link to add the key a tool runs on instead of its own login; none for a tool the
- * console has no key kind for. */
-export function apiKeyHref(driver: string): string | undefined {
-  const kind = (KEY_KIND as Partial<Record<string, ProviderKind>>)[driver]
-  return kind ? keyHref(kind) : undefined
 }
 
 /** What the tool itself says on this node: installed, and signed in. Only a
@@ -287,8 +287,11 @@ export function ToolCard({
       ) : null}
       {!status.isLoading && !installed && part !== 'signIn' ? (
         <div className="flex flex-col gap-2">
+          {/* Secondary on purpose: several tool rows offer Install at once, and
+              one orange control per first screen is the rule (dev#2673). The
+              wizard's one next step — Start — keeps the orange. */}
           <Button
-            variant="primary"
+            variant="secondary"
             className="self-start"
             onClick={() => install.mutate()}
             disabled={install.isPending}
@@ -314,21 +317,10 @@ export function ToolCard({
         </div>
       ) : null}
       {installed && !ready && part !== 'install' ? (
-        <SignIn driver={driver} />
+        <SignIn driver={driver} variant="secondary" />
       ) : null}
     </div>
   )
-}
-
-/** The tool's own login, relayed: a link, and the code (Claude) or the device
- * code (Codex, Grok Build). The login is stored where the tool keeps it, on the server. */
-/** The API key each sign-in tool can run on instead of its own login (HU2-18). */
-const KEY_KIND: Partial<Record<SignInTool, ProviderKind>> = {
-  claude: 'anthropic',
-  codex: 'openai',
-  grok: 'xai',
-  opencode: 'openai',
-  'gemini-cli': 'gemini',
 }
 
 /** The code the person types on the vendor's page: large, one tap to copy. */
@@ -364,24 +356,38 @@ function DeviceCode({ code }: { code: string }) {
   )
 }
 
+/** The tool's own login, relayed: a link, and the code (Claude), the device code
+ * (Codex, Grok Build) or the API key its own login asks for (OpenCode's own providers).
+ * The login is stored where the tool keeps it, on the server. A tool with several
+ * methods offers them first, in the engine's order, and starts the one chosen. */
 export function SignIn({
   driver,
   accountRef,
   tenantId,
+  methods: listedMethods,
   onSignedIn,
   mutationScope,
   requestOptions,
   autoStart = false,
+  offerKey = true,
+  variant = 'primary',
 }: {
   driver: SignInTool
   accountRef?: string
   tenantId?: string
+  /** The methods the account's own status read lists; the default row reads its own. */
+  methods?: SignInMethod[]
   onSignedIn?: () => void
   mutationScope?: MutationKey
   requestOptions?: () => RequestOptions
   /** Start the login when this mounts: the person already chose to sign in (Add profile
    * continues here), so a second button would only repeat the choice. */
   autoStart?: boolean
+  /** Offer "Use an API key instead" here; off where the host sheet offers it once. */
+  offerKey?: boolean
+  /** The one verb of a dialog is the filled primary; a list of cards, one per tool,
+   * passes `secondary` so a screen shows a single filled control. */
+  variant?: 'primary' | 'secondary'
 }) {
   const { t } = useTranslation('firstHour')
   const qc = useQueryClient()
@@ -389,6 +395,9 @@ export function SignIn({
   const tenant = tenantId ?? activeTenant
   const [flow, setFlow] = useState<SignInFlow | null>(null)
   const [code, setCode] = useState('')
+  // The sheet became KeyInstead's key form (the link's replacement, #2551).
+  const [addingKey, setAddingKey] = useState(false)
+  const keyTriggerRef = useKeyTriggerFocus(addingKey)
   const [error, setError] = useState<string | null>(null)
   // The poll could not reach the server (not a login that is gone): said, not awaited.
   const [lostTouch, setLostTouch] = useState(false)
@@ -406,11 +415,20 @@ export function SignIn({
   const pending = statusRead.data?.pending
   // A resumed login is only known once the status is read: start nothing before.
   const statusSettled = !ownsDefault || !statusRead.isPending
+  const methods =
+    listedMethods ?? (ownsDefault ? statusRead.data?.methods : undefined) ?? []
+  // The first listed method is the one to offer first (OpenCode's own key, #2567).
+  const [chosen, setChosen] = useState<string | undefined>(undefined)
+  const method = methods.length > 1 ? (chosen ?? methods[0]?.id) : undefined
+  const takesKey = methods.find((m) => m.id === method)?.key === true
   // Once per mounted row: after a resume, a start or a cancel, the status's snapshot of a
   // pending login is never taken up again here.
   const [resumeSpent, setResumeSpent] = useState(false)
+  // The key form replaces the sheet: a login it did not ask for must not be taken
+  // up, started or completed underneath it (#2551).
   if (
     ownsDefault &&
+    !addingKey &&
     !resumeSpent &&
     !flow &&
     pending &&
@@ -424,9 +442,11 @@ export function SignIn({
     mutationKey: mutationScope && [...mutationScope, 'start'],
     gcTime: mutationScope ? 0 : undefined,
     mutationFn: (options?: RequestOptions) =>
-      accountRef
-        ? signInApi.start(driver, tenant, accountRef, options)
-        : signInApi.start(driver, tenant),
+      method
+        ? signInApi.start(driver, tenant, accountRef, options, method)
+        : accountRef
+          ? signInApi.start(driver, tenant, accountRef, options)
+          : signInApi.start(driver, tenant),
     onSuccess: (f) => {
       setResumeSpent(true)
       setFlow(f)
@@ -441,22 +461,31 @@ export function SignIn({
       accountRef
         ? signInApi.code(flow!.id, code.trim(), options)
         : signInApi.code(flow!.id, code.trim()),
-    onSuccess: (f) => {
-      setFlow(f)
-      setCode('')
-    },
+    onSuccess: (f) => setFlow(f),
     onError: (err) => setError(errorText(err)),
+    // A typed key or code is not kept on the page once it was handed over.
+    onSettled: () => setCode(''),
   })
-  const keyKind = KEY_KIND[driver]
+  const offeredKind = useKeyKind(driver, accountRef)
+  const keyKind = offerKey ? offeredKind : undefined
   const autoStarted = useRef(false)
   useEffect(() => {
     // A login a reload resumed is the one being completed: never start another over it.
-    if (!autoStart || autoStarted.current || flow || !statusSettled) return
+    // A tool with several methods waits for the person's choice.
+    if (
+      !autoStart ||
+      methods.length > 1 ||
+      autoStarted.current ||
+      flow ||
+      !statusSettled ||
+      addingKey
+    )
+      return
     autoStarted.current = true
     start.mutate(captureRequest())
     // Once per mount: a failed start offers the button, never a loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoStart, statusSettled])
+  }, [autoStart, statusSettled, addingKey])
   const live = flow && flow.state !== 'signed_in' && flow.state !== 'failed'
   useEffect(() => {
     if (!flow || !live) return
@@ -496,7 +525,9 @@ export function SignIn({
     }
   }, [flow, live, accountRef])
   useEffect(() => {
-    if (flow?.state === 'signed_in') {
+    // Not under the key form: a login that completes then must not close the sheet
+    // (or the dialog) over a key the person is typing (#2551).
+    if (flow?.state === 'signed_in' && !addingKey) {
       if (!accountRef) {
         void qc.invalidateQueries({
           queryKey: firstHourKeys.signIn(tenant, driver),
@@ -505,7 +536,7 @@ export function SignIn({
       }
       onSignedIn?.()
     }
-  }, [flow?.state, driver, qc, tenant, accountRef, onSignedIn])
+  }, [flow?.state, driver, qc, tenant, accountRef, onSignedIn, addingKey])
   // Stops the tool's login on this server (its process ends) and forgets it here.
   const cancel = () => {
     if (flow) {
@@ -520,35 +551,73 @@ export function SignIn({
     setCode('')
   }
 
+  if (addingKey && keyKind) {
+    return (
+      <KeyInstead
+        driver={driver}
+        onCancel={() => setAddingKey(false)}
+        // A stored key changes what is ready: back to the sign-in, which re-reads it.
+        onCreated={() => setAddingKey(false)}
+      />
+    )
+  }
+
   if (!flow || flow.state === 'failed') {
     return (
       <div className="flex flex-col gap-2">
+        {method ? (
+          <div
+            className="flex flex-col gap-1.5"
+            role="radiogroup"
+            aria-label={t('signIn.method')}
+          >
+            {methods.map((m) => (
+              <label
+                key={m.id}
+                className="flex items-center gap-2 text-body text-text"
+              >
+                <input
+                  type="radio"
+                  name={`sign-in-method-${driver}`}
+                  value={m.id}
+                  checked={method === m.id}
+                  onChange={() => setChosen(m.id)}
+                />
+                {t(`signIn.methods.${m.id}`, { defaultValue: m.label })}
+              </label>
+            ))}
+          </div>
+        ) : null}
         <div className="flex flex-wrap items-center gap-3">
           <Button
-            variant="primary"
+            variant={variant}
             onClick={() => start.mutate(captureRequest())}
             disabled={start.isPending}
           >
             {start.isPending ? (
               <Loader2 aria-hidden className="animate-spin" />
             ) : null}
-            {driver === 'claude'
-              ? t('actions.signInClaude')
-              : driver === 'gemini-cli'
-                ? t('actions.signInGoogle')
-                : driver === 'grok'
-                  ? t('actions.signInGrok')
-                  : driver === 'codex' || driver === 'opencode'
-                    ? t('actions.signInChatGPT')
-                    : t('actions.signIn')}
+            {method
+              ? t('signIn.continue')
+              : driver === 'claude'
+                ? t('actions.signInClaude')
+                : driver === 'gemini-cli'
+                  ? t('actions.signInGoogle')
+                  : driver === 'grok'
+                    ? t('actions.signInGrok')
+                    : driver === 'codex' || driver === 'opencode'
+                      ? t('actions.signInChatGPT')
+                      : t('actions.signIn')}
           </Button>
-          {!accountRef && keyKind ? (
-            <a
-              href={keyHref(keyKind)}
-              className="text-caption text-text-2 underline underline-offset-2"
+          {keyKind ? (
+            <Button
+              type="button"
+              variant="link"
+              ref={keyTriggerRef}
+              onClick={() => setAddingKey(true)}
             >
               {t('actions.useApiKey')}
-            </a>
+            </Button>
           ) : null}
         </div>
         {flow?.state === 'failed' ? (
@@ -566,9 +635,12 @@ export function SignIn({
   }
   // The engine says when the tool waits for a pasted code (state needs_code). Claude Code
   // and Gemini CLI show their field from the start, as they always did.
+  const keyAsked =
+    flow.state === 'needs_key' || (flow.state === 'checking' && takesKey)
   const pastesCode =
     driver === 'claude' ||
     driver === 'gemini-cli' ||
+    keyAsked ||
     flow.state === 'needs_code' ||
     (flow.state === 'checking' && !flow.user_code)
   return (
@@ -591,7 +663,7 @@ export function SignIn({
         <Button asChild variant="secondary" className="self-start">
           <a href={flow.url} target="_blank" rel="noreferrer noopener">
             <ExternalLink aria-hidden />
-            {t('signIn.openLink')}
+            {keyAsked ? t('signIn.openKeyPage') : t('signIn.openLink')}
           </a>
         </Button>
       ) : null}
@@ -627,11 +699,17 @@ export function SignIn({
           }}
         >
           <Field
-            label={t('signIn.codeLabel')}
-            description={flow.message || t('signIn.codeHint')}
+            label={keyAsked ? t('signIn.keyLabel') : t('signIn.codeLabel')}
+            description={
+              flow.message ||
+              (keyAsked
+                ? t('signIn.keyHint', { name: TOOL_NAMES[driver] })
+                : t('signIn.codeHint'))
+            }
           >
             <Input
               autoFocus
+              type={keyAsked ? 'password' : undefined}
               value={code}
               onChange={(e) => setCode(e.target.value)}
               autoComplete="off"
@@ -1375,10 +1453,17 @@ export function NewSessionDialog({
   onAdvanced?: (launch?: AdvancedLaunch) => void
 }) {
   const { t } = useTranslation('firstHour')
+  // A tool card's key write must not be cut off by the dialog's own close (X, Escape,
+  // overlay): the write would then finish with no toast and no refresh (#2551).
+  const keyBeingStored = useKeyBeingStored()
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* Keep the phone brand and release version above the expanded dialog. */}
-      <DialogContent className="max-w-lg max-[760px]:max-h-[calc(100dvh-7rem)]">
+    <Dialog
+      open={open}
+      onOpenChange={(o) => (keyBeingStored() ? undefined : onOpenChange(o))}
+    >
+      {/* Keep the release version in the status bar (24 px, over the 64 px phone bar
+          below 761 px) clear of the expanded dialog, which is centred. */}
+      <DialogContent className="max-h-[calc(100dvh-3rem)] max-w-lg max-[760px]:max-h-[calc(100dvh-11rem)]">
         <DialogHeader>
           <DialogTitle>{t('start.dialogTitle')}</DialogTitle>
           <DialogDescription>{t('start.dialogDescription')}</DialogDescription>
@@ -1534,8 +1619,8 @@ export function FirstHourSteps() {
         </div>
         {signedIn || deciding ? null : (
           // A key or a local model needs no install first, and stays offered until a tool
-          // can start a session. The same Providers form as a tool's "Use an API key
-          // instead", which brings the person back here.
+          // can start a session. A page link to the Providers form, which brings the
+          // person back here (keyHref).
           <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-body text-text-2">
             {t('steps.install.orUse')}
             <a

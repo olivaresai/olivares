@@ -360,9 +360,9 @@ def mensaje(cuerpo):
     try:
         j = json.loads(cuerpo)
     except Exception:
-        return cuerpo[:160]
+        return redacta(cuerpo)[:160]
     if isinstance(j, dict) and isinstance(j.get("error"), dict):
-        return str(j["error"].get("message", ""))[:200]
+        return redacta(str(j["error"].get("message", "")))[:200]
     return ""
 
 

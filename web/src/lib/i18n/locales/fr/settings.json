@@ -1,7 +1,7 @@
 {
-  "title": "Réglages",
+  "title": "Paramètres",
   "restoreAll": "Rétablir toutes les valeurs",
-  "search": "Rechercher dans les réglages",
+  "search": "Rechercher dans les paramètres",
   "changedReset": "Modifié · réinitialiser",
   "noMatches": "Aucun réglage ne correspond.",
   "groups": {
@@ -11,9 +11,7 @@
   },
   "nav": {
     "general": "Général",
-    "notifications": "Notifications",
     "keyboard": "Clavier",
-    "sessionDefaults": "Valeurs de session",
     "aiTools": "Outils d’IA",
     "workspaces": "Espaces de travail",
     "deploy": "Déploiement et mises à jour",
@@ -21,7 +19,7 @@
     "setup": "Installation",
     "edition": "Édition et modules",
     "about": "À propos",
-    "sections": "Sections des réglages",
+    "sections": "Sections des paramètres",
     "signing": "Signature des rapports",
     "tracing": "Traces",
     "sessionIdle": "Mémoire des sessions",
@@ -31,7 +29,7 @@
     "title": "Général",
     "scope": "Vos préférences. Elles vous suivent dans chaque espace de travail de cette installation.",
     "theme": "Thème",
-    "themeHint": "Suit le système, sauf si vous choisissez clair ou sombre.",
+    "themeHint": "Suit le système, sauf si vous choisissez clair, sombre ou noir.",
     "density": "Densité",
     "densityHint": "Compact affiche plus de lignes ; confortable se lit plus facilement.",
     "language": "Langue",
@@ -46,10 +44,6 @@
     "confirmStopHint": "Demander une fois avant qu’Arrêter ne termine une session encore au travail.",
     "reduceMotion": "Réduire les animations",
     "reduceMotionHint": "Remplace le mouvement par des fondus. Activé quand le système le demande."
-  },
-  "unavailable": {
-    "notifications": "Les préférences de notification ne sont pas encore enregistrées sur cette installation.",
-    "sessionDefaults": "Les valeurs de session ne sont pas encore enregistrées sur cette installation."
   },
   "sessionNotifications": {
     "title": "Notifications de session",
@@ -189,7 +183,7 @@
       "capabilities": "Serveurs MCP, outils et compétences découverts.",
       "catalog": "Agents et capacités approuvés.",
       "claude-agents": "Agents Claude gérés et leurs approbations.",
-      "claude-policy": "Réglages Claude Code gérés et dérives.",
+      "claude-policy": "Paramètres Claude Code gérés et dérive.",
       "compliance": "Référentiels, contrôles et preuves.",
       "consoleviews": "Favoris et vues enregistrées.",
       "deploy": "Déploiements d'agents et leurs révisions.",
@@ -237,7 +231,7 @@
       "orchestration": "Les flux ne s'exécutent plus.",
       "knowledge": "Les connaissances ne sont plus servies aux agents.",
       "sourcescope": "Les limites de sources ne sont plus appliquées.",
-      "claude-policy": "Les réglages Claude Code gérés ne sont plus vérifiés."
+      "claude-policy": "Les paramètres Claude Code gérés ne sont plus vérifiés."
     },
     "turnOn": "Activer {{name}}",
     "activatedBy": "Activé par {{addons}}. Il reste actif tant que ce module complémentaire est actif.",
@@ -344,9 +338,17 @@
       "stop_many": "{{count}} sessions en cours s'arrêtent. Chacune pourra être reprise après le redémarrage.",
       "stop_other": "{{count}} sessions en cours s'arrêtent. Chacune pourra être reprise après le redémarrage.",
       "none": "Le moteur redémarre une fois sur la nouvelle version.",
-      "confirm": "Installer et redémarrer"
+      "switchNone": "Le moteur redémarre une fois sur l'édition sous licence. Vos données restent où elles sont.",
+      "confirm": "Installer et redémarrer",
+      "switchTitle": "Passer à {{edition}} ?",
+      "switchConfirm": "Changer et redémarrer"
     },
     "alreadyCurrent": "Déjà sur la version la plus récente. Rien n'a été installé.",
-    "restartRequired": "Une version plus récente est installée. Redémarrez le moteur avec son gestionnaire de services pour l'exécuter."
+    "restartRequired": "Une version plus récente est installée. Redémarrez le moteur avec son gestionnaire de services pour l'exécuter.",
+    "switch": "Passer à {{edition}}",
+    "switchTitle": "Passer à {{edition}}",
+    "switched": "Changement installé.",
+    "terminal": "La même chose dans un terminal sur le serveur",
+    "orTerminal": "Ou dans un terminal sur le serveur"
   }
 }

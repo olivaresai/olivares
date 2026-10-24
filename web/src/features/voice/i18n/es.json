@@ -1,6 +1,6 @@
 {
   "title": "Voz y tiempo real",
-  "description": "Sesiones de voz y tiempo real gobernadas en todo el estate. La consola muestra solo referencias y agregados, nunca audio, texto de transcripción, prompts ni PII.",
+  "description": "Sesiones de voz y tiempo real gobernadas en todo el parque. La consola muestra solo referencias y agregados, nunca audio, texto de transcripción, prompts ni PII.",
   "tabs": {
     "sessions": "Sesiones",
     "policies": "Políticas",
@@ -103,7 +103,9 @@
     "decisionsError": "No se han podido leer las decisiones.",
     "noDecisions": "Sin decisiones registradas para esta sesión.",
     "noReason": "sin motivo registrado",
-    "frames": "{{count}} actualización(es) en vivo",
+    "frames_one": "{{count}} actualización en vivo",
+    "frames_many": "{{count}} actualizaciones en vivo",
+    "frames_other": "{{count}} actualizaciones en vivo",
     "open": "Abrir sesión (gobernado)",
     "stream": {
       "connecting": "conectando",

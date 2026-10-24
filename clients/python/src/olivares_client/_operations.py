@@ -11,7 +11,7 @@ from typing import TypedDict, cast
 from urllib.parse import quote
 
 API_VERSION = "v1"
-SPEC_HASH = "360874048f1625ed3033ab9461f76682a7ff15cd9fbafdbe2583a13b91ff49be"
+SPEC_HASH = "832886a267f7ebde6958d24d8347fbb09b88faf990c2bd0aa8a14e9409755aa0"
 STABILITY_POLICY = "https://olivares.ai/docs"
 
 class _AuthCapabilityQuestionRequired(TypedDict):
@@ -949,7 +949,7 @@ class OperationsMixin:
         return self._do("GET", "/v1/console/activation", "/v1/console/activation", query=query, headers=headers, tenant=tenant)
 
     def post_v1_console_activation_apply(self, body=None, *, tenant=None, headers=None, **query):
-        """POST /v1/console/activation/apply — Enable or disable a preset, or promote one add-on (AAL3 step-up; 501 without the activation service)
+        """POST /v1/console/activation/apply — Enable or disable a preset or one family, or promote one add-on (AAL3 step-up; 501 without the activation service)
 
         Stability: stable.
         """
@@ -1999,7 +1999,7 @@ class OperationsMixin:
         return self._do("DELETE", "/v1/m/agenttools/sign-in/{id}", "/v1/m/agenttools/sign-in/" + quote(str(id), safe=""), query=query, headers=headers, tenant=tenant)
 
     def post_v1_m_agenttools_sign_in_by_id_code(self, id, body, *, tenant=None, headers=None, **query):
-        """POST /v1/m/agenttools/sign-in/{id}/code — Hands the code shown on Claude's sign-in page to the waiting login and answers once the tool says whether it is signed in.
+        """POST /v1/m/agenttools/sign-in/{id}/code — Hands the code shown on Claude's sign-in page, or the API key a needs_key login waits for, to the waiting login and answers once the tool says whether it is signed in.
 
         Stability: beta.
         """
@@ -6917,6 +6917,20 @@ class OperationsMixin:
         """
         return self._do("GET", "/v1/m/sessions/runs/{ref}/activity/agents/{agent}", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/activity/agents/" + quote(str(agent), safe=""), query=query, headers=headers, tenant=tenant)
 
+    def post_v1_m_sessions_runs_by_ref_archive(self, ref, *, tenant=None, headers=None, **query):
+        """POST /v1/m/sessions/runs/{ref}/archive — Archives the run for every reader, idempotently: an archived run keeps its first archived_at.
+
+        Stability: beta.
+        """
+        return self._do("POST", "/v1/m/sessions/runs/{ref}/archive", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/archive", query=query, headers=headers, tenant=tenant)
+
+    def delete_v1_m_sessions_runs_by_ref_archive(self, ref, *, tenant=None, headers=None, **query):
+        """DELETE /v1/m/sessions/runs/{ref}/archive — Unarchives the run, idempotently.
+
+        Stability: beta.
+        """
+        return self._do("DELETE", "/v1/m/sessions/runs/{ref}/archive", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/archive", query=query, headers=headers, tenant=tenant)
+
     def get_v1_m_sessions_runs_by_ref_attach(self, ref, *, tenant=None, headers=None, **query):
         """GET /v1/m/sessions/runs/{ref}/attach — Streams a live session's bridged I/O as server-sent events, replaying from an optional ?from=<seq> cursor.
 
@@ -6979,6 +6993,20 @@ class OperationsMixin:
         Stability: beta.
         """
         return self._do("GET", "/v1/m/sessions/runs/{ref}/diff/file", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/diff/file", query=query, headers=headers, tenant=tenant)
+
+    def post_v1_m_sessions_runs_by_ref_done(self, ref, *, tenant=None, headers=None, **query):
+        """POST /v1/m/sessions/runs/{ref}/done — Marks the run done for the caller, idempotently.
+
+        Stability: beta.
+        """
+        return self._do("POST", "/v1/m/sessions/runs/{ref}/done", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/done", query=query, headers=headers, tenant=tenant)
+
+    def delete_v1_m_sessions_runs_by_ref_done(self, ref, *, tenant=None, headers=None, **query):
+        """DELETE /v1/m/sessions/runs/{ref}/done — Removes the caller's done mark, idempotently.
+
+        Stability: beta.
+        """
+        return self._do("DELETE", "/v1/m/sessions/runs/{ref}/done", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/done", query=query, headers=headers, tenant=tenant)
 
     def get_v1_m_sessions_runs_by_ref_events(self, ref, *, tenant=None, headers=None, **query):
         """GET /v1/m/sessions/runs/{ref}/events — sessions module route (requires sessions:run:read)
@@ -7064,6 +7092,13 @@ class OperationsMixin:
         """
         return self._do_json_required("POST", "/v1/m/sessions/runs/{ref}/move", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/move", body=body, query=query, headers=headers, tenant=tenant)
 
+    def put_v1_m_sessions_runs_by_ref_name(self, ref, body, *, tenant=None, headers=None, **query):
+        """PUT /v1/m/sessions/runs/{ref}/name — Renames the run; an empty name clears it.
+
+        Stability: beta.
+        """
+        return self._do_json_required("PUT", "/v1/m/sessions/runs/{ref}/name", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/name", body=body, query=query, headers=headers, tenant=tenant)
+
     def put_v1_m_sessions_runs_by_ref_peers(self, ref, body, *, tenant=None, headers=None, **query):
         """PUT /v1/m/sessions/runs/{ref}/peers — Stores one operator choice on the existing run row.
 
@@ -7105,6 +7140,20 @@ class OperationsMixin:
         Stability: beta.
         """
         return self._do("POST", "/v1/m/sessions/runs/{ref}/resume", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/resume", query=query, headers=headers, tenant=tenant)
+
+    def post_v1_m_sessions_runs_by_ref_snooze(self, ref, body, *, tenant=None, headers=None, **query):
+        """POST /v1/m/sessions/runs/{ref}/snooze — Snoozes the run for the caller until a moment still to come, or moves the moment of a snooze already set.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/sessions/runs/{ref}/snooze", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/snooze", body=body, query=query, headers=headers, tenant=tenant)
+
+    def delete_v1_m_sessions_runs_by_ref_snooze(self, ref, *, tenant=None, headers=None, **query):
+        """DELETE /v1/m/sessions/runs/{ref}/snooze — Ends the caller's snooze, idempotently.
+
+        Stability: beta.
+        """
+        return self._do("DELETE", "/v1/m/sessions/runs/{ref}/snooze", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/snooze", query=query, headers=headers, tenant=tenant)
 
     def post_v1_m_sessions_runs_by_ref_stop(self, ref, body=None, *, tenant=None, headers=None, **query):
         """POST /v1/m/sessions/runs/{ref}/stop — sessions module route (requires sessions:run:write)

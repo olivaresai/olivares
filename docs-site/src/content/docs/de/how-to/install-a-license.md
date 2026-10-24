@@ -131,8 +131,19 @@ Mit installierter Lizenz ist das kommerzielle Binary nur noch einen Download ent
 wird neu installiert, und keine Daten werden verschoben:
 
 ```sh
-olivares upgrade --enterprise --token <TOKEN>
+export OLIVARES_UPGRADE_TOKEN=<TOKEN>   # not needed once this installation is connected
+olivares upgrade --edition business
 ```
+
+`olivares license install` und `olivares license status` geben den genauen Befehl für die Art aus, wie diese Installation installiert wurde, und die Ansicht **Edition & license** der Konsole zeigt denselben Schritt als einen Button, **Zu Business wechseln**: Die Engine lädt den Build herunter, prüft ihn, tauscht ihn an Ort und Stelle aus und startet damit neu. Das Download-Token steht auf der Seite **Downloads** des lizenzierten Download-Portals ([https://licenses.olivares.ai/portal/downloads](https://licenses.olivares.ai/portal/downloads)), neben diesen Befehlen, und in Ihrer Lizenz-E-Mail; übergeben Sie es wie oben über den Namen, damit es nicht in der Prozessliste erscheint. Eine verbundene Installation (`olivares license connect start`) braucht kein Token. `--enterprise` ist die ältere Schreibweise derselben Route. Der Button der Konsole braucht eines von beiden, das Token in der Umgebung der Engine selbst oder diese Verbindung; ohne beides zeigt die Ansicht stattdessen den Befehl.
+
+:::caution[Paketinstallationen]
+Bei einer deb-, rpm-, apk- oder AUR-Installation gehört `/usr/bin/olivares` dem Paketmanager, daher wird
+dieser Befehl abgelehnt: Er endet mit Exit-Code 2, bevor etwas heruntergeladen wird. Nutzen Sie das
+Business-Paket, sobald der berechtigte Paketkanal es bereitstellt. Bis dahin ersetzen Sie die Datei
+selbst mit `--target /usr/bin/olivares --data-dir /var/lib/olivares`; die Paketdatenbank passt dann nicht mehr zu ihr. `--check`
+zeigt weiterhin den Plan.
+:::
 
 Der Befehl lädt den signierten kommerziellen Build für Ihre Plattform herunter und **verifiziert
 die Signatur offline** — ein manipuliertes Artefakt bricht das Upgrade ab, während das
@@ -142,7 +153,7 @@ also auch, wenn Sie diese Version bereits ausführen. Verwenden Sie zuerst `--ch
 sehen möchten, ohne ihn auszuführen; er nennt den Wechsel `edition: community -> enterprise`:
 
 ```sh
-olivares upgrade --enterprise --token <TOKEN> --check
+olivares upgrade --edition business --check
 ```
 
 Starten Sie den Dienst neu und schalten Sie anschließend die Module ein:
@@ -177,8 +188,8 @@ Prozessliste erscheint:
 
 ```sh
 export OLIVARES_UPGRADE_TOKEN=<TOKEN>
-docker compose exec -e OLIVARES_UPGRADE_TOKEN olivares olivares upgrade --enterprise --yes
-docker compose up -d --force-recreate olivares
+docker compose exec -e OLIVARES_UPGRADE_TOKEN olivares olivares upgrade --edition business --yes
+docker compose restart olivares
 ```
 
 Das Release liegt in `ota/` im Datenverzeichnis (`/var/lib/olivares/ota` im ausgelieferten

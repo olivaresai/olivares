@@ -48,6 +48,8 @@
     "running": "実行中",
     "idle": "待機中",
     "stopped": "停止",
+    "done": "完了",
+    "ended": "終了",
     "failed": "失敗",
     "cleaned": "クリーンアップ済み"
   },
@@ -250,7 +252,7 @@
     "noOutput": "まだ出力はありません。",
     "waiting": "出力を待機中…",
     "ended": "セッションの I/O ストリームが終了しました。",
-    "lag": "{{count}} 個のフレームがドロップされました（バッファオーバーフロー）。以下の出力はギャップの後から再開します。",
+    "lag_other": "{{count}} 個のフレームがドロップされました（バッファオーバーフロー）。以下の出力はギャップの後から再開します。",
     "remoteControl": "これは remote-control セッションです。I/O は Anthropic のクラウドへ中継され、ここにはブリッジされません。Olivares はライフサイクルのみを管理します。",
     "notLive": "このセッションはライブではありません（現在は {{state}}）。I/O にアタッチするには再開してください。",
     "ioUnavailableNotLiveOnNode": "このノードにブリッジされた I/O はありません。",
@@ -268,7 +270,7 @@
     "interruptUnknown": "中断の結果を確認できませんでした。再試行する前にセッションを確認してください。",
     "interruptWorkConflict": "現在の作業状態では、このセッションを中断できません。実行を更新して状態を確認してください。",
     "blocked": {
-      "notLive": "送信するにはセッションを開始または再開してください。",
+      "notLive": "メッセージを送るにはセッションを再開してください。",
       "approval": "起動は承認待ちです。承認されると送信できます。",
       "sending": "送信中… セッションが受け付けるまでお待ちください。",
       "uploading": "画像を保存しています… 添付が終わると送信できます。",
@@ -440,7 +442,6 @@
     "title": "プロバイダープロファイル",
     "subtitle": "セッションでツールをどう実行するか（どのツールを使い、どの設定フォルダーからサインインするか）を示します。プロファイルは、このサーバーに既にあるツールのインストールを指すだけで、何もインストールせず、サインインも行いません。",
     "register": "プロファイルを登録",
-    "nextAction": "プロファイルを登録",
     "rowMenu": "{{name}} の行操作",
     "search": "プロファイルを検索…",
     "allStates": "すべての状態",
@@ -512,8 +513,8 @@
       "submit": "登録",
       "submitting": "登録中…",
       "success": "プロバイダープロファイルを登録しました",
-      "homesOptionalManaged": "プロバイダーの API キーを使う場合は、両方のフォルダーを空のままにしてください。このサーバーがプロファイル専用のフォルダーを作成します。",
-      "missingProvider": "このプロファイルで使う API キーを選んでください。",
+      "homesOptionalManaged": "プロバイダーの APIキーを使う場合は、両方のフォルダーを空のままにしてください。このサーバーがプロファイル専用のフォルダーを作成します。",
+      "missingProvider": "このプロファイルで使う APIキーを選んでください。",
       "missingHomesOrNone": "両方のフォルダーを指定するか、両方とも空にしてください。",
       "missingHomes": "両方のフォルダーを指定してください。このサーバー上に既に存在している必要があります。"
     },
@@ -547,7 +548,8 @@
       "created": "作成日時",
       "updated": "更新日時",
       "retiredAt": "廃止日時",
-      "loadFailed": "このプロファイルを読み取れませんでした。"
+      "loadFailed": "このプロファイルを読み取れませんでした。",
+      "loading": "プロファイルを読み込んでいます…"
     },
     "configuration": {
       "title": "設定",
@@ -634,13 +636,8 @@
     "view": {
       "profilesTitle": "プロバイダープロファイル",
       "bindingsTitle": "ソースバインディング",
-      "accountsTitle": "プロバイダーアカウント",
-      "tabProfiles": "プロファイル",
-      "tabBindings": "バインディング",
-      "tabAccounts": "アカウント",
-      "openProfiles": "プロバイダープロファイルのページを開く",
-      "openBindings": "ソースバインディングのページを開く",
-      "crossHint": "プロファイルとバインディングにはそれぞれ専用ページもあり、それぞれ固有の読み取り権限で入ります。"
+      "openProfiles": "ツールを開く",
+      "crossHint": "各アカウントは、そのプロファイルとソースバインディングとともに「ツール」にもあります。"
     },
     "authority": {
       "lost": "現在の権限ではこの操作は許可されなくなりました。何も送信されていません。",
@@ -856,8 +853,8 @@
     "transport": "トランスポート",
     "isolation": "隔離",
     "failedInline": "起動依頼は拒否されました。選択内容はそのままです。",
-    "stoppedAtStart": "The tool started and stopped at once. What it said:",
-    "stoppedSilently": "It printed nothing. Check on AI tools that it is installed and signed in, then start again.",
+    "stoppedAtStart": "ツールは起動した直後に停止しました。出力された内容:",
+    "stoppedSilently": "何も出力されませんでした。AI ツールでインストールとサインインを確認してから、もう一度開始してください。",
     "state": {
       "ready": "ローカル要件を確認済み",
       "not_configured": "設定が不足",
@@ -908,11 +905,11 @@
       "auth_source_required": "このドライバーには明示的な認証ソースが必要です。account-home またはマネージド注入です。その選択はプロファイル上で行い、この検査からは行いません。",
       "managed_injection_not_applied_for_transport": "マネージド注入が選択されていますが、このトランスポートはそれを適用しません。",
       "claude_credential_source_configured": "Claude の推論資格情報ソースは設定済みです。",
-      "claude_credential_source_not_configured": "ここには Claude Code の資格情報がありません。AI ツールで Claude Code 自身のログインでサインインするか、プロバイダーに保存した API キーを使ってください。独自の推論ゲートウェイを持つデプロイでは OLIVARES_SESSION_RUNTIME_WIF または OLIVARES_SESSION_RUNTIME_TOKEN_FILE を設定します。",
+      "claude_credential_source_not_configured": "ここには Claude Code の資格情報がありません。AI ツールで Claude Code 自身のログインでサインインするか、プロバイダーに保存した APIキーを使ってください。独自の推論ゲートウェイを持つデプロイでは OLIVARES_SESSION_RUNTIME_WIF または OLIVARES_SESSION_RUNTIME_TOKEN_FILE を設定します。",
       "provider_credential_adapter_configured": "このドライバーの資格情報アダプターは設定済みです。",
       "provider_credential_adapter_not_configured": "このドライバーのガバナンス対象資格情報アダプターは設定されていません。別プロバイダーの bearer を流用したり、account-home にフォールバックしたりしないでください。",
       "credential_source_not_injected": "この組み合わせでは推論資格情報を注入しません。",
-      "provider_record_bound": "This profile runs on an API key saved in Providers; that key is its credential.",
+      "provider_record_bound": "このプロファイルは、プロバイダーに保存された APIキーで動作します。そのキーが資格情報です。",
       "runtime_credentials_wired": "work/K3 のランタイム資格情報は設定済みです。",
       "runtime_credentials_not_requested": "この構成は work/K3 のランタイム資格情報を要求しません。",
       "runtime_credential_wiring_incomplete": "work/K3 のランタイム資格情報の設定が不完全です。オペレーターがその構成を確認します。この読み取りは商用資格情報を要求しません。",
@@ -929,7 +926,7 @@
       "configure_provider_program": "このランタイムに公式プロバイダー CLI を構成してください。",
       "review_profile_homes": "管理用の構成読み取りで、保存済み Homes を確認してください。",
       "authorize_auth_source": "プロファイルで account-home またはマネージド注入を認可してください。",
-      "configure_claude_credential_source": "AI ツールで Claude Code にサインインするか、プロバイダーの API キーを使ってください。",
+      "configure_claude_credential_source": "AI ツールで Claude Code にサインインするか、プロバイダーの APIキーを使ってください。",
       "configure_provider_credential_adapter": "このツールの資格情報アダプターを設定してください。",
       "review_runtime_credential_composition": "work/K3 のランタイム資格情報の構成を確認してください。",
       "select_supported_selection": "このランタイムが実証するトランスポートと隔離を選んでください。",

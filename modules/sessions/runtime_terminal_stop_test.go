@@ -463,7 +463,7 @@ func TestRuntime_TerminalDeleteKeepsUncollectedProcess(t *testing.T) {
 	if err != nil || before.State != stateCleaned {
 		t.Fatalf("offline cleanup: state=%s err=%v", before.State, err)
 	}
-	if err := m.deleteRun(ctx, tenant, created.RunRef); !isRunConflict(err) {
+	if err := m.deleteRun(ctx, tenant, created.RunRef, "test", model.ActorSystem); !isRunConflict(err) {
 		t.Errorf("delete must retain the uncollected child's row: %v", err)
 	}
 	after, err := m.getRun(ctx, tenant, created.RunRef)
@@ -476,7 +476,7 @@ func TestRuntime_TerminalDeleteKeepsUncollectedProcess(t *testing.T) {
 	if err := m.stopAllRuns(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := m.deleteRun(ctx, tenant, created.RunRef); err != nil {
+	if err := m.deleteRun(ctx, tenant, created.RunRef, "test", model.ActorSystem); err != nil {
 		t.Errorf("delete after confirmed collection: %v", err)
 	}
 }

@@ -127,7 +127,7 @@ func TestDeleteRun_RemovesLegacyRowsOfARunWithNoManagedRow(t *testing.T) {
 		}
 	}
 
-	if err := m.deleteRun(ctx, tenant, runRef); err != nil {
+	if err := m.deleteRun(ctx, tenant, runRef, "test", model.ActorSystem); err != nil {
 		t.Fatal(err)
 	}
 	live, timeline := liveAndTimelineRefs(t, h.st, tenant)
@@ -203,7 +203,7 @@ func TestDeleteRun_TakesTheLiveRowsOfItsSessionAndNoOtherSession(t *testing.T) {
 	if _, err := m.cleanupRun(ctx, tenant, removed.RunRef, "user:u1", model.ActorUser); err != nil {
 		t.Fatal(err)
 	}
-	if err := m.deleteRun(ctx, tenant, removed.RunRef); err != nil {
+	if err := m.deleteRun(ctx, tenant, removed.RunRef, "test", model.ActorSystem); err != nil {
 		t.Fatal(err)
 	}
 

@@ -40,7 +40,13 @@ if __name__ == '__main__':
     parser.add_argument('archive', type=Path)
     parser.add_argument('destination', type=Path)
     args = parser.parse_args()
+    # The attempt that produced the artifact is pr-build's output, never this job's own
+    # GITHUB_RUN_ATTEMPT: "re-run failed jobs" re-runs userspace-compat at a new attempt
+    # while pr-build's earlier success keeps its artifact (#2749).
+    build_attempt = os.environ.get('BUILD_ATTEMPT', '')
+    if not build_attempt:
+        parser.error('pr-build reported no attempt for the build artifact')
     event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
     head = event['pull_request']['head']['sha']
     extract(args.archive, args.destination, head, head,
-            os.environ['GITHUB_RUN_ID'], os.environ['GITHUB_RUN_ATTEMPT'], os.environ['GITHUB_REPOSITORY'])
+            os.environ['GITHUB_RUN_ID'], build_attempt, os.environ['GITHUB_REPOSITORY'])

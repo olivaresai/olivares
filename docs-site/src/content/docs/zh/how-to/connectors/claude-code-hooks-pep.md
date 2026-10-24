@@ -89,12 +89,12 @@ OTLP 遥测进、访问边出。本页讲的是**治理那一半**：Claude Code
 
 ## 你将在控制台中看到什么
 
-**Claude Code governance** 是编写与真值闭环的界面：你所意图的策略、各主机实际承载的配置，
+**托管策略** 是编写与真值闭环的界面：你所意图的策略、各主机实际承载的配置，
 以及二者之间的漂移。拦截项与遥测缺口发现项落在 **Security** 中；会话本身仍在
 **Sessions** 中可见：
 
-<img class="light:sl-hidden" src="/console/claude-policy-dark.png" alt="Claude Code 治理视图 —— 策略编写与整队态势集于一处。" />
-<img class="dark:sl-hidden" src="/console/claude-policy-light.png" alt="Claude Code 治理视图 —— 策略编写与整队态势集于一处。" />
+<img class="light:sl-hidden" src="/console/claude-policy-dark.png" alt="托管策略视图 —— 策略编写与整队态势集于一处。" />
+<img class="dark:sl-hidden" src="/console/claude-policy-light.png" alt="托管策略视图 —— 策略编写与整队态势集于一处。" />
 
 ## 诚实的局限
 

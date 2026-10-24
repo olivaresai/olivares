@@ -7,6 +7,7 @@ package sessions
 import (
 	"context"
 	"crypto/sha256"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -48,6 +49,10 @@ type childDecision struct {
 	resumeID string
 	// ws is the resolved workspace; nil when the run has none.
 	ws *resolvedWorkspace
+	// networkModel is the model an own-login OpenCode launch is held to, read once
+	// by launchChild (launchNetworkModel) for the refusal, the policy and the driver.
+	networkModel    string
+	networkModelSet bool
 	// gateEnv is the launch gate's grant, already checked (validateGateEnv).
 	gateEnv []EnvVar
 	// providerEnv is a registered driver's governed managed credential; empty
@@ -73,7 +78,11 @@ func (m *Module) launchChild(ctx, runCtx context.Context, tenant model.TenantID,
 		return LaunchSpec{}, nil, "tool version selection", err
 	}
 	p.resolvedProgram, p.resolvedIdentity = toolProgramIdentity(program)
+	d.networkModel, d.networkModelSet = launchNetworkModel(launchDriverKey(*p), *p, d), true
 	spec := m.childSpec(*p, d)
+	if err := openCodeUnknownHosts(launchDriverKey(*p), d.cred.bound, d.networkModel, spec.NetworkPolicy); err != nil {
+		return spec, nil, "provider hosts", err
+	}
 	m.watchEgressRefusals(tenant, runRef, spec.NetworkPolicy)
 	if spec.NetworkPolicy != nil && keyHeaderKinds[d.cred.bound.Kind] && spec.NetworkPolicy.CredentialSHA256 == ([sha256.Size]byte{}) {
 		m.warnf("sessions: a launch on a provider key has no key to pin; the session proxy does not check which key it forwards",
@@ -88,6 +97,37 @@ func (m *Module) launchChild(ctx, runCtx context.Context, tenant model.TenantID,
 	}
 	proc, err := m.rt.Runner.Launch(runCtx, spec)
 	return spec, proc, "tool process launch", err
+}
+
+// launchNetworkModel is the model whose provider an own-login OpenCode launch is held
+// to: the launch's own, or else the one the account's OpenCode configuration sets,
+// which OpenCode uses when the launch names none (#3094).
+func launchNetworkModel(driver string, p CreateRunParams, d childDecision) string {
+	if p.Model != "" || driver != providerDriverOpenCode || d.cred.bound.Kind != "" || p.ProviderHome == nil {
+		return p.Model
+	}
+	return openCodeConfiguredModel(p.ProviderHome.ConfigHome)
+}
+
+// openCodeUnknownHosts refuses an own-login OpenCode launch whose hosts are not known
+// (#3094): its model's provider has no entry in openCodeOwnLoginHosts, or it names no
+// model and the account's configuration sets none. Such a session would keep the host
+// network, and a session reaches only its provider or does not start.
+func openCodeUnknownHosts(driver string, bound BoundProvider, model string, network *egress.Policy) error {
+	if driver != providerDriverOpenCode || bound.Kind != "" || network != nil {
+		return nil
+	}
+	if facts, ok := driverfacts.Lookup(driver); !ok || !facts.EgressMeasured {
+		return nil
+	}
+	if model == "" {
+		return &runErr{503, "OpenCode's own sign-in names no model here, and its configuration sets none that Olivares can read (model in opencode.jsonc or opencode.json, plain JSON), so the hosts it would reach are not known; choose a model in the console's launch form, or olivares session start <folder> --model opencode/<model>"}
+	}
+	provider := openCodeModelProvider(model)
+	if provider == "" {
+		return &runErr{503, fmt.Sprintf("OpenCode's own sign-in is held to its login's hosts, known for the opencode, opencode-go and openai providers; model %q names no provider (provider/model): choose one of theirs, or a provider key", model)}
+	}
+	return &runErr{503, fmt.Sprintf("OpenCode's own sign-in is held to its login's hosts, known for the opencode, opencode-go and openai providers; model %q names %q: choose one of those, or a provider key", model, provider)}
 }
 
 // claudeBoundProviderEnv holds a Claude Code session on a key from Providers to that key's
@@ -141,6 +181,11 @@ func (m *Module) childSpec(p CreateRunParams, d childDecision) LaunchSpec {
 	drv, driven := m.driverFor(driverKey)
 	dir, mount := launchWorkspaceTarget(p, d.ws)
 
+	netModel := d.networkModel
+	if !d.networkModelSet {
+		netModel = launchNetworkModel(driverKey, p, d)
+	}
+	network := sessionNetworkPolicy(driverKey, d.cred.bound, netModel, d.gateEnv, d.providerEnv)
 	var args []string
 	var driverLaunch DriverLaunch
 	program := p.resolvedProgram
@@ -152,7 +197,7 @@ func (m *Module) childSpec(p CreateRunParams, d childDecision) LaunchSpec {
 		if program == "" {
 			program = m.driverProgram(drv)
 		}
-		driverLaunch = DriverLaunch{WorkDir: dir, Model: p.Model, Effort: p.Effort, Preset: launchPreset(p), CodexSandboxFallback: p.codexSandboxFallback, LocalModelEndpoint: d.cred.localModelEndpoint, LocalModels: d.cred.localModels, BoundProvider: d.cred.bound}
+		driverLaunch = DriverLaunch{WorkDir: dir, Model: netModel, Effort: p.Effort, Preset: launchPreset(p), CodexSandboxFallback: p.codexSandboxFallback, LocalModelEndpoint: d.cred.localModelEndpoint, LocalModels: d.cred.localModels, BoundProvider: d.cred.bound, OwnNetwork: network != nil}
 		if p.ProviderHome != nil {
 			driverLaunch.ConfigHome = p.ProviderHome.ConfigHome
 			driverLaunch.UserHome = p.ProviderHome.UserHome
@@ -348,7 +393,7 @@ func (m *Module) childSpec(p CreateRunParams, d childDecision) LaunchSpec {
 		Dir:           dir,
 		Env:           env,
 		BoundProvider: d.cred.bound,
-		NetworkPolicy: sessionNetworkPolicy(driverKey, d.cred.bound, d.gateEnv, d.providerEnv),
+		NetworkPolicy: network,
 		EnvAllow:      p.EnvAllow,
 		Isolation:     p.Isolation,
 		WaitDelay:     m.rt.waitDelay,
@@ -420,8 +465,14 @@ func (m *Module) prepareSessionLaunch(ctx, runCtx context.Context, tenant model.
 	if err := m.configureGitRead(ctx, runCtx, tenant, runRef, p, spec); err != nil {
 		return "repository read credential", err
 	}
+	if err := m.configureCredentials(ctx, runCtx, tenant, runRef, p, spec); err != nil {
+		return "managed credentials", err
+	}
 	if err := m.configureProfilePackages(ctx, runCtx, tenant, runRef, p, spec); err != nil {
 		return "profile programs, package registries and egress hosts", err
+	}
+	if err := m.prepareOpenCodeSearch(*p, spec); err != nil {
+		return "OpenCode's ripgrep", err
 	}
 	if err := m.prepareCodexSandbox(ctx, p, spec); err != nil {
 		return "Codex sandbox check", err
@@ -493,11 +544,32 @@ func (m *Module) prepareClaudeHooks(spec *LaunchSpec, p CreateRunParams, runRef 
 // the record's key (never the key) and the proxy forwards only that one. Only the
 // kinds whose tool sends its key in a header the proxy compares are pinned: Claude
 // Code (X-Api-Key) and Codex (bearer). Gemini CLI and xAI keys are not checked.
-func sessionNetworkPolicy(driver string, bound BoundProvider, injected, credentials []EnvVar) *egress.Policy {
-	if facts, ok := driverfacts.Lookup(driver); bound.Kind == "" || !ok || !facts.EgressMeasured {
+//
+// OpenCode's own login has no record: its model's provider names the hosts it
+// needs (openCodeOwnLoginHosts), and a model naming none keeps today's network.
+func sessionNetworkPolicy(driver string, bound BoundProvider, model string, injected, credentials []EnvVar) *egress.Policy {
+	if facts, ok := driverfacts.Lookup(driver); !ok || !facts.EgressMeasured {
 		return nil
 	}
-	p := &egress.Policy{Providers: []string{bound.Endpoint}}
+	var p *egress.Policy
+	switch {
+	case bound.Kind != "":
+		p = &egress.Policy{Providers: []string{bound.Endpoint}}
+	case driver == providerDriverOpenCode:
+		hosts, ok := openCodeOwnLoginHosts[openCodeModelProvider(model)]
+		if !ok {
+			return nil
+		}
+		// The own login's hosts are public names: a reserved address refuses.
+		// Copies: a profile's registries are appended to this launch's policy
+		// (applyProfileRegistries), never to the table every launch reads.
+		p = &egress.Policy{Providers: slices.Clone(hosts[:1]), PublicProviders: slices.Clone(hosts[1:]), PublicOnly: true}
+	default:
+		return nil
+	}
+	if driver == providerDriverOpenCode {
+		p.LoopbackPorts = []int{openCodeACPPort}
+	}
 	if keyHeaderKinds[bound.Kind] {
 		keyEnv := providerRecordKeyEnv(bound.Kind)
 		for _, item := range credentials {

@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 """Exercise the real web task with a deterministic pnpm fixture, without Node."""
+import json
 import os
 from pathlib import Path
 import re
@@ -68,6 +69,8 @@ class WebConsumerTests(unittest.TestCase):
                                 scripts / "ci-postgres-service.sh")
                 # Stage a valid downloaded artifact; run the real shell steps in
                 # workflow order, each in its own shell just as Actions does.
+                head = subprocess.check_output(["git", "rev-parse", "HEAD"],
+                                               cwd=repo, env=env, text=True).strip()
                 artifact = top / "web-generation-artifact"
                 artifact.mkdir()
                 dist = source / "dist"
@@ -75,8 +78,12 @@ class WebConsumerTests(unittest.TestCase):
                 (dist / "index.html").write_text("generated console")
                 subprocess.run(["tar", "-czf", str(artifact / "dist.tar.gz"), "dist"],
                                cwd=source, check=True)
+                manifest = {"schema": "olivares.web-generation/v1", "checkout_sha": head,
+                            "pr_head_sha": head, "repository": "example-org/example-repo",
+                            "run_id": "1", "run_attempt": "1"}
+                (artifact / "manifest.json").write_text(json.dumps(manifest) + "\n")
                 (artifact / "SHA256SUMS").write_bytes(subprocess.check_output(
-                    ["sha256sum", "dist.tar.gz"], cwd=artifact))
+                    ["sha256sum", "dist.tar.gz", "manifest.json"], cwd=artifact))
                 output = repo / "core/internal/webui"
                 output.mkdir(parents=True)
                 low_port, high_port = map(int, Path(
@@ -84,7 +91,9 @@ class WebConsumerTests(unittest.TestCase):
                 self.assertLess(low_port, high_port)
                 run_env = dict(env, RUNNER_TEMP=tmp, GITHUB_WORKSPACE=str(repo),
                                GITHUB_ENV=str(top / "github-env"),
-                               PGPORT_HOST=str(low_port), PGPORT_OTHER=str(high_port))
+                               PGPORT_HOST=str(low_port), PGPORT_OTHER=str(high_port),
+                               GITHUB_SHA=head, GITHUB_REPOSITORY="example-org/example-repo",
+                               GITHUB_RUN_ID="1", GITHUB_RUN_ATTEMPT="1", GENERATION_ATTEMPT="1")
                 for step in steps[checkout + 1:max(guard, embed) + 1]:
                     if "        run: |\n" not in step:
                         continue
@@ -118,6 +127,7 @@ class WebConsumerTests(unittest.TestCase):
                         if 'run: python3 scripts/capture-web-generation.py' in job)
         self.assertIn('actions/upload-artifact@', jobs[producer])
         self.assertIn('bundle-artifact: web-generation-', jobs[producer])
+        self.assertIn('bundle-attempt: ${{ github.run_attempt }}', jobs[producer])
         for name in ['race-root', 'race-workspace']:
             with self.subTest(job=name):
                 job = jobs[name]
@@ -126,12 +136,52 @@ class WebConsumerTests(unittest.TestCase):
                 self.assertIn('name: ${{ needs.' + producer + '.outputs.bundle-artifact }}', job)
                 self.assertIn('OLIVARES_REQUIRE_WEB_BUNDLE: "1"', job)
                 steps = job.split('      - name: embed the verified console output\n', 1)[1]
+                embed_step = steps.split('\n      - ', 1)[0]
                 embed = steps.split('        run: |\n', 1)[1].split('\n      - ', 1)[0]
                 self.assertLess(job.index('tar -xzf dist.tar.gz'), job.index('bash scripts/race-groups.sh'))
-                # Execute the consumer: a corrupt archive must fail before extraction.
-                for valid in [True, False]:
-                    with self.subTest(valid=valid), tempfile.TemporaryDirectory() as tmp:
+                # The shape that makes the step read the producing attempt: the bindings below
+                # are what the executed cases inject, so a wrong binding fails here, not only in CI.
+                self.assertIn('PR_HEAD: ${{ github.sha }}', embed_step)
+                self.assertIn('GENERATION_ATTEMPT: ${{ needs.' + producer + '.outputs.bundle-attempt }}',
+                              embed_step)
+                self.assertNotIn('--arg attempt "$GITHUB_RUN_ATTEMPT"', embed)
+                # Execute the consumer: only the producer's own identity may extract, and a
+                # foreign manifest or a corrupt archive must fail before extraction.
+                env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+                # (manifest changes, corrupt archive, stale candidate, setup's attempt, this job's
+                # attempt): each refusal changes one thing. A stale candidate names an older commit
+                # in the manifest and PR_HEAD, while the checkout stays on the candidate; only the
+                # checkout guard can refuse it. The manifest carries the PRODUCING job's attempt
+                # ('1'): "re-run failed jobs" re-runs a race job at attempt 2 against setup's
+                # earlier success, so this job's own attempt never decides (#2749).
+                cases = {
+                    'matching identity': ({}, False, False, '1', '1'),
+                    're-run of a failed race job': ({}, False, False, '1', '2'),
+                    'other checkout': ({'checkout_sha': '0' * 40}, False, False, '1', '1'),
+                    'other pr head': ({'pr_head_sha': '0' * 40}, False, False, '1', '1'),
+                    'other schema': ({'schema': 'olivares.web-generation/v0'}, False, False, '1', '1'),
+                    'other run': ({'run_id': '41'}, False, False, '1', '1'),
+                    # The manifest names this job's own attempt, not the producer's: refused.
+                    'other attempt': ({'run_attempt': '2'}, False, False, '1', '2'),
+                    'other repository': ({'repository': 'fork/project'}, False, False, '1', '1'),
+                    'checkout is not the candidate': ({}, False, True, '1', '1'),
+                    'corrupt archive': ({}, True, False, '1', '1'),
+                    'empty producing attempt': ({}, False, False, '', '1'),
+                }
+                for case, (changed, corrupt, stale, producer_attempt, job_attempt) in cases.items():
+                    with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
                         root = Path(tmp)
+                        subprocess.run(['git', 'init', '-q', tmp], env=env, check=True)
+                        for message in ['previous', 'candidate']:
+                            subprocess.run(['git', '-c', 'user.name=Fixture',
+                                            '-c', 'user.email=fixture@example.invalid',
+                                            '-c', 'commit.gpgsign=false', 'commit', '-q',
+                                            '--allow-empty', '-m', message],
+                                           cwd=tmp, env=env, check=True)
+                        head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=tmp,
+                                                       env=env, text=True).strip()
+                        identity = subprocess.check_output(['git', 'rev-parse', 'HEAD~1'], cwd=tmp,
+                                                           env=env, text=True).strip() if stale else head
                         artifact = root / 'web-generation-artifact'
                         artifact.mkdir()
                         dist = root / 'source/dist'
@@ -139,17 +189,30 @@ class WebConsumerTests(unittest.TestCase):
                         (dist / 'index.html').write_text('generated console')
                         subprocess.run(['tar', '-czf', str(artifact / 'dist.tar.gz'), 'dist'],
                                        cwd=dist.parent, check=True)
-                        digest = subprocess.check_output(['sha256sum', 'dist.tar.gz'], cwd=artifact)
-                        (artifact / 'SHA256SUMS').write_bytes(digest)
-                        if not valid:
+                        manifest = {'schema': 'olivares.web-generation/v1', 'checkout_sha': identity,
+                                    'pr_head_sha': identity, 'repository': 'example/project',
+                                    'run_id': '42', 'run_attempt': '1', **changed}
+                        (artifact / 'manifest.json').write_text(json.dumps(manifest) + '\n')
+                        sums = subprocess.check_output(['sha256sum', 'dist.tar.gz', 'manifest.json'],
+                                                       cwd=artifact)
+                        (artifact / 'SHA256SUMS').write_bytes(sums)
+                        if corrupt:
                             (artifact / 'dist.tar.gz').write_text('corrupt')
                         output = root / 'core/internal/webui'
                         output.mkdir(parents=True)
-                        result = subprocess.run(['bash', '-euo', 'pipefail', '-c', textwrap.dedent(embed)],
-                                                env=dict(os.environ, RUNNER_TEMP=tmp, GITHUB_WORKSPACE=tmp),
-                                                capture_output=True, text=True, timeout=10)
+                        result = subprocess.run(
+                            ['bash', '-euo', 'pipefail', '-c', textwrap.dedent(embed)], cwd=tmp,
+                            env=dict(env, RUNNER_TEMP=tmp, GITHUB_WORKSPACE=tmp,
+                                     PR_HEAD=identity, GENERATION_ATTEMPT=producer_attempt,
+                                     GITHUB_REPOSITORY='example/project',
+                                     GITHUB_RUN_ID='42', GITHUB_RUN_ATTEMPT=job_attempt),
+                            capture_output=True, text=True, timeout=10)
+                        valid = not changed and not corrupt and not stale and producer_attempt != ''
                         self.assertEqual(result.returncode == 0, valid, result.stdout + result.stderr)
                         self.assertEqual((output / 'dist/index.html').exists(), valid)
+                        if not producer_attempt:
+                            # jq alone would refuse too; the reviewer-visible reason is the error.
+                            self.assertIn('::error::setup reported no attempt', result.stdout + result.stderr)
 
     def test_pr_build_rejects_unsuccessful_console_before_consuming_artifacts(self):
         workflow = (ROOT / ".github/workflows/pr-ci.yml").read_text()
@@ -234,6 +297,63 @@ export -f task pnpm go
                                 if 'run: task test:' in job else job.index('task test:functional:shard'))
         self.assertRegex(jobs['web-bundle'], r'(?m)^    outputs:\n      bundle-artifact: web-generation-')
         self.assertNotIn('bundle-artifact', jobs['web'])
+
+    def test_mainline_embed_refuses_foreign_manifest_before_extraction(self):
+        workflow = (ROOT / ".github/workflows/mainline-ci.yml").read_text()
+        jobs = dict(re.findall(r"^  ([\w-]+):\n(.*?)(?=^  [\w-]+:\n|\Z)",
+                               workflow, re.M | re.S))
+        outputs = jobs['web-bundle'].split('    needs:', 1)[0]
+        self.assertIn('      bundle-attempt: ${{ github.run_attempt }}\n', outputs)
+        head, other = 'a' * 40, 'b' * 40
+        repository, run_id = 'example-org/example-repo', '1001'
+        manifest = {'schema': 'olivares.web-generation/v1', 'checkout_sha': head,
+                    'pr_head_sha': head, 'repository': repository, 'run_id': run_id,
+                    'run_attempt': '1'}
+        # (case, manifest overrides, producing attempt, GITHUB_RUN_ATTEMPT, embeds)
+        cases = [
+            ('valid manifest', {}, '1', '1', True),
+            ('re-run of a failed consumer', {}, '1', '2', True),
+            ('wrong head', {'checkout_sha': other, 'pr_head_sha': other}, '1', '1', False),
+            ('wrong checkout only', {'checkout_sha': other}, '1', '1', False),
+            ('wrong pr head only', {'pr_head_sha': other}, '1', '1', False),
+            ('wrong run', {'run_id': '1002'}, '1', '1', False),
+            ('wrong repository', {'repository': 'olivaresai/olivares'}, '1', '1', False),
+            ('wrong schema', {'schema': 'olivares.web-generation/v0'}, '1', '1', False),
+            ('foreign attempt', {'run_attempt': '2'}, '1', '1', False),
+            ('empty producing attempt', {}, '', '1', False),
+        ]
+        for name in ['control-plane', 'functional-shard', 'race-rest', 'race-hot-manifest']:
+            job = jobs[name]
+            step = job.split('      - name: embed the verified console output\n', 1)[1]
+            self.assertIn('GENERATION_ATTEMPT: ${{ needs.web-bundle.outputs.bundle-attempt }}',
+                          step.split('        run: |\n', 1)[0])
+            embed = step.split('        run: |\n', 1)[1].split('\n      - ', 1)[0]
+            for case, overrides, attempt, runner_attempt, embeds in cases:
+                with self.subTest(job=name, case=case), tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    artifact = root / 'web-generation-artifact'
+                    artifact.mkdir()
+                    dist = root / 'source/dist'
+                    dist.mkdir(parents=True)
+                    (dist / 'index.html').write_text('generated console')
+                    subprocess.run(['tar', '-czf', str(artifact / 'dist.tar.gz'), 'dist'],
+                                   cwd=dist.parent, check=True)
+                    (artifact / 'manifest.json').write_text(
+                        json.dumps(dict(manifest, **overrides)) + '\n')
+                    (artifact / 'SHA256SUMS').write_bytes(subprocess.check_output(
+                        ['sha256sum', 'dist.tar.gz', 'manifest.json'], cwd=artifact))
+                    output = root / 'core/internal/webui'
+                    output.mkdir(parents=True)
+                    env = dict(os.environ, RUNNER_TEMP=tmp, GITHUB_WORKSPACE=tmp,
+                               GITHUB_SHA=head, GITHUB_REPOSITORY=repository,
+                               GITHUB_RUN_ID=run_id, GITHUB_RUN_ATTEMPT=runner_attempt,
+                               GENERATION_ATTEMPT=attempt)
+                    result = subprocess.run(['bash', '-euo', 'pipefail', '-c', textwrap.dedent(embed)],
+                                            env=env, capture_output=True, text=True, timeout=10)
+                    self.assertEqual(result.returncode == 0, embeds, result.stdout + result.stderr)
+                    self.assertEqual((output / 'dist/index.html').exists(), embeds)
+                    if attempt == '':
+                        self.assertIn('::error::', result.stdout + result.stderr)
 
     def test_pr_tests_require_the_producers_bundle(self):
         workflow = (ROOT / ".github/workflows/pr-ci.yml").read_text()

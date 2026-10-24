@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 )
 
 // cmd_upgrade_timer.go generates an OPT-IN systemd timer + service for `olivares
@@ -71,6 +74,18 @@ func generateUpgradeTimer(cmd *cobra.Command, o *upgradeOptions) error {
 	bin, err := resolveTargetBinary(o.target)
 	if err != nil {
 		return err
+	}
+	// The package manager owns the installed binary. A unit that upgrades it in place would
+	// replace a file dpkg, rpm or apk tracks, or fail every night, so no unit is written.
+	// A container swaps its data volume, not the image's file: the upgrade's guard exempts it too.
+	if !inContainer() && isInstalledPackageBinary(bin) {
+		msg := fmt.Sprintf("%s is installed by a system package: %s; --install-timer writes no unit for it", bin, packageManagerRoute)
+		if o.enterprise && o.connect {
+			// A connected unit is also the credential's upkeep. No unit is written, so say what keeps it:
+			// the refresh command, run by the operator (it runs only when it is run).
+			msg += "; the connected credential is not refreshed by a timer here: run `olivares license connect refresh` yourself, on your own schedule"
+		}
+		return exitcode.New(exitcode.Usage, errors.New(msg))
 	}
 
 	// Build the upgrade invocation. --if-eligible + --yes make it unattended and
@@ -245,6 +260,15 @@ WantedBy=timers.target
 		_, werr := fmt.Fprintln(w, "# (Or write the files directly with:  olivares upgrade --install-timer --timer-dir <dir>)")
 		return werr
 	}, res)
+}
+
+// isInstalledPackageBinary reports whether bin is the package-owned CLI. A symlink to it is
+// followed, so a link named elsewhere is refused the same way.
+func isInstalledPackageBinary(bin string) bool {
+	if resolved, err := filepath.EvalSymlinks(bin); err == nil {
+		bin = resolved
+	}
+	return filepath.Clean(bin) == installedPackageBinary
 }
 
 // shellQuote wraps a path in single quotes for a systemd ExecStart when it contains

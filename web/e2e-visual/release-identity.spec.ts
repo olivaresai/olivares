@@ -73,10 +73,6 @@ for (const theme of ['light', 'dark']) {
           await page.goto(path)
           await expect(page.locator('[data-slot="app-frame"]')).toBeVisible()
           await expectIdentityRead(page, version)
-          if (width === 1280)
-            await expect(
-              page.locator('aside[aria-label="Primary"]'),
-            ).toHaveAttribute('data-sidebar-mode', 'rail')
           await page.screenshot({
             path: testInfo.outputPath(`${path.split('/')[1]}-${release}.png`),
           })
@@ -111,9 +107,7 @@ for (const theme of ['light', 'dark']) {
           .click()
         await expectIdentityRead(page, version)
         const identity = page
-          .locator(
-            'aside[aria-label="Primary"], [data-testid="deployment-identity"]',
-          )
+          .locator('[data-testid="deployment-identity"]')
           .getByText(version, { exact: true })
         expect(
           await identity.evaluate((el) => {

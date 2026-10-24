@@ -15,13 +15,13 @@ description: >-
 本指南面向用 Docker 将 Olivares AI control plane 投入生产的工程师与 SRE。
 整个产品是一个单镜像——引擎内嵌 web UI——因此单台主机即可运行
 SQLite 拓扑而无需任何外部依赖，在需要时通过 Postgres override 即可获得多租户拓扑。
-容器镜像基于 Debian 13 slim（含供代理工具使用的 Node.js 24），并以非 root 用户运行。
+容器镜像基于 Debian 13 slim（含供智能体工具使用的 Node.js 24），并以非 root 用户运行。
 每条路径都保持相同的安全默认值：无默认凭据、一次性 setup token、默认开启 TLS，
 以及默认启用的 TLS。主机端口默认发布在所有网络接口上，因为这是一台服务器——请按下文有意识地加以限制。
 
 <!-- release -->
-:::note[Olivares 0.3]
-下一个版本是 `0.3`，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 `docs/releases/0.3-install-surfaces.json`。
+:::note[Olivares 0.4]
+下一个版本是 `0.4`，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 `docs/releases/0.4-install-surfaces.json`。
 :::
 <!-- /release -->
 
@@ -36,7 +36,7 @@ SQLite 拓扑而无需任何外部依赖，在需要时通过 Postgres override 
 
 <!-- release -->
 ```bash
-docker pull docker.io/olivaresai/olivares:0.3
+docker pull docker.io/olivaresai/olivares:0.4
 ```
 <!-- /release -->
 
@@ -44,7 +44,7 @@ docker pull docker.io/olivaresai/olivares:0.3
 用作备份和构建 registry。Docker Hub 对**匿名**拉取施加速率限制；ghcr.io 不对公共镜像的匿名拉取
 限速——因此当 CI 节点或大规模集群触及上限时，可以先 `docker login`，或改用 ghcr.io 坐标。
 Tag **不带前导 `v`**： <!-- release -->
-`:0.3`<!-- /release --> 固定一个版本，`:latest` 浮动，而 <!-- release -->`:0.3-fips`<!-- /release --> / <!-- release -->`:0.3-stig`<!-- /release -->
+`:0.4`<!-- /release --> 固定一个版本，`:latest` 浮动，而 <!-- release -->`:0.4-fips`<!-- /release --> / <!-- release -->`:0.4-stig`<!-- /release -->
 是加固变体。基础 tag 和 `:latest` 是多架构的
 （`linux/amd64`、`linux/arm64`）；`fips`/`stig` 仅有 `amd64`。
 
@@ -56,7 +56,7 @@ control plane 是一款安全产品，所以运行前先验证。签名是
 <!-- release -->
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:0.3")"
+DIGEST="$(crane digest "$IMAGE:0.4")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
@@ -94,7 +94,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:0.3 \
+  docker.io/olivaresai/olivares:0.4 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -317,7 +317,7 @@ docker compose -f deploy/compose/docker-compose.yml up -d
 
 ## 8. 生产环境按 digest 固定
 
-可变 tag（<!-- release -->`:0.3`<!-- /release -->、`:latest`）用于评估。在生产环境中，请固定你所验证的
+可变 tag（<!-- release -->`:0.4`<!-- /release -->、`:latest`）用于评估。在生产环境中，请固定你所验证的
 **digest**——digest 不可变，且正是你签字确认过的东西：
 
 ```bash

@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE AREA DIRECTORY (N1) — Overview, then the nine areas, then the pinned Settings
-// utility. Since the v26.10 frame it is the "All areas" sheet: the sidebar itself
-// (app-sidebar.tsx) holds the journeys and the sessions, and opens this directory from its
-// "All areas" entry; the phone bar opens it from "More".
+// THE AREA DIRECTORY (N1) — the areas, each with its pages, then the pinned Settings
+// utility, as the "All areas" sheet. Two levels and no more (#3121): an area, then its pages;
+// the places the bar shows (Now, Sessions, Tools, Rules, Ledger; the phone bar's three below
+// 761 px) are not listed again.
+// The console has no sidebar: the top bar holds the places, and this directory opens from
+// the account menu, the palette and the phone bar's "More" (useAreasSheet).
 //
 // Every list here is a projection of features/navigation/model.ts over the single
 // FEATURE_VIEWS registry: the same areas, sections and leaves for the same principal, and
@@ -17,10 +19,10 @@
 // two things and a screen-reader user must be able to do either without triggering the
 // other. `aria-current="page"` marks exactly one link — the current page — and the area
 // that contains it is distinguished visually (`data-branch="active"`) without claiming to be
-// the page. Sections inside an area are grouping labels, not links.
+// the page. A section orders an area's pages and draws no row of its own.
 //
-// Expansion: arriving inside an area opens it; the operator may hold several open, open or
-// fold them all, or fold the active one without leaving it (stores/preferences.ts navAreas).
+// Expansion: arriving inside an area opens it; the operator may hold several open, or fold
+// the active one without leaving it (stores/preferences.ts navAreas).
 //
 // FILTERING IS A RANKED PROJECTION (R2, independent review finding 1). With a query the grouped
 // tree is replaced by ONE flat list of the authorized matches in the order `rankNavMatches`
@@ -37,14 +39,7 @@
 // control names the panel or heading it actually renders.
 import { Link, useRouterState } from '@tanstack/react-router'
 import type { LucideIcon } from 'lucide-react'
-import {
-  ChevronDown,
-  ChevronsDownUp,
-  ChevronsUpDown,
-  Search,
-  Star,
-  X,
-} from 'lucide-react'
+import { ChevronDown, Search, Star, X } from 'lucide-react'
 import {
   useEffect,
   useId,
@@ -63,20 +58,17 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { useViewAccess } from '@/features/navigation/authorization'
-import { NAV_AREAS, type AreaId, type NavArea } from '@/features/registry'
+import type { AreaId, FeatureView } from '@/features/registry'
 import {
   SETTINGS_UTILITY,
   activeAreaId as activeAreaOf,
   areaLabel,
   authorizedEntries,
-  authorizedSections,
   buildNavSearchIndex,
   fold,
   rankNavMatches,
   resolveLocation,
-  sectionLabel,
   viewLabel,
-  type AreaSection,
   type NavSearchEntry,
   type ViewGate,
 } from '@/features/navigation/model'
@@ -88,11 +80,19 @@ import { PersonalNavigation } from './personal-navigation'
 import { revealRow } from './reveal-row'
 import { TenantSwitcher } from './tenant-switcher'
 import { WorkspaceSwitcher } from './workspace-switcher'
+import { restoreOpener, useAreasSheet } from './areas-sheet-store'
+import { useMinWidth } from '@/lib/hooks/use-min-width'
+import {
+  directoryAreas,
+  journeyDestinations,
+  phoneBarDestinations,
+  type ShellDestination,
+} from './shell-destinations'
 
 // The folding helper stays importable from here for its existing callers and tests.
 export { fold }
 
-/** Row chrome shared by the Overview link, the area links and every leaf. */
+/** Row chrome shared by the area links, every page and Settings. */
 const ROW_CLASS = cn(
   'group relative flex min-h-8 min-w-0 items-center gap-2.5 rounded-md px-2.5 py-1 text-body text-muted-foreground outline-none transition-colors',
   'hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
@@ -113,8 +113,6 @@ interface NavItemProps {
   depth?: 0 | 1
   /** The feature id this row pins, when the principal has a personal partition. */
   pinId?: string
-  /** The current page reached through a second door into this row's view (`doorTo`). */
-  current?: boolean
 }
 
 /**
@@ -141,7 +139,6 @@ function NavItem({
   className,
   depth = 0,
   pinId,
-  current,
 }: NavItemProps) {
   const link = (
     <Link
@@ -151,11 +148,6 @@ function NavItem({
       // WCAG 4.1.2 / 2.4.8: announce the current page to assistive tech (the router
       // only sets data-status, so set aria-current explicitly when active).
       activeProps={{ 'aria-current': 'page' }}
-      // A row reached through its view's second door reads as the current page, the
-      // way the router marks an active link (`data-status` carries the styling).
-      {...(current
-        ? { 'aria-current': 'page' as const, 'data-status': 'active' }
-        : {})}
       onClick={onNavigate}
       // The rail is ONE tab stop with a roving tabindex (see `useRailKeyboard`), so every
       // row starts untabbable and the hook promotes exactly one.
@@ -249,60 +241,33 @@ function RailPin({ id, label }: { id: string; label: string }) {
   )
 }
 
-/** One area's sections and leaves — the same markup inside the expanded sidebar, the rail's
- * flyout and the mobile drawer. */
-function AreaSections({
-  area,
-  sections,
-  idPrefix,
+/** One area's pages, one level under the area: the section orders them and names no row. */
+function AreaPages({
+  label,
+  views,
   onNavigate,
-  dense,
-  doorTo,
 }: {
-  area: NavArea
-  sections: AreaSection[]
-  /** This instance's id namespace (a `useId()` of the owning body plus the surface). */
-  idPrefix: string
+  /** The area's name, which names the list for a screen reader. */
+  label: string
+  views: FeatureView[]
   onNavigate?: () => void
-  dense?: boolean
-  /** The view the current page is a second door into: its row is the current page. */
-  doorTo?: string
 }) {
   const { t } = useTranslation('nav')
   return (
-    <>
-      {sections.map((s) => {
-        const headingId = `${idPrefix}${area.id}-${s.sectionId}`
-        return (
-          <div key={s.sectionId} role="group" aria-labelledby={headingId}>
-            <p
-              id={headingId}
-              className={cn(
-                'break-words px-2.5 pb-0.5 text-caption font-medium text-text-3',
-                dense ? 'pt-1' : 'pt-1.5',
-              )}
-            >
-              {sectionLabel(t, area.id, s.sectionId)}
-            </p>
-            <ul className="flex flex-col gap-0.5">
-              {s.views.map((v) => (
-                <li key={v.id}>
-                  <NavItem
-                    to={v.path}
-                    icon={v.icon}
-                    label={viewLabel(t, v.id)}
-                    onNavigate={onNavigate}
-                    depth={1}
-                    pinId={v.id}
-                    current={v.id === doorTo}
-                  />
-                </li>
-              ))}
-            </ul>
-          </div>
-        )
-      })}
-    </>
+    <ul aria-label={label} className="flex flex-col gap-0.5">
+      {views.map((v) => (
+        <li key={v.id}>
+          <NavItem
+            to={v.path}
+            icon={v.icon}
+            label={viewLabel(t, v.id)}
+            onNavigate={onNavigate}
+            depth={1}
+            pinId={v.id}
+          />
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -414,24 +379,15 @@ function useRailKeyboard(
   }
 }
 
-interface ProjectedArea {
-  area: NavArea
-  /** The sections this principal may open — the union that makes the area visible. */
-  sections: AreaSection[]
-}
-
 /**
- * Areas this principal may see — the union of authorized leaves, in the ratified order.
- * An area with no authorized leaf is never offered.
+ * The places the bar shows this principal at this width: the top bar's, or below 761 px the
+ * phone bar's first three (app-frame.tsx), whose other places then stay in All areas.
  */
-function useProjectedAreas(gate: ViewGate): ProjectedArea[] {
+function useBarPlaces(gate: ViewGate): ShellDestination[] {
+  const wide = useMinWidth(761)
   return useMemo(
-    () =>
-      NAV_AREAS.map((area) => ({
-        area,
-        sections: authorizedSections(area.id, gate),
-      })).filter((a) => a.sections.length > 0),
-    [gate],
+    () => (wide ? journeyDestinations(gate) : phoneBarDestinations(gate)),
+    [gate, wide],
   )
 }
 
@@ -449,17 +405,19 @@ function useRankedMatches(
 }
 
 /**
- * The areas of the product, grouped and folding: the header with "expand all", then one
- * block per area this principal may open (its link, a fold button and its sections).
- * Arriving inside an area opens it. The "All areas" sheet and the full sidebar both render
+ * The areas of the product, folding: one block per area this principal may open (its link,
+ * a fold button and its pages), with no caption above them. Arriving inside an area opens it. The "All areas" sheet and the full sidebar both render
  * this, so the two cannot disagree about which areas exist or which are open.
  */
 function AreaGroups({
   idPrefix,
+  places,
   onNavigate,
 }: {
   /** This instance's id namespace, so `aria-controls` names the panel it renders. */
   idPrefix: string
+  /** The places the bar shows at this width (useBarPlaces): not listed again. */
+  places: readonly ShellDestination[]
   onNavigate?: () => void
 }) {
   const { t } = useTranslation('nav')
@@ -469,42 +427,15 @@ function AreaGroups({
   const activeAreaId = activeAreaOf(location)
   const expansion = usePreferencesStore((s) => s.navAreas)
   const setAreaOpen = usePreferencesStore((s) => s.setAreaOpen)
-  const setAreasOpen = usePreferencesStore((s) => s.setAreasOpen)
   const revealArea = usePreferencesStore((s) => s.revealArea)
   // Arriving inside an area opens it (unless the operator folds it again while here).
   useEffect(() => {
     if (activeAreaId) revealArea(activeAreaId)
   }, [activeAreaId, revealArea])
-  const areas = useProjectedAreas(listed)
-  const visibleIds = areas.map((a) => a.area.id)
-  const allOpen =
-    visibleIds.length > 0 &&
-    visibleIds.every((id) => isAreaOpen(expansion, id, activeAreaId))
+  const areas = useMemo(() => directoryAreas(listed, places), [listed, places])
   return (
     <>
-      {areas.length > 0 && (
-        <div className="mt-1 flex items-center justify-between px-2.5 pb-0.5">
-          <span className="text-caption font-medium text-text-3">
-            {t('directory.areas')}
-          </span>
-          <button
-            type="button"
-            onClick={() => setAreasOpen(visibleIds, !allOpen)}
-            aria-label={
-              allOpen ? t('directory.collapseAll') : t('directory.expandAll')
-            }
-            className="rounded p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {allOpen ? (
-              <ChevronsDownUp aria-hidden="true" className="size-3.5" />
-            ) : (
-              <ChevronsUpDown aria-hidden="true" className="size-3.5" />
-            )}
-          </button>
-        </div>
-      )}
-
-      {areas.map(({ area, sections }) => {
+      {areas.map(({ area, views }) => {
         const label = areaLabel(t, area.id)
         const isBranch = activeAreaId === area.id
         const Icon = area.icon
@@ -569,48 +500,12 @@ function AreaGroups({
                 !open && 'hidden',
               )}
             >
-              <AreaSections
-                area={area}
-                sections={sections}
-                idPrefix={`${idPrefix}nav-area-`}
-                onNavigate={onNavigate}
-                doorTo={
-                  location.kind === 'view' ? location.view.doorTo : undefined
-                }
-              />
+              <AreaPages label={label} views={views} onNavigate={onNavigate} />
             </div>
           </div>
         )
       })}
     </>
-  )
-}
-
-/**
- * The areas inside the full sidebar, under the pinned destinations: the same groups as the
- * "All areas" sheet, with the rail's one-tab-stop keyboard over their rows. It scrolls with
- * the sidebar; the rail and the phone open the sheet instead.
- */
-export function SidebarAreas({ onNavigate }: { onNavigate?: () => void }) {
-  const { t } = useTranslation('nav')
-  const uid = useId()
-  const setAreaOpen = usePreferencesStore((s) => s.setAreaOpen)
-  const ref = useRef<HTMLElement>(null)
-  const onKeyDown = useRailKeyboard(ref, {
-    onExpand: (id) => setAreaOpen(id as AreaId, true),
-    onFold: (id) => setAreaOpen(id as AreaId, false),
-  })
-  return (
-    <nav
-      ref={ref}
-      aria-label={t('directory.areas')}
-      aria-keyshortcuts="p"
-      data-slot="sidebar-areas"
-      onKeyDown={onKeyDown}
-      className="flex flex-col gap-0.5"
-    >
-      <AreaGroups idPrefix={`${uid}sb-`} onNavigate={onNavigate} />
-    </nav>
   )
 }
 
@@ -621,6 +516,9 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
   //    capability question would answer from the reflection, and the sidebar would offer
   //    a door the route then refuses (or hide one the engine allows).
   const { listed } = useViewAccess()
+  // What the bar already shows is not offered again, in the areas or in Favorites and Recent.
+  const places = useBarPlaces(listed)
+  const placeIds = useMemo(() => new Set(places.map((p) => p.id)), [places])
   const setAreaOpen = usePreferencesStore((s) => s.setAreaOpen)
 
   const [query, setQuery] = useState('')
@@ -631,12 +529,10 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
   const filtering = query.trim().length > 0
   const index = useMemo(() => buildNavSearchIndex(t), [t])
   const ranked = useRankedMatches(index, listed, query)
-  const homeLabel = viewLabel(t, 'home')
   const settingsLabel = viewLabel(t, SETTINGS_UTILITY.id)
-  const homeIcon = index.find((e) => e.kind === 'view' && e.id === 'home')?.icon
 
   // Counts what the operator can actually SEE: with a query, the ranked list IS the
-  // visible list (Overview and Settings included when they match), so the announcement
+  // visible list (Settings included when it matches), so the announcement
   // and the screen cannot disagree.
   const hits = filtering ? ranked.length : 0
 
@@ -672,12 +568,13 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
           the header.
 
           Both switchers return `null` when there is nothing to choose, so a
-          single-membership deployment spends no pixels here. From 761 px the sidebar
-          carries the same scope above the journeys, so this copy shows on the phone
-          only, where this directory is the "More" sheet. */}
+          single-membership deployment spends no pixels here. From 1024 px the top bar
+          carries the same scope beside the mark, so this copy shows below it only: on
+          the phone, where this directory is the "More" sheet, and on a narrow desktop,
+          where the bar gives that room to the places. */}
       <div
         data-slot="rail-scope"
-        className="flex shrink-0 flex-col gap-0.5 border-b border-border p-1.5 empty:hidden min-[761px]:hidden"
+        className="flex shrink-0 flex-col gap-0.5 border-b border-border p-1.5 empty:hidden min-[1024px]:hidden"
       >
         <TenantSwitcher className="w-full max-w-none justify-start" />
         <WorkspaceSwitcher className="w-full max-w-none justify-start" />
@@ -775,20 +672,17 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
             </ul>
           )}
 
-          {!filtering && homeIcon && (
-            <NavItem
-              to="/"
-              icon={homeIcon}
-              label={homeLabel}
-              exact
-              onNavigate={onNavigate}
-              pinId="home"
-            />
+          {!filtering && (
+            <PersonalNavigation onNavigate={onNavigate} hide={placeIds} />
           )}
 
-          {!filtering && <PersonalNavigation onNavigate={onNavigate} />}
-
-          {!filtering && <AreaGroups idPrefix={uid} onNavigate={onNavigate} />}
+          {!filtering && (
+            <AreaGroups
+              idPrefix={uid}
+              places={places}
+              onNavigate={onNavigate}
+            />
+          )}
 
           {filtering && hits === 0 && (
             <p className="px-2.5 py-4 text-body text-muted-foreground">
@@ -837,48 +731,28 @@ export function AreasTree({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 /**
- * ALL AREAS, as a sheet from the left: opened by the sidebar's "All areas" entry and by
- * the phone bar's "More". Every registry destination the journeys do not name is here.
+ * ALL AREAS, as a sheet from the left: every registry page the top bar does not name as a
+ * place is here.
  */
-export function AreasSheet({
-  open,
-  onOpenChange,
-  returnFocusTo,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  /**
-   * The control that opened the sheet; closing gives focus back to it. The sheet
-   * primitive's own restore left focus on <body> on the built console (measured
-   * 2026-09-06, keyboard and pointer paths), so the drawer restores it explicitly.
-   */
-  returnFocusTo?: RefObject<HTMLElement | null>
-}) {
+export function AreasSheet() {
   const { t } = useTranslation(['nav', 'common'])
-  const restore = () => {
-    const el = returnFocusTo?.current
-    if (el && el.isConnected) el.focus()
-  }
+  const open = useAreasSheet((s) => s.open)
+  const setOpen = useAreasSheet((s) => s.setOpen)
   useEffect(() => {
     if (open) return
     const id = window.setTimeout(() => {
       if (document.activeElement === document.body || !document.activeElement)
-        restore()
+        restoreOpener()
     }, 0)
     return () => window.clearTimeout(id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the ref is stable; only the open flag matters
   }, [open])
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={setOpen}>
       <SheetContent
         side="left"
         className="w-72 p-0"
         onCloseAutoFocus={(e) => {
-          const el = returnFocusTo?.current
-          if (el && el.isConnected) {
-            e.preventDefault()
-            el.focus()
-          }
+          if (restoreOpener()) e.preventDefault()
         }}
       >
         {/* Name the sheet for what it IS — the directory of the areas — not the
@@ -887,7 +761,7 @@ export function AreasSheet({
         <SheetDescription className="sr-only">
           {t('common:commandPalette.placeholder')}
         </SheetDescription>
-        <SidebarBody onNavigate={() => onOpenChange(false)} />
+        <SidebarBody onNavigate={() => setOpen(false)} />
       </SheetContent>
     </Sheet>
   )

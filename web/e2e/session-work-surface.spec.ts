@@ -220,11 +220,15 @@ test.describe('the work surface', () => {
       await page.goto('/sessions')
       await expect(page.getByTestId('work-surface')).toBeVisible()
 
-      // THE LAYOUT CLAIM, measured rather than asserted from a class: all three panes
-      // are on screen, and they sit side by side rather than stacked.
+      // THE LAYOUT CLAIM, measured rather than asserted from a class: the side pane
+      // starts closed; opened from the pane header, all three panes
+      // are on screen, side by side rather than stacked, and the thread keeps its 760 px.
       const rail = page.locator('#work-pane-rail')
       const narrative = page.locator('#work-pane-narrative')
       const context = page.locator('#work-pane-context')
+      await expect(narrative).toBeVisible()
+      await expect(context).toBeHidden()
+      await page.getByTestId('context-toggle').click()
       for (const pane of [rail, narrative, context])
         await expect(pane).toBeVisible()
       const boxes = await Promise.all(
@@ -233,6 +237,7 @@ test.describe('the work surface', () => {
       expect(boxes.every(Boolean)).toBe(true)
       expect(boxes[0]!.x).toBeLessThan(boxes[1]!.x)
       expect(boxes[1]!.x).toBeLessThan(boxes[2]!.x)
+      expect(boxes[1]!.width).toBeGreaterThanOrEqual(760)
       // Same row: a "three-pane" surface that wrapped would be three stacked panes.
       expect(Math.abs(boxes[0]!.y - boxes[2]!.y)).toBeLessThan(4)
 

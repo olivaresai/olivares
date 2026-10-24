@@ -28,7 +28,7 @@ defaults:
 jobs:
   rpm-repository:
     if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.repository.private && (vars.CI_RUNNER || 'hetzner') || 'ubuntu-latest' }}
     # Step ceilings total 53 minutes (3 + 5 + 5 + 10 + 30); allow 7 for job overhead.
     timeout-minutes: 60
     steps:

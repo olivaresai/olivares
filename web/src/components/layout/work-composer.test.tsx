@@ -38,15 +38,25 @@ const api = vi.hoisted(() => ({
   inputText: vi.fn(),
   getRun: vi.fn(),
   profileModels: vi.fn(),
+  activity: vi.fn(),
 }))
 vi.mock('@/features/agentops/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/agentops/api')>()),
   agentOpsApi: api,
 }))
+const templates = vi.hoisted(() => ({ get: vi.fn() }))
+vi.mock('@/features/workspace-templates/api', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@/features/workspace-templates/api')
+  >()),
+  templatesApi: templates,
+}))
 
 const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }))
 vi.mock('@/components/ui/toaster', () => ({ toast: toasts }))
 
+import { ApiError } from '@/lib/api/errors'
+import { sentTurnsOf, useSentTurns } from '@/features/sessions/sent-turns'
 import { ScopeLine, WorkComposer } from './work-composer'
 import { COMPOSER_INPUT_ID } from './work-composer-id'
 import type { RunDTO } from '@/features/agentops/types'
@@ -70,6 +80,20 @@ const WORKSPACE = {
   dlp_mode: 'off',
 }
 
+/** A session whose tool reported no context window: the composer draws no ring. */
+const ACTIVITY = {
+  driver: 'claude',
+  transcript: 'read',
+  context_tokens: 0,
+  compactions: [],
+  todos: [],
+  agents: [],
+  tasks: [],
+  files: [],
+  skills: [],
+  mcp_servers: [],
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   clearSessionDrafts()
@@ -82,6 +106,7 @@ beforeEach(() => {
   api.listWorkspaces.mockResolvedValue({ items: [WORKSPACE], has_more: false })
   api.input.mockResolvedValue({ accepted: true })
   api.inputText.mockResolvedValue({ accepted: true })
+  api.activity.mockResolvedValue(ACTIVITY)
   api.profileModels.mockResolvedValue({
     profile_ref: 'ppf_team',
     driver: 'claude',
@@ -132,6 +157,75 @@ describe('WorkComposer tab drafts', () => {
     Object.keys(sessionStorage).filter((key) =>
       key.startsWith('olivares.draft.'),
     )
+
+  // dev#2787: the message the person sent appeared only when the tool took the turn,
+  // seconds later, so they could not tell it had been sent.
+  it('hands the conversation the message as soon as the engine takes it', async () => {
+    useSentTurns.setState({ byRun: {}, seen: {}, said: {} })
+    const user = userEvent.setup()
+    renderIntel(composer())
+    await user.type(field(), 'Look up the readme')
+    await user.click(screen.getByTestId('composer-send'))
+    await waitFor(() =>
+      expect(sentTurnsOf(RUNNING.run_ref)).toEqual([
+        { text: 'Look up the readme' },
+      ]),
+    )
+  })
+
+  it('places the message after what the session showed when it was sent, even if its echo comes first', async () => {
+    useSentTurns.setState({
+      byRun: {},
+      seen: { [RUNNING.run_ref]: 2 },
+      said: { [RUNNING.run_ref]: { continue: 1 } },
+    })
+    let finish!: (value: { accepted: boolean }) => void
+    api.input.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const user = userEvent.setup()
+    renderIntel(composer())
+    await user.type(field(), 'continue')
+    await user.click(screen.getByTestId('composer-send'))
+    await waitFor(() => expect(api.input).toHaveBeenCalledOnce())
+    // The tool's echo renders before the engine's answer arrives.
+    act(() => useSentTurns.getState().see(RUNNING.run_ref, 3, { continue: 2 }))
+    await act(async () => finish({ accepted: true }))
+    expect(sentTurnsOf(RUNNING.run_ref)).toEqual([
+      { text: 'continue', after: 2, shown: 1 },
+    ])
+  })
+
+  it('notes no slash command: the tool answers a command, it does not show it', async () => {
+    useSentTurns.setState({ byRun: {}, seen: {}, said: {} })
+    const user = userEvent.setup()
+    renderIntel(composer())
+    await user.type(field(), '/compact')
+    await user.keyboard('{Escape}')
+    await user.click(screen.getByTestId('composer-send'))
+    await waitFor(() => expect(api.input).toHaveBeenCalledOnce())
+    expect(sentTurnsOf(RUNNING.run_ref)).toBeUndefined()
+  })
+
+  it('keeps the words and notes nothing when the engine refuses the message', async () => {
+    useSentTurns.setState({ byRun: {}, seen: {}, said: {} })
+    api.input.mockRejectedValueOnce(
+      new ApiError(409, 'conflict', 'the session is not accepting input'),
+    )
+    const user = userEvent.setup()
+    renderIntel(composer())
+    await user.type(field(), 'Look up the readme')
+    await user.click(screen.getByTestId('composer-send'))
+    await waitFor(() => expect(toasts.error).toHaveBeenCalled())
+    expect(String(toasts.error.mock.calls.at(-1)?.[0])).toContain(
+      'the session is not accepting input',
+    )
+    expect(field()).toHaveValue('Look up the readme')
+    expect(sentTurnsOf(RUNNING.run_ref)).toBeUndefined()
+  })
 
   it('clears the current field when a send completes after an unedited session round trip', async () => {
     let finish!: (value: { accepted: boolean }) => void
@@ -667,7 +761,10 @@ describe('WorkComposer layout and disclosure', () => {
     const field = await screen.findByTestId('launcher-input')
     expect(field.tagName).toBe('TEXTAREA')
     expect(field).toHaveAttribute('rows', '2')
-    expect(field).toHaveAttribute('placeholder', 'Message calc-review…')
+    expect(field).toHaveAttribute(
+      'placeholder',
+      'Ask anything, / for commands and skills',
+    )
     expect(field.className).toContain('max-h-48')
     expect(field.className).toContain('resize-none')
   })
@@ -687,11 +784,32 @@ describe('WorkComposer layout and disclosure', () => {
       />,
     )
     const chip = await screen.findByTestId('composer-tool-model')
-    expect(chip).toHaveTextContent('Codex · stub-model · high')
+    // Three pickers (dev#3162): the model on its own, the effort on the next.
+    expect(chip).toHaveTextContent(/^Stub Model$/)
+    expect(screen.getByTestId('composer-effort')).toHaveTextContent(/^High$/)
     expect(chip.tagName).toBe('BUTTON')
-    expect(chip).toHaveAccessibleName(
-      'Model and effort of this session: Codex · stub-model · high',
+    expect(chip).toHaveAccessibleName('Model: Stub Model')
+  })
+
+  // dev#3120: "claude-opus-5-5" was cut to "clau…" in the composer. It now says
+  // "Claude Opus 5.5", and the id stays one hover away.
+  it('says the model and the effort in words, with the id on the hover', async () => {
+    renderIntel(
+      <WorkComposer
+        attached={{
+          run: {
+            ...RUNNING,
+            provider_driver: 'claude',
+            model_ref: 'claude-opus-5-5',
+            effort: 'high',
+          },
+          group: 'active',
+        }}
+      />,
     )
+    const chip = await screen.findByTestId('composer-tool-model')
+    expect(chip.textContent).toBe('Claude Opus 5.5')
+    expect(chip.getAttribute('title')).toContain('claude-opus-5-5')
   })
 
   it('Send is a 32 px round icon button: orange only with text, a quiet ghost otherwise', async () => {
@@ -943,7 +1061,7 @@ describe('WorkComposer — attached session input', () => {
     await screen.findByTestId('launcher-input')
     expect(screen.getByTestId('launcher-input')).toHaveAttribute(
       'placeholder',
-      'Send a sentence…',
+      'Ask anything, / for commands and skills',
     )
     expect(screen.getByTestId('composer-advanced')).toBeInTheDocument()
     expect(
@@ -969,19 +1087,72 @@ describe('WorkComposer — a disabled Send says why', () => {
   it('says where the sentence would go when the session is not live, in the field itself', async () => {
     renderIntel(
       <WorkComposer
-        attached={{ run: { ...RUNNING, state: 'stopped' }, group: 'settled' }}
+        attached={{
+          run: { ...RUNNING, state: 'stopped', claude_session_id: 'cs-1' },
+          group: 'settled',
+        }}
       />,
     )
     const send = await screen.findByTestId('composer-send')
     expect(send).toBeDisabled()
     expect(send).toHaveAccessibleDescription(
-      'Start or resume the session to send.',
+      'Resume the session to send a message.',
     )
     const field = screen.getByTestId('launcher-input')
     expect(field).toBeDisabled()
     expect(field).toHaveAttribute(
       'placeholder',
-      'Start or resume the session to send.',
+      'Resume the session to send a message.',
+    )
+  })
+
+  it('names the step the header offers: Start again for a run that never got going', async () => {
+    const again = renderIntel(
+      <WorkComposer
+        attached={{
+          run: { ...RUNNING, state: 'stopped' },
+          group: 'settled',
+        }}
+      />,
+    )
+    expect(await screen.findByTestId('launcher-input')).toHaveAttribute(
+      'placeholder',
+      'Start the session again to send a message.',
+    )
+    again.unmount()
+    renderIntel(
+      <WorkComposer
+        attached={{
+          run: { ...RUNNING, state: 'stopped', claude_session_id: 'cs-1' },
+          group: 'settled',
+        }}
+      />,
+    )
+    expect(await screen.findByTestId('launcher-input')).toHaveAttribute(
+      'placeholder',
+      'Resume the session to send a message.',
+    )
+  })
+
+  it('says a session that cannot be resumed has ended, and one starting is starting', async () => {
+    const ended = renderIntel(
+      <WorkComposer
+        attached={{ run: { ...RUNNING, state: 'cleaned' }, group: 'settled' }}
+      />,
+    )
+    expect(await screen.findByTestId('launcher-input')).toHaveAttribute(
+      'placeholder',
+      'This session has ended.',
+    )
+    ended.unmount()
+    renderIntel(
+      <WorkComposer
+        attached={{ run: { ...RUNNING, state: 'pending' }, group: 'active' }}
+      />,
+    )
+    expect(await screen.findByTestId('launcher-input')).toHaveAttribute(
+      'placeholder',
+      'The session is starting…',
     )
   })
 
@@ -1010,13 +1181,16 @@ describe('WorkComposer — a disabled Send says why', () => {
   it('the advanced line Send names the session state when it is not live', async () => {
     renderIntel(
       <WorkComposer
-        attached={{ run: { ...RUNNING, state: 'stopped' }, group: 'settled' }}
+        attached={{
+          run: { ...RUNNING, state: 'stopped', claude_session_id: 'cs-1' },
+          group: 'settled',
+        }}
       />,
     )
     const wireSend = await screen.findByTestId('composer-wire-send')
     expect(wireSend).toBeDisabled()
     expect(wireSend).toHaveAccessibleDescription(
-      'Start or resume the session to send.',
+      'Resume the session to send a message.',
     )
   })
 
@@ -1143,6 +1317,66 @@ describe('WorkComposer — model and effort', () => {
     )
   })
 
+  // dev#2786: a session records the exact id its catalog selector launched on, which
+  // the catalog does not list. Its own speed is the one the engine checked at launch.
+  it('keeps the Fast On of a session recorded under its exact model id', async () => {
+    const user = userEvent.setup()
+    api.profileModels.mockResolvedValue({
+      state: 'fresh',
+      models: [{ id: 'default', supports_fast_mode: true }],
+    })
+    renderIntel(
+      <WorkComposer
+        attached={{
+          ...ATTACHED,
+          run: {
+            ...ATTACHED.run,
+            model_ref: 'claude-opus-5-5',
+            fast_mode: true,
+          },
+        }}
+      />,
+    )
+    await user.click(await screen.findByTestId('composer-tool-model'))
+    expect(await screen.findByLabelText('Fast mode')).toHaveTextContent('On')
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  // A Claude launch with no model is recorded under the exact id of the tool's default,
+  // which the catalog (the tool's selectors) does not list, and so is every session that
+  // chose no speed. Off is a valid Claude launch on any model, so the message bar still
+  // offers it; On waits for a listed model that reports Fast mode.
+  it('offers Fast Off for a session recorded under an exact model id the catalog does not list', async () => {
+    const user = userEvent.setup()
+    const { useNewSessionDialog } =
+      await import('@/features/first-hour/new-session-store')
+    api.profileModels.mockResolvedValue({
+      state: 'fresh',
+      models: [{ id: 'default', supports_fast_mode: true }],
+    })
+    renderIntel(
+      <WorkComposer
+        attached={{
+          ...ATTACHED,
+          run: { ...ATTACHED.run, model_ref: 'claude-opus-5-5' },
+        }}
+      />,
+    )
+    await user.click(await screen.findByTestId('composer-tool-model'))
+    await user.click(await screen.findByLabelText('Fast mode'))
+    expect(screen.getByRole('option', { name: 'On' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
+    await user.click(screen.getByRole('option', { name: 'Off' }))
+    expect(screen.queryByRole('alert')).toBeNull()
+    await user.click(screen.getByTestId('composer-new-with-choice'))
+    expect(useNewSessionDialog.getState().advanced).toMatchObject({
+      model: 'claude-opus-5-5',
+      fastMode: false,
+    })
+  })
+
   it('drops Fast On when another model is picked and hides unsupported speed controls', async () => {
     const user = userEvent.setup()
     const { useNewSessionDialog } =
@@ -1233,7 +1467,7 @@ describe('WorkComposer — model and effort', () => {
     const user = userEvent.setup()
     renderIntel(<WorkComposer attached={ATTACHED} />)
     const chip = await screen.findByTestId('composer-tool-model')
-    expect(chip).toHaveTextContent('Claude Code · opus-5-5 · medium')
+    expect(chip).toHaveTextContent(/^Opus 5\.5$/)
     await user.click(chip)
     expect(await screen.findByText('Claude Haiku 5.5')).toBeInTheDocument()
     expect(api.profileModels).toHaveBeenCalledWith(
@@ -1255,7 +1489,7 @@ describe('WorkComposer — model and effort', () => {
     await user.click(await screen.findByText('Claude Haiku 5.5'))
     expect(
       await screen.findByText(
-        'This session keeps Claude Code · opus-5-5 · medium. A different choice starts a new session.',
+        'This session keeps Claude Code · Opus 5.5 · medium. A different choice starts a new session.',
       ),
     ).toBeInTheDocument()
     await user.click(screen.getByTestId('composer-new-with-choice'))
@@ -1376,5 +1610,150 @@ describe('WorkComposer — model and effort', () => {
       model: '',
       effort: 'high',
     })
+  })
+})
+
+// The composer: model, effort and access are three pickers, and the field teaches
+// what can be typed (dev#3162).
+describe('WorkComposer — three pickers and a field that teaches (dev#3162)', () => {
+  const attached = {
+    run: {
+      ...RUNNING,
+      provider_driver: 'claude',
+      model_ref: 'claude-opus-5-5',
+      effort: 'high',
+      permission_mode: 'default',
+      tool_mode: 'default',
+    },
+    group: 'active' as const,
+    title: 'calc-review',
+  }
+
+  it('says the model, the effort and the access each on its own picker', async () => {
+    renderIntel(<WorkComposer attached={attached} />)
+    expect(await screen.findByTestId('composer-tool-model')).toHaveTextContent(
+      /^Claude Opus 5\.5$/,
+    )
+    expect(screen.getByTestId('composer-effort')).toHaveTextContent(/^High$/)
+    expect(screen.getByTestId('composer-access')).toHaveTextContent(
+      /^Ask before each action$/,
+    )
+    for (const id of [
+      'composer-tool-model',
+      'composer-effort',
+      'composer-access',
+    ])
+      expect(screen.getByTestId(id).tagName).toBe('BUTTON')
+  })
+
+  it.each([
+    [
+      {
+        tool_mode: 'dontAsk',
+        permission_mode: 'dontAsk',
+        template_id: 'tpl_ec',
+      },
+      'Edit files and run commands',
+    ],
+    [
+      { tool_mode: 'bypassPermissions', permission_mode: 'bypassPermissions' },
+      'Runs without asking',
+    ],
+  ])('words the access %o as New session does: %s', async (over, words) => {
+    templates.get.mockResolvedValue({
+      id: 'tpl_ec',
+      name: 'Edits and commands',
+      builtin: true,
+    })
+    renderIntel(
+      <WorkComposer
+        attached={{ ...attached, run: { ...attached.run, ...over } }}
+      />,
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('composer-access')).toHaveTextContent(
+        new RegExp(`^${words}$`),
+      ),
+    )
+  })
+
+  it('cuts a long picker word with an ellipsis and keeps its chevron, in a narrow column', async () => {
+    renderIntel(<WorkComposer attached={attached} />)
+    for (const id of [
+      'composer-tool-model',
+      'composer-effort',
+      'composer-access',
+    ]) {
+      const picker = await screen.findByTestId(id)
+      const words = picker.querySelector('span')
+      expect(words?.className.split(/\s+/)).toContain('truncate')
+      expect(picker.lastElementChild?.tagName.toLowerCase()).toBe('svg')
+    }
+    // The effort is one short word: the model and the access give way before it.
+    expect(screen.getByTestId('composer-effort').className).toContain(
+      'shrink-0',
+    )
+  })
+
+  it("opens the access picker on the session's permission, kept until a new session", async () => {
+    const user = userEvent.setup()
+    renderIntel(<WorkComposer attached={attached} />)
+    await user.click(await screen.findByTestId('composer-access'))
+    expect(
+      await screen.findByTestId('composer-access-panel'),
+    ).toHaveTextContent(/A different access starts a new session/)
+  })
+
+  it('draws how full the context is when the tool reports its window, and nothing otherwise', async () => {
+    const first = renderIntel(<WorkComposer attached={attached} />)
+    await screen.findByTestId('composer-access')
+    await waitFor(() => expect(api.activity).toHaveBeenCalled())
+    expect(screen.queryByTestId('composer-context')).toBeNull()
+    first.unmount()
+    api.activity.mockResolvedValue({
+      ...ACTIVITY,
+      context_tokens: 90_000,
+      context_window: 200_000,
+      context_percent: 45,
+    })
+    renderIntel(<WorkComposer attached={attached} />)
+    const ring = await screen.findByTestId('composer-context')
+    expect(ring).toHaveAccessibleName('90,000 tokens · 45.0% of 200,000')
+  })
+
+  it.each([
+    [79, false],
+    [80, true],
+  ])('warns when the context is %i%% full: %s', async (percent, warns) => {
+    api.activity.mockResolvedValue({
+      ...ACTIVITY,
+      context_tokens: 1000,
+      context_window: 200_000,
+      context_percent: percent,
+    })
+    renderIntel(<WorkComposer attached={attached} />)
+    const ring = await screen.findByTestId('composer-context')
+    expect(ring.className.split(/\s+/).includes('text-warning')).toBe(warns)
+  })
+
+  it('draws no ring for a window with no share of it reported', async () => {
+    api.activity.mockResolvedValue({
+      ...ACTIVITY,
+      context_tokens: 1000,
+      context_window: 200_000,
+      context_percent: null,
+    })
+    renderIntel(<WorkComposer attached={attached} />)
+    await screen.findByTestId('composer-access')
+    await waitFor(() => expect(api.activity).toHaveBeenCalled())
+    expect(screen.queryByTestId('composer-context')).toBeNull()
+  })
+
+  it('teaches what can be typed', async () => {
+    renderIntel(<WorkComposer attached={attached} />)
+    expect(await screen.findByTestId('launcher-input')).toHaveAttribute(
+      'placeholder',
+      'Ask anything, / for commands and skills',
+    )
   })
 })

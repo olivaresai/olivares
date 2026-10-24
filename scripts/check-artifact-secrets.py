@@ -25,6 +25,9 @@ from package_repository_lib import digest_file, read_checksum_rows, regular_file
 
 ARCHIVES = ('.tar', '.tar.gz', '.tgz', '.tar.xz', '.tar.zst', '.zip', '.deb', '.rpm', '.apk',
             '.gz', '.gzip', '.xz', '.zst', '.zstd', '.cpio')
+# Archives that are only a compressed stream around their content (.tar.gz, .tgz, .pkg.tar.zst, a
+# compressed image layer): deb, rpm, apk, zip, tar and cpio are not, and keep their printable pass.
+COMPRESSION_WRAPPERS = ('.gz', '.gzip', '.tgz', '.xz', '.zst', '.zstd')
 ROOT = Path(__file__).resolve().parents[1]
 # .goreleaser.yaml checksum.extra_files globs these in the working directory, not in dist/.
 RELEASE_EVIDENCE = ('release-commit.txt', 'release-build-context.json')
@@ -279,14 +282,7 @@ def image_members(data, paths):
         raise ValueError('no copied path in the image')
 
 
-def prepare(path, targets, counter, origins, origin, depth=0):
-    regular_file(path, 'artifact member')
-    index = str(next(counter))
-    origins[index] = origin
-    destination = targets / index
-    destination.mkdir()
-    staged = destination / path.name
-    shutil.copyfile(path, staged)
+def write_printable(staged, destination):
     # Gitleaks skips binary files. Printable strings must also be inspected, including
     # those in executables embedded inside archives and older, whiteouted image layers.
     with staged.open('rb') as source, (destination / 'printable.txt').open('wb') as output:
@@ -301,6 +297,16 @@ def prepare(path, targets, counter, origins, origin, depth=0):
                     output.write(match.group() + b'\n')
         if len(tail) >= 4:
             output.write(tail + b'\n')
+
+
+def prepare(path, targets, counter, origins, origin, depth=0):
+    regular_file(path, 'artifact member')
+    index = str(next(counter))
+    origins[index] = origin
+    destination = targets / index
+    destination.mkdir()
+    staged = destination / path.name
+    shutil.copyfile(path, staged)
     archive_name = path.name if path.name.endswith(ARCHIVES) else ''
     if not archive_name:
         # Docker/OCI saves can name layer blobs by digest without a suffix.
@@ -316,16 +322,28 @@ def prepare(path, targets, counter, origins, origin, depth=0):
                 break
         if not archive_name and prefix[257:262] == b'ustar':
             archive_name = path.name + '.tar'
+    # A pure compression wrapper's raw bytes are a compressed stream: its content is inspected
+    # decompressed, as members, and the printable runs of the stream itself only add noise (zstd
+    # literals once matched generic-api-key in a release package). If it cannot be decompressed,
+    # its raw bytes are still read as text before the scan fails, so nothing goes unscanned.
+    wrapper = archive_name.endswith(COMPRESSION_WRAPPERS)
+    if not wrapper:
+        write_printable(staged, destination)
     if archive_name:
         if depth >= 10:
             raise ValueError('archive nesting exceeds the inspection limit')
         with tempfile.TemporaryDirectory(prefix='artifact-unpack-') as temporary:
-            for number, (name, data) in enumerate(archive_members(staged.read_bytes(), archive_name)):
-                # Flatten members; archive paths and links never address host files.
-                member = Path(temporary) / str(number) / Path(name).name
-                member.parent.mkdir()
-                member.write_bytes(data)
-                prepare(member, targets, counter, origins, origin + '!' + name, depth + 1)
+            try:
+                for number, (name, data) in enumerate(archive_members(staged.read_bytes(), archive_name)):
+                    # Flatten members; archive paths and links never address host files.
+                    member = Path(temporary) / str(number) / Path(name).name
+                    member.parent.mkdir()
+                    member.write_bytes(data)
+                    prepare(member, targets, counter, origins, origin + '!' + name, depth + 1)
+            except Exception:
+                if wrapper:
+                    write_printable(staged, destination)
+                raise
 
 
 def scan(paths, copied=None):

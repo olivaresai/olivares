@@ -132,6 +132,7 @@ async function expectFullText(locator: Locator) {
 
 for (const theme of ['light', 'dark']) {
   for (const width of [1920, 1280, 768, 390, 320]) {
+    // The provider profiles page is a door into Tools (#2552): its header is the one read.
     test(`provider profiles header remains readable at ${width} in ${theme}`, async ({
       page,
     }, testInfo) => {
@@ -140,9 +141,9 @@ for (const theme of ['light', 'dark']) {
       await page.goto('/provider-profiles')
       const header = page.locator('[data-slot="page-header"]')
       const title = header.locator('h1')
-      await expect(title).toHaveText('Provider profiles')
+      await expect(title).toHaveText('AI tools')
       await expect(
-        page.getByText('No provider profiles', { exact: true }),
+        page.getByRole('heading', { name: 'Accounts and API keys' }),
       ).toBeVisible()
       await page.evaluate(() => document.fonts.ready)
 

@@ -124,6 +124,31 @@ describe('session attention', () => {
     ).toBe('ended')
     expect(snapshot({ ...run, state: 'idle' }).state).toBe('quiet')
   })
+  it('watches no session the person snoozed or marked done, as Needs you leaves it out (#2480)', () => {
+    const asking = { ...run, pending_approval_ref: 'approval' }
+    const keys = (runs: RunDTO[]) =>
+      attentionSnapshots({ live: [], handoffs: [], runs }, NOW).map(
+        (s) => s.key,
+      )
+    expect(keys([asking])).toHaveLength(1)
+    expect(
+      keys([{ ...asking, snoozed_until: '2030-01-02T09:00:00Z' }]),
+    ).toEqual([])
+    expect(keys([{ ...asking, done: true }])).toEqual([])
+  })
+  it('watches no archived session, as no list shows it (#2795)', () => {
+    const asking = { ...run, pending_approval_ref: 'approval' }
+    expect(
+      attentionSnapshots(
+        {
+          live: [],
+          handoffs: [],
+          runs: [{ ...asking, archived_at: '2026-10-21T12:00:00Z' }],
+        },
+        NOW,
+      ),
+    ).toEqual([])
+  })
   it('reads a turn that ended from an idle run active within the window, not from silence', () => {
     const snapshot = (r: RunDTO) =>
       attentionSnapshots({ live: [], handoffs: [], runs: [r] }, NOW)[0]

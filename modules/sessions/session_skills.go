@@ -12,7 +12,9 @@ import (
 	"io/fs"
 	"math"
 	"os"
+	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/olivaresai/olivares/core/driverfacts"
@@ -238,9 +240,10 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 		return err
 	}
 	driver := rec.String(colRunProfileDriver)
-	if driver == providerDriverClaude {
-		// Skills and commands share Claude's slash namespace; agents do not.
-		// Refuse an ambiguous native alias instead of letting the tool hide one.
+	if driver == providerDriverClaude || driver == providerDriverOpenCode {
+		// Skills and commands share the tool's slash namespace; agents do not.
+		// Refuse an ambiguous native alias instead of letting the tool hide one
+		// (OpenCode 1.19.3 skips a skill whose name a command already has).
 		slashNames := map[string]string{}
 		for _, member := range selection.Members {
 			if member.Kind != "" && member.Kind != "command" {
@@ -248,7 +251,7 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 			}
 			name := strings.TrimPrefix(member.Name, "command:")
 			if kind, exists := slashNames[name]; exists && kind != member.Kind {
-				return &runErr{503, fmt.Sprintf("assigned skill and command use the same Claude Code slash name %q", name)}
+				return &runErr{503, fmt.Sprintf("assigned skill and command use the same %s slash name %q", toolDisplayName(driver), name)}
 			}
 			slashNames[name] = member.Kind
 		}
@@ -275,21 +278,37 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 		return errors.New("assigned skills have no verified files")
 	}
 	hasRules := false
+	files = slices.Clone(files)
+	var agents []string // a skill's @name of one starts it (openCodeSkill)
 	for _, file := range files {
+		if file.Kind == "agent" {
+			agents = append(agents, strings.TrimSuffix(path.Base(file.Path), ".md"))
+		}
+	}
+	for i, file := range files {
 		switch file.Kind {
 		case "": // portable skills keep their documented driver-specific folder
+			if driver == providerDriverOpenCode && path.Base(file.Path) == "SKILL.md" {
+				if err := openCodeSkill(spec.Dir, file.Path, file.Bytes, agents); err != nil {
+					return err
+				}
+			}
 		case "agent", "command", "rule":
-			if driver != providerDriverClaude {
+			if driver != providerDriverClaude && driver != providerDriverOpenCode {
 				return &runErr{503, fmt.Sprintf("assigned %s content cannot be delivered to %q: no documented native delivery", file.Kind, facts.Name)}
 			}
 			if file.Kind == "rule" {
 				if file.Imports {
-					return &runErr{503, "assigned rules with file imports cannot be delivered to Claude Code in a governed session; copy the referenced instructions into the rule"}
+					return &runErr{503, fmt.Sprintf("assigned rules with file imports cannot be delivered to %s in a governed session; copy the referenced instructions into the rule", facts.Name)}
 				}
 				if file.Scoped {
-					return &runErr{503, "assigned path-scoped rules cannot be delivered to Claude Code in a governed session"}
+					return &runErr{503, fmt.Sprintf("assigned path-scoped rules cannot be delivered to %s in a governed session", facts.Name)}
 				}
 				hasRules = true
+			} else if driver == providerDriverOpenCode {
+				if files[i].Bytes, err = openCodeComponent(file.Kind, file.Path, file.Bytes); err != nil {
+					return err
+				}
 			}
 		default:
 			return errors.New("invalid verified instruction kind")
@@ -323,6 +342,10 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 	home := filepath.Join(dir, "home")
 	destination := filepath.Join(home, filepath.FromSlash(facts.SkillsDir))
 	native := filepath.Dir(destination)
+	components := native
+	if driver == providerDriverOpenCode {
+		components = filepath.Join(home, openCodeComponentsDir)
+	}
 	if err := os.MkdirAll(destination, 0700); err != nil {
 		return err
 	}
@@ -347,6 +370,7 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 		}
 		spec.Confinement.ReadWrite = append(spec.Confinement.ReadWrite, path)
 	}
+	var rules []string
 	for _, file := range files {
 		if !fs.ValidPath(file.Path) || strings.Contains(file.Path, "\\") || file.Mode&0222 != 0 {
 			return errors.New("invalid verified skill file")
@@ -354,9 +378,12 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 		base := destination
 		if file.Kind != "" {
 			folder := map[string]string{"agent": "agents", "command": "commands", "rule": "rules"}[file.Kind]
-			base = filepath.Join(native, folder)
+			base = filepath.Join(components, folder)
 		}
 		name := filepath.Join(base, filepath.FromSlash(file.Path))
+		if file.Kind == "rule" {
+			rules = append(rules, name)
+		}
 		if err := os.MkdirAll(filepath.Dir(name), 0700); err != nil {
 			return err
 		}
@@ -387,6 +414,14 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 			spec.Args = append(spec.Args, "--add-dir", home)
 			spec.Env = append(spec.Env, EnvVar{Name: "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD", Value: "1"})
 		}
+	}
+	if driver == providerDriverOpenCode && len(rules) > 0 {
+		if err := addOpenCodeInstructions(spec, rules); err != nil {
+			return err
+		}
+	}
+	if components != native && slices.ContainsFunc(files, func(f skills.DeliveryFile) bool { return f.Kind != "" }) {
+		spec.Confinement.Sealed = append(spec.Confinement.Sealed, components)
 	}
 	for i := range spec.Env {
 		if spec.Env[i].Name == envUserHome || driver == providerDriverGemini && spec.Env[i].Name == facts.ConfigHomeEnv {

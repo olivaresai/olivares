@@ -385,10 +385,11 @@ func TestRuntimeSkillsDocumentedFoldersPreserveConfiguration(t *testing.T) {
 			for _, item := range spec.Env {
 				env[item.Name] = item.Value
 			}
-			if got, err := os.ReadFile(filepath.Join(env["HOME"], ".agents", "skills", "research", "SKILL.md")); err != nil || string(got) != "verified" {
+			skillsDir := filepath.Join(env["HOME"], filepath.FromSlash(facts.SkillsDir))
+			if got, err := os.ReadFile(filepath.Join(skillsDir, "research", "SKILL.md")); err != nil || string(got) != "verified" {
 				t.Fatalf("discovery file = %q %v", got, err)
 			}
-			if !slices.Contains(spec.Confinement.Sealed, filepath.Join(env["HOME"], ".agents")) {
+			if !slices.Contains(spec.Confinement.Sealed, filepath.Dir(skillsDir)) {
 				t.Fatal("discovery directory is not sealed")
 			}
 			if driver == "gemini-cli" {

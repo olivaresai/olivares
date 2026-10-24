@@ -73,7 +73,7 @@ var (
 	// The transcript on disk is the tool's own, unredacted. Current vault values cannot
 	// redact a value an earlier generation of the session printed, so, as for a handoff
 	// and a stored Codex conversation, it is not shown; the attach stream still is.
-	errActivitySecretBearing = conflictErr("this session was given vault secrets or a repository credential; " +
+	errActivitySecretBearing = conflictErr("this session was given vault secrets, a repository credential or a managed credential; " +
 		"its transcript cannot be proven free of them, so its activity is not shown (its live output is)")
 	// A package registry token is withheld by the redactor of a live session, which
 	// holds the tokens of its own launch only. One that is not live in this engine
@@ -183,8 +183,8 @@ type activityTurnDTO struct {
 
 // activitySource is the transcript of a session the activity may read, and the
 // redactor its records pass through: the live session's, which also withholds the
-// package registry tokens of its profile. A session given vault secrets or a
-// repository credential is refused; so is one that used a registry token and is
+// package registry tokens of its profile. A session given vault secrets, a
+// repository credential or a managed credential is refused; so is one that used a registry token and is
 // not live, or is live after a launch an earlier one preceded, because only the
 // first launch's redactor is known to hold every token the transcript may quote.
 func (m *Module) activitySource(ctx context.Context, tenant model.TenantID, runRef string, agent bool) (model.Record, activitySession, *secretRedactor, bool, error) {

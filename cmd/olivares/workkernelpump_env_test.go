@@ -51,10 +51,8 @@ func TestWorkOutboxPumpIntervalEnv(t *testing.T) {
 }
 
 func TestWorkOutboxPumpZeroDisablesPeriodicKeepsInsertNudge(t *testing.T) {
-	// The nudge slot is process-global: leave it as found.
-	t.Cleanup(func() { sessions.SetWorkOutboxNudge(nil) })
-
-	p := newWorkOutboxPump(func(string) string { return "0" }, fakeStoreLeader(true), &sessions.Module{}, discardLog())
+	module := &sessions.Module{}
+	p := newWorkOutboxPump(func(string) string { return "0" }, fakeStoreLeader(true), module, discardLog())
 	if p == nil {
 		t.Fatal("\"0\" must keep a pump that owns the insert nudge, not remove it")
 	}
@@ -80,7 +78,7 @@ func TestWorkOutboxPumpZeroDisablesPeriodicKeepsInsertNudge(t *testing.T) {
 	if ready, err := witness.CommunicationPumpReady(context.Background()); err != nil || ready {
 		t.Fatalf("a disabled pump must not authorize K3 claims: ready=%t err=%v", ready, err)
 	}
-	if !sessions.WorkOutboxNudgeRegistered() {
+	if !module.WorkOutboxNudgeRegistered() {
 		t.Fatal("the insert nudge must stay registered while the periodic drain is disabled")
 	}
 

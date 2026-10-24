@@ -157,15 +157,15 @@ class Motor:
             with abre(pet, timeout=60) as r:
                 return r.status, r.read().decode()
         except urllib.error.HTTPError as e:
-            return e.code, e.read().decode()[:300]
+            return e.code, redacta(e.read().decode())[:300]
         except Exception as e:  # red caida, DNS, TLS: no he podido mirar
-            return 0, f"{type(e).__name__}: {e}"[:300]
+            return 0, redacta(f"{type(e).__name__}: {e}")[:300]
 
     def listar(self, ruta, bajo):
         """(filas, None) o (None, motivo). Una lista que no se puede leer NO es una lista vacia."""
         st, cuerpo = self._pide(ruta)
         if st != 200:
-            return None, f"GET {ruta} -> {st} {cuerpo[:120]}"
+            return None, f"GET {ruta} -> {st} {redacta(cuerpo)[:120]}"
         try:
             d = json.loads(cuerpo)
         except Exception:
@@ -457,7 +457,7 @@ def main(argv):
     try:
         edicion = edition_of(st_info, json.loads(cuerpo_info) if st_info == 200 else None)
     except ValueError as e:
-        return salir(RC_UNAVAILABLE, f"{e}: {cuerpo_info[:120]}")
+        return salir(RC_UNAVAILABLE, f"{e}: {redacta(cuerpo_info)[:120]}")
     di(f"seed-estate-volume: edition {edicion}")
     ctx = {"workspace_slug": a.workspace, "agentes": [], "libres": {}, "edition": edicion}
 
@@ -526,10 +526,10 @@ def main(argv):
                     #    version hacia `continue` a secas y una superficie podia quedarse en 1 de
                     #    6 creando cero SIN UNA SOLA LINEA que dijera por que.
                     conflictos += 1
-                    ultimo = resp[:110]
+                    ultimo = redacta(resp)[:110]
                     continue
                 else:
-                    fallos.append(f"`{sid}`: POST {ruta} -> {st} {resp[:110]}")
+                    fallos.append(f"`{sid}`: POST {ruta} -> {st} {redacta(resp)[:110]}")
                     break
             if creados < missing_inputs and conflictos and not any(f.startswith(f"`{sid}`") for f in fallos):
                 fallos.append(f"`{sid}`: {conflictos} HTTP 409 conflicts and only {creados} of {missing_inputs} "

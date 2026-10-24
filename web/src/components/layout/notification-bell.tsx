@@ -150,6 +150,7 @@ export function NotificationBell() {
           variant="ghost"
           size="icon"
           aria-label={t('notifications.title')}
+          title={t('notifications.title')}
           className="relative"
         >
           <Bell className="size-4" />

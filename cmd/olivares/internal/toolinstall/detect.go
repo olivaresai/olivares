@@ -16,6 +16,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
 // Installed is one release directory under the root and how it reads today.
@@ -105,7 +107,7 @@ func (e *Engine) list(ctx context.Context, rootPath, driver string) (*Inventory,
 		if driver != "" && d.Name() != driver {
 			continue
 		}
-		if d.Name() == LockFile {
+		if d.Name() == LockFile || d.Name() == RipgrepFolder {
 			continue
 		}
 		if !d.IsDir() || strings.HasPrefix(d.Name(), ".") {
@@ -606,7 +608,7 @@ func (e *Engine) Detect(ctx context.Context, opts DetectOptions) ([]Candidate, e
 			failures++
 			continue
 		}
-		scratch, err := os.MkdirTemp("", "olivares-tool-probe-")
+		scratch, err := confine.ChildTempDir()
 		if err != nil {
 			c.ProbeError = err.Error()
 			failures++

@@ -38,8 +38,11 @@ import (
 //     enforcement and an unreadable stop state must never mean "go".
 //   - ENGAGE also revokes the queued work the gates cannot reach: every PENDING
 //     approval for an in-scope actuation action is canceled in the same
-//     transaction, so pre-stop intents cannot ripen into approved grants that
-//     dispatch the moment the estate is re-enabled. Approved-but-unconsumed
+//     transaction, and an ESTATE stop also cancels every pending request a
+//     session filed (session_ref): the stop ends every session, so none of them
+//     can be carried out by the session that asked (governance work excepted,
+//     ksKeptGovernanceActions). Pre-stop intents cannot ripen into approved
+//     grants that dispatch the moment the estate is re-enabled. Approved-but-unconsumed
 //     grants cannot be canceled (the engine cancels pending only, by design);
 //     they are listed in the evidence pack for the post-review instead.
 //   - RE-ENABLE is NEVER unilateral: it is gated on a fresh dual-control
@@ -97,6 +100,29 @@ var ksActuationActions = map[string]struct{}{
 	"orchestration.schedule.fire": {},
 	"voice.session.open":          {},
 	"routine.fire":                {},
+}
+
+// ksKeptGovernanceActions are the action families an engage never cancels, even on a
+// session's request: the stop halts the agentic estate, never the controls that govern
+// it (credentials of non-human identities, security posture and the stop itself,
+// compliance attestations). Each family has its own case in
+// TestKillSwitchEstateStopRevokesSessionRequests.
+var ksKeptGovernanceActions = []string{"nhi.", "security.", "compliance."}
+
+// ksSessionRequest reports whether a pending approval is a request a session filed
+// (session_ref) for work that is not governance. An estate stop ends every session, so
+// such a request can never be carried out by the session that asked.
+func ksSessionRequest(rec model.Record) bool {
+	if strings.TrimSpace(rec.String(colApprovalSessionRef)) == "" {
+		return false
+	}
+	action := rec.String(colAction)
+	for _, kept := range ksKeptGovernanceActions {
+		if strings.HasPrefix(action, kept) {
+			return false
+		}
+	}
+	return true
 }
 
 // Finding kinds emitted by the kill-switch path (routed by modules/notify).
@@ -362,7 +388,8 @@ func (m *Module) engageKillSwitchLocked(ctx context.Context, sc store.Scope, p k
 }
 
 // cancelActuationApprovals cancels the PENDING approvals an engage revokes and
-// returns their ids. Estate scope cancels every pending actuation approval;
+// returns their ids. Estate scope cancels every pending actuation approval and
+// every pending request a session filed (ksSessionRequest);
 // agent scope cancels those whose subject is that agent (the surfaces that key
 // approvals on other subjects — e.g. orchestration fires keyed on a schedule —
 // stay pending and are denied at dispatch by the stop gates instead; honest
@@ -384,7 +411,9 @@ func (m *Module) cancelActuationApprovals(ctx context.Context, sc store.Scope, p
 	}
 	var canceled []string
 	for _, rec := range pending {
-		if _, governed := ksActuationActions[rec.String(colAction)]; !governed {
+		_, actuation := ksActuationActions[rec.String(colAction)]
+		sessionRequest := p.ScopeKind == ksScopeEstate && ksSessionRequest(rec)
+		if !actuation && !sessionRequest {
 			continue
 		}
 		if effectiveStatus(rec, now) != statusPending {

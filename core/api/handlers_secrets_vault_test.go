@@ -146,7 +146,7 @@ func TestVaultRevealIsOwnerOnly(t *testing.T) {
 // write-only, and a malformed vault name is not a vault item.
 func TestVaultRevealRefusesEveryOtherNamespace(t *testing.T) {
 	f := newVaultFixture(t)
-	for _, name := range []string{"mcp/github", "env/GITHUB_TOKEN"} {
+	for _, name := range []string{"mcp/github", "env/GITHUB_TOKEN", "credential/prod-db"} {
 		if got := f.put(f.alice, name, "tenant-"+vaultValue); got.code != http.StatusOK {
 			t.Fatalf("seed %s = %d %s", name, got.code, got.raw)
 		}

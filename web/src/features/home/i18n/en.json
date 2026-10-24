@@ -1,23 +1,4 @@
 {
-  "title": "Now",
-  "description": "What your AI agents did in the last 30 days, in the areas you can open.",
-  "aside": "Estate summary",
-  "range": "last 30 days",
-  "next": {
-    "title": "Next step",
-    "provider": {
-      "title": "Add a provider",
-      "description": "Connect Claude, Codex or another engine so its sessions are attributed and governed."
-    },
-    "agent": {
-      "title": "Deploy an agent",
-      "description": "Roll an agent out to a workspace, with its policy and its revision history."
-    },
-    "session": {
-      "title": "Start a session",
-      "description": "Launch a governed run and watch its tool calls as they happen."
-    }
-  },
   "recent": {
     "title": "Recent work",
     "description": "The five most recent sessions this deployment observed.",
@@ -26,75 +7,10 @@
     "emptyDescription": "Every run a connected engine performs appears here, with what it did, how long it took and what it cost.",
     "unavailableTitle": "Couldn’t load recent work",
     "unavailableDescription": "The sessions read did not answer. The estate figures above are unaffected.",
-    "open": "Open the session: {{what}}",
     "untitled": "Untitled session"
   },
   "live": {
     "title": "Live now"
-  },
-  "tiles": {
-    "today": {
-      "label": "Today",
-      "caption_one": "Cost of the session that worked today",
-      "caption_other": "Cost of the {{count}} sessions that worked today",
-      "unpriced_one": "{{count}} reported no cost",
-      "unpriced_other": "{{count}} reported no cost"
-    },
-    "inventory": {
-      "label": "Inventory",
-      "caption": "{{agents}} agents · {{active}} active"
-    },
-    "sessions": {
-      "label": "Live sessions",
-      "caption": "{{idle}} idle now",
-      "silent": "{{count}} gone silent (possible evasion)"
-    },
-    "security": {
-      "label": "Security",
-      "caption": "{{count}} critical or high",
-      "clear": "No open findings"
-    },
-    "compliance": {
-      "label": "Compliance",
-      "caption": "{{gap}} gaps · {{unmapped}} unmapped",
-      "noControls": "No controls mapped yet"
-    },
-    "spend": {
-      "label": "Spend",
-      "caption": "{{range}}",
-      "projected": "{{amount}} projected at run-rate",
-      "projectedOver": "{{amount}} projected at run-rate — above spend so far"
-    },
-    "health": {
-      "label": "Health & SLA",
-      "value": "{{healthy}}/{{total}} healthy",
-      "caption": "{{breaches}} SLA breaches · {{incidents}} open incidents",
-      "noChecks": "No health checks yet"
-    },
-    "budgets": {
-      "label": "Budgets",
-      "none": "No budgets yet",
-      "nonePartial": "None enabled on this page; there are more",
-      "over_one": "{{count}} over limit",
-      "over_other": "{{count}} over limit",
-      "unknown_one": "{{count}} amount unknown",
-      "unknown_other": "{{count}} amount unknown",
-      "within": "None over limit",
-      "partial": "Loaded {{n}} budgets; there are more"
-    }
-  },
-  "state": {
-    "unavailable": "Couldn't load — open to retry",
-    "pendingIdle": "Query not started — open to load",
-    "pendingPaused": "Query paused — waiting to resume"
-  },
-  "availability": {
-    "loading": "{{source}}: loading.",
-    "pendingIdle": "{{source}}: query not started.",
-    "pendingPaused": "{{source}}: query paused, waiting to resume.",
-    "unavailable": "{{source}}: could not be loaded.",
-    "partial": "{{source}}: figures available, partial data.",
-    "current": "{{source}}: figures available."
   },
   "empty": {
     "title": "Nothing to show yet",
@@ -107,5 +23,77 @@
     "install": "Install Claude Code or Codex to start a session.",
     "installAction": "Set up a tool",
     "newSession": "New session"
+  },
+  "swimlane": {
+    "title": "Last hour",
+    "subtitle": "{{from}} to {{to}}. Each bar is a run, stronger where it made more tool calls.",
+    "lanes": "Sessions in the last hour",
+    "now": "Now {{at}}",
+    "range": "{{from}} to {{to}}",
+    "selectSlot": "{{from}} to {{to}}",
+    "active": "Active {{spans}}",
+    "noActivity": "No activity in the last hour",
+    "unread": "Activity not read",
+    "toolCalls_one": "{{n}} tool call",
+    "toolCalls_other": "{{n}} tool calls",
+    "runTip_one": "Run {{from}} to {{to}}, {{count}} tool call",
+    "runTip_other": "Run {{from}} to {{to}}, {{count}} tool calls",
+    "waitingSince": "Waiting for approval since {{at}}",
+    "needsYouSince": "Needs you since {{at}}",
+    "idleSince": "Idle since {{at}}",
+    "failedAt": "Failed at {{at}}",
+    "failed": "Failed",
+    "automation": "Schedule",
+    "hint": "Drag across the lanes, or choose a time, to see that range in the Ledger.",
+    "openLedger": "Open in the Ledger",
+    "clear": "Clear",
+    "legend": "Legend",
+    "legendRun": "Run, stronger with more tool calls",
+    "legendWait": "Waiting for approval",
+    "legendIdle": "Idle, waiting for a prompt",
+    "legendFailure": "Failure",
+    "table": "Show as a table",
+    "colSession": "Session",
+    "colActive": "Active",
+    "colCalls": "Tool calls",
+    "colNow": "Now",
+    "working": "Working",
+    "reading": "Reading activity",
+    "waiting": "Waiting for approval",
+    "needsYou": "Needs you",
+    "idle": "Idle",
+    "approvalsUnread": "Approvals could not be read, so waits for approval are not drawn."
+  },
+  "summary": {
+    "heading": "Summary",
+    "nothingRunning": "Nothing is running",
+    "running_one": "{{count}} session open",
+    "running_other": "{{count}} sessions open",
+    "runningFor_one": "{{count}} session open for {{people}}",
+    "runningFor_other": "{{count}} sessions open for {{people}}",
+    "runningMore": "{{n}}+ sessions open",
+    "people_one": "{{count}} person",
+    "people_other": "{{count}} people",
+    "today": "{{amount}} today",
+    "todayFloor": "at least {{amount}} today",
+    "needs_one": "{{count}} needs you",
+    "needs_other": "{{count}} need you",
+    "needsMore": "{{n}}+ need you",
+    "yesterday": "Yesterday {{amount}}",
+    "unpriced_one": "{{count}} reported no cost",
+    "unpriced_other": "{{count}} reported no cost",
+    "month": "{{spent}} of {{limit}} this month",
+    "monthFloor": "at least {{spent}} of {{limit}} this month",
+    "monthLabel": "Spend this month"
+  },
+  "state": {
+    "pendingIdle": "Query not started — open to load",
+    "pendingPaused": "Query paused — waiting to resume"
+  },
+  "proof": {
+    "verified": "Chain verified at {{time}}",
+    "entries_one": "{{n}} entry",
+    "entries_other": "{{n}} entries",
+    "broken": "Chain broken: open the Ledger"
   }
 }

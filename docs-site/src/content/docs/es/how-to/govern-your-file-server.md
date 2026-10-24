@@ -73,7 +73,9 @@ El conector mapea **solo lo que el sistema de ficheros expresa**, y declara lo q
 Los nombres de principal se resuelven por el name service del host (que puede incluir
 **LDAP**, así que `uid`→usuario coincide con tu directorio). Un uid/gid que no
 resuelve cae a su id **numérico**. Un fichero **sin ACL derivable** hereda la ACL por
-defecto del knowledge base, que retrieval sigue aplicando. El conector **nunca inventa**
+defecto del knowledge base, que retrieval sigue aplicando; sin ACL por defecto, el
+fichero se **deniega** salvo que la fuente se declare pública con `"public": "true"`
+en su configuración. El ajuste se aplica a los documentos guardados después; vuelve a ingerir para cambiar las filas ya guardadas. El conector **nunca inventa**
 una ACL que el fichero no tiene.
 
 ### Clasificación

@@ -64,17 +64,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 | 1.4.10 Reflow | AA | Partially Supports | Layout reflows to small viewports (mobile nav, responsive shell); the access **graph** is desktop-only with a documented text fallback on small screens (an intentional equivalent, not a reflow of the canvas). |
 | 1.4.11 Non-text Contrast | AA | Supports | The information **required to identify a control and its state** meets 3:1: the focus ring (`ring-ring`) is ≥ 3:1 against adjacent surfaces in both themes (measured), and chart/graph data strokes use the solid semantic tokens (≥ 3:1). The *resting* hairline borders (`border-strong`, the thin semantic `-line` rules) are intentionally low-contrast (1.3–1.9:1) but are **not the sole identifier** — a control is identified by its fill + label + the ≥ 3:1 focus indicator, and the `-line` rules are decorative reinforcement beside text/icons (1.4.11 Understanding). |
 | 1.4.12 Text Spacing | AA | Supports | No fixed line-height/letter-spacing traps; content tolerates user spacing overrides. |
-| 1.4.13 Content on Hover or Focus | AA | Supports | Tooltips/popovers are Radix (dismissable, hoverable, persistent); the sidebar tooltip is keyboard-reachable. |
+| 1.4.13 Content on Hover or Focus | AA | Supports | Tooltips/popovers are Radix (dismissable, hoverable, persistent); the top bar's place tooltips are keyboard-reachable. |
 | 2.1.1 Keyboard | A | Supports | Every interactive element is keyboard-operable: grid arrow navigation, combobox, dialogs, nav, ⌘K palette, graph zoom/pan buttons + arrow-key pan. |
 | 2.1.2 No Keyboard Trap | A | Supports | Radix dialog/sheet/popover trap focus only while open and release on Escape with focus return (verified `dialog.test.tsx`). |
 | 2.1.4 Character Key Shortcuts | A | Supports | The only single-key affordance (⌘K) is a modifier combo, not a lone character. |
-| 2.2.1 / 2.2.2 Timing / Pause | A | Partially Supports | No session time limits imposed by the UI. The one looping animation (live-attribution pulse) honours `prefers-reduced-motion`; a user-facing pause control for it is not provided (it is decorative and stoppable via OS reduced-motion). |
+| 2.2.1 / 2.2.2 Timing / Pause | A | Supports | No session time limits imposed by the UI; no looping animation remains. The one-shot ledger-row slide and the live elapsed/cost ticks stop under `prefers-reduced-motion`, the console Reduce motion setting, and the `?still` capture switch. |
 | 2.3.1 Three Flashes | A | Supports | No flashing content. |
 | 2.4.1 Bypass Blocks | A | Supports | A "Skip to content" link targets `#main-content` as the first focusable element (`app-layout.tsx`). |
-| 2.4.2 Page Titled | A | Supports | `<title>` set; the breadcrumb names the current view. |
+| 2.4.2 Page Titled | A | Supports | `<title>` set; the page header `<h1>` names the current view. |
 | 2.4.3 Focus Order | A | Supports | Logical tab order; dialogs move focus in and return it to the trigger. |
 | 2.4.4 Link Purpose (In Context) | A | Supports | Links/nav items are labelled; icon-only items carry `aria-label`. |
-| 2.4.5 Multiple Ways | AA | Supports | Sidebar nav + ⌘K command palette + breadcrumb provide multiple ways to reach views. |
+| 2.4.5 Multiple Ways | AA | Supports | The top bar's places + ⌘K command palette + All areas provide multiple ways to reach views. |
 | 2.4.6 Headings and Labels | AA | Supports | Descriptive headings (`PageHeader` `<h1>`), nav group labels, form labels. |
 | 2.4.7 Focus Visible | AA | Supports | Global `:focus-visible` ring (`ring-ring`, offset) on all focusables; the active grid cell shows an inset ring. |
 | 2.5.1 Pointer Gestures | A | Supports | No multipoint/path gestures required (graph drag has single-pointer button alternatives — see 2.5.7). |
@@ -84,7 +84,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 | 3.1.1 Language of Page | A | Supports | `<html lang>` set and kept in sync with the language selector. |
 | 3.1.2 Language of Parts | AA | Supports | ES/EN content is served in the active language; no mixed-language fragments without markup. |
 | 3.2.1 On Focus / 3.2.2 On Input | A | Supports | Focus/input cause no unexpected context change. |
-| 3.2.3 Consistent Navigation | AA | Supports | Sidebar + topbar are a single shared shell rendered identically on every page. |
+| 3.2.3 Consistent Navigation | AA | Supports | The top bar is a single shared shell rendered identically on every page. |
 | 3.2.4 Consistent Identification | AA | Supports | Shared design-system components identify the same function the same way everywhere. |
 | 3.3.1 Error Identification | A | Supports | Form submit errors use `role="alert"`. The `Field` primitive now (Rev 1.2) **auto-associates** every control with its label (`aria-labelledby`), its description and its error (`aria-describedby`) and sets `aria-invalid`, even for plain (non-render-prop) children — so per-field errors are programmatically linked and announced on focus across all forms; `FieldError` carries `role="alert"`. Forms that bypassed `Field` (agentops run/workspace dialogs) were converted. |
 | 3.3.2 Labels or Instructions | A | Supports | Inputs are labelled with instructions/placeholders where needed. |

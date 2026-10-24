@@ -17,10 +17,8 @@
  *                               reduced-motion user never sees a delayed invisible flash (the
  *                               element just renders at rest)".
  *   web/src/index.css:128-135   the global `reduce` damper.
- *   web/src/index.css:139-149   `pulse-live`, "the one sanctioned looping animation" — and it is
- *                               deliberately NOT ported: a live-attribution pulse means something
- *                               in an operator console and nothing on a documentation page. There
- *                               are no loops here.
+ *   No loop: the console dropped its `pulse-live` (a status is a solid dot plus a word), and
+ *   there are no loops here either.
  *
  * The curve is not authored here either: --olv-ease-out comes out of the generated brand.css,
  * which reads it from web/tokens/primitives.tokens.json:36-44.

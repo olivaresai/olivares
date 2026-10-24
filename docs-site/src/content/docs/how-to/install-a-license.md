@@ -111,15 +111,39 @@ names the installed license separately from the build. **Expires** is the paid t
 **Lease until**, when shown, is the separate provisional instance lease. Running in
 Docker? Go to [Docker and Compose](#docker-and-compose) below.
 
-With a license installed, the commercial binary is a download away. Nothing is
-reinstalled and no data moves:
+With a license installed, the commercial binary is one command away. Nothing is
+reinstalled and no data moves. `olivares license install` and `olivares license status`
+print the exact command for how this installation was installed, and the console's
+**Edition & license** view shows the same step as one button, **Switch to Business**: the
+engine downloads the build, verifies it, swaps it in place and restarts on it.
 
 ```sh
-olivares upgrade --enterprise --token <TOKEN>
+export OLIVARES_UPGRADE_TOKEN=<TOKEN>   # not needed once this installation is connected
+olivares upgrade --edition business
 ```
 
+The download token is on the **Downloads** page of the
+[licensed download portal](https://licenses.olivares.ai/portal/downloads), next to these same
+commands, and in your license email. Pass it by name, as above, so it stays out of the process
+list. An installation that ran `olivares license connect start` once needs no token: its own
+identity fetches one. The console button needs one of the two, the token in the engine's own
+environment or this connection; with neither, the view shows the command instead.
+`--enterprise` is the older spelling of the same route and keeps working.
+Later releases come the same way, with `olivares upgrade` or the console's
+**Settings → Updates** page.
+
+:::caution[Package installs]
+On a deb, rpm, apk or AUR install the package manager owns `/usr/bin/olivares`, so this command is
+refused: it exits 2 before it downloads anything. Use the Business package once the entitled package
+channel serves it. Until then, the step the install command prints names the file yourself:
+`sudo --preserve-env=OLIVARES_UPGRADE_TOKEN olivares upgrade --edition business --target /usr/bin/olivares --data-dir /var/lib/olivares`.
+The package database then no longer matches that file, and a later package upgrade puts the
+Community build back: run the command again after it. `--check` still shows the plan.
+:::
+
 :::note[Business and the commercial artifact channel]
-The `--enterprise` flag names the commercial artifact channel, not the edition.
+`--edition business` and the older `--enterprise` name the commercial artifact channel, not
+a separate Enterprise build: Business and Enterprise are the one licensed build.
 The editions are Community, Business and Enterprise. Business includes Regulated Operations,
 AI Runtime Security, Compliance Packs, and Identity & Scale in one subscription.
 Each family can be enabled or disabled; none is sold separately.
@@ -132,7 +156,7 @@ number as Community, so this also works when you already run that version. `--ch
 you want to see the plan without taking it; it names the move as `edition: community -> enterprise`:
 
 ```sh
-olivares upgrade --enterprise --token <TOKEN> --check
+olivares upgrade --edition business --check
 ```
 
 Restart the service, and then turn the modules on:
@@ -162,13 +186,14 @@ The public `docker.io/olivaresai/olivares` image is Community. In a container,
 recreating the container starts it again. This applies the Business release when it is newer
 than the image or has the same version (`--check` names the move as `edition: community -> enterprise`);
 building the image yourself, as described below, is the alternative. With the license installed (section 2),
-run the upgrade in the running container and restart it. The token comes from your fulfilment
-email; pass it by name so it stays out of the process list:
+run the upgrade in the running container and restart it. The token comes from the Downloads
+page or your fulfilment email; pass it by name so it stays out of the process list. The console's
+**Switch to Business** button does the same and restarts the container's engine itself:
 
 ```sh
 export OLIVARES_UPGRADE_TOKEN=<TOKEN>
-docker compose exec -e OLIVARES_UPGRADE_TOKEN olivares olivares upgrade --enterprise --yes
-docker compose up -d --force-recreate olivares
+docker compose exec -e OLIVARES_UPGRADE_TOKEN olivares olivares upgrade --edition business --yes
+docker compose restart olivares
 ```
 
 The release is kept in `ota/` under the data directory (`/var/lib/olivares/ota` in the

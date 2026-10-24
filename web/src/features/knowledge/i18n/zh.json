@@ -159,7 +159,7 @@
     "contextTruncated": "⛔ 上下文放不下：已丢弃 {{n}} 个分块。此回答所依据的证据少于下方列表所显示的。",
     "excludedChunks": "{{n}} 个分块被来源下限排除（{{sources}}）",
     "sourceFloorNoEffect": "已应用来源下限，未排除任何内容",
-    "redactedItems": "{{n}} items redacted",
+    "redactedItems": "已脱敏 {{n}} 项",
     "redactionNoEffect": "要求脱敏，但没有任何匹配"
   },
   "lineage": {
@@ -463,7 +463,7 @@
     "empty": "没有 DLP 规则",
     "emptyHint": "没有规则时网关不作任何强制。写入一条规则即为该租户启用 DLP。",
     "anyScope": "匹配任何带标签的类别 — 不涵盖未扫描的内容",
-    "newRule": "New DLP rule",
+    "newRule": "新建 DLP 规则",
     "newRuleHint": "一条规则把一个内容类别绑定到出站时的允许或拒绝。",
     "class": "Class",
     "action": "Action",
@@ -488,15 +488,15 @@
     "allHealthyHint": "完整性校验会把每一条存储行与其记录的摘要进行比对。所有已检查的行都匹配。"
   },
   "scans": {
-    "empty": "No scans yet",
+    "empty": "暂无扫描",
     "emptyHint": "扫描会遍历数据源并记录发现的内容。启动一次扫描即可在此查看结果。",
-    "sourceName": "Source name",
-    "scanSource": "Scan source",
+    "sourceName": "来源名称",
+    "scanSource": "扫描来源",
     "scanSourceHint": "读取数据源，但不摄取它。正文只在内存中分类，绝不存储、记录或嵌入。",
     "basisNotice": "扫描记录的是它查看的对象。“stored”是摄取后已清理的形式；“raw”是脱敏前的正文。两者不可比较。",
     "basis": {
-      "raw": "raw bodies",
-      "stored": "stored (post-scrub)"
+      "raw": "原始正文",
+      "stored": "已存储（脱敏后）"
     },
     "counts": "{{docs}} 份文档 · {{hits}} 份有命中 · {{markers}} 个脱敏标记",
     "truncated": "已加载 {{n}} 条扫描记录；还有更多",
@@ -506,15 +506,15 @@
   },
   "portability": {
     "title": "Portability",
-    "export": "Export bundle",
-    "bundle": "Bundle to import",
-    "bundlePlaceholder": "Paste a signed bundle",
-    "import": "Import bundle",
+    "export": "导出数据包",
+    "bundle": "待导入的数据包",
+    "bundlePlaceholder": "粘贴已签名的包",
+    "import": "导入数据包",
     "exported": "数据包中有 {{n}} 条记录",
     "excluded": "⛔ 有 {{n}} 条记录因未通过完整性校验而被排除。此数据包不是完整副本——交给数据主体时请如实说明。",
     "nothingExcluded": "没有因完整性问题而排除任何内容。",
     "noManifest": "该数据包没有可读取的清单，因此无法说明其完整性。",
-    "imported": "{{n}} entries imported",
+    "imported": "已导入 {{n}} 条记录",
     "rejectedCount": "有 {{n}} 行被逐行拒绝。导入只部分成功——这些行未导入。"
   },
   "contextPolicies": {

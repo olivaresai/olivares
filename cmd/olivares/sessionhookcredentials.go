@@ -191,13 +191,16 @@ func (c *sessionHookCredentials) mintForPrincipalContext(ctx context.Context, p 
 }
 
 // redactedSecretNames names every secret the run's redactor withholds: the vault
-// secrets given as environment, the package registry tokens, and the repository
-// read credential. The hook and the approval apply that redactor to a tool input
-// only when this is not empty.
+// secrets given as environment, the package registry tokens, the repository
+// read credential and the managed credentials. The hook and the approval apply that
+// redactor to a tool input only when this is not empty.
 func redactedSecretNames(intent sessions.LaunchIntent) []string {
 	names := secretEnvNames(slices.Concat(intent.SecretEnv, intent.RegistrySecrets))
 	if intent.GitRead != "" {
 		names = append(names, "git_read<-"+intent.GitRead)
+	}
+	for _, name := range intent.Credentials {
+		names = append(names, "credential<-"+name)
 	}
 	return names
 }

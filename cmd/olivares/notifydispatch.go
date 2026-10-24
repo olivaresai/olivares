@@ -376,6 +376,10 @@ func (d *connectorDispatcher) openAll(ctx context.Context, r *secret.Resolver, l
 func openInProcessDestination(ctx context.Context, spec notifyDestinationSpec, r *secret.Resolver, build func(kind string) (sdk.OutputConnector, error)) (conn sdk.OutputConnector, fingerprint, skipped string) {
 	conn, err := build(spec.Kind)
 	if err != nil {
+		var business businessOutputKindError
+		if errors.As(err, &business) {
+			return nil, "", "notify: destination connector kind is a Business capability; skipped"
+		}
 		return nil, "", "notify: destination has unknown connector kind; skipped"
 	}
 	// Resolve the destination's secret references (Slack webhook URL, PagerDuty
@@ -676,6 +680,12 @@ func (d *connectorDispatcher) ConnectorFingerprint(destination string) (string, 
 	return fp, ok
 }
 
+// businessOutputKindError refuses an output connector kind that only the Business edition
+// builds. openInProcessDestination tells it from a typo, so the skip names Business.
+type businessOutputKindError string
+
+func (e businessOutputKindError) Error() string { return string(e) }
+
 // buildOutputConnector keeps generic notifications in Community. Business supplies
 // SIEM and ITSM destinations through the existing outputConnector edition port.
 func buildOutputConnector(kind string) (sdk.OutputConnector, error) {
@@ -696,18 +706,19 @@ func buildOutputConnector(kind string) (sdk.OutputConnector, error) {
 	default:
 		// build-tag-gated enterprise destinations (e.g. "teamsbot", the
 		// registered-bot Action.Execute Teams connector). The default build has no
-		// outputConnector port, so an unknown kind still errors as before (no rug-pull).
+		// outputConnector port, so a Business kind (teamsbot included) is refused naming
+		// Business, and any other unknown kind errors as before (no rug-pull).
 		if thisEdition.outputConnector != nil {
 			if c, ok := thisEdition.outputConnector(kind); ok {
 				return c, nil
 			}
 		}
 		switch kind {
-		case "siem", "syslog", "splunkhec", "otlplog", "chronicle", "datadog", "elastic", "snmp", "filelog", "servicenow", "jira", "pagerduty", "opsgenie":
-			return nil, fmt.Errorf("output connector %q requires Business", kind)
+		case "siem", "syslog", "splunkhec", "otlplog", "chronicle", "datadog", "elastic", "snmp", "filelog", "servicenow", "jira", "pagerduty", "opsgenie", "teamsbot":
+			return nil, businessOutputKindError(fmt.Sprintf("output connector %q requires Business", kind))
 		}
 		if kind == "s3archive" {
-			return nil, fmt.Errorf("s3archive requires Business Regulated Operations")
+			return nil, businessOutputKindError("s3archive requires Business Regulated Operations")
 		}
 		return nil, fmt.Errorf("unknown output connector kind %q", kind)
 	}

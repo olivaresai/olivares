@@ -11,9 +11,42 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/sdk"
 )
+
+func TestSelectiveEvidenceCommitOutcomeUnknownIsWriteError(t *testing.T) {
+	// Real tenants' evidence operations commit through the selective path, not
+	// Store.Mutate. A COMMIT whose acknowledgement is lost must classify the same way.
+	ctx := context.Background()
+	st := openSQLiteTest(t, nil)
+	tenant := provisionTenant(t, st, "selective-evidence-commit-unknown")
+	raw := st.(*sqlStore)
+	plan, err := store.NewEvidenceOperationPlan("selective-evidence-commit-unknown-op")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lost := &pgconn.PgError{Code: "08006", Message: "connection failure"}
+	raw.selectiveMutationTestHook = func(_ context.Context, _ *sql.Tx, stage selectiveMutationTestStage) error {
+		if stage == selectiveMutationAfterCommit {
+			return lost
+		}
+		return nil
+	}
+	t.Cleanup(func() { raw.selectiveMutationTestHook = nil })
+	err = raw.MutateEvidenceOperation(ctx, tenant, plan, func(store.EvidenceOperationMutationScope) error {
+		return nil
+	})
+	if !errors.Is(err, store.ErrCommitOutcomeUnknown) {
+		t.Fatalf("lost COMMIT acknowledgement err = %v, want ErrCommitOutcomeUnknown in the chain", err)
+	}
+	if got := store.EvidenceFaultForStoreError(err); got != sdk.EvidenceFaultWriteError {
+		t.Fatalf("lost COMMIT acknowledgement fault = %q, want write_error", got)
+	}
+}
 
 func TestSelectiveMutationSQLitePlansScopesAndPoison(t *testing.T) {
 	ctx := context.Background()
@@ -173,6 +206,9 @@ func TestPostgresSelectiveMutationTransactionFailures(t *testing.T) {
 		}
 		if strings.Contains(err.Error(), "rollback could not be confirmed") {
 			t.Fatalf("commit error was replaced by a rollback claim: %v", err)
+		}
+		if !errors.Is(err, store.ErrCommitOutcomeUnknown) {
+			t.Fatalf("terminated commit err = %v, want ErrCommitOutcomeUnknown in the chain", err)
 		}
 	})
 }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useClientSettings } from '@/features/settings/preferences'
@@ -24,7 +24,11 @@ vi.mock('@/lib/api/client', async (importOriginal) => {
   return { ...actual, http: { ...actual.http, post: httpPost } }
 })
 
-const api = vi.hoisted(() => ({ getRun: vi.fn() }))
+const api = vi.hoisted(() => ({
+  getRun: vi.fn(),
+  cleanup: vi.fn(),
+  deleteRun: vi.fn(),
+}))
 vi.mock('./api', async (orig) => {
   const real = (await orig()) as Record<string, unknown>
   return { ...real, agentOpsApi: { ...(real.agentOpsApi as object), ...api } }
@@ -44,12 +48,12 @@ const unnamed: RunDTO = {
   critical: false,
 }
 
-function wrap(run: RunDTO) {
+function wrap(run: RunDTO, onClose: () => void = () => undefined) {
   api.getRun.mockResolvedValue(run)
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <RunDetailSheet runRef={run.run_ref} onClose={() => undefined} />
+      <RunDetailSheet runRef={run.run_ref} onClose={onClose} />
     </QueryClientProvider>,
   )
 }
@@ -194,5 +198,37 @@ describe('RunDetailSheet — the engine warning for a tool whose own MCP servers
     wrap({ ...unnamed, provider_driver: 'claude' })
     await screen.findAllByRole('button', { name: /^Stop$/ })
     expect(screen.queryByText(/not governed by Olivares/)).toBeNull()
+  })
+})
+
+describe('RunDetailSheet — Delete', () => {
+  it('retries a failed delete without a second clean up', async () => {
+    // A stopped run is cleaned up before it is deleted. When the clean up went through
+    // and the delete did not, a retry must not clean up again: the engine refuses a
+    // second clean up of a released run (state=cleaned), and Delete never reaches it.
+    api.cleanup.mockResolvedValue({ run_ref: 'run-anon', state: 'cleaned' })
+    api.deleteRun
+      .mockRejectedValueOnce(new Error('lost answer'))
+      .mockResolvedValueOnce(undefined)
+    const onClose = vi.fn()
+    wrap({ ...unnamed, state: 'stopped' }, onClose)
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Delete' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    await user.click(dialog.getByRole('button', { name: 'Delete' }))
+    // The failure is said, and the dialog stays open for the retry.
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1))
+    expect(api.cleanup).toHaveBeenCalledTimes(1)
+    expect(api.cleanup.mock.invocationCallOrder[0]).toBeLessThan(
+      api.deleteRun.mock.invocationCallOrder[0],
+    )
+    expect(onClose).not.toHaveBeenCalled()
+    const confirm = dialog.getByRole('button', { name: 'Delete' })
+    await waitFor(() => expect(confirm).toBeEnabled())
+    await user.click(confirm)
+    await waitFor(() => expect(api.deleteRun).toHaveBeenCalledTimes(2))
+    expect(api.cleanup).toHaveBeenCalledTimes(1)
+    // Deleted, the sheet closes: the run it showed is gone.
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
   })
 })

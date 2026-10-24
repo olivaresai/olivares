@@ -54,10 +54,10 @@ Claude Code 遥测告诉你在开发者机器上运行了什么。**Anthropic ad
 - **`gateway`**（`direct`）——该组织所运行的部署表面（`direct | claude-platform-aws |
   bedrock-mantle | bedrock-legacy | vertex | foundry`）。在一个没有 Admin API 的表面上
   （Bedrock/Vertex/Foundry），治理摄取会**带着一项姿态发现如实降级**，而不是假装一份空清单。
-- **`mcp_toolsets`** / **`server_tool_grants`**——为 API 驱动的 Claude 代理运维方声明的许可集
-  （某个代理*可以*使用哪些 MCP 工具、哪些 Anthropic server-tool 类型）。每个被许可的条目都成为模块
+- **`mcp_toolsets`** / **`server_tool_grants`**——为 API 驱动的 Claude 智能体运维方声明的许可集
+  （某个智能体*可以*使用哪些 MCP 工具、哪些 Anthropic server-tool 类型）。每个被许可的条目都成为模块
   III 中的一条**已许可 edge**，与已观测访问交叉比对——和别处一样的“已许可对比已观测”差异。`agent_ref`
-  必须是该代理在运行时被发现的外部 id，否则该 grant 就是一个如实的无操作，而非一个错误匹配。
+  必须是该智能体在运行时被发现的外部 id，否则该 grant 就是一个如实的无操作，而非一个错误匹配。
 
 :::caution[分析馈送有一个被点名的边界]
 Claude Code Analytics 馈送只追踪 **Claude API** 上的用量。在 Claude Platform on AWS、Bedrock、

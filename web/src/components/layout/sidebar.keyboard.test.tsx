@@ -91,7 +91,6 @@ afterEach(() => {
   setFavorite.mockReset()
   usePreferencesStore.setState({
     collapsedNavGroups: [],
-    sidebarCollapsed: false,
     navAreas: DEFAULT_AREA_EXPANSION,
   })
 })
@@ -115,7 +114,7 @@ describe('the navigation rail from a keyboard', () => {
   })
 
   it('puts the tab stop on the row that names the current page', () => {
-    routerState.pathname = '/'
+    routerState.pathname = '/mcp-servers'
     renderIntel(<AreasTree />)
     expect(tabbable()[0].getAttribute('aria-current')).toBe('page')
   })
@@ -167,21 +166,25 @@ describe('the navigation rail from a keyboard', () => {
   })
 
   it('pins the focused row with `p`, through the row control the menu path uses', async () => {
+    routerState.pathname = '/mcp-servers'
     renderIntel(<AreasTree />)
-    const row = rows().find((r) => r.getAttribute('data-pin-id') === 'home')!
+    const row = rows().find(
+      (r) => r.getAttribute('data-pin-id') === 'mcpServers',
+    )!
     row.focus()
     fireEvent.keyDown(row, { key: 'p' })
     // ONE implementation: the key clicks the row's own button, so the key and the named
     // control cannot become two behaviours.
     expect(setFavorite).toHaveBeenCalledTimes(1)
-    expect(setFavorite.mock.calls[0][0]).toMatchObject({ id: 'home' })
+    expect(setFavorite.mock.calls[0][0]).toMatchObject({ id: 'mcpServers' })
     expect(setFavorite.mock.calls[0][1]).toBe(true)
   })
 
   it('offers the pin as a NAMED control that says which key does it', async () => {
+    routerState.pathname = '/mcp-servers'
     renderIntel(<AreasTree />)
     const pin = document.querySelector<HTMLButtonElement>(
-      '[data-slot="areas-tree"] [data-rail-pin="home"]',
+      '[data-slot="areas-tree"] [data-rail-pin="mcpServers"]',
     )!
     // Named before it happens, and the name carries the key, which is what
     // makes the two equal paths rather than a key nobody can discover.

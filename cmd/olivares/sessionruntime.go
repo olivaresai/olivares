@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/toolinstall"
 	"github.com/olivaresai/olivares/core/driverfacts"
 	executor "github.com/olivaresai/olivares/core/runtime/executor"
 	"github.com/olivaresai/olivares/modules/sessions"
@@ -114,6 +115,10 @@ func buildSessionRuntimeOptions(getenv func(string) string, broker *wifCredentia
 	// --data-dir (measured 2026-09-18).
 	obs := newHostToolObserverForDataDir(dataDir, getenv)
 	opts = append(opts, sessions.WithHostToolObserver(obs))
+	// OpenCode's glob and grep run the ripgrep installing OpenCode placed (#3173).
+	if obs.rootErr == nil {
+		opts = append(opts, sessions.WithOpenCodeSearchDir(toolinstall.Ripgrep(obs.root)))
+	}
 	// the session-workspace root is NOT wired here. It is bound after
 	// construction by useSessionWorkspaceRoot, through the door that REPORTS a
 	// refusal — an Option cannot return one, and a refused root that nobody hears
@@ -151,7 +156,7 @@ func buildSessionRuntimeOptions(getenv func(string) string, broker *wifCredentia
 	pinOfficialSessionDriver(&opts, getenv, log, obs, envSessionGrokBin, "grok", sessions.NewGrokDriver,
 		"transport", "agent --no-leader stdio (owned child, ACP over stdio; never a leader, server or relay)")
 	pinOfficialSessionDriver(&opts, getenv, log, obs, envSessionOpenCodeBin, "opencode", sessions.NewOpenCodeDriver,
-		"transport", "acp --hostname 127.0.0.1 (owned child, ACP over stdio; never serve, web, attach or an external listener)")
+		"transport", "acp --hostname 127.0.0.1 --print-logs --log-level ERROR (owned child, ACP over stdio; never serve, web, attach or an external listener)")
 	pinOfficialSessionDriver(&opts, getenv, log, obs, envSessionGeminiBin, "gemini-cli", sessions.NewGeminiDriver,
 		"transport", "--acp (owned child, ACP over stdio; never a relaunched copy)")
 	if base := strings.TrimSpace(getenv(envSessionBaseURL)); base != "" {

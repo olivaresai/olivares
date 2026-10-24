@@ -260,7 +260,7 @@ func seedDemoKnowledge(ctx context.Context, sc store.Scope, now time.Time) error
 		rec, err := documentRepo.Create(ctx, model.Record{
 			"kb_ref": kbID, "source_kind": "demo", "source_ref": "demo", "source_mode": "direct",
 			"source_doc_id": document.SourceDocID, "title": document.Title, "content_type": "text/plain",
-			"classification": spec.Classification, "residency_region": "global", "acl": "[]",
+			"classification": spec.Classification, "residency_region": "global", "acl": `["anyone"]`,
 			"content_hash": demoSeedHash(document.Content), "redaction_count": int64(0),
 			"space_ref": "", "chunk_count": int64(0), "status": "indexed",
 		})

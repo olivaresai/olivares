@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { afterAll, afterEach, describe, expect, it } from 'vitest'
+import { humanDurationSeconds } from '@/features/shared/format'
 import { useClientSettings } from '@/features/settings/preferences'
 import i18n from './i18n'
 import {
@@ -66,9 +67,45 @@ describe('tokens / score / latency / duration', () => {
   })
   it('formats latency and duration', () => {
     expect(formatLatency(110)).toBe('110 ms')
-    expect(formatDuration(42_000)).toBe('42.0s')
-    expect(formatDuration(62_000)).toBe('1m 02s')
+    expect(formatDuration(42_000)).toBe('42s')
+    expect(formatDuration(62_000)).toBe('1m 2s')
     expect(formatDuration(300)).toBe('300ms')
+  })
+})
+
+describe('formatDuration: the console says a duration one way (dev#3120)', () => {
+  it('carries a rounded 60 seconds into the next minute', () => {
+    // 16 min 59.6 s read "16m 60s" in the Activity panel.
+    expect(formatDuration(16 * 60_000 + 59_600)).toBe('17m')
+    expect(formatDuration(59_600)).toBe('1m')
+    expect(formatDuration(999.6)).toBe('1s')
+  })
+
+  it('keeps a tenth only under ten seconds, and never a trailing .0', () => {
+    expect(formatDuration(8_000)).toBe('8s')
+    expect(formatDuration(8_140)).toBe('8.1s')
+    expect(formatDuration(9_960)).toBe('10s')
+    expect(formatDuration(16_100)).toBe('16s')
+  })
+
+  it('names at most two units, up to days', () => {
+    expect(formatDuration(143_000)).toBe('2m 23s')
+    expect(formatDuration(60 * 60_000 + 5 * 60_000 + 30_000)).toBe('1h 5m')
+    expect(formatDuration(2 * 3_600_000)).toBe('2h')
+    expect(formatDuration(50 * 3_600_000)).toBe('2d 2h')
+  })
+
+  it('is the formatter the whole-seconds helper speaks with', () => {
+    for (const s of [0, 1, 45, 90, 959, 3_659, 90_000])
+      expect(humanDurationSeconds(s)).toBe(
+        s === 0 ? '0s' : formatDuration(s * 1000),
+      )
+  })
+
+  it('says nothing for what is not a duration', () => {
+    expect(formatDuration(null)).toBe('—')
+    expect(formatDuration(Number.NaN)).toBe('—')
+    expect(formatDuration(Number.POSITIVE_INFINITY)).toBe('—')
   })
 })
 

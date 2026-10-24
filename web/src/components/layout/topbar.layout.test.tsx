@@ -2,24 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Structure of the responsive topbar. jsdom does not lay out, so the pixel facts (no
-// overlap at 1440/1024/390, the ellipsis) live in the browser evidence; what is pinned
-// here is what those pixels depend on: ONE ROW at every width, one DOM instance of
-// every control, the Tab order equal to the reading order, the parent crumb keeping its
-// accessible name in its condensed form, and the page crumb carrying its full title.
-//
-// ⛔ THE CONTEXT ROW IS GONE, AND THE ASSERTIONS THAT PINNED IT ARE REPLACED RATHER
-//    THAN DELETED. The bar carried a second 40 px row below `lg` holding the
-//    organisation and workspace switchers, and the consequence measured 52 % of a
-//    390×844 phone spent on chrome before any content. The switchers live in the
-//    sidebar (`app-sidebar.tsx`), and the checks below say so: there is NO
-//    `topbar-context` wrapper, and no switcher in this bar.
-//
-// THE v26.10 BAR (redesign §3.2) is breadcrumb · page state · page actions · panel
-// toggles, 52 px. Search sits in the sidebar beside New session, and on the phone, where
-// the sidebar gives way to the phone bar, in this bar; theme, settings and the account sit
-// in the sidebar footer (the account also here on the phone).
-import { within } from '@testing-library/react'
+// Structure of the top bar (console Estate #2544, slimmed in #3161). jsdom does not lay
+// out, so the pixel facts (no overlap at 1280 and 1920, light, dark and black) live in the
+// browser captures; what is pinned here is what those pixels depend on: ONE 56 px ROW and
+// no sidebar, the five places and four controls (the scope, search, notifications and the
+// account) and nothing else, the scope named once, and the Tab order equal to the reading
+// order. The version, Stop all and the stops live in the status bar (status-bar.test.tsx).
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { ComponentProps, ReactNode } from 'react'
@@ -29,9 +18,12 @@ const routerState = vi.hoisted(() => ({
   pathname: '/console',
   search: {} as Record<string, unknown>,
 }))
-const identity = vi.hoisted(() => ({ desktop: false, version: '1.0' }))
-vi.mock('@/lib/hooks/use-min-width', () => ({
-  useMinWidth: () => identity.desktop,
+const identity = vi.hoisted(() => ({ version: '1.0' }))
+const navigate = vi.hoisted(() => vi.fn())
+const authz = vi.hoisted(() => ({
+  denied: new Set<string>(),
+  estateStopped: false,
+  established: true,
 }))
 vi.mock('@/lib/hooks/use-server-info', () => ({
   useServerInfo: () => ({ data: { version: identity.version } }),
@@ -47,7 +39,7 @@ vi.mock('@tanstack/react-router', () => ({
     select({
       location: { pathname: routerState.pathname, search: routerState.search },
     }),
-  useNavigate: () => vi.fn(),
+  useNavigate: () => navigate,
   Link: ({
     children,
     to,
@@ -75,7 +67,7 @@ vi.mock('@/lib/auth/context', () => ({
     activeRole: 'owner',
     isSuperadmin: false,
     isAuthenticated: true,
-    can: () => true,
+    can: (p: string) => !authz.denied.has(p),
     login: async () => {},
     logout: async () => {},
     setActiveTenant: () => {},
@@ -118,13 +110,51 @@ vi.mock('./notification-bell', () => ({
   ),
 }))
 
+// The counts and the stop posture own live reads of their own; the bar only draws them.
+vi.mock('./use-session-rail', () => ({
+  // Working and Needs you are 5; with the idle ones, 7 sessions have not ended.
+  useSessionRail: () => ({
+    sessionCounts: { needsYou: 1, live: 5, running: 7 },
+  }),
+}))
+vi.mock('@/features/governance/use-pending-approvals', () => ({
+  usePendingApprovals: () => ({ query: { data: undefined } }),
+  pendingCount: () => 3,
+}))
+vi.mock('./use-killswitch-state', () => ({
+  useKillSwitchState: () => ({
+    permitted: true,
+    posture: { estate: authz.estateStopped, active: 0, agentStops: 0 },
+  }),
+}))
+// The identity the kill switch verb is queued under (the whoami reflection, in the app).
+vi.mock('@/lib/auth/capabilities', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth/capabilities')>()),
+  liveCapabilityContext: () =>
+    authz.established
+      ? {
+          principalKind: 'user',
+          actor: 'user:operator',
+          tenant: '01a0776d-4e2c-4c1b-9f3a-000000000001',
+          credentialGeneration: 1,
+          workspace: null,
+          lifetime: 1,
+        }
+      : null,
+}))
+
 import { afterEach } from 'vitest'
+import { useCommandStore } from '@/stores/command'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { Topbar } from './topbar'
 
 afterEach(() => {
-  identity.desktop = false
   identity.version = '1.0'
+  authz.denied.clear()
+  authz.estateStopped = false
+  authz.established = true
+  navigate.mockReset()
+  useCommandStore.setState({ pendingAction: null })
   routerState.pathname = '/console'
   routerState.search = {}
   useWorkspaceStore.setState({
@@ -133,152 +163,197 @@ afterEach(() => {
   })
 })
 
-describe('Topbar — responsive structure', () => {
-  it('paints the server version with the phone brand, with no duplicate on desktop or invented version', () => {
-    const { container, rerender } = renderIntel(<Topbar />)
-    expect(
-      within(within(container).getByTestId('deployment-identity')).getByText(
-        '1.0',
-        { exact: true },
-      ),
-    ).toBeVisible()
-    identity.version = '26.10.1'
-    rerender(<Topbar />)
-    expect(
-      within(within(container).getByTestId('deployment-identity')).getByText(
-        '26.10.1',
-        { exact: true },
-      ),
-    ).toBeVisible()
-    identity.desktop = true
-    rerender(<Topbar />)
-    expect(within(container).queryByTestId('deployment-identity')).toBeNull()
-    identity.desktop = false
-    identity.version = ''
-    rerender(<Topbar />)
-    expect(within(container).queryByTestId('deployment-identity')).toBeNull()
-    expect(
-      within(container).getByRole('link', { name: 'Olivares AI, home' })
-        .parentElement?.textContent,
-    ).toBe('')
-  })
+/** Every control a person can reach in the bar that is not one of the places. */
+function controlsOutsidePlaces(header: HTMLElement): HTMLElement[] {
+  const places = within(header).getByRole('navigation', { name: 'Journeys' })
+  return [...header.querySelectorAll<HTMLElement>('a, button')].filter(
+    (el) => !places.contains(el),
+  )
+}
 
-  it('is one 52 px row with the trail, the reserved page slots and each action once', async () => {
+describe('the top bar holds the places and four controls, nothing else (#3161)', () => {
+  it('is one 56 px row: the scope, the five places, search, notifications and the account', async () => {
     const { container } = renderIntel(<Topbar />)
     const header = container.querySelector('header') as HTMLElement
     expect(header.getAttribute('data-slot')).toBe('topbar')
-    expect(header.className).toContain('h-13')
+    expect(header.className).toContain('h-14')
     expect(header.className).toContain('flex-nowrap')
-    // No second row and no switcher in the bar.
-    expect(header.querySelector('[data-slot="topbar-context"]')).toBeNull()
+    const places = within(header).getByRole('navigation', { name: 'Journeys' })
     expect(
-      within(header).queryByRole('button', { name: /workspace/i }),
-    ).toBeNull()
-    // The trail: the parent links, the page does not. Administration sits in System &
-    // settings, so its parent is that area's directory.
-    const nav = within(header).getByRole('navigation', { name: 'Breadcrumb' })
+      within(places)
+        .getAllByRole('link')
+        .map((a) => a.getAttribute('title')),
+    ).toEqual(['Now', 'Sessions', 'Tools', 'Rules', 'Ledger'])
+    // The counts: the sessions open (the status bar's number, idle ones too), and
+    // the requests that wait for a person.
     expect(
-      within(nav).getAllByRole('link', { name: /^System & settings$/ })[0],
-    ).toHaveAttribute('href', '/areas/system')
-    // The places a screen fills are reserved, and empty until it does.
-    expect(header.querySelector('[data-slot="page-state"]')).not.toBeNull()
-    expect(header.querySelector('[data-slot="page-actions"]')).not.toBeNull()
-    // One instance of each action.
-    for (const name of [
-      'Search and commands',
-      'Notifications',
-      'Open documentation for this view',
-    ])
-      expect(header.querySelectorAll(`[aria-label="${name}"]`)).toHaveLength(1)
-    // The phone-only controls say so in their classes: jsdom does not lay out.
-    expect(
-      within(header).getByRole('button', { name: 'Search and commands' })
-        .className,
-    ).toContain('min-[761px]:hidden')
+      within(places)
+        .getAllByRole('link')
+        .map((a) => a.textContent),
+    ).toEqual(['Now', 'Sessions, 7, Needs you', 'Tools', 'Rules, 3', 'Ledger'])
+    // Four controls, and still four once the workspaces answered after the first paint.
+    await waitFor(() => expect(controlsOutsidePlaces(header)).toHaveLength(4))
+    const controls = controlsOutsidePlaces(header)
+    expect(controls[0]).toHaveAttribute('data-slot', 'scope-switcher')
+    expect(controls[1]).toHaveAccessibleName('Search and commands')
+    expect(controls[2]).toHaveAccessibleName('Notifications')
+    expect(controls[3]).toHaveAccessibleName(/, Account$/)
   })
 
-  it('Tab order is the reading order: the trail, then the actions', async () => {
+  it('moves the version, theme, favorites, the mark and Stop all out of the bar', () => {
+    const { container } = renderIntel(<Topbar />)
+    const header = container.querySelector('header') as HTMLElement
+    expect(within(header).queryByTestId('deployment-identity')).toBeNull()
+    expect(within(header).queryByText('1.0', { exact: true })).toBeNull()
+    for (const name of [
+      'Olivares AI, home',
+      'Toggle theme',
+      'Stop all',
+      /favorite/i,
+      /sidebar/i,
+    ])
+      expect(
+        within(header).queryByRole('button', { name }) ??
+          within(header).queryByRole('link', { name }),
+        String(name),
+      ).toBeNull()
+    expect(
+      within(header).queryByRole('navigation', { name: 'Breadcrumb' }),
+    ).toBeNull()
+  })
+
+  it('names the scope once: the workspace in force, or the organization when none is', async () => {
+    useWorkspaceStore.setState({
+      activeWorkspace: 'w2',
+      activeWorkspaceName: 'Research',
+    })
     const user = userEvent.setup()
     const { container } = renderIntel(<Topbar />)
     const header = container.querySelector('header') as HTMLElement
+    const scope = header.querySelector(
+      '[data-slot="scope-switcher"]',
+    ) as HTMLElement
+    await within(scope).findByText('Research')
+    // The organization is named in the menu and the tooltip, not a second time here.
+    expect(scope.textContent).not.toContain('01a0776d')
+    expect(scope).toHaveAttribute('title', expect.stringContaining('01a0776d'))
+    // One control, both levels: the organizations and the workspaces in one menu.
+    await user.click(scope)
+    expect(await screen.findByText('Switch organization')).toBeVisible()
+    expect(screen.getByText('Switch workspace')).toBeVisible()
+    expect(
+      screen.getByRole('menuitem', { name: /Billing operations/ }),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('menuitem', { name: /All workspaces/ }),
+    ).toBeVisible()
+  })
+
+  it('says a workspace in force that the list does not resolve, never the organization in its place', async () => {
+    useWorkspaceStore.setState({
+      activeWorkspace: 'gone',
+      activeWorkspaceName: 'Archived',
+    })
+    const { container } = renderIntel(<Topbar />)
+    const scope = container.querySelector(
+      '[data-slot="scope-switcher"]',
+    ) as HTMLElement
+    await within(scope).findByText('Workspace not in list')
+    expect(scope).toHaveAccessibleName(/^Workspace not in list, /)
+  })
+
+  it('gives the scope to All areas below 1024 px, where All areas shows it', () => {
+    const { container } = renderIntel(<Topbar />)
+    expect(
+      container.querySelector('[data-slot="topbar-scope"]')!.className,
+    ).toContain('max-[1023px]:hidden')
+  })
+
+  it('names search by its visible word, and folds it to its icon below 1101 px', () => {
+    const { container } = renderIntel(<Topbar />)
+    const search = within(container).getByRole('button', {
+      name: 'Search and commands',
+    })
+    expect(search).toHaveTextContent(/^Search/)
+    expect(search).toHaveAttribute('aria-keyshortcuts', 'Control+K Meta+K')
+    expect(search.className).toContain('max-[1100px]:w-9')
+  })
+
+  it('Tab order is the reading order: the scope, the places, then the actions', async () => {
+    const user = userEvent.setup()
+    const { container } = renderIntel(<Topbar />)
+    const header = container.querySelector('header') as HTMLElement
+    await waitFor(() => expect(controlsOutsidePlaces(header)).toHaveLength(4))
     const order: string[] = []
     await user.tab()
     while (header.contains(document.activeElement)) {
       const el = document.activeElement as HTMLElement
-      order.push(el.getAttribute('aria-label') ?? el.textContent ?? '')
+      order.push(
+        el.getAttribute('data-slot') === 'scope-switcher'
+          ? 'scope'
+          : (el.getAttribute('aria-label') ?? el.textContent ?? ''),
+      )
       await user.tab()
     }
-    const at = (name: string) => order.findIndex((n) => n.includes(name))
-    expect(at('System & settings')).toBeGreaterThanOrEqual(0)
-    expect(at('System & settings')).toBeLessThan(at('Search and commands'))
+    const at = (name: string) => order.findIndex((n) => n.startsWith(name))
+    expect(at('scope')).toBe(0)
+    expect(at('scope')).toBeLessThan(at('Now'))
+    expect(at('Now')).toBeLessThan(at('Ledger'))
+    expect(at('Ledger')).toBeLessThan(at('Search and commands'))
     expect(at('Search and commands')).toBeLessThan(at('Notifications'))
-    expect(at('Notifications')).toBeLessThan(at('Open documentation'))
+    expect(at('Notifications')).toBeLessThan(
+      order.findIndex((n) => n.endsWith(', Account')),
+    )
   })
+})
 
-  it('reads a journey the way the sidebar names it, after the workspace it operates on', () => {
-    routerState.pathname = '/agent-tools'
-    useWorkspaceStore.setState({
-      activeWorkspace: 'w1',
-      activeWorkspaceName: 'Billing operations',
+describe('the bar speaks the platform and names its icons (#3121)', () => {
+  /** The platform the browser reports, as `navigator.platform` answers it. */
+  const onPlatform = (platform: string) =>
+    Object.defineProperty(window.navigator, 'platform', {
+      value: platform,
+      configurable: true,
     })
-    const { container } = renderIntel(<Topbar />)
-    const nav = within(
-      container.querySelector('header') as HTMLElement,
-    ).getByRole('navigation', { name: 'Breadcrumb' })
-    expect(nav.textContent?.replace(/\s+/g, ' ')).toMatch(
-      /Billing operations.*AI tools/,
-    )
-    // The journey is the page (the breadcrumb's current page), and the workspace is a
-    // caption, not a door: no anchor in the trail.
-    expect(nav.querySelectorAll('a')).toHaveLength(0)
-    expect(nav.querySelector('[aria-current="page"]')?.textContent).toBe(
-      'AI tools',
-    )
+  afterEach(() => {
+    delete (window.navigator as { platform?: string }).platform
   })
 
-  it('reads a page beside Policies as its area and the page, the area linking to its directory', () => {
-    routerState.pathname = '/routine-policies'
+  it.each([
+    ['Linux x86_64', 'Ctrl+K'],
+    ['Win32', 'Ctrl+K'],
+    ['MacIntel', '⌘K'],
+  ])('on %s the search hint reads %s', (platform, hint) => {
+    onPlatform(platform)
     const { container } = renderIntel(<Topbar />)
-    const nav = within(
-      container.querySelector('header') as HTMLElement,
-    ).getByRole('navigation', { name: 'Breadcrumb' })
-    expect(nav.textContent?.replace(/\s+/g, ' ')).toMatch(
-      /Security & identity.*Routine policies/,
-    )
-    // The parent crumb is drawn twice (text, and an icon link below sm); both open the
-    // area's directory, where All areas places the page too.
-    const area = within(nav).getAllByRole('link', {
-      name: 'Security & identity',
+    const search = within(container).getByRole('button', {
+      name: 'Search and commands',
     })
-    expect(area.length).toBeGreaterThan(0)
-    for (const a of area)
-      expect(a).toHaveAttribute('href', '/areas/security-identity')
-    expect(nav.querySelector('[aria-current="page"]')?.textContent).toBe(
-      'Routine policies',
-    )
+    expect(search).toHaveTextContent(hint)
+    if (hint !== '⌘K') expect(search.textContent).not.toContain('⌘')
   })
 
-  it('reads the Approvals address as the sidebar marks it, after the workspace', () => {
-    routerState.pathname = '/permissions'
-    routerState.search = { tab: 'approvals' }
+  it('gives every control that shows only an icon a tooltip with its name', () => {
     const { container } = renderIntel(<Topbar />)
-    const nav = within(
-      container.querySelector('header') as HTMLElement,
-    ).getByRole('navigation', { name: 'Breadcrumb' })
-    expect(nav.querySelector('[aria-current="page"]')?.textContent).toBe(
-      'Approvals',
-    )
-  })
-
-  it('reads the /agentops door as Sessions itself', () => {
-    routerState.pathname = '/agentops'
-    const { container } = renderIntel(<Topbar />)
-    const nav = within(
-      container.querySelector('header') as HTMLElement,
-    ).getByRole('navigation', { name: 'Breadcrumb' })
-    expect(nav.querySelector('[aria-current="page"]')?.textContent).toBe(
-      'Sessions',
-    )
-    expect(nav.textContent).not.toMatch(/Operate sessions/)
+    const header = container.querySelector('header') as HTMLElement
+    /** The text a sighted person reads on the control: screen-reader-only text aside. */
+    const visibleText = (el: Element) => {
+      const copy = el.cloneNode(true) as Element
+      copy
+        .querySelectorAll('.sr-only, [aria-hidden="true"]')
+        .forEach((n) => n.remove())
+      return (copy.textContent ?? '').trim()
+    }
+    const silent = [...header.querySelectorAll('a, button')]
+      .filter((el) => visibleText(el) === '')
+      .filter((el) => !el.getAttribute('title'))
+      .map((el) => el.getAttribute('aria-label') ?? el.outerHTML.slice(0, 80))
+    expect(silent).toEqual([])
+    // The controls whose visible text is not their name say it on hover too.
+    expect(
+      within(header).getByRole('button', { name: 'Search and commands' }),
+    ).toHaveAttribute('title', 'Search and commands')
+    expect(
+      within(header).getByRole('button', { name: /, Account$/ }),
+    ).toHaveAttribute('title', 'Account')
   })
 })

@@ -18,7 +18,8 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { ApiError } from '@/lib/api/errors'
+import { ApiError, NetworkError } from '@/lib/api/errors'
+import { networkErrorText } from '@/lib/api/network-error-text'
 import { queryKeys } from '@/lib/api/query'
 import type { Whoami } from '@/lib/api/types'
 import { useAuth } from '@/lib/auth/context'
@@ -143,7 +144,9 @@ export function LoginPage() {
       : mutation.error instanceof ApiError
         ? t('login.invalid')
         : mutation.error
-          ? t('errors:network.title') // a NetworkError (or non-API failure), not bad creds
+          ? mutation.error instanceof NetworkError
+            ? networkErrorText(t).line
+            : t('errors:network.title') // a non-API failure, not bad creds
           : null
 
   return (

@@ -80,11 +80,16 @@ type preparedDoc struct {
 	scanned bool
 	hits    []classHit // classes of the PERSISTED (post-scrub) form
 	chunks  []preparedChunk
+	// madePublic is true when "anyone" was written because the operator declared
+	// the source public (not for a direct upload): it is what the ledger counts.
+	madePublic bool
 }
 
 type ingestDocument struct {
 	doc        contentsource.Document
 	sourceMode string
+	// public is the source operator's explicit "public" decision (publicSource).
+	public bool
 }
 
 // preparedChunk is one redacted, embedded chunk ready to persist.
@@ -240,7 +245,7 @@ func (m *Module) handleIngest(w http.ResponseWriter, r *http.Request, mc api.Mod
 	prepared := make([]preparedDoc, 0, len(docs))
 	totalChunks, totalRedactions := 0, 0
 	for _, d := range docs {
-		pd, err := m.prepareContent(d.doc, d.sourceMode, defaultACL, kbClassif, dlpPol)
+		pd, err := m.prepareContent(d.doc, d.sourceMode, d.public, defaultACL, kbClassif, dlpPol)
 		if err != nil {
 			if de, ok := err.(*dlpDeniedError); ok {
 				// DLP egress gate: nothing has been embedded yet — the content never
@@ -362,7 +367,7 @@ func (m *Module) gatherDocuments(ctx context.Context, mc api.ModuleContext, kbRe
 				return nil, nil, "workspace source changed during ingest; no documents were ingested", http.StatusConflict
 			}
 		}
-		return ingestDocumentsWithMode(docs, sourceModeForSource(src)), validate, "", 0
+		return ingestDocumentsWithMode(docs, sourceModeForSource(src), sourcePublic(src)), validate, "", 0
 	}
 	if len(req.Documents) == 0 {
 		return nil, nil, "", 0
@@ -393,11 +398,11 @@ func (m *Module) gatherDocuments(ctx context.Context, mc api.ModuleContext, kbRe
 	return docs, nil, "", 0
 }
 
-func ingestDocumentsWithMode(docs []contentsource.Document, mode string) []ingestDocument {
+func ingestDocumentsWithMode(docs []contentsource.Document, mode string, public bool) []ingestDocument {
 	out := make([]ingestDocument, len(docs))
 	mode = normalizeSourceMode(mode, sourceModeExport)
 	for i, doc := range docs {
-		out[i] = ingestDocument{doc: doc, sourceMode: mode}
+		out[i] = ingestDocument{doc: doc, sourceMode: mode, public: public}
 	}
 	return out
 }
@@ -460,15 +465,12 @@ func (m *Module) pullFromSource(ctx context.Context, src contentsource.Source) (
 // email) and (b) persist a label that withholds already-minimized chunks at
 // retrieval for no risk. What scrub removed is still reported — redactions
 // feeds the knowledge_secret_redacted finding.
-func (m *Module) prepareContent(d contentsource.Document, sourceMode string, defaultACL []string, kbClassif string, policy dlpPolicy) (preparedDoc, error) {
+func (m *Module) prepareContent(d contentsource.Document, sourceMode string, public bool, defaultACL []string, kbClassif string, policy dlpPolicy) (preparedDoc, error) {
 	classif := normClass(d.Classification)
 	if strings.TrimSpace(d.Classification) == "" {
 		classif = normClass(kbClassif)
 	}
-	acl := d.ACL
-	if len(acl) == 0 {
-		acl = defaultACL
-	}
+	acl, madePublic := effectiveACL(d.ACL, defaultACL, public, sourceMode == sourceModeDirect)
 	rawHash := hashHex(d.Body)
 	cleanBody, redactions, removedHits := m.scrubWith(d.Body)
 	// What the redactor REMOVED is kept as a label, deliberately apart from the
@@ -509,7 +511,7 @@ func (m *Module) prepareContent(d contentsource.Document, sourceMode string, def
 	}
 
 	texts := chunkText(cleanBody)
-	pd := preparedDoc{doc: d, sourceMode: normalizeSourceMode(sourceMode, sourceModeExport), classif: classif, acl: acl, contentHash: rawHash,
+	pd := preparedDoc{doc: d, sourceMode: normalizeSourceMode(sourceMode, sourceModeExport), classif: classif, acl: acl, madePublic: madePublic, contentHash: rawHash,
 		redactions: redactions, scanned: scanned, hits: hits, removed: pdRemoved}
 	pd.chunks = make([]preparedChunk, len(texts))
 	chunkHashes := make([]string, len(texts))
@@ -639,6 +641,9 @@ func (m *Module) persistDocuments(ctx context.Context, mc api.ModuleContext, kbI
 		if err := auditEvent(ctx, sc, mc, "knowledge.ingest", baseKind, kbID, map[string]any{
 			"documents": len(prepared), "chunks_added": addedChunks, "embed_model": m.embedder.ModelRef(), "egress": m.embedder.AllowsEgress(),
 		}); err != nil {
+			return err
+		}
+		if err := auditPublicSource(ctx, sc, mc, kbID, countMadePublic(prepared)); err != nil {
 			return err
 		}
 		// The original proof must still be live at a fresh transaction-time

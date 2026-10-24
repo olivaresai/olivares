@@ -95,7 +95,7 @@ const (
 	colSourceDocID = "source_doc_id" // the source's natural doc id
 	colTitle       = "title"
 	colContentType = "content_type"
-	colACL         = "acl"             // JSON []string of permission refs ("" => inherit KB default_acl)
+	colACL         = "acl"             // JSON []string of permission refs ("" => inherit KB default_acl, then denied unless "anyone" was decided: effectiveACL)
 	colContentHash = "content_hash"    // hex SHA-256 of the RAW (pre-redaction) body — dedup/change detection
 	colRedactCount = "redaction_count" // how many secrets the module redacted on ingest
 	colSpaceRef    = "space_ref"

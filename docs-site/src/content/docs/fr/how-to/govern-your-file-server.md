@@ -80,7 +80,9 @@ Les noms de principaux sont résolus par le service de noms de l'hôte (qui peut
 **LDAP**, afin que la correspondance `uid`→nom d'utilisateur reflète votre annuaire). Si
 un uid/gid ne peut pas être résolu, son identifiant **numérique** est utilisé. Un fichier
 pour lequel aucune ACL ne peut être déduite hérite de l'ACL par défaut de la base de
-connaissances, toujours appliquée lors de la récupération. Le connecteur **n'invente
+connaissances, toujours appliquée lors de la récupération ; sans ACL par défaut, le
+fichier est **refusé**, sauf si la source est déclarée publique avec
+`"public": "true"` dans sa configuration. Le paramètre s'applique aux documents enregistrés ensuite ; réingérez pour modifier les lignes déjà enregistrées. Le connecteur **n'invente
 jamais** une ACL que le fichier ne porte pas.
 
 ### Classification

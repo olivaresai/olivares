@@ -1,0 +1,956 @@
+{
+  "schema": "claims-measurement-index/v1",
+  "measuredAt": "2026-10-21",
+  "objects": {
+    "H": "d7ac76cfc9951c67a99ffd2e2af9316b7d976950",
+    "W": "2c80f52379d1bb17ec74b6174c6261ea5898fc3b",
+    "E": "7091dc66d05accd09506a565393c7d2aa6d99b13"
+  },
+  "scope": "Community source review at H. W is the consumer code identity; E is a resolved comparison identity only. No Business or Enterprise source, live deployment or claim acceptance is established.",
+  "audit": {
+    "path": "docs/claims/measurements/2026-10-21/AUDIT.md",
+    "sha256": "c84c05a89c1990a5553f40b9e484af8305ef3b4542b8380cceef635b816cbca8",
+    "bytes": 13963,
+    "title": "Current capability source review, 2026-10-21"
+  },
+  "manifest": {
+    "path": "docs/claims/public-claims.v1.json",
+    "sha256": "d0349534f74b77bafe24b9edb9ad50452a176ce15e1cec322d91f885d2712808",
+    "bytes": 41561
+  },
+  "preserved_history": {
+    "path": "docs/claims/history/2026-09-12-public-claims.v1.json",
+    "sha256": "bf505e1e549e231d42c0b567d9c5216bb08beb32ea5864ae6edcfb619a6ad0e0"
+  },
+  "states": {
+    "implemented_unaccepted": 12
+  },
+  "jobs_implemented": {
+    "claim-sessions-work": false,
+    "claim-agent-coordination": false,
+    "claim-sandbox-agent-isolation": false,
+    "claim-model-routing-providers": false,
+    "claim-managed-settings-fleet": false,
+    "claim-roadmap-bindings": false
+  },
+  "executed_claim_runs": 0,
+  "anchors": [
+    {
+      "claim": "sessions-live-operations",
+      "path": "modules/sessions/schema.go",
+      "blob": "ac44ca5d063a4a655681614236c4690eaefcdbb7",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "sessions-live-operations",
+      "path": "modules/sessions/live.go",
+      "blob": "ecdc9200b4221506d6be7e923c7d88fa344aa2fe",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "sessions-live-operations",
+      "path": "modules/sessions/api.go",
+      "blob": "e68689b9ea5c0a19d3a94cf04a7880395951d4d0",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "sessions-live-operations",
+      "path": "modules/sessions/work_api.go",
+      "blob": "0e480f3744e9d9dd3af3040afd31671996a4cd19",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "sessions-live-operations",
+      "path": "modules/sessions/communication_api.go",
+      "blob": "0767d2e0444d889c64ed756762fb49b3fb7dee13",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "sessions-live-operations",
+      "path": "modules/sessions/communication_handoff_apply.go",
+      "blob": "4590107349e4a80240a8b2e9b1a1bb5711a220a9",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "sessions-live-operations",
+      "path": "modules/sessions/communication_handoff_service.go",
+      "blob": "6a3926dd7f96ebd99062e443f5fd11c71997d9b5",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "sessions-live-operations",
+      "path": "modules/sessions/live_test.go",
+      "blob": "ab0eebb2e52f0c33a7f1d78c80c6cd84df93de3a",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "sessions-live-operations",
+      "path": "modules/sessions/communication_handoff_service_test.go",
+      "blob": "33699539dd4d7d042b5a0bc7a210a5980c11707b",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "sessions-live-operations",
+      "path": "modules/sessions/work_api_test.go",
+      "blob": "57528ede08e5b6aaffc2e5853c38443a375ae9df",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "agent-coordination",
+      "path": "modules/orchestration/community.go",
+      "blob": "18c3a8792882907b9371cc28398a0f9d89cbaaeb",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "agent-coordination",
+      "path": "modules/orchestration/api.go",
+      "blob": "7064305b2986566193ce137461bf1b7f50aafed5",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "agent-coordination",
+      "path": "cmd/olivares/orchestration_community.go",
+      "blob": "a4e6dbe6b3eacdb1cc36e5c7ed1d6a0669df2a3a",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "agent-coordination",
+      "path": "cmd/olivares/a2agateway_community.go",
+      "blob": "c39e076ce7f57025a796f6157116411674008114",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "agent-coordination",
+      "path": "cmd/olivares/mcpgateway.go",
+      "blob": "af1bf75b7d09c2fbe661de17b96cbc2ad52c2170",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "agent-coordination",
+      "path": "connectors/a2a/delegation_community.go",
+      "blob": "d214057e1f045d472d219d000761c8825a9d0ee0",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "agent-coordination",
+      "path": "cmd/olivares/wire.go",
+      "blob": "03e126483bb5bac0cfe48daa602ff221b7d089c6",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "agent-coordination",
+      "path": "modules/orchestration/community_test.go",
+      "blob": "697f4459d6c548de09697d13bdace6211fe15a7f",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "agent-coordination",
+      "path": "modules/orchestration/stored_export_test.go",
+      "blob": "be54e05ae7538465ac3bd79f3530b9bc2111c512",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "agent-coordination",
+      "path": "cmd/olivares/orchestration_community_test.go",
+      "blob": "05b3b5de46e7380ac7d618cf193062d5cd52e809",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "agent-coordination",
+      "path": "connectors/a2a/community_test.go",
+      "blob": "95d0f4110b0ed15a9d798ffd5697c2f2dad30fef",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "simulation-sandbox",
+      "path": "modules/sandbox/ports.go",
+      "blob": "0fee867db6c06915e870a6a9ca576de9a69db5ef",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "simulation-sandbox",
+      "path": "modules/sandbox/sandbox.go",
+      "blob": "35b4da87694a01d8be10e395c7bcfc940fb4bc35",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "simulation-sandbox",
+      "path": "modules/sandbox/runs.go",
+      "blob": "589a35a5c5e26ff9fbcdcac54dd9a8462cbb4d34",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "simulation-sandbox",
+      "path": "modules/sandbox/synthetic.go",
+      "blob": "0fe30503400d3052126905b42b0d6feacc40ae45",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "simulation-sandbox",
+      "path": "core/runtime/sandboxrt/engine.go",
+      "blob": "6d7753f330fb0bc58c6972002d1b6e2f51971a7f",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "simulation-sandbox",
+      "path": "core/runtime/sandboxrt/gvisor.go",
+      "blob": "cb7d5877b4bb831b3a2c0d55313ba81281b7754c",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "simulation-sandbox",
+      "path": "core/runtime/sandboxrt/firecracker.go",
+      "blob": "ebb656ef9be483bf763bf84fd9eac9907c8e351d",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "simulation-sandbox",
+      "path": "cmd/olivares/sandboxrt.go",
+      "blob": "233862f6d6883a9e999202098fd4967b633113a9",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "simulation-sandbox",
+      "path": "cmd/olivares/sandboxrt_load.go",
+      "blob": "5eb0ca1d998d4b2b23b0c8bab5be60bb73e1b192",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "simulation-sandbox",
+      "path": "cmd/olivares/wire.go",
+      "blob": "03e126483bb5bac0cfe48daa602ff221b7d089c6",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "simulation-sandbox",
+      "path": "modules/sandbox/sandbox_test.go",
+      "blob": "b88ebf1c28fe20fee943d6791c4ed5ce7fc6211e",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "simulation-sandbox",
+      "path": "modules/sandbox/synthetic_test.go",
+      "blob": "61484237cc03700a766dd275ddd40e93c91aa024",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "simulation-sandbox",
+      "path": "core/runtime/sandboxrt/engine_test.go",
+      "blob": "2b594057382e911be592b3d0fb35c9dd57bdc862",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "simulation-sandbox",
+      "path": "core/runtime/sandboxrt/backends_test.go",
+      "blob": "1b80997e7899ec0f498248f56ce3d87291964492",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "simulation-sandbox",
+      "path": "cmd/olivares/sandboxrt_test.go",
+      "blob": "710f301d89bd0fbea3584c36576b2b0b193e5bd9",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "model-routing-providers",
+      "path": "modules/models/api.go",
+      "blob": "c7e655f11a079c2ce453284c325e8bebbfe7ab16",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "model-routing-providers",
+      "path": "modules/models/routing.go",
+      "blob": "cff992f4224f59e6de8a84c26b932679f882196a",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "model-routing-providers",
+      "path": "modules/models/execute.go",
+      "blob": "b05c9b1b60113950a999057e2ac90135358eeb53",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "model-routing-providers",
+      "path": "modules/models/models.go",
+      "blob": "34928bc51b83ae42fc91a6ff4cdf86302e30ccce",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "model-routing-providers",
+      "path": "modules/models/keys.go",
+      "blob": "b4fcbf5b8a6dafb2b30f1b5c1059707f5c50086b",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "model-routing-providers",
+      "path": "connectors/modelrouter/router.go",
+      "blob": "1db9c3aa6e5b5a375216787af4a1da36f9ffd5e6",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "model-routing-providers",
+      "path": "cmd/olivares/modelsactuate.go",
+      "blob": "09e200acec51bf47fad0583ddde625c49d894564",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "model-routing-providers",
+      "path": "cmd/olivares/wire.go",
+      "blob": "03e126483bb5bac0cfe48daa602ff221b7d089c6",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "model-routing-providers",
+      "path": "modules/models/guardedtext.go",
+      "blob": "d08e740899a311ca105f6f2bb911f78e20daadda",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "model-routing-providers",
+      "path": "cmd/olivares/modelsguardedtext.go",
+      "blob": "8c187f47434436a818a02123ed7bf6e1678e5c76",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "model-routing-providers",
+      "path": "web/src/features/models/models-view.tsx",
+      "blob": "78a82c9d5e5fb1f628b467cd71e6a634568be24a",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "model-routing-providers",
+      "path": "web/src/features/models/api.ts",
+      "blob": "d972f8b9c4bb95a4e5fdcb376887e0a6a2b16f00",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "model-routing-providers",
+      "path": "modules/models/executionprofile.go",
+      "blob": "266f741297dd386b64fe73f1efac6b7db8b56c00",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "model-routing-providers",
+      "path": "cmd/olivares/modelsgatewayprofiles.go",
+      "blob": "24a794e66a1bb11926775a939aca83acd324ba92",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "model-routing-providers",
+      "path": "cmd/olivares/budgetgate.go",
+      "blob": "8aafae8af725c75abf188044708168bacbafca0f",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "model-routing-providers",
+      "path": "connectors/modelrouter/router_test.go",
+      "blob": "74b1d1eb34c398e1d194022603fed93dfb7d6bf5",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "model-routing-providers",
+      "path": "modules/models/api_test.go",
+      "blob": "79ae5ad2dc4d1ee2d96499ca29e21a690f37cb92",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "model-routing-providers",
+      "path": "modules/models/execute_ratelimits_test.go",
+      "blob": "17fbb5ba619cb095b40ccebeb225b4a50e28212b",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "model-routing-providers",
+      "path": "modules/models/guardedtext_test.go",
+      "blob": "0d7352626da23e58777b3c14865622d03b3e5203",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "model-routing-providers",
+      "path": "cmd/olivares/modelsguardedtextcomposition_test.go",
+      "blob": "97957d06b6a0d58678551a0530709f36fbe2542a",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "model-routing-providers",
+      "path": "web/src/features/models/execute-view.test.tsx",
+      "blob": "1a868af5aceb8262852abacc8818993bd8e67ce2",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "managed-settings-delivery",
+      "path": "connectors/managedsettings/delivery.go",
+      "blob": "0fced3eb80b48ef46788fb9aa6e491f1857c6834",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "managed-settings-delivery",
+      "path": "cmd/olivares/cmd_managedsettings.go",
+      "blob": "16e8a8a8edd4a78c203c104b8ee7f091362f2efc",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "managed-settings-delivery",
+      "path": "cmd/olivares/cmd_agent.go",
+      "blob": "8a46a3a23bb9724c2838ef82c010d0cea90b2371",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "managed-settings-delivery",
+      "path": "cmd/olivares/cmd_claudepolicy.go",
+      "blob": "d9e7b2008cf00bff932b4df44af25fbb7ba73194",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "managed-settings-delivery",
+      "path": "modules/governance/claudepolicy.go",
+      "blob": "e126408b879c5c55f8ca49f2b7a538e44344ed9a",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "managed-settings-delivery",
+      "path": "modules/governance/claudepolicy_fleet_noenterprise.go",
+      "blob": "746e602a429d20a323ae851af2080696c21f757d",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "managed-settings-delivery",
+      "path": "cmd/olivares/appsgateway.go",
+      "blob": "48303311a8bf70c71d2770217cbe9e1fa41fee81",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "managed-settings-delivery",
+      "path": "modules/governance/claudepolicy_community_test.go",
+      "blob": "6e152f340ede4cd66be65383a668ff03c584a97e",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "managed-settings-delivery",
+      "path": "cmd/olivares/appsgateway_test.go",
+      "blob": "1f291458faff32a149aa003e06505c7387a2a983",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "managed-settings-delivery",
+      "path": "cmd/olivares/cmd_managedsettings_published_defaults_test.go",
+      "blob": "107b846e42a30e6531a1696990dbca95692ff33d",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "managed-settings-delivery",
+      "path": "connectors/managedsettings/delivery_test.go",
+      "blob": "031705795cd18f7dbb1f7f7610a7cf08695a6128",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-access-map-inventory",
+      "path": "modules/access-map/module.go",
+      "blob": "4e563cb13c743def31762d0bc677fb8f08b96769",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-access-map-inventory",
+      "path": "modules/access-map/api.go",
+      "blob": "caff7afb1adc585ae2e8efbd201d1cd907312610",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-access-map-inventory",
+      "path": "modules/access-map/query.go",
+      "blob": "ebffb70de0c5eadcea265736c1802354dd8f6926",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-access-map-inventory",
+      "path": "modules/access-map/attackpath.go",
+      "blob": "37295a5a1ca6eb98da5a0ac60cba853ea59c557f",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-access-map-inventory",
+      "path": "modules/access-map/reactor.go",
+      "blob": "fe3e03627e14e4119141735fd5b9f580d33b22f9",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-access-map-inventory",
+      "path": "modules/access-map/evidence.go",
+      "blob": "55c3a4b73c3630daf8246d87d98e97c9ea499867",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-access-map-inventory",
+      "path": "modules/access-map/query_test.go",
+      "blob": "107d39dabc1354361c1496d10965f2e478f97527",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-access-map-inventory",
+      "path": "modules/access-map/evidence_test.go",
+      "blob": "ead5c3c945dcb6e81381b992e584b29623463d7b",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-access-map-inventory",
+      "path": "modules/access-map/api_test.go",
+      "blob": "3188feed014fc58ff3157b40fdebda7cdee1d535",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-access-map-inventory",
+      "path": "modules/access-map/attribution_test.go",
+      "blob": "5e4f4eaaf0bfc8e08daa4f94bb0b1857c89eea16",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-claude-code-governance",
+      "path": "cmd/olivares/claudehookpep.go",
+      "blob": "8e9a01f6683e9b5aab3347fd6e6cf6fd870069c4",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-claude-code-governance",
+      "path": "modules/sessions/hookpep/claudehookpep.go",
+      "blob": "f42909be83e6c7b2167706b7eb47c928e0aa4d7b",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-claude-code-governance",
+      "path": "modules/governance/killswitch.go",
+      "blob": "edeff8af21b86a0b615a591c1198ed9e46b4bded",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-claude-code-governance",
+      "path": "modules/governance/approval_service.go",
+      "blob": "cfa8e9dfb84d84b248d8f1adc1552e1ecbce3680",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-claude-code-governance",
+      "path": "cmd/olivares/killswitch_e2e_test.go",
+      "blob": "b86cd43a72c14440e98b1c38394ef3c0a97fc920",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-claude-code-governance",
+      "path": "cmd/olivares/claudehookpep_killswitch_wiring_test.go",
+      "blob": "692627a7522da07298083f32109694b005a5175e",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-claude-code-governance",
+      "path": "modules/sessions/hookpep/claudehookpep_observe_mode_test.go",
+      "blob": "5685248e538d16aafb5fecdaa4719b8da5d60a39",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-claude-code-governance",
+      "path": "modules/governance/approvals_test.go",
+      "blob": "4d4087d5f2e15c21f87d3a65d796f0966a4ec28b",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-mcp-governance",
+      "path": "modules/catalog/mcpadmission.go",
+      "blob": "9e6fa5105a13d00529bcd04fd3baae56060d2084",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-mcp-governance",
+      "path": "modules/catalog/entries.go",
+      "blob": "d225bc2dbf83ba0b4d773a068f1ee5e8cd5eb9c6",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-mcp-governance",
+      "path": "modules/catalog/sign.go",
+      "blob": "f4efdd45476f7746f1e3839ec16787ba9ffc5312",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-mcp-governance",
+      "path": "cmd/olivares/catalogdeploy.go",
+      "blob": "94795bf7dd8ac9752d8efe05d260645f31112112",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-mcp-governance",
+      "path": "modules/deploy/routes_noenterprise.go",
+      "blob": "984779366f2841dbedc0869129118cc2b3c38e9a",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-mcp-governance",
+      "path": "modules/catalog/mcpadmission_test.go",
+      "blob": "15c22fbab79277d1e490aafbc3cab7682fa54468",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-mcp-governance",
+      "path": "modules/catalog/provision_e2e_test.go",
+      "blob": "6bc49c79a8064bf839e2723aee1a10c3ef34f0cd",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-mcp-governance",
+      "path": "cmd/olivares/edition_deploy_noenterprise_test.go",
+      "blob": "defeb97b94104ba7ea27d1c4ca472641cf91d981",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-finops-cost-controls",
+      "path": "cmd/olivares/budgetgate.go",
+      "blob": "8aafae8af725c75abf188044708168bacbafca0f",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-finops-cost-controls",
+      "path": "modules/finops/reservation.go",
+      "blob": "9097d76a07c728f5666a180ee5bded7d1a13cf49",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-finops-cost-controls",
+      "path": "modules/finops/admission.go",
+      "blob": "e330ef7f5a5756e72f5d73bbffba17c6a27f99ee",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-finops-cost-controls",
+      "path": "modules/finops/admission_settle.go",
+      "blob": "7e59dfa5bb90d6e707117c1bcb2cd32c3bf4417e",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-finops-cost-controls",
+      "path": "modules/finops/budgets.go",
+      "blob": "e4512f713519246a13f6b336b3cc1dc1668e1aa7",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-finops-cost-controls",
+      "path": "modules/finops/edition_noenterprise.go",
+      "blob": "1fe318644a1f090be6f0721c9bf687d72a1b0434",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-finops-cost-controls",
+      "path": "modules/finops/api.go",
+      "blob": "df4e76685075ac46491a564eac3a5ed25bd8bdbf",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-finops-cost-controls",
+      "path": "cmd/olivares/wire.go",
+      "blob": "03e126483bb5bac0cfe48daa602ff221b7d089c6",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-finops-cost-controls",
+      "path": "cmd/olivares/internal/inferencepep/inferenceproxy.go",
+      "blob": "9a6421a8db7fd817b7e05e686920b88765071e12",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-finops-cost-controls",
+      "path": "cmd/olivares/sessiongov.go",
+      "blob": "e1e510af9ced7fda3d2232a83c4c4d7a7cc85430",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-finops-cost-controls",
+      "path": "cmd/olivares/mcpgateway.go",
+      "blob": "af1bf75b7d09c2fbe661de17b96cbc2ad52c2170",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-finops-cost-controls",
+      "path": "cmd/olivares/modelsguardedtext.go",
+      "blob": "8c187f47434436a818a02123ed7bf6e1678e5c76",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-finops-cost-controls",
+      "path": "cmd/olivares/budgetgate_test.go",
+      "blob": "0575003dc792eb7bf6b54a1b1059ff1c65304095",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-finops-cost-controls",
+      "path": "modules/finops/reservation_group_test.go",
+      "blob": "5d159b248b5d3c1515a4177ded96a6e09e4a4170",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-finops-cost-controls",
+      "path": "modules/finops/admission_test.go",
+      "blob": "5bb54cc1780a460ebad3f0e2431e60653454d4d1",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-finops-cost-controls",
+      "path": "cmd/olivares/internal/inferencepep/inferenceproxy_test.go",
+      "blob": "83b2d79c450c0f895d9f5b976a3f46cc31655489",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-finops-cost-controls",
+      "path": "cmd/olivares/inferenceproxy_admissionkey_test.go",
+      "blob": "90a78327b1a1f1d528e92d0c3d7966d1bac39202",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-finops-cost-controls",
+      "path": "modules/finops/edition_noenterprise_test.go",
+      "blob": "6c77bc319c5ca8d1a9a2c78e1a36c83aec4bedcf",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-finops-cost-controls",
+      "path": "cmd/olivares/sessiongov_posture_test.go",
+      "blob": "a70d284e988ebb6bb4e1dfb5cc282b73275a6ba9",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-compliance-evidence",
+      "path": "modules/compliance/evidence.go",
+      "blob": "7587b8edfbbd4e8129ab8f8ba76680b136806a0a",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-compliance-evidence",
+      "path": "modules/compliance/views_noenterprise.go",
+      "blob": "837f7503be76aef75934387efe565e6b29fad5d5",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-compliance-evidence",
+      "path": "modules/compliance/compliance.go",
+      "blob": "ebe23643fd578cff5c2e94f244a0082df7032816",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-compliance-evidence",
+      "path": "modules/compliance/evidence_portability_test.go",
+      "blob": "3b7c9a93c56c86b5024c2b8078382d78027d3867",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-compliance-evidence",
+      "path": "modules/compliance/edition_community_test.go",
+      "blob": "3da3df511753b1eaab88530766ae2cb2070ec9f1",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-kill-switch",
+      "path": "cmd/olivares/killswitchgate.go",
+      "blob": "908d6628115e0f7d6538286b8c2646167aaa99b1",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-kill-switch",
+      "path": "modules/sessions/hookpep/claudehookpep.go",
+      "blob": "f42909be83e6c7b2167706b7eb47c928e0aa4d7b",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-kill-switch",
+      "path": "modules/governance/killswitch.go",
+      "blob": "edeff8af21b86a0b615a591c1198ed9e46b4bded",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-kill-switch",
+      "path": "cmd/olivares/wire.go",
+      "blob": "03e126483bb5bac0cfe48daa602ff221b7d089c6",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-kill-switch",
+      "path": "cmd/olivares/sessiongov.go",
+      "blob": "e1e510af9ced7fda3d2232a83c4c4d7a7cc85430",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-kill-switch",
+      "path": "cmd/olivares/internal/inferencepep/inferenceproxy.go",
+      "blob": "9a6421a8db7fd817b7e05e686920b88765071e12",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-kill-switch",
+      "path": "cmd/olivares/cmd_governance.go",
+      "blob": "93202c70c5c42a0e4fbfafd7585a15d8663fd12e",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-kill-switch",
+      "path": "cmd/olivares/killswitch_e2e_test.go",
+      "blob": "b86cd43a72c14440e98b1c38394ef3c0a97fc920",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-kill-switch",
+      "path": "modules/governance/killswitch_test.go",
+      "blob": "1f9f3ec89ffcd8d14462e5f16b7d51eb05e233ac",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-self-hosted",
+      "path": "cmd/olivares/boot.go",
+      "blob": "806f0903677f1482c060e78721b5ba7f79a7b4f0",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-self-hosted",
+      "path": "cmd/olivares/license_service.go",
+      "blob": "78083c27f820ce93c196644033730174ed9ed1c1",
+      "kind": "control source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-self-hosted",
+      "path": "cmd/olivares/boot_test.go",
+      "blob": "d8421b9bad684b3a4eaeb768bac825293a839aeb",
+      "kind": "component test source",
+      "executed": false
+    },
+    {
+      "claim": "roadmap-self-hosted",
+      "path": "cmd/olivares/license_service_test.go",
+      "blob": "8133477d0db827d844239a0ab133c3890819f4e3",
+      "kind": "component test source",
+      "executed": false
+    }
+  ]
+}

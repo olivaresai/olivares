@@ -1,14 +1,14 @@
 # Changelog
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Releases use `MAJOR.MINOR`, with no patch number or `v` prefix. The next release is <!-- release -->`0.3`<!-- /release -->.
+Releases use `MAJOR.MINOR`, with no patch number or `v` prefix. The next release is <!-- release -->`0.4`<!-- /release -->.
 See [versioning](INSTALL.md#versioning) for the release policy.
 
-> **Draft: Community <!-- release -->`0.3`<!-- /release --> is unreleased.** Dated sections remain unchanged;
+> **Draft: Community <!-- release -->`0.4`<!-- /release --> is unreleased.** Dated sections remain unchanged;
 > the release-preparation section awaits publication. Other dated sections record published releases. [GitHub releases](https://github.com/olivaresai/olivares/releases)
 > lists their notes and artifacts. Published CLI commands and flags, API routes and
 > fields, configuration keys, defaults, paths and stored data follow the compatibility policy.
-> The <!-- release -->0.3<!-- /release --> edition changes are described in [Editions](docs/editions.md).
+> The <!-- release -->0.4<!-- /release --> edition changes are described in [Editions](docs/editions.md).
 > Announce deprecations in an earlier release and provide an automatic migration
 > before removal. A release never permits a regression. Any breaking change must
 > be explicit under **Changed** or **Removed**.
@@ -27,6 +27,449 @@ See [versioning](INSTALL.md#versioning) for the release policy.
   fix and keep private reports undisclosed.
 
 ## [Unreleased]
+
+## [0.4] - 2026-10-24
+
+### Added
+
+- Choose **Black**, the dark theme on true black (`#000`) for OLED screens and dark rooms, beside
+  Light, Dark and System: in the theme menu, in Settings (four previews) and in the command
+  palette. Surfaces rise one step at a time, the brand orange and the status colors are the dark
+  theme's, and every text pair keeps WCAG AA contrast. The choice is stored as `black` under the
+  browser's existing theme key; an older build that reads it follows the system.
+- See the last hour of every live session on **Now**, the console's home: one row per session,
+  with its activity, approval waits, idle stretches and failures. A row opens its session, and
+  dragging across the rows, or choosing a ten-minute mark, opens the Ledger for that range.
+  Opening a session from Now shows it in a sheet over the page, with its live conversation,
+  Interrupt and Stop; **Open the session** goes to its full page. The sheet is kept in the
+  address (`?session=`), so a reload or a shared link reopens it and Back closes it. The session
+  timeline reads (`GET /v1/m/sessions/live/{ref}/timeline` and
+  `GET /v1/m/sessions/live/by-id/{live_ref}/timeline`) take `?since=` with an RFC 3339 time
+  (anything else answers 400), and approvals carry `created_at`. Business draws one square per
+  session instead of a row past 30 live sessions; Community keeps the rows.
+- **Tools → Reach** (`/reach`) shows what the AI tools reach (folders, MCP servers and network
+  endpoints) as a graph, with a table beside it. A destination that a pending approval names is
+  drawn dashed from the tool that asked; once approved, it shows as reached after a tool uses it.
+- Choose a session's speed beside its model and effort, in New session, the launch dialog and
+  the message bar's model popover: Claude Code's **Fast mode** (on, off or the tool's default)
+  and Codex's **service tier**. `POST /v1/m/sessions/runs` takes `fast_mode` and `service_tier`.
+  Fast mode on needs a model whose catalog entry reports `supports_fast_mode` (otherwise 400, and
+  503 when the catalog cannot be read), a provider-bound launch refuses it, and other tools
+  refuse both choices; Codex must confirm the requested tier before the first prompt. Both are
+  kept on the session through stop, resume and queued launches, and a session without them keeps
+  the tool's default. For a session whose own model its tool's catalog does not list (a Claude
+  Code session started without a model), the message bar offers the default and Off, and On
+  waits for a listed model.
+- Select and copy anything in a session's conversation. Your own messages and the system lines
+  can be selected now, **Copy message** under each message and reply copies its plain text, and
+  **Copy code** on each code block copies it exactly, tabs included. A copy that fails says so.
+- Work from a terminal with `olivares ui`. Its main menu shows the installation's state and names
+  the command each entry stands for. **Get started** and **AI tools** install a tool, sign it in
+  (a link and code, or a hidden key field), add a provider key and list providers and accounts,
+  through the same calls as `olivares tool install`, `tool login`, `provider add`, `provider ls`
+  and `provider account ls`, so the ledger records the same events. `olivares ui session new` or
+  `olivares ui session <name>` follows one session as a conversation: it streams the output,
+  sends what you type, and takes `/interrupt` (or Ctrl-C), `/stop` (which asks first), `/facts`,
+  `/help`, and `//` for a message that starts with a slash. `olivares ui` refuses a pipe or a
+  terminal smaller than 80×24 with exit 2; on a terminal, `olivares` alone names it.
+- Sign OpenCode in to its own providers. Its sign-in offers OpenCode Zen (with the free models)
+  first, then OpenCode Go, then ChatGPT. Zen and Go take a key in the sign-in form, or from
+  `olivares tool login opencode`, which reads it with echo off or from standard input; the API
+  reports the `needs_key` state and `methods[].key`, and the key is sent with
+  `POST /v1/m/agenttools/sign-in/{id}/code`. The model picker lists OpenCode's own live list,
+  free `*-free` models included, even before sign-in; a typed model name still works.
+- Sessions on OpenCode, Gemini CLI and Grok Build record the tokens and cost their agent reports,
+  so a free model shows a cost of 0 rather than "no usage reported". A cost the tool reports is
+  never replaced by a list price.
+- A session read says who and what it involves: `GET /v1/m/sessions/runs` and
+  `GET /v1/m/sessions/runs/{ref}` add `acts_for`, `runs_as`, `reaches`, `cost`, `approvals` and
+  `proof` (the session's ledger entries and `chain_verified`). A fact that cannot be read carries
+  a `reason`, and an unknown cost is null, never 0.
+- Business: turn each Business family on or off from the License page, behind the step-up
+  dialog, without a restart. Turning one on shows a preview first, and turning one off names what
+  stops; running sessions keep running and the new pages appear without a reload. Add-ons wired
+  at boot still report `restart_required`. `/v1/console/activation/apply` and `/preview` take a
+  `family`, the activation status lists `families[]`, whose `active` names the family's active
+  add-ons, and each add-on names its `family`. Community answers 501 (`apply` asks for step-up
+  first).
+- Resize the panes of the console, and keep the widths on your account. Drag the edge of
+  the Sessions list, the context pane, the second thread or the side panel, or focus it
+  and press the arrow keys (Shift for a bigger step, Home and End for the limits);
+  double-click or Enter puts the default width back. A pane never takes so much that the
+  thread loses its room, and a phone keeps its one-column layout. The widths are yours:
+  the server keeps them in your interface state, so they follow you to another browser.
+  `PUT /v1/m/consoleviews/ui-state` takes an optional `pane_widths` (pixels by pane id; `0`
+  puts one pane back to its default); a request without it leaves the stored widths alone.
+- Snooze a session, or mark it done. In the console session menu, Snooze hides the
+  session from your list for an hour, a day or a week, and Mark done files it under
+  Earlier whatever it is doing; Unsnooze and Mark not done undo them. Snoozed sessions
+  wait behind a Snoozed toggle under the list and come back by themselves at their
+  moment. From a terminal: `olivares session snooze <session> 2h` (a duration or an
+  RFC 3339 time), `olivares session done <session>`, and `--undo` on either. Like a pin,
+  both marks are yours: the server keeps them and nobody else's list changes.
+  `olivares session ls` still lists every session. `GET /runs` and `GET /runs/{ref}`
+  add `done` and, while a snooze lasts, `snoozed_until`; `POST /runs/{ref}/snooze`
+  with `{until}` and `DELETE` set and clear the snooze, and `POST` or
+  `DELETE /runs/{ref}/done` the done mark.
+- Switch a Community installation to the Business build, and update it later, in one step. With
+  a Business or Enterprise license installed, `olivares license install` and `license status`
+  name the exact command for how this installation was installed (tarball, Docker or package),
+  and the console's Edition & license view offers the same switch as one button, **Switch to
+  Business**: the engine downloads the licensed build through the license service, verifies
+  its signature and checksum, swaps it in place, keeps your data and restarts on it. From a
+  terminal it is `olivares upgrade --edition business`, then a restart of the service;
+  `--enterprise` keeps working. The download
+  token comes from `OLIVARES_UPGRADE_TOKEN`, or from this installation's own identity once
+  `olivares license connect start` has connected it; the console shows the button only when the
+  engine has one of the two, and the command otherwise. The licensed download never goes to the
+  public update endpoint (`OLIVARES_UPDATE_ENDPOINT`) unless the installation is connected.
+  Where the switch cannot run (no token or connection, an unconnected endpoint, a package or a
+  pod), Settings → Updates keeps checking for Community updates from the public channel,
+  security releases included, and installs them where the engine replaces its own binary (a
+  package is upgraded by its package manager), with the switch step beside **Update to X**.
+  The Business build updates the same way, with `olivares upgrade` or Settings → Updates; an
+  unconnected one needs `OLIVARES_UPGRADE_TOKEN` and no `OLIVARES_UPDATE_ENDPOINT`. `GET
+  /v1/console/updates` adds `edition_switch` on a Community build with a live commercial license.
+  The licensed download portal prints the same commands next to the download.
+- Every session in the console's Sessions list has an actions menu: right-click the row, use
+  the `⋯` beside it, or press Shift+F10 or the menu key on the focused row. As your role allows,
+  it renames, pins, archives and deletes the session (Delete asks first and is refused while the
+  session runs, with "Stop it first"), and copies its link, its id or its whole transcript as
+  text; a session you only observe offers the copies. Archived sessions fold out of the list
+  under an Archived toggle, as snoozed ones do; like them they leave the rail's needs-you mark
+  and raise no notification, and the open count still counts one that has not ended.
+- Rename and archive a session. `olivares session rename <session> <name>` gives it a new name
+  (`""` clears it), and `olivares session archive <session>` takes it out of your lists without
+  stopping or removing it; `--undo` brings it back. `olivares session ls` leaves archived
+  sessions out unless `--all` or `--state` is given, and `--archived` lists only those.
+  `olivares session rename` refuses a name another session already has, as `start` keeps names
+  unique; the API and the console's Rename check only the name's length and characters. A name
+  and the archived mark belong to the session, so everyone who reads it sees them. The API
+  adds `PUT /v1/m/sessions/runs/{ref}/name`
+  and `POST`/`DELETE /v1/m/sessions/runs/{ref}/archive` (run write permission, both answer the
+  run), and run reads carry `archived_at`; `GET /v1/m/sessions/runs` still returns archived
+  sessions. Renames, archives and unarchives are recorded in the audit ledger, and so is deleting
+  a session's record, which was not recorded before.
+- `GET /v1/m/sessions/runs/{ref}/messages?text=1` returns each message of the page whole
+  (up to 64 KiB each), so a client can copy a conversation page by page.
+- Give a session an SSH key, a database login or an API account without giving it the secret
+  (Business). A launch names managed credentials in `credentials` (at most 8); the engine runs a
+  helper for each and tells the session only where it is: an SSH agent that signs and cannot be
+  asked for the key (or that holds a short-lived certificate, when the credential holds a CA key),
+  a PostgreSQL proxy that logs in for the client, and a local proxy that adds the API account's
+  header. The helpers stop and their files go when the session stops. The secret is in no
+  environment variable, no file the session can read, no run read, no launch event and no stored
+  output. Each helper serves only the session's own processes (the one the engine started and what
+  it started), never another session's. Such a session cannot be moved or handed off; for Claude
+  Code and Codex its Activity and Messages answer 409 (other tools answer 422 earlier), and its
+  stored conversation is not read. A container or sandbox session cannot use one (422). A
+  credential is a document sealed as `credential/<name>` in the tenant's secrets (`PUT
+  /v1/console/secrets?scope=tenant`, which asks for step-up); `env/` secrets cannot name it. Needs
+  tenant administration, asked again on resume. A Community engine answers `501 business_required`
+  to a launch that names a credential. Limits: the ssh and API helpers need a session whose
+  network is not confined to its provider; a long-lived SSH key cannot be revoked at the target,
+  so use a CA key for certificates that expire; the database role, not the helper, limits what the
+  session may do. See [Managed credentials for sessions](docs/session-credentials.md).
+- Business: the fleet managed-settings loop that covered Claude Code now covers Codex,
+  Grok Build, OpenCode and Gemini CLI. An administrator publishes the tool's managed file,
+  `olivares claude-policy pull` on a workstation verifies the signed artifact against a pinned
+  key, writes the file and checks in what it reads back, and drift names the keys that differ.
+  Community still validates and previews the files, and answers the fleet routes with 501.
+
+### Changed
+
+- The console has one top bar instead of the 13-entry sidebar, and a status bar under the work.
+  The top bar holds one scope control (the workspace in force, or else the organization, with both
+  levels in its menu), the places **Now** (the home), **Sessions**, **Tools**, **Rules**
+  (approvals, with their count) and **Ledger** (Business adds Organization), then Search,
+  notifications and your account. The status bar says how the engine is, how many sessions are
+  open, meaning not ended (it opens Sessions), the version, and for a superadmin each tool's
+  5-hour and weekly usage. **Stop all** shows there only while a session is open, and its
+  confirmation says how many open sessions stop. The account menu holds your role, the edition and
+  the version, the theme, adding the page to your favorites or removing it, Settings and **All
+  areas**. All areas, also in the command palette and a phone's More, lists every other page once:
+  an area, then its pages. Place labels fold to icons, named in their tooltips, when the bar runs
+  out of room. Claude Code Adoption is now Adoption, Claude Code governance is Managed policy,
+  AgentCore export is Policy export, and the areas Observability & evidence and Deployment are
+  Oversight and Delivery; search still finds the three pages by their old names. Each page names
+  itself in the browser tab ("Sessions · Olivares AI"), and the search hint reads Ctrl+K on Linux
+  and Windows and ⌘K on a Mac. The top bar changes no URL or permission. Removed: the Mod+B
+  shortcut, which folded the sidebar.
+- **Now**, the home, has three parts: one sentence for the estate (how many sessions are open for
+  how many people, today's cost and how many need you, with yesterday's cost and the monthly budget
+  when they can be read), the live sessions with their last hour, and **Needs you**, where
+  **Approve once** approves a flagged request in one click when its card shows the whole request,
+  and otherwise opens it in Approvals. A proof line ("Chain verified at 07:20
+  · 289 entries") opens the Ledger. The inventory, security, compliance, health, budget and
+  kill-switch tiles and the cost panel left the home; each keeps its own page. The header holds
+  still while the page loads, with New session first.
+- **Settings** shows AI tools, Workspaces and Setup, and Deploy in Business, as its own sections
+  (`/settings?section=aiTools`, `workspaces`, `setup`, `deploy`), not as links that leave
+  Settings. Back returns to the section you came from, and an address to a section you are not
+  offered shows General; for a non-administrator, `?section=updates` showed an empty pane. An
+  administrator also finds **Session memory** in the list (`?section=sessionIdle`; before, only
+  its address opened it). An address to a section that does not exist, such as `notifications`
+  or `sessionDefaults`, shows General instead of a page saying it is not stored yet.
+- **Rules → Approvals** is a queue with the open request beside it: who asks, the exact command,
+  the rule that asked (`Matched: <rule>`, or that no rule did and the default applies) and what it
+  reaches. **Approve once** takes one click and Deny takes an optional note; A and D do the same
+  on the page. The request on screen is never replaced under you, and `?approval=<id>` opens one
+  directly.
+- **Tools** is the one place for AI tools, their accounts and API keys, and members can open it:
+  it needs `sessions:account:read`, not `system:admin`. Installing tools and signing them in stays
+  with system administrators. `/providers`, `/provider-accounts`, `/provider-profiles` and
+  `/provider-bindings` keep their URLs and open Tools.
+- A session's conversation reads like a chat. The tool calls between two replies fold into one
+  row ("Worked for 1m 33s · ran 3 commands, edited 1 file · 1 failed") that opens to one line per
+  call, with `+N −M` for an edit. A running call is one live line, and Escape in that pane's
+  message bar interrupts the turn. A subagent's calls nest under it. Heartbeat, thinking-only,
+  task and limit-warning rows are gone; a turn that a limit stopped says so once, with the reset
+  time. Arguments show in the tool's short form, not as JSON. The Sessions page speaks the same
+  way: no banner at the top, "Showing the N most recent · Load more" at the foot of the list with
+  what your role cannot see, one next step in an empty session, models by their names (the id
+  on hover), long paths cut in the middle, one form for durations ("17m"),
+  Done for finished work and Stopped only when a person or a policy stopped it.
+- The Sessions list says each session's state in a word with its time: Working with how long it
+  has worked, Needs you, Pending, Failed, Stopped, Done, or the session's age. It groups sessions
+  under Needs you, Working, Done today and Earlier, with the folder above the title and the tool
+  as a mark. The conversation is one centered column, two side by side in a split. The side pane
+  stays closed until you open it from the pane's header, and the console remembers that choice for
+  you. Between 761 px and the width where it fits beside the conversation (1441 px, or 2201 px
+  with two side by side), an open side pane takes the conversation's place and the session list
+  stays beside it. The message bar has three pickers (model, effort, and access in New session's
+  words), a placeholder that says what can be typed, and a ring that fills with the context the
+  tool reports and warns from 80%.
+- Status in the console is a dot and a word: nothing pulses, glows or spins for decoration, and a
+  spinner still shows an action in progress. A running session's elapsed time ticks every second,
+  a session that reported no cost shows none rather than $0, and new Ledger rows slide in once.
+  Motion stops under reduced motion, the console's Reduce motion setting and `?still`. Each first
+  screen has at most one filled orange control: five empty states (Alerting destinations,
+  Eventing subscriptions, Voice policies, Sandbox scenarios and the inference proxy's DLP card)
+  show their action as a secondary button, and a checked switch or checkbox fills with the
+  neutral ink instead of orange, which also lifts its contrast above 3:1.
+- Claude Code on its own sign-in is launched on the exact model id, never an alias, and the
+  session records that id: no model and each of Claude Code's model aliases resolve to one fixed
+  id, keeping a `[1m]` suffix. Claude Code
+  resolved an alias again in each process it started, so one account's sessions alternated
+  between two models. An alias is still accepted on input. The conversation
+  names each turn's model and says when it changes ("Model changed at …"), when they differ, the
+  header shows the model requested beside the one in use, and attach stream frames add `at`.
+- OpenCode sessions answer to their approvals and the audit for what they read and run. These
+  launches and prompts were accepted before:
+  - a `read` goes through the session's live policy and is audited. Every preset still allows
+    reads without asking, but a review policy on `sessions.provider.approval` asks a person;
+  - assigned agents, commands and rules from the skills catalog reach OpenCode; agents and
+    commands are rewritten so they can only narrow permissions (their model and `allowed-tools`
+    are dropped), and rules arrive as written. A command that
+    interpolates, an agent named like an OpenCode built-in, an agent whose `tools` is not a list
+    of tool names, and a path-scoped rule or one that imports files are refused with 503;
+  - a launch is refused with 503, naming the skill, when an assigned skill's `/command` form
+    would run a shell or read a file outside approvals (`` !`…` ``, `@path` outside the folder,
+    `.env`, `@~`). Each of the built-in skills dart-flutter-patterns, flutter-dart-code-review,
+    rails-patterns and rust-testing holds such a form, so assigning one to an OpenCode session
+    refuses its launch;
+  - a `/command` prompt that holds a backtick, `$` or `@` anywhere is refused with 400 and the
+    reason, since OpenCode would expand them outside approvals; a prompt without the leading
+    `/command` is sent as typed;
+  - skills that other agents keep in folders above the session folder or in the home directory
+    no longer load. The session folder's own skills and OpenCode's own skill folders still do,
+    and assigned skills are written to a private home made for each launch;
+  - sharing and language-server downloads are off for every OpenCode session, and on OpenCode's
+    own sign-in `enabled_providers` holds only the model's provider when the model names one.
+- `olivares tool login opencode` without `--method` signs in with an OpenCode Zen key (`--method
+  opencode-go` for Go); before, it started the ChatGPT sign-in, which `--method chatgpt-headless`
+  keeps. A sign-in started through the API without a method still starts ChatGPT.
+- A knowledge document from a connector that carries no ACL is denied; before, the whole tenant
+  saw it. It stays visible only when its source sets `"public": "true"` in its
+  `OLIVARES_SOURCES_CONFIG` entry (`documents[].config`), the knowledge base has a `default_acl`,
+  or someone with write access uploaded it directly. Scans report `documents_without_acl`, and the
+  ledger records `knowledge.source.public` and `knowledge.acl.legacy_direct`.
+- A Community engine refuses to start (exit 9, naming the key) when a setting only Business reads
+  is set, even to `0`: `OLIVARES_SESSIONS_AGENT_LINK_LISTEN`, `OLIVARES_SIEM_FORWARD_INTERVAL`,
+  `OLIVARES_ORCH_CADENCE_INTERVAL`, `OLIVARES_ORCH_WORKFLOW_INTERVAL`,
+  `OLIVARES_ORCH_WORKFLOW_MAX`, `OLIVARES_ORCH_WORKFLOW_STEPS_MAX`,
+  `OLIVARES_CREDENTIAL_MINTER_CONFIG`, `OLIVARES_ONBOARDING_CONFIG` or
+  `OLIVARES_PQC_POSTURE_CONFIG`, or an activation manifest it cannot read. Before, it started
+  and ignored them. Remove the setting, or run the Business build. A `conjur` source in
+  `OLIVARES_SOURCES_CONFIG` also stops the start, with an error that names the connector. The
+  Business notification kinds (`siem`, `syslog`, `splunkhec`, `otlplog`, `chronicle`,
+  `datadog`, `elastic`, `snmp`, `filelog`, `servicenow`, `jira`, `pagerduty`, `opsgenie`,
+  `teamsbot` and `s3archive`) are skipped with a message that names Business.
+- `olivares upgrade` leaves a binary that a package owns to the package manager. On a deb, rpm,
+  apk or AUR `/usr/bin/olivares` it exits 2 before downloading and names the package route (with
+  `--enterprise`, the `--target` route, since the Business build is not in the package channel
+  yet), and
+  `--install-timer` exits 2 before writing anything (with `--enterprise --connect` it also names
+  `olivares license connect refresh`). Before, it replaced the binary in place or wrote the
+  timer. For the upgrade, `--check`, containers and an explicit `--target` are unchanged;
+  `--install-timer` refuses the package's binary whatever names it.
+- A core API request that finds the database unreachable answers 503 `store_unavailable`
+  instead of 500, and a write whose commit outcome is unknown answers 503
+  `commit_outcome_unknown` (gRPC `Unknown`); both carry `Cache-Control: no-store`. An evidence
+  receipt whose commit outcome is unknown reports `write_error`, not `ledger_unavailable`.
+- The console in German, Spanish, French, Japanese and Chinese reads as one product: German uses
+  "Sie" throughout, Spanish "tú" and French "vous", each language uses one word per concept, more
+  than 300 strings that were still in English are translated, and counted strings use real
+  plural forms in every language.
+- On Community, `olivares claude-policy --help` leads with `validate` and `dry-run` and marks
+  `publish`, `versions`, `distribution`, `artifact`, `checkin` and `pull` as requiring Business.
+- Business: saving a tenant's or an additional identity provider (`PUT
+  /v1/console/sso/tenants/{tenant}`, `PUT /v1/console/sso/tenants/{tenant}/idps/{alias}` or the
+  deployment-wide `PUT /v1/console/sso/idps/{alias}`) with `require_sso` or a `network_allowlist`
+  answers 400 and names `PUT /v1/console/sso`, where those settings apply. Before, it answered 200
+  and the setting was never enforced.
+- OpenCode sessions no longer run subagents. OpenCode does not pass a subagent's
+  approval requests to Olivares, so such a request was never answered and the turn
+  waited forever, and what a subagent was allowed to do went unaudited. So:
+  - the session's agent is not offered OpenCode's task tool;
+  - agents delivered from the skills catalog are listed but do not run;
+  - a `/review` prompt, which OpenCode always runs as a subagent, is refused with 400.
+
+  Ask for the work, a review included, in your own words; the session's own agent
+  does it under the session's approvals and audit. Subagents come back once OpenCode
+  passes their approval requests to its client.
+- OpenCode's glob and grep searches go through the session's live policy and the audit,
+  as its file reads do. Before, they ran without a decision and left no record. Each
+  search is now decided as a read of the folder it searches, or of the session folder
+  when it names none; every preset allows a read, so nothing new asks a person.
+- OpenCode sessions join session network isolation. A session bound to a provider key
+  reaches only that provider's endpoint. A session on OpenCode's own sign-in reaches
+  only its sign-in's hosts: OpenCode Zen and Go reach `opencode.ai`, ChatGPT reaches
+  `chatgpt.com` and `auth.openai.com`, and every own sign-in reaches OpenCode's model
+  catalog. Such a session no longer reaches other hosts, git remotes or package
+  registries that the provider profile does not declare. An OpenCode session now does
+  not start, and says why:
+  - under container isolation;
+  - on an engine that is not Linux;
+  - on a host without unprivileged user and network namespaces and Landlock;
+  - on its own sign-in, when the model names another provider;
+  - on its own sign-in, when the launch names no model and the account's OpenCode
+    configuration sets none that Olivares can read.
+
+  Choose a model in the console's launch form or with `--model` on
+  `olivares session start`.
+- `olivares dr backup` and the console backup seal the database snapshot inside the bundle under
+  the same key-encryption key as the signing keys, in the copy that `--offsite-bucket` uploads
+  too. Before, the snapshot (accounts, policies, the audit ledger and session metadata) travelled
+  in clear next to the sealed keys, so anyone who could read the bundle read it. A new bundle is
+  manifest `olivares.dr.manifest.v2` and carries the snapshot as `store/<file>.enc`. `dr verify`,
+  `dr restore` and the console restore still read bundles taken before: they restore, and say that
+  the snapshot of that bundle is not encrypted. `dr inspect` still needs no KEK. Sealing and
+  opening each write a second copy of the snapshot beside it (for a console backup, in the backup
+  directory), a bundle is about as large as its snapshot because encrypted data does not compress
+  (6.2 MB became 26.8 MB for a 20,000-event ledger), and a lost KEK now loses the bundle's data,
+  not only its verifiability. Take a new backup to seal an old one; the old bundles and their
+  offsite copies stay readable by anyone who holds them until you delete them.
+- A session's name is checked at launch, handoff and child launch: at most 200 characters, and no
+  control or invisible characters or line and paragraph separators (zero-width spaces, direction
+  overrides, line separators, the braille blank). `POST /runs`, a handoff and a child launch that
+  name a session with one of these answer 400 with the rename's message, where they answered 201
+  before. A handoff refused for its name stops nothing. A folder whose name holds such a character
+  starts with `olivares session start --name <name>`; the CLI prints the engine's sentence and
+  exits 1, as `olivares session` does for a 400. The console leaves these characters out of the
+  name it takes from the first message or the folder.
+
+### Fixed
+
+- **Stop all** cancels the pending approval requests the stopped sessions filed, and Now and Rules
+  drop them at once; before, they stayed pending and Now still offered **Approve once** on them.
+  Requests about non-human identities, security or compliance (`nhi.`, `security.`,
+  `compliance.`) and requests a person filed outside a session stay pending, as the confirmation
+  says. The stop's `revoked_approvals` counts the canceled requests, and so does its notice.
+- OpenCode's glob and grep work in a confined session: installing OpenCode also installs the
+  ripgrep they run, pinned and checksum-verified, and the session finds it first. Before, both
+  failed with `ripgrep execution failed`, because OpenCode downloads ripgrep at first use and a
+  confined session cannot reach that download. Install OpenCode again to add it to an existing
+  installation, or to replace it if it was changed or removed. While it is changed, starting an
+  OpenCode session is refused with 409 and the reason names `olivares tool install opencode`.
+- A message sent from the message bar shows in the conversation at once ("Sent. Waiting for the
+  tool to take it.") and appears once when the tool takes it; before, a message to a busy Claude
+  Code session appeared seconds later. If the session ends first, it says the session ended
+  before the tool took it.
+- An OpenCode turn whose model call fails upstream (a free model's usage limit, for example) ends
+  after 15 seconds with a notice in the tool's words; before, it showed Working forever and the
+  next message was refused with 409.
+- With **Confirm before stopping a session** on, a session card's Stop asks first; it stopped
+  at once.
+- **Use an API key instead** turns the sign-in sheet into the key form in place, with the tool's
+  provider chosen; before, it left for the providers page and closed New session. Cancel, X and
+  Escape clear a typed key.
+- A console page opened over https that gets no answer says the secure connection failed and how
+  to trust the engine's certificate (open the engine's address in a new tab, or install its CA,
+  `tls.crt.ca` in the data directory); over http it still says the control plane is unreachable.
+- On Community, Business pages say so: the Managed policy page's Publish, Versions and
+  Distribution sections say they require Business (they said "Backend pending"), and
+  `/organization` shows the "Part of Business" notice instead of a page that was not found.
+- The session side panel keeps its Last turns rows on one line, with the tool's name; a narrow
+  panel squeezed them to one letter per line.
+- For screen readers and voice control: a refused request in a provider dialog (create, rotate,
+  bind, default model, revoke, the sign-in key form) is announced next to its field inside the
+  dialog, not only in a toast that the dialog hid; and the account button, the workspace card,
+  Recent work rows and the Ledger fingerprint chip have names that start with their visible text.
+- A Docker session under a non-root engine gets a read-only `/etc/passwd` with root and the
+  engine's user, so `ssh` and git over ssh work; they failed with "No user exists for uid 1000".
+  Podman sessions are unchanged.
+- The Docker first-boot certificate also names the `OLIVARES_PUBLIC_URL` (`--public-url`) host,
+  with the same pin, so clients on other machines connect. The Compose healthcheck checks
+  readiness against `/var/lib/olivares/public/tls.crt`, so an operator's own certificate keeps
+  the container healthy.
+- A group budget's status (`GET /v1/m/finops/budgets/{id}/status` for `user_group` and
+  `agent_group` budgets) shows the members' spend as a floor, still marked `truncated`, instead of
+  zero. A deleted agent no longer fails the read, and a `fail_closed` agent-group budget is judged
+  on its remaining members.
+- The MQTT connector classes a refused connection by its reason: 0x86 and 0x87 are credentials,
+  and 0x88, 0x89 and 0x97 are unavailable rather than refused. The message shows the reason byte.
+- Business: a workflow `session-launch` step that names no provider profile runs under the
+  default profile of the work item's owner, with the checks of `POST /v1/m/sessions/runs`; it
+  failed with "select a provider profile before launching a session". A changed owner answers 409
+  `dispatch_conflict`.
+- Community starts on a data directory a Business build wrote, unless a Business add-on is still
+  active there, its activation manifest cannot be read or it uses a customer-managed key. Moving
+  back from Business to
+  Community keeps every stored row and answers 501 for what Community does not offer; before,
+  the engine refused to start on that directory. A directory whose guard history this build does
+  not recognize is still refused.
+- Gemini CLI installs from the console, signs in and starts a session. Every confined launch of
+  a managed tool ran without access to the `lib/<tool>` directory beside its `bin/` (Gemini's
+  bundle, Ollama's libraries), so Node stopped on an unreadable file and the install ended with
+  `probe_failed ... node:internal/modules/run_main:76`. A failed version check now shows the
+  tool's whole error message, not only its first line.
+- Confined sessions and AI tool installs start under the packaged systemd unit (deb, rpm and the
+  Server image). Before, every confined launch there was refused before the tool ran: the
+  unit's `RestrictSUIDSGID=true` makes systemd answer `openat2` with ENOSYS, and the engine
+  stopped with `open confined path ... without symlinks: function not implemented` (exit 126).
+  Past that, the unit's system call filter killed the launch when it lowered the tool's
+  priority. The unit keeps `RestrictSUIDSGID=true` and allows only `setpriority` from
+  `@resources`. On any host, a symlink in `/etc` whose target only root may reach (such as
+  `/etc/grub2-efi.cfg` on a UEFI host) no longer refuses a confined launch; it is not granted.
+
+### Security
+
+- The engine is built with Go 1.26.10, whose `crypto/x509` no longer trusts the compromised
+  eMudhra intermediates ([GO-2026-6809](https://pkg.go.dev/vuln/GO-2026-6809), CVE-2026-111943).
+  Outbound TLS to a server whose chain goes through them now fails, and no setting relaxes it;
+  the remedy is a server certificate from another chain.
+- The container images run Node 24.22.1, the Node security release of 2026-10-21: CVE-2026-111497
+  (remote code execution in the Brotli decoder), CVE-2026-105482, CVE-2026-105483 and
+  CVE-2026-106069. 0.3 shipped Node 24.21.0.
+- The container images ship npm 11.21.1. Its bundled undici 6.29.0, brace-expansion 5.0.12,
+  ip-address 10.7.2 and http-cache-semantics 4.3.0 fix CVE-2026-19534, CVE-2026-85024,
+  CVE-2026-102276, CVE-2026-102277, CVE-2026-102278, CVE-2026-101911, CVE-2026-101912 and
+  CVE-2026-93748. The exposure was the `npm` command in the image, not the engine.
+- The container images ship uv 0.13.5: uv before 0.13.4 trusted the compromised emSign root in
+  its bundled CA store ([GHSA-hq85-5cpj-mr62](https://github.com/advisories/GHSA-hq85-5cpj-mr62)).
+  0.3 shipped uv 0.12.21.
+- Every release rebuilds the images' Debian security updates, and the build fails below
+  the ca-certificates update of DSA-6572-1, so the fixes of DSA-6572-1, curl's DSA-6558-1
+  and expat's DSA-6566-1 are in.
+- The packaged systemd unit (deb, rpm and the Server image) keeps `/var/lib/olivares` at mode
+  0750. systemd reset it to 0755 at every start, so every local user could read the engine's
+  data directory.
+- The MQTT connector no longer copies payload bytes into a PUBLISH message's user properties.
+- Business: when the identity provider says it left the groups out of a sign-in (OIDC
+  `_claim_names`, or Entra's SAML `groups.link`) and the sign-in would apply groups, it is
+  refused with 403 `sso_groups_indeterminate` and recorded as `auth.login.blocked`. Before, the
+  person signed in with no groups.
 
 ## [0.3] - 2026-10-19
 

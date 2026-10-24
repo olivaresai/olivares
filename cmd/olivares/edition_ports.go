@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/tui"
 	"github.com/olivaresai/olivares/connectors/contentsource"
 	"github.com/olivaresai/olivares/connectors/identitysource"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
@@ -23,6 +24,7 @@ import (
 	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/modules/knowledge"
 	"github.com/olivaresai/olivares/modules/reporting"
+	"github.com/olivaresai/olivares/modules/sessions"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
 	"github.com/spf13/cobra"
@@ -75,8 +77,8 @@ type editionPorts struct {
 	loginPolicy func(getenv func(string) string, fed *auth.FederationService, log *slog.Logger) auth.LoginPolicy
 	// nil pushes no CAEP event; the receiver is separately wired by the Identity & Scale edition seam.
 	caepTransmitter func(getenv func(string) string, log *slog.Logger) (caepTransmitter, error)
-	// nil makes "conjur" an unknown source kind. The Business observation kinds (claude-compliance,
-	// kmip, oracle-audit, servicenow-cmdb) are refused at startup, naming Business: sources_business.go.
+	// nil refuses a configured "conjur" source kind at startup, naming Business, like the Business
+	// observation kinds (claude-compliance, kmip, oracle-audit, servicenow-cmdb): sources_business.go.
 	inProcSource func(kind string) (sdk.SourceConnector, bool)
 	// nil: a configured Business document kind (sharepoint, sap_odata, salesforce) refuses startup, naming Business.
 	contentSource func(kind string) (contentsource.Source, bool)
@@ -110,6 +112,9 @@ type editionPorts struct {
 	// nil plants no decoy credentials and watches for none. An edition that has the add-on
 	// returns a nil engine when the operator has not opted in: the same posture.
 	sessionDecoys func(getenv func(string) string, deps sessionDecoyDeps, log *slog.Logger) sessionDecoyEngine
+	// nil gives a session no managed credentials: a launch that names one answers 501
+	// business_required (modules/sessions session_credentials.go).
+	sessionCredentialBroker func(deps sessionCredentialDeps, log *slog.Logger) sessions.SessionCredentialBroker
 	// nil subscribes no feed, and the CLI answers honestly that the add-on is not in this edition.
 	threatIntelSource editionEnvPort[threatIntelSource]
 	// Every edition fills it; Community sends the operator-configured upstream credential to every target.
@@ -167,7 +172,7 @@ type editionPorts struct {
 	reportCustomTemplates editionPort[reporting.CustomTemplateProvider]
 	// nil makes /enterprise/* reporting routes answer 501; on-demand reports belong to Business Compliance Packs.
 	enterpriseReportSource func(getenv func(string) string, comp *compliance.Module, gov *governance.Module, pins mcpc.ToolPinVerifier, log *slog.Logger) reporting.EnterpriseReportSource
-	// nil makes "teamsbot" an unknown output kind, exactly as before the add-on.
+	// nil refuses a "teamsbot" output kind naming Business; the Apache Teams webhook destination is untouched.
 	outputConnector func(kind string) (sdk.OutputConnector, bool)
 	// nil: the passive PagerDuty/Opsgenie notify sinks behave exactly as before.
 	incidentCloseLoop func(ctx context.Context, getenv func(string) string, log *slog.Logger) incidentCloseLoop
@@ -175,6 +180,8 @@ type editionPorts struct {
 	// Platform: event bus, activation and the session cockpit.
 	// Every edition fills it; Community is NOT silently inert: a set OLIVARES_DURABLE_BUS_CONFIG refuses the boot.
 	durableBus func(getenv func(string) string, decoders map[event.Type]natsbus.PayloadDecoder, demote func(error) bool, log *slog.Logger, licenseFile, dataDir string) (injectGatedBus, error)
+	// nil draws no extra row in the `olivares ui` main menu.
+	uiScreens editionPort[[]tui.MenuItem]
 	// nil adds no top-level command; the binary still READS an activation manifest but never links its writer.
 	rootCommands editionPort[[]*cobra.Command]
 	// nil makes the /v1/console/activation endpoints answer 501.

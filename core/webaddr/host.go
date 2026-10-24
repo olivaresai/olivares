@@ -139,10 +139,12 @@ func ParseHost(host string) (string, Kind, Code) {
 		}
 	}
 	if erasesALabel(host) {
-		// MEASURED, and it is the one place x/net decodes to something a browser
-		// refuses: a label whose punycode payload is empty comes back as "" with a
-		// NIL error, so a label the operator wrote is erased rather than rejected.
-		// The installed Node implementation refuses those inputs outright.
+		// MEASURED, and it is the one place x/net silently erases a label instead
+		// of rejecting it: a label whose punycode payload is empty comes back as ""
+		// with a NIL error, so a label the operator wrote is erased rather than
+		// rejected. Node 24.15 refused those inputs too; the WHATWG implementation
+		// in Node 24.21 passes the literal ACE prefix through. This parser refuses
+		// it on both builds, because the label decodes to nothing.
 		return "", KindNone, CodeHostNotAName
 	}
 	if !endsInANumber(ascii) {

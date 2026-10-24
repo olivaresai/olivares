@@ -78,7 +78,9 @@
   },
   "apply": {
     "success": "Plantilla aplicada.",
-    "conflicts": "Aplicada con {{count}} conflicto(s).",
+    "conflicts_one": "Aplicada con {{count}} conflicto.",
+    "conflicts_many": "Aplicada con {{count}} conflictos.",
+    "conflicts_other": "Aplicada con {{count}} conflictos.",
     "conflictField": "Campo",
     "conflictOld": "Valor anterior",
     "conflictNew": "Valor nuevo",

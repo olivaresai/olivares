@@ -8,7 +8,7 @@ description: >-
 
 Skills（`modules/skills`、`olivares.skills`）是 32 个模块之一。它拥有**不可变的
 技能目录**及其**固定分配**：技能包只安装一次，逐条对照其清单 digest 校验，并作为
-不可变修订发布——此后绝不在原地修改。目标（代理、组、工作区）可以使用什么，由一条
+不可变修订发布——此后绝不在原地修改。目标（智能体、组、工作区）可以使用什么，由一条
 把包修订固定下来的**分配**决定，而每一次固定都会写入审计账本
 （`skills.assignment.pin`）。
 
@@ -36,7 +36,7 @@ olivares skills selection --workspace <workspace-id> --folder <folder-ref>
   内容。
 - **分配。** `GET/POST /v1/m/skills/assignments` 与
   `PUT/DELETE /v1/m/skills/assignments/{id}` 把修订固定到目标（存在活动工作区时
-  按其限定）。同一类型的两个目标若把不同内容固定到同一个技能名下，会在会话启动前被拒绝；更窄的目标（文件夹、模板、代理、会话）会取代更宽目标中同名的技能，因此项目无需编辑通用技能包即可覆盖它。
+  按其限定）。同一类型的两个目标若把不同内容固定到同一个技能名下，会在会话启动前被拒绝；更窄的目标（文件夹、模板、智能体、会话）会取代更宽目标中同名的技能，因此项目无需编辑通用技能包即可覆盖它。
 - **Git 导入。** 一个操作员范围的导入器可以在固定策略之下从 Git 源获取技能包；
   导入会作为又一条不可变修订落入目录，而不是引擎读取的活检出。
 
@@ -60,7 +60,7 @@ read 权限；安装包或修订需要 write；退役需要 admin；分配需要
 - [模块目录](/zh/reference/modules/overview/) — 32 个模块以及本模块在其中的位置。
 - [MCP、技能与能力](/zh/reference/modules/v-capabilities/) — 本目录供料的工具与
   能力治理视图。
-- [内部目录与市场](/zh/reference/modules/xiv-catalog/) — 经审核的代理、MCP 服务器
+- [内部目录与市场](/zh/reference/modules/xiv-catalog/) — 经审核的智能体、MCP 服务器
   与技能的策展市场。
 - [模块路由（beta）](/reference/api-beta/) — `/v1/m/skills/` 的操作。
 - [诚实与边界](/zh/start/honesty-and-limits/) — 为什么不可变性是明说的，而不是

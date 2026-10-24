@@ -39,6 +39,7 @@ func (call *acpToolCall) UnmarshalJSON(raw []byte) error {
 		} `json:"locations"`
 	}
 	complete := json.Unmarshal(raw, &input) == nil
+	call.searchesSessionFolder = complete && call.Kind == "search" && len(input.Locations) == 0 && openCodeFolderSearch(raw)
 	facts := codexApprovalFacts{CommandLine: input.RawInput.Cmd}
 	if input.RawInput.Command != nil {
 		facts.CommandLine = *input.RawInput.Command
@@ -80,4 +81,34 @@ func (call *acpToolCall) UnmarshalJSON(raw []byte) error {
 	facts.Complete = complete && !runsAnUnnamedCommand && (strings.TrimSpace(facts.CommandLine) != "" || len(facts.FilePaths) > 0)
 	call.facts = cleanApprovalFacts(facts)
 	return nil
+}
+
+// openCodeFolderSearch reports a glob or grep that names no folder, which OpenCode runs
+// in the session folder (1.19.4). OpenCode asks for them with their own input only
+// (pattern, path, include) and titles them with the pattern; an MCP tool it also gives
+// kind search (context, context7_*) asks with empty metadata, so it is not one (#3058).
+// The title only recognizes the tool here: it is never a fact.
+func openCodeFolderSearch(raw []byte) bool {
+	var shape struct {
+		Title    string         `json:"title"`
+		RawInput map[string]any `json:"rawInput"`
+	}
+	if json.Unmarshal(raw, &shape) != nil {
+		return false
+	}
+	pattern, _ := shape.RawInput["pattern"].(string)
+	if strings.TrimSpace(pattern) == "" || shape.Title != pattern {
+		return false
+	}
+	for key, value := range shape.RawInput {
+		text, isText := value.(string)
+		switch {
+		case key == "pattern":
+		case key == "include" && isText:
+		case key == "path" && isText && text == "":
+		default:
+			return false
+		}
+	}
+	return true
 }

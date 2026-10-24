@@ -56,13 +56,20 @@ Kernvertrag; ihre feldgenauen Formen leben in den typisierten Interfaces des Pro
   Infrastruktur und misst nie.
 - **Produziert** ausgehende Benachrichtigungen über eine Dispatch-Naht, gestützt auf
   die Output-Konnektoren (Slack/Teams, PagerDuty/Opsgenie, signiertes Webhook und ein
-  SIEM-Ziel, das Splunk/Elastic über CEF/LEEF/syslog/OTLP abdeckt). Eine
+  SIEM-Ziel, das Splunk/Elastic über CEF/LEEF/syslog/OTLP abdeckt). Community stellt
+  Slack-, Teams-, E-Mail-, SMS- und signierte Webhook-Ziele bereit; SIEM-, ITSM- und
+  PagerDuty/Opsgenie-Ziele erfordern Business, und ein Community-Server verweigert das
+  Öffnen eines solchen Ziels und nennt Business. Eine
   Benachrichtigung trägt nur die ohnehin sicheren Anzeigefelder des Findings — Titel,
   Kind, Schweregrad, Subjektreferenz und einen Korrelations-Hash — **niemals** eine
   Payload, einen Prompt, ein Secret oder PII. **Datenminimierung ist eine Eigenschaft
   der Leitung**, kein nachträglicher Filter. Das Ziel-Secret lebt ausschließlich in der
-  Konnektor-Konfiguration, die der Betreiber bereitstellt, hier referenziert über einen
-  geheimnisfreien Namen.
+  Konnektor-Konfiguration, hier referenziert über einen geheimnisfreien Namen. Ein
+  Administrator legt Slack- und Microsoft-Teams-Ziele in der Konsole an
+  (**Benachrichtigungen → Ziele**): Die Webhook-URL wird im Secret-Store versiegelt, nur
+  als Host angezeigt und vor dem Speichern mit einer echten Nachricht getestet. Jede
+  andere Art wird vom Betreiber in der Datei bereitgestellt, die `OLIVARES_NOTIFY_CONFIG`
+  nennt.
 
 :::caution[Ehrliche Grenzen]
 - **Das Standard-Binary liefert einen deny-closed-Dispatcher aus.** Bis ein Betreiber

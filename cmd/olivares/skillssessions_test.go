@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -206,11 +207,12 @@ skill_home="$GEMINI_CLI_HOME"
 config="$GEMINI_CLI_HOME/.gemini"
 `
 			}
-			script += `cat "$skill_home/.agents/skills/research/SKILL.md" > delivered.md
+			skill := "$skill_home/" + facts.SkillsDir + "/research/SKILL.md"
+			script += `cat "` + skill + `" > delivered.md
 cat "$config/profile-marker" > profile-marker
-if printf changed > "$skill_home/.agents/skills/research/SKILL.md"; then exit 11; fi
-if rm "$skill_home/.agents/skills/research/SKILL.md"; then exit 12; fi
-if mv "$skill_home/.agents" "$skill_home/replaced"; then exit 13; fi
+if printf changed > "` + skill + `"; then exit 11; fi
+if rm "` + skill + `"; then exit 12; fi
+if mv "$skill_home/` + path.Dir(facts.SkillsDir) + `" "$skill_home/replaced"; then exit 13; fi
 printf preserved > "$config/session-marker"
 printf sealed > sealed
 while IFS= read -r line; do
@@ -275,6 +277,10 @@ done
 					t.Fatal(err)
 				}
 				if err := os.WriteFile(authFile, []byte(`{"openai":{"type":"oauth","refresh":"fixture","access":"fixture","expires":0}}`), 0600); err != nil {
+					t.Fatal(err)
+				}
+				// The account names its model, so the session is held to its login's hosts.
+				if err := os.WriteFile(filepath.Join(config, "opencode.json"), []byte(`{"model":"openai/gpt-5.4-mini"}`), 0600); err != nil {
 					t.Fatal(err)
 				}
 			}

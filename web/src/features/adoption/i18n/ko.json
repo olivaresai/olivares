@@ -26,11 +26,11 @@
   "lenses": {
     "analytics": {
       "title": "개발자별(관리자 Analytics)",
-      "description": "관리자 Analytics 피드의 권위 있는 개발자별/일별 합계이며 {{developers}}명의 개발자를 포함합니다."
+      "description_other": "관리자 Analytics 피드의 권위 있는 개발자별/일별 합계이며 {{count}}명의 개발자를 포함합니다."
     },
     "telemetry": {
       "title": "세션별(실시간 텔레메트리)",
-      "description": "OTLP 플레인의 실시간 세션별 활동이며 {{teams}}개 팀을 포함합니다. 활성 시간이 포함됩니다."
+      "description_other": "OTLP 플레인의 실시간 세션별 활동이며 {{count}}개 팀을 포함합니다. 활성 시간이 포함됩니다."
     }
   },
   "comparison": {

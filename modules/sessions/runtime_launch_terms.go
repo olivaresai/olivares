@@ -26,13 +26,14 @@ type callerAsks struct {
 
 // askCallerQuestions settles MayRunUnrestricted and MayUseSecretEnv for the terms
 // as they are now, after the template and the profile policy have been applied:
-// "full" asks the first (refuseUnrestrictedFor), secret_env and git_read ask the
-// second (refuseSecretEnvFor, refuseGitReadFor). Any other launch asks neither.
+// "full" asks the first (refuseUnrestrictedFor), secret_env, git_read and credentials
+// ask the second (refuseSecretEnvFor, refuseGitReadFor, refuseCredentialsFor). Any
+// other launch asks neither.
 func (p *CreateRunParams) askCallerQuestions() {
 	if p.asks.runUnrestricted != nil && strings.TrimSpace(p.PermissionMode) == permModeBypass {
 		p.MayRunUnrestricted = p.asks.runUnrestricted()
 	}
-	if p.asks.secretEnv != nil && (len(p.SecretEnv) > 0 || p.GitRead != "") {
+	if p.asks.secretEnv != nil && (len(p.SecretEnv) > 0 || p.GitRead != "" || len(p.Credentials) > 0) {
 		p.MayUseSecretEnv = p.asks.secretEnv()
 	}
 }
@@ -78,5 +79,7 @@ func (m *Module) prepareLaunchTerms(ctx context.Context, tenant model.TenantID, 
 	if err := m.validateLaunchSpeed(ctx, tenant, p); err != nil {
 		return templateDTO{}, nil, err
 	}
+	// Every launch, a resume and a queued one too, hands Claude Code the exact id.
+	resolveClaudeModelAlias(p)
 	return tpl, conflicts, nil
 }

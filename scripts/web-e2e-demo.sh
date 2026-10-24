@@ -234,8 +234,19 @@ cd "$ROOT/web"
 # it MEASURES the rail in nine languages (`scrollWidth > clientWidth`) and the computed
 # font size of a painted element, and both of those need a real console with a real
 # estate behind it — on the shared engine it would measure the login page nine times.
+# pane-resize.spec.ts for the same reason: it signs in as the demo operator and drags a handle,
+# then opens a second browser to see the width the engine kept.
+# session-row-menu.spec.ts comes after the session specs: it launches, stops and deletes a session of its own on
+# the conversation fixture's profile, and no session spec after it should see that estate move.
+# theme-black.spec.ts MEASURES the painted background of the main places in Black, Dark and
+# Light; on the shared engine it would measure the login page, so it carries the same guard.
+# settings-sections.spec.ts for the same reason: it signs in as the demo operator and walks AI tools,
+# Workspaces and Back inside Settings, which the shared engine cannot sign in to. It creates a
+# profile on this engine (Playwright runs the files in name order, not in the order of this list).
 SPECS=(e2e/demo-graph.spec.ts e2e/console-func-l4.spec.ts e2e/console-keyboard-routes.spec.ts
-  e2e/first-screens.spec.ts e2e/session-work-surface.spec.ts e2e/console-wide-standard.spec.ts)
+  e2e/first-screens.spec.ts e2e/session-work-surface.spec.ts e2e/console-wide-standard.spec.ts
+  e2e/pane-resize.spec.ts e2e/session-row-menu.spec.ts e2e/theme-black.spec.ts
+  e2e/settings-sections.spec.ts)
 # The access graph and the identity inventory are Community: the public specs above cover them.
 # A non-Community build that serves them must bring its private suites; an installed one is always run.
 if [ "$BUILD_EDITION" != community ]; then

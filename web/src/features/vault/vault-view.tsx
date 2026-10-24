@@ -134,15 +134,19 @@ function VaultBody() {
         description={t('vault:subtitle')}
         primaryAction={
           // Adding waits for the list: without it the form cannot tell that a name is taken,
-          // and saving over an existing item would replace it.
-          <Button
-            variant="primary"
-            disabled={!list.isSuccess}
-            onClick={() => setAdding(true)}
-          >
-            <Plus />
-            {t('vault:add')}
-          </Button>
+          // and saving over an existing item would replace it. The empty state offers the
+          // same verb only when a successful read proves the vault is empty; a read that
+          // failed or is still running keeps the verb here, disabled until the list answers.
+          !(list.isSuccess && rows.length === 0) ? (
+            <Button
+              variant="primary"
+              disabled={!list.isSuccess}
+              onClick={() => setAdding(true)}
+            >
+              <Plus />
+              {t('vault:add')}
+            </Button>
+          ) : undefined
         }
       />
       {sealerMissing && (

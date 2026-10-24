@@ -25,7 +25,7 @@ description: "在一台 Linux 主机上联合部署 Olivares 控制平面与 Cla
 ## 开始前的两条原则
 
 1. **可选启用（Opt-in）。** Olivares 镜像**不携带 `claude`**。在 Docker 中，当你需要时，Olivares
-   会把代理工具安装到其数据卷，并通过产品完成登录；原生安装时由下文的安装附加项完成。如果你不运行
+   会把智能体工具安装到其数据卷，并通过产品完成登录；原生安装时由下文的安装附加项完成。如果你不运行
    受治理的 Claude Code，就不会安装任何东西。
 2. **官方来源，绝不二次分发。** Anthropic 的条款不允许二次分发 `claude` 二进制文件，因此我们
    **从 Anthropic 官方的、经 GPG 签名的来源**在安装时安装它（原生安装时为签名的 apt/dnf/apk 仓库；
@@ -44,7 +44,7 @@ description: "在一台 Linux 主机上联合部署 Olivares 控制平面与 Cla
 
 两种**同址（co-located）**拓扑（1、2）是安全的默认选项。拓扑 2（原生）由
 [`scripts/smoke-agentops.sh`](https://github.com/olivaresai/olivares/blob/main/scripts/smoke-agentops.sh)
-做了端到端测试；拓扑 1 复用**同一条**受治理的 procRunner 路径，CI 会运行镜像的代理运行时检查（`scripts/qualify-container-agent-runtime.sh`）。
+做了端到端测试；拓扑 1 复用**同一条**受治理的 procRunner 路径，CI 会运行镜像的智能体运行时检查（`scripts/qualify-container-agent-runtime.sh`）。
 拓扑 3 和 4 要求治理者与被治理者位于*不同*的容器中；跨该边界桥接 stdio 需要 Docker-API 访问权限
 （这是引擎默认有意**不**获取的特权）。它们诚实的路径在
 [混合拓扑](#混合拓扑3-和-4) 中阐明。
@@ -53,7 +53,7 @@ description: "在一台 Linux 主机上联合部署 Olivares 控制平面与 Cla
 
 ## 拓扑 1 — 两者都在 Docker 中（推荐）
 
-标准引擎容器同样运行 `claude`：Olivares 把代理工具安装到其数据卷，并通过产品完成登录。非 root、只读根文件系统——与基础 compose 相同的姿态，没有第二个镜像，也没有 override 文件。
+标准引擎容器同样运行 `claude`：Olivares 把智能体工具安装到其数据卷，并通过产品完成登录。非 root、只读根文件系统——与基础 compose 相同的姿态，没有第二个镜像，也没有 override 文件。
 
 ### 启动它
 
@@ -62,7 +62,7 @@ description: "在一台 Linux 主机上联合部署 Olivares 控制平面与 Cla
 <!-- release -->
 ```sh
 # verify the engine image you run (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:0.3 \
+cosign verify docker.io/olivaresai/olivares:0.4 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
@@ -101,7 +101,7 @@ olivares tool login claude
 (
 set -eu
 cd "$(mktemp -d)"
-ver=0.3
+ver=0.4
 base=https://github.com/olivaresai/olivares/releases/download/$ver
 curl -fsSLO $base/checksums.txt
 curl -fsSLO $base/checksums.txt.sig

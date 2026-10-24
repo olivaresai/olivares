@@ -15,7 +15,8 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { authApi } from '@/lib/api/endpoints'
 import { notifyUnauthorized } from '@/lib/api/client'
-import { ApiError } from '@/lib/api/errors'
+import { ApiError, NetworkError } from '@/lib/api/errors'
+import { networkErrorText } from '@/lib/api/network-error-text'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { queryKeys } from '@/lib/api/query'
@@ -291,7 +292,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // A failed revocation must not look like logout: the cookie would sign the
       // operator back in on reload. A 401 confirms that the server session has ended.
       if (!(error instanceof ApiError && error.isUnauthenticated)) {
-        toast.error(t('network.title'))
+        if (error instanceof NetworkError) {
+          const text = networkErrorText(t)
+          toast.error(text.title, { description: text.description })
+        } else toast.error(t('network.title'))
         return
       }
     }

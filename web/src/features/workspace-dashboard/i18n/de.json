@@ -1,8 +1,8 @@
 {
   "truncation": {
     "label": "{{n}} Zeilen geladen; es gibt weitere",
-    "hint": "Diese Workspace-Vorschau ist begrenzt. Über Alle anzeigen lässt sich das breitere Inventar prüfen.",
-    "hintCapped": "Diese Workspace-Vorschau ist begrenzt."
+    "hint": "Diese Arbeitsbereich-Vorschau ist begrenzt. Über Alle anzeigen lässt sich das breitere Inventar prüfen.",
+    "hintCapped": "Diese Arbeitsbereich-Vorschau ist begrenzt."
   },
   "title": "Arbeitsbereich-Übersicht",
   "selectTitle": "Kein Arbeitsbereich ausgewählt",

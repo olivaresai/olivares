@@ -66,7 +66,8 @@ type Grants struct {
 	Allowed bool
 	// Groups are the identity's group/role references, intersected with each
 	// chunk's ACL. A chunk with a non-empty ACL is visible only if it shares a
-	// group; an unrestricted chunk (empty ACL or "anyone") is always visible.
+	// group; an unrestricted chunk ("anyone") is always visible, and a chunk with
+	// an empty ACL is never visible.
 	Groups []string
 	// Clearance is the identity's classification clearance label ("public",
 	// "internal", "confidential", "secret"). A chunk is visible only if its

@@ -370,6 +370,9 @@ dockers:
       - "{{ .Env.OCI_IMAGE_REPO }}:{{ .Version }}-amd64"
     build_flag_templates:
       - "--platform=linux/amd64"
+      # A fresh apt layer every release: a self-hosted runner's Docker cache would
+      # otherwise ship the `apt-get upgrade` of an earlier build, before a Debian security update.
+      - "--no-cache"
       - "--label=org.opencontainers.image.title={{ .ProjectName }}"
       - "--label=org.opencontainers.image.version={{ .Version }}"
       - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
@@ -402,6 +405,9 @@ dockers:
       - "{{ .Env.OCI_IMAGE_REPO }}:{{ .Version }}-arm64"
     build_flag_templates:
       - "--platform=linux/arm64"
+      # A fresh apt layer every release: a self-hosted runner's Docker cache would
+      # otherwise ship the `apt-get upgrade` of an earlier build, before a Debian security update.
+      - "--no-cache"
       - "--label=org.opencontainers.image.title={{ .ProjectName }}"
       - "--label=org.opencontainers.image.version={{ .Version }}"
       - "--label=org.opencontainers.image.revision={{ .FullCommit }}"

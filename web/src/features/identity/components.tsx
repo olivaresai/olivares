@@ -108,10 +108,8 @@ export function DeclaredSection<T>({
     return (
       <QueryErrorState
         error={query.error}
-        title={isNetwork ? t('network.title') : t('serverError.title')}
-        description={
-          isNetwork ? t('network.description') : t('serverError.description')
-        }
+        title={isNetwork ? undefined : t('serverError.title')}
+        description={isNetwork ? undefined : t('serverError.description')}
         retry={() => void query.refetch()}
       />
     )

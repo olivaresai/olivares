@@ -78,6 +78,16 @@ func (a *Authenticator) CompleteSSO(ctx context.Context, id FederatedIdentity, i
 	// JIT-creates and never reconciles groups at login. The flag is the RESOLVED IdP's,
 	// so it is the policy of the config that actually authenticated the user.
 	authoritative := scimAuthoritative
+	// An IdP that could not send the user's full group list (Entra group overage) leaves
+	// the asserted groups UNKNOWN. Group membership is a fact deny rules reason over: the
+	// list arrives empty, nothing is reconciled, and the membership a forbid relies on is
+	// never added, so the forbid stops applying. Where the asserted groups would be used,
+	// the login is refused before any account is looked up or provisioned.
+	groupsApply := a.assertedGroupsApply(tenant, authoritative)
+	if groupsApply && id.GroupsIndeterminate {
+		a.auditSSORefused(ctx, "", ip, tenant, "sso_groups_indeterminate")
+		return "", model.AuthSession{}, ErrSSOGroupsIndeterminate
+	}
 	user, err := a.findOrProvision(ctx, id, !authoritative, tenant)
 	var outside outsideProviderScope
 	if errors.As(err, &outside) {
@@ -188,10 +198,19 @@ func (a *Authenticator) CompleteSSO(ctx context.Context, id FederatedIdentity, i
 	// GroupMapper), for a "" tenant, when SCIM is authoritative, or with no asserted
 	// groups. Best-effort: a reconciliation error never fails an otherwise-valid login
 	// (the user simply carries the memberships they already had).
-	if a.groupMapper != nil && !authoritative && tenant != "" && tenant != GlobalFederationScope && len(id.Groups) > 0 {
+	if groupsApply && len(id.Groups) > 0 {
 		a.reconcileAssertedGroups(ctx, user.ID, tenant, id.Groups)
 	}
 	return token, sess, nil
+}
+
+// assertedGroupsApply reports whether a login under tenant uses the groups its IdP
+// asserts: a GroupMapper is wired (not the open build), the scope is a tenant (the
+// deployment-wide provider maps nothing) and SCIM is not the authority for groups.
+// Reconciliation and the refusal of indeterminate groups share it, so the login that
+// would have used the groups is exactly the one that is refused when they are unknown.
+func (a *Authenticator) assertedGroupsApply(tenant model.TenantID, scimAuthoritative bool) bool {
+	return a.groupMapper != nil && !scimAuthoritative && isTenantScope(tenant)
 }
 
 // FindOrProvisionByEmail returns the local user for a federated identity, JIT-
@@ -448,11 +467,16 @@ func (a *Authenticator) RecordSSOOutsideScope(ctx context.Context, ip string, sc
 // "user:<id>" when an account was correlated, else "anonymous"; the address is never
 // recorded. Best-effort, like auditLoginBlocked: the refusal is already decided.
 func (a *Authenticator) auditSSOOutsideScope(ctx context.Context, account model.ID, ip string, scope model.TenantID) {
+	a.auditSSORefused(ctx, account, ip, scope, "sso_outside_provider_scope")
+}
+
+// auditSSORefused records a federated sign-in refused for reason (a stable code, never
+// assertion data). Same record and actor rule as auditSSOOutsideScope.
+func (a *Authenticator) auditSSORefused(ctx context.Context, account model.ID, ip string, scope model.TenantID, reason string) {
 	actor := "anonymous"
 	if !account.IsZero() {
 		actor = "user:" + account.String()
 	}
-	const reason = "sso_outside_provider_scope"
 	if aerr := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
 		_, err := as.Audit().Append(ctx, model.AuditDraft{
 			Actor: actor, ActorKind: model.ActorUser, Action: "auth.login.blocked",

@@ -6,7 +6,14 @@
 // to the profile used most recently that is ready, else the first ready one. A tool with
 // one profile hides the select and still carries a named account's reference.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -48,6 +55,9 @@ import type {
   ProviderProfileDTO,
   RunDTO,
 } from '@/features/agentops/types'
+import { providersApi } from '@/features/providers/api'
+import type { ProviderRecordDTO } from '@/features/providers/types'
+import { toast } from '@/components/ui/toaster'
 import { useTenantStore } from '@/stores/tenant'
 import { NewSessionDialog, StartSessionForm } from './first-hour'
 import { firstHourKeys } from './api'
@@ -416,6 +426,109 @@ describe('the profile in the New session dialog', () => {
       profileRef: 'ppf_b',
     })
   })
+
+  // #2551: with nothing ready, the New session dialog holds one sign-in card per tool.
+  // "Use an API key instead" turns the card's sheet into the key field in place: the
+  // page and the dialog stay (the old link reloaded and lost both).
+  it('keeps the New session dialog when the sheet turns into the key field', async () => {
+    signedIn.default = false
+    vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(readinessOf({}))
+    vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+    const onOpenChange = vi.fn()
+    const user = userEvent.setup()
+    wrap(<NewSessionDialog open onOpenChange={onOpenChange} />)
+    const dialog = await screen.findByRole('dialog', { name: 'New session' })
+    const card = await within(dialog).findByTestId('tool-claude')
+    // The sheet appears once the card's status is read.
+    const useKey = await within(card).findByRole('button', {
+      name: 'Use an API key instead',
+    })
+    // The control is a button in the sheet, not a link that reloads the page (#2551).
+    expect(
+      within(card).queryByRole('link', { name: 'Use an API key instead' }),
+    ).not.toBeInTheDocument()
+    await user.click(useKey)
+    // The dialog and the card stayed: the sheet itself became the key field.
+    expect(
+      screen.getByRole('dialog', { name: 'New session' }),
+    ).toBeInTheDocument()
+    expect(onOpenChange).not.toHaveBeenCalled()
+    expect(within(card).getByText('Anthropic')).toBeInTheDocument()
+    const key = within(card).getByLabelText(/^API key/)
+    await waitFor(() => expect(key).toHaveFocus())
+  })
+
+  // #2551 review: closing the dialog mid-write unmounted the form, retired its step-up
+  // owner, and the write then finished with no toast, no refresh and no error report.
+  it.each([
+    ['stored', 'success'],
+    ['refused', 'error'],
+  ] as const)(
+    'holds the New session dialog open while the key is being %s, then reports it',
+    async (outcome, intent) => {
+      signedIn.default = false
+      vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(readinessOf({}))
+      vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue({
+        items: [],
+        has_more: false,
+      })
+      const announced = vi.spyOn(toast, intent).mockReturnValue('test-toast')
+      let settle!: () => void
+      vi.spyOn(providersApi, 'create').mockImplementation(
+        () =>
+          new Promise<ProviderRecordDTO>((resolve, reject) => {
+            settle = () =>
+              outcome === 'stored'
+                ? resolve({
+                    provider_ref: 'prv-a',
+                    kind: 'anthropic',
+                    display_name: 'Anthropic',
+                    state: 'active',
+                  } as ProviderRecordDTO)
+                : reject(new Error('upstream refused the key'))
+          }),
+      )
+      const onOpenChange = vi.fn()
+      const user = userEvent.setup()
+      wrap(<NewSessionDialog open onOpenChange={onOpenChange} />)
+      const dialog = await screen.findByRole('dialog', { name: 'New session' })
+      const card = await within(dialog).findByTestId('tool-claude')
+      await user.click(
+        await within(card).findByRole('button', {
+          name: 'Use an API key instead',
+        }),
+      )
+      await user.type(within(card).getByLabelText(/^API key/), 'sk-pending')
+      // Escape in the same tick as the click, before the pending write has re-rendered
+      // anything (real use on the binary hit that gap): the dialog stays.
+      fireEvent.click(
+        within(card).getByRole('button', { name: 'Add provider' }),
+      )
+      fireEvent.keyDown(document.activeElement ?? document.body, {
+        key: 'Escape',
+      })
+      expect(onOpenChange).not.toHaveBeenCalled()
+      await waitFor(() => expect(settle).toBeDefined())
+      // The outcome reaches the person, and the dialog closes as before. A refusal is
+      // said inside the dialog, which hides the toast from screen readers (#2561).
+      await act(async () => settle())
+      if (outcome === 'stored') {
+        await waitFor(() =>
+          expect(announced).toHaveBeenCalledWith('Provider added.', undefined),
+        )
+      } else {
+        expect(await within(card).findByRole('alert')).toHaveTextContent(
+          'upstream refused the key',
+        )
+        expect(announced).not.toHaveBeenCalled()
+      }
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+    },
+  )
 
   it('waits for account discovery before enabling Start from the default login', async () => {
     let finish!: (

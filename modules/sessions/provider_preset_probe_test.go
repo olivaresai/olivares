@@ -70,6 +70,43 @@ func TestCodexNativeSandboxProbeKeepsOrRefusesBeforeFallback(t *testing.T) {
 	}
 }
 
+// A credential broker binds its helpers to the first process OnStart reports. The
+// probe is a copy of the session's spec, but it is not the session: reporting it
+// would bind the helpers to a process that exits at once and leave the real child
+// refused by every one of them.
+func TestCredentials_TheCodexSandboxProbeDoesNotBindTheHelpers(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux native sandbox")
+	}
+	m, _, _, profile := codexHarness(t, AuthSourceAccountHome)
+	p := CreateRunParams{PermissionMode: "default", ProviderHome: &ProviderHomeSnapshot{Driver: providerDriverCodex}}
+	// A stand-in codex that leaves a mark when it is run, so the test knows the probe launched.
+	dir := t.TempDir()
+	ran := dir + "/probe-ran"
+	program := dir + "/codex"
+	if err := os.WriteFile(program, []byte("#!/bin/sh\n: > "+ran+"\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var told []int
+	spec := LaunchSpec{
+		Program: program, Dir: dir,
+		Env:     []EnvVar{{Name: envCodexHome, Value: profile.ConfigHome}, {Name: envUserHome, Value: profile.UserHome}},
+		OnStart: func(pid int) { told = append(told, pid) },
+	}
+	if err := m.prepareCodexSandbox(t.Context(), &p, &spec); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(ran); err != nil {
+		t.Fatalf("the probe did not run, so the test proves nothing: %v", err)
+	}
+	if len(told) != 0 {
+		t.Fatalf("the Codex sandbox probe told the broker its own process %v before the run's child started", told)
+	}
+	if spec.OnStart == nil {
+		t.Fatal("the session's own launch lost its OnStart: the broker would never learn the child")
+	}
+}
+
 func TestProviderPresetRetainsConfiguredCodexGranularControls(t *testing.T) {
 	granular := &CodexGranularApproval{MCPElicitations: true, Rules: true, SandboxApproval: true, RequestPermissions: true, SkillApproval: true}
 	d := codexDriver{policy: CodexPolicy{Approval: CodexApprovalPolicy{Granular: granular}}}

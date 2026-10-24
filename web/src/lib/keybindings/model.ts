@@ -80,6 +80,35 @@ export function parseChord(keys: string): Chord | null {
   return chord
 }
 
+/**
+ * The Mod key as this platform names it: ⌘ on Apple systems, Ctrl on Linux and Windows,
+ * which have no ⌘ key. Every hint prints Mod through here.
+ */
+export function modKeyName(): '⌘' | 'Ctrl' {
+  const nav = globalThis.navigator as
+    (Navigator & { userAgentData?: { platform?: string } }) | undefined
+  const platform = nav?.userAgentData?.platform || nav?.platform || ''
+  return /mac|iphone|ipad|ipod/i.test(platform) ? '⌘' : 'Ctrl'
+}
+
+/** A chord as the keys a person presses here: `Mod+k` is Ctrl, k (⌘, k on a Mac). */
+export function chordKeys(keys: string): string[] {
+  const mod = modKeyName()
+  return keys
+    .split('+')
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => (p.toLowerCase() === 'mod' ? mod : p))
+}
+
+/** A chord as one short hint: ⌘K on a Mac, Ctrl+K elsewhere; glyphs join, words take a +. */
+export function chordHint(keys: string): string {
+  const parts = chordKeys(keys).map((p) =>
+    p.length === 1 ? p.toUpperCase() : p,
+  )
+  return parts.join(parts.every((p) => p.length === 1) ? '' : '+')
+}
+
 /** The parts of a keyboard event this matches on — so a test needs no real event. */
 export interface KeyEventLike {
   key: string
@@ -179,6 +208,9 @@ export function resolveBinding(
  * It lives beside the resolver rather than in one component because every keyboard
  * surface needs the same answer, and two copies of "is the operator typing" is how one
  * of them ends up eating a keystroke from a form.
+ *
+ * An open menu counts: its letters are typeahead ("Ren" finds Rename), and a shell
+ * key read from them (`n`, a new session) took the menu's choice away (#2795).
  */
 export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
@@ -187,6 +219,35 @@ export function isTypingTarget(target: EventTarget | null): boolean {
     tag === 'INPUT' ||
     tag === 'TEXTAREA' ||
     tag === 'SELECT' ||
-    target.isContentEditable
+    target.isContentEditable ||
+    target.closest('[role="menu"]') !== null
   )
+}
+
+/** True while any Radix dialog or sheet is open: a bare key then belongs to it, never to
+ * the page behind it. Beside `isTypingTarget` for the same reason: one answer for every
+ * keyboard surface. */
+export function modalIsOpen(): boolean {
+  return !!document.querySelector(
+    '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]',
+  )
+}
+
+/**
+ * THE `g` LEADER, ARMED: one value for the whole console, not a ref inside the shell.
+ * A page that answers a bare key asks it too, so the second half of `g a` is never read
+ * as `a`, whichever window listener runs first (the shell re-adds its listener when it
+ * re-renders, so registration order is not a guarantee; #2548).
+ */
+let navLeaderUntil = 0
+export const navLeader = {
+  arm(until: number) {
+    navLeaderUntil = until
+  },
+  disarm() {
+    navLeaderUntil = 0
+  },
+  armed(now: number = Date.now()): boolean {
+    return navLeaderUntil >= now
+  },
 }

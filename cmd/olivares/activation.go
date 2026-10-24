@@ -8,10 +8,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -221,7 +223,33 @@ func SaveActivationManifestOwned(dataDir string, m *ActivationManifest, owned []
 var (
 	activationOverlay   map[string]string
 	activationOverlayMu sync.RWMutex
+	// activationGeneration counts the overlays published, so a capability built from
+	// the configuration can tell that it may have changed (activationEpoch).
+	activationGeneration atomic.Uint64
 )
+
+// activationEpoch changes every time the overlay is replaced: a capability that
+// follows an activation without a restart rebuilds itself when it differs from the
+// epoch it was built at.
+func activationEpoch() uint64 { return activationGeneration.Load() }
+
+// activationOverlayMatches says the engine reads the configuration m would give it. It is
+// false for a manifest written to the node's file by something other than the running
+// engine: nothing applied it.
+func activationOverlayMatches(m *ActivationManifest) bool {
+	activationOverlayMu.RLock()
+	defer activationOverlayMu.RUnlock()
+	return maps.Equal(m.activeOverlay(), activationOverlay)
+}
+
+// publishActivationOverlay makes m the configuration osGetenv reads, for a running
+// engine whose activation changed.
+func publishActivationOverlay(m *ActivationManifest) {
+	activationOverlayMu.Lock()
+	activationOverlay = m.activeOverlay()
+	activationGeneration.Add(1)
+	activationOverlayMu.Unlock()
+}
 
 // initActivationManifest loads the activation manifest from dataDir into the
 // process-wide overlay (called by boot() before buildModules). A read error is
@@ -232,9 +260,7 @@ func initActivationManifest(dataDir string) error {
 	if err != nil {
 		return err
 	}
-	activationOverlayMu.Lock()
-	activationOverlay = m.activeOverlay()
-	activationOverlayMu.Unlock()
+	publishActivationOverlay(m)
 	return nil
 }
 
@@ -253,6 +279,7 @@ func activationManifestLookup(k string) string {
 func setActivationOverlayForTest(overlay map[string]string) {
 	activationOverlayMu.Lock()
 	activationOverlay = overlay
+	activationGeneration.Add(1)
 	activationOverlayMu.Unlock()
 }
 

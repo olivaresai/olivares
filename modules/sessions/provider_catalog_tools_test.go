@@ -16,17 +16,20 @@ import (
 )
 
 type catalogToolPeer struct {
-	t            *testing.T
-	signed       bool
-	methods      []string
-	specs        []LaunchSpec
-	procs        []*catalogPeerProcess
-	grokOutput   string
-	grokExit     int
-	modelIDs     []string
-	statusExit   int
-	claudeModels []map[string]any
-	codexModels  []map[string]any
+	t          *testing.T
+	signed     bool
+	methods    []string
+	specs      []LaunchSpec
+	procs      []*catalogPeerProcess
+	grokOutput string
+	grokExit   int
+	// openCodeOutput is what `opencode models --pure` prints (one provider/model per line).
+	openCodeOutput string
+	openCodeExit   int
+	modelIDs       []string
+	statusExit     int
+	claudeModels   []map[string]any
+	codexModels    []map[string]any
 }
 type catalogPeerProcess struct {
 	*fakeProc
@@ -111,6 +114,17 @@ func (p *catalogToolPeer) Launch(_ context.Context, spec LaunchSpec) (Process, e
 		raw, _ := json.Marshal(map[string]bool{"loggedIn": p.signed})
 		proc.out <- OutputFrame{Stream: streamStdout, Data: raw}
 		proc.finish(p.statusExit)
+	}
+	if reflect.DeepEqual(spec.Args, []string{"models", "--pure"}) {
+		raw := p.openCodeOutput
+		if raw == "" {
+			raw = openCodeCatalogFixture
+		}
+		proc.out = make(chan OutputFrame, len(strings.Split(raw, "\n")))
+		for _, line := range strings.Split(raw, "\n") {
+			proc.out <- OutputFrame{Stream: streamStdout, Data: []byte(line)}
+		}
+		proc.finish(p.openCodeExit)
 	}
 	if reflect.DeepEqual(spec.Args, []string{"models"}) {
 		raw := p.grokOutput
@@ -322,5 +336,98 @@ func TestParseGrokModelCatalogDefaultMarker(t *testing.T) {
 	}
 	if out[0].ID != "grok-4.6" || out[0].IsDefault == nil || !*out[0].IsDefault || out[1].ID != "grok-4.5" || out[1].IsDefault == nil || *out[1].IsDefault {
 		t.Fatalf("default marker: %+v", out)
+	}
+}
+
+// openCodeCatalogFixture is the shape `opencode models --pure` prints on v1.18.34 for an
+// OpenCode console key: one provider/model per line, the free models among them.
+const openCodeCatalogFixture = "opencode/claude-haiku-5-5\nopencode/deepseek-v4.1-flash-free\nopencode/glm-5.3-flash-free\n" +
+	"opencode/longcat-2.5-preview-free\nopencode/mimo-v2.6-flash-free\nopencode-go/kimi-k3\n"
+
+// #2567: OpenCode's catalog is the tool's own `models` list, read in the account's home
+// with `--pure` (v1.18.34: "run without external plugins", so a configured plugin does
+// not run), with no input sent. The free models are listed exactly as the tool prints
+// them, which is the provider/model form a session's model option takes.
+func TestOpenCodeCatalogListsTheToolsOwnModels(t *testing.T) {
+	peer := &catalogToolPeer{t: t, signed: true}
+	m := New(WithRunner(peer), WithProviderDriver(NewOpenCodeDriver()))
+	m.UseToolLoginsRoot(t.TempDir())
+	tenant := model.TenantID(model.NewID())
+	userHome, configHome, ok := m.OwnToolLoginHomes(tenant, "opencode")
+	if !ok {
+		t.Fatal("no own login home")
+	}
+	if err := os.MkdirAll(configHome, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ids, err := m.ReadOwnToolLoginModels(context.Background(), tenant, "opencode")
+	want := []string{"opencode/claude-haiku-5-5", "opencode/deepseek-v4.1-flash-free", "opencode/glm-5.3-flash-free",
+		"opencode/longcat-2.5-preview-free", "opencode/mimo-v2.6-flash-free", "opencode-go/kimi-k3"}
+	if err != nil || !reflect.DeepEqual(ids, want) {
+		t.Fatalf("models = %v %v, want the tool's own list", ids, err)
+	}
+	if len(peer.specs) != 1 || !reflect.DeepEqual(peer.specs[0].Args, []string{"models", "--pure"}) {
+		t.Fatalf("OpenCode discovery did not run the plugin-free native list: %+v", peer.specs)
+	}
+	values := map[string]string{}
+	for _, value := range peer.specs[0].Env {
+		values[value.Name] = value.Value
+	}
+	if values["HOME"] != userHome || values["OPENCODE_CONFIG_DIR"] != configHome || values["OPENCODE_DISABLE_AUTOUPDATE"] != "1" {
+		t.Fatalf("wrong account home: %+v", peer.specs[0].Env)
+	}
+	for _, proc := range peer.procs {
+		if proc.sentCount() != 0 {
+			t.Fatal("discovery sent input to the tool")
+		}
+		select {
+		case <-proc.stopped:
+		default:
+			t.Fatal("catalog child left running")
+		}
+	}
+}
+
+// A list the engine cannot read whole is no list: nothing is advertised.
+func TestOpenCodeCatalogRejectsFailedAndMalformedOutput(t *testing.T) {
+	for _, tc := range []struct {
+		name, output string
+		exit         int
+	}{
+		{"failed command", openCodeCatalogFixture, 1},
+		{"no provider", "glm-5.3-flash-free\n", 0},
+		{"empty provider", "/glm-5.3-flash-free\n", 0},
+		{"empty model", "opencode/\n", 0},
+		{"space in id", "opencode/glm 5.3\n", 0},
+		{"a sentence", "Error: something went wrong\n", 0},
+		{"response bound", strings.Repeat("x", (1<<20)+1), 0},
+		{"model bound", strings.Repeat("opencode/m\n", 1001), 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			peer := &catalogToolPeer{t: t, signed: true, openCodeOutput: tc.output, openCodeExit: tc.exit}
+			m := New(WithRunner(peer), WithProviderDriver(NewOpenCodeDriver()))
+			m.UseToolLoginsRoot(t.TempDir())
+			tenant := model.TenantID(model.NewID())
+			_, configHome, _ := m.OwnToolLoginHomes(tenant, "opencode")
+			if err := os.MkdirAll(configHome, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if ids, err := m.ReadOwnToolLoginModels(context.Background(), tenant, "opencode"); err == nil || len(ids) != 0 {
+				t.Fatalf("unreadable catalog advertised: %v %v", ids, err)
+			}
+			if len(peer.procs) != 1 {
+				t.Fatal("the native catalog response was not examined")
+			}
+		})
+	}
+}
+
+// A catalog id is what a session's model option takes: on the tool's own login
+// (no bound record) the free model keeps the provider/model spelling the tool listed.
+func TestOpenCodeCatalogIDReachesTheModelOptionUnchanged(t *testing.T) {
+	for _, id := range []string{"opencode/glm-5.3-flash-free", "opencode/deepseek-v4.1-flash-free"} {
+		if got := openCodeModelValue(BoundProvider{}, id, false); got != id {
+			t.Fatalf("native model %q became %q", id, got)
+		}
 	}
 }

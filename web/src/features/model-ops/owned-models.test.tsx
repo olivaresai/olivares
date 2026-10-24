@@ -116,6 +116,18 @@ describe('El parque de modelos propios', () => {
     expect(within(vacio).queryByRole('button')).toBeNull()
   })
 
+  // Only a successful empty answer moves the verb into the empty state; a read
+  // that failed keeps it in the section header.
+  it('keeps the header action when the list could not be read', async () => {
+    api.ownedModels.mockRejectedValue(new Error('down'))
+    wrap(<OwnedModelsTab />)
+    await screen.findByRole('alert')
+    expect(
+      await screen.findByRole('button', { name: 'New model' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('No owned models registered yet')).toBeNull()
+  })
+
   it('pide el techo real del motor', async () => {
     wrap(<OwnedModelsTab />)
     await waitFor(() => expect(api.ownedModels).toHaveBeenCalled())
@@ -252,5 +264,23 @@ describe('Las versiones de un modelo', () => {
     // El texto exacto del estado vacío, no una subcadena: el propio aviso de error contiene
     // «no versions» entre comillas, así que un `/no versions/i` casaría consigo mismo.
     expect(screen.queryByText('No versions yet')).toBeNull()
+  })
+})
+
+/**
+ * ONE ORANGE PER FIRST SCREEN (dev#2673's console rule 2026-10-17). The
+ * merged mechanism (main e601803a8, dfff8c3ad): while a read list is empty the
+ * section header's verb steps aside, so the empty state's action is the one orange.
+ */
+describe('OwnedModelsTab — one orange control on an empty model list', () => {
+  it('offers the verb in the empty state only, never as a section-level New model button', async () => {
+    api.ownedModels.mockResolvedValue({ items: [], has_more: false })
+    wrap(<OwnedModelsTab />)
+    expect(
+      await screen.findByText('No owned models registered yet'),
+    ).toBeInTheDocument()
+    const buttons = await screen.findAllByRole('button', { name: 'New model' })
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0].className).toContain('bg-accent')
   })
 })

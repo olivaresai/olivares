@@ -10,11 +10,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/tui"
 )
 
 // root_status.go is what `olivares` alone prints: where the engine is, who is
@@ -67,12 +69,21 @@ func runRootStatus(cmd *cobra.Command) error {
 		r.Line("Start here:")
 		root := cmd.Root()
 		for _, c := range root.Commands() {
-			if c.GroupID == "start" && c.IsAvailableCommand() {
+			// ui is named by the hint line below, not repeated here: the bare
+			// command's only allowed change on its own is that one line (#2569).
+			if c.GroupID == "start" && c.IsAvailableCommand() && c.Name() != "ui" {
 				fmt.Fprintf(w, "  %-10s %s\n", c.Name(), c.Short)
 			}
 		}
 		r.Blank()
 		r.Line("All commands: olivares --help")
+		// The hint advertises exactly the check `olivares ui` makes: both
+		// streams a terminal, so the menu it names cannot then refuse.
+		if in, ok := cmd.InOrStdin().(*os.File); ok {
+			if out, ok := w.(*os.File); ok && tui.CheckTerminal(in, out) == nil {
+				r.Line("Interactive: olivares ui")
+			}
+		}
 		return nil
 	}, report)
 }
@@ -159,6 +170,13 @@ func rootStatus(ctx context.Context) rootStatusReport {
 // its sign-in. A signed-in Codex with no Claude Code is a working path, so the next
 // step is a Codex session, not "install Claude Code" (measured 2026-10-01: the two disagreed).
 func rootNextFromTools(rows []toolRow) string {
+	_, next := nextToolStep(rows)
+	return next
+}
+
+// nextToolStep is rootNextFromTools with the tool the step is about, for the
+// screen that puts its cursor on that tool's row.
+func nextToolStep(rows []toolRow) (driver, command string) {
 	byDriver := map[string]toolRow{}
 	for _, row := range rows {
 		byDriver[row.Driver] = row
@@ -169,12 +187,12 @@ func rootNextFromTools(rows []toolRow) string {
 			continue
 		}
 		if row.SignedIn != nil && !*row.SignedIn {
-			return "olivares tool login " + driver
+			return driver, "olivares tool login " + driver
 		}
 		if driver == "claude" {
-			return "olivares session start <folder>"
+			return driver, "olivares session start <folder>"
 		}
-		return "olivares session start <folder> --tool " + driver
+		return driver, "olivares session start <folder> --tool " + driver
 	}
-	return "olivares tool install claude"
+	return "claude", "olivares tool install claude"
 }

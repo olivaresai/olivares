@@ -23,8 +23,8 @@ a one-time setup token and TLS on by default. The host port is published on ever
 interface, because this is a server — restrict it deliberately, as shown below.
 
 <!-- release -->
-:::note[Olivares 0.3]
-The next release is `0.3`; its GitHub release is not published yet. The commands below describe the planned artifacts. Build from source until publication, then verify each artifact before use. See `docs/releases/0.3-install-surfaces.json` for the observed publication state.
+:::note[Olivares 0.4]
+The next release is `0.4`; its GitHub release is not published yet. The commands below describe the planned artifacts. Build from source until publication, then verify each artifact before use. See `docs/releases/0.4-install-surfaces.json` for the observed publication state.
 :::
 <!-- /release -->
 
@@ -39,7 +39,7 @@ The official container pull is **Docker Hub**:
 
 <!-- release -->
 ```bash
-docker pull docker.io/olivaresai/olivares:0.3
+docker pull docker.io/olivaresai/olivares:0.4
 ```
 <!-- /release -->
 
@@ -48,7 +48,7 @@ and used as the build registry and the fallback. Docker Hub rate-limits **anonym
 pulls; ghcr.io does not rate-limit anonymous pulls of public images, so `docker login`
 or the ghcr.io coordinate is the way out if a CI node or a large fleet hits the ceiling.
 Tags carry **no leading `v`**: <!-- release -->
-`:0.3`<!-- /release --> pins a release, `:latest` floats, and <!-- release -->`:0.3-fips`<!-- /release --> / <!-- release -->`:0.3-stig`<!-- /release --> are
+`:0.4`<!-- /release --> pins a release, `:latest` floats, and <!-- release -->`:0.4-fips`<!-- /release --> / <!-- release -->`:0.4-stig`<!-- /release --> are
 the hardened variants. The base and `:latest` tags are multi-arch
 (`linux/amd64`, `linux/arm64`); `fips`/`stig` are `amd64`-only.
 
@@ -60,7 +60,7 @@ Docker Hub by `cosign copy`, so the digest is the same:
 <!-- release -->
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:0.3")"
+DIGEST="$(crane digest "$IMAGE:0.4")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
@@ -98,7 +98,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:0.3 \
+  docker.io/olivaresai/olivares:0.4 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -327,7 +327,7 @@ image before recreating.
 
 ## 8. Pin by digest for production
 
-Mutable tags (<!-- release -->`:0.3`<!-- /release -->, `:latest`) are for evaluation. In production, pin the
+Mutable tags (<!-- release -->`:0.4`<!-- /release -->, `:latest`) are for evaluation. In production, pin the
 **digest** you verified — a digest is immutable and is exactly what you signed off on:
 
 ```bash

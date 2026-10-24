@@ -37,6 +37,7 @@ func TestSyncToRetrievalE2E(t *testing.T) {
 			DocID:  "d1",
 			Title:  "Public Doc",
 			Body:   "public content e2e overview",
+			ACL:    []string{"anyone"},
 		},
 		{
 			Source: "e2esrc",
@@ -50,6 +51,7 @@ func TestSyncToRetrievalE2E(t *testing.T) {
 			DocID:          "d3",
 			Title:          "Purview Doc",
 			Body:           "purview confidential content e2e overview",
+			ACL:            []string{"anyone"},
 			ExternalLabels: []string{"purview:confidential"},
 		},
 	}

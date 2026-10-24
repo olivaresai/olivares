@@ -103,17 +103,17 @@
       "create": "ポリシーを保存",
       "created": "ルーティングポリシーを保存しました"
     },
-    "execute": "Execute",
+    "execute": "実行",
     "executeConfirm": "Execute and spend",
     "input": "Input",
-    "executeHint": "Resolve is free. Execute calls the provider and spends against your budget.",
-    "executeWarning": "This runs the resolved model chain against the real provider and records a cost sample. It is not a simulation — use Resolve to preview the decision without spending.",
+    "executeHint": "解決は無料です。実行はプロバイダーを呼び出し、予算に対して支出します。",
+    "executeWarning": "解決済みのモデルチェーンを実際のプロバイダーに対して実行し、コストサンプルを記録します。シミュレーションではありません。支出せずに判断をプレビューするには「解決」を使ってください。",
     "noExecutor": "エグゼキューターがプロビジョニングされていません。障害ではありません。コントロールプレーンはルーティングの判断を解決しますが、オペレーターがエグゼキューターを設定するまで、プロバイダーに対して支出することはありません。",
-    "budgetDenied": "A FinOps budget denied the spend BEFORE any provider call. The governance gate worked — raise or review the budget rather than retrying.",
+    "budgetDenied": "FinOps の予算が、プロバイダー呼び出しの「前」に支出を拒否しました。ガバナンスゲートは正しく機能しています。再試行せず、予算を引き上げるか見直してください。",
     "fallbackUsed": "fallback used",
-    "refusal": "provider refusal",
+    "refusal": "プロバイダーによる拒否",
     "tokens": "{{in}} in · {{out}} out",
-    "outputNotStored": "The output is returned to you and stored nowhere: only a redacted cost sample reaches the ledger.",
+    "outputNotStored": "出力は呼び出し元に返され、どこにも保存されません。台帳に届くのは、編集除去されたコストサンプルだけです。",
     "truncated": "{{n}} 件のポリシーを読み込みました。さらに存在します",
     "truncatedHint": "ルーティングポリシーは表示分より多くあります。このページは行 id で取得します。ここに無いことが、あるリクエストをルーティングするポリシーが存在しないことを示すわけではありません。"
   },
@@ -225,7 +225,7 @@
   "empty": {
     "keyRefs": {
       "title": "プロバイダーキー参照はまだ追加されていません",
-      "description": "クレデンシャル値はコンソールで受け付けず、保存もしないため、プロバイダー識別子を指定して API キーまたはワークスペース参照を追加してください。"
+      "description": "クレデンシャル値はコンソールで受け付けず、保存もしないため、プロバイダー識別子を指定して APIキーまたはワークスペース参照を追加してください。"
     },
     "models": {
       "title": "ガバナンス対象のモデルはまだ観測されていません",
@@ -248,14 +248,14 @@
   "access": {
     "title": "Model access rules",
     "description": "Who may use which model, and where.",
-    "empty": "No access rules — every subject is unrestricted",
+    "empty": "アクセスルールはありません — すべての主体が無制限です",
     "emptyHint": "アクセスルールは、どの主体がどのモデルを呼び出せるかを定めます。ルールがない場合、すべての主体が資産内のすべてのモデルを呼び出せます。",
     "groupsTitle": "Model groups",
-    "groupsDescription": "Named sets a rule can target instead of a single model.",
+    "groupsDescription": "単一のモデルの代わりに、ルールの対象にできる名前付きのセット。",
     "groupsEmpty": "No model groups",
     "groupsEmptyHint": "モデルグループは複数のモデルに名前を付け、1 つのルールでまとめて統制できるようにします。まず 1 つ作成してください。",
     "members": "{{n}} members",
-    "confinementNotice": "⛔ An allow is not only additive. A subject NAMED by any allow is CONFINED to its allows — everything else becomes denied for them. A subject named by no rule is unrestricted. So creating the FIRST allow for someone TAKES AWAY the rest of the catalogue from them.",
+    "confinementNotice": "⛔ 許可は追加だけではありません。いずれかの許可で「名指しされた」主体は、その許可の範囲に「限定」され、それ以外はすべて拒否されます。どのルールにも名指しされない主体は無制限です。そのため、誰かに最初の許可を作成すると、その人からカタログの残りを「取り上げる」ことになります。",
     "effect": {
       "allow": "allow",
       "forbid": "forbid"
@@ -264,8 +264,8 @@
     "inWorkspace": "in {{ws}}",
     "allSurfaces": "all surfaces",
     "onSurfaces": "on {{list}}",
-    "forbidSubtracts": "This forbid SUBTRACTS: it overrides any allow naming the same subject.",
-    "confinedSubject": "{{subject}} is confined to its allows — anything not listed is denied for them.",
+    "forbidSubtracts": "この禁止は「差し引き」ます。同じ主体を名指しするあらゆる許可より優先されます。",
+    "confinedSubject": "{{subject}} は許可の範囲に限定されています。一覧にないものはすべて拒否されます。",
     "readOnlyNote": "読み取り専用：モデルを使用できる人の変更にはモデルアクセスの管理が必要です。これはルーティングポリシーの編集より上位の権限です。",
     "truncated": "{{n}} 件のルールを読み込みました。さらに存在します",
     "truncatedHint": "アクセスルールは表示分より多くあります。このページは行 id で取得します。これらの行の表示は読み込み済みのルールのみを反映します。限定を生じさせる allow や許可先を追加する allow が欠けることもあれば、アクセスを差し引く forbid が欠けることもあります。したがって、このページは実際より広くも狭くも見え得ますし、ルールが 1 件も読み込まれていない主体はそもそも現れません。ここから実効アクセスを推論しないでください。エンジンは判断前にすべてのページを読み、ユーザー・ロール・グループを横断して主体を解決します。1 行では示せません。",

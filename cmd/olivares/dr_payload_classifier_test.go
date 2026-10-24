@@ -68,6 +68,9 @@ func TestDRRestoreClassifiesAuthenticatedAndLegacyPayloadBeforeEffects(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := dr.VerifyBundleIntegrity(work, m, kek, cipher, false); err != nil {
+		t.Fatalf("open the sealed snapshot: %v", err)
+	}
 	path := filepath.Join(work, m.Store.File)
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
@@ -105,6 +108,8 @@ func TestDRRestoreClassifiesAuthenticatedAndLegacyPayloadBeforeEffects(t *testin
 			if !legacy {
 				err = dr.WriteAuthenticatedBundle(f, dr.BundleInput{Manifest: m, KEK: kek, SnapshotPath: path, SealedKeys: sealed}, cipher)
 			} else {
+				// A real pre-v2 bundle: the snapshot in the clear under a v1, unsigned manifest.
+				m.Format, m.Store.Encryption = dr.ManifestFormatV1, ""
 				m.Authentication = dr.ManifestAuthentication{}
 				m.Files = nil
 				gz := gzip.NewWriter(f)
@@ -199,9 +204,16 @@ func TestDRSQLitePayloadKeepsDeclarationAndExcludesSidecars(t *testing.T) {
 		t.Fatalf("backup: %v\n%s", err, out)
 	}
 	work := t.TempDir()
-	m, _, err := openAndCheckBundle(bundle, work)
+	m, kek, err := openAndCheckBundle(bundle, work)
 	if err != nil {
 		t.Fatal(err)
+	}
+	cipher, err := dr.OpenCipher(make([]byte, 32), kek)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dr.VerifyBundleIntegrity(work, m, kek, cipher, false); err != nil {
+		t.Fatalf("open the sealed snapshot: %v", err)
 	}
 	for _, entry := range m.Files {
 		if filepath.Base(entry.Path) == filepath.Base(anchor.RecordPath()) || filepath.Base(entry.Path) == filepath.Base(anchor.LockPath()) {
@@ -423,6 +435,9 @@ func TestDRInPlaceRestoreRefusesChangedClassifiedPayload(t *testing.T) {
 	cipher, err := dr.OpenCipher(make([]byte, 32), kek)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if err := dr.VerifyBundleIntegrity(work, m, kek, cipher, false); err != nil {
+		t.Fatalf("open the sealed snapshot: %v", err)
 	}
 	path := filepath.Join(work, m.Store.File)
 	proof, err := classifyDRPayload(t.Context(), "sqlite", m.Store.Method, path, "")

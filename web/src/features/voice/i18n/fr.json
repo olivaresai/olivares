@@ -103,7 +103,9 @@
     "decisionsError": "Les décisions n'ont pas pu être lues.",
     "noDecisions": "Aucune décision enregistrée pour cette session.",
     "noReason": "aucun motif enregistré",
-    "frames": "{{count}} mise(s) à jour en direct",
+    "frames_one": "Mise à jour en direct : {{count}}",
+    "frames_many": "Mises à jour en direct : {{count}}",
+    "frames_other": "Mises à jour en direct : {{count}}",
     "open": "Ouvrir la session (encadré)",
     "stream": {
       "connecting": "connexion",

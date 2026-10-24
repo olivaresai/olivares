@@ -503,8 +503,25 @@ func (s *samlProvider) validate(_ context.Context, a auth.Assertion) (auth.Feder
 	id.AAL, id.AuthenticatedAt = s.assertionAssurance(assertion)
 	if s.groupsAttr != "" {
 		id.Groups = s.extractGroups(assertion)
+		id.GroupsIndeterminate = hasAttribute(assertion, entraGroupsLinkAttr)
 	}
 	return id, nil
+}
+
+// entraGroupsLinkAttr is what Entra sends in place of the groups once a user has more
+// than 150 of them: a link to fetch the list from. Its presence means the groups
+// attribute is absent or incomplete. It names no attribute, so any configured groups
+// attribute counts as unreliable for that user: the login fails closed.
+const entraGroupsLinkAttr = "http://schemas.microsoft.com/claims/groups.link"
+
+// hasAttribute reports whether the assertion carries an attribute with this Name.
+func hasAttribute(a *types.Assertion, name string) bool {
+	for _, attr := range attributes(a) {
+		if strings.EqualFold(attr.Name, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // checkResponse applies what gosaml2 leaves to the caller to a response it has already

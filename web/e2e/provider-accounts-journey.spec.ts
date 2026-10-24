@@ -123,12 +123,12 @@ async function authed<T>(
 }
 
 /** The page's own content. Every page locator below is scoped to it, so it never reaches the
- *  navigation rail, the breadcrumb or the toasts, which repeat page and account names. */
+ *  top bar or the toasts, which repeat page and account names. */
 function content(page: Page) {
   return page.getByRole('main')
 }
 
-/** The Now link in the journey navigation, outside breadcrumbs and recent pages. */
+/** The Now place in the top bar's Journeys navigation, outside recent pages. */
 function nowLink(page: Page) {
   return page
     .getByRole('navigation', { name: 'Journeys', exact: true })
@@ -364,9 +364,10 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
     await test.step('the member opens the accounts page', async () => {
       await signIn(member, MEMBER_EMAIL, MEMBER_PASSWORD)
       await member.goto(stepHref(ACCOUNTS))
+      // The accounts page is a door into Tools (#2552): a member reads its Accounts part.
       await expect(
         content(member).getByRole('heading', {
-          name: 'Provider accounts',
+          name: 'Accounts',
           exact: true,
         }),
       ).toBeVisible()
@@ -639,12 +640,10 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
       )
       expect(first).toHaveLength(1)
       await member.keyboard.press('Escape')
-      await content(member)
-        .getByRole('tab', { name: 'Profiles', exact: true })
-        .click()
-      await content(member)
-        .getByRole('tab', { name: 'Accounts', exact: true })
-        .click()
+      // Leave the accounts and come back (they are on Tools, #2552): the parked
+      // creation survives the list unmounting, as it did a tab switch.
+      await nowLink(member).click()
+      await member.locator('[data-place="agent-tools"]').click()
       await content(member)
         .getByRole('button', { name: 'Retry creation', exact: true })
         .click()

@@ -92,10 +92,11 @@ var providerProfileDescriptorKinds = map[model.Kind]string{
 }
 
 // personalStateDescriptorKinds is the manifest of a person's own interface state: the
-// pins on operated sessions (#2130). Like B1 and K5 it is absent from the pre-K3
+// pins (#2130) and snooze and done marks (#2480) on operated sessions. Like B1 and K5 it is absent from the pre-K3
 // schema the upgrade tests reopen from, and a new kind must be listed here.
 var personalStateDescriptorKinds = map[model.Kind]string{
-	runPinKind: runPinTable,
+	runPinKind:  runPinTable,
+	runMarkKind: runMarkTable,
 }
 
 type communicationCapturedMigration struct {
@@ -1824,7 +1825,7 @@ func communicationK2Registration(
 			continue // B1, like K5: not part of the pre-K3 schema this reopens from
 		}
 		if _, personal := personalStateDescriptorKinds[descriptor.Kind]; personal {
-			continue // a person's pins (#2130): not part of the pre-K3 schema either
+			continue // a person's pins and marks (#2130, #2480): not part of the pre-K3 schema either
 		}
 		if _, legacy := communicationLegacyDescriptorKinds[descriptor.Kind]; !legacy {
 			t.Fatalf("unexpected descriptor %s cannot be classified as K2, K3, K5 or B1", descriptor.Kind)

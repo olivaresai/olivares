@@ -42,7 +42,7 @@ var toolInstallEngine = func(ctx context.Context) *toolinstall.Engine {
 		verifier = v
 	}
 	cat := toolinstall.NewOfficialCatalog(nil, verifier)
-	opts := toolinstall.EngineOptions{InstallerVersion: version, Verified: verifiedToolReleases}
+	opts := toolinstall.EngineOptions{InstallerVersion: version, Verified: verifiedToolReleases, PlaceRipgrep: true}
 	return toolinstall.NewEngineWithCapabilities(cat, opts)
 }
 

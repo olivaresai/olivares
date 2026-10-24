@@ -1,8 +1,8 @@
 {
   "title": "Herramientas de IA",
   "description": "Instala en este servidor las herramientas de IA que ejecutan las sesiones e inicia sesión en ellas.",
+  "descriptionMember": "Las sesiones se ejecutan con estas cuentas y claves de API. Un administrador del sistema instala las herramientas e inicia su sesión.",
   "refresh": "Actualizar",
-  "adminOnly": "Se requiere una sesión de administrador del sistema para administrar las herramientas del servidor.",
   "readOnly": "Este servidor es de solo lectura. La instalación está deshabilitada.",
   "notInstalled": "Sin instalación administrada",
   "installedOutside": "Instalado en este servidor, no por Olivares",
@@ -127,8 +127,7 @@
   "tool": {
     "menu": "Opciones de {{name}}",
     "update": "Actualizar",
-    "details": "Detalles de la instalación",
-    "profilesPage": "Página detallada de perfiles"
+    "details": "Detalles de la instalación"
   },
   "details": {
     "title": "{{name}}: detalles de la instalación",
@@ -220,5 +219,11 @@
     "packagesHint": "Los declara el perfil de proveedor que usa la nueva sesión de cada herramienta ({{profiles}}). Una herramienta sin perfil recibe uno nuevo que no declara ninguno.",
     "packagesNoProfile": "Vienen del perfil de proveedor con el que se ejecutan las sesiones de cada herramienta. Aún no existe ninguno, y uno nuevo no declara ninguno.",
     "packagesRefused": "No se lista nada porque aún no puede iniciarse ninguna sesión en: {{tools}}."
+  },
+  "place": {
+    "title": "Cuentas y claves de API",
+    "accounts": "Cuentas",
+    "allAccounts": "Todas las cuentas: detalles, etiquetas y vínculos",
+    "noAccess": "Tu rol no puede leer las cuentas ni las claves de API de esta organización."
   }
 }

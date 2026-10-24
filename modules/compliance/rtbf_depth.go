@@ -13,6 +13,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/sdk"
 )
 
 // rtbf_depth.go is the public half of enterprise RTBF-depth seam. The
@@ -20,7 +21,7 @@ import (
 // this repo; compliance consumes it without importing it.
 
 func (m *Module) validateCryptoShredReadiness(ctx context.Context, tenant model.TenantID, subjectKind, subjectRef string) (CryptoShredReadiness, bool, error) {
-	if m.shredCoordinator == nil {
+	if !sdk.CapabilityEnabled(m.shredCoordinator) {
 		return CryptoShredReadiness{}, false, nil
 	}
 	if c, ok := m.shredCoordinator.(CryptoShredCoordinator); ok {
@@ -39,7 +40,7 @@ func (m *Module) validateCryptoShredReadiness(ctx context.Context, tenant model.
 }
 
 func (m *Module) notifyCryptoShredWORM(ctx context.Context, keyID string, at time.Time) (bool, error) {
-	if m.shredCoordinator == nil {
+	if !sdk.CapabilityEnabled(m.shredCoordinator) {
 		return false, nil
 	}
 	if c, ok := m.shredCoordinator.(CryptoShredCoordinator); ok {
@@ -57,7 +58,7 @@ func (m *Module) notifyCryptoShredWORM(ctx context.Context, keyID string, at tim
 }
 
 func (m *Module) verifyCryptoShredCompleteness(ctx context.Context, keyID string, targets []string, probes CryptoShredProbes) (CryptoShredVerification, bool, error) {
-	if m.shredCoordinator == nil {
+	if !sdk.CapabilityEnabled(m.shredCoordinator) {
 		return CryptoShredVerification{}, false, nil
 	}
 	if c, ok := m.shredCoordinator.(CryptoShredCoordinator); ok {

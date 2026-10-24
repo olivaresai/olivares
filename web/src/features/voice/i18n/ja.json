@@ -103,7 +103,7 @@
     "decisionsError": "決定を読み取れませんでした。",
     "noDecisions": "このセッションの決定は記録されていません。",
     "noReason": "理由の記録なし",
-    "frames": "ライブ更新 {{count}} 件",
+    "frames_other": "ライブ更新 {{count}} 件",
     "open": "セッションを開く（統制下）",
     "stream": {
       "connecting": "接続中",

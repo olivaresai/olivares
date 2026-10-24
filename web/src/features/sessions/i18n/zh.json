@@ -122,13 +122,13 @@
     "table": "表格"
   },
   "partial": {
-    "noLiveRead": "未显示被观察的会话：你的角色无法读取它们。下面这些已启动的会话只是能读到的部分，不是全貌。",
-    "noRunRead": "未显示已启动的会话：你的角色无法读取它们。下面标为“已发现”的会话仍可能由 Olivares 启动——此列表无法核对。",
-    "truncated": "这是最近的一页，不是整个资产域。此处的来源只在已加载的数据上比对，因此运行记录已滚出该页的会话可能显示为“已发现”；打开会话，让引擎来回答。",
-    "runLookupFailed": "已启动的那一半读取失败：运行查询出错。下面的行是被观察的那一半返回的内容；来源标记为“未读取”，而不是猜测。",
-    "liveLookupFailed": "被观察的那一半读取失败：实时查询出错。下面的行是已启动的会话；遥测列为空是因为没能读到，而不是因为没有。",
-    "noProfileRead": "未显示提供商配置名称：你的角色无法读取配置。“实例”列改为显示每行的配置引用。",
-    "profileLookupFailed": "未能读取提供商配置名称：配置查询出错。“实例”列改为显示每行的配置引用。"
+    "noLiveRead": "未显示在 Olivares 之外启动的会话：你的角色无权查看。",
+    "noRunRead": "未显示在 Olivares 中启动的会话：你的角色无权查看。",
+    "truncated": "只加载了最近的会话，因此较早的会话在这里可能显示为“已发现”。打开它即可查看来源。",
+    "runLookupFailed": "无法加载在 Olivares 中启动的会话。",
+    "liveLookupFailed": "无法加载在 Olivares 之外启动的会话。",
+    "noProfileRead": "未显示提供商名称：你的角色无法读取提供商配置。",
+    "profileLookupFailed": "无法加载提供商名称。"
   },
   "move": {
     "open": "移动到…",
@@ -275,7 +275,7 @@
     "cleaned": "已清理"
   },
   "address": {
-    "retired": "已打开的会话已关闭。您对其来源半边的访问权限发生了变化。请选择一行，以当前权限打开会话。"
+    "retired": "你打开的会话已不可用。请从列表中选择另一个。"
   },
   "work": {
     "worked": "运行 {{duration}}",
@@ -289,7 +289,14 @@
     "pinnedMark": "已固定",
     "rowMenu": "{{name}} 的操作",
     "noObservation": "尚未收到该会话的遥测数据。",
-    "pinFailed": "未能更改固定状态。"
+    "pinFailed": "未能更改固定状态。",
+    "snoozeHour": "延后 1 小时",
+    "snoozeDay": "延后 1 天",
+    "snoozeWeek": "延后 1 周",
+    "unsnooze": "取消延后",
+    "markDone": "标记为完成",
+    "markNotDone": "标记为未完成",
+    "markFailed": "未能更改标记。"
   },
   "surface": {
     "openBeside": "在旁边打开",
@@ -303,6 +310,11 @@
       "rail": "会话",
       "narrative": "工作",
       "context": "上下文"
+    },
+    "resize": {
+      "rail": "调整会话列表宽度",
+      "context": "调整上下文面板宽度",
+      "beside": "调整旁边会话的宽度"
     }
   },
   "narrative": {
@@ -315,14 +327,15 @@
   },
   "meter": {
     "mode": "模式：{{mode}}",
+    "unasked": "无需询问即可运行：受 <policy>Olivares 策略</policy>约束",
+    "unaskedShort": "无需询问即可运行",
+    "accessUnknown": "未报告访问权限",
     "modeTitle": "{{tool}} 报告：{{mode}}",
     "theTool": "该工具",
     "toolWord": {
-      "bypassPermissions": "从不请求许可",
       "untrusted": "在执行不信任的命令前询问",
       "onFailure": "命令失败时询问",
       "onRequest": "需要时询问",
-      "never": "从不请求许可",
       "granular": "按自身规则询问"
     },
     "usageLabel": "本会话的用量",
@@ -429,9 +442,9 @@
   "conversation": {
     "log": "对话",
     "waiting": "正在等待会话…",
-    "empty": "尚无回合。请在下方发送一句话。",
-    "ended": "会话的输入输出流已结束。",
-    "lag": "丢失 {{count}} 帧 — 下方输出在缺口之后继续。",
+    "empty": "还没有消息。",
+    "ended": "会话已结束。",
+    "lag_other": "丢失 {{count}} 帧 — 下方输出在缺口之后继续。",
     "tool": "工具",
     "result": "结果",
     "unknown": "无法识别的帧",
@@ -439,6 +452,7 @@
     "args": "参数",
     "toolResult": "结果",
     "toolFailed": "失败",
+    "toolStopped": "已停止",
     "tokens": "输入 {{input}} · 输出 {{output}}",
     "protocol": "协议帧：{{count}}",
     "stop": {
@@ -458,7 +472,50 @@
     "workingFolder": "工作文件夹：{{cwd}}",
     "temporaryFolder": "工作文件夹：此会话的临时文件夹",
     "workedFor": "已运行 {{duration}}",
-    "toolsFolded_other": "+{{count}} 次工具调用"
+    "modelChanged": "模型已更换：{{from}} → {{to}}",
+    "modelChangedAt": "模型于 {{time}} 更换：{{from}} → {{to}}",
+    "sentPending": "已发送。正在等待工具接收。",
+    "sentNotTaken": "会话在工具接收之前已结束。",
+    "finishedIn": "用时 {{duration}} 完成",
+    "escToInterrupt": "按 Esc 中断",
+    "background": "在后台",
+    "agentWorking": "工作中",
+    "work": {
+      "join": "，",
+      "ran_other": "运行了 {{count}} 条命令",
+      "edited_other": "编辑了 {{count}} 个文件",
+      "editedSome": "编辑了文件",
+      "agents_other": "运行了 {{count}} 个智能体",
+      "read_other": "读取了 {{count}} 个文件",
+      "readSome": "读取了文件",
+      "searched_other": "搜索了 {{count}} 次",
+      "used_other": "使用了 {{count}} 个工具",
+      "failed_other": "{{count}} 个失败",
+      "background_other": "{{count}} 个在后台",
+      "stopped_other": "{{count}} 个已停止"
+    },
+    "running": {
+      "command_other": "正在运行 {{count}} 条 shell 命令",
+      "edit": "正在编辑 {{target}}",
+      "read": "正在读取 {{target}}",
+      "search": "正在搜索 {{target}}",
+      "agent": "{{name}} 正在工作",
+      "tool": "正在运行 {{tool}}"
+    },
+    "limit": {
+      "reached": "Claude Code 已达到{{window}}",
+      "reachedUntil": "Claude Code 已达到{{window}}，将于 {{time}} 重置",
+      "reachedUsed": "Claude Code 已达到{{window}}（已用 {{used}}%）",
+      "reachedUsedUntil": "Claude Code 已达到{{window}}（已用 {{used}}%），将于 {{time}} 重置",
+      "window": {
+        "fiveHour": "5 小时限额",
+        "weekly": "每周限额",
+        "weeklyOpus": "Opus 每周限额",
+        "weeklySonnet": "Sonnet 每周限额",
+        "extra": "额外用量限额",
+        "usage": "用量限额"
+      }
+    }
   },
   "changes": {
     "title": "{{folder}} 中的更改",
@@ -524,17 +581,24 @@
       "pinned": "已固定",
       "attention": "需要你处理",
       "active": "运行中",
-      "settled": "更早"
+      "today": "今日完成",
+      "settled": "更早",
+      "snoozed": "已延后",
+      "archived": "已归档"
     },
     "more": "更多",
     "back": "返回会话",
     "showTable": "以表格显示",
     "filter": "筛选会话…",
+    "recent": "显示最近 {{n}} 个",
+    "loadMore": "加载更多",
     "noMatch": "没有匹配的会话。"
   },
   "thread": {
     "copyReference": "复制引用",
-    "terminalHint": "在终端中操作同一个会话。"
+    "terminalHint": "在终端中操作同一个会话。",
+    "modelMismatch": "请求 {{requested}}，实际运行 {{inUse}}",
+    "modelTitle": "请求：{{requested}} · 使用中：{{inUse}}"
   },
   "activity": {
     "workflowPhases": "阶段",
@@ -621,5 +685,34 @@
     "usageUntil": "额度已用完，{{time}} 恢复",
     "usage": "额度已用完",
     "rate": "提供商正在限制请求。请稍后再试。"
+  },
+  "sheet": {
+    "title": "会话",
+    "open": "打开会话"
+  },
+  "rowActions": {
+    "rename": "重命名…",
+    "renameTitle": "重命名会话",
+    "renameDescription": "名称保存在服务器上，并显示在列出此会话的所有位置。留空则恢复为 Olivares 给出的名称。",
+    "renameLabel": "名称",
+    "save": "保存",
+    "cancel": "取消",
+    "archive": "归档",
+    "unarchive": "取消归档",
+    "archived": "已归档。它在列表末尾的“已归档”中。",
+    "unarchived": "已回到列表。",
+    "copyLink": "复制链接",
+    "copyId": "复制会话 ID",
+    "copyTranscript": "复制对话记录",
+    "noTranscript": "此会话的工具尚未写出可复制的对话记录。",
+    "copyFailed": "浏览器不允许复制。",
+    "you": "你",
+    "assistant": "助手",
+    "delete": "删除…",
+    "stopFirst": "请先停止",
+    "copiedPartial": "已复制。对话记录中有 {{n}} 条记录无法读取，未包含在内。",
+    "clipped": "部分消息超过 64 KiB，在副本中已被截断，末尾带有 [...]。",
+    "noWholeText": "引擎只发送了每条消息的第一行，因此未复制对话记录。",
+    "transcriptChanged": "复制期间对话记录发生了变化，请重试。"
   }
 }

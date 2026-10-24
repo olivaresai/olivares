@@ -325,8 +325,26 @@ func TestPublishReaderLimitsAnEarlyPublicationToo(t *testing.T) {
 	}
 }
 
+// The Business MQTT reader maps errors.Is(err, ErrBrokerRefused) to its refusal sentence. A bad
+// password or a Not-authorized CONNACK stays a refusal for that matcher while it gains its class.
+func TestPublishReaderCredentialsStayARefusal(t *testing.T) {
+	for _, reason := range []byte{0x86, 0x87} {
+		b := newFakeBroker(t, []byte{0x20, 0x03, 0x00, reason, 0x00}, subackOK)
+		_, err := publishReader(t, b.addr, PublishOptions{Topic: "a", Timeout: 200 * time.Millisecond}).Read(t.Context())
+		if !errors.Is(err, ErrBrokerCredentials) || !errors.Is(err, ErrBrokerRefused) {
+			t.Fatalf("CONNACK 0x%02x: error = %v, want credentials and refused", reason, err)
+		}
+	}
+	busy := newFakeBroker(t, []byte{0x20, 0x03, 0x00, 0x89, 0x00}, subackOK)
+	_, err := publishReader(t, busy.addr, PublishOptions{Topic: "a", Timeout: 200 * time.Millisecond}).Read(t.Context())
+	if errors.Is(err, ErrBrokerRefused) {
+		t.Fatalf("a busy broker reads as a refusal: %v", err)
+	}
+}
+
 func TestPublishReaderErrorsAreTheDocumentedOnes(t *testing.T) {
 	refusedConn := newFakeBroker(t, []byte{0x20, 0x03, 0x00, 0x87, 0x00}, subackOK)
+	busy := newFakeBroker(t, []byte{0x20, 0x03, 0x00, 0x89, 0x00}, subackOK)
 	refusedSub := newFakeBroker(t, connackOK, []byte{0x90, 0x04, 0x00, 0x01, 0x00, 0x87})
 	silent := newFakeBroker(t, connackOK, subackOK)
 	closed, err := net.Listen("tcp", "127.0.0.1:0")
@@ -340,7 +358,8 @@ func TestPublishReaderErrorsAreTheDocumentedOnes(t *testing.T) {
 		broker string
 		want   error
 	}{
-		{"connection refused by the broker", refusedConn.addr, ErrBrokerRefused},
+		{"credentials refused by the broker", refusedConn.addr, ErrBrokerCredentials},
+		{"broker busy at connection", busy.addr, ErrBrokerUnavailable},
 		{"subscription refused by the broker", refusedSub.addr, ErrBrokerRefused},
 		{"no publication before the deadline", silent.addr, ErrNoPublish},
 		{"nothing listening", deadAddr, ErrBrokerUnavailable},
@@ -379,7 +398,9 @@ func TestTemperatureReaderKeepsItsErrorSentences(t *testing.T) {
 		broker *fakeBroker
 		want   string
 	}{
-		{"broker refuses", newFakeBroker(t, []byte{0x20, 0x03, 0x00, 0x87, 0x00}, subackOK), "mqtt temperature: broker unavailable"},
+		{"broker refuses the credentials", newFakeBroker(t, []byte{0x20, 0x03, 0x00, 0x87, 0x00}, subackOK), "mqtt temperature: broker refused the credentials or authorization"},
+		{"broker busy", newFakeBroker(t, []byte{0x20, 0x03, 0x00, 0x89, 0x00}, subackOK), "mqtt temperature: broker unavailable"},
+		{"broker refuses the connection", newFakeBroker(t, []byte{0x20, 0x03, 0x00, 0x84, 0x00}, subackOK), "mqtt temperature: broker refused the connection or subscription"},
 		{"no publication", newFakeBroker(t, connackOK, subackOK), "mqtt temperature: sensor unavailable"},
 		{"oversized payload", newFakeBroker(t, connackOK, subackOK,
 			fakePublish{topic: "plant/temperature", payload: []byte(strings.Repeat("x", 4097))}), "mqtt temperature: invalid sensor measurement"},

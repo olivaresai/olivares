@@ -42,8 +42,13 @@ type updateService struct {
 	restart func(reason string) error
 	// sessions counts the sessions running now, which a restart stops.
 	sessions func() int
-	settings *productSettings
-	log      *slog.Logger
+	// licensed is the edition the live license entitles ("" for none); installKind is how this
+	// engine was installed (nil reads the host). Together they say what a Community build can
+	// move to and how.
+	licensed    func() string
+	installKind func() string
+	settings    *productSettings
+	log         *slog.Logger
 }
 
 // upgradeRunLimit bounds one `olivares upgrade` run: the command's own network timeout
@@ -55,31 +60,83 @@ const checkTimeout = "30s"
 
 const updateApplyAction = "deployment.update.apply"
 
-func newUpdateService(st *productSettings, edition, version, dataDir string, restart func(string) error, sessions func() int, log *slog.Logger) updateService {
+func newUpdateService(st *productSettings, edition, version, dataDir string, licensed func() string, restart func(string) error, sessions func() int, log *slog.Logger) updateService {
 	return updateService{
 		run: runSelfUpgrade, version: version, edition: edition, dataDir: dataDir,
-		getenv: envconfig.Get, restart: restart, sessions: sessions, settings: st, log: log,
+		getenv: envconfig.Get, restart: restart, sessions: sessions, licensed: licensed, installKind: installKind,
+		settings: st, log: log,
 	}
+}
+
+// switchTo is the edition a Community build with a live commercial license moves to, or "".
+func (s updateService) switchTo() string {
+	if s.edition != "community" || s.licensed == nil {
+		return ""
+	}
+	return s.licensed()
+}
+
+// endpointTokenReason is why the licensed download refuses an update endpoint: the variable names
+// the public update channel, and the download sends its token to the endpoint it is given.
+const endpointTokenReason = "OLIVARES_UPDATE_ENDPOINT names the public update channel, and the licensed download would send its token there: unset it, or connect this installation once with `olivares license connect start`"
+
+// endpointBlocksToken says the licensed download cannot run here: this engine names an update
+// endpoint and is not connected. Only a connected installation may name one, because its connect
+// state binds the origin and refuses another; without it the token would go to a public mirror.
+func (s updateService) endpointBlocksToken() bool {
+	return strings.TrimSpace(s.getenv("OLIVARES_UPDATE_ENDPOINT")) != "" && !isConnected(s.dataDir)
+}
+
+// licensedRoute says this engine's update is the licensed download: always on a Business build,
+// and on a Community build only where its license entitles a build the console can take now (a
+// token or a connection, no unconnected mirror, an install the engine can swap). Everywhere else a
+// Community build keeps the public channel it always had, so a security release never waits on a
+// switch nobody can take; the switch step is shown beside it. One predicate for args(), the
+// step's button and the apply, so they never disagree.
+func (s updateService) licensedRoute() bool {
+	if s.edition != "community" {
+		return true
+	}
+	sw := s.editionSwitch()
+	return sw != nil && sw.ConsoleAction
 }
 
 // args is `olivares upgrade` for this instance: the channel and endpoint the update
 // indicator already reads (OLIVARES_UPDATE_CHANNEL / OLIVARES_UPDATE_ENDPOINT), and the
-// licensed route for a Business build, which `upgrade` requires and cannot default
-// without a download token.
+// licensed route when licensedRoute says so. `upgrade` takes that route's download token from
+// this installation's connected identity when it has one, else from OLIVARES_UPGRADE_TOKEN
+// in this engine's environment, which the child inherits; with neither it says so. A
+// Community build with a live Business license takes the licensed route too (--edition
+// business): the update it offers is the Business build.
 func (s updateService) args(apply bool) ([]string, error) {
 	a := []string{"upgrade", "-o", "json", "--data-dir", s.dataDir}
+	licensed := s.licensedRoute()
+	// A connected installation refreshes its own credential, and the connect state binds the
+	// endpoint (a different one is refused), as a Business build's console update always did.
+	connected := licensed && isConnected(s.dataDir)
 	if ch := strings.TrimSpace(s.getenv("OLIVARES_UPDATE_CHANNEL")); ch != "" {
 		a = append(a, "--channel", ch)
 	}
 	if ep := strings.TrimSpace(s.getenv("OLIVARES_UPDATE_ENDPOINT")); ep != "" {
 		// The endpoint travels in the child's argv, which any local user can read.
-		if u, err := url.Parse(ep); err != nil || u.User != nil {
+		u, err := url.Parse(ep)
+		if err != nil || u.User != nil {
 			return nil, errors.New("OLIVARES_UPDATE_ENDPOINT carries credentials or is not a URL; the update would expose them in the process list")
+		}
+		// The connect state is read once (above): a binding that turns active between two reads must
+		// not skip this refusal and still leave --connect off, which would send the token to the mirror.
+		if licensed && !connected {
+			return nil, errors.New(endpointTokenReason)
 		}
 		a = append(a, "--endpoint", ep)
 	}
 	if s.edition != "community" {
-		a = append(a, "--enterprise", "--connect")
+		a = append(a, "--enterprise")
+	} else if licensed {
+		a = append(a, "--edition", "business")
+	}
+	if connected {
+		a = append(a, "--connect")
 	}
 	if apply {
 		return append(a, "--yes"), nil
@@ -88,15 +145,49 @@ func (s updateService) args(apply bool) ([]string, error) {
 	return append(a, "--check", "--timeout", checkTimeout), nil
 }
 
-// replaced says the binary on disk is not the version this engine runs: an install
-// whose restart has not happened.
-func (s updateService) replaced(onDisk string) bool {
+// editionReplaced says a Community engine's file now holds the licensed build: a switch whose
+// restart has not happened. A Community build moving to the licensed one keeps its version, so the
+// version alone cannot show it. Only that direction counts: a package upgrade that puts Community
+// back under a Business engine is not an install, and its refusal must stay the answer.
+func (s updateService) editionReplaced(doc upgradeResult) bool {
+	ed := doc.EditionCurrent
+	return s.edition == release.EditionCommunity && ed != "" && ed != release.EditionUnknown && ed != release.EditionCommunity
+}
+
+// replaced says the binary on disk is not the build this engine runs: an install whose restart
+// has not happened.
+func (s updateService) replaced(doc upgradeResult) bool {
+	if s.editionReplaced(doc) {
+		return true
+	}
 	running, err := release.ParseVersion(s.version)
 	if err != nil {
 		return false
 	}
-	installed, err := release.ParseVersion(onDisk)
+	installed, err := release.ParseVersion(doc.Current)
 	return err == nil && release.Compare(running, installed) != 0
+}
+
+// editionSwitch is the step to the licensed build for this installation, nil when the license
+// entitles nothing this build lacks. It is part of the answer even when the channel cannot be
+// checked: a missing download token is exactly when the owner needs the step. Its button
+// (ConsoleAction) is true only where the apply would run it, so an unconnected mirror takes the
+// button away and names itself, as a missing token does.
+func (s updateService) editionSwitch() *api.EditionSwitchDTO {
+	to := s.switchTo()
+	if to == "" {
+		return nil
+	}
+	kind := installKind
+	if s.installKind != nil {
+		kind = s.installKind
+	}
+	step := switchStepFor(kind(), s.dataDir)
+	if step.ConsoleAction && s.endpointBlocksToken() {
+		step.ConsoleAction = false
+		step.Then += " " + endpointTokenReason + "."
+	}
+	return withEdition(step, to)
 }
 
 func (s updateService) runningSessions() int {
@@ -110,7 +201,7 @@ func (s updateService) runningSessions() int {
 // release yet, an unverifiable manifest) still answers with the installed version and
 // upgrade's own reason, because that is what the page shows the administrator.
 func (s updateService) UpdateStatus(ctx context.Context) (api.UpdateStatusDTO, error) {
-	dto := api.UpdateStatusDTO{Edition: s.edition, Version: s.version, RunningSessions: s.runningSessions()}
+	dto := api.UpdateStatusDTO{Edition: s.edition, Version: s.version, RunningSessions: s.runningSessions(), EditionSwitch: s.editionSwitch()}
 	doc, err := s.upgrade(ctx, false)
 	if err == nil && doc.Status == "" {
 		err = errors.New("the upgrade check returned no status")
@@ -120,7 +211,7 @@ func (s updateService) UpdateStatus(ctx context.Context) (api.UpdateStatusDTO, e
 		dto.CheckError = err.Error()
 		return dto, nil
 	}
-	dto.RestartRequired = s.replaced(doc.Current)
+	dto.RestartRequired = s.replaced(doc)
 	dto.Channel = doc.Channel
 	dto.Available = doc.Available
 	dto.UpdateAvailable = doc.Status == upgradeStatusAvailable
@@ -132,7 +223,9 @@ func (s updateService) UpdateStatus(ctx context.Context) (api.UpdateStatusDTO, e
 }
 
 // ApplyUpdate runs `olivares upgrade --yes`, records who asked, and restarts the engine
-// on the installed binary. Nothing newer means nothing installed and no restart.
+// on the installed binary. Nothing newer means nothing installed and no restart, except that
+// a licensed build another run already put on disk is restarted onto. Which download it runs is
+// licensedRoute's: the switch where the console offers its button, else the public channel.
 func (s updateService) ApplyUpdate(ctx context.Context, actor auth.Principal) (api.UpdateStatusDTO, error) {
 	dto := api.UpdateStatusDTO{Edition: s.edition, Version: s.version, RunningSessions: s.runningSessions()}
 	// Once begun, the install finishes and the engine restarts on it whether or not the
@@ -143,21 +236,28 @@ func (s updateService) ApplyUpdate(ctx context.Context, actor auth.Principal) (a
 		// A run can fail after the swap (killed at the time limit, unreadable output).
 		// If the binary on disk is no longer the running one, the install happened.
 		check, cerr := s.upgrade(ctx, false)
-		if cerr != nil || !s.replaced(check.Current) {
+		if cerr != nil || !s.replaced(check) {
 			return api.UpdateStatusDTO{}, fmt.Errorf("%w: %v", api.ErrUpdateRefused, err)
 		}
-		s.log.Warn("update: the upgrade run failed after installing; restarting on the installed binary", "err", err, "to", check.Current)
+		s.log.Warn("update: the upgrade run failed after installing; restarting on the installed build", "err", err, "to", check.Current)
 		doc = check
 		doc.Action = upgradeActionInstalled
 	}
 	dto.Channel, dto.Available = doc.Channel, doc.Available
-	if doc.Action != upgradeActionInstalled {
+	installed := doc.Action == upgradeActionInstalled
+	if !installed && !s.editionReplaced(doc) {
 		return dto, nil
+	}
+	if !installed {
+		// Another run (a terminal's `olivares upgrade`) installed it and nobody restarted the engine:
+		// the ledger names what is on disk, not the channel's newest.
+		s.log.Info("update: the installed build is not the one running; restarting on it", "actor", actor.Actor(), "to", doc.Current)
+		doc.Available, doc.EditionAvailable = doc.Current, doc.EditionCurrent
 	}
 	if err := s.record(ctx, actor, doc); err != nil {
 		// The binary is already replaced: restart on it rather than leave the engine on
 		// a version its ledger does not mention, and say why the record is missing.
-		s.log.Error("update: installed, but the audit event was not recorded", "err", err, "actor", actor.Actor(), "to", doc.Available)
+		s.log.Error("update: restarting on the installed build, but the audit event was not recorded", "err", err, "actor", actor.Actor(), "to", doc.Available)
 	}
 	if s.restart == nil {
 		return api.UpdateStatusDTO{}, fmt.Errorf("%w: this engine is not running as a server", api.ErrUpdateRestartUnavailable)
@@ -193,7 +293,8 @@ func (s updateService) record(ctx context.Context, actor auth.Principal, doc upg
 		_, err := as.Audit().Append(ctx, model.AuditDraft{
 			Actor: actor.Actor(), ActorKind: actor.ActorKind(),
 			Action: updateApplyAction, TargetKind: "core.engine_binary",
-			Meta: map[string]any{"from": s.version, "to": doc.Available, "channel": doc.Channel, "installed": doc.Installed},
+			Meta: map[string]any{"from": s.version, "to": doc.Available, "channel": doc.Channel, "installed": doc.Installed,
+				"edition_from": s.edition, "edition_to": doc.EditionAvailable},
 		})
 		return err
 	})

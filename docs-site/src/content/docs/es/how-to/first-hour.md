@@ -1,65 +1,105 @@
 ---
 title: "Tu primera hora con Olivares AI"
 description: >-
-  Instala el plano de control, abre la consola, conecta un agente de código,
-  ejecuta una sesión gobernada que permite una acción y deniega otra, y lee
-  la evidencia. Tres formas: local (SQLite), equipo (Postgres y Docker), híbrida.
+  Instala Olivares AI, inicia sesión con una herramienta de IA o conecta un
+  proveedor, abre una conversación en la carpeta de tu proyecto, aprueba una
+  acción, detén y reanuda.
 ---
 
-Esta página es la primera hora **en este árbol**. No es una maqueta. Cada
-comando de la forma local es el que ejecuta `task smoke:first-hour` contra
-`./bin/olivares`. Si una forma necesita Docker o Postgres, la página lo dice.
+Necesitas Docker Compose, una carpeta de proyecto sobre la que quieras que la
+herramienta trabaje y, además, una suscripción a una herramienta, una clave de
+API de un proveedor o un modelo local.
 
-El producto imprime el siguiente paso. `olivares quickstart` nombra el
-registro de passkey, `olivares agent tool detect`, el inventario, el PEP de
-hooks y `olivares doctor` después del token de configuración.
-`olivares doctor` informa `first-hour-coding-agent`, `first-hour-hook-pep` y
-`first-hour-next-step`. Esas comprobaciones son opcionales. No marcan como
-fallida una instalación sana.
+## 1. Instala y abre la consola
 
-## Qué es esta hora
+Sigue la [instalación del README](https://github.com/olivaresai/olivares#install).
+Selecciona la imagen de la versión de forma explícita, monta la carpeta de tu
+proyecto del host en `/project` e imprime una dirección de consola y un token de
+configuración de un solo uso de sustitución. Usa allí las instrucciones de
+AppArmor cuando se apliquen a tu host Docker.
 
-Instalar → consola → conectar **un** agente de código → verlo en el
-inventario → sesión gobernada que **permite una acción y deniega otra** →
-leer la evidencia.
+Abre la dirección impresa. La primera instalación usa un certificado
+autofirmado; comprueba que estás abriendo tu propio servidor antes de aceptar la
+advertencia del navegador. Introduce el token de configuración, tu correo y una
+contraseña para crear el primer administrador. Mantén el token y la contraseña
+en privado. La consola inicia tu sesión y abre el asistente de configuración.
 
-Esta página usa el **PEP de hooks de Claude Code** que este árbol ya incluye
-(`olivares claude-hook`). Lanzar un CLI oficial como proceso de sesión es la
-costura del runtime Community. Esta hora no duplica ese controlador. No envía un
-turno de modelo.
+El contenedor ejecuta las herramientas en el servidor. Una herramienta con
+sesión iniciada en tu portátil es otra instalación; su inicio de sesión no se
+copia al contenedor.
 
-`--seed-demo` no es esta hora.
+## 2. Elige una herramienta y su inicio de sesión
 
-## Forma 1 — Local (SQLite, esta caja)
+Usa el asistente o abre **Herramientas de IA** (`/agent-tools`). Cada herramienta
+muestra si está instalada y si tiene la sesión iniciada. Si falta, revisa y
+aprueba su instalación. Usa el control de inicio de sesión de la herramienta y
+completa su propio flujo de inicio de sesión. En Claude Code o Codex, aprueba el
+inicio de sesión con tu cuenta de Claude o de ChatGPT.
 
-Este contenedor **no tiene Docker**. PostgreSQL **no está en marcha**. La
-forma local usa SQLite embebido y HTTP en loopback. Esa es la forma que
-reproduce la prueba de humo.
+En una instalación nativa, la instancia predeterminada usa el inicio de sesión
+del usuario que ejecuta el motor. Los inicios de sesión hechos a través de
+Olivares siguen siendo instancias separadas. Las herramientas informan de la
+cuenta, el plan, los modelos y las ventanas de uso que exponen. Un valor no
+disponible no es un saldo cero; si una actualización falla, la última
+instantánea aparece como obsoleta, junto con el comando que falló.
 
-### 1. Compilar y arrancar
+Para usar una clave de API, abre **Herramientas**, añade el proveedor en
+**Claves de API** y prueba la conexión. Para un modelo local, añade un endpoint
+de Ollama accesible desde el motor; no hace falta clave de API. Consulta
+[Añadir un proveedor](/how-to/add-a-provider/). Para una herramienta que requiere
+un modelo, como Codex, selecciona uno de los que devuelve la prueba de conexión
+si el proveedor no tiene un modelo predeterminado guardado. Claude Code puede
+usar su modelo predeterminado nativo.
 
-```bash
-task build
-./bin/olivares version
-DATA="$(mktemp -d)"
-./bin/olivares serve --insecure \
-  --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444 \
-  --data-dir "$DATA"
-```
+## 3. Inicia una conversación en tu proyecto
 
-La prueba de humo usa `serve --insecure` para que `curl` no tenga que
-confiar un certificado autofirmado, y pasa `--listen 127.0.0.1:8443` de forma
-explícita: ese bind en loopback es de la prueba de humo, no el valor
-predeterminado del producto. Un operador interactivo ejecuta
-`olivares quickstart` (TLS activado, ninguna credencial predeterminada, un
-token de configuración de un solo uso). Su dirección de escucha predeterminada
-es `:8443` — **todas las interfaces**, porque esto es un servidor
-(`cmd/olivares/binddefaults.go`); pasa `--listen 127.0.0.1:8443` para
-restringirla a esta máquina. Medido en esta caja el 2026-09-17,
-`quickstart --quiet` imprimió el token en **3 s**.
+1. Abre **Sesiones** (`/sessions`) y elige **Nueva sesión**.
+2. Elige una herramienta lista. El formulario muestra una carpeta y la rellena
+   por ti. Déjala así para una sesión en su propia carpeta, o elige **Cambiar
+   carpeta** e introduce `/project` para usar la carpeta del host montada por la
+   instalación del README.
+3. Deja **Primer mensaje** vacío y pulsa **Iniciar**. Puedes escribir tu mensaje
+   en la conversación una vez abierta. El motor rellena un perfil y las rutas
+   de inicio; no necesitas registrarlos para esta primera sesión.
 
-El inicio nativo muestra una de estas instrucciones según el estado de la
-configuración. Solo imprime un token cuando acaba de emitirlo:
+El usuario del contenedor, UID 65532, necesita acceso de escritura a la carpeta
+del proyecto del host. Las [instrucciones de carpeta de proyecto](https://github.com/olivaresai/olivares/blob/main/deploy/compose/README.md#work-on-a-host-project-folder)
+explican los permisos. Una sesión puede cambiar el contenido de la carpeta
+montada; usa el directorio de un proyecto, no tu directorio personal completo.
+
+Pide a la herramienta que explique el proyecto. Lee su respuesta en la
+conversación. Si **Iniciar** no puede continuar, el formulario indica qué falta.
+Sigue esa indicación en **Herramientas** y vuelve después a la sesión.
+
+## 4. Aprueba una acción
+
+Para probar una aprobación, elige **Más opciones → Pedir confirmación antes de
+cada acción** al iniciar la sesión. Pide a la herramienta que ejecute en el
+proyecto un comando inofensivo. Cuando solicite permiso, abre **Reglas**. La
+solicitud que espera tu respuesta aparece marcada en naranja y abierta junto a
+la cola, con el comando, a qué afecta y la regla que la pidió. Elige **Aprobar
+una vez** (o pulsa `A`), o **Rechazar** (`D`) y añade una nota. Vuelve a la
+conversación para leer el resultado. Una política de la organización también
+puede exigir aprobación antes de que se inicie una sesión; un aprobador debe
+aceptar primero esa solicitud.
+
+## 5. Detén y reanuda
+
+Elige **Detener** en la sesión y confirma si se te pide. El proceso de la
+herramienta termina; la conversación permanece. Elige **Reanudar** en esa misma
+sesión y envía otro mensaje. Reanudar mantiene el perfil, la cuenta y la
+carpeta seleccionados, y comprueba que todavía se pueden usar.
+
+Para la operación continua, la CLI y los ajustes opcionales de perfil, consulta
+[Operar una sesión de proveedor](/how-to/operate-provider-sessions/).
+
+## Mensajes de inicio nativo
+
+Otros métodos de instalación tienen límites de cualificación propios; consulta
+[Instalación](https://github.com/olivaresai/olivares/blob/main/INSTALL.md#installation-qualification).
+Un inicio rápido nativo imprime la dirección de la consola y el siguiente paso
+según el estado de su configuración. Estos son los mensajes para una instalación
+nueva, una que vuelve y una con la configuración pendiente:
 
 ```text
 Next: Open the console; it guides setup, sign-in and your first session.
@@ -67,193 +107,14 @@ Next: Open the console and sign in to continue your work.
 Next: Open the console to finish setup with the one-time token issued earlier.
 ```
 
-Para el bind comodín predeterminado, el banner imprime
-`https://localhost:8443` y lista las demás direcciones
-en las que responde este host: sirven para llegar a la consola desde otra
-máquina. Si el banner ya se ha ido de la pantalla, `olivares first-boot`
-vuelve a imprimir la dirección o direcciones de la consola y el estado de la
-configuración inicial. Abre `https://localhost:PORT` antes de registrar una
-passkey: el navegador rechaza una IP como relying party de WebAuthn, y el
-producto ya lo dice en el aviso de dirección
-(`cmd/olivares/consoleaddr.go`).
-
-### 2. Crear el administrador y el tenant
-
-Un solo comando completa la configuración contra el motor en marcha, y es el que
-imprime el panel de arranque. El token se lee de la entrada estándar para que nunca
-aparezca en la tabla de procesos:
-
-```bash
-# pega el token olst_… que el motor imprimió al arrancar
-./bin/olivares auth bootstrap --server http://127.0.0.1:8443 \
-  --setup-token-file - \
-  --email admin@local --password-file ./admin.pw \
-  --organization "First hour" --save-context
-```
-
-`--save-context` inicia sesión y guarda la sesión, de modo que el siguiente comando ya
-está autenticado. Medido el 2026-09-18 sobre un directorio de datos limpio: 263 ms.
-
-Lo mismo por la API, si programas directamente contra los endpoints:
-
-```bash
-BASE=http://127.0.0.1:8443
-curl -sf -X POST "$BASE/v1/setup" -H 'Content-Type: application/json' \
-  -d '{"token":"olst_…","email":"admin@local","password":"correct-horse-battery-staple"}'
-TOKEN=$(curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/json' \
-  -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
-# La configuración inicial ya creó la única organización; consulta su ID de tenant.
-TENANT=$(curl -sf "$BASE/v1/auth/whoami" \
-  -H "Authorization: Bearer $TOKEN" \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')
-```
-
-### 3. Conectar un agente de código y verlo en el inventario
-
-```bash
-./bin/olivares agent tool detect -o json
-curl -sf -X POST "$BASE/v1/agents" \
-  -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"claude-code-local","kind":"claude-code"}'
-curl -sf "$BASE/v1/agents" \
-  -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT"
-./bin/olivares agent managed-settings --out ./managed-settings.json
-```
-
-`POST /v1/agents` no exige una verificación administrativa adicional. Para
-fuentes, conectores, espacios de trabajo y secretos, esa verificación depende
-de `admin_step_up`, cuyo valor predeterminado es `none`. La sección de
-política más abajo explica cómo exigir AAL3.
-
-### 4. Sesión gobernada: permitir Read, denegar Bash
-
-Detén el motor del paso 1. Ejecuta lo siguiente en el mismo directorio de
-trabajo, conservando `DATA` y `TENANT` de los pasos 1 y 2. Esto escribe una
-política que deniega por defecto y reinicia el motor con el PEP montado:
-
-```bash
-# TENANT is the tenant_id returned in step 2.
-: "${TENANT:?Set TENANT to the tenant_id from step 2}"
-cat > ./hook-pep.json <<JSON
-{
-  "listen": "127.0.0.1:8447",
-  "tenants": [
-    {
-      "tenant": "$TENANT",
-      "require_firm_identity": false,
-      "policy": {
-        "version": "first-hour/v1",
-        "default": "deny",
-        "rules": [
-          { "tool": "Read", "decision": "allow", "reason": "reads are permitted in the first hour" },
-          { "tool": "Bash", "decision": "deny", "reason": "shell execution is blocked in the first hour" }
-        ]
-      }
-    }
-  ]
-}
-JSON
-OLIVARES_HOOK_PEP_CONFIG=./hook-pep.json \
-  ./bin/olivares serve --insecure --data-dir "$DATA" \
-  --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444
-```
-
-```bash
-export OLIVARES_HOOK_PEP_URL=http://127.0.0.1:8447/
-export OLIVARES_HOOK_PEP_TOKEN="$TOKEN"
-export OLIVARES_HOOK_PEP_TENANT="$TENANT"
-printf '%s\n' '{"session_id":"sess-first-hour","hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"/repo/README.md"}}' \
-  | ./bin/olivares claude-hook
-printf '%s\n' '{"session_id":"sess-first-hour","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"rm -rf /"}}' \
-  | ./bin/olivares claude-hook
-```
-
-### 5. Leer la evidencia
-
-```bash
-curl -sf "$BASE/v1/audit?action=hook.tool.allow&limit=100" \
-  -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT"
-curl -sf "$BASE/v1/audit?action=hook.tool.deny&limit=100" \
-  -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT"
-./bin/olivares doctor --mode user
-task smoke:first-hour
-```
-
-Cada decisión gobernada añade `hook.tool.allow` o `hook.tool.deny` al ledger del
-tenant (`modules/sessions/hookpep/claudehookpep.go`). El smoke test comprueba que
-existan ambas filas.
-
-## Forma 2 — Equipo (Postgres y Docker)
-
-Este contenedor **no tiene Docker**. PostgreSQL **no está en marcha** aquí.
-No trates los comandos siguientes como medidos en esta caja.
-
-```bash
-cp deploy/compose/.env.example deploy/compose/.env
-docker compose -f deploy/compose/docker-compose.yml \
-               -f deploy/compose/docker-compose.postgres.yml up --wait --wait-timeout 120
-```
-
-Sin el pool `olivares_admin`, `POST /v1/setup` responde
-`501 cross_tenant_admin_pool_not_configured`. Esa negativa es intencionada.
-Véase [Desplegar con Docker](/how-to/docker-deployment/).
-
-## Forma 3 — Híbrida (plano local, agente en una estación)
-
-Mantén el plano de control en SQLite local. Ejecuta el agente en una
-estación que ya tenga `claude`. El plano no necesita el CLI oficial en el
-mismo host. Una sesión oficial en vivo (PTY) es del runtime Community, no de esta página.
-
-## Política de verificación administrativa adicional
-
-El valor predeterminado de `admin_step_up` es `none`: un administrador
-autenticado actúa con la fuerza de su sesión actual. Por tanto, crear fuentes,
-conectores, espacios de trabajo y secretos no exige AAL3 por defecto. Siguen
-aplicándose la autenticación, los permisos, el aislamiento entre tenants y
-la auditoría; los tokens de API no satisfacen esta verificación.
-
-Para exigir AAL3 reciente en esas acciones, registra una passkey en
-`https://localhost:PORT` y completa una verificación reciente con passkey
-en esa dirección de la consola. En **Settings → Sign-in → Extra check for
-administrative actions**, selecciona **Passkey**. El equivalente por API es
-`PUT /v1/auth/step-up-policy` con `{"admin_step_up":"passkey"}`. El motor
-rechaza elevar la política hasta que el administrador demuestre que funciona
-el factor elegido. `POST /v1/agents` queda fuera de esta verificación adicional.
-
-
-## 3. Iniciar una sesión de Claude Code desde la consola
-
-Sin una fuente de credencial de inferencia, los lanzamientos stream-json
-están deny-closed:
+Cuando no hay configurada una credencial de inferencia para todo el host, el
+registro de inicio del motor incluye:
 
 ```text
 session runtime: no inference credential source configured; stream-json launches are deny-closed
 ```
 
-Para los perfiles de Claude con `managed_injection` que no nombran un proveedor,
-`OLIVARES_SESSION_RUNTIME_WIF` o `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` aporta la
-credencial de inferencia del host. Un perfil vinculado a un proveedor usa su
-credencial; si falla, se rechaza el inicio sin recurrir a la del host.
-Un perfil con `provider_account_home` usa el inicio de sesión autorizado de la
-herramienta y no necesita ninguna de las dos variables. Consulta
-[Añadir un proveedor](/es/how-to/add-a-provider/).
-
-## Comprobaciones de estado de OpenCode
-
-Si la comprobación del estado de inicio de sesión de OpenCode agota el tiempo o
-falla durante la configuración, el motor informa de que no pudo leer el estado.
-Reintenta la comprobación; un fallo no significa que la herramienta tenga la
-sesión cerrada. Las comprobaciones concurrentes para la misma organización y
-cuenta comparten un único comando nativo. Los resultados correctos se reutilizan
-durante un máximo de 30 segundos y se actualizan cuando cambia el archivo de
-inicio de sesión o el ejecutable instalado.
-
-## Relacionado
-
-- [Honestidad y límites](/start/honesty-and-limits/)
-- [Autoalojar Olivares AI](/how-to/self-hosting/)
-- [Operar una sesión de proveedor](/how-to/operate-provider-sessions/)
-- [PEP de hooks de Claude Code](/how-to/connectors/claude-code-hooks-pep/)
-- [Desplegar con Docker](/how-to/docker-deployment/)
+Esto limita los perfiles de Claude que usan inyección gestionada sin un
+proveedor vinculado. Una clave de proveedor vinculada o el inicio de sesión
+autorizado de la herramienta es una fuente de credencial distinta; consulta
+[Operar una sesión de proveedor](/how-to/operate-provider-sessions/#choose-how-the-tool-connects).

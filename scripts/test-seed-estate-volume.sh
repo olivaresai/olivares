@@ -353,7 +353,7 @@ else
 fi
 fi
 
-muta "$T/m5.py" '            return None, f"GET {ruta} -> {st} {cuerpo[:120]}"' '            return [], None  # MUTANTE: no poder leer se cuenta como lista vacia'
+muta "$T/m5.py" '            return None, f"GET {ruta} -> {st} {redacta(cuerpo)[:120]}"' '            return [], None  # MUTANTE: no poder leer se cuenta como lista vacia'
 if exige_mutante "$T/m5.py" m5; then
 r="$(corre "$T/m5.py" "$OBJETIVOS" "500:/v1/m/knowledge/kbs")"
 if [ "$r" != "2" ]; then

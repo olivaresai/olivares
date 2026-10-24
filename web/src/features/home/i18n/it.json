@@ -1,23 +1,4 @@
 {
-  "title": "Adesso",
-  "description": "Che cosa hanno fatto i tuoi agenti AI negli ultimi 30 giorni, nelle aree che puoi aprire.",
-  "aside": "Riepilogo del parco",
-  "range": "ultimi 30 giorni",
-  "next": {
-    "title": "Prossimo passo",
-    "provider": {
-      "title": "Aggiungi un provider",
-      "description": "Collega Claude, Codex o un altro motore, così le sue sessioni vengono attribuite e governate."
-    },
-    "agent": {
-      "title": "Esegui il deploy di un agente",
-      "description": "Distribuisci un agente in un workspace, con la sua policy e la sua cronologia delle revisioni."
-    },
-    "session": {
-      "title": "Avvia una sessione",
-      "description": "Lancia un'esecuzione governata e guarda le sue chiamate agli strumenti mentre avvengono."
-    }
-  },
   "recent": {
     "title": "Lavoro recente",
     "description": "Le cinque sessioni più recenti osservate da questa installazione.",
@@ -26,79 +7,10 @@
     "emptyDescription": "Ogni esecuzione di un motore collegato compare qui, con ciò che ha fatto, quanto è durata e quanto è costata.",
     "unavailableTitle": "Impossibile caricare il lavoro recente",
     "unavailableDescription": "La lettura delle sessioni non ha risposto. Le cifre del parco qui sopra non sono influenzate.",
-    "open": "Apri la sessione: {{what}}",
     "untitled": "Sessione senza titolo"
   },
   "live": {
     "title": "Live ora"
-  },
-  "tiles": {
-    "today": {
-      "label": "Oggi",
-      "caption_one": "Costo della sessione che ha lavorato oggi",
-      "caption_many": "Costo delle {{count}} sessioni che hanno lavorato oggi",
-      "caption_other": "Costo delle {{count}} sessioni che hanno lavorato oggi",
-      "unpriced_one": "{{count}} senza costo segnalato",
-      "unpriced_many": "{{count}} senza costo segnalato",
-      "unpriced_other": "{{count}} senza costo segnalato"
-    },
-    "inventory": {
-      "label": "Inventario",
-      "caption": "{{agents}} agenti · {{active}} attivi"
-    },
-    "sessions": {
-      "label": "Sessioni live",
-      "caption": "{{idle}} inattive ora",
-      "silent": "{{count}} in silenzio (possibile elusione)"
-    },
-    "security": {
-      "label": "Sicurezza",
-      "caption": "{{count}} critiche o alte",
-      "clear": "Nessun finding aperto"
-    },
-    "compliance": {
-      "label": "Compliance",
-      "caption": "{{gap}} lacune · {{unmapped}} non mappati",
-      "noControls": "Ancora nessun controllo mappato"
-    },
-    "spend": {
-      "label": "Spesa",
-      "caption": "{{range}}",
-      "projected": "{{amount}} previsti al ritmo attuale",
-      "projectedOver": "{{amount}} previsti al ritmo attuale: oltre la spesa finora"
-    },
-    "health": {
-      "label": "Stato e SLA",
-      "value": "{{healthy}}/{{total}} in salute",
-      "caption": "{{breaches}} violazioni SLA · {{incidents}} incidenti aperti",
-      "noChecks": "Ancora nessun controllo di salute"
-    },
-    "budgets": {
-      "label": "Budget",
-      "none": "Ancora nessun budget",
-      "nonePartial": "Nessuno attivo in questa pagina; ce ne sono altri",
-      "over_one": "{{count}} oltre il limite",
-      "over_many": "{{count}} oltre il limite",
-      "over_other": "{{count}} oltre il limite",
-      "unknown_one": "{{count}} con importo sconosciuto",
-      "unknown_many": "{{count}} con importo sconosciuto",
-      "unknown_other": "{{count}} con importo sconosciuto",
-      "within": "Nessuno oltre il limite",
-      "partial": "Caricati {{n}} budget; ce ne sono altri"
-    }
-  },
-  "state": {
-    "unavailable": "Impossibile caricare: apri per riprovare",
-    "pendingIdle": "Query non avviata: apri per caricare",
-    "pendingPaused": "Query in pausa: in attesa di riprendere"
-  },
-  "availability": {
-    "loading": "{{source}}: caricamento in corso.",
-    "pendingIdle": "{{source}}: query non avviata.",
-    "pendingPaused": "{{source}}: query in pausa, in attesa di riprendere.",
-    "unavailable": "{{source}}: impossibile caricare.",
-    "partial": "{{source}}: cifre disponibili, dati parziali.",
-    "current": "{{source}}: cifre disponibili."
   },
   "empty": {
     "title": "Ancora niente da mostrare",
@@ -111,5 +23,85 @@
     "install": "Installa Claude Code o Codex per avviare una sessione.",
     "installAction": "Configura uno strumento",
     "newSession": "Nuova sessione"
+  },
+  "swimlane": {
+    "title": "Ultima ora",
+    "subtitle": "Dalle {{from}} alle {{to}}. Ogni barra è un’esecuzione, più marcata dove ha fatto più chiamate agli strumenti.",
+    "lanes": "Sessioni dell’ultima ora",
+    "now": "Ora {{at}}",
+    "range": "dalle {{from}} alle {{to}}",
+    "selectSlot": "{{from}} fino alle {{to}}",
+    "active": "Attiva {{spans}}",
+    "noActivity": "Nessuna attività nell’ultima ora",
+    "unread": "Attività non letta",
+    "toolCalls_one": "{{n}} chiamata a strumento",
+    "toolCalls_many": "{{n}} chiamate a strumenti",
+    "toolCalls_other": "{{n}} chiamate a strumenti",
+    "runTip_one": "Esecuzione dalle {{from}} alle {{to}}, {{count}} chiamata a strumento",
+    "runTip_many": "Esecuzione dalle {{from}} alle {{to}}, {{count}} chiamate a strumenti",
+    "runTip_other": "Esecuzione dalle {{from}} alle {{to}}, {{count}} chiamate a strumenti",
+    "waitingSince": "In attesa di approvazione dalle {{at}}",
+    "needsYouSince": "Ti aspetta dalle {{at}}",
+    "idleSince": "Inattiva dalle {{at}}",
+    "failedAt": "Non riuscita alle {{at}}",
+    "failed": "Non riuscita",
+    "automation": "Pianificata",
+    "hint": "Trascina sulle righe, o scegli un orario, per vedere quell’intervallo nel Registro.",
+    "openLedger": "Apri nel Registro",
+    "clear": "Annulla",
+    "legend": "Legenda",
+    "legendRun": "Esecuzione, più marcata con più chiamate",
+    "legendWait": "In attesa di approvazione",
+    "legendIdle": "Inattiva, in attesa di un prompt",
+    "legendFailure": "Errore",
+    "table": "Mostra come tabella",
+    "colSession": "Sessione",
+    "colActive": "Attiva",
+    "colCalls": "Chiamate a strumenti",
+    "colNow": "Ora",
+    "working": "In corso",
+    "reading": "Lettura dell’attività",
+    "waiting": "In attesa di approvazione",
+    "needsYou": "Ti aspetta",
+    "idle": "Inattiva",
+    "approvalsUnread": "Non è stato possibile leggere le approvazioni, quindi le attese di approvazione non sono disegnate."
+  },
+  "summary": {
+    "heading": "Riepilogo",
+    "nothingRunning": "Non è in corso nulla",
+    "running_one": "{{count}} sessione aperta",
+    "running_many": "{{count}} sessioni aperte",
+    "running_other": "{{count}} sessioni aperte",
+    "runningFor_one": "{{count}} sessione aperta per {{people}}",
+    "runningFor_many": "{{count}} sessioni aperte per {{people}}",
+    "runningFor_other": "{{count}} sessioni aperte per {{people}}",
+    "runningMore": "{{n}}+ sessioni aperte",
+    "people_one": "{{count}} persona",
+    "people_many": "{{count}} persone",
+    "people_other": "{{count}} persone",
+    "today": "{{amount}} oggi",
+    "todayFloor": "almeno {{amount}} oggi",
+    "needs_one": "{{count}} ti aspetta",
+    "needs_many": "{{count}} ti aspettano",
+    "needs_other": "{{count}} ti aspettano",
+    "needsMore": "{{n}}+ ti aspettano",
+    "yesterday": "Ieri {{amount}}",
+    "unpriced_one": "{{count}} senza costo dichiarato",
+    "unpriced_many": "{{count}} senza costo dichiarato",
+    "unpriced_other": "{{count}} senza costo dichiarato",
+    "month": "{{spent}} su {{limit}} questo mese",
+    "monthFloor": "almeno {{spent}} su {{limit}} questo mese",
+    "monthLabel": "Spesa di questo mese"
+  },
+  "state": {
+    "pendingIdle": "Query non avviata: apri per caricare",
+    "pendingPaused": "Query in pausa: in attesa di riprendere"
+  },
+  "proof": {
+    "verified": "Catena verificata alle {{time}}",
+    "entries_one": "{{n}} voce",
+    "entries_many": "{{n}} voci",
+    "entries_other": "{{n}} voci",
+    "broken": "Catena interrotta: apri il Registro"
   }
 }

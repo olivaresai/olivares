@@ -155,6 +155,7 @@ probe = read("cmd/olivares/internal/readyzprobe/probe.go")
 probe_test = read("cmd/olivares/internal/readyzprobe/probe_test.go")
 compose = read("deploy/compose/docker-compose.yml")
 standby = read("deploy/compose/docker-compose.standby-not-ready.ci.yml")
+postgres_overlay = read("deploy/compose/docker-compose.postgres.yml")
 workflow = read(".github/workflows/compose-ready.yml")
 taskfile = read("Taskfile.yml")
 mainline = read(".github/workflows/mainline-ci.yml")
@@ -186,7 +187,7 @@ health = (
     "        - /usr/local/bin/olivares\n"
     "        - readyz\n"
     "        - --server=https://127.0.0.1:8443\n"
-    "        - --ca-cert=/var/lib/olivares/tls.crt\n"
+    "        - --ca-cert=/var/lib/olivares/public/tls.crt\n"
     "        - --timeout=3s"
 )
 assert health in compose
@@ -336,7 +337,27 @@ assert standby.count("condition: service_healthy") == 2
 assert health in standby
 for token in ("--engine=postgres", "olivares-standby-data", "read_only: true"):
     assert token in standby
-
+# A Postgres engine without its cross-tenant admin pool exits at boot (it needs a closed
+# inventory routine this Compose Postgres does not provision), so the standby never answers
+# /readyz and the negative step cannot see HTTP 503. It takes the leader's two pools: the
+# flag as a command item and the DSN line equal to the overlay's, judged on non-comment lines.
+def code_lines(text):
+    return "\n".join(l for l in text.splitlines() if not l.lstrip().startswith("#"))
+def admin_dsn_line(text):
+    found = re.findall(r"(?m)^ +OLIVARES_ADMIN_DSN: (.*)$", code_lines(text))
+    return [re.sub(r"\$\{OLIVARES_ADMIN_PASSWORD:\?[^}]*\}", "${OLIVARES_ADMIN_PASSWORD:?}", f) for f in found]
+admin_flag = r"(?m)^ +- --admin-dsn=env:OLIVARES_ADMIN_DSN$"
+assert re.search(admin_flag, code_lines(postgres_overlay)), (
+    "the Postgres overlay's engine must keep --admin-dsn=env:OLIVARES_ADMIN_DSN as a command item"
+)
+assert re.search(admin_flag, code_lines(standby)), (
+    "the standby fixture must carry --admin-dsn=env:OLIVARES_ADMIN_DSN as a command item like the "
+    "Postgres overlay's engine, or it exits at boot and never answers /readyz"
+)
+assert len(admin_dsn_line(postgres_overlay)) == 1 and admin_dsn_line(standby) == admin_dsn_line(postgres_overlay), (
+    "the standby fixture must carry the OLIVARES_ADMIN_DSN environment line of the Postgres overlay's "
+    f"engine (olivares_admin, same host and database), got {admin_dsn_line(standby)}"
+)
 guard = (
     "vars.OLIVARES_DEV_CI == 'true' ||\n      (github.event_name != 'schedule' &&\n"
     "      (github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'))"
@@ -347,9 +368,30 @@ assert 'push:\n    tags: ["[0-9]*.[0-9]*"]' in workflow, (
 for token in (
     "workflow_dispatch:", "schedule:\n    - cron:", guard, "permissions:\n  contents: read",
     "docker build", "up --wait --wait-timeout 120", "up --wait --wait-timeout 90",
-    'if [ "$rc" -ne 1 ]', "{{.State.Running}}", "HTTP 503",
+    "{{.State.Running}}",
 ):
     assert token in workflow
+# The negative step's four assertions, each on its own code line: a comment or a message that
+# mentions HTTP 503 must not stand in for the grep that proves a running standby answered it.
+workflow_code = code_lines(workflow)
+for assertion in (
+    '[ "$rc" -eq 1 ] || fail "expected compose up --wait rc=1 ',
+    '[ "$running" = true ] || fail ',
+    '[ "$health" = unhealthy ] || fail ',
+    "grep -qF 'HTTP 503' <<<\"$probes\" || fail ",
+):
+    assert re.search(r"(?m)^ +" + re.escape(assertion), workflow_code), (
+        f"the negative step of compose-ready.yml must keep the assertion {assertion.strip()!r}"
+    )
+# The step's failure dump can reach a public log: both engine logs go through redact(), which
+# hides the one-time setup token and indents each line (a leading :: is a runner command).
+assert re.search(r"(?m)^ +redact\(\) \{ sed -E -e 's/olst_\[A-Za-z0-9_-\]\+/olst_REDACTED/g' -e 's/\^/\| /'; \}$", workflow_code), (
+    "the negative step of compose-ready.yml must keep redact() hiding the setup token and indenting lines"
+)
+dumps = re.findall(r"(?m)^ +.*\bdocker logs\b.*$", workflow_code)
+assert len(dumps) == 2 and all(re.search(r"2>&1 \| redact >&2", d) for d in dumps), (
+    f"every docker logs line of the negative step must pipe through redact, got {dumps}"
+)
 # After the positive `up` from the checkout root, /project exists and is not the checkout.
 assert re.search(r"(?m)^          docker exec \"\$cid\" test -d /project -a ! -e "
                  r"/project/deploy/compose/docker-compose\.yml$", workflow), (

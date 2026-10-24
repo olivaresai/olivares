@@ -31,26 +31,40 @@ We will keep you updated through triage and fix, and we are glad to credit repor
 
 ## Supported versions
 
-The project is **beta**; the next release is <!-- release -->`0.3`<!-- /release -->. Security fixes are applied to the `main` branch and ship as the next signed release — there is no separate maintenance branch yet. Each release's cut date is in its own [`CHANGELOG.md`](CHANGELOG.md) section.
+The project is **beta**; the next release is <!-- release -->`0.4`<!-- /release -->. Security fixes are applied to the `main` branch and ship as the next signed release — there is no separate maintenance branch yet. Each release's cut date is in its own [`CHANGELOG.md`](CHANGELOG.md) section.
 
 | Version | Supported |
 |---|---|
 | `main` (development) | Yes |
-| Olivares <!-- release -->`0.3`<!-- /release --> (next release) | Yes — fixes ship as the next release |
+| Olivares <!-- release -->`0.4`<!-- /release --> (next release) | Yes — fixes ship as the next release |
 | Older tagged releases | No — upgrade to the latest release |
 
 This table grows into a real support matrix as releases accumulate.
 
 ## Session network isolation
 
-A Claude Code or Codex session bound to a provider key runs in its own user and
-network namespace with only loopback. Its traffic leaves through a per-session smokescreen
+A Claude Code, Codex or OpenCode session bound to a provider key, and an OpenCode
+session on the tool's own sign-in, runs in its own user and network namespace with only
+loopback. Its traffic leaves through a per-session smokescreen
 proxy outside that namespace, which allows only the exact host and port of the key's
 endpoint. The session reaches that endpoint or it does not start: a failed namespace,
 seccomp or Landlock setup refuses the launch before the tool runs.
 
-**Other sessions are not network-isolated yet.** Grok Build and OpenCode sessions,
-every account-login session and Claude Code sessions routed through the engine's
+An OpenCode session on its own sign-in is held to its sign-in's hosts: `opencode.ai`
+for OpenCode Zen and Go, `chatgpt.com` and `auth.openai.com` for ChatGPT, and OpenCode's
+model catalog at `models.opencode.ai`. The model the launch names, or the one the
+account's OpenCode configuration sets, chooses the sign-in. A launch whose model names
+another provider, or that names none and whose configuration sets none Olivares can
+read, does not start, and says so. OpenCode's own local server is reached directly on
+one pinned loopback port, which the proxy environment exempts by host and port.
+A package registry is reached only when the provider profile declares it.
+
+Like every isolated session, these OpenCode sessions do not start under container
+isolation, on an engine that is not Linux, or on a host that does not allow
+unprivileged user and network namespaces and Landlock.
+
+**Other sessions are not network-isolated yet.** Grok Build sessions, account-login
+sessions of other tools and Claude Code sessions routed through the engine's
 inference gateway can reach any host the network permits.
 Provider binding still configures those tools to use the bound provider; it does not
 stop a child process from connecting elsewhere.
@@ -73,8 +87,11 @@ The inventory does not cover UDP or DNS, connections shorter than its 50 ms samp
 the vendors' default endpoints, resumed sessions or long-running background work.
 Codex joined the boundary after its turn passed inside the namespace, with its
 seccomp and Landlock filters, while the proxy refused a second loopback host and a
-public host. Grok Build and OpenCode sessions can still reach any host the network
-permits; each joins the boundary once the same turn has passed.
+public host. OpenCode joined it after an own-login session on OpenCode 1.19.4 answered
+behind the proxy in its namespace while a request to another public host was refused;
+record-bound OpenCode turns rest on the inventory above. Grok Build sessions can still
+reach any host the network permits; Grok Build joins the boundary once the same turn
+has passed.
 
 How the boundary works:
 
@@ -152,7 +169,7 @@ Out of scope: third-party dependencies (report upstream; tell us so we can pin/p
 For a security product, build integrity is part of the trust model, not an afterthought:
 
 - **Signed releases** with cosign / Sigstore, published **SBOMs** (syft), and checksums —
-  Olivares <!-- release -->0.3<!-- /release --> is the next release, not yet published. Once its artifacts are available,
+  Olivares <!-- release -->0.4<!-- /release --> is the next release, not yet published. Once its artifacts are available,
   `scripts/verify-release.sh` verifies their chain before use.
 - **Minimal, non-root** container images on a digest-pinned Debian 13 slim base (the STIG image on UBI 9 minimal), and a single static, memory-safe Go binary, which removes whole classes of C memory-corruption CVEs.
 - **Minimal, pinned dependencies**; no `curl | bash` without checksums.

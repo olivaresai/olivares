@@ -207,7 +207,7 @@ export function VoiceView() {
                       action={
                         canWritePolicy ? (
                           <Button
-                            variant="primary"
+                            variant="secondary"
                             size="sm"
                             onClick={() => {
                               setEditing(null)

@@ -27,6 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from '@/components/ui/toaster'
 import { sessionNameLadder } from '@/features/home/work-line'
 import { isResumableRun } from '@/features/sessions/provenance'
+import { DeleteRunDialog } from '@/features/sessions/run-actions'
 import { RelTimeLabel } from '@/features/shared'
 import { NamedRef } from '@/features/shared/named-ref'
 import { useClientSettings } from '@/features/settings/preferences'
@@ -38,6 +39,7 @@ import { DiscardWorktreeOption } from './discard-worktree-option'
 import { GovernancePanel } from './governance-panel'
 import { LiveConsole } from './live-console'
 import { RunStateBadge } from './run-state-badge'
+import { useRunLedger } from './run-state-word'
 import { useAuthBoundary } from './auth-boundary'
 import {
   nameProfileRefs,
@@ -75,6 +77,7 @@ export function RunDetailSheet({
     refetchInterval: 5_000,
   })
   const run = runQuery.data
+  const ledger = useRunLedger(run)
   const runNaming = run
     ? sessionNameLadder(run.name, null, t('untitled'))
     : null
@@ -100,7 +103,7 @@ export function RunDetailSheet({
                 />
               </SheetTitle>
               <SheetDescription className="flex flex-wrap items-center gap-2">
-                <RunStateBadge state={run.state} />
+                <RunStateBadge run={run} ledger={ledger} />
                 <GovBadges run={run} />
               </SheetDescription>
             </SheetHeader>
@@ -208,20 +211,6 @@ export function RunDetailSheet({
       },
       onError: onErr,
     })
-    const del = useMutation({
-      // The server deletes only a cleaned record; a stopped or failed one is cleaned first.
-      mutationFn: async () => {
-        if (run.state !== 'cleaned')
-          await agentOpsApi.cleanup(run.run_ref, discardWorktree)
-        return agentOpsApi.deleteRun(run.run_ref)
-      },
-      onSuccess: () => {
-        closeConfirm()
-        invalidate()
-        onClose()
-      },
-      onError: onErr,
-    })
 
     const stoppable = ['pending', 'running', 'idle'].includes(run.state)
     // A stream-json run that never captured a session starts again with the same settings.
@@ -304,23 +293,14 @@ export function RunDetailSheet({
             />
           )}
         </ConfirmDialog>
-        <ConfirmDialog
+        <DeleteRunDialog
+          // A cleanup made for one run says nothing about the next one the sheet shows.
+          key={run.run_ref}
+          run={run}
           open={confirm === 'delete'}
           onOpenChange={(o) => !o && closeConfirm()}
-          tone="danger"
-          title={t('actions.delete')}
-          confirmLabel={t('actions.delete')}
-          pending={del.isPending}
-          onConfirm={() => del.mutate()}
-        >
-          {run.worktree_branch && run.state !== 'cleaned' && (
-            <DiscardWorktreeOption
-              branch={run.worktree_branch}
-              checked={discardWorktree}
-              onCheckedChange={setDiscardWorktree}
-            />
-          )}
-        </ConfirmDialog>
+          onDeleted={onClose}
+        />
       </div>
     )
   }

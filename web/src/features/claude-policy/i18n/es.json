@@ -1,5 +1,5 @@
 {
-  "title": "Gobierno de Claude Code",
+  "title": "Gobernanza de Claude Code",
   "subtitle": "Redacta la política gestionada, los hooks, los controles de MCP y sandbox, y la policy-as-code Cedar/OPA — y revisa la deriva política-vs-observado que reporta el motor.",
   "tabs": {
     "drift": "Deriva y postura",
@@ -16,7 +16,9 @@
   },
   "validation": {
     "ok": "Esquema válido.",
-    "summary": "{{count}} aviso(s) de validación — {{errors}} error(es).",
+    "summary_one": "{{count}} aviso de validación · errores: {{errors}}",
+    "summary_many": "{{count}} avisos de validación · errores: {{errors}}",
+    "summary_other": "{{count}} avisos de validación · errores: {{errors}}",
     "listLabel": "Resultados de validación del esquema"
   },
   "form": {
@@ -79,7 +81,7 @@
     "subject": "sujeto",
     "fingerprint": "huella",
     "emptyTitle": "Sin hallazgos de deriva",
-    "emptyBody": "No hay hallazgos de deriva de política para las superficies de Claude Code en este momento.",
+    "emptyBody": "No hay hallazgos de deriva de política para tus herramientas de IA gestionadas en este momento.",
     "truncated": "Cargados {{n}} hallazgos de deriva; hay más",
     "truncatedHint": "Hay más hallazgos de deriva de política de los que se ven; esta página toma filas por id. Que no aparezca ninguno no demuestra que no haya deriva: el hallazgo puede estar simplemente más allá de esta página."
   },
@@ -88,7 +90,7 @@
     "subtitle": "Llamadas a herramienta pausadas vía stop_reason:requires_action, a la espera de allow/deny humano.",
     "postV1": "Diferenciador · candidato post-v1",
     "postV1Hint": "El HITL de Managed Agents es un diferenciador; el corte v1-vs-post-v1 se decide en el gate.",
-    "vaultsRisk": "Riesgo lateral: los vaults/credenciales son workspace-scoped — cualquiera con una API key del workspace puede referenciarlos. Los secretos son write-only; archivar purga los secretos pero retiene el registro para auditoría, borrar es un hard delete.",
+    "vaultsRisk": "Riesgo lateral: los vaults/credenciales se limitan al espacio de trabajo — cualquiera con una clave de API del espacio de trabajo puede referenciarlos. Los secretos son write-only; archivar purga los secretos pero retiene el registro para auditoría, borrar es un hard delete.",
     "endpointNote": "Los eventos del thread y la emisión allow/deny siguen el contrato declarado. La doc viva expone eventos en /v1/sessions/{id}/events; el conector lee la ruta por thread — ninguna está re-expuesta aún por una ruta del motor.",
     "listLabel": "Confirmaciones de agente gestionado pendientes",
     "pending": "Pendiente de confirmación",
@@ -110,7 +112,7 @@
     "emptyTitle": "Sin confirmaciones pendientes",
     "emptyBody": "No hay llamadas a herramienta de agentes gestionados esperando confirmación humana.",
     "truncated": "Cargados {{n}} hallazgos; hay más",
-    "truncatedHint": "Hay más hallazgos de gobierno de los que se ven; esta página toma filas por id, y la lista de abajo se vuelve a filtrar en el navegador a agentes gestionados, así que las filas visibles pueden ser menos que las cargadas. Que una petición no aparezca no demuestra que no haya nada esperando revisión."
+    "truncatedHint": "Hay más hallazgos de gobernanza de los que se ven; esta página toma filas por id, y la lista de abajo se vuelve a filtrar en el navegador a agentes gestionados, así que las filas visibles pueden ser menos que las cargadas. Que una petición no aparezca no demuestra que no haya nada esperando revisión."
   },
   "ref": {
     "ms": {
@@ -130,14 +132,14 @@
       "noApplyRuleHere": "applyPermissionRule NO está disponible aquí.",
       "applyRuleHere": "— solo en PermissionRequest.",
       "events": "Eventos de hook ({{count}})",
-      "gov": "gobierno"
+      "gov": "gobernanza"
     },
     "mcp": {
       "paths": "Rutas de managed-mcp.json",
       "evalOrder": "Orden de evaluación",
       "serverNameCaveat": "Una allowlist por serverName NO es un control de seguridad — usa match exacto de URL/comando.",
       "gatingKeys": "Claves de managed-settings que gobiernan MCP",
-      "marketplaces": "Gobierno de marketplaces de plugins",
+      "marketplaces": "Gobernanza de marketplaces de plugins",
       "enforcer": "Enforcer",
       "matching": "Matching",
       "airGap": "Dirs air-gap"
@@ -172,7 +174,7 @@
     "liveBadge": "API activa",
     "liveHint": "La validación, la explicación de decisión, el dry-run, el historial de revisiones, la puerta de compilación/validación, la publicación y la activación los sirve el motor en /v1/m/governance/pdp.",
     "cedarSemantics": "Aplicación de tres valores: un permit CONCEDE la petición dentro del árbol de ámbito que resuelve —más allá de la línea base de RBAC, y una denegación de RBAC queda anulada—; un forbid RESTRINGE y prevalece sobre cualquier concesión; si no encaja nada, ABSTIENE y la decisión de RBAC se mantiene.",
-    "cedarSemanticsBounds": "Una concesión nunca sale del árbol de ámbito que resuelve (workspace / grupo de agentes / recurso) y, mientras el nodo está sin conexión y ha superado su límite de obsolescencia de política, una concesión degrada a abstención en lugar de seguir autorizando; una restricción sigue aplicándose.",
+    "cedarSemanticsBounds": "Una concesión nunca sale del árbol de ámbito que resuelve (espacio de trabajo / grupo de agentes / recurso) y, mientras el nodo está sin conexión y ha superado su límite de obsolescencia de política, una concesión degrada a abstención en lugar de seguir autorizando; una restricción sigue aplicándose.",
     "decisionFooter": "Esto es un dry-run de un candidato sin publicar. Un permit concede dentro de su árbol de ámbito, un forbid restringe y prevalece sobre cualquier concesión, y si no encaja nada abstiene y la decisión de RBAC se mantiene; las condiciones de árbol de ámbito solo se resuelven contra la jerarquía viva una vez activada la revisión.",
     "decisionFooterOpa": "Para OPA no se evalúa nada en este proceso: este dry-run no impone ninguna restricción y es tu propio sidecar de OPA quien aplica Rego.",
     "publish": {
@@ -291,6 +293,8 @@
     "verified": "verificado",
     "unverified": "SIN VERIFICAR",
     "contentUnknown": "contenido DESCONOCIDO (solo attestation)",
-    "openFindings": "{{count}} hallazgo(s) abierto(s)"
+    "openFindings_one": "{{count}} hallazgo abierto",
+    "openFindings_many": "{{count}} hallazgos abiertos",
+    "openFindings_other": "{{count}} hallazgos abiertos"
   }
 }

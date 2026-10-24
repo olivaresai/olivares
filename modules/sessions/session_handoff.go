@@ -7,7 +7,6 @@ package sessions
 import (
 	"bufio"
 	"bytes"
-	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -501,6 +500,31 @@ func afterStop(err error) error {
 	return err
 }
 
+// handoffName is the new session's name: the one the caller gave, or "Handoff from" the
+// source's name. The source's name is cut so that the derived name stays within the limit.
+func handoffName(given, sourceName, runRef string) string {
+	if name := strings.TrimSpace(given); name != "" {
+		return name
+	}
+	const prefix = "Handoff from "
+	// A source named before the rule may hold characters it now refuses; they are left
+	// out of the derived name, so the handoff is not refused for a name the caller never chose.
+	var clean strings.Builder
+	for _, r := range sourceName {
+		if !invisibleInName(r) {
+			clean.WriteRune(r)
+		}
+	}
+	name := strings.TrimSpace(clean.String())
+	if name == "" {
+		name = runRef
+	}
+	if room := maxRunNameRunes - utf8.RuneCountInString(prefix); utf8.RuneCountInString(name) > room {
+		name = strings.TrimSpace(string([]rune(name)[:room]))
+	}
+	return prefix + name
+}
+
 // handoffRun starts the linked session. The attachment is written before anything
 // starts, under a name of its own, so a refusal or a failed launch leaves no session
 // behind and removes only what this call wrote. A running source is stopped only after
@@ -545,6 +569,11 @@ func (m *Module) handoffRun(ctx context.Context, mc api.ModuleContext, runRef st
 	if err != nil {
 		return handoffResultDTO{}, err
 	}
+	// The name is refused here too, before the source is stopped; createRun checks it again.
+	name := handoffName(req.Name, rec.String(colRunName), runRef)
+	if err := checkRunName(name); err != nil {
+		return handoffResultDTO{}, err
+	}
 	if live {
 		// A read that would be refused (no file, two files, too large, a record too
 		// large) is refused now, while the session still runs. OpenCode's is a
@@ -580,10 +609,6 @@ func (m *Module) handoffRun(ctx context.Context, mc api.ModuleContext, runRef st
 	attachment, attachmentFile, err := writeHandoffAttachment(dst.ConfigHome, runRef, conv.transcript())
 	if err != nil {
 		return refused(err)
-	}
-	name := strings.TrimSpace(req.Name)
-	if name == "" {
-		name = "Handoff from " + cmp.Or(rec.String(colRunName), runRef)
 	}
 	credential, _ := auth.QueuedCredentialFrom(mc.Principal)
 	params := CreateRunParams{

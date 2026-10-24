@@ -112,8 +112,8 @@ func TestOnlyMeasuredToolsAreEgressEnforced(t *testing.T) {
 			measured = append(measured, f.Key)
 		}
 	}
-	if !slices.Equal(measured, []string{"claude", "codex", "gemini-cli"}) {
-		t.Fatalf("egress-measured tools = %v, want [claude codex gemini-cli]", measured)
+	if !slices.Equal(measured, []string{"claude", "codex", "opencode", "gemini-cli"}) {
+		t.Fatalf("egress-measured tools = %v, want [claude codex opencode gemini-cli]", measured)
 	}
 }
 
@@ -142,7 +142,7 @@ func TestSessionToolsDeclareTheirEnvironment(t *testing.T) {
 func TestDocumentedSessionSkillsFolders(t *testing.T) {
 	want := map[string]string{
 		"claude": ".claude/skills", "codex": ".agents/skills", "grok": ".agents/skills",
-		"gemini-cli": ".agents/skills", "opencode": ".agents/skills", "ollama": "",
+		"gemini-cli": ".agents/skills", "opencode": ".opencode/skills", "ollama": "",
 	}
 	for _, facts := range All() {
 		if facts.SkillsDir != want[facts.Key] {

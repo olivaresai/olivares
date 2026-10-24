@@ -78,7 +78,7 @@
   },
   "apply": {
     "success": "テンプレートを適用しました。",
-    "conflicts": "{{count}} 件の競合とともに適用されました。",
+    "conflicts_other": "{{count}} 件の競合とともに適用されました。",
     "conflictField": "フィールド",
     "conflictOld": "以前の値",
     "conflictNew": "新しい値",

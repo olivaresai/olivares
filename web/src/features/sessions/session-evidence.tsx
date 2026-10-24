@@ -66,6 +66,9 @@ function EntryRow({ entry }: { entry: TimelineDTO }) {
     (entry.title || entry.tool_ref || '').trim() || t(`kind.${entry.kind}`),
     entry.resource_ref,
   )
+  // ONE LINE PER ROW (#2796): the words and the resource are cut with an
+  // ellipsis, their whole text on `title`, and a word is never broken per letter.
+  const whole = subtitle ? `${title} · ${subtitle}` : title
   return (
     <li className="flex items-start gap-2 py-1">
       <Icon
@@ -76,11 +79,17 @@ function EntryRow({ entry }: { entry: TimelineDTO }) {
         aria-hidden
       />
       <span className="min-w-0 flex-1">
-        <span className="block break-words text-caption text-foreground">
+        <span
+          className="block truncate text-caption text-foreground"
+          title={whole}
+        >
           {title}
         </span>
         {subtitle ? (
-          <span className="block font-mono text-caption text-muted-foreground [overflow-wrap:anywhere]">
+          <span
+            className="block truncate font-mono text-caption text-muted-foreground"
+            title={subtitle}
+          >
             {subtitle}
           </span>
         ) : null}
@@ -111,6 +120,7 @@ function EntryGroupRow({ group }: { group: EntryGroup }) {
     group.resource,
   )
   const time = 'text-caption text-muted-foreground'
+  const whole = subtitle ? `${title} · ${subtitle}` : title
   return (
     <li className="py-1">
       <button
@@ -128,27 +138,42 @@ function EntryGroupRow({ group }: { group: EntryGroup }) {
           aria-hidden
         />
         <span className="min-w-0 flex-1">
-          <span className="block break-words text-caption text-foreground">
-            {title}{' '}
-            <span className="tabular-nums text-muted-foreground">
+          {/* The count stays visible beside the cut-off words (#2796): the row
+              is one line and its whole text is on `title`. */}
+          <span className="flex min-w-0 items-baseline gap-1 text-caption">
+            <span
+              className="min-w-0 flex-1 truncate text-foreground"
+              title={whole}
+            >
+              {title}
+            </span>
+            {/* `gap-1` spaces the eye; this space is the one the button's name reads
+                ("Bash ×10", not "Bash×10"). */}{' '}
+            <span className="shrink-0 tabular-nums text-muted-foreground">
               {t('evidence.repeat', { count: group.count })}
             </span>
           </span>
           {subtitle ? (
-            <span className="block font-mono text-caption text-muted-foreground [overflow-wrap:anywhere]">
+            <span
+              className="block truncate font-mono text-caption text-muted-foreground"
+              title={subtitle}
+            >
               {subtitle}
             </span>
           ) : null}
-        </span>
-        <span className={cn('shrink-0', time)}>
+          {/* A range is about as wide as the pane's text (#2796): beside the words
+              it left "Bash ×10" no room, so it takes a line of its own. */}
           {group.ranged ? (
-            <>
+            <span className={cn('block', time)}>
               <RelTimeLabel ts={group.oldest} className={time} />
               {' – '}
-            </>
+              <RelTimeLabel ts={group.newest} className={time} />
+            </span>
           ) : null}
-          <RelTimeLabel ts={group.newest} className={time} />
         </span>
+        {group.ranged ? null : (
+          <RelTimeLabel ts={group.newest} className={cn('shrink-0', time)} />
+        )}
         <ChevronDown
           className={cn(
             'mt-0.5 size-3.5 shrink-0 text-muted-foreground transition-transform',

@@ -7,7 +7,13 @@ import { describe, expect, it } from 'vitest'
 import type { RunDTO } from '@/features/agentops/types'
 import { mergeSessions, type UnifiedSession } from './provenance'
 import type { LiveDTO } from './types'
-import { groupOf, groupSessions, railOrder } from './session-groups'
+import {
+  groupOf,
+  groupSessions,
+  isArchived,
+  railOrder,
+  workingCount,
+} from './session-groups'
 
 function live(over: Partial<LiveDTO> = {}): LiveDTO {
   return {
@@ -155,7 +161,10 @@ describe('groupSessions — the rail in reading order', () => {
       'pinned',
       'attention',
       'active',
+      'today',
       'settled',
+      'snoozed',
+      'archived',
     ])
   })
 
@@ -163,7 +172,8 @@ describe('groupSessions — the rail in reading order', () => {
     // A rail that changed shape every time a session settled would move the row under
     // the operator's cursor.
     const groups = groupSessions([working])
-    expect(groups).toHaveLength(4)
+    expect(groups).toHaveLength(7)
+    expect(groups.find((g) => g.id === 'today')?.sessions).toEqual([])
     expect(groups.find((g) => g.id === 'settled')?.sessions).toEqual([])
     expect(groups.find((g) => g.id === 'pinned')?.sessions).toEqual([])
   })
@@ -193,7 +203,10 @@ describe('groupSessions — the rail in reading order', () => {
       ['pinned', ['c']],
       ['attention', []],
       ['active', ['a']],
+      ['today', []],
       ['settled', []],
+      ['snoozed', []],
+      ['archived', []],
     ])
   })
 
@@ -202,8 +215,158 @@ describe('groupSessions — the rail in reading order', () => {
     expect(order.map((s) => s.sessionRef)).toEqual(['c', 'd'])
   })
 
+  // The person's own marks (#2480), sent by the engine on the session's runs.
+  const snoozed = row(undefined, {
+    run_ref: 'run-s',
+    state: 'running',
+    snoozed_until: '2030-01-02T09:00:00Z',
+  })
+  const marked = row(undefined, {
+    run_ref: 'run-m',
+    state: 'running',
+    pending_approval_ref: 'apr_9',
+    done: true,
+  })
+
+  it('takes a snoozed session out of every other section, into Snoozed at the end', () => {
+    // Snooze is "not in my list until then", whatever the session is doing or whether
+    // it is pinned; the rail keeps the section so the person can still reach it.
+    const groups = groupSessions([working, snoozed], new Set([snoozed.key]))
+    expect(groups.map((g) => [g.id, g.sessions.map((s) => s.key)])).toEqual([
+      ['pinned', []],
+      ['attention', []],
+      ['active', [working.key]],
+      ['today', []],
+      ['settled', []],
+      ['snoozed', [snoozed.key]],
+      ['archived', []],
+    ])
+  })
+
+  it('files a session the person marked done under Settled, whatever it is doing', () => {
+    expect(groupOf(marked)).toBe('attention')
+    const groups = groupSessions([marked, working])
+    expect(groups.find((g) => g.id === 'settled')?.sessions).toEqual([marked])
+    expect(groups.find((g) => g.id === 'attention')?.sessions).toEqual([])
+  })
+
+  it('keeps a pinned session first even when it is marked done', () => {
+    const groups = groupSessions([marked], new Set([marked.key]))
+    expect(groups.find((g) => g.id === 'pinned')?.sessions).toEqual([marked])
+  })
+
+  // The session's own archived mark (#2795), the same for everyone who reads it.
+  const archived = row(undefined, {
+    run_ref: 'run-z',
+    state: 'running',
+    pending_approval_ref: 'apr_z',
+    snoozed_until: '2030-01-02T09:00:00Z',
+    archived_at: '2026-10-21T12:00:00Z',
+  })
+
+  it('takes an archived session out of every section, pinned or snoozed, into Archived last', () => {
+    expect(isArchived(archived)).toBe(true)
+    const groups = groupSessions([working, archived], new Set([archived.key]))
+    expect(groups.map((g) => [g.id, g.sessions.map((s) => s.key)])).toEqual([
+      ['pinned', []],
+      ['attention', []],
+      ['active', [working.key]],
+      ['today', []],
+      ['settled', []],
+      ['snoozed', []],
+      ['archived', [archived.key]],
+    ])
+  })
+
+  it('walks the archived rows only while the rail shows them', () => {
+    const groups = groupSessions([archived, working])
+    expect(railOrder(groups)).toEqual([working])
+    expect(railOrder(groups, true)).toEqual([working])
+    expect(railOrder(groups, false, true)).toEqual([working, archived])
+  })
+
+  it('walks the snoozed rows only while the rail shows them', () => {
+    const groups = groupSessions([snoozed, working])
+    expect(railOrder(groups)).toEqual([working])
+    expect(railOrder(groups, true)).toEqual([working, snoozed])
+  })
+
+  it('counts as working only what the Working section shows', () => {
+    // "N working" in the header and on the dashboard card is the Working section's
+    // size: a working session the person snoozed, marked done or archived is not in it.
+    const markedWorking = row(undefined, {
+      run_ref: 'run-w',
+      state: 'running',
+      done: true,
+    })
+    const archivedWorking = row(undefined, {
+      run_ref: 'run-a',
+      state: 'running',
+      archived_at: '2026-10-21T12:00:00Z',
+    })
+    const all = [working, snoozed, markedWorking, archivedWorking]
+    expect(groupOf(snoozed)).toBe('active')
+    expect(groupOf(markedWorking)).toBe('active')
+    expect(groupOf(archivedWorking)).toBe('active')
+    expect(workingCount(all)).toBe(
+      groupSessions(all).find((g) => g.id === 'active')?.sessions.length,
+    )
+    expect(workingCount(all)).toBe(1)
+  })
+
   it('ignores a pin naming a session that is not here', () => {
     const order = railOrder(groupSessions([working], new Set(['live:gone'])))
     expect(order).toEqual([working])
+  })
+})
+
+// The list is grouped by what a session needs from the person, and keeps what ended
+// today apart from what ended before (dev#3162).
+describe('the day a session finished (dev#3162)', () => {
+  const now = new Date(2026, 9, 23, 15, 0).getTime()
+  const today = row({
+    session_ref: 's-today',
+    live_ref: 'lr-today',
+    cc_state: 'ended',
+    last_event_at: new Date(2026, 9, 23, 9, 0).toISOString(),
+  })
+  const yesterday = row({
+    session_ref: 's-yesterday',
+    live_ref: 'lr-yesterday',
+    cc_state: 'ended',
+    last_event_at: new Date(2026, 9, 22, 20, 0).toISOString(),
+  })
+
+  it('files a session that finished today under Done today, an older one under Earlier', () => {
+    const groups = groupSessions([yesterday, today], new Set(), now)
+    expect(groups.map((g) => g.id)).toEqual([
+      'pinned',
+      'attention',
+      'active',
+      'today',
+      'settled',
+      'snoozed',
+      'archived',
+    ])
+    expect(groups.find((g) => g.id === 'today')?.sessions).toEqual([today])
+    expect(groups.find((g) => g.id === 'settled')?.sessions).toEqual([
+      yesterday,
+    ])
+  })
+
+  it('starts the day at local midnight: one millisecond before is Earlier', () => {
+    const at = (ms: number, ref: string) =>
+      row({
+        session_ref: ref,
+        live_ref: `lr-${ref}`,
+        cc_state: 'ended',
+        last_event_at: new Date(ms).toISOString(),
+      })
+    const midnight = new Date(2026, 9, 23).getTime()
+    const first = at(midnight, 's-first')
+    const last = at(midnight - 1, 's-last')
+    const groups = groupSessions([first, last], new Set(), now)
+    expect(groups.find((g) => g.id === 'today')?.sessions).toEqual([first])
+    expect(groups.find((g) => g.id === 'settled')?.sessions).toEqual([last])
   })
 })

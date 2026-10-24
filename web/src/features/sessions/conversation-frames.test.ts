@@ -3,10 +3,16 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { describe, expect, it } from 'vitest'
 import nativeHistory from './fixtures/codex-native-history.json'
+import claudeStream from './fixtures/claude-2.1.309-subagents.jsonl?raw'
 import {
   conversationCwd,
+  conversationModel,
+  cutMiddle,
+  isQuiet,
   mapConversationFrames,
+  sameModel,
   stripAnsi,
+  type ConversationItem,
   type ConversationKind,
 } from './conversation-frames'
 
@@ -216,7 +222,6 @@ describe('mapConversationFrames — kinds from the golden-path attach', () => {
       'system',
       'system',
       'system',
-      'system',
       'operator',
       'assistant',
       'result',
@@ -225,16 +230,18 @@ describe('mapConversationFrames — kinds from the golden-path attach', () => {
     expect(items[2]?.cwd).toBe('/home/operator/project')
     expect(items[2]?.summary).toContain('claude-opus-5[1m]')
     expect(items[2]?.summary).toContain('4 tools')
-    expect(items[3]?.systemKind).toBe('rate_limit')
-    expect(items[3]?.summary).toMatch(/84%/)
-    expect(items[4]?.text).toBe('Reply with the single word OK')
+    // A limit warning that did not stop the turn is no row (dev#3119): it joins the line
+    // before it, for the inspector.
+    expect(items[2]?.raw).toEqual([INIT, RATE_LIMIT])
+    expect(items[3]?.text).toBe('Reply with the single word OK')
+    expect(items[4]?.text).toBe('OK')
+    expect(items[5]?.costUsd).toBe(0.0274295)
+    expect(items[5]?.durationMs).toBe(1575)
+    expect(items[5]?.inputTokens).toBe(2)
+    expect(items[5]?.outputTokens).toBe(4)
+    // The turn is named after its own reply's model, not the costliest usage key.
+    expect(items[5]?.model).toBe('claude-opus-5')
     expect(items[5]?.text).toBe('OK')
-    expect(items[6]?.costUsd).toBe(0.0274295)
-    expect(items[6]?.durationMs).toBe(1575)
-    expect(items[6]?.inputTokens).toBe(2)
-    expect(items[6]?.outputTokens).toBe(4)
-    expect(items[6]?.model).toBe('claude-opus-5[1m]')
-    expect(items[6]?.text).toBe('OK')
   })
 
   it('keeps the raw line on every item so the inspector can show the wire', () => {
@@ -422,15 +429,13 @@ describe('mapConversationFrames — Claude Code tool progress and control replie
     expect(items[0]?.raw).toHaveLength(3)
   })
 
-  it('tells progress for a tool it has not seen as one quiet line', () => {
+  it('makes no row of progress for a call it has not seen (dev#3119)', () => {
     const items = mapConversationFrames([
       progress('toolu_other', 5),
       progress('toolu_other', 10),
     ])
-    expect(items).toHaveLength(1)
-    expect(items[0]?.kind).toBe('system')
-    expect(items[0]?.summary).toContain('Bash')
-    expect(items[0]?.raw).toHaveLength(2)
+    expect(items.every(isQuiet)).toBe(true)
+    expect(items.flatMap((item) => item.raw)).toHaveLength(2)
   })
 
   it("keeps the reply to the plane's own control request off the conversation", () => {
@@ -965,14 +970,16 @@ describe('mapConversationFrames — the tool’s own bookkeeping is no row (#178
     expect(items[0]?.text).toBe('Hello')
   })
 
-  it('keeps a rate limit the person has to act on as a row', () => {
+  it('keeps only a refusal, the limit that stopped the turn, as a row (dev#3119)', () => {
     const items = mapConversationFrames([RATE_LIMIT, RATE_LIMIT_REJECTED])
-    expect(items.map((i) => i.systemKind)).toEqual(['rate_limit', 'rate_limit'])
-    expect(items[0]?.summary).toMatch(/84%/)
-    expect(items[1]?.summary).toMatch(/rejected/)
+    expect(items.map((i) => i.systemKind)).toEqual(['quiet', 'rate_limit'])
+    expect(items[1]).toMatchObject({
+      limitWindow: 'five_hour',
+      limitResetsAt: new Date(1760270400 * 1000).toISOString(),
+    })
   })
 
-  it('keeps an allowed rate limit that is near its window or on overage as a row', () => {
+  it('leaves every limit state that did not stop the turn off the conversation (dev#3119)', () => {
     const allowed = (info: Record<string, unknown>) =>
       JSON.stringify({
         type: 'rate_limit_event',
@@ -990,7 +997,7 @@ describe('mapConversationFrames — the tool’s own bookkeeping is no row (#178
       // the top-level figure is the limiting window; another window may be the news
       { unifiedWindows: { seven_day: { utilization: 0.97, resetsAt: 1 } } },
     ])
-      expect(kindsOf([USER, allowed(info)])).toEqual(['operator', 'system'])
+      expect(kindsOf([USER, allowed(info)])).toEqual(['operator'])
     // a weekly bucket named "overage_included" is not overage, and far from its limit
     expect(
       kindsOf([
@@ -1069,5 +1076,497 @@ describe('a message with attached images', () => {
       }),
     ])
     expect(item.attachments).toBeUndefined()
+  })
+})
+
+// dev#2786: one session started on claude-opus-5-5 and went on on claude-opus-4-8 with no
+// word of it. The conversation names the model of each turn and says when it changes.
+describe('the model in use', () => {
+  const init = JSON.stringify({
+    type: 'system',
+    subtype: 'init',
+    model: 'claude-opus-5-5',
+  })
+  const reply = (model: string, text: string, parent: string | null = null) =>
+    JSON.stringify({
+      type: 'assistant',
+      parent_tool_use_id: parent,
+      message: { model, content: [{ type: 'text', text }] },
+    })
+  const result = JSON.stringify({
+    type: 'result',
+    subtype: 'success',
+    duration_ms: 1200,
+    // A subagent on another model can cost more than the turn's own model.
+    modelUsage: {
+      'claude-haiku-5-5': { costUSD: 0.9 },
+      'claude-opus-5-5': { costUSD: 0.1 },
+    },
+  })
+
+  it('names the model that produced each turn on its result', () => {
+    const items = mapConversationFrames([
+      init,
+      reply('claude-opus-5-5', 'one'),
+      result,
+    ])
+    expect(items.find((item) => item.kind === 'result')?.model).toBe(
+      'claude-opus-5-5',
+    )
+  })
+
+  it('tells a change of model inside the session once, from and to, with its time', () => {
+    const items = mapConversationFrames(
+      [
+        init,
+        reply('claude-opus-5-5', 'one'),
+        result,
+        reply('claude-opus-4-8', 'two'),
+        reply('claude-opus-4-8', 'three'),
+      ],
+      [undefined, undefined, undefined, '2026-10-21T12:03:46Z', undefined],
+    )
+    const changes = items.filter((item) => item.systemKind === 'model')
+    expect(changes).toHaveLength(1)
+    expect(changes[0]).toMatchObject({
+      kind: 'system',
+      fromModel: 'claude-opus-5-5',
+      model: 'claude-opus-4-8',
+      at: '2026-10-21T12:03:46Z',
+    })
+    expect(items.map((item) => item.kind)).toEqual([
+      'system',
+      'assistant',
+      'result',
+      'system',
+      'assistant',
+    ])
+  })
+
+  it('does not count a subagent on another model as a change', () => {
+    const items = mapConversationFrames([
+      init,
+      reply('claude-haiku-5-5', 'searching', 'toolu_1'),
+      reply('claude-opus-5-5', 'done'),
+    ])
+    expect(items.some((item) => item.systemKind === 'model')).toBe(false)
+  })
+})
+
+describe('the model in use — what is not a change', () => {
+  const init = (model: string) =>
+    JSON.stringify({ type: 'system', subtype: 'init', model })
+  const reply = (model: string, text: string) =>
+    JSON.stringify({
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: { model, content: [{ type: 'text', text }] },
+    })
+
+  it('does not take a message the tool wrote itself for a model', () => {
+    const items = mapConversationFrames([
+      init('claude-opus-5-5'),
+      reply('<synthetic>', 'API Error: overloaded'),
+      reply('claude-opus-5-5', 'retried'),
+    ])
+    expect(items.some((item) => item.systemKind === 'model')).toBe(false)
+    expect(conversationModel(items.slice(0, 2))).toBe('claude-opus-5-5')
+  })
+
+  it('tells a resume that starts on another model', () => {
+    const items = mapConversationFrames([
+      init('claude-opus-5-5'),
+      reply('claude-opus-5-5', 'one'),
+      init('claude-opus-4-8'),
+      reply('claude-opus-4-8', 'two'),
+    ])
+    const changes = items.filter((item) => item.systemKind === 'model')
+    expect(changes).toHaveLength(1)
+    expect(changes[0]).toMatchObject({
+      fromModel: 'claude-opus-5-5',
+      model: 'claude-opus-4-8',
+    })
+  })
+
+  it('reads one model through the 1M suffix and a dated snapshot', () => {
+    expect(sameModel('claude-opus-5-5[1m]', 'claude-opus-5-5')).toBe(true)
+    expect(sameModel('claude-sonnet-4-5', 'claude-sonnet-4-5-20250929')).toBe(
+      true,
+    )
+    expect(sameModel('claude-sonnet-4-5', 'claude-sonnet-4-5-2025-09-29')).toBe(
+      true,
+    )
+    expect(sameModel('claude-opus-5-5', 'claude-opus-4-8')).toBe(false)
+  })
+})
+
+// A REAL CLAUDE CODE STREAM (dev#3119). Recorded 2026-10-23 from Claude Code 2.1.309 with
+// the engine's own argv (cliruntime/argv.go: --input-format stream-json --output-format
+// stream-json --verbose --print --replay-user-messages) on claude-haiku-5-5 in a scratch
+// folder: a 35 s command, a background command, a background subagent with calls of its
+// own, a Write, an Edit, a failing command and a 45 s wait. Paths were rewritten to
+// /home/dev/shop, thinking signatures shortened, the init frame's skill, plugin and agent
+// lists dropped, and the session, request and message ids and the account's usage figures
+// replaced by neutral ones; no frame was added, removed or reordered.
+const REAL = claudeStream.trim().split('\n')
+const byCommand = (items: ConversationItem[], part: string) =>
+  items.find((item) => item.toolCommand?.includes(part))
+
+describe('a real Claude Code 2.1.309 stream (dev#3119)', () => {
+  it('keeps task and background-task frames off the conversation, every line still reachable', () => {
+    const items = mapConversationFrames(REAL)
+    expect(
+      items.filter((i) => /^(task_|background_tasks)/.test(i.systemKind ?? '')),
+    ).toEqual([])
+    expect(
+      items.some((i) =>
+        /task (started|progress|updated|notification)|background tasks/.test(
+          i.summary,
+        ),
+      ),
+    ).toBe(false)
+    expect(items.flatMap((i) => i.raw).sort()).toEqual([...REAL].sort())
+  })
+
+  it('folds the 30 s heartbeat into its running call: no row of its own', () => {
+    const items = mapConversationFrames(REAL)
+    expect(items.some((i) => i.systemKind === 'tool_progress')).toBe(false)
+    expect(byCommand(items, 'sleep(35)')?.toolElapsedSeconds).toBe(30)
+    expect(byCommand(items, 'sleep(45)')?.toolElapsedSeconds).toBe(30)
+  })
+
+  it('shows no row for a frame that holds only thinking', () => {
+    const items = mapConversationFrames(REAL)
+    expect(items.filter((i) => i.kind === 'assistant' && !i.text)).toEqual([])
+    expect(items.some((i) => i.summary === 'Assistant')).toBe(false)
+  })
+
+  it("tells the person's turn once: a replayed task notification is not theirs", () => {
+    const turns = mapConversationFrames(REAL).filter(
+      (i) => i.kind === 'operator',
+    )
+    expect(turns).toHaveLength(1)
+    expect(turns[0]?.text).toMatch(/^Follow these steps/)
+  })
+
+  it("ties a subagent's calls and reply to the Agent call that started it", () => {
+    const items = mapConversationFrames(REAL)
+    const agent = items.find((i) => i.kind === 'tool' && i.toolName === 'Agent')
+    expect(agent?.toolArgsSummary).toBe('Count entries')
+    expect(agent?.toolResultSummary ?? '').not.toMatch(/Async agent launched/)
+    expect(agent?.toolStatus).toBe('completed')
+    const children = items.filter((i) => i.parentToolId === agent?.toolId)
+    expect(children.map((i) => i.toolName ?? i.kind)).toEqual([
+      'Bash',
+      'Bash',
+      'Read',
+      'assistant',
+    ])
+    expect(children[3]?.text).toMatch(/^There are 4 entries/)
+    // The session's own last reply stays its own, after the subagent's.
+    const replies = items.filter((i) => i.kind === 'assistant')
+    expect(replies.at(-1)?.parentToolId).toBeUndefined()
+    expect(replies.at(-1)?.text).toMatch(/^I ran all seven steps/)
+  })
+
+  it('reads a background command by its outcome, not by its receipt', () => {
+    const background = byCommand(mapConversationFrames(REAL), 'sleep(4)')
+    expect(background?.toolBackground).toBe(true)
+    expect(background?.toolResultSummary ?? '').not.toMatch(/in background/)
+    expect(background?.toolStatus).toBe('completed')
+  })
+
+  it('marks a call the tool answered with an error failed, and only that one', () => {
+    const items = mapConversationFrames(REAL)
+    expect(byCommand(items, '&& false')?.toolFailed).toBe(true)
+    expect(
+      items.filter((i) => i.kind === 'tool' && i.toolFailed).map((i) => i.id),
+    ).toEqual([byCommand(items, '&& false')?.id])
+  })
+
+  it("carries an edit's own diff: lines added and removed, and a short excerpt", () => {
+    const items = mapConversationFrames(REAL)
+    expect(items.find((i) => i.toolName === 'Edit')?.toolDiff).toEqual({
+      added: 3,
+      removed: 2,
+      lines: [' alpha', '-beta', '-gamma', '+delta', '+zeta', '+eta'],
+    })
+    expect(items.find((i) => i.toolName === 'Write')?.toolDiff).toEqual({
+      added: 5,
+      removed: 0,
+      lines: ['+alpha', '+beta', '+gamma', '+epsilon', '+omega'],
+    })
+  })
+
+  it('names a file tool by its path inside the working folder, never by JSON', () => {
+    const items = mapConversationFrames(REAL)
+    expect(items.find((i) => i.toolName === 'Write')?.toolArgsSummary).toBe(
+      'notes.txt',
+    )
+    expect(items.find((i) => i.toolName === 'Read')?.toolArgsSummary).toBe(
+      'plan.md',
+    )
+    expect(
+      items.some((i) => i.toolArgsSummary?.trimStart().startsWith('{')),
+    ).toBe(false)
+  })
+
+  it('keeps when each call started and when it answered', () => {
+    const at = (i: number) =>
+      new Date(Date.UTC(2026, 9, 23, 12, 0, i)).toISOString()
+    const items = mapConversationFrames(
+      REAL,
+      REAL.map((_, i) => at(i)),
+    )
+    const first = byCommand(items, 'sleep(35)')
+    expect(first?.at).toBe(at(6))
+    expect(first?.toolEndAt).toBe(at(10))
+  })
+
+  it('leaves the warning the 0.3 screenshot showed off the conversation', () => {
+    const recorded = JSON.parse(REAL[1]!) as {
+      rate_limit_info: Record<string, unknown>
+    }
+    const warning = JSON.stringify({
+      ...recorded,
+      rate_limit_info: {
+        ...recorded.rate_limit_info,
+        status: 'allowed_warning',
+        rateLimitType: 'seven_day',
+        utilization: 0.93,
+      },
+    })
+    expect(mapConversationFrames([USER, warning]).map((i) => i.kind)).toEqual([
+      'operator',
+    ])
+  })
+})
+
+describe('a tool call in its own short form (dev#3119)', () => {
+  const toolCall = (name: string, input: Record<string, unknown>) =>
+    JSON.stringify({
+      type: 'assistant',
+      message: {
+        content: [{ type: 'tool_use', id: `t-${name}`, name, input }],
+      },
+    })
+  const target = (name: string, input: Record<string, unknown>) =>
+    mapConversationFrames([
+      JSON.stringify({
+        type: 'system',
+        subtype: 'init',
+        cwd: '/home/dev/shop',
+      }),
+      toolCall(name, input),
+    ])[1]?.toolArgsSummary
+
+  it('reads each tool by what it acts on', () => {
+    expect(
+      target('Grep', { pattern: 'TODO', path: '/home/dev/shop/src' }),
+    ).toBe('TODO · src')
+    expect(
+      target('WebFetch', { url: 'https://example.com', prompt: 'x' }),
+    ).toBe('https://example.com')
+    expect(target('Skill', { skill: 'pdf' })).toBe('pdf')
+    expect(target('Read', { file_path: '/etc/hosts' })).toBe('/etc/hosts')
+  })
+
+  it('reads an unknown tool by its plain fields, not as JSON', () => {
+    const shown = target('mcp__db__query', {
+      sql: 'select 1',
+      limit: 5,
+      opts: {},
+    })
+    expect(shown).toBe('sql select 1 · limit 5')
+  })
+
+  it('cuts a long path in the middle and keeps its first folder and its file', () => {
+    const cut = cutMiddle(
+      'web/src/features/sessions/very/deep/folder/session-conversation.tsx',
+      44,
+    )
+    expect(cut.length).toBeLessThanOrEqual(44)
+    expect(cut.startsWith('web/')).toBe(true)
+    expect(cut.endsWith('/session-conversation.tsx')).toBe(true)
+    expect(cut).toContain('…')
+    expect(cutMiddle('src/a.ts', 44)).toBe('src/a.ts')
+  })
+})
+
+describe('how a call ended, from every tool (dev#3119)', () => {
+  it('reads an ACP call that completed without output as ended', () => {
+    const [item] = mapConversationFrames([
+      JSON.stringify({
+        method: 'session/update',
+        params: {
+          update: { sessionUpdate: 'tool_call', toolCallId: 'c1', title: 'ls' },
+        },
+      }),
+      JSON.stringify({
+        method: 'session/update',
+        params: {
+          update: {
+            sessionUpdate: 'tool_call_update',
+            toolCallId: 'c1',
+            status: 'completed',
+          },
+        },
+      }),
+    ])
+    expect(item?.toolStatus).toBe('completed')
+    expect(item?.toolFailed).toBeUndefined()
+  })
+
+  it('marks a background task that failed as failed, and one that was stopped as stopped', () => {
+    const recorded = REAL.slice(0, 15)
+    const ended = (status: string) =>
+      JSON.stringify({
+        type: 'system',
+        subtype: 'task_notification',
+        task_id: 'bxsdzgtr2',
+        tool_use_id: 'toolu_01H5RHZSgWd7JBf6MsEWkGD2',
+        status,
+      })
+    const failed = byCommand(
+      mapConversationFrames([...recorded, ended('failed')]),
+      'sleep(4)',
+    )
+    expect(failed).toMatchObject({ toolStatus: 'failed', toolFailed: true })
+    const stopped = byCommand(
+      mapConversationFrames([...recorded, ended('killed')]),
+      'sleep(4)',
+    )
+    expect(stopped?.toolStatus).toBe('stopped')
+    expect(stopped?.toolFailed).toBeUndefined()
+  })
+
+  it('cuts a long path inside the folder when it names the call', () => {
+    const [, item] = mapConversationFrames([
+      JSON.stringify({
+        type: 'system',
+        subtype: 'init',
+        cwd: '/home/dev/shop',
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          content: [
+            {
+              type: 'tool_use',
+              id: 't1',
+              name: 'Read',
+              input: {
+                file_path:
+                  '/home/dev/shop/web/src/features/sessions/very/deep/folder/session-conversation.tsx',
+              },
+            },
+          ],
+        },
+      }),
+    ])
+    expect(item?.toolArgsSummary).toBe(
+      'web/…/sessions/very/deep/folder/session-conversation.tsx',
+    )
+  })
+})
+
+describe('what the reviews of dev#3119 found', () => {
+  const codex = (item: Record<string, unknown>) =>
+    mapConversationFrames([
+      JSON.stringify({
+        method: 'item/completed',
+        params: {
+          turnId: 't',
+          item: { type: 'commandExecution', id: 'c1', command: 'ls', ...item },
+        },
+      }),
+    ])[0]
+  it('reads a declined Codex command as failed and one in progress as running', () => {
+    expect(codex({ status: 'declined' })).toMatchObject({
+      toolFailed: true,
+      toolStatus: 'failed',
+    })
+    expect(codex({ status: 'inProgress' })?.toolStatus).toBe('running')
+    expect(codex({ status: 'completed', exitCode: 0 })?.toolStatus).toBe(
+      'completed',
+    )
+  })
+
+  it('reads an ACP call that is still in progress as running, whatever output it sent', () => {
+    const [item] = mapConversationFrames([
+      JSON.stringify({
+        method: 'session/update',
+        params: {
+          update: {
+            sessionUpdate: 'tool_call_update',
+            toolCallId: 'c1',
+            status: 'in_progress',
+            content: [
+              { type: 'content', content: { type: 'text', text: 'partial' } },
+            ],
+          },
+        },
+      }),
+    ])
+    expect(item).toMatchObject({
+      toolStatus: 'running',
+      toolResultSummary: 'partial',
+    })
+  })
+
+  it('keeps a reply with no words but content it does not read as a row', () => {
+    const [item] = mapConversationFrames([
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          content: [{ type: 'server_tool_use', id: 's1', name: 'web_search' }],
+        },
+      }),
+    ])
+    expect(item).toMatchObject({ kind: 'unknown', summary: 'server_tool_use' })
+  })
+
+  it('learns how a call ended from the replayed notification when the task frame is missing', () => {
+    const recorded = REAL.slice(0, 15)
+    const replay = JSON.stringify({
+      type: 'user',
+      message: {
+        role: 'user',
+        content:
+          '<task-notification>\n<task-id>bxsdzgtr2</task-id>\n<tool-use-id>toolu_01H5RHZSgWd7JBf6MsEWkGD2</tool-use-id>\n<status>failed</status>\n</task-notification>',
+      },
+    })
+    const items = mapConversationFrames([...recorded, replay])
+    expect(byCommand(items, 'sleep(4)')).toMatchObject({
+      toolFailed: true,
+      toolStatus: 'failed',
+    })
+    expect(items.filter((i) => i.kind === 'operator')).toHaveLength(1)
+  })
+
+  it('reads any end of a task it does not know as failed, never as done', () => {
+    const items = mapConversationFrames([
+      ...REAL.slice(0, 15),
+      JSON.stringify({
+        type: 'system',
+        subtype: 'task_updated',
+        task_id: 'bxsdzgtr2',
+        patch: { status: 'timed_out' },
+      }),
+    ])
+    expect(byCommand(items, 'sleep(4)')?.toolStatus).toBe('failed')
+  })
+
+  it('tells a limit that stopped the turn whatever its status is called, and survives a reset it cannot date', () => {
+    const limit = (info: Record<string, unknown>) =>
+      mapConversationFrames([
+        JSON.stringify({ type: 'rate_limit_event', rate_limit_info: info }),
+      ])[0]
+    expect(
+      limit({ status: 'blocked', rateLimitType: 'seven_day' })?.systemKind,
+    ).toBe('rate_limit')
+    const huge = limit({ status: 'rejected', resetsAt: 1e20 })
+    expect(huge?.systemKind).toBe('rate_limit')
+    expect(huge?.limitResetsAt).toBeUndefined()
   })
 })

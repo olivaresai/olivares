@@ -15,6 +15,8 @@ At-most-once arbeitet und beim Herunterfahren verwirft, ist dieses Modul die
 festgehalten ist, ist die Zustellung dauerhaft und auditierbar. Seine Routen
 sind unter `/v1/m/eventing/` eingebunden.
 
+**Edition:** Signierte Webhook-Subscriptions gehören zu Community. SIEM-Senken (gesetztes `sink_kind`) erfordern Business: Ein Community-Server beantwortet ein Anlegen oder Aktualisieren, das eine solche enthält, mit `501 business_required`. Eine zuvor gespeicherte Senke liefert nichts aus; ein Update ohne Senke deaktiviert oder entfernt die Senke der Subscription, und `DELETE` entfernt die Subscription.
+
 ## Was Sie abonnieren
 
 Eine **Subscription** erfasst die gewünschten Event-Typen, einen optionalen

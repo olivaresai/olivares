@@ -113,16 +113,27 @@ func (m *Module) readToolModelCatalog(ctx context.Context, home ProviderHomeSnap
 	case providerDriverGrok:
 		program = m.driverProgram(NewGrokDriver())
 		args = []string{"models"}
+	case providerDriverOpenCode:
+		// The tool's own list (#2567). `models` loads configured plugins; `--pure`
+		// ("run without external plugins", v1.18.34) does not, so reading the list
+		// runs no user automation.
+		program = m.driverProgram(NewOpenCodeDriver())
+		args = []string{"models", "--pure"}
 	default:
-		// ponytail: OpenCode `models` loads configured plugins; enable discovery
-		// when the tool exposes a catalog interface that disables user automation.
 		return nil, ErrToolModelListUnsupported
 	}
 	if m.rt.Runner == nil {
 		return nil, errors.New("tool model catalog runtime is unavailable")
 	}
+	env := toSessionEnv(cliruntime.HomeEnv(home.Driver, home.UserHome, home.ConfigHome))
+	if home.Driver == providerDriverOpenCode {
+		// cliruntime knows only its own kinds: OpenCode's account config home and
+		// its no-update switch come from its driver, as for its sign-in and sessions.
+		env = append(env, EnvVar{Name: m.configHomeEnvForDriver(home.Driver), Value: home.ConfigHome},
+			EnvVar{Name: envOpenCodeDisableAutoUpdate, Value: "1"})
+	}
 	spec := LaunchSpec{Program: program, Args: args, Dir: home.UserHome,
-		Env:       toSessionEnv(cliruntime.HomeEnv(home.Driver, home.UserHome, home.ConfigHome)),
+		Env:       env,
 		Isolation: IsolationNative, WaitDelay: time.Second,
 		Confinement: m.sessionConfinement("", &home, PresetNone)}
 	proc, err := m.rt.Runner.Launch(ctx, spec)
@@ -140,14 +151,17 @@ func (m *Module) readToolModelCatalog(ctx context.Context, home ProviderHomeSnap
 		return readCodexModelCatalog(ctx, proc)
 	}
 	if home.Driver == providerDriverGrok {
-		return readGrokModelCatalog(ctx, proc)
+		return readStdoutModelCatalog(ctx, proc, parseGrokModelCatalog)
+	}
+	if home.Driver == providerDriverOpenCode {
+		return readStdoutModelCatalog(ctx, proc, parseOpenCodeModelCatalog)
 	}
 	return readClaudeModelCatalog(ctx, proc)
 }
 
-// Grok's native models command also prints its reference list when signed out.
-// Only a confirmed account-home login can advertise that list as available.
-func readGrokModelCatalog(ctx context.Context, proc Process) ([]CatalogModel, error) {
+// readStdoutModelCatalog reads a native models command's whole standard output,
+// bounded, and parses it once the command ended successfully.
+func readStdoutModelCatalog(ctx context.Context, proc Process, parse func(string) ([]CatalogModel, error)) ([]CatalogModel, error) {
 	var data []byte
 	for {
 		select {
@@ -159,7 +173,7 @@ func readGrokModelCatalog(ctx context.Context, proc Process) ([]CatalogModel, er
 				if err != nil || code != 0 {
 					return nil, errors.New("the tool model catalog command failed")
 				}
-				return parseGrokModelCatalog(string(data))
+				return parse(string(data))
 			}
 			if frame.Stream != streamStdout {
 				continue
@@ -173,6 +187,8 @@ func readGrokModelCatalog(ctx context.Context, proc Process) ([]CatalogModel, er
 	}
 }
 
+// Grok's native models command also prints its reference list when signed out.
+// Only a confirmed account-home login can advertise that list as available.
 func parseGrokModelCatalog(data string) ([]CatalogModel, error) {
 	signed, listed := false, false
 	ids := []CatalogModel{}
@@ -219,6 +235,24 @@ func parseGrokModelCatalog(data string) ([]CatalogModel, error) {
 		return nil, errors.New("invalid tool model list")
 	}
 	return ids, nil
+}
+
+// parseOpenCodeModelCatalog reads `opencode models`: one provider/model per line, as a
+// session's model option takes it. Any other line makes the whole list unreadable.
+func parseOpenCodeModelCatalog(data string) ([]CatalogModel, error) {
+	models := []CatalogModel{}
+	for _, line := range strings.Split(data, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		provider, name, ok := strings.Cut(line, "/")
+		if !ok || provider == "" || name == "" || !validToolCatalogModelID(line) || len(models) == 1000 {
+			return nil, errors.New("invalid tool model list")
+		}
+		models = append(models, CatalogModel{ID: line})
+	}
+	return models, nil
 }
 
 func validToolCatalogModelID(id string) bool {

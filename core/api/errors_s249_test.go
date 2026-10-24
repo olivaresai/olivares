@@ -31,6 +31,10 @@ func TestStatusFor_LoginEnforcement(t *testing.T) {
 		// deployment state, not as an authentication failure or an edition prompt.
 		{"login_enforcement_unavailable", auth.ErrLoginEnforcementComponentAbsent, http.StatusServiceUnavailable, "login_enforcement_unavailable"},
 		{"login_enforcement_unavailable wrapped", fmt.Errorf("mint session: %w", auth.ErrLoginEnforcementComponentAbsent), http.StatusServiceUnavailable, "login_enforcement_unavailable"},
+		// Group overage: the IdP did not send the user's full group list. A refusal the
+		// person signing in can act on, not a 401 that reads as a wrong password.
+		{"sso_groups_indeterminate", auth.ErrSSOGroupsIndeterminate, http.StatusForbidden, "sso_groups_indeterminate"},
+		{"sso_groups_indeterminate wrapped", fmt.Errorf("complete sso: %w", auth.ErrSSOGroupsIndeterminate), http.StatusForbidden, "sso_groups_indeterminate"},
 		{"invalid credentials stay 401", auth.ErrInvalidCredentials, http.StatusUnauthorized, "unauthenticated"},
 	}
 	for _, tc := range cases {

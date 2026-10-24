@@ -81,8 +81,8 @@ func (s *Server) handleServerInfo(w http.ResponseWriter, r *http.Request, mc Mod
 	}
 	// The modules this node does not run, so the console hides what would only
 	// answer module_not_enabled. Absent when every module runs.
-	if len(s.notEnabled) > 0 {
-		info["modules_not_enabled"] = s.notEnabled
+	if off := s.modulesNotEnabled(); len(off) > 0 {
+		info["modules_not_enabled"] = off
 	}
 	// Whether the session communication plane is effective: the console shows its
 	// screens only then, and never probes a route to find out.

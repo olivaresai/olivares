@@ -285,7 +285,7 @@ func TestRuntime_E2E_RealProcess(t *testing.T) {
 	if _, err := m.cleanupRun(ctx, tenant, ref, "user:u1", "user"); err != nil {
 		t.Fatalf("cleanupRun: %v", err)
 	}
-	if err := m.deleteRun(ctx, tenant, ref); err != nil {
+	if err := m.deleteRun(ctx, tenant, ref, "user:u1", "user"); err != nil {
 		t.Fatalf("deleteRun: %v", err)
 	}
 }
@@ -301,5 +301,27 @@ func TestProcRunner_RejectsNonNativeIsolation(t *testing.T) {
 		if _, err := NewProcRunner().Launch(context.Background(), LaunchSpec{Program: "true", Isolation: iso}); err == nil {
 			t.Fatalf("isolation %q: native runner must refuse, got nil error", iso)
 		}
+	}
+}
+
+// A launch that asks is told the child's process id once it is started, before the
+// runner returns: the Business credential helpers admit that process and its descendants
+// and nobody else.
+func TestProcRunner_TellsTheLaunchTheChildsProcessWhenItStarts(t *testing.T) {
+	t.Parallel()
+
+	var told []int
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	proc, err := NewProcRunner().Launch(ctx, LaunchSpec{
+		Program: writeFakeClaude(t), Dir: t.TempDir(), WaitDelay: 2 * time.Second,
+		OnStart: func(pid int) { told = append(told, pid) },
+	})
+	if err != nil {
+		t.Fatalf("launch: %v", err)
+	}
+	defer func() { _ = proc.Stop(ctx) }()
+	if len(told) != 1 || told[0] != proc.(*procProcess).PID() || told[0] <= 0 {
+		t.Fatalf("OnStart was called with %v, want once with the child's pid %d", told, proc.(*procProcess).PID())
 	}
 }

@@ -116,18 +116,32 @@ func TestUpdateStatusKeepsTheInstalledVersionWhenTheChannelCannotBeChecked(t *te
 func TestUpdateRunsUpgradeAgainstTheConfiguredChannelAndEdition(t *testing.T) {
 	env := map[string]string{"OLIVARES_UPDATE_ENDPOINT": "https://mirror.example/olivares", "OLIVARES_UPDATE_CHANNEL": "security"}
 	for _, tc := range []struct {
-		edition string
-		want    []string
-		absent  []string
+		name, edition string
+		connected     bool
+		noEndpoint    bool // the public-channel endpoint is not in the environment
+		want          []string
+		absent        []string
 	}{
-		{"community", []string{"--endpoint", "https://mirror.example/olivares", "--channel", "security"}, []string{"--enterprise", "--connect"}},
-		{"enterprise", []string{"--endpoint", "https://mirror.example/olivares", "--channel", "security", "--enterprise", "--connect"}, nil},
+		{"community", "community", false, false, []string{"--endpoint", "https://mirror.example/olivares", "--channel", "security"}, []string{"--enterprise", "--connect"}},
+		// A connected Business build names its endpoint (the connect state binds the origin) and connects.
+		{"business, connected", "enterprise", true, false, []string{"--endpoint", "https://mirror.example/olivares", "--channel", "security", "--enterprise", "--connect"}, nil},
+		// Not connected: upgrade takes OLIVARES_UPGRADE_TOKEN from the engine's environment, so a token
+		// alone also updates, and it is sent to the license service, never to a public-channel endpoint.
+		{"business, by token alone", "enterprise", false, true, []string{"--channel", "security", "--enterprise"}, []string{"--connect", "--endpoint"}},
 	} {
-		t.Run(tc.edition, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			f := &fakeUpgrade{doc: availableDoc()}
 			svc := newTestUpdateService(t, f, nil)
 			svc.edition = tc.edition
-			svc.getenv = func(k string) string { return env[k] }
+			if tc.connected {
+				svc.dataDir = connectedDir(t)
+			}
+			svc.getenv = func(k string) string {
+				if tc.noEndpoint && k == "OLIVARES_UPDATE_ENDPOINT" {
+					return ""
+				}
+				return env[k]
+			}
 			if _, err := svc.UpdateStatus(context.Background()); err != nil {
 				t.Fatal(err)
 			}

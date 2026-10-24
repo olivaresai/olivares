@@ -4,9 +4,9 @@
 //
 // ONE NAVIGATION MODEL, AS THE PERSON SEES IT. Each view sits in one place, its area and
 // section, and every surface that shows where a page is says the same thing: the row of
-// pages above it, the sidebar row it marks, and All areas. The first job (the four
-// journeys) is reachable from the first screen: a sidebar row, or a page in that row's
-// strip, or the footer's Settings and its strip. The sidebar pins the first job; the areas
+// pages above it, the top bar place it marks, and All areas. The first job (the four
+// journeys) is reachable from the first screen: a place, or a page in that place's
+// strip, or Settings and its strip. The top bar names the places; the areas
 // hold the rest.
 import { cleanup } from '@testing-library/react'
 import type { ComponentProps } from 'react'
@@ -76,9 +76,8 @@ vi.mock('@/lib/auth/context', () => ({
 import { FEATURE_VIEWS, type FeatureView } from '@/features/registry'
 import { SETTINGS_UTILITY, isListed, permissionGate } from './model'
 import { JOURNEYS, stepHref } from './journeys'
-import { AreasEntry } from '@/components/layout/areas-entry'
 import { DestinationSections } from '@/components/layout/destination-sections'
-import { JourneyNav } from '@/components/layout/journey-nav'
+import { PlacesNav } from '@/components/layout/places-nav'
 
 afterEach(() => {
   cleanup()
@@ -88,16 +87,15 @@ afterEach(() => {
 
 const allowAll = permissionGate(() => true)
 
-/** What the sidebar and the strip show at an address, for a principal who may open all. */
+/** What the top bar and the strip show at an address, for a principal who may open all. */
 function shownAt(href: string) {
   const url = new URL(href, 'http://console.invalid')
   routerState.pathname = url.pathname
   routerState.search = Object.fromEntries(url.searchParams)
   const { container } = renderIntel(
     <>
-      <JourneyNav />
+      <PlacesNav />
       <DestinationSections />
-      <AreasEntry open={false} onOpen={() => {}} />
     </>,
   )
   const strip = [
@@ -106,19 +104,15 @@ function shownAt(href: string) {
     ),
   ].map((a) => a.getAttribute('href') ?? '')
   const rows = [
-    ...container.querySelectorAll<HTMLAnchorElement>('a[data-journey]'),
+    ...container.querySelectorAll<HTMLAnchorElement>('a[data-place]'),
   ]
   const marked = rows
     .filter((a) => a.getAttribute('aria-current') === 'page')
     .map((a) => a.getAttribute('href') ?? '')
-  const branch = container.querySelector('button[data-branch="active"]')
-    ? 'active'
-    : ''
   const result = {
     rows: rows.map((a) => a.getAttribute('href') ?? ''),
     strip,
     marked,
-    branch,
   }
   cleanup()
   return result
@@ -133,8 +127,8 @@ const inSettingsArea = (v: FeatureView) =>
   v.navigation.kind !== 'root' &&
   v.navigation.areaId === SETTINGS_UTILITY.areaId
 
-/** Every address the first screen offers: its sidebar rows, the footer's Settings, and the
- *  strip each of those opens on. */
+/** Every address the first screen offers: its places, Settings, and the strip each of
+ *  those opens on. */
 function offeredFromFirstScreen(): Set<string> {
   const { rows } = shownAt('/')
   const offered = new Set(rows)
@@ -152,7 +146,7 @@ function offeredFromFirstScreen(): Set<string> {
 }
 
 describe('the first screen', () => {
-  it('offers every step of the four journeys: a sidebar row, its strip, or Settings', () => {
+  it('offers every step of the four journeys: a place, its strip, or Settings', () => {
     const offered = offeredFromFirstScreen()
     const missing = Object.entries(JOURNEYS).flatMap(([journey, steps]) =>
       steps
@@ -163,12 +157,13 @@ describe('the first screen', () => {
     expect(missing).toEqual([])
   })
 
-  it('pins the first job and only the first job, on a new installation and any other', () => {
+  it('names the places and only the places, on a new installation and any other', () => {
     expect(shownAt('/').rows).toEqual([
       '/',
       '/sessions',
       '/agent-tools',
       '/permissions?tab=approvals',
+      '/audit',
     ])
     // A tool, a key or a local model, a session, its approval, stop and resume, history.
     const offered = offeredFromFirstScreen()
@@ -178,8 +173,8 @@ describe('the first screen', () => {
       ...JOURNEYS.approvals,
     ])
       expect(offered).toContain(stepHref(step))
-    // The rest of the product is in the areas, not in a second list of pins.
-    expect(shownAt('/').rows).not.toContain('/audit')
+    // The rest of the product is in the areas, not in a second list of places.
+    expect(shownAt('/').rows).not.toContain('/models')
   })
 })
 
@@ -208,14 +203,19 @@ describe('every page sits in one place', () => {
     expect(strays).toEqual([])
   })
 
-  it('marks one sidebar row of its own section (itself when it is one), or names its area in All areas', () => {
+  it('marks one place of its own section (itself when it is one), or none, leaving the page to All areas', () => {
     const wrong = listed.flatMap((v) => {
-      const { rows, marked, branch } = shownAt(v.path)
+      const { rows, marked } = shownAt(v.path)
       const pinned = rows.some((href) => href === v.path)
       const row = marked.length === 1 ? viewAt(marked[0].split('?')[0]) : null
       if (row && placeOf(row) === placeOf(v) && (!pinned || row.id === v.id))
         return []
-      if (marked.length === 0 && (branch !== '' || inSettingsArea(v))) return []
+      // Nothing marked is right only when no place holds the page's section (a section
+      // place, Rules, covers its own address and nothing else).
+      const holder = rows.find(
+        (href) => !href.includes('?') && placeOf(viewAt(href)!) === placeOf(v),
+      )
+      if (marked.length === 0 && !holder) return []
       return [
         `${v.path} (${placeOf(v)}) marks ${marked.join(', ') || 'nothing'}`,
       ]

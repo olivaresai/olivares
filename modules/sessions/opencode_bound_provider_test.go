@@ -243,14 +243,25 @@ func TestOpenCodeSavedEndpointModelDoesNotShadowAnExplicitNativeChoice(t *testin
 func TestOpenCodeWithNoRecordKeepsItsOwnConfiguration(t *testing.T) {
 	env := envMap(openCodeDriver{}.LaunchEnv(DriverLaunch{Preset: PresetAsk}))
 	cfg := openCodeInline(t, env)
-	for _, key := range []string{"enabled_providers", "disabled_providers", "share", "model"} {
+	// With no model named, the own sign-in keeps its provider choice and its model
+	// catalog; it shares nothing and downloads nothing (#2888).
+	for _, key := range []string{"enabled_providers", "disabled_providers", "model"} {
 		if _, ok := cfg[key]; ok {
 			t.Errorf("a launch on the tool's own sign-in sets %s; only a record-bound launch is confined", key)
 		}
 	}
-	for _, name := range []string{envOpenCodeDisableModelsFetch, envOpenCodeDisableLSPDownload, envNPMConfigOffline} {
-		if _, ok := env[name]; ok {
-			t.Errorf("a launch on the tool's own sign-in sets %s", name)
+	if cfg["share"] != "disabled" {
+		t.Errorf("share = %v", cfg["share"])
+	}
+	if _, ok := env[envOpenCodeDisableModelsFetch]; ok {
+		t.Error("a launch on the tool's own sign-in turns off its model catalog")
+	}
+	if _, ok := env[envNPMConfigOffline]; ok {
+		t.Error("a launch on the tool's own sign-in turns npm offline for the agent's commands")
+	}
+	for _, name := range []string{envOpenCodeDisableLSPDownload, envOpenCodeDisableShare} {
+		if _, ok := env[name]; !ok {
+			t.Errorf("a launch on the tool's own sign-in lacks %s", name)
 		}
 	}
 }
@@ -285,7 +296,7 @@ func TestOpenCodeRuntimeKeyRecordConfinesTheChildOnLaunchAndResume(t *testing.T)
 	if _, err := m.stopRun(context.Background(), tenant, run.RunRef, "user:u1", model.ActorUser); err != nil {
 		t.Fatalf("stop: %v", err)
 	}
-	resumeRecord := setOpenCodeFixture(t, prof, openCodeFixture{RecordPath: t.TempDir() + "/resume.json", ResumeEmptyObject: true})
+	resumeRecord := setOpenCodeFixture(t, prof, openCodeFixture{RecordPath: filepath.Join(prof.ConfigHome, "resume.json"), ResumeEmptyObject: true})
 	resumed, err := m.resumeRun(context.Background(), tenant, run.RunRef, "user:u1", model.ActorUser, "")
 	if err != nil {
 		t.Fatalf("resume: %v", err)

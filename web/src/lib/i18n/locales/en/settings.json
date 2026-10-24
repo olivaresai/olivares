@@ -11,9 +11,7 @@
   },
   "nav": {
     "general": "General",
-    "notifications": "Notifications",
     "keyboard": "Keyboard",
-    "sessionDefaults": "Session defaults",
     "aiTools": "AI tools",
     "workspaces": "Workspaces",
     "deploy": "Deploy and updates",
@@ -31,7 +29,7 @@
     "title": "General",
     "scope": "Your own preferences. They follow you to every workspace on this installation.",
     "theme": "Theme",
-    "themeHint": "Follows the system unless you choose light or dark.",
+    "themeHint": "Follows the system unless you choose light, dark or black.",
     "density": "Density",
     "densityHint": "Compact shows more rows; comfortable is easier to read.",
     "language": "Language",
@@ -46,10 +44,6 @@
     "confirmStopHint": "Ask once before Stop ends a session that is still working.",
     "reduceMotion": "Reduce motion",
     "reduceMotionHint": "Replace movement with fades. On when your system asks for it."
-  },
-  "unavailable": {
-    "notifications": "Notification preferences are not stored on this installation yet.",
-    "sessionDefaults": "Session defaults are not stored on this installation yet."
   },
   "sessionNotifications": {
     "title": "Session notifications",
@@ -339,9 +333,17 @@
       "stop_one": "{{count}} running session stops. It can be resumed after the restart.",
       "stop_other": "{{count}} running sessions stop. Each one can be resumed after the restart.",
       "none": "The engine restarts once on the new version.",
-      "confirm": "Install and restart"
+      "switchNone": "The engine restarts once on the licensed edition. Your data stays where it is.",
+      "confirm": "Install and restart",
+      "switchTitle": "Switch to {{edition}}?",
+      "switchConfirm": "Switch and restart"
     },
     "alreadyCurrent": "Already on the newest release. Nothing was installed.",
-    "restartRequired": "A newer version is installed. Restart the engine with its service manager to run it."
+    "restartRequired": "A newer version is installed. Restart the engine with its service manager to run it.",
+    "switch": "Switch to {{edition}}",
+    "switchTitle": "Switch to {{edition}}",
+    "switched": "Switch installed.",
+    "terminal": "Same thing in a terminal on the server",
+    "orTerminal": "Or in a terminal on the server"
   }
 }

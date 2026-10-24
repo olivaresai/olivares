@@ -10,12 +10,14 @@
 //    this key beside it, in the narrative pane's menu — which also names the action
 //    before it happens (Pin / Unpin), the other half of the same rule.
 //
-//    ⛔ THE MENU IS NOT ON THE ROW, and that is not a preference. `option` is
-//       children-presentational in ARIA: a focusable control inside one is ignored by
-//       assistive technology and reported by axe (`nested-interactive`). A first draft
-//       put a `⋯` trigger in every row; it also broke the rail's single tab stop the
-//       moment the roving index was not on that row — measured here, in this file's
-//       own keyboard test, before the menu moved.
+//    ⛔ EVERY ROW HAS ONE ACTIONS MENU (#2795), opened three ways: a right-click (the
+//       browser's own menu said Back and Reload), the `⋯` beside the row, and Shift+F10
+//       or the menu key on the focused row. The `⋯` is NOT a control inside the row, and
+//       that is not a preference: `option` is children-presentational in ARIA, so a
+//       focusable control inside one is ignored by assistive technology and reported by
+//       axe (`nested-interactive`), and a first draft that put one in every row broke the
+//       rail's single tab stop. It is a pointer shortcut beside the option, the way Open
+//       beside is; the keyboard's path is the declared key.
 //
 // ⛔ ARROWS MOVE, ENTER OPENS. Moving focus is not choosing: an operator walking the
 //    rail with the keyboard must be able to read the labels without firing a
@@ -31,7 +33,13 @@
 //    table and the sidebar can never tell the same session two different ways. The action
 //    and resource a connector reported are the secondary fact: on the row's hover and in
 //    the thread, never the title (#2266).
-import { Columns2, Pin, SquareTerminal } from 'lucide-react'
+import {
+  ChevronDown,
+  Columns2,
+  MoreHorizontal,
+  Pin,
+  SquareTerminal,
+} from 'lucide-react'
 import {
   useCallback,
   useRef,
@@ -43,18 +51,26 @@ import { useTranslation } from 'react-i18next'
 import { EmptyState } from '@/components/ui/empty-state'
 import { runFolder } from './folder'
 import { workLine } from '@/features/home/work-line'
-import { RelTimeLabel, humanDurationSeconds } from '@/features/shared'
+import { humanDurationSeconds } from '@/features/shared'
 import { resolveBinding } from '@/lib/keybindings/model'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { usePreferencesStore, type Density } from '@/stores/preferences'
 import { IconTip } from './icon-tip'
-import { StateDot } from './session-state-dot'
+import { StateWord, useForgetTurnsOnLeave } from './session-state-word'
+import { ToolMark } from './tool-mark'
 import {
   primaryRun,
+  sessionFolder,
   sessionNaming,
   sessionPlace,
+  sessionTool,
   sharedNames,
   type UnifiedSession,
 } from './provenance'
@@ -71,6 +87,9 @@ export interface WorkRailProps {
   pinned: ReadonlySet<string>
   /** Pin or unpin the session at this address; null offers no pin at all. */
   onTogglePin: ((address: string) => void) | null
+  /** The items of a row's actions menu; absent, a row has no menu and a right-click is
+   * the browser's. */
+  rowMenu?: (session: UnifiedSession) => ReactNode
   /** Rendered when the estate has no sessions at all. One action, already authorized. */
   emptyAction?: ReactNode
   loading?: boolean
@@ -83,14 +102,14 @@ export interface WorkRailProps {
  * the class is in the stylesheet.
  */
 const ROW_HEIGHT: Record<Density, string> = {
-  compact: 'h-11 min-[761px]:h-8',
-  comfortable: 'h-11 min-[761px]:h-9',
+  compact: 'h-14 min-[761px]:h-11',
+  comfortable: 'h-14 min-[761px]:h-12',
 }
 
 /**
- * ONE ROW, ONE LINE: tool icon, what the session is called, and on the right its state
- * as a dot and the time as a relative figure. The tool, the folder, how long it has been
- * at it and what it is doing now are on the row's hover and in the thread it opens.
+ * A ROW (dev#3162): the tool's mark; the folder small above what
+ * the session is called; at the right what it is doing in a word with its time. The full
+ * path and what it is doing now are on the row's hover and in the thread it opens.
  */
 function RailRow({
   session,
@@ -101,6 +120,11 @@ function RailRow({
   registerRef,
   shared,
   onOpenBeside,
+  menu,
+  menuOpen,
+  onMenuOpenChange,
+  onMenuClosed,
+  onFocused,
 }: {
   session: UnifiedSession
   selected: boolean
@@ -111,6 +135,14 @@ function RailRow({
   /** Names another row of this rail also carries: those rows show their tail. */
   shared: ReadonlySet<string>
   onOpenBeside?: (session: UnifiedSession) => void
+  /** The row's actions menu items; absent, the row has no menu. */
+  menu?: (session: UnifiedSession) => ReactNode
+  menuOpen: boolean
+  onMenuOpenChange: (open: boolean) => void
+  /** Where focus goes when the menu closes: back to this row, not to the `⋯`. */
+  onMenuClosed: () => void
+  /** The row took DOM focus, by a click or by the keyboard. */
+  onFocused: () => void
 }) {
   const { t } = useTranslation('sessions')
   const density = usePreferencesStore((s) => s.density)
@@ -139,6 +171,7 @@ function RailRow({
   // a second line on, which was blank for every observed session. `undefined` and not an
   // empty string when there is none: a tooltip that says nothing is worse than no tooltip.
   const place = sessionPlace(session)
+  const folder = sessionFolder(session)
   const rowTitle =
     [
       place && place !== naming.name ? place : null,
@@ -161,18 +194,23 @@ function RailRow({
         data-testid="rail-row"
         data-address={address}
         onClick={() => onOpen(session)}
-        /* ⛔ A ROW IS ONE LINE AT THE LIST'S STANDARD ROW HEIGHT: tool icon, the name, and
-         on the right the state as a dot and the time as a relative figure. It was a
-         52 px row with a second line that was blank for every observed session (#2266:
-         half the screen empty, fifty rows of the same shape). The name is cut with an
-         ellipsis and its whole text (name, tail, reference) is on the name's hover; the
-         tool, folder, elapsed duration and observed clause are on the row's own hover and
-         are painted in full by the thread this row opens. What stays on the row is what a
-         person picks a row BY. The dot has no width to lose in German, which is what the
-         old 146 px state badge did to the name.
+        onFocus={onFocused}
+        onContextMenu={
+          menu
+            ? (e) => {
+                e.preventDefault()
+                onMenuOpenChange(true)
+              }
+            : undefined
+        }
+        /* ⛔ TWO SHORT LINES, BOTH WITH WORDS (dev#3162): the folder and the state above,
+         the name below. The old second line was blank for every observed session
+         (#2266); this one carries the place and what the session is doing, which is what
+         a person picks a row BY. The name is cut with an ellipsis and its whole text
+         (name, tail, reference) is on the name's hover.
 
          ⛔ SELECTED IS NEUTRAL. The orange marks the one action, the focus ring and the
-         brand; "this is open" is a tonal fill, and "working" is the dot. */
+         brand; "this is open" is a tonal fill, and the state is a word. */
         title={rowTitle}
         className={cn(
           'group relative flex cursor-pointer items-center gap-2.5 px-3 outline-none transition-colors',
@@ -183,14 +221,35 @@ function RailRow({
           // name keeps the room: reserving 48 px for it on every row left a title 103 px.
           // On a phone, or with a coarse pointer (a tablet has no hover to reveal it), the
           // button is always painted and keeps its own column.
-          onOpenBeside && 'max-[760px]:pr-12 pointer-coarse:pr-12',
+          onOpenBeside && menu
+            ? 'max-[760px]:pr-22 pointer-coarse:pr-22'
+            : (onOpenBeside || menu) &&
+                'max-[760px]:pr-12 pointer-coarse:pr-12',
         )}
       >
-        <SquareTerminal
-          aria-hidden="true"
-          className="size-4 shrink-0 text-text-3"
-        />
-        <span className="flex min-w-0 flex-1 items-center">
+        <ToolMark tool={sessionTool(session)} />
+        <span className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
+          {/* The place above the name, small; the state and its time at
+            its right. */}
+          <span className="flex min-w-0 items-center gap-2">
+            <span
+              data-testid="rail-row-place"
+              className="min-w-0 flex-1 truncate text-overline font-normal text-text-3"
+            >
+              {folder}
+            </span>
+            <span
+              className={cn(
+                'flex shrink-0 items-center gap-1.5',
+                // Faded, not hidden: it keeps its place and the row's accessible name.
+                // Hover only: a focused row is not asking for the button.
+                (onOpenBeside || menu) &&
+                  'min-[761px]:group-hover/row:opacity-0',
+              )}
+            >
+              <StateWord session={session} />
+            </span>
+          </span>
           <span
             data-testid="rail-row-name"
             title={nameTitle}
@@ -219,20 +278,6 @@ function RailRow({
             ) : null}
           </span>
         </span>
-        <span className="flex shrink-0 items-center gap-1.5">
-          <StateDot session={session} />
-          {session.lastActivityMs > 0 ? (
-            <RelTimeLabel
-              ts={new Date(session.lastActivityMs).toISOString()}
-              className={cn(
-                'shrink-0 whitespace-nowrap text-overline font-normal tabular-nums text-text-3',
-                // Faded, not hidden: it keeps its place in the layout and in the row's
-                // accessible name. Hover only: a focused row is not asking for the button.
-                onOpenBeside && 'min-[761px]:group-hover/row:opacity-0',
-              )}
-            />
-          ) : null}
-        </span>
       </div>
       {onOpenBeside ? (
         <IconTip label={t('surface.openBeside')}>
@@ -251,11 +296,47 @@ function RailRow({
             aria-hidden="true"
             tabIndex={-1}
             onClick={() => onOpenBeside(session)}
-            className="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 group-hover/row:opacity-100 max-[760px]:opacity-100 pointer-coarse:opacity-100"
+            className={cn(
+              'absolute top-1/2 -translate-y-1/2 opacity-0 group-hover/row:opacity-100 max-[760px]:opacity-100 pointer-coarse:opacity-100',
+              menu ? 'right-11' : 'right-1',
+            )}
           >
             <Columns2 aria-hidden="true" />
           </Button>
         </IconTip>
+      ) : null}
+      {menu ? (
+        <DropdownMenu open={menuOpen} onOpenChange={onMenuOpenChange}>
+          <IconTip label={t('rail.rowMenu', { name: naming.name })}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={t('rail.rowMenu', { name: naming.name })}
+                // THE POINTER'S WAY TO THE MENU, beside the option and not in it (see the
+                // head of this file): out of the tab order and the accessibility tree,
+                // like Open beside. Painted on hover, while its menu is open, and always
+                // on a phone or with a coarse pointer.
+                aria-hidden="true"
+                tabIndex={-1}
+                data-testid="rail-row-menu"
+                className="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 group-hover/row:opacity-100 data-[state=open]:opacity-100 max-[760px]:opacity-100 pointer-coarse:opacity-100"
+              >
+                <MoreHorizontal aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+          </IconTip>
+          <DropdownMenuContent
+            align="end"
+            onCloseAutoFocus={(e) => {
+              // The `⋯` is out of the tab order: focus returns to the row it acted on.
+              e.preventDefault()
+              onMenuClosed()
+            }}
+          >
+            {menu(session)}
+          </DropdownMenuContent>
+        </DropdownMenu>
       ) : null}
     </div>
   )
@@ -270,10 +351,23 @@ export function WorkRail({
   emptyAction,
   loading,
   onOpenBeside,
+  rowMenu,
 }: WorkRailProps) {
   const { t } = useTranslation('sessions')
+  useForgetTurnsOnLeave()
   const groups = groupSessions(sessions, pinned)
-  const order = railOrder(groups)
+  // THE SNOOZED SECTION IS FOLDED (#2480): a snooze takes the session out of the list
+  // until its moment, and one toggle under the list keeps it reachable, so a snooze is
+  // never a way to lose a session. Folded, its rows are not drawn and not walked.
+  const [showSnoozed, setShowSnoozed] = useState(false)
+  const snoozedCount =
+    groups.find((group) => group.id === 'snoozed')?.sessions.length ?? 0
+  // THE ARCHIVED SECTION FOLDS THE SAME WAY (#2795), under its own toggle: one rule for
+  // every session that is out of the list, whoever put it there.
+  const [showArchived, setShowArchived] = useState(false)
+  const archivedCount =
+    groups.find((group) => group.id === 'archived')?.sessions.length ?? 0
+  const order = railOrder(groups, showSnoozed, showArchived)
   const shared = sharedNames(sessions, t('untitled'))
   const rowRefs = useRef(new Map<string, HTMLDivElement>())
 
@@ -281,6 +375,8 @@ export function WorkRail({
   // sessions must not open one per keystroke. It starts on the open session so a
   // deep-linked arrival can walk away from where it landed.
   const [focusedAddress, setFocusedAddress] = useState<string | null>(null)
+  // The one row whose actions menu is open, if any.
+  const [menuAddress, setMenuAddress] = useState<string | null>(null)
   const focused =
     (focusedAddress && order.some((s) => addressOf(s) === focusedAddress)
       ? focusedAddress
@@ -311,6 +407,10 @@ export function WorkRail({
    * anywhere else.
    */
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    // A row's open menu is portalled out of the rail's DOM but not out of its React
+    // tree: its keys bubble here, and Enter on an item must not also open the session,
+    // nor `p` typed to find an item pin it. Only keys pressed in the rail itself count.
+    if (!e.currentTarget.contains(e.target as Node)) return
     // Row action buttons keep their native Enter/Space activation.
     if (e.target instanceof Element && e.target.closest('button')) return
     if (order.length === 0) return
@@ -339,6 +439,12 @@ export function WorkRail({
       if (row) onOpen(row)
       return
     }
+    if (command === 'rail.menu' && rowMenu) {
+      e.preventDefault()
+      const row = order[at]
+      if (row) setMenuAddress(addressOf(row))
+      return
+    }
     if (command === 'rail.pin' && onTogglePin) {
       e.preventDefault()
       const row = order[at]
@@ -359,57 +465,120 @@ export function WorkRail({
   }
 
   return (
-    // Roles, not tags: the ARIA tree a listbox must have is `listbox > group >
-    // option`, and a group HEADING is a child of its group, never of the listbox.
-    // Wrapping each section in a presentational <li> put that heading directly under
-    // the listbox, where it is not an allowed child — a structure axe reads as broken
-    // and a screen reader reads as a stray line of text.
-    <div
-      role="listbox"
-      aria-label={t('rail.label')}
-      // A listbox with no option yet is only a valid tree while it says it is busy.
-      aria-busy={loading ? true : undefined}
-      data-testid="work-rail"
-      onKeyDown={onKeyDown}
-      className="flex flex-col"
-    >
-      {groups
-        .filter((group) => group.sessions.length > 0)
-        .map((group) => (
-          <div
-            key={group.id}
-            role="group"
-            aria-labelledby={`rail-group-${group.id}`}
-          >
-            <p
-              className="sticky top-0 z-10 bg-canvas px-3 pt-4 pb-1 text-overline font-medium text-text-3"
-              id={`rail-group-${group.id}`}
-            >
-              {/* THE SPACE IS NOT DECORATION. This paragraph is the group's accessible
+    <>
+      {/* Roles, not tags: the ARIA tree a listbox must have is `listbox > group >
+        option`, and a group HEADING is a child of its group, never of the listbox.
+        Wrapping each section in a presentational <li> put that heading directly under
+        the listbox, where it is not an allowed child — a structure axe reads as broken
+        and a screen reader reads as a stray line of text. With every session
+        snoozed or archived and folded there is no option to own, and no listbox is drawn. */}
+      {loading || order.length > 0 ? (
+        <div
+          role="listbox"
+          aria-label={t('rail.label')}
+          // A listbox with no option yet is only a valid tree while it says it is busy.
+          aria-busy={loading ? true : undefined}
+          data-testid="work-rail"
+          onKeyDown={onKeyDown}
+          className="flex flex-col"
+        >
+          {groups
+            .filter(
+              (group) =>
+                group.sessions.length > 0 &&
+                (group.id !== 'snoozed' || showSnoozed) &&
+                (group.id !== 'archived' || showArchived),
+            )
+            .map((group) => (
+              <div
+                key={group.id}
+                role="group"
+                aria-labelledby={`rail-group-${group.id}`}
+              >
+                <p
+                  className="sticky top-0 z-10 bg-canvas px-3 pt-4 pb-1 text-overline font-medium text-text-3"
+                  id={`rail-group-${group.id}`}
+                >
+                  {/* THE SPACE IS NOT DECORATION. This paragraph is the group's accessible
                   name (`aria-labelledby`), and without it the name is the two run
                   together: "Working1". A group with no rows is not drawn, and no
                   sentence stands in for it. */}
-              {t(`list.group.${group.id}`)}{' '}
-              <span className="tabular-nums">{group.sessions.length}</span>
-            </p>
-            {group.sessions.map((s) => (
-              <RailRow
-                key={s.key}
-                session={s}
-                selected={addressOf(s) === selected}
-                focused={addressOf(s) === focused}
-                pinned={pinned.has(s.key)}
-                onOpen={onOpen}
-                onOpenBeside={
-                  addressOf(s) !== selected ? onOpenBeside : undefined
-                }
-                registerRef={registerRef}
-                shared={shared}
-              />
+                  {t(`list.group.${group.id}`)}{' '}
+                  <span className="tabular-nums">{group.sessions.length}</span>
+                </p>
+                {group.sessions.map((s) => (
+                  <RailRow
+                    key={s.key}
+                    session={s}
+                    selected={addressOf(s) === selected}
+                    focused={addressOf(s) === focused}
+                    pinned={pinned.has(s.key)}
+                    onOpen={onOpen}
+                    onOpenBeside={
+                      addressOf(s) !== selected ? onOpenBeside : undefined
+                    }
+                    registerRef={registerRef}
+                    shared={shared}
+                    menu={rowMenu}
+                    menuOpen={menuAddress === addressOf(s)}
+                    onMenuOpenChange={(open) => {
+                      if (open) setFocusedAddress(addressOf(s))
+                      setMenuAddress(open ? addressOf(s) : null)
+                    }}
+                    onMenuClosed={() => moveTo(addressOf(s))}
+                    // THE KEYBOARD'S ROW IS THE ONE THAT HAS FOCUS, however it got there:
+                    // a click on a row moves it too, so `p` and Shift+F10 act on that row.
+                    onFocused={() => setFocusedAddress(addressOf(s))}
+                  />
+                ))}
+              </div>
             ))}
-          </div>
-        ))}
-    </div>
+        </div>
+      ) : null}
+      {/* OUTSIDE the listbox: a listbox owns options, and a button in it would be a
+        second kind of child and a second tab stop inside the rail's one. */}
+      <FoldToggle
+        label={t('list.group.snoozed')}
+        count={snoozedCount}
+        shown={showSnoozed}
+        onToggle={() => setShowSnoozed((shown) => !shown)}
+      />
+      <FoldToggle
+        label={t('list.group.archived')}
+        count={archivedCount}
+        shown={showArchived}
+        onToggle={() => setShowArchived((shown) => !shown)}
+      />
+    </>
+  )
+}
+
+/** The toggle under the rail that unfolds one section kept out of the list. */
+function FoldToggle({
+  label,
+  count,
+  shown,
+  onToggle,
+}: {
+  label: string
+  count: number
+  shown: boolean
+  onToggle: () => void
+}) {
+  if (count === 0) return null
+  return (
+    <button
+      type="button"
+      aria-expanded={shown}
+      onClick={onToggle}
+      className="flex items-center gap-1 px-3 pt-4 pb-2 text-left text-overline font-medium text-text-3 outline-none hover:text-text-2 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset"
+    >
+      <ChevronDown
+        aria-hidden="true"
+        className={cn('size-3 transition-transform', !shown && '-rotate-90')}
+      />
+      {label} <span className="tabular-nums">{count}</span>
+    </button>
   )
 }
 

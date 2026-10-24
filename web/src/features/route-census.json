@@ -67,6 +67,7 @@
     "/observability",
     "/onboarding",
     "/orchestration",
+    "/organization",
     "/permissions",
     "/platforms",
     "/provider-accounts",
@@ -74,6 +75,7 @@
     "/provider-profiles",
     "/providers",
     "/rate-limits",
+    "/reach",
     "/recordings",
     "/red-team",
     "/residency",
@@ -107,6 +109,7 @@
     "/recordings",
     "/red-team",
     "/session-viewer/$id",
-    "/team-costs"
+    "/team-costs",
+    "/organization"
   ]
 }

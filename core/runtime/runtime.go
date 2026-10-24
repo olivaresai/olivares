@@ -232,8 +232,10 @@ type moduleReg struct {
 	status Status
 	err    error
 	// dormant modules declare their schema and are initialized with a host
-	// that delivers no event; they are never started or stopped.
-	dormant bool
+	// that delivers no event; they are not started or stopped unless SetModuleActive
+	// turns them on (liveStarted).
+	dormant     bool
+	liveStarted bool
 }
 
 // New creates a runtime. If opts.Bus is nil it builds and owns an in-process bus.
@@ -271,6 +273,9 @@ var ErrNotRunning = errors.New("runtime: not running")
 // ErrSourceNotFound is returned by a live remove/rotate when no source is
 // registered under the given name.
 var ErrSourceNotFound = errors.New("runtime: no such source")
+
+// ErrModuleNotFound is returned by SetModuleActive when no module has that name.
+var ErrModuleNotFound = errors.New("runtime: no such module")
 
 // ErrSourceOpenFailed wraps a connector's Open error on a live add/rotate.
 // Open runs against the RESOLVED config (live secret values substituted in), so a

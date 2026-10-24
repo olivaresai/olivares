@@ -557,7 +557,7 @@ func (m *Module) budgetTargets(ctx context.Context, tenant model.TenantID, dims 
 		if isGroupDimension(spec.Dimension) {
 			dimension, key := spec.Dimension, spec.Key
 			read = func(ctx context.Context, sc store.Scope) (aggResult, error) {
-				return aggregateGroupPeriod(ctx, sc, userGroups.get, dimension, key, pStart, hasLower, pEnd, hasLower)
+				return aggregateGroupPeriod(ctx, sc, nil, userGroups.get, dimension, key, pStart, hasLower, pEnd, hasLower)
 			}
 		} else {
 			read = func(ctx context.Context, sc store.Scope) (aggResult, error) {

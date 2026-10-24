@@ -13,7 +13,8 @@
 //     text token on 30 backgrounds per theme (the four bases, each base under the selection
 //     fill, under the hover fill and under both, and canvas and surface under each of the
 //     seven soft fills), control boundaries,
-//     focus and the selection border at 3:1, the ink on the orange at 4.5:1 — 500 pairs;
+//     focus and the selection border at 3:1, the ink on the orange at 4.5:1 — 250 pairs
+//     per theme, light, dark and black;
 //   - the type ladder, the font stacks, radii, density and motion.
 /// <reference types="node" />
 import { readdirSync, readFileSync } from 'node:fs'
@@ -696,5 +697,62 @@ describe('v26.10 design tokens — the generated file is the approved system', (
     expect(tokensCss.replace(/\/\*[\s\S]*?\*\//g, '')).not.toMatch(
       /\[data-density='compact'\][^{]*\{[^}]*--text-/,
     )
+  })
+})
+
+describe('the Black theme: the dark theme on true black', () => {
+  const dark = parseBlock(tokensCss, '.dark')
+  const black = () => parseBlock(tokensCss, '.dark.black')
+
+  it('is true black: #000 sheet, surfaces one step up, faint hairlines, #ededed text', () => {
+    const t = black()
+    expect(t.canvas).toBe('#000000')
+    expect(t.frame).toBe('#000000')
+    expect(t.surface).toBe('#0a0a0a')
+    expect(t.raised).toBe('#111111')
+    expect(t.line).toBe('#1f1f1f')
+    expect(t['line-strong']).toBe('#262626')
+    expect(t.text).toBe('#ededed')
+    expect(t['text-2']).toBe('#8a8a8a')
+    // The roles follow the black values, not the dark ones.
+    expect(t.background).toBe(t.canvas)
+    expect(t.foreground).toBe(t.text)
+  })
+
+  it('keeps the one brand orange and the status colours of the dark theme', () => {
+    const t = black()
+    for (const name of [
+      'accent',
+      'accent-text',
+      'focus',
+      'ok',
+      'warn',
+      'bad',
+      'info',
+    ])
+      expect(t[name], `--${name}`).toBe(dark[name])
+  })
+
+  it('gives every role the black value of the token it aliases, and muted the selected fill', () => {
+    const t = black()
+    for (const [role, token] of Object.entries(ROLE_ALIASES))
+      expect(t[role], `.dark.black --${role} = --${token}`).toBe(t[token])
+    // The dark file states muted as a value, not an alias: Black must override it.
+    expect(t.muted).toBe('#141414')
+    expect(t.muted).toBe(t.active)
+  })
+
+  it('declares exactly the names of the dark theme, so no style falls back to grey', () => {
+    expect(new Set(Object.keys(black()))).toEqual(new Set(Object.keys(dark)))
+  })
+
+  it('passes the same 250 required contrast pairs as the other themes', () => {
+    const pairs = requiredPairs('black', black())
+    expect(pairs).toHaveLength(250)
+    expect(
+      pairs
+        .filter((p) => p.ratio < p.required)
+        .map((p) => `${p.fg} on ${p.bg}: ${show(p.ratio)} < ${p.required}`),
+    ).toEqual([])
   })
 })

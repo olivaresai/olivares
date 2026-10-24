@@ -2,7 +2,6 @@
   "title": "Proveedores",
   "subtitle": "Una credencial de proveedor en la nube o un endpoint de modelos locales con el que trabajan tus herramientas de agentes.",
   "nav": "Proveedores",
-  "add": "Añadir proveedor",
   "rowMenu": "Acciones de fila para {{name}}",
   "empty": {
     "title": "Todavía no hay ningún proveedor registrado",
@@ -162,5 +161,9 @@
     "failed": "Proveedor guardado. No se pudo preparar la sesión: {{error}}",
     "retry": "Reintentar preparación",
     "incomplete": "La instalación de la herramienta está en estado {{state}}. Revisa Herramientas de IA y reinténtalo."
+  },
+  "section": {
+    "title": "Claves de API",
+    "add": "Añadir una clave de API"
   }
 }

@@ -398,13 +398,13 @@ func (m *Module) Start(context.Context) error {
 	if !m.fileEraser.Wired() {
 		m.log.Info("compliance: no Files-store eraser wired; the Claude Files inventory + governed delete are inert and the RTBF disclosure leg is skipped")
 	}
-	if m.shredCoordinator == nil {
+	if !sdk.CapabilityEnabled(m.shredCoordinator) {
 		m.log.Info("compliance: no enterprise RTBF shred coordinator wired; erasure uses open-core crypto-shredding only")
 	}
 	if m.profileResolver == nil {
 		m.log.Info("compliance: no OSCAL profile resolver wired (Business capability absent); profile/SSP ingestion returns 501 ")
 	}
-	if m.governor == nil {
+	if !sdk.CapabilityEnabled(m.governor) {
 		m.log.Info("compliance: no retention governor wired (Business capability absent); no regulatory retention floor is enforced and schedules may be freely relaxed/deleted")
 	}
 	if m.regPackager == nil {
@@ -416,7 +416,7 @@ func (m *Module) Start(context.Context) error {
 	if m.aimsPackager == nil {
 		m.log.Info("compliance: no AIMS packager wired (Business capability absent); ISO/IEC 42001 certification-readiness pack generation returns 501 ")
 	}
-	if m.nis2Packager == nil {
+	if !sdk.CapabilityEnabled(m.nis2Packager) {
 		m.log.Info("compliance: no NIS2 incident packager wired (Business capability absent); NIS 2 significant-incident classification returns 501 ")
 	}
 	return nil

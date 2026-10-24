@@ -147,6 +147,10 @@ func (s *Server) ssoRoutedBy() string {
 	return "unavailable"
 }
 
+// ssoEnforcedOutOfScope is the enforced_by answer for a row whose posture the wired engine
+// never reads; handlePutSSOConfig refuses a set posture on exactly these rows.
+const ssoEnforcedOutOfScope = "out_of_scope"
+
 // ssoEnforcedBy is the HONEST enforced_by signal for ONE IdP row. It answers three ways,
 // never two — the console prints it directly above THAT ROW's stored posture, so a
 // build-wide yes/no was read as a claim about a posture nobody reads:
@@ -184,7 +188,7 @@ func (s *Server) ssoEnforcedBy(scope model.TenantID, alias string) string {
 	if scope == auth.GlobalFederationScope && model.NormalizeFederationAlias(alias) == model.DefaultFederationAlias {
 		return "enterprise"
 	}
-	return "out_of_scope"
+	return ssoEnforcedOutOfScope
 }
 
 // ssoConfigInput is the PUT/test payload. A blank secret field keeps the sealed
@@ -212,7 +216,8 @@ type ssoConfigInput struct {
 	// Login-enforcement posture (non-secret). Replaced verbatim on every PUT:
 	// require_sso toggles password-login enforcement; network_allowlist is the full
 	// intended CIDR set (an empty/absent list clears the allow-list). Malformed CIDRs
-	// are rejected (400). The open build persists these but never enforces them.
+	// are rejected (400). The open build persists these but never enforces them; an
+	// enforcing build refuses them on any row but the deployment-wide primary (400).
 	RequireSSO       bool     `json:"require_sso"`
 	NetworkAllowlist []string `json:"network_allowlist"`
 
@@ -224,6 +229,21 @@ type ssoConfigInput struct {
 	// U5 home-realm domains (non-secret, replaced verbatim). Normalized + validated +
 	// checked for global uniqueness by the backend (400/409 on a bad or already-claimed one).
 	ClaimedDomains []string `json:"claimed_domains"`
+}
+
+// setsPosture reports whether the payload turns require_sso on or lists at least one
+// non-blank CIDR. Blank entries do not count: the service drops them, so a payload that
+// holds only blanks clears the posture.
+func (in ssoConfigInput) setsPosture() bool {
+	if in.RequireSSO {
+		return true
+	}
+	for _, cidr := range in.NetworkAllowlist {
+		if strings.TrimSpace(cidr) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (in ssoConfigInput) toParams() auth.FederationConfigInput {
@@ -374,6 +394,14 @@ func (s *Server) handlePutSSOConfig(w http.ResponseWriter, r *http.Request, mc M
 	var in ssoConfigInput
 	if err := decodeJSON(w, r, &in); err != nil {
 		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
+		return
+	}
+	// A posture on a row the enforcing engine never reads is refused, not stored: the
+	// operator would see it saved while every sign-in stays open.
+	// Only while the build enforces: with no LoginPolicy nothing is read on any row and the
+	// published contract (store it, enforce nothing) is unchanged. Clearing is not refused.
+	if s.ssoEnforcedBy(scope, alias) == ssoEnforcedOutOfScope && in.setsPosture() {
+		s.badRequest(w, r, "require_sso and network_allowlist apply only to the deployment-wide primary identity provider (set them with PUT /v1/console/sso); this provider's are not read, so turn them off and empty the allow-list here to save")
 		return
 	}
 	view, err := svc.PutConfigIdP(r.Context(), p, scope, alias, in.toParams())

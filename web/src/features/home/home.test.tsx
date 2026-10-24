@@ -19,12 +19,14 @@ import { expectNoRawI18nKeys } from '@/test/i18n-keys'
 // front door printed `cost.deltaUp`. The modules that translate now register their
 // own namespaces; if that regresses, this test goes red with the raw key.
 import { ApiError } from '@/lib/api/errors'
-import { FEATURE_EXTENSIONS } from '@/features/extensions'
-
-const businessFinops = FEATURE_EXTENSIONS.some((view) => view.id === 'finops')
+import { auditApi } from '@/lib/api/endpoints'
 import { finopsApi } from '@/features/finops/api'
-import { governanceApi } from '@/features/governance/api'
+import {
+  budgetsFixture,
+  budgetStatusFixtures,
+} from '@/features/finops/fixtures'
 import { killswitchApi } from '@/features/killswitch/api'
+import { governanceApi } from '@/features/governance/api'
 import { securityApi } from '@/features/security/api'
 import { healthApi } from '@/features/health/api'
 import { complianceApi } from '@/features/compliance/api'
@@ -33,24 +35,16 @@ import { signInApi } from '@/features/first-hour/api'
 import { sessionsApi } from '@/features/sessions/api'
 import { inventoryApi } from '@/features/inventory/api'
 import { agentOpsApi } from '@/features/agentops/api'
-import { useModulesStore } from '@/stores/modules'
-import {
-  finopsForecastFixture,
-  finopsSummaryFixture,
-  finopsTrendFixture,
-  complianceSummary,
-  healthIncidentsFixture,
-  healthStatusFixture,
-  securityFindingsFixture,
-} from '@/features/executive/fixtures'
-import { EstateTile } from './components'
 import { HomeView } from './home-view'
+import type { SwimlaneProps } from './swimlane'
+import { FLEET_SESSIONS } from './swimlane-model'
 import './i18n'
 
 // Render TanStack Router <Link> as a plain anchor (no RouterProvider in jsdom) — the
 // established pattern across the view tests.
 const panels = vi.hoisted(() => ({
   complianceView: undefined as undefined | (() => null),
+  estateFleet: undefined as undefined | ((p: SwimlaneProps) => ReactNode),
 }))
 vi.mock('@/features/extensions', () => ({
   PANEL_EXTENSIONS: panels,
@@ -80,204 +74,323 @@ const authState = vi.hoisted(() => ({
   activeTenant: 'demo' as string | null,
   // The tools' own status is a system administrator's read (useToolStatus).
   isSuperadmin: true,
-  principal: { superadmin: true, grants: [] },
+  principal: { superadmin: true, grants: [] } as {
+    superadmin: boolean
+    grants: never[]
+    actor?: string
+    kind?: string
+  },
 }))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 
 afterEach(() => {
   panels.complianceView = undefined
+  panels.estateFleet = undefined
+  onlineManager.setOnline(true)
 
   vi.restoreAllMocks()
   compliance.opened = false
   navigate.mockReset()
   authState.can = () => true
   authState.isSuperadmin = true
+  authState.principal = { superadmin: true, grants: [] }
 })
 
-describe('EstateTile (the three honest states)', () => {
-  it('ready: links to its module and shows the figure', () => {
-    renderIntel(
-      <EstateTile
-        to="/finops"
-        icon={<span />}
-        label="Spend"
-        value="$1.2k"
-        caption="last 30 days"
-        state="ready"
-      />,
-    )
-    expect(screen.getByRole('link')).toHaveAttribute('href', '/finops')
-    expect(screen.getByText('$1.2k')).toBeInTheDocument()
+const page = (items: unknown[], has_more = false) =>
+  ({ items, has_more }) as never
+
+describe('Estate: three regions, one orange control, the proof line (#2546)', () => {
+  const now = () => new Date().toISOString()
+  const run = (over: Record<string, unknown>) => ({
+    tenant_id: 'demo',
+    state: 'running',
+    provider_driver: 'claude',
+    created_at: now(),
+    last_activity_at: now(),
+    proof: { ledger_entries: 4, chain_verified: true },
+    ...over,
   })
-
-  it('loading: no link, no figure (skeletons only)', () => {
-    renderIntel(
-      <EstateTile
-        to="/finops"
-        icon={<span />}
-        label="Spend"
-        value="$1.2k"
-        state="loading"
-      />,
+  const estate = () => {
+    vi.spyOn(sessionsApi, 'live').mockResolvedValue(page([]))
+    vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue(
+      page([
+        run({
+          run_ref: 'r1',
+          name: 'Refactor cart totals',
+          cost_micro_usd: 1_420_000,
+          acts_for: { kind: 'user', user_id: 'u-lena' },
+        }),
+        run({
+          run_ref: 'r2',
+          name: 'Reconcile invoice export',
+          cost_micro_usd: 880_000,
+          acts_for: { kind: 'user', user_id: 'u-marc' },
+        }),
+        run({
+          run_ref: 'r3',
+          name: 'Nightly dependency audit',
+          cost_micro_usd: 120_000,
+          acts_for: { kind: 'automation' },
+        }),
+      ]),
     )
-    expect(screen.queryByRole('link')).toBeNull()
-    // The figure is NOT shown while loading — no half-rendered number.
-    expect(screen.queryByText('$1.2k')).toBeNull()
-  })
-
-  /**
-   * THE TONE IS THE SIGNAL, AND IT HAS TO REACH THE DOM.
-   *
-   * ⛔ WHY THIS REPLACED A CASE THAT PASSED. The case here used to supply its OWN
-   *    `<span className="text-warning">` as the caption and then assert that the span it
-   *    had just written carried `text-warning` — so it held whether or not `tone` did
-   *    anything, and it held while `tone` was destructured away and reached no element
-   *    at all. No caller writes a pre-toned caption: the four in `home-view.tsx` pass a
-   *    translated STRING and the tone beside it.
-   *
-   * ⛔ AND IT IS THE STATE WORD, NEVER THE NUMERAL. The work-first pass took colour off
-   *    the figures on purpose — a grid of tinted numerals is a grid with no emphasis —
-   *    and the bar's §4 keeps ok/warn/fail on the semantic tokens while reserving the
-   *    orange accent for selection, the primary action and links. The caption line is
-   *    where a tile says what STATE it is in, so that is where the token goes.
-   */
-  it.each([
-    ['warning', 'text-warning'],
-    ['danger', 'text-danger'],
-    ['success', 'text-success'],
-  ] as const)(
-    'tone %s tints the state word and never the numeral',
-    (tone, token) => {
-      renderIntel(
-        <EstateTile
-          to="/sessions"
-          icon={<span />}
-          label="Live sessions"
-          value="1"
-          caption="2 of 3 healthy"
-          tone={tone}
-          state="ready"
-        />,
-      )
-      const value = screen.getByTestId('estate-kpi-value')
-      expect(value).toHaveTextContent('1')
-      expect(value.className).toMatch(/text-foreground/)
-      expect(value.className).not.toMatch(
-        /text-warning|text-danger|text-success|text-accent/,
-      )
-      const state = screen.getByTestId('estate-tile-state')
-      expect(state).toHaveTextContent('2 of 3 healthy')
-      expect(state).toHaveClass(token)
-    },
-  )
-
-  it('no tone: the state word keeps the caption\u2019s own muted register', () => {
-    renderIntel(
-      <EstateTile
-        to="/sessions"
-        icon={<span />}
-        label="Live sessions"
-        value="1"
-        caption="3 of 3 healthy"
-        state="ready"
-      />,
+    vi.spyOn(governanceApi, 'listApprovals').mockResolvedValue(
+      page([
+        {
+          id: 'ap-migrate',
+          action: 'claude.hook.tool',
+          subject_kind: 'claude.tool',
+          requested_by: 'user:marc',
+          review: {
+            tool: 'Command',
+            text: 'pnpm db:migrate --env payments-staging',
+          },
+          status: 'pending',
+          required_approvals: 1,
+          approve_count: 0,
+          reject_count: 0,
+          escalated: false,
+        },
+        {
+          id: 'ap-network',
+          action: 'claude.hook.tool',
+          subject_kind: 'claude.tool',
+          requested_by: 'user:sam',
+          review: {
+            tool: 'Command',
+            text: 'curl -sI https://registry.terraform.io/v1/providers',
+          },
+          status: 'pending',
+          required_approvals: 1,
+          approve_count: 0,
+          reject_count: 0,
+          escalated: false,
+        },
+      ]),
     )
-    // The CONTROL for the three above: without a tone nothing is tinted, so the token
-    // they assert is the tone's doing and not a class the tile always writes.
-    expect(screen.getByTestId('estate-tile-state').className).not.toMatch(
-      /text-warning|text-danger|text-success|text-accent/,
+    vi.spyOn(auditApi, 'recent').mockResolvedValue({
+      items: [],
+      head_seq: 12408,
+    })
+    vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(
+      readinessOf({ claude: 'own_login' }),
     )
-  })
-
-  it('a tone does not tint a figure that is not there (unavailable)', () => {
-    renderIntel(
-      <EstateTile
-        to="/health"
-        icon={<span />}
-        label="Health"
-        value="2/3"
-        caption="1 down"
-        tone="danger"
-        state="unavailable"
-      />,
+    vi.spyOn(signInApi, 'status').mockImplementation(
+      async (driver) =>
+        ({
+          driver,
+          installed: driver === 'claude',
+          signed_in: driver === 'claude',
+        }) as Awaited<ReturnType<typeof signInApi.status>>,
     )
-    // Same rule as the floor marker (`partial`): a tone qualifies a figure, and with no
-    // figure on screen there is nothing to qualify — the retry hint is the whole
-    // message, and a red one would claim the estate is down when what is down is the read.
-    expect(screen.queryByTestId('estate-tile-state')).toBeNull()
-    expect(screen.getByText(/Couldn't load/i).className).not.toMatch(
-      /text-danger/,
-    )
-  })
+  }
 
-  it('unavailable: an em-dash + retry hint, never a fabricated 0, still links out', () => {
-    renderIntel(
-      <EstateTile
-        to="/health"
-        icon={<span />}
-        label="Health"
-        value="42"
-        state="unavailable"
-      />,
-    )
-    expect(screen.getByRole('link')).toHaveAttribute('href', '/health')
-    expect(screen.getByText('—')).toBeInTheDocument()
-    expect(screen.getByText(/Couldn't load/i)).toBeInTheDocument()
-    // The would-be value is never shown when the source failed.
-    expect(screen.queryByText('42')).toBeNull()
-  })
-})
-
-describe('HomeView (RBAC gating + honest states)', () => {
-  it('mounts only the tiles the role can read', async () => {
-    // The permissions the two tiles' own requests require: finopsApi.summary/trend/
-    // forecast are gated on finops:spend:read and securityApi.findings() on
-    // security:finding:read. The coarse `finops:read` / `security:read` this used to
-    // name were never declared by the engine.
-    authState.can = (p) =>
-      p === 'finops:spend:read' || p === 'security:finding:read'
-    vi.spyOn(finopsApi, 'summary').mockResolvedValue(finopsSummaryFixture)
-    vi.spyOn(finopsApi, 'trend').mockResolvedValue(finopsTrendFixture)
-    vi.spyOn(finopsApi, 'forecast').mockResolvedValue(finopsForecastFixture)
-    vi.spyOn(securityApi, 'findings').mockResolvedValue(securityFindingsFixture)
-
+  it('what runs and what it costs takes no click; the request takes one', async () => {
+    estate()
     const { container } = renderIntel(<HomeView />)
-
-    expect(await screen.findByText('Security')).toBeInTheDocument()
-    if (businessFinops) {
-      // The paid hook's answers can change the overview layout while this tile mounts.
-      await waitFor(() => expect(screen.getByText('Spend')).toBeInTheDocument())
-    } else {
-      expect(screen.queryByText('Spend')).toBeNull()
-      expect(finopsApi.summary).not.toHaveBeenCalled()
-      expect(finopsApi.trend).not.toHaveBeenCalled()
-      expect(finopsApi.forecast).not.toHaveBeenCalled()
-    }
-    // The front door reuses the executive tiles, whose namespace this chunk has to
-    // carry: `DeltaCaption` printed `cost.deltaUp` here until executive/components.tsx
-    // started registering it. Wait for that caption to MOUNT before sweeping — it
-    // arrives with the trend query, one tick after "Spend", and a sweep that runs
-    // early passes over an empty slot. The wait keys on the icon, not on the text, so
-    // it cannot depend on the namespace under scrutiny.
-    if (businessFinops) {
-      await waitFor(() =>
-        expect(
-          container.querySelector(
-            'svg.lucide-trending-up, svg.lucide-trending-down, svg.lucide-minus',
-          ),
-        ).not.toBeNull(),
-      )
-    }
+    // Region 1: the sentence (6 sessions would need 6 people; here 2 people, 1 automation).
+    expect(
+      await screen.findByTestId('estate-summary-sentence'),
+    ).toHaveTextContent(
+      '3 sessions open for 2 people · $2.42 today · 2 need you',
+    )
+    // Region 2: each session with its cost, on the first screen.
+    const cards = await screen.findByTestId('now-live')
+    expect(within(cards).getByText('$1.42')).toBeInTheDocument()
+    // Region 3: the flagged request, decided from here.
+    const flagged = await screen.findByTestId('now-flagged-request')
+    expect(flagged).toHaveTextContent('pnpm db:migrate --env payments-staging')
+    expect(
+      within(flagged).getByRole('button', { name: 'Approve once' }),
+    ).toBeInTheDocument()
+    // Three regions under the header, and no fourth.
+    expect(container.querySelectorAll('[data-estate-region]')).toHaveLength(3)
     expectNoRawI18nKeys(container)
-    // A viewer never sees a KPI whose module their role could not open (docs/SECURITY-HARDENING.md).
-    expect(screen.queryByText('Live sessions')).toBeNull()
-    expect(screen.queryByText('Health & SLA')).toBeNull()
-    expect(screen.queryByText('Inventory')).toBeNull()
-    expect(screen.queryByText('Compliance')).toBeNull()
-    expect(screen.queryByText('Kill switch')).toBeNull()
   })
 
-  it('gives a role that reads only the approval queue its pending approvals on Now', async () => {
+  it('the spend line puts the month against the monthly budget', async () => {
+    estate()
+    vi.spyOn(finopsApi, 'budgets').mockResolvedValue(page(budgetsFixture))
+    vi.spyOn(finopsApi, 'budgetStatus').mockResolvedValue(
+      budgetStatusFixtures['bdg-global']!,
+    )
+    renderIntel(<HomeView />)
+    expect(
+      await screen.findByRole('meter', { name: 'Spend this month' }),
+    ).toHaveAttribute('aria-valuetext', '$12,400.00 of $100,000.00 this month')
+  })
+
+  it('a session waiting for a person counts in the sentence beside the requests', async () => {
+    estate()
+    vi.spyOn(sessionsApi, 'live').mockResolvedValue(
+      page([
+        {
+          session_ref: 'sess-silent',
+          live_ref: 'l-silent',
+          attribution: 'legacy',
+          cc_state: 'silent_evasion',
+          input_tokens: 0,
+          output_tokens: 0,
+          cost_micro_usd: 0,
+          event_count: 1,
+          tool_call_count: 0,
+          first_event_at: now(),
+          last_event_at: now(),
+          duration_seconds: 1,
+        },
+      ]),
+    )
+    renderIntel(<HomeView />)
+    await waitFor(async () =>
+      expect(
+        await screen.findByTestId('estate-summary-sentence'),
+      ).toHaveTextContent('3 need you'),
+    )
+  })
+
+  it('a live page cut short says at least how many sessions run', async () => {
+    estate()
+    vi.spyOn(sessionsApi, 'live').mockResolvedValue(page([], true))
+    renderIntel(<HomeView />)
+    await waitFor(async () =>
+      expect(
+        await screen.findByTestId('estate-summary-sentence'),
+      ).toHaveTextContent(/^3\+ sessions open · /),
+    )
+  })
+
+  it('a sessions read paused offline says so, never a skeleton with no reason', async () => {
+    estate()
+    onlineManager.setOnline(false)
+    renderIntel(<HomeView />)
+    expect(await screen.findByTestId('estate-summary')).toHaveTextContent(
+      'Query paused — waiting to resume',
+    )
+  })
+
+  it('one filled orange control: Approve, while New session steps back', async () => {
+    estate()
+    const { container } = renderIntel(<HomeView />)
+    await screen.findByTestId('now-flagged-request')
+    await screen.findByTestId('now-start')
+    const orange = () =>
+      [...container.querySelectorAll('button, a')].filter((el) =>
+        el.classList.contains('bg-accent'),
+      )
+    await waitFor(() => expect(orange()).toHaveLength(1))
+    expect(orange()[0]).toHaveTextContent('Approve')
+  })
+
+  it('with nothing to decide, New session is the one orange control', async () => {
+    estate()
+    vi.spyOn(governanceApi, 'listApprovals').mockResolvedValue(page([]))
+    const { container } = renderIntel(<HomeView />)
+    const start = await screen.findByTestId('now-start')
+    await waitFor(() =>
+      expect(
+        within(start).getByRole('button', { name: /New session/ }),
+      ).toHaveClass('bg-accent'),
+    )
+    expect(
+      [...container.querySelectorAll('.bg-accent')].filter((el) =>
+        el.matches('button, a'),
+      ),
+    ).toHaveLength(1)
+  })
+
+  it('a request the person raised steps aside: the next one they may decide carries the orange', async () => {
+    estate()
+    // The first request was raised by user:marc (estate()); here Marc is signed in.
+    authState.principal = {
+      superadmin: true,
+      grants: [],
+      actor: 'user:marc',
+      kind: 'user',
+    }
+    const { container } = renderIntel(<HomeView />)
+    const flagged = await screen.findByTestId('now-flagged-request')
+    expect(flagged).toHaveTextContent('registry.terraform.io')
+    await screen.findByTestId('now-start')
+    await waitFor(() =>
+      expect(
+        [...container.querySelectorAll('.bg-accent')].filter((el) =>
+          el.matches('button, a'),
+        ),
+      ).toHaveLength(1),
+    )
+    expect(
+      within(flagged).getByRole('button', { name: 'Approve once' }),
+    ).toHaveClass('bg-accent')
+  })
+
+  it('with only requests the person raised, New session keeps the orange', async () => {
+    estate()
+    authState.principal = {
+      superadmin: true,
+      grants: [],
+      actor: 'user:marc',
+      kind: 'user',
+    }
+    const all = await governanceApi.listApprovals({ status: 'pending' })
+    vi.spyOn(governanceApi, 'listApprovals').mockResolvedValue(
+      page(all.items.filter((a) => a.requested_by === 'user:marc')),
+    )
+    renderIntel(<HomeView />)
+    // A quiet row, not the flag: there is nothing here this person may decide.
+    expect(await screen.findByTestId('now-approvals')).toHaveTextContent(
+      'pnpm db:migrate --env payments-staging',
+    )
+    expect(screen.queryByTestId('now-flagged-request')).toBeNull()
+    const start = await screen.findByTestId('now-start')
+    await waitFor(() =>
+      expect(
+        within(start).getByRole('button', { name: /New session/ }),
+      ).toHaveClass('bg-accent'),
+    )
+    expect(screen.queryByRole('button', { name: 'Approve once' })).toBeNull()
+  })
+
+  it('the proof line says the chain verifies and how many entries the ledger holds', async () => {
+    estate()
+    renderIntel(<HomeView />)
+    const proof = await screen.findByRole('link', { name: /^Chain verified/ })
+    await waitFor(() => expect(proof).toHaveTextContent('12,408 entries'))
+    expect(proof).toHaveAttribute('href', '/audit')
+  })
+
+  it('a role that cannot read the ledger gets the verdict without the count, and no ledger read', async () => {
+    estate()
+    authState.can = (p) => p !== 'audit:read'
+    const recent = vi.spyOn(auditApi, 'recent')
+    renderIntel(<HomeView />)
+    expect(
+      await screen.findByRole('link', { name: /^Chain verified/ }),
+    ).toHaveTextContent(/^Chain verified at \d\d:\d\d$/)
+    expect(recent).not.toHaveBeenCalled()
+  })
+
+  it('asks nothing of what left the home: inventory, security, compliance, health, kill switch, spend', async () => {
+    estate()
+    const reads = [
+      vi.spyOn(inventoryApi, 'summary'),
+      vi.spyOn(securityApi, 'findings'),
+      vi.spyOn(complianceApi, 'summary'),
+      vi.spyOn(healthApi, 'status'),
+      vi.spyOn(healthApi, 'incidents'),
+      vi.spyOn(killswitchApi, 'state'),
+      vi.spyOn(finopsApi, 'summary'),
+      vi.spyOn(finopsApi, 'trend'),
+    ]
+    const queryClient = createTestQueryClient()
+    renderIntel(<HomeView />, { queryClient })
+    await screen.findByTestId('now-flagged-request')
+    await waitFor(() => expect(queryClient.isFetching()).toBe(0))
+    for (const read of reads) expect(read).not.toHaveBeenCalled()
+  })
+})
+
+describe('Estate (RBAC gating + honest states)', () => {
+  it('gives a role that reads only the approval queue its pending approvals', async () => {
     authState.can = (p) => p === 'governance:approval:read'
     vi.spyOn(governanceApi, 'listApprovals').mockResolvedValue({
       items: [
@@ -295,34 +408,13 @@ describe('HomeView (RBAC gating + honest states)', () => {
       has_more: false,
     } as never)
     renderIntel(<HomeView />)
-    // This file's Link double renders href and children only, so the row is read by text.
-    const action = await screen.findByText('Deploy promote')
-    expect(action.closest('a')).toHaveAttribute('href', '/permissions')
-    expect(screen.queryByText(/Nothing to show yet/i)).toBeNull()
-  })
-
-  it('states the kill switch posture from its own read, and opens the kill switch', async () => {
-    authState.can = (p) => p === 'governance:killswitch:read'
-    vi.spyOn(killswitchApi, 'state').mockResolvedValue({
-      estate_stopped: true,
-      active: [
-        {
-          id: 'ks-1',
-          scope_kind: 'estate',
-          status: 'active',
-          source: 'operator',
-          engaged_aal: 3,
-          engage_audit_seq: 1,
-          revoked_approvals: 0,
-          reviewed: false,
-        },
-      ],
-    })
-    renderIntel(<HomeView />)
-    expect(await screen.findByText('ALL AGENTS STOPPED')).toBeInTheDocument()
-    const tile = screen.getByText('Kill switch').closest('a')
-    expect(tile).toHaveAttribute('href', '/killswitch')
-    // A role that can read only the kill switch still gets a Now page, not "nothing".
+    expect(await screen.findByTestId('now-approvals')).toHaveTextContent(
+      'Deploy promote',
+    )
+    // A role that may not decide reads the request as a quiet row; the decision stays on
+    // the queue, and nothing is flagged for it.
+    expect(screen.queryByTestId('now-flagged-request')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Approve once' })).toBeNull()
     expect(screen.queryByText(/Nothing to show yet/i)).toBeNull()
   })
 
@@ -330,21 +422,8 @@ describe('HomeView (RBAC gating + honest states)', () => {
     authState.can = () => false
     renderIntel(<HomeView />)
     expect(screen.getByText(/Nothing to show yet/i)).toBeInTheDocument()
-    // No tiles, no fabricated numbers.
+    // No regions, no fabricated numbers.
     expect(screen.queryByRole('link')).toBeNull()
-  })
-
-  it('offers a key manager who cannot start a session "Add a provider", to /providers', async () => {
-    // A viewer who also holds a custom role with the provider key permissions, and no
-    // sessions:run:write: Home shows it the generic next steps, and the provider one
-    // opens the key page (#336).
-    authState.isSuperadmin = false
-    authState.can = (p) =>
-      p.endsWith(':read') || p === 'sessions:provider:write'
-    renderIntel(<HomeView />)
-    expect(
-      await screen.findByRole('link', { name: /Add a provider/ }),
-    ).toHaveAttribute('href', '/providers')
   })
 
   it('does not add a 16 px stack gap above the work', () => {
@@ -354,284 +433,12 @@ describe('HomeView (RBAC gating + honest states)', () => {
     expect(page).not.toBeNull()
     expect(page!.className).not.toMatch(/\bgap-4\b/)
   })
-
-  // HU2-25: an upgraded install drew a tile per module, "No health checks yet" and a
-  // compliance score nobody asked for among them. A tile now hides when its answer is in
-  // and empty; the compliance score waits until the person opened Compliance.
-  it('draws no tile for a module whose answer is empty', async () => {
-    authState.can = (p) =>
-      p === 'health:status:read' || p === 'governance:killswitch:read'
-    const status = vi
-      .spyOn(healthApi, 'status')
-      .mockResolvedValue({ items: [], has_more: false } as never)
-    // No subject and no open incident: an open incident is something to say.
-    vi.spyOn(healthApi, 'incidents').mockResolvedValue({
-      items: [],
-      has_more: false,
-    } as never)
-    vi.spyOn(killswitchApi, 'state').mockResolvedValue({
-      estate_stopped: false,
-      active: [],
-    })
-    renderIntel(<HomeView />)
-    await waitFor(() => expect(status).toHaveBeenCalled())
-    await waitFor(() => expect(screen.queryByText('Health & SLA')).toBeNull())
-    expect(screen.queryByText('No health checks yet')).toBeNull()
-    expect(screen.queryByText('Kill switch')).toBeNull()
-  })
-
-  // SR4C on ea62fad5: only a successful, complete, empty answer hides a tile.
-  it('keeps a tile whose first read is paused, and says so instead of "no checks"', async () => {
-    authState.can = (p) => p === 'health:status:read'
-    vi.spyOn(healthApi, 'status').mockResolvedValue({
-      items: [],
-      has_more: false,
-    } as never)
-    vi.spyOn(healthApi, 'incidents').mockResolvedValue(healthIncidentsFixture)
-    onlineManager.setOnline(false)
-    try {
-      renderIntel(<HomeView />)
-      expect(await screen.findByText('Health & SLA')).toBeInTheDocument()
-      expect(
-        screen.getByText('Query paused — waiting to resume'),
-      ).toBeInTheDocument()
-      expect(screen.queryByText('No health checks yet')).toBeNull()
-    } finally {
-      onlineManager.setOnline(true)
-    }
-  })
-
-  it('keeps a tile whose answer is a first page with more behind it', async () => {
-    authState.can = (p) => p === 'security:finding:read'
-    const findings = vi.spyOn(securityApi, 'findings').mockResolvedValue({
-      items: [],
-      has_more: true,
-    } as never)
-    renderIntel(<HomeView />)
-    await waitFor(() => expect(findings).toHaveBeenCalled())
-    // The answered tile is a link (a loading tile is not): it stays after the answer.
-    await waitFor(() =>
-      expect(screen.getByText('Security').closest('a')).toHaveAttribute(
-        'href',
-        '/security',
-      ),
-    )
-  })
-
-  it('keeps a tile whose source could not be read', async () => {
-    authState.can = (p) => p === 'health:status:read'
-    vi.spyOn(healthApi, 'status').mockRejectedValue(
-      new ApiError(500, 'server_error', 'boom'),
-    )
-    vi.spyOn(healthApi, 'incidents').mockResolvedValue(healthIncidentsFixture)
-    renderIntel(<HomeView />)
-    expect(await screen.findByText('Health & SLA')).toBeInTheDocument()
-  })
-
-  it('shows the Business compliance score only after Compliance was opened', async () => {
-    panels.complianceView = () => null
-    authState.can = (p) => p === 'compliance:framework:read'
-    const summary = vi
-      .spyOn(complianceApi, 'summary')
-      .mockResolvedValue(complianceSummary)
-    const first = renderIntel(<HomeView />)
-    await waitFor(() => expect(summary).toHaveBeenCalled())
-    await waitFor(() => expect(screen.queryByText('Compliance')).toBeNull())
-    first.unmount()
-    compliance.opened = true
-    renderIntel(<HomeView />)
-    expect(await screen.findByText('Compliance')).toBeInTheDocument()
-  })
-
-  it('does not turn Business framework gaps into a fresh-install Home score', async () => {
-    panels.complianceView = () => null
-    authState.can = (p) =>
-      [
-        'compliance:framework:read',
-        'inventory:catalog:read',
-        'sessions:live:read',
-      ].includes(p)
-    // A new install still has framework assessments from platform defaults. An
-    // empty frameworks array would miss the reported 9% / 68 gaps regression.
-    const summary = vi.spyOn(complianceApi, 'summary').mockResolvedValue({
-      ...complianceSummary,
-      frameworks: [
-        {
-          ...complianceSummary.frameworks[0]!,
-          summary: {
-            total: 100,
-            satisfied: 0,
-            by_design: 9,
-            partial: 6,
-            gap: 68,
-            unmapped: 17,
-          },
-        },
-      ],
-    })
-    vi.spyOn(inventoryApi, 'summary').mockResolvedValue({
-      by_kind: {},
-      by_source: {},
-      total: 0,
-    })
-    vi.spyOn(sessionsApi, 'live').mockResolvedValue({
-      items: [],
-      has_more: false,
-    })
-    renderIntel(<HomeView />)
-    await waitFor(() => expect(summary).toHaveBeenCalled())
-    await waitFor(() => expect(screen.queryByText('Inventory')).toBeNull())
-    await waitFor(() =>
-      expect(screen.queryByTestId('home-sessions-scope-note')).toBeNull(),
-    )
-    expect(screen.queryByText('Compliance')).toBeNull()
-    expect(screen.queryByText('9%')).toBeNull()
-    expect(screen.queryByText(/68 gaps/)).toBeNull()
-    expect(screen.queryByText('All workspaces')).toBeNull()
-    expect(screen.queryByText(/Tenant-wide/)).toBeNull()
-  })
-
-  it('keeps a seeded Business compliance assessment available after Compliance was opened', async () => {
-    panels.complianceView = () => null
-    authState.can = (p) => p === 'compliance:framework:read'
-    vi.spyOn(complianceApi, 'summary').mockResolvedValue({
-      ...complianceSummary,
-      frameworks: [
-        {
-          ...complianceSummary.frameworks[0]!,
-          summary: {
-            total: 10,
-            satisfied: 4,
-            by_design: 2,
-            partial: 1,
-            gap: 2,
-            unmapped: 1,
-          },
-        },
-      ],
-    })
-    compliance.opened = true
-    renderIntel(<HomeView />)
-    const tile = await screen.findByRole('link', { name: /Compliance/ })
-    expect(tile).toHaveAttribute('href', '/compliance')
-    expect(within(tile).getByText('60%')).toBeInTheDocument()
-    expect(within(tile).getByText('2 gaps · 1 unmapped')).toBeInTheDocument()
-  })
-
-  it('renders a source error as unavailable, never a fabricated 0', async () => {
-    authState.can = (p) => p === 'health:status:read'
-    vi.spyOn(healthApi, 'status').mockRejectedValue(
-      new ApiError(500, 'server_error', 'boom'),
-    )
-    vi.spyOn(healthApi, 'incidents').mockResolvedValue(healthIncidentsFixture)
-
-    renderIntel(<HomeView />)
-
-    expect(await screen.findByText(/Couldn't load/i)).toBeInTheDocument()
-    expect(screen.getByText('—')).toBeInTheDocument()
-  })
-
-  /**
-   * THE TWO SIGNALS THE FRONT DOOR LOST, MEASURED THROUGH THE SCREEN THAT LOST THEM.
-   *
-   * The tile cases above prove `tone` reaches an element; these two prove the four
-   * callers still compute the right one and that it survives the trip. They are the
-   * inputs a review named: a run-rate projected over the period's own spend, and a
-   * subject that is DOWN while nothing has breached and no incident is open — the state
-   * in which `2/3 healthy` used to read exactly like `3/3 healthy`.
-   */
-  /**
-   * ⛔ AND THE WORDS ARE THE ASSERTION, BECAUSE THE COLOUR WAS THE WHOLE SIGNAL.
-   *    `toHaveClass('text-warning')` is what this case used to say, and it is true of a
-   *    tile whose sentence is identical in both states: the same estate under and over
-   *    its run-rate printed "$9.0k projected at run-rate" either way, differing only by
-   *    amber. A reader on a monochrome display, a colour-blind reader and a screen
-   *    reader all got one tile for two states (WCAG 2.1 AA 1.4.1). The pair below is
-   *    therefore read as TEXT, and the token is asserted beside it — the colour is still
-   *    right, it is just no longer the only thing that is.
-   */
-  async function spendCaption(projected: number, spent: number) {
-    authState.can = (p) => p === 'finops:spend:read'
-    vi.spyOn(finopsApi, 'summary').mockResolvedValue(finopsSummaryFixture)
-    vi.spyOn(finopsApi, 'trend').mockResolvedValue(finopsTrendFixture)
-    vi.spyOn(finopsApi, 'forecast').mockResolvedValue({
-      ...finopsForecastFixture,
-      spend_micro_usd: spent,
-      trend_projected_micro_usd: projected,
-    })
-    renderIntel(<HomeView />)
-    if (!businessFinops) {
-      expect(screen.queryByText('Spend')).toBeNull()
-      expect(finopsApi.forecast).not.toHaveBeenCalled()
-      return null
-    }
-    await screen.findByText('Spend')
-    return await screen.findByTestId('estate-tile-state')
-  }
-
-  it('over its run-rate: the spend tile says so in WORDS, not only in amber', async () => {
-    const state = await spendCaption(9_000_000, 1_000_000)
-    if (state === null) return
-    await waitFor(() => expect(state).toHaveClass('text-warning'))
-    expect(state).toHaveTextContent(/projected at run-rate/i)
-    expect(state).toHaveTextContent(/above spend so far/i)
-  })
-
-  it('under its run-rate: the same tile says the plain sentence and no more', async () => {
-    // The CONTROL for the case above: without it "says so in words" would hold for a
-    // caption that says the same thing in both states.
-    const state = await spendCaption(1_000_000, 9_000_000)
-    if (state === null) return
-    expect(state).toHaveTextContent(/projected at run-rate/i)
-    expect(state).not.toHaveTextContent(/above spend so far/i)
-    expect(state.className).not.toMatch(/text-warning/)
-  })
-
-  it('a subject is down with no breach and no incident: the health tile is not silent', async () => {
-    authState.can = (p) => p === 'health:status:read'
-    const down = {
-      ...healthStatusFixture.items[0],
-      id: 'h-down',
-      state: 'down' as const,
-      sla_breach_open: false,
-    }
-    vi.spyOn(healthApi, 'status').mockResolvedValue({
-      items: [healthStatusFixture.items[0], down],
-      has_more: false,
-    })
-    vi.spyOn(healthApi, 'incidents').mockResolvedValue({
-      items: [],
-      has_more: false,
-    })
-
-    renderIntel(<HomeView />)
-    await screen.findByText('Health & SLA')
-    await waitFor(() =>
-      expect(screen.getByTestId('estate-tile-state')).toHaveClass(
-        'text-danger',
-      ),
-    )
-    // The figure itself is the count, and it is NOT the thing that carries the colour.
-    expect(screen.getByTestId('estate-kpi-value')).toHaveTextContent(
-      '1/2 healthy',
-    )
-    expect(screen.getByTestId('estate-kpi-value').className).not.toMatch(
-      /text-danger/,
-    )
-    // ⛔ AND THE WORDS ALREADY CARRY IT HERE, which is why this tile needed no new key:
-    //    a down subject changes the FIGURE (`1/2 healthy`, never `2/2`), so the danger
-    //    tone is a second statement of a fact the sentence already makes. Asserted, not
-    //    assumed — it is the property the spend tile was missing.
-    expect(screen.getByTestId('estate-kpi-value')).not.toHaveTextContent(
-      '2/2 healthy',
-    )
-  })
 })
 
-describe('Now — live session cards and today’s cost (#2245)', () => {
-  // Now reads two pages: the runs Olivares operates and the live sessions it observes.
-  // A live session is a card, an ended one a Recent work row, and the Today tile sums
-  // what the sessions that worked today cost. The header holds no lone report button.
+describe('Estate — live session cards and the summary sentence (#2245, #2546)', () => {
+  // Estate reads two pages: the runs Olivares operates and the live sessions it observes.
+  // A live session is a card, an ended one a Recent work row, and the summary sentence
+  // says what the sessions that worked today cost. The header holds no lone report button.
   const role = (p: string) =>
     p === 'sessions:live:read' || p === 'sessions:run:read'
   const page = (items: unknown[]) => ({ items, has_more: false }) as never
@@ -661,19 +468,28 @@ describe('Now — live session cards and today’s cost (#2245)', () => {
     cost_micro_usd: 9_000_000,
     created_at: '2026-10-01T08:00:00Z',
   }
-  // The Today tile is a link once its reads answered (no link while loading).
-  const todayTile = async () => {
-    let tile: HTMLElement | null = null
-    await waitFor(() => {
-      tile = screen.getByText('Today').closest('a')
-      expect(tile).not.toBeNull()
-    })
-    return tile!
-  }
+  const sentence = () => screen.findByTestId('estate-summary-sentence')
   const stub = (runs: unknown[], live: unknown[] = []) => {
     vi.spyOn(sessionsApi, 'live').mockResolvedValue(page(live))
     vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue(page(runs))
   }
+
+  it('past FLEET_SESSIONS live sessions the last hour is the fleet panel a build supplies (#2565)', async () => {
+    authState.can = role
+    panels.estateFleet = (p) => <p>fleet for {p.sessions.length} sessions</p>
+    const live = FLEET_SESSIONS + 1
+    stub(
+      Array.from({ length: live }, (_, i) => ({
+        ...running(),
+        run_ref: `run-live-${i}`,
+        name: `Live ${i}`,
+      })),
+    )
+    renderIntel(<HomeView />)
+    expect(
+      await screen.findByText(`fleet for ${live} sessions`),
+    ).toBeInTheDocument()
+  })
 
   it('the header holds no lone Executive report button', async () => {
     authState.can = role
@@ -701,20 +517,18 @@ describe('Now — live session cards and today’s cost (#2245)', () => {
     expect(within(recent).queryByText('Fix the flaky login test')).toBeNull()
   })
 
-  it('Today sums what the sessions that worked today cost', async () => {
+  it('the sentence sums what the sessions that worked today cost', async () => {
     authState.can = role
     stub([running(), ended(), lastWeek])
     renderIntel(<HomeView />)
-    const tile = await todayTile()
-    await waitFor(() =>
-      expect(within(tile).getByText('$0.50')).toBeInTheDocument(),
+    await waitFor(async () =>
+      expect(await sentence()).toHaveTextContent(
+        /^1 session open · \$0\.50 today$/,
+      ),
     )
-    expect(
-      within(tile).getByText('Cost of the 2 sessions that worked today'),
-    ).toBeInTheDocument()
   })
 
-  it('Today says which sessions reported no cost, and marks a page with more as a floor', async () => {
+  it('the sentence says which sessions reported no cost, and a page with more is a floor', async () => {
     authState.can = role
     const unpriced = { ...ended(), run_ref: 'run-free', name: 'Local model' }
     delete (unpriced as { cost_micro_usd?: number }).cost_micro_usd
@@ -724,19 +538,15 @@ describe('Now — live session cards and today’s cost (#2245)', () => {
       has_more: true,
     } as never)
     renderIntel(<HomeView />)
-    const tile = await todayTile()
-    await waitFor(() =>
-      expect(within(tile).getByText('$0.42')).toBeInTheDocument(),
+    await waitFor(async () =>
+      expect(await sentence()).toHaveTextContent('at least $0.42 today'),
     )
-    expect(
-      within(tile).getByText(
-        'Cost of the 2 sessions that worked today · 1 reported no cost',
-      ),
-    ).toBeInTheDocument()
-    expect(screen.getByTestId('home-today-partial-note')).toBeInTheDocument()
+    expect(screen.getByTestId('estate-summary-spend')).toHaveTextContent(
+      '1 reported no cost',
+    )
   })
 
-  it('a role that reads only live sessions gets cards and Today from them', async () => {
+  it('a role that reads only live sessions gets cards and the sentence from them', async () => {
     authState.can = (p) => p === 'sessions:live:read'
     const runs = vi.spyOn(agentOpsApi, 'listRuns')
     vi.spyOn(sessionsApi, 'live').mockResolvedValue(
@@ -761,22 +571,22 @@ describe('Now — live session cards and today’s cost (#2245)', () => {
     renderIntel(<HomeView />)
     const cards = await screen.findByTestId('now-live')
     expect(within(cards).getByText('Claude Code')).toBeInTheDocument()
-    const tile = await todayTile()
-    await waitFor(() =>
-      expect(within(tile).getByText('$0.25')).toBeInTheDocument(),
+    await waitFor(async () =>
+      expect(await sentence()).toHaveTextContent(
+        /^1 session open · \$0\.25 today$/,
+      ),
     )
     expect(runs).not.toHaveBeenCalled()
-    expect(screen.queryByTestId('home-today-partial-note')).toBeNull()
   })
 
-  it('a day with no sessions draws no Today tile', async () => {
+  it('a day with no sessions says nothing runs, with no $0', async () => {
     authState.can = role
     stub([lastWeek])
     const queryClient = createTestQueryClient()
     renderIntel(<HomeView />, { queryClient })
     expect(await screen.findByText('Last week')).toBeInTheDocument()
     await waitFor(() => expect(queryClient.isFetching()).toBe(0))
-    expect(screen.queryByText('Today')).toBeNull()
+    expect(await sentence()).toHaveTextContent(/^Nothing is running$/)
   })
 
   it('when every session is live the cards carry the link to all sessions', async () => {
@@ -832,7 +642,7 @@ describe('Now — the next step once a coding tool is ready (HU 022)', () => {
       .spyOn(agentOpsApi, 'toolsReadiness')
       .mockResolvedValue(readinessOf(answers))
 
-  it('drops the generic next steps when a tool is signed in; New session is the action', async () => {
+  it('New session is the action when a tool is signed in', async () => {
     runsOn({ claude: 'own_login' })
     vi.spyOn(signInApi, 'status').mockImplementation(
       async (driver) =>
@@ -843,8 +653,12 @@ describe('Now — the next step once a coding tool is ready (HU 022)', () => {
         }) as Awaited<ReturnType<typeof signInApi.status>>,
     )
     renderIntel(<HomeView />)
-    expect(await screen.findByTestId('now-start')).toBeInTheDocument()
-    expect(screen.queryByTestId('home-next-step')).toBeNull()
+    // The line is there from the first paint; the tools' answer names it.
+    await waitFor(() =>
+      expect(screen.getByTestId('now-start')).toHaveTextContent(
+        'Claude Code is ready.',
+      ),
+    )
   })
 
   it('offers one start on an empty Now: the start line, not a second one in Recent work', async () => {
@@ -881,10 +695,11 @@ describe('Now — the next step once a coding tool is ready (HU 022)', () => {
       claude: { provider: { provider_ref: 'prv_1', kind: 'anthropic' } },
     })
     renderIntel(<HomeView />)
-    expect(await screen.findByTestId('now-start')).toHaveTextContent(
-      'Claude Code is ready.',
+    await waitFor(() =>
+      expect(screen.getByTestId('now-start')).toHaveTextContent(
+        'Claude Code is ready.',
+      ),
     )
-    expect(screen.queryByTestId('home-next-step')).toBeNull()
   })
 
   it('sends an installed tool with a refused API key to Providers instead of sign-in', async () => {
@@ -906,8 +721,10 @@ describe('Now — the next step once a coding tool is ready (HU 022)', () => {
     })
     renderIntel(<HomeView />)
     const start = await screen.findByTestId('now-start')
-    expect(start).toHaveTextContent(
-      'The API key Anthropic was refused. Replace it under Providers.',
+    await waitFor(() =>
+      expect(start).toHaveTextContent(
+        'The API key Anthropic was refused. Replace it under Providers.',
+      ),
     )
     expect(within(start).queryByRole('button', { name: 'Sign in' })).toBeNull()
     await user.click(
@@ -934,11 +751,11 @@ describe('Now — the next step once a coding tool is ready (HU 022)', () => {
     renderIntel(<HomeView />)
     const start = await screen.findByTestId('now-start')
     expect(
+      await within(start).findByRole('button', { name: 'Sign in' }),
+    ).toBeInTheDocument()
+    expect(
       within(start).queryByRole('button', { name: 'Open Providers' }),
     ).toBeNull()
-    expect(
-      within(start).getByRole('button', { name: 'Sign in' }),
-    ).toBeInTheDocument()
   })
 
   // WEB on 09b: an editor's Home asked GET agenttools/sign-in for both tools and got
@@ -948,13 +765,15 @@ describe('Now — the next step once a coding tool is ready (HU 022)', () => {
     runsOn({ claude: 'own_login' })
     const status = vi.spyOn(signInApi, 'status')
     renderIntel(<HomeView />)
-    expect(await screen.findByTestId('now-start')).toHaveTextContent(
-      'Claude Code is ready.',
+    await waitFor(() =>
+      expect(screen.getByTestId('now-start')).toHaveTextContent(
+        'Claude Code is ready.',
+      ),
     )
     expect(status).not.toHaveBeenCalled()
   })
 
-  it('a fresh install shows the real next step, signing the tool in, and no generic cards (N2 J8)', async () => {
+  it('a fresh install shows the real next step, signing the tool in (N2 J8)', async () => {
     runsOn({})
     vi.spyOn(signInApi, 'status').mockImplementation(
       async (driver) =>
@@ -965,24 +784,11 @@ describe('Now — the next step once a coding tool is ready (HU 022)', () => {
         }) as Awaited<ReturnType<typeof signInApi.status>>,
     )
     renderIntel(<HomeView />)
-    expect(await screen.findByTestId('now-start')).toHaveTextContent(
-      'Sign Claude Code in to start a session.',
+    await waitFor(() =>
+      expect(screen.getByTestId('now-start')).toHaveTextContent(
+        'Sign Claude Code in to start a session.',
+      ),
     )
-    expect(screen.queryByTestId('home-next-step')).toBeNull()
-  })
-})
-
-describe('Home with modules not enabled (ARCH C1)', () => {
-  afterEach(() => useModulesStore.getState().setOff([]))
-
-  it('shows no tile and asks nothing of a module that is not enabled', async () => {
-    useModulesStore.getState().setOff(['finops', 'security'])
-    const summary = vi.spyOn(finopsApi, 'summary')
-    const findings = vi.spyOn(securityApi, 'findings')
-    renderIntel(<HomeView />)
-    await screen.findByTestId('now-aside')
-    expect(summary).not.toHaveBeenCalled()
-    expect(findings).not.toHaveBeenCalled()
   })
 })
 
@@ -1040,25 +846,78 @@ describe('Now counts sessions, not the rows each one wrote (HU 029)', () => {
       ],
       has_more: false,
     } as never)
-    const { container } = renderIntel(<HomeView />)
-    await waitFor(() => {
-      const tile = [...container.querySelectorAll('a[href="/sessions"]')].find(
-        (a) => a.textContent?.includes('Live sessions'),
-      )
+    renderIntel(<HomeView />)
+    await waitFor(async () =>
       expect(
-        tile?.querySelector('[data-testid="estate-kpi-value"]')?.textContent,
-      ).toBe('1')
-    })
+        await screen.findByTestId('estate-summary-sentence'),
+      ).toHaveTextContent(/^1 session open/),
+    )
   })
 })
 
-it('does not fetch Business compliance assessments in Community', async () => {
-  compliance.opened = true
-  authState.can = (p) => p === 'compliance:framework:read'
-  const summary = vi
-    .spyOn(complianceApi, 'summary')
-    .mockResolvedValue(complianceSummary)
-  renderIntel(<HomeView />)
-  await waitFor(() => expect(screen.queryByText('Compliance')).toBeNull())
-  expect(summary).not.toHaveBeenCalled()
+describe('Now: the header block holds still while the page loads (#3121)', () => {
+  const never = () => new Promise<never>(() => {})
+
+  it('shows New session from the first paint, before the tools answer', () => {
+    vi.spyOn(signInApi, 'status').mockImplementation(never)
+    vi.spyOn(agentOpsApi, 'toolsReadiness').mockImplementation(never)
+    vi.spyOn(sessionsApi, 'live').mockImplementation(never)
+    vi.spyOn(agentOpsApi, 'listRuns').mockImplementation(never)
+    const { container } = renderIntel(<HomeView />)
+    const header = container.querySelector(
+      '[data-slot="page-header"]',
+    ) as HTMLElement
+    // Nothing waits for an answer to take its place: the verb is there at once.
+    const start = within(header).getByTestId('now-start')
+    expect(
+      within(start).getByRole('button', { name: /New session/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('puts New session first: the proof link comes after the verb', async () => {
+    vi.spyOn(signInApi, 'status').mockImplementation(
+      async (driver) =>
+        ({
+          driver,
+          installed: driver === 'claude',
+          signed_in: driver === 'claude',
+        }) as Awaited<ReturnType<typeof signInApi.status>>,
+    )
+    vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(
+      readinessOf({ claude: 'own_login' }),
+    )
+    vi.spyOn(sessionsApi, 'live').mockResolvedValue(page([]))
+    vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue(
+      page([
+        {
+          run_ref: 'r1',
+          tenant_id: 'demo',
+          state: 'completed',
+          provider_driver: 'claude',
+          created_at: new Date().toISOString(),
+          proof: { ledger_entries: 4, chain_verified: true },
+        },
+      ]),
+    )
+    const { container } = renderIntel(<HomeView />)
+    const proof = await screen.findByRole('link', { name: /^Chain verified/ })
+    const header = container.querySelector(
+      '[data-slot="page-header"]',
+    ) as HTMLElement
+    const verb = within(header).getByRole('button', { name: /New session/ })
+    // The first control of the page is the verb; the proof link follows it.
+    expect(header.querySelector('a[href], button')).toBe(verb)
+    expect(
+      verb.compareDocumentPosition(proof) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  it('gives a role that cannot start sessions no empty row under the title', () => {
+    authState.can = (p) => p !== 'sessions:run:write'
+    vi.spyOn(sessionsApi, 'live').mockImplementation(never)
+    vi.spyOn(agentOpsApi, 'listRuns').mockImplementation(never)
+    renderIntel(<HomeView />)
+    expect(screen.queryByTestId('now-header-line')).toBeNull()
+    expect(screen.queryByTestId('now-start')).toBeNull()
+  })
 })

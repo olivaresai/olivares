@@ -25,6 +25,7 @@ import type { RailStatus } from './session-rail'
 import { attentionSnapshots, type AttentionSnapshot } from './session-attention'
 import {
   RAIL_ROWS_PER_GROUP,
+  aliveSessions,
   railGroups,
   type RailGroup,
 } from './session-rail-model'
@@ -77,7 +78,9 @@ export interface SessionRailData {
   groups: RailGroup[]
   attention: AttentionSnapshot[]
   attentionReady: boolean
-  sessionCounts: { live: number; needsYou: number }
+  /** live: Needs you and Working, the Sessions place's count; running: every session
+   * that has not ended, idle ones too (the status bar and Stop all). */
+  sessionCounts: { live: number; needsYou: number; running: number }
   status: RailStatus
   allTo: '/sessions' | '/agentops' | '/communications/handoffs'
 }
@@ -201,9 +204,10 @@ export function useSessionRail(background = false): SessionRailData {
       (!readSessions || live.isSuccess) && (!readRuns || runs.isSuccess),
     sessionCounts: {
       live: groups
-        .filter((g) => g.id !== 'earlier')
+        .filter((g) => g.id === 'needsYou' || g.id === 'working')
         .reduce((n, g) => n + g.sessionTotal, 0),
       needsYou: groups.find((g) => g.id === 'needsYou')?.sessionTotal ?? 0,
+      running: aliveSessions(sources),
     },
     status,
     allTo,

@@ -6,9 +6,12 @@ package runtime_test
 
 import (
 	"context"
+	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/core/eventbus"
 	coremodel "github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/runtime"
 	"github.com/olivaresai/olivares/sdk"
@@ -137,5 +140,200 @@ func TestDormantModulePublishDoesNotDeliver(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("active publication did not reach subscriber")
+	}
+}
+
+// A running node can turn a module on and off without a restart: the event
+// subscriptions the module made in Init follow its state, Start runs once, and
+// Stop still runs at shutdown for a module that was ever started.
+func TestModuleActivityChangesWhileTheRuntimeRuns(t *testing.T) {
+	bus := eventbus.NewInProc(eventbus.Options{Logger: quiet()})
+	t.Cleanup(func() { _ = bus.Close() })
+	rt := runtime.New(runtime.Options{Logger: quiet(), Bus: bus})
+	later := &fakeModule{name: "later", got: make(chan event.Event, 8)}
+	always := &fakeModule{name: "always", got: make(chan event.Event, 8)}
+	if err := rt.AddDormantModule(later, sdk.Config{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := rt.AddModule(always, sdk.Config{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := rt.SetModuleActive(t.Context(), "later", true); !errors.Is(err, runtime.ErrNotRunning) {
+		t.Fatalf("SetModuleActive before Start = %v, want ErrNotRunning", err)
+	}
+	if err := rt.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = rt.Stop(context.Background()) })
+
+	publish := func() {
+		if err := bus.Publish(t.Context(), event.Event{Type: event.TypeEdgeObserved}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	delivered := func(m *fakeModule) bool {
+		select {
+		case <-m.got:
+			return true
+		case <-time.After(300 * time.Millisecond):
+			return false
+		}
+	}
+	status := func(name string) runtime.Status {
+		for _, cs := range rt.Status() {
+			if cs.Name == name {
+				return cs.Status
+			}
+		}
+		t.Fatalf("no component %q", name)
+		return ""
+	}
+
+	publish()
+	if delivered(later) || !delivered(always) {
+		t.Fatal("before activation: the dormant module must get nothing and the running one must")
+	}
+	for _, step := range []struct {
+		name   string
+		active bool
+	}{{"later", true}, {"later", false}, {"later", true}, {"always", false}, {"always", true}} {
+		if err := rt.SetModuleActive(t.Context(), step.name, step.active); err != nil {
+			t.Fatalf("SetModuleActive(%s, %v) = %v", step.name, step.active, err)
+		}
+		want := runtime.StatusDormant
+		if step.active {
+			want = runtime.StatusRunning
+		}
+		if got := status(step.name); got != want {
+			t.Fatalf("%s active=%v: status %s, want %s", step.name, step.active, got, want)
+		}
+		publish()
+		for _, m := range []*fakeModule{later, always} {
+			wantDelivery := status(m.name) == runtime.StatusRunning
+			if got := delivered(m); got != wantDelivery {
+				t.Fatalf("after %s active=%v: %s delivered=%v, want %v", step.name, step.active, m.name, got, wantDelivery)
+			}
+		}
+	}
+	if err := rt.SetModuleActive(t.Context(), "nope", true); err == nil {
+		t.Fatal("an unknown module must be refused")
+	}
+	if err := rt.Stop(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if !later.stopCalled.Load() || !always.stopCalled.Load() {
+		t.Fatal("a module that ran must be stopped at shutdown")
+	}
+}
+
+// failingBus refuses the nth subscription, so a module with several subscriptions can be
+// turned on only partway.
+type failingBus struct {
+	eventbus.Bus
+	calls, failAt int
+}
+
+func (b *failingBus) Subscribe(types []event.Type, h event.Handler) (eventbus.Subscription, error) {
+	b.calls++
+	if b.calls == b.failAt {
+		return nil, errors.New("bus refused the subscription")
+	}
+	return b.Bus.Subscribe(types, h)
+}
+
+// twoSubscriptions asks the bus for two subscriptions in Init and records its Start context.
+type twoSubscriptions struct {
+	fakeModule
+	startCtx atomic.Pointer[context.Context]
+	starts   atomic.Int32
+	startErr atomic.Pointer[error]
+}
+
+func (m *twoSubscriptions) Init(_ context.Context, host sdk.Host) error {
+	for range 2 {
+		if _, err := host.Subscribe([]event.Type{event.TypeEdgeObserved}, func(context.Context, event.Event) error {
+			m.got <- event.Event{}
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *twoSubscriptions) Start(ctx context.Context) error {
+	m.starts.Add(1)
+	m.startCtx.Store(&ctx)
+	if e := m.startErr.Load(); e != nil {
+		return *e
+	}
+	return nil
+}
+
+// A module that cannot be turned on is left with no subscription, not with the first one
+// that attached; and the module is not reported running.
+func TestFailedActivationLeavesNoSubscriptionBehind(t *testing.T) {
+	inner := eventbus.NewInProc(eventbus.Options{Logger: quiet()})
+	t.Cleanup(func() { _ = inner.Close() })
+	bus := &failingBus{Bus: inner, failAt: 2}
+	rt := runtime.New(runtime.Options{Logger: quiet(), Bus: bus})
+	m := &twoSubscriptions{fakeModule: fakeModule{name: "two", got: make(chan event.Event, 8)}}
+	if err := rt.AddDormantModule(m, sdk.Config{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := rt.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = rt.Stop(context.Background()) })
+	if err := rt.SetModuleActive(t.Context(), "two", true); err == nil {
+		t.Fatal("turning on a module whose second subscription is refused must fail")
+	}
+	if err := inner.Publish(t.Context(), event.Event{Type: event.TypeEdgeObserved}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-m.got:
+		t.Fatal("a module that failed to turn on still receives events through the subscription that attached")
+	case <-time.After(300 * time.Millisecond):
+	}
+	if m.starts.Load() != 0 {
+		t.Fatal("a module that failed to attach was started")
+	}
+}
+
+// Start runs once however often the module is turned off and on, gets a context that
+// outlives the call that turned it on, and a Start that fails is tried again next time.
+func TestLiveStartUsesTheRuntimeContextAndIsRetriedAfterAFailure(t *testing.T) {
+	rt := runtime.New(runtime.Options{Logger: quiet()})
+	m := &twoSubscriptions{fakeModule: fakeModule{name: "late", got: make(chan event.Event, 8)}}
+	if err := rt.AddDormantModule(m, sdk.Config{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := rt.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = rt.Stop(context.Background()) })
+
+	boom := errors.New("start failed")
+	m.startErr.Store(&boom)
+	req, cancel := context.WithCancel(context.Background())
+	if err := rt.SetModuleActive(req, "late", true); err == nil {
+		t.Fatal("a module whose Start fails must not be reported turned on")
+	}
+	m.startErr.Store(nil)
+	if err := rt.SetModuleActive(req, "late", true); err != nil {
+		t.Fatalf("turning the module on again after a failed Start = %v", err)
+	}
+	cancel() // the request that turned it on is over
+	if ctx := m.startCtx.Load(); ctx == nil || (*ctx).Err() != nil {
+		t.Fatal("Start was given the request's context: it ends with the request")
+	}
+	for _, active := range []bool{false, true, false, true} {
+		if err := rt.SetModuleActive(context.Background(), "late", active); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := m.starts.Load(); got != 2 { // the failed attempt and the one that worked
+		t.Fatalf("Start ran %d times, want 2 (the failure and the success)", got)
 	}
 }

@@ -521,7 +521,7 @@ func (m *Module) mutateCommunicationTransaction(
 		if err != nil {
 			return err
 		}
-		tx, err := newCommunicationTxWithAuthority(ctx, confined, request, claims)
+		tx, err := m.communicationTxWithAuthority(ctx, confined, request, claims)
 		if err != nil {
 			return err
 		}
@@ -532,34 +532,56 @@ func (m *Module) mutateCommunicationTransaction(
 	})
 }
 
+// SetWorkOutboxNudge registers the wake-up of this module's outbox pump (C2 item
+// 5): the composition root (boot) registers it once per engine, and nil withdraws
+// it. communicationTx.create calls it after a successful work-outbox insert so a
+// fresh event drains promptly instead of waiting out the safety cadence. A nudge
+// after a rolled-back transaction is harmless: the drain finds nothing and idles.
+// It belongs to the module, never to the process: with one process-wide slot, a
+// second engine in the same process (the cmd/olivares tests run many) took the
+// wake-up, and the first engine's rows waited for its 5 minute safety tick.
+func (m *Module) SetWorkOutboxNudge(fn func()) {
+	m.workOutboxNudge.Store(fn)
+}
+
+// WorkOutboxNudgeRegistered reports whether this module's pump has a nudge
+// registered. The boot-failure regression (cmd/olivares) reads it to prove a
+// failed boot withdrew the callback its pump registered.
+func (m *Module) WorkOutboxNudgeRegistered() bool {
+	fn, _ := m.workOutboxNudge.Load().(func())
+	return fn != nil
+}
+
+func (m *Module) nudgeWorkOutbox() {
+	if fn, _ := m.workOutboxNudge.Load().(func()); fn != nil {
+		fn()
+	}
+}
+
+// communicationTxWithAuthority is newCommunicationTxWithAuthority wired to this
+// module's outbox nudge: the constructor every production mutation uses.
+func (m *Module) communicationTxWithAuthority(
+	ctx context.Context,
+	sc store.Scope,
+	request communicationRequestAuthoritySnapshot,
+	claims CommunicationClaimAuthoritySnapshot,
+) (*communicationTx, error) {
+	tx, err := newCommunicationTxWithAuthority(ctx, sc, request, claims)
+	if err == nil {
+		tx.nudge = m.nudgeWorkOutbox
+	}
+	return tx, err
+}
+
 // communicationTx is constructed exactly once inside a communication Mutate
 // callback. newCommunicationTx takes the initial database-time observation and
 // retains only the narrow capability needed to resample after all blocking
 // locks. Callers use now rather than consulting a process clock.
-// workOutboxNudge is the outbox pump's wake-up (C2 item 5): a launch-time
-// registration by the composition root (boot), nil everywhere else — including
-// every module test, which never sets it. communicationTx.create calls it after
-// a successful work-outbox insert so a fresh event drains promptly instead of
-// waiting out the safety cadence. A nudge after a rolled-back transaction is
-// harmless: the drain finds nothing and idles.
-var workOutboxNudge atomic.Value // func()
-
-// SetWorkOutboxNudge registers the nudge the outbox pump waits on. One
-// composition root registers it once at boot; it is not a per-module setting.
-func SetWorkOutboxNudge(fn func()) {
-	workOutboxNudge.Store(fn)
-}
-
-// WorkOutboxNudgeRegistered reports whether a nudge is currently registered.
-// The boot-failure regression (cmd/olivares) reads it to prove a failed boot
-// withdrew the callback its pump registered.
-func WorkOutboxNudgeRegistered() bool {
-	fn, _ := workOutboxNudge.Load().(func())
-	return fn != nil
-}
-
 type communicationTx struct {
 	now model.Timestamp
+	// nudge wakes the owning module's outbox pump after a work-outbox insert;
+	// nil (module tests, the free constructors) inserts silently.
+	nudge func()
 
 	observeNowFn              func(context.Context) (model.Timestamp, error)
 	lockTransactionFn         func(context.Context, string) error
@@ -1382,10 +1404,8 @@ func (tx *communicationTx) create(
 		return nil, err
 	}
 	created, err := repo.CreateAtTransactionTime(ctx, record)
-	if err == nil && kind == workOutboxKind {
-		if fn, ok := workOutboxNudge.Load().(func()); ok && fn != nil {
-			fn()
-		}
+	if err == nil && kind == workOutboxKind && tx.nudge != nil {
+		tx.nudge()
 	}
 	return created, err
 }

@@ -105,13 +105,13 @@ auf eine Datei gerichtet werden.
 
 ## Was du in der Konsole siehst
 
-**Claude Code Governance** ist die Authoring- und Truth-Loop-Oberfläche: die
+**Verwaltete Richtlinie** ist die Authoring- und Truth-Loop-Oberfläche: die
 Policy, die du beabsichtigst, die Konfiguration, die Hosts tatsächlich tragen,
 und der Drift dazwischen. Gates und Telemetrie-Lücken-Findings landen in
 **Security**; die Session selbst bleibt in **Sessions** sichtbar:
 
-<img class="light:sl-hidden" src="/console/claude-policy-dark.png" alt="Die Claude-Code-Governance-Ansicht — Policy-Authoring und Flotten-Posture an einem Ort." />
-<img class="dark:sl-hidden" src="/console/claude-policy-light.png" alt="Die Claude-Code-Governance-Ansicht — Policy-Authoring und Flotten-Posture an einem Ort." />
+<img class="light:sl-hidden" src="/console/claude-policy-dark.png" alt="Die Ansicht Verwaltete Richtlinie — Policy-Authoring und Flotten-Posture an einem Ort." />
+<img class="dark:sl-hidden" src="/console/claude-policy-light.png" alt="Die Ansicht Verwaltete Richtlinie — Policy-Authoring und Flotten-Posture an einem Ort." />
 
 ## Ehrliche Grenzen
 

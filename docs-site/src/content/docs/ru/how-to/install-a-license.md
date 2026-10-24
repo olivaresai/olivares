@@ -124,8 +124,19 @@ AI Runtime Security, Compliance Packs и Identity & Scale в одну подпи
 переустанавливать, и данные никуда не перемещаются:
 
 ```sh
-olivares upgrade --enterprise --token <TOKEN>
+export OLIVARES_UPGRADE_TOKEN=<TOKEN>   # not needed once this installation is connected
+olivares upgrade --edition business
 ```
+
+`olivares license install` и `olivares license status` выводят точную команду для того способа, которым установлена эта инсталляция, а представление **Edition & license** в консоли показывает тот же шаг одной кнопкой **Перейти на Business**: движок скачивает сборку, проверяет её, заменяет на месте и перезапускается на ней. Токен загрузки находится на странице **Downloads** лицензионного портала загрузок ([https://licenses.olivares.ai/portal/downloads](https://licenses.olivares.ai/portal/downloads)), рядом с этими командами, и в письме с лицензией; передавайте его по имени, как выше, чтобы он не попадал в список процессов. Подключённой инсталляции (`olivares license connect start`) токен не нужен. `--enterprise` — прежняя запись того же маршрута. Кнопке консоли нужно одно из двух: токен в собственном окружении движка или это подключение; если нет ни того, ни другого, представление показывает команду.
+
+:::caution[Установка из пакета]
+При установке deb, rpm, apk или AUR файлом `/usr/bin/olivares` владеет менеджер пакетов, поэтому эта
+команда отклоняется: она завершается с кодом 2 до какой-либо загрузки. Используйте пакет Business, когда
+его начнёт отдавать канал пакетов с проверкой права доступа. До тех пор добавьте
+`--target /usr/bin/olivares --data-dir /var/lib/olivares`, чтобы заменить этот файл самостоятельно; база данных пакетов после этого
+перестанет с ним совпадать. `--check` по-прежнему показывает план.
+:::
 
 Команда получает подписанную коммерческую сборку для вашей платформы и **проверяет подпись
 офлайн** — артефакт с несанкционированными изменениями прерывает обновление, оставляя
@@ -135,7 +146,7 @@ olivares upgrade --enterprise --token <TOKEN>
 применяя его; смену редакции он показывает как `edition: community -> enterprise`:
 
 ```sh
-olivares upgrade --enterprise --token <TOKEN> --check
+olivares upgrade --edition business --check
 ```
 
 Перезапустите службу, а затем включите модули:
@@ -169,8 +180,8 @@ secret или проверка, переводится в подготовлен
 
 ```sh
 export OLIVARES_UPGRADE_TOKEN=<TOKEN>
-docker compose exec -e OLIVARES_UPGRADE_TOKEN olivares olivares upgrade --enterprise --yes
-docker compose up -d --force-recreate olivares
+docker compose exec -e OLIVARES_UPGRADE_TOKEN olivares olivares upgrade --edition business --yes
+docker compose restart olivares
 ```
 
 Релиз хранится в `ota/` в каталоге данных (`/var/lib/olivares/ota` в поставляемом образе)

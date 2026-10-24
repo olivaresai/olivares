@@ -48,6 +48,8 @@
     "running": "In corso",
     "idle": "Inattiva",
     "stopped": "Fermata",
+    "done": "Completata",
+    "ended": "Terminata",
     "failed": "Non riuscita",
     "cleaned": "Ripulita"
   },
@@ -252,7 +254,9 @@
     "noOutput": "Ancora nessun output.",
     "waiting": "In attesa di output…",
     "ended": "Il flusso I/O della sessione è terminato.",
-    "lag": "{{count}} frame scartati (overflow del buffer): l'output qui sotto riprende dopo la lacuna.",
+    "lag_one": "{{count}} frame scartato (overflow del buffer): l'output qui sotto riprende dopo la lacuna.",
+    "lag_many": "{{count}} frame scartati (overflow del buffer): l'output qui sotto riprende dopo la lacuna.",
+    "lag_other": "{{count}} frame scartati (overflow del buffer): l'output qui sotto riprende dopo la lacuna.",
     "remoteControl": "Questa è una sessione remote-control: il suo I/O è inoltrato al cloud di Anthropic e non è collegato qui. Olivares gestisce solo il ciclo di vita.",
     "notLive": "Questa sessione non è live (è {{state}}). Riprendila per collegarti al suo I/O.",
     "ioUnavailableNotLiveOnNode": "Nessun I/O collegato su questo nodo.",
@@ -270,7 +274,7 @@
     "interruptUnknown": "L'esito dell'interruzione è sconosciuto. Controlla la sessione prima di riprovare.",
     "interruptWorkConflict": "La sessione non può accettare questa interruzione nel suo stato di lavoro corrente. Aggiorna l'esecuzione per controllarne lo stato.",
     "blocked": {
-      "notLive": "Avvia o riprendi la sessione per inviare.",
+      "notLive": "Riprendi la sessione per inviare un messaggio.",
       "approval": "L'avvio attende un'approvazione; Invia funziona dopo l'approvazione.",
       "sending": "Invio in corso… Attendi che la sessione lo accetti.",
       "uploading": "Salvataggio dell'immagine… Invia funziona quando è allegata.",
@@ -442,7 +446,6 @@
     "title": "Profili dei provider",
     "subtitle": "Come viene eseguito uno strumento per una sessione: quale strumento e la cartella delle impostazioni da cui accede. Un profilo punta a un'installazione dello strumento già presente su questo server; non installa nulla e non fa accedere a nulla.",
     "register": "Registra profilo",
-    "nextAction": "Registra un profilo",
     "rowMenu": "Azioni della riga per {{name}}",
     "search": "Cerca profili…",
     "allStates": "Tutti gli stati",
@@ -549,7 +552,8 @@
       "created": "Creato",
       "updated": "Aggiornato",
       "retiredAt": "Ritirato",
-      "loadFailed": "Impossibile leggere questo profilo."
+      "loadFailed": "Impossibile leggere questo profilo.",
+      "loading": "Lettura del profilo…"
     },
     "configuration": {
       "title": "Configurazione",
@@ -636,13 +640,8 @@
     "view": {
       "profilesTitle": "Profili dei provider",
       "bindingsTitle": "Associazioni di fonti",
-      "accountsTitle": "Account dei provider",
-      "tabProfiles": "Profili",
-      "tabBindings": "Associazioni",
-      "tabAccounts": "Account",
-      "openProfiles": "Apri la pagina dei profili dei provider",
-      "openBindings": "Apri la pagina delle associazioni di fonti",
-      "crossHint": "Profili e associazioni hanno anche pagine proprie, ciascuna con il proprio permesso di lettura."
+      "openProfiles": "Apri Strumenti",
+      "crossHint": "Ogni account, con il suo profilo e le associazioni di origine, è anche in Strumenti."
     },
     "authority": {
       "lost": "Questa azione non è più consentita con i tuoi permessi attuali; non è stato inviato nulla.",

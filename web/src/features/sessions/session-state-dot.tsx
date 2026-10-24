@@ -10,8 +10,9 @@
 // has one name wherever it is shown.
 import { useTranslation } from 'react-i18next'
 import { StatusDot, type StatusTone } from '@/components/ui/status-chip'
+import { runStateWord } from '@/features/agentops/run-state-word'
 import { cn } from '@/lib/utils'
-import type { UnifiedSession } from './provenance'
+import { primaryRun, type UnifiedSession } from './provenance'
 import { sessionDisplayState, type StateTone } from './session-display-state'
 import './i18n'
 import '@/features/agentops/i18n'
@@ -34,8 +35,9 @@ export function StateDot({
 }) {
   const { t } = useTranslation(['sessions', 'agentops'])
   const display = sessionDisplayState(session)
+  const run = primaryRun(session.runs)
   const word = display.runState
-    ? t(`agentops:state.${display.runState}`, {
+    ? t(`agentops:state.${run ? runStateWord(run) : display.runState}`, {
         defaultValue: String(display.runState),
       })
     : display.observedState
@@ -51,10 +53,7 @@ export function StateDot({
       data-tone={display.tone}
       className={cn('inline-flex size-1.5 shrink-0 items-center', className)}
     >
-      <StatusDot
-        tone={TONE[display.tone]}
-        working={display.tone === 'working'}
-      />
+      <StatusDot tone={TONE[display.tone]} />
     </span>
   )
 }

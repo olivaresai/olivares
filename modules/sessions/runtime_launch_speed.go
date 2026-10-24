@@ -58,7 +58,9 @@ func (m *Module) validateLaunchSpeed(ctx context.Context, tenant model.TenantID,
 		selected = catalog.DefaultModel
 	}
 	for _, md := range catalog.Models {
-		if md.ID == selected && md.SupportsFastMode != nil && *md.SupportsFastMode {
+		// A session stores the exact id its catalog selector launched on (dev#2786):
+		// its resume finds the same entry.
+		if (md.ID == selected || claudeModelID(md.ID) == selected) && md.SupportsFastMode != nil && *md.SupportsFastMode {
 			// Pin the exact selector checked above instead of inheriting a different
 			// configured model that Fast mode could replace without governance.
 			p.Model = selected

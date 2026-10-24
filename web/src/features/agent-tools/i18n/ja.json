@@ -1,8 +1,8 @@
 {
   "title": "AI ツール",
   "description": "セッションが実行する AI ツールをこのサーバーにインストールし、サインインします。",
+  "descriptionMember": "セッションはこれらのアカウントと APIキーで動きます。ツールのインストールとサインインはシステム管理者が行います。",
   "refresh": "更新",
-  "adminOnly": "ホストのツールを管理するにはシステム管理者のセッションが必要です。",
   "readOnly": "このサーバーは読み取り専用です。インストールは無効です。",
   "notInstalled": "管理されたインストールなし",
   "installedOutside": "このサーバーにインストール済み（Olivares 以外による）",
@@ -98,9 +98,9 @@
     "accountNotSignedIn": "アカウント · 未サインイン",
     "accountChecking": "アカウント · 確認中…",
     "accountUnreadable": "アカウント · 読み取れません",
-    "keyDetail": "API キー · {{name}} ({{hint}})",
-    "keyName": "API キー · {{name}}",
-    "keyNone": "API キー · 未選択",
+    "keyDetail": "APIキー · {{name}} ({{hint}})",
+    "keyName": "APIキー · {{name}}",
+    "keyNone": "APIキー · 未選択",
     "lastSignIn": "最終サインイン {{when}}",
     "details": "詳細",
     "ref": "参照",
@@ -127,8 +127,7 @@
   "tool": {
     "menu": "{{name}} のオプション",
     "update": "更新",
-    "details": "インストールの詳細",
-    "profilesPage": "プロファイルの詳細ページ"
+    "details": "インストールの詳細"
   },
   "details": {
     "title": "{{name}}：インストールの詳細",
@@ -155,7 +154,7 @@
     "needKey": "キーを選んでください。",
     "method": "サインイン方法",
     "account": "アカウント",
-    "key": "API キー",
+    "key": "APIキー",
     "accountHint": "{{name}} 自身のサインインを使います。Olivares がパスワードを見ることはありません。",
     "chooseKey": "キーを選択",
     "addKey": "キーを追加…",
@@ -220,5 +219,11 @@
     "packagesHint": "各ツールの新しいセッションが使うプロバイダープロファイルで宣言されています（{{profiles}}）。プロファイルのないツールには、何も宣言しない新しいプロファイルが作られます。",
     "packagesNoProfile": "各ツールのセッションが実行されるプロバイダープロファイルから取得されます。まだ存在せず、新しいプロファイルは何も宣言しません。",
     "packagesRefused": "まだセッションを開始できないため表示されません: {{tools}}。"
+  },
+  "place": {
+    "title": "アカウントと APIキー",
+    "accounts": "アカウント",
+    "allAccounts": "すべてのアカウント: 詳細、ラベル、バインディング",
+    "noAccess": "あなたのロールでは、この組織のアカウントと APIキーを読み取れません。"
   }
 }

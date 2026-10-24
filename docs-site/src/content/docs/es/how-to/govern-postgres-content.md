@@ -102,7 +102,7 @@ de los valores de tus `acl_columns` declaradas (p. ej. una columna `owner_group`
 | Situación | Qué hace el conector |
 |---|---|
 | Una columna `owner_group` / de rol | Mapea cada valor a una referencia ACL (`<acl_prefix><valor>`). |
-| Sin `acl_columns` declaradas | El documento hereda la **ACL por defecto** del knowledge base — retrieval la sigue aplicando. |
+| Sin `acl_columns` declaradas | El documento hereda la **ACL por defecto** del knowledge base. Sin ACL por defecto, se **deniega** a todos; define una ACL por defecto en el knowledge base o declara la fuente pública con `"public": "true"` en su configuración (cada ingesta o sincronización que guarda filas visibles para todo el tenant deja una entrada de auditoría `knowledge.source.public`). El ajuste se aplica a los documentos guardados después; vuelve a ingerir para cambiar las filas ya guardadas. |
 | **Row-level security (RLS)** en la tabla | Respetada implícitamente: el rol del conector ve exactamente las filas que RLS le permite. El conector no reimplementa RLS; la hereda. |
 | Un permiso que la tabla **no** modela como columna | **No derivable** → no se mapea. Modélalo como columna (o una tabla ACL unida vía `query`) si quieres que se aplique. |
 

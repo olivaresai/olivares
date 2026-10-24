@@ -78,7 +78,8 @@
   },
   "apply": {
     "success": "Vorlage angewendet.",
-    "conflicts": "Mit {{count}} Konflikt(en) angewendet.",
+    "conflicts_one": "Mit {{count}} Konflikt angewendet.",
+    "conflicts_other": "Mit {{count}} Konflikten angewendet.",
     "conflictField": "Feld",
     "conflictOld": "Vorheriger Wert",
     "conflictNew": "Neuer Wert",

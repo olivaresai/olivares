@@ -368,17 +368,23 @@
   {
     "input": "https://xn--.example",
     "accepted": false,
-    "code": "host_not_a_name"
+    "code": "host_not_a_name",
+    "divergence": "library-difference",
+    "why": "golang.org/x/net/idna maps the bare ACE prefix to the empty string with a nil error, so this package refuses it instead of erasing the label the operator wrote. The installed WHATWG implementation refused it in Node 24.15 and accepts it literally in Node 24.21; either verdict is legitimate for the live comparison. Refusing is the safe direction: the label decodes to nothing."
   },
   {
     "input": "https://xn--a.example",
     "accepted": false,
-    "code": "host_not_a_name"
+    "code": "host_not_a_name",
+    "divergence": "library-difference",
+    "why": "the punycode payload of \"xn--a\" decodes to U+0080, which x/net/idna's label validation refuses. Node 24.15 refused the input as well; Node 24.21 passes the literal label through. This build refuses more than a browser does, which is the safe direction for an address that can become a relying-party ID."
   },
   {
     "input": "https://XN--.example",
     "accepted": false,
-    "code": "host_not_a_name"
+    "code": "host_not_a_name",
+    "divergence": "library-difference",
+    "why": "as \"https://xn--.example\": UTS-46 maps the uppercase prefix to the same empty ACE payload, which this package refuses and Node 24.21 passes through (Node 24.15 refused it). Refusing never accepts an address a browser would reject."
   },
   {
     "input": "https://xn--。example",
@@ -530,7 +536,7 @@
     "accepted": false,
     "code": "host_not_a_name",
     "divergence": "library-difference",
-    "why": "golang.org/x/net/idna's BidiRule refuses a bidi domain whose first character is a European number (RFC 5893 rule 1); the ICU implementation behind the installed Node URL accepts it. We refuse MORE than a browser here. Recorded rather than worked around: the alternative is dropping the Bidi rule, which the URL Standard requires, for an IDN class no deployment uses."
+    "why": "golang.org/x/net/idna's BidiRule refuses a bidi domain whose first character is a European number (RFC 5893 rule 1). The WHATWG implementation in Node 24.15 accepts it; Node 24.21 refuses it. This build refuses it on both, so it refuses more than the older browser and agrees with the newer one. Recorded rather than worked around: the alternative is dropping the Bidi rule, which the URL Standard requires, for an IDN class no deployment uses."
   },
   {
     "input": "https://a%2Fb.example",

@@ -151,6 +151,20 @@ var moduleErrorMessage = map[string]string{
 	"tenant_not_in_service":    "tenant not in service",
 	"not_leader":               "not leader",
 	"audit_spool_full":         "audit spool full",
+	// The sentinel's own text (core/store errors.go), like not_leader and
+	// audit_spool_full above: the module envelope keeps the short wording the
+	// family has always used for store sentinels, never the wrapper's.
+	"store_unavailable": "store backend unavailable",
+	// There is deliberately NO "commit_outcome_unknown" entry, and this is a
+	// pinned contract, not an omission. The work plane words an undetermined
+	// commit itself (modules/sessions classifyWorkStoreError + writeWorkError,
+	// HP-9/E9): a canceled commit keeps the shared 500 internal_error and a
+	// deadline commit answers its own observation_unavailable, and
+	// TestWorkStoreErrorCommitOutcomePreserved fails if anything changes either.
+	// statusFor answers the sentinel (503, core REST/gRPC), but without an entry
+	// here StoreErrorStatus reports ok=false and the module family keeps today's
+	// answers — exactly like bad_request above, an arm above the delegation that
+	// must not be silently re-routed from below.
 }
 
 // AddonRefusalMessage is the client-facing sentence for an add-on entitlement

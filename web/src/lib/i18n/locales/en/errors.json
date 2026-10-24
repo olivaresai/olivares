@@ -30,6 +30,10 @@
     "title": "Control plane unreachable",
     "description": "We could not reach the control plane. Check your connection and that the engine is running."
   },
+  "networkSecure": {
+    "title": "Secure connection failed",
+    "description": "Your browser could not open a secure connection to {{origin}}. If it does not trust the engine’s certificate, open that address in a new tab and trust it, or install the engine’s CA (tls.crt.ca in its data directory). Otherwise check your connection and that the engine is running."
+  },
   "boundary": {
     "title": "This view crashed",
     "description": "An unexpected error occurred while rendering. Reloading usually fixes it.",

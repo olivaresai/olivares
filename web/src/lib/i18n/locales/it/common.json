@@ -32,8 +32,6 @@
     "viewAll": "Vedi tutto",
     "learnMore": "Scopri di più",
     "openMenu": "Apri il menu",
-    "expandSidebar": "Espandi la barra laterale",
-    "collapseSidebar": "Comprimi la barra laterale",
     "help": "Apri la documentazione di questa vista"
   },
   "states": {
@@ -50,6 +48,7 @@
     "label": "Tema",
     "light": "Chiaro",
     "dark": "Scuro",
+    "black": "Nero",
     "system": "Sistema",
     "toggle": "Cambia tema"
   },
@@ -164,9 +163,7 @@
     "email": "Inserisci un indirizzo email valido."
   },
   "a11y": {
-    "breadcrumb": "Percorso di navigazione",
     "skipToContent": "Vai al contenuto",
-    "primarySidebar": "Principale",
     "mainNavigation": "Navigazione principale",
     "graphControls": "Controlli del grafo",
     "graphMinimap": "Minimappa del grafo",
@@ -328,10 +325,8 @@
         "first": "Prima sessione",
         "last": "Ultima sessione",
         "open": "Apri la sessione",
-        "pin": "Fissa o sblocca"
-      },
-      "nav": {
-        "toggleRail": "Comprimi o espandi la barra di navigazione"
+        "pin": "Fissa o sblocca",
+        "menu": "Apri il menu azioni della sessione"
       },
       "navRail": {
         "next": "Modulo successivo",
@@ -351,6 +346,10 @@
         "previousFile": "File precedente",
         "nextHunk": "Modifica successiva",
         "previousHunk": "Modifica precedente"
+      },
+      "approvals": {
+        "approve": "Approva una volta la richiesta aperta",
+        "deny": "Rifiuta la richiesta aperta"
       }
     },
     "when": {
@@ -358,10 +357,10 @@
       "launcherFocused": "nel campo del launcher",
       "workSurface": "nella schermata delle sessioni",
       "sessionHistory": "quando è disponibile una sessione precedente",
-      "paletteRecent": "nei risultati della palette con ricerca vuota"
+      "paletteRecent": "nei risultati della palette con ricerca vuota",
+      "approvalQueue": "nella coda delle approvazioni"
     },
     "precedence": "Quando due righe condividono gli stessi tasti, vale l'ultima che si applica.",
-    "modNote": "⌘ è Control su Windows e Linux.",
     "problems_one": "{{count}} scorciatoia non è leggibile e non si attiva: {{commands}}",
     "problems_many": "{{count}} scorciatoie non sono leggibili e non si attivano: {{commands}}",
     "problems_other": "{{count}} scorciatoie non sono leggibili e non si attivano: {{commands}}",
@@ -413,6 +412,18 @@
       "copy": "Copia il comando",
       "copied": "Copiato",
       "copyFailed": "Impossibile copiare. Seleziona il comando e copialo."
+    },
+    "copy": {
+      "message": "Copia messaggio",
+      "code": "Copia codice",
+      "copied": "Copiato",
+      "failed": "Impossibile copiare. Seleziona il testo e copialo."
     }
+  },
+  "resize": {
+    "hint": "Trascina o usa le frecce. Doppio clic o Invio per ripristinare."
+  },
+  "panes": {
+    "saveFailed": "Impossibile salvare la larghezza del pannello. Vale solo per questa visita."
   }
 }

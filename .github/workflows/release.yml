@@ -124,6 +124,9 @@ jobs:
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           HOMEBREW_PREPROD_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_PREPROD_TAP_GITHUB_TOKEN }}
         run: bash scripts/release-preflight.sh
+      - name: SLSA provenance is not started while the repository is private
+        if: github.event.repository.private
+        run: echo "SLSA provenance is not started in a private repository (the official generator runs on a GitHub-hosted runner, and a private repository spends no hosted minutes)." >> "$GITHUB_STEP_SUMMARY"
 
   release-environment-policy:
     # Read-only (contents, actions): our pool where vars.CI_RUNNER is set, hosted fallback otherwise.
@@ -145,8 +148,8 @@ jobs:
     needs: [preflight, release-environment-policy]
     # Use the validated release profile and destinations.
     if: github.event_name == 'push' && (github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod')
-    # Build and sign on a GitHub-hosted runner to keep provenance isolated.
-    runs-on: ubuntu-latest
+    # Build and sign on a GitHub-hosted runner to keep provenance isolated. In a private repository this job runs on our runners instead.
+    runs-on: ${{ github.event.repository.private && (vars.CI_RUNNER || 'hetzner') || 'ubuntu-latest' }}
     permissions:
       contents: write # create the DRAFT release + upload assets
       packages: write # push the image to ghcr.io
@@ -1011,8 +1014,10 @@ jobs:
   # tag pins: slsa-verifier uses the tag in the builder identity.
   provenance-binaries:
     needs: [preflight, goreleaser]
-    # Run provenance generation only when the validated profile enables it.
-    if: needs.preflight.outputs.run_slsa == 'true'
+    # Run provenance generation only when the validated profile enables it, and never in a private
+    # repository: the official generator runs on a GitHub-hosted runner, which a private repository
+    # does not spend (the preflight job summary says so).
+    if: ${{ !github.event.repository.private && needs.preflight.outputs.run_slsa == 'true' }}
     permissions:
       actions: read # read the build environment for provenance
       id-token: write # keyless Sigstore signing
@@ -1028,7 +1033,7 @@ jobs:
   # SLSA provenance for the image.
   provenance-image:
     needs: [preflight, goreleaser]
-    if: needs.preflight.outputs.run_slsa == 'true'
+    if: ${{ !github.event.repository.private && needs.preflight.outputs.run_slsa == 'true' }}
     permissions:
       actions: read
       id-token: write
@@ -1047,7 +1052,7 @@ jobs:
   verify-assets:
     needs: [preflight, goreleaser, provenance-binaries, provenance-image]
     if: ${{ !failure() && !cancelled() && github.event_name == 'push' && needs.goreleaser.result == 'success' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.repository.private && (vars.CI_RUNNER || 'hetzner') || 'ubuntu-latest' }}
     permissions:
       contents: write # draft visibility requires push access; checker only reads metadata
     steps:
@@ -1069,10 +1074,12 @@ jobs:
   # This job has no protected-environment approval; Homebrew remains in the build.
   promote-latest:
     needs: [preflight, goreleaser, provenance-image]
-    # Preflight decides whether this profile may publish latest aliases.
-    if: github.event_name == 'push' && (github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod') && needs.preflight.outputs.publish_latest == 'true'
-    # Use a GitHub-hosted runner for mutations covered by provenance.
-    runs-on: ubuntu-latest
+    # Preflight decides whether this profile may publish latest aliases. A private repository skips the
+    # provenance job, so only a non-production release there may do without its result; a production
+    # release (whatever the repository visibility) needs the provenance to have succeeded.
+    if: ${{ !failure() && !cancelled() && needs.goreleaser.result == 'success' && (needs.provenance-image.result == 'success' || (github.event.repository.private && needs.preflight.outputs.release_mode != 'production')) && github.event_name == 'push' && (github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod') && needs.preflight.outputs.publish_latest == 'true' }}
+    # Use a GitHub-hosted runner for mutations covered by provenance. In a private repository this job runs on our runners instead.
+    runs-on: ${{ github.event.repository.private && (vars.CI_RUNNER || 'hetzner') || 'ubuntu-latest' }}
     permissions:
       contents: read
       packages: write # push the latest* alias tags to ghcr.io
@@ -1168,10 +1175,12 @@ jobs:
   # Copy after attestations, provenance and latest aliases are ready.
   mirror-dockerhub:
     needs: [preflight, goreleaser, provenance-image, promote-latest]
-    # Explicit false skips the mirror; production auto requires credentials.
-    if: needs.preflight.outputs.release_mode == 'production' && needs.preflight.outputs.publish_dockerhub != 'false'
-    # Use a GitHub-hosted runner for mutations covered by provenance.
-    runs-on: ubuntu-latest
+    # Explicit false skips the mirror; production auto requires credentials. The fence comes first (the
+    # destinations check pins it); !failure() lets it run after a skipped provenance job, and a skipped or
+    # failed promote-latest still stops it.
+    if: needs.preflight.outputs.release_mode == 'production' && needs.preflight.outputs.publish_dockerhub != 'false' && !failure() && !cancelled() && needs.goreleaser.result == 'success' && needs.promote-latest.result == 'success'
+    # Use a GitHub-hosted runner for mutations covered by provenance. In a private repository this job runs on our runners instead.
+    runs-on: ${{ github.event.repository.private && (vars.CI_RUNNER || 'hetzner') || 'ubuntu-latest' }}
     permissions:
       contents: read
       # Read GHCR packages to authenticate the source pull before copying to Docker Hub.
@@ -1301,8 +1310,8 @@ jobs:
   # validated GHCR namespace.
   mirror-preprod:
     needs: [preflight, goreleaser, provenance-image, promote-latest]
-    if: needs.preflight.outputs.release_mode == 'preprod' && needs.preflight.outputs.publish_dockerhub == 'true'
-    runs-on: ubuntu-latest
+    if: needs.preflight.outputs.release_mode == 'preprod' && needs.preflight.outputs.publish_dockerhub == 'true' && !failure() && !cancelled() && needs.goreleaser.result == 'success' && needs.promote-latest.result == 'success'
+    runs-on: ${{ github.event.repository.private && (vars.CI_RUNNER || 'hetzner') || 'ubuntu-latest' }}
     permissions:
       contents: read
       packages: write
@@ -1348,8 +1357,8 @@ jobs:
   publish-ota-manifest:
     needs: [release-environment-policy]
     if: github.event_name == 'workflow_dispatch' && (github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod')
-    # Use a GitHub-hosted runner for signing and publication.
-    runs-on: ubuntu-latest
+    # Use a GitHub-hosted runner for signing and publication. In a private repository this job runs on our runners instead.
+    runs-on: ${{ github.event.repository.private && (vars.CI_RUNNER || 'hetzner') || 'ubuntu-latest' }}
     # Keep the protected ota-release-ceremony environment name. A new name may
     # create an environment without approval rules. Preprod uses its own environment.
     environment:
@@ -2365,7 +2374,7 @@ jobs:
 
   qualify-published-installer:
     needs: [publish-ota-manifest]
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.repository.private && (vars.CI_RUNNER || 'hetzner') || 'ubuntu-latest' }}
     permissions:
       contents: read
       actions: write

@@ -172,6 +172,33 @@ func TestParsePublishSkipsUnknownProperty(t *testing.T) {
 	}
 }
 
+// A PUBLISH property must end inside the declared properties block. A value or a skipped
+// property that runs past it is malformed, and the payload bytes never become a property.
+func TestParsePublishRejectsPropertyPastItsBlock(t *testing.T) {
+	payload := bytes.Repeat([]byte("P"), 16)
+	cases := []struct {
+		name  string
+		props []byte
+	}{
+		{"user property value runs past the block", []byte{propUserProperty, 0x00, 0x01, 'k', 0x00, 0x10}},
+		{"message expiry runs past the block", []byte{0x02, 0x00}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var body []byte
+			body = appendString(body, "t")
+			body = encodeVBI(body, len(tc.props))
+			body = append(body, tc.props...)
+			body = append(body, payload...)
+
+			pub, err := parsePublish(0x00, body)
+			if err == nil {
+				t.Fatalf("a property past its block was accepted: UserProps=%v", pub.UserProps)
+			}
+		})
+	}
+}
+
 // TestBuildConnectShape checks the CONNECT builder emits a well-formed packet:
 // fixed-header type CONNECT, the protocol name "MQTT", version 5, the clean-start
 // flag, and (when credentials are set) the username/password flags. The framing is

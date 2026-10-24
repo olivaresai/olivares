@@ -68,7 +68,7 @@ func (g sessionProviderPolicy) Decide(ctx context.Context, tenant model.TenantID
 	}
 	metadata := func(facts sessions.ProviderApprovalRequest, reason string) map[string]any {
 		return map[string]any{"session_ref": facts.SessionRef, "run_ref": facts.RunRef, "turn_id": facts.TurnID,
-			"method": facts.Method, "kind": facts.Kind, "decision": out.Disposition, "reason": reason,
+			"method": facts.Method, "kind": facts.Kind, "tool_kind": facts.ToolKind, "decision": out.Disposition, "reason": reason,
 			"command_line": facts.CommandLine, "file_paths": facts.FilePaths, "facts_complete": facts.FactsComplete}
 	}
 	meta := metadata(req, out.Reason)
@@ -271,6 +271,14 @@ func (g sessionProviderPolicy) verdict(ctx context.Context, tenant model.TenantI
 		}
 		mode, kind, resource = "write", "file", strings.Join(req.FilePaths, "\n")
 	case "permissions", "mcp_elicitation", "tool_call_permission":
+		// An ACP read or search that names the files it reads is a read, as Claude Code's
+		// reads are: the live policy decides it as one, and every preset allows reads
+		// (#2890). One that names no file (a web search, a tool's own query) is not.
+		// A request that also carries a command is not a read, whatever its kind says.
+		if req.Kind == "tool_call_permission" && (req.ToolKind == "read" || req.ToolKind == "search") &&
+			req.FactsComplete && len(req.FilePaths) > 0 && strings.TrimSpace(req.CommandLine) == "" {
+			mode, kind, resource = "read", "file", strings.Join(req.FilePaths, "\n")
+		}
 	default:
 		return refuse("provider approval surface is unknown")
 	}

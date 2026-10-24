@@ -60,9 +60,77 @@ docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first
 **Compose readiness contract.** The image carries `olivares readyz`,
 and the reference stack invokes it directly—no shell, curl, or wget. The hermetic
 battery proves local HTTP 200 → rc 0, a received non-200 → rc 1, and an input/TLS/
-transport failure → rc 2; `up --wait` consumes that health state. **Docker qualification
+transport failure → rc 2; `up --wait` consumes that health state. The probe trusts the
+certificate chain the engine serves (`/var/lib/olivares/public/tls.crt`), so it follows an
+operator-supplied certificate as well as the first-boot one. **Docker qualification
 remains unmeasured until the dispatch workflow succeeds** for this commit, so the
 workflow's presence alone is not a recorded hosted-Docker result.
+
+## Reach the engine from another machine
+
+The first-boot certificate names what the engine can see from inside the container:
+`localhost`, the container's hostname and its container addresses. The address other
+machines type is the host's, which the container does not know, so a CLI or API client
+there is refused with `The engine's certificate covers …, not <address>`, even with the
+right pin. Declare that address with `OLIVARES_PUBLIC_URL` in `.env` and the engine adds
+its host, an IP address or a DNS name, to the certificate next to those names:
+
+```sh
+OLIVARES_PUBLIC_URL=https://192.168.8.17:8443
+```
+
+```sh
+docker compose -f deploy/compose/docker-compose.yml up -d    # start-time only
+docker compose -f deploy/compose/docker-compose.yml logs olivares | grep pin_sha256
+```
+
+Then, from the other machine, with the `pin_sha256` value that line prints:
+
+```sh
+olivares auth login --server https://192.168.8.17:8443 --pin-sha256 <pin_sha256> --token-file <file>
+```
+
+Setting, changing or clearing the variable re-issues the certificate at the next start
+from the same local CA and key, so the trust bundle and the `pin_sha256` that clients
+already hold keep working. Without the variable the certificate is what it was. A
+certificate you supply with `--tls-cert` and `--tls-key` is never changed: it has to name
+the address itself. The variable also sets the console address the startup banner prints
+and the passkey relying party.
+
+### Use your own certificate
+
+To serve a certificate from your own CA, mount it and restate the container's command with
+`--tls-cert` and `--tls-key` in a Compose override. Compose replaces a `command` list as a
+whole, so the override repeats the base file's flags:
+
+```yaml
+# docker-compose.tls.yml, next to the base file
+services:
+  olivares:
+    command:
+      - serve
+      - --listen=:8443
+      - --grpc-listen=:8444
+      - --data-dir=/var/lib/olivares
+      - --checkpoint-interval=1h
+      - --tls-cert=/certs/tls.crt
+      - --tls-key=/certs/tls.key
+    volumes:
+      - ./certs:/certs:ro
+```
+
+The certificate has to name the address your machines type, and the engine refuses a key
+file readable by anyone but its owner, so give the key mode `0600` and owner UID 65532, the
+container user. Then start both files together and give clients your CA, not a pin:
+
+```sh
+docker compose -f deploy/compose/docker-compose.yml -f docker-compose.tls.yml up -d --wait
+olivares auth login --server https://192.168.8.17:8443 --ca-cert <your-ca.pem> --token-file <file>
+```
+
+The container's health check follows the certificate the engine serves, so it stays healthy
+with yours: the engine publishes the chain it serves at `/var/lib/olivares/public/tls.crt`
+and the probe trusts that file.
 
 ## Agent tools and first-session resources
 

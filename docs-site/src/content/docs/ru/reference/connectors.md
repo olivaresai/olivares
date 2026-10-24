@@ -535,9 +535,11 @@ blueprint, поставщики учётных данных, агенты на �
 
 Внутрипроцессные виды назначений: `slack`, `teams`, `pagerduty`, `opsgenie`,
 `webhook`, `siem`, `splunkhec`, `syslog`, `servicenow`, `jira`, `email`, `twilio`,
-`chronicle`, `datadog`, `elastic`, `snmp`, `filelog`, `otlplog` (журналы OTLP/HTTP)
-и `s3archive` (Business: Regulated Operations) (WORM sink S3 Object Lock — по одному неизменяемому объекту с проверенным
-lock на уведомление).
+`chronicle`, `datadog`, `elastic`, `snmp`, `filelog`, `otlplog` (журналы OTLP/HTTP),
+`s3archive` (Business: Regulated Operations) (WORM sink S3 Object Lock — по одному неизменяемому объекту с проверенным
+lock на уведомление) и `teamsbot` (Business: Regulated Operations, коннектор Teams с зарегистрированным ботом
+для цикла инцидентов; бинарный файл Community пропускает получателя этого вида и пишет строку журнала,
+в которой названа Business).
 
 Три вида egress через брокер работают **вне процесса** как встроенные плагины (деревья
 зависимостей их сетевых протоколов никогда не линкуются с движком, как и у plugin-источников):

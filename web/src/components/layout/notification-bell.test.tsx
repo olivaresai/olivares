@@ -128,6 +128,13 @@ beforeEach(() => {
 })
 
 describe('NotificationBell', () => {
+  it('names its icon on hover as it does to a screen reader (#3121)', () => {
+    mount()
+    expect(
+      screen.getByRole('button', { name: 'Recent activity' }),
+    ).toHaveAttribute('title', 'Recent activity')
+  })
+
   it('keeps unread activity independent when the organization or user changes', async () => {
     const user = userEvent.setup()
     const view = mount()

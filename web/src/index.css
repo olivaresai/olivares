@@ -151,18 +151,6 @@
   }
 }
 
-/* The one sanctioned looping animation: a live-attribution pulse on accent/teal
- * (referenced by the `animate-pulse-live` utility via --animate-pulse-live). */
-@keyframes pulse-live {
-  0%,
-  100% {
-    opacity: 0.55;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
 /* A calm mount-in (fade + small rise) for dashboard sections — sober, Linear/Grafana,
  * not decorative. Applied via `.animate-enter` and ONLY when motion is allowed, so a
  * reduced-motion user never sees a delayed invisible flash (the element just renders
@@ -182,6 +170,26 @@
     animation: enter var(--duration-sheet) var(--ease-out) both;
   }
   [data-motion='reduce'] .animate-enter {
+    animation: none;
+  }
+}
+
+/* New ledger rows slide in 6 px (--motion-shift) and stop there (C2-DESIGN §3). Applied
+ * via `.feed-enter` — transform only, and ONLY when motion is allowed, so a
+ * reduced-motion user sees the row at rest. */
+@keyframes feed-enter {
+  from {
+    transform: translateY(var(--motion-shift));
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .feed-enter {
+    animation: feed-enter var(--duration-fast) var(--ease-out) both;
+  }
+  [data-motion='reduce'] .feed-enter {
     animation: none;
   }
 }

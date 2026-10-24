@@ -324,6 +324,13 @@ func (t tplTerms) applyTo(p *CreateRunParams) []mergeConflict {
 		if want == "" || *cur == want {
 			return
 		}
+		// A Claude Code alias and the exact id it launches on are one model: no conflict,
+		// and still the template's term. An empty request names none, so the template's
+		// model is applied as below.
+		if field == "model" && *cur != "" && claudeModelID(*cur) == claudeModelID(want) {
+			*cur = want
+			return
+		}
 		if strings.TrimSpace(*cur) != "" {
 			conflicts = append(conflicts, mergeConflict{Field: field, OldValue: *cur, NewValue: want})
 		}

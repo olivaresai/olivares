@@ -35,7 +35,7 @@ describe('findRawI18nKeys', () => {
   })
 
   it('catches a raw nav key whether or not a bundle happens to declare it', () => {
-    // The sidebar/breadcrumb/⌘K class: `t('items.<id>')` built from the registry id.
+    // The All areas/⌘K class: `t('items.<id>')` built from the registry id.
     // Whether that key is declared decides only WHICH rule fires — never whether the
     // operator is looking at an identifier, so the kind is deliberately not pinned.
     const hits = findRawI18nKeys(dom('<a>items.routinePolicies</a>'))

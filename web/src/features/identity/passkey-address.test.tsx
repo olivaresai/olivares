@@ -14,7 +14,7 @@
 // row where the two deliberately disagree has to carry the reason in the row.
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, URL as NodeURL } from 'node:url'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { ApiError } from '@/lib/api/errors'
@@ -43,7 +43,7 @@ interface OriginRow {
   port?: string
   kind?: string
   code?: string
-  divergence?: string
+  divergence?: 'console-origin-restriction' | 'library-difference'
   why?: string
 }
 
@@ -61,13 +61,17 @@ const goldenDir = join(
   'testdata',
 )
 
-// The measurement itself: the WHATWG URL implementation installed in this
-// repository, asked live on every run. Nothing here replays a recorded verdict,
-// so this comparison cannot quietly describe a Node version nobody has.
+// The measurement itself: the WHATWG URL implementation Node ships, imported
+// explicitly so the jsdom environment's wrapper cannot substitute a different
+// parser. Asked live on every run; nothing here replays a recorded verdict, so
+// this comparison cannot quietly describe a Node version nobody has.
 function parseWithTheInstalledURLImplementation(input: string): URL | null {
   try {
-    return new URL(input)
-  } catch {
+    return new NodeURL(input)
+  } catch (error) {
+    // `new URL` reports an invalid address as a TypeError. Anything else is an
+    // environment failure and must not read as "the browser refuses this".
+    if (!(error instanceof TypeError)) throw error
     return null
   }
 }
@@ -117,6 +121,10 @@ describe('the engine agrees with the installed WHATWG URL implementation', () =>
     expect(rows.length).toBeGreaterThan(40)
     expect(rows.some((r) => r.accepted)).toBe(true)
     expect(rows.some((r) => !r.accepted)).toBe(true)
+    expect(
+      rows.some((r) => r.divergence),
+      'the corpus has no divergent row; the divergence checks would be vacuous',
+    ).toBe(true)
   })
 
   it.each(rows)('$input', (row) => {
@@ -128,13 +136,13 @@ describe('the engine agrees with the installed WHATWG URL implementation', () =>
     const origin = node && node.origin !== 'null' ? node.origin : null
     if (row.divergence) {
       // The reason field is the only thing that makes a divergence legitimate,
-      // so it is asserted, and so is the direction: every recorded divergence is
-      // one where a browser accepts and this parser refuses. The opposite
-      // direction — accepting an address a browser rejects — is never allowed.
+      // so it is asserted, and so is the safe direction: this parser never
+      // accepts an address a browser rejects.
+      const why = row.why?.trim() ?? ''
       expect(
-        row.why,
+        why.length,
         `divergent row ${row.input} carries no reason`,
-      ).toBeTruthy()
+      ).toBeGreaterThan(0)
       expect(['console-origin-restriction', 'library-difference']).toContain(
         row.divergence,
       )
@@ -142,16 +150,31 @@ describe('the engine agrees with the installed WHATWG URL implementation', () =>
         row.accepted,
         `${row.input}: recorded as divergent but accepted`,
       ).toBe(false)
-      expect(
-        node,
-        `${row.input}: recorded as "a browser accepts this and we refuse it", but the installed implementation refuses it too — the divergence is stale`,
-      ).not.toBeNull()
+      if (row.divergence === 'console-origin-restriction') {
+        // A console restriction refuses something the browser parses. If the
+        // installed implementation refuses it too, the recorded disagreement no
+        // longer exists and the row must be revisited.
+        expect(
+          node,
+          `${row.input}: recorded as "a browser accepts this and we refuse it", but the installed implementation refuses it too — the divergence is stale`,
+        ).not.toBeNull()
+      }
+      // A library difference has NO fixed direction across parser builds. The
+      // WHATWG implementation moved both ways between the Node builds this
+      // repository runs: 24.15 refused the empty ACE payloads and accepted the
+      // bidi number, while 24.21 accepts the former and refuses the latter. The
+      // row records the refusal and its reason; the parser's current verdict is
+      // measured live, so either outcome is legitimate here.
       return
     }
     if (!row.accepted) {
+      // A refused row with no reason must be refused by the parser too. An
+      // opaque `null` origin is still a parse, so `node` is what is asserted,
+      // not `origin`: a browser that parses the address disagrees with this
+      // parser and the row has to record why.
       expect(
-        origin,
-        `${row.input}: refused here and given a usable origin by the installed URL implementation, with no reason recorded`,
+        node,
+        `${row.input}: refused here and parsed by the installed URL implementation, with no reason recorded`,
       ).toBeNull()
       return
     }

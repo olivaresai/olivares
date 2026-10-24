@@ -19,6 +19,11 @@ the catalog file (.fixture-commands.json in the session folder, a JSON object
 When the session folder holds a file named .fixture-echo-user, each turn also echoes the
 person's message as a user record, as Claude Code does with --replay-user-messages (#2129:
 the message navigator reaches the row of a message the tool has taken).
+
+It reports the model it was launched with (`--model`, else fixture-claude) on its init
+and replies; like Claude Code, its result footer names none. When the session folder holds a file named .fixture-model, the turns
+after it run on the model that file names, with no other word of it: the change of model
+in mid-session the console must tell (dev#2786).
 """
 from __future__ import annotations
 
@@ -42,6 +47,17 @@ def emit(obj: dict[str, object]) -> None:
 
 
 ECHO_USER_FILE = os.path.join(CWD, ".fixture-echo-user")
+MODEL_FILE = os.path.join(CWD, ".fixture-model")
+_ARGS = sys.argv[1:]
+LAUNCH_MODEL = _ARGS[_ARGS.index("--model") + 1] if "--model" in _ARGS[:-1] else "fixture-claude"
+
+
+def turn_model() -> str:
+    try:
+        with open(MODEL_FILE, encoding="utf-8") as handle:
+            return handle.read().strip() or LAUNCH_MODEL
+    except OSError:
+        return LAUNCH_MODEL
 
 # Like the real tool, the catalog comes from the session's own folder.
 CATALOG_FILE = os.environ.get("FIXTURE_COMMANDS_FILE") or os.path.join(CWD, ".fixture-commands.json")
@@ -91,7 +107,7 @@ emit(
         "session_id": SID,
         "cwd": CWD,
         "tools": ["Read", "Bash"],
-        "model": "fixture-claude",
+        "model": LAUNCH_MODEL,
         "permissionMode": "default",
     }
 )
@@ -125,6 +141,7 @@ while True:
                 "message": {"role": "user", "content": (request.get("message") or {}).get("content", "")},
             }
         )
+    model = turn_model()
     for estimated in (120, 412):
         emit(
             {
@@ -141,6 +158,7 @@ while True:
             "session_id": SID,
             "message": {
                 "role": "assistant",
+                "model": model,
                 "content": [{"type": "text", "text": "I'll look that up."}],
             },
         }
@@ -151,6 +169,7 @@ while True:
             "session_id": SID,
             "message": {
                 "role": "assistant",
+                "model": model,
                 "content": [
                     {
                         "type": "tool_use",
@@ -184,6 +203,7 @@ while True:
             "session_id": SID,
             "message": {
                 "role": "assistant",
+                "model": model,
                 "content": [
                     {
                         "type": "text",
@@ -216,6 +236,5 @@ while True:
             "duration_ms": 42,
             "total_cost_usd": 0.0,
             "usage": {"input_tokens": 2, "output_tokens": 8},
-            "model": "fixture-claude",
         }
     )

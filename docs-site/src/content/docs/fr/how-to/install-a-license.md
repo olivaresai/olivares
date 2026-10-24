@@ -129,8 +129,19 @@ Avec une licence installée, le binaire commercial n'est plus qu'à un télécha
 n'est réinstallé et aucune donnée n'est déplacée :
 
 ```sh
-olivares upgrade --enterprise --token <TOKEN>
+export OLIVARES_UPGRADE_TOKEN=<TOKEN>   # not needed once this installation is connected
+olivares upgrade --edition business
 ```
+
+`olivares license install` et `olivares license status` affichent la commande exacte pour la façon dont cette installation a été faite, et la vue **Edition & license** de la console propose la même étape sous la forme d'un bouton, **Passer à Business** : le moteur télécharge le build, le vérifie, le remplace sur place et redémarre dessus. Le jeton de téléchargement se trouve sur la page **Downloads** du portail de téléchargement sous licence ([https://licenses.olivares.ai/portal/downloads](https://licenses.olivares.ai/portal/downloads)), à côté de ces commandes, et dans votre e-mail de licence ; passez-le par son nom, comme ci-dessus, pour qu'il reste hors de la liste des processus. Une installation connectée (`olivares license connect start`) n'a besoin d'aucun jeton. `--enterprise` est l'ancienne graphie de la même route. Le bouton de la console demande l'un des deux, le jeton dans l'environnement du moteur lui-même ou cette connexion ; sans l'un ni l'autre, la vue affiche la commande à la place.
+
+:::caution[Installations par paquet]
+Sur une installation deb, rpm, apk ou AUR, le gestionnaire de paquets possède `/usr/bin/olivares` : la
+commande est donc refusée, avec le code de sortie 2, avant tout téléchargement. Utilisez le paquet
+Business dès que le canal de paquets avec droits le propose. D'ici là, ajoutez
+`--target /usr/bin/olivares --data-dir /var/lib/olivares` pour remplacer vous-même ce fichier ; la base de données des paquets ne le
+décrit alors plus correctement. `--check` montre toujours le plan.
+:::
 
 La commande récupère le build commercial signé pour votre plateforme et **vérifie la signature
 hors ligne** — un artefact altéré interrompt la mise à niveau en laissant intact le binaire en
@@ -140,7 +151,7 @@ exécutez déjà cette version. Utilisez d'abord `--check` si vous souhaitez voi
 il indique le changement par `edition: community -> enterprise` :
 
 ```sh
-olivares upgrade --enterprise --token <TOKEN> --check
+olivares upgrade --edition business --check
 ```
 
 Redémarrez le service, puis activez les modules :
@@ -175,8 +186,8 @@ n'apparaisse pas dans la liste des processus :
 
 ```sh
 export OLIVARES_UPGRADE_TOKEN=<TOKEN>
-docker compose exec -e OLIVARES_UPGRADE_TOKEN olivares olivares upgrade --enterprise --yes
-docker compose up -d --force-recreate olivares
+docker compose exec -e OLIVARES_UPGRADE_TOKEN olivares olivares upgrade --edition business --yes
+docker compose restart olivares
 ```
 
 La version est conservée dans `ota/` sous le répertoire de données (`/var/lib/olivares/ota`

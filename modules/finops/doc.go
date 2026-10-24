@@ -43,7 +43,16 @@
 //     no group column, so CheckBudget sums group spend by member fan-out over the
 //     existing per-subject attribution columns (actor for users, agent_ref for
 //     agents). The scan is capped and reports Truncated; in-flight concurrent spend
-//     can still over-admit. Coverage scales with attribution quality: unattributed
+//     can still over-admit. The budget status read shows that same member fan-out
+//     as the group's spend, always flagged truncated (a floor, because spend no member is
+//     credited with is missing). A membership whose agent was deleted is skipped, so the
+//     group is counted over the members that are left, by the status read, CheckBudget and
+//     the reserve path alike (a fail_closed budget included: it is judged on the survivors,
+//     not denied for the membership); the status read logs the agent it left out. Where the members
+//     cannot be resolved (no directory reader, a group the tenant does not hold) the status
+//     keeps saying zero and truncated, and logs it, while a read that fails (the directory)
+//     is an error and never a zero. The strict amount section stays unknown for a group:
+//     its accounting is separate, later work. Coverage scales with attribution quality: unattributed
 //     spend is under-counted, which is the safe direction for this approximation
 //     because it never creates a false deny. Group checks fail open by default with
 //     a per-budget fail_closed opt-in. The detective ingest/finding path for

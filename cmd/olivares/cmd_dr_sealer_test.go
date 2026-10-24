@@ -183,6 +183,9 @@ func drLegacyBundle(t *testing.T, bundle, passFile string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := dr.VerifyBundleIntegrity(work, m, kek, cipher, false); err != nil {
+		t.Fatalf("open the sealed snapshot: %v", err)
+	}
 	sealer := map[string]bool{}
 	for _, k := range drSealerKeys {
 		sealer[k.name] = true

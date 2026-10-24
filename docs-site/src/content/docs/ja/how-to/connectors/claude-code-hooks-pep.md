@@ -96,12 +96,12 @@ allowlist の評価順序をモデル化し、name のみの allow エントリ�
 
 ## コンソールで見えるもの
 
-**Claude Code governance** は作成と truth-loop の画面である。意図したポリシー、ホストが実際に
+**管理ポリシー** は作成と truth-loop の画面である。意図したポリシー、ホストが実際に
 持っている設定、そしてその間のドリフトを表示する。ゲートとテレメトリギャップの finding は
 **Security** に着地し、セッション自体は **Sessions** で引き続き見える：
 
-<img class="light:sl-hidden" src="/console/claude-policy-dark.png" alt="Claude Code ガバナンスビュー — ポリシー作成とフリートの姿勢を 1 か所に。" />
-<img class="dark:sl-hidden" src="/console/claude-policy-light.png" alt="Claude Code ガバナンスビュー — ポリシー作成とフリートの姿勢を 1 か所に。" />
+<img class="light:sl-hidden" src="/console/claude-policy-dark.png" alt="管理ポリシービュー — ポリシー作成とフリートの姿勢を 1 か所に。" />
+<img class="dark:sl-hidden" src="/console/claude-policy-light.png" alt="管理ポリシービュー — ポリシー作成とフリートの姿勢を 1 か所に。" />
 
 ## 正直な限界
 

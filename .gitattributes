@@ -29,3 +29,11 @@ design/logo-olivaresai-01-resources/.thumbnail binary
 # Pinned dictation inputs must survive checkout byte for byte on every platform.
 web/src/features/dictation/model/** -text
 web/src/features/dictation/model/onnx/*.onnx binary
+
+# The SELinux manifest: every policy change appends its rows at the end, so the change
+# merged second conflicted on that tail every time (measured 2026-10-23 on three changes
+# in a row). Union keeps both. What union cannot see — one id taken on two branches, or
+# one row edited two ways, both of which leave the id twice — is what the manifest's
+# repeated-id check refuses (appliance/selinux/test_manifest.py), so the two controls
+# cover each other.
+appliance/selinux/manifest.tsv merge=union

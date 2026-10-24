@@ -42,17 +42,19 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Field } from '@/components/ui/field'
+import { Field, FieldError } from '@/components/ui/field'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ForbiddenState } from '@/components/ui/error-state'
-import { PageHeader } from '@/components/ui/page-header'
 import { Spinner } from '@/components/ui/spinner'
 import { ListTruncationBadge } from '@/features/_intel'
 import { useAuth } from '@/lib/auth/context'
 import { consoleReturnPath } from '@/lib/auth/return-path'
 import { formatDateTime } from '@/lib/format'
 import { useIsPhone } from '@/lib/hooks/use-is-phone'
-import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
+import {
+  failureText,
+  usePrivilegedMutation,
+} from '@/lib/hooks/use-privileged-mutation'
 import { cn } from '@/lib/utils'
 import { providerKeys, providersApi } from './api'
 import { useProviderBoundary } from './auth-boundary'
@@ -64,25 +66,25 @@ import type { ProbeState, ProviderKind, ProviderRecordDTO } from './types'
 import './i18n'
 
 /**
- * ProvidersView — the screen a new operator reaches when they ask "where do I put
- * my API key".
+ * ApiKeys — the API keys on Tools (#2552): where a new operator lands when they ask
+ * "where do I put my API key". It was a page of its own (`/providers`), which is now a
+ * door into Tools.
  *
- * Before this screen there was no answer: the console had provider PROFILES (which
- * home directory an official CLI runs under) and the server had environment
- * variables, and nothing in between that an operator could name, test or revoke.
+ * Before it there was no answer: the console had provider PROFILES (which home
+ * directory an official CLI runs under) and the server had environment variables, and
+ * nothing in between that an operator could name, test or revoke.
  *
- * Three rules this screen holds itself to, each of them a measured complaint:
- *  1. The empty state names the next action. It is the first screen of a clean
- *     install, so "No results" would be the product's first sentence.
+ * Three rules this list holds itself to, each of them a measured complaint:
+ *  1. The empty state names the next action.
  *  2. A registered provider is NEVER shown as working. Registering is not evidence;
  *     only a connection test is, and an untested one says so in its own column.
  *  3. Nothing ends in a form. Creating offers the test; a tested provider offers
  *     the binding that actually launches something.
  *
- * The room is remounted on the authority boundary: nothing read or half-done under
+ * The list is remounted on the authority boundary: nothing read or half-done under
  * one operator survives into the next.
  */
-export function ProvidersView() {
+export function ApiKeys() {
   const boundary = useProviderBoundary()
   return <Inner key={boundary.key} />
 }
@@ -96,15 +98,15 @@ function probeHintKey(record: ProviderRecordDTO) {
   return `probe.${record.kind === 'ollama' ? 'local.' : ''}${state}Hint`
 }
 
-/** The provider `?add=<kind>` asks for: "Use an API key instead" under a tool opens the
- * form on the provider that tool runs on (HU2-18). Read once, like the other views'
+/** The provider `?add=<kind>` asks for: the setup wizard's "Add an API key" or "Add a
+ * local model" opens the form on that provider (HU2-18). Read once, like the other views'
  * `?tab=`; anything else opens nothing. */
 function addFromURL(): ProviderKind | undefined {
   const want = new URLSearchParams(window.location.search).get('add')
   return PROVIDER_KINDS.find((k) => k === want)
 }
 
-/** Where a tool's "Use an API key instead" came from (`?returnTo=`, a console page on this
+/** Where the wizard's "Add an API key" came from (`?returnTo=`, a console page on this
  * origin only): the person goes back there once the new key passes its test; a refused key
  * keeps them here, where it is fixed. */
 function returnFromURL(): string | null {
@@ -127,7 +129,7 @@ const SESSION_TOOL: Partial<Record<ProviderKind, SignInTool>> = {
 }
 
 function Inner() {
-  const { t, i18n } = useTranslation('providers')
+  const { t, i18n } = useTranslation(['providers', 'errors'])
   const navigate = useNavigate()
   const { activeTenant, can } = useAuth()
   const phone = useIsPhone()
@@ -137,6 +139,7 @@ function Inner() {
   const canAdmin = can('sessions:provider:admin')
 
   const addReasonId = useId()
+  const headingId = useId()
   const [addKind] = useState(addFromURL)
   const [returnTo] = useState(returnFromURL)
   // The provider this page just created, whose first test decides the return.
@@ -149,6 +152,9 @@ function Inner() {
   const [editingDefault, setEditingDefault] =
     useState<ProviderRecordDTO | null>(null)
   const [defaultModel, setDefaultModel] = useState('')
+  // The refusal of the default-model or revoke dialog: the open dialog hides the
+  // toast from screen readers, so the dialog says it (one is open at a time).
+  const [dialogError, setDialogError] = useState<string>()
   const [preparing, setPreparing] = useState<SignInTool | null>(null)
   // The engine's latest line about the download a preparation is waiting for (#1086).
   const [download, setDownload] = useState<string | null>(null)
@@ -256,6 +262,10 @@ function Inner() {
     successMessage: (record) =>
       t(record.kind === 'ollama' ? 'revoke.localSuccess' : 'revoke.success'),
     onDone: () => setRevoking(null),
+    onError: (err) => {
+      setDialogError(failureText(err) ?? t('errors:generic'))
+      return true
+    },
   })
 
   const saveDefault = usePrivilegedMutation<
@@ -270,6 +280,10 @@ function Inner() {
     ],
     successMessage: t('defaultModel.success'),
     onDone: () => setEditingDefault(null),
+    onError: (err) => {
+      setDialogError(failureText(err) ?? t('errors:generic'))
+      return true
+    },
   })
 
   if (!canRead) {
@@ -380,6 +394,7 @@ function Inner() {
         label: t('defaultModel.title'),
         run: () => {
           setDefaultModel(record.default_model ?? '')
+          setDialogError(undefined)
           setEditingDefault(record)
         },
       },
@@ -400,7 +415,10 @@ function Inner() {
         key: 'revoke',
         label: t('actions.revoke'),
         icon: <Trash2 className="size-3.5" />,
-        run: () => setRevoking(record),
+        run: () => {
+          setDialogError(undefined)
+          setRevoking(record)
+        },
       },
     ].filter(Boolean) as {
       key: string
@@ -469,29 +487,30 @@ function Inner() {
   }
 
   return (
-    <div className="flex h-full flex-col gap-4">
-      <PageHeader
-        icon={KeyRound}
-        title={t('title')}
-        description={t('subtitle')}
-        // The verb of this screen goes in the NAMED slot, not in the `actions` bag:
-        // registering a provider is what the page is for, and a census cannot tell a
-        // verb from a range picker once both are in the same bag
-        // (`page-actions.census.test.ts`).
-        primaryAction={
-          canWrite ? (
-            <Button
-              variant="primary"
-              onClick={() => setCreateOpen(true)}
-              disabled={addingBlocked}
-              aria-describedby={addingBlocked ? addReasonId : undefined}
-            >
-              <Plus className="size-4" />
-              {t('add')}
-            </Button>
-          ) : undefined
-        }
-      />
+    <section
+      aria-labelledby={headingId}
+      className="flex min-w-0 flex-col gap-3"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <h3 id={headingId} className="text-body-l font-semibold text-text">
+            {t('section.title')}
+          </h3>
+          <p className="text-caption text-text-2">{t('subtitle')}</p>
+        </div>
+        {/* Secondary: the one filled control of Tools is the page's own verb. */}
+        {canWrite && !(listQ.isSuccess && rows.length === 0) ? (
+          <Button
+            variant="secondary"
+            onClick={() => setCreateOpen(true)}
+            disabled={addingBlocked}
+            aria-describedby={addingBlocked ? addReasonId : undefined}
+          >
+            <Plus className="size-4" />
+            {t('section.add')}
+          </Button>
+        ) : null}
+      </div>
 
       {addReason && (
         <p
@@ -556,7 +575,10 @@ function Inner() {
       />
 
       {phone && !listQ.isLoading && !listQ.error && rows.length > 0 ? (
-        <ul aria-label={t('title')} className="flex min-w-0 flex-col gap-3">
+        <ul
+          aria-label={t('section.title')}
+          className="flex min-w-0 flex-col gap-3"
+        >
           {rows.map((record) => (
             <li key={record.provider_ref}>
               <article
@@ -636,7 +658,7 @@ function Inner() {
           isLoading={listQ.isLoading}
           error={listQ.error}
           onRetry={() => void listQ.refetch()}
-          label={t('title')}
+          label={t('section.title')}
           getRowId={(r) => r.provider_ref}
           empty={
             <EmptyState
@@ -646,7 +668,7 @@ function Inner() {
               action={
                 canWrite ? (
                   <Button
-                    variant="primary"
+                    variant="secondary"
                     onClick={() => setCreateOpen(true)}
                     disabled={addingBlocked}
                     aria-describedby={addingBlocked ? addReasonId : undefined}
@@ -703,6 +725,7 @@ function Inner() {
             <Field
               label={t('defaultModel.model')}
               description={t('defaultModel.modelsHint')}
+              error={dialogError}
             >
               <select
                 value={defaultModel}
@@ -735,12 +758,13 @@ function Inner() {
               <Button
                 variant="primary"
                 disabled={saveDefault.isPending}
-                onClick={() =>
+                onClick={() => {
+                  setDialogError(undefined)
                   saveDefault.mutate({
                     ref: editingDefault.provider_ref,
                     model: defaultModel,
                   })
-                }
+                }}
               >
                 {t('defaultModel.save')}
               </Button>
@@ -769,10 +793,15 @@ function Inner() {
           confirmLabel={t('revoke.confirm')}
           tone="danger"
           pending={revoke.isPending}
-          onConfirm={() => revoke.mutate(revoking.provider_ref)}
-        />
+          onConfirm={() => {
+            setDialogError(undefined)
+            revoke.mutate(revoking.provider_ref)
+          }}
+        >
+          {dialogError ? <FieldError>{dialogError}</FieldError> : null}
+        </ConfirmDialog>
       )}
-    </div>
+    </section>
   )
 
   function ConnectionCell({ record }: { record: ProviderRecordDTO }) {

@@ -39,7 +39,9 @@ export type MessageProblem = 'missing' | 'refused' | 'error'
 
 export interface MessageNavigator {
   runRef: string
-  /** The index has messages: the rail, the count and the panel are offered. */
+  /** The index has messages and the conversation shows some: the rail, the count and
+   * the panel are offered. A count beside an empty conversation ("Messages 2" over "No
+   * messages yet") counted what the person could not see (dev#3120). */
   available: boolean
   problem: MessageProblem | null
   total: number
@@ -129,7 +131,10 @@ export function useMessageNavigator({
 
   const status = index.error instanceof ApiError ? index.error.status : 0
   let problem: MessageProblem | null = null
-  if (index.data?.transcript === 'missing') problem = 'missing'
+  // A missing transcript matters only under messages the conversation shows: a session
+  // stopped before its first turn has none yet, and its empty state says so (dev#3120).
+  if (index.data?.transcript === 'missing')
+    problem = items.length > 0 ? 'missing' : null
   else if (index.isError && status === 409) problem = 'refused'
   // 422: the engine does not read this transcript (too large to read, or a tool the
   // caller's `enabled` did not know). Nothing to say.
@@ -201,7 +206,8 @@ export function useMessageNavigator({
 
   return {
     runRef,
-    available: index.data !== undefined && index.data.total > 0,
+    available:
+      index.data !== undefined && index.data.total > 0 && items.length > 0,
     problem,
     total: index.data?.total ?? 0,
     unreadable: index.data?.unreadable ?? 0,

@@ -11,6 +11,7 @@ import (
 
 	"github.com/olivaresai/olivares/connectors/threatfeed"
 	"github.com/olivaresai/olivares/core/eventbus"
+	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
@@ -110,6 +111,11 @@ func subscribeThreatIntel(ctx context.Context, getenv func(string) string, bus e
 	}
 
 	handler := func(_ context.Context, e event.Event) error {
+		// The subscription is made once at boot; the source may be turned on or off
+		// later by an activation.
+		if !sdk.CapabilityEnabled(src) {
+			return nil
+		}
 		now := time.Now().UTC()
 		switch e.Type {
 		case event.TypeGuardrailObserved:

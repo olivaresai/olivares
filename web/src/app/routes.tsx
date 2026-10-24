@@ -10,6 +10,7 @@ import {
   type ErrorComponentProps,
 } from '@tanstack/react-router'
 import { lazy, Suspense } from 'react'
+import { useDocumentTitle } from '@/components/layout/document-title'
 import { RequirePermission } from '@/components/layout/require-permission'
 import { Spinner } from '@/components/ui/spinner'
 import { FEATURE_VIEWS, NAV_AREAS, ROUTE_ALIASES } from '@/features/registry'
@@ -67,8 +68,14 @@ function ShellError({ error }: ErrorComponentProps) {
   return <RouteErrorPage error={error} />
 }
 
+/** The root of every route, public or shell: it names the page in the document title. */
+function RootLayout() {
+  useDocumentTitle()
+  return <Outlet />
+}
+
 export const rootRoute = createRootRoute({
-  component: () => <Outlet />,
+  component: RootLayout,
   notFoundComponent: NotFoundPage,
   errorComponent: RouteErrorPage,
 })

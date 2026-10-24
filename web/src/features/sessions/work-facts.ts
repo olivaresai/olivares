@@ -13,6 +13,7 @@
 //    calls" is a claim that the session made none; an absent count is the claim that
 //    nobody counted. The two look alike on a screen and mean opposite things, and this
 //    is the one place the difference is decided.
+import { modelName } from '@/features/agentops/model-name'
 import type { LiveDTO } from './types'
 
 /**
@@ -30,8 +31,11 @@ export type FactTranslate = (
 ) => string
 
 export interface FactFormatters {
-  /** Milliseconds → "15.0s". The console's own `formatDuration`. */
-  duration: (ms: number) => string
+  /**
+   * Milliseconds → "15s". The console's own `formatDuration`. Absent: another part
+   * of the screen says the elapsed time (or that it is unknown), and this line does not.
+   */
+  duration?: (ms: number) => string
   /**
    * Micro-USD → "$0.042". The console's own `formatMicroUsd`. Absent: another part
    * of the screen says the cost (or that it is unknown), and this line does not.
@@ -41,7 +45,9 @@ export interface FactFormatters {
 
 /**
  * The facts line, in reading order: how long it worked, how many tool calls, how many
- * events, what it cost, which model. Every entry is a figure the engine sent.
+ * events, what it cost, which model. Every entry is a figure the engine sent. The events
+ * are said only when they are not the tool calls again: "188 tool calls · 188 events"
+ * repeated a number that added nothing. The model is said by its name (`modelName`).
  *
  * `model` is the model the CALLER names for the session (`sessionModelRef`: the run's
  * first). It is not read from the observed row here: that row's `model_ref` is the model
@@ -54,7 +60,7 @@ export function workFacts(
   model: string | undefined,
 ): string[] {
   return [
-    s.duration_seconds > 0
+    s.duration_seconds > 0 && fmt.duration
       ? t('sessions:work.worked', {
           duration: fmt.duration(s.duration_seconds * 1000),
         })
@@ -62,10 +68,10 @@ export function workFacts(
     s.tool_call_count > 0
       ? t('sessions:work.toolCalls', { count: s.tool_call_count })
       : null,
-    s.event_count > 0
+    s.event_count > 0 && s.event_count !== s.tool_call_count
       ? t('sessions:work.events', { count: s.event_count })
       : null,
     s.cost_micro_usd > 0 && fmt.cost ? fmt.cost(s.cost_micro_usd) : null,
-    model ?? null,
+    model ? modelName(model) : null,
   ].filter((f): f is string => f !== null)
 }

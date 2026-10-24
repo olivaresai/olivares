@@ -32,8 +32,6 @@
     "viewAll": "Alle anzeigen",
     "learnMore": "Mehr erfahren",
     "openMenu": "Menü öffnen",
-    "expandSidebar": "Seitenleiste ausklappen",
-    "collapseSidebar": "Seitenleiste einklappen",
     "help": "Dokumentation zu dieser Ansicht öffnen"
   },
   "states": {
@@ -50,6 +48,7 @@
     "label": "Design",
     "light": "Hell",
     "dark": "Dunkel",
+    "black": "Schwarz",
     "system": "System",
     "toggle": "Design umschalten"
   },
@@ -100,7 +99,7 @@
     "deniedHelp": "Bitten Sie eine Verwaltungsperson, die das gewähren kann.",
     "noTargetReason": "Erfordert eine Organisation, in der es ausgeführt wird.",
     "noTargetHelp": "Wählen Sie eine Organisation und versuchen Sie es erneut.",
-    "goTo": "Gehe zu",
+    "goTo": "Wechseln zu",
     "recentSessions": "Letzte Sitzungen",
     "settingsGroup": "Einstellungen",
     "scope": "in {{name}}",
@@ -164,9 +163,7 @@
     "email": "Geben Sie eine gültige E-Mail-Adresse ein."
   },
   "a11y": {
-    "breadcrumb": "Brotkrümelnavigation",
     "skipToContent": "Zum Inhalt springen",
-    "primarySidebar": "Primär",
     "mainNavigation": "Hauptnavigation",
     "graphControls": "Diagrammsteuerung",
     "graphMinimap": "Graph-Minimap",
@@ -212,35 +209,35 @@
       "auditCheckpoint": "Audit-Prüfpunkt erstellt",
       "orgCreated": "Organisation erstellt",
       "loginBlocked": "Eine Anmeldung von {{actor}} wurde blockiert",
-      "loginBlocked_you": "Eine deiner Anmeldungen wurde blockiert",
+      "loginBlocked_you": "Eine Ihrer Anmeldungen wurde blockiert",
       "ssoLogin": "{{actor}} hat sich mit SSO angemeldet",
-      "ssoLogin_you": "Du hast dich mit SSO angemeldet",
+      "ssoLogin_you": "Sie haben sich mit SSO angemeldet",
       "userInvited": "{{actor}} hat jemanden eingeladen",
-      "userInvited_you": "Du hast jemanden eingeladen",
+      "userInvited_you": "Sie haben jemanden eingeladen",
       "userJoined": "{{actor}} ist beigetreten",
-      "userJoined_you": "Du bist beigetreten",
+      "userJoined_you": "Sie sind beigetreten",
       "sessionStarted": "{{actor}} hat eine Sitzung gestartet",
-      "sessionStarted_you": "Du hast eine Sitzung gestartet",
+      "sessionStarted_you": "Sie haben eine Sitzung gestartet",
       "sessionStopped": "{{actor}} hat eine Sitzung gestoppt",
-      "sessionStopped_you": "Du hast eine Sitzung gestoppt",
+      "sessionStopped_you": "Sie haben eine Sitzung gestoppt",
       "sessionResumed": "{{actor}} hat eine Sitzung fortgesetzt",
-      "sessionResumed_you": "Du hast eine Sitzung fortgesetzt",
+      "sessionResumed_you": "Sie haben eine Sitzung fortgesetzt",
       "sessionFailed": "Eine Sitzung konnte nicht starten",
       "approvalRequested": "{{actor}} hat eine Genehmigung angefordert",
       "approvalRequested_you": "Sie haben eine Genehmigung angefordert",
       "killswitchEngaged": "Not-Aus von {{actor}} ausgelöst",
-      "killswitchEngaged_you": "Du hast den Not-Aus ausgelöst",
+      "killswitchEngaged_you": "Sie haben den Not-Aus ausgelöst",
       "killswitchReleased": "Not-Aus von {{actor}} aufgehoben",
-      "killswitchReleased_you": "Du hast den Not-Aus aufgehoben",
+      "killswitchReleased_you": "Sie haben den Not-Aus aufgehoben",
       "killswitchDenied": "Der Not-Aus hat eine Sitzung gestoppt",
-      "toolInstalled": "Ein Agent-Tool wurde installiert",
+      "toolInstalled": "Ein Agent-Werkzeug wurde installiert",
       "secretStored": "Ein Geheimnis wurde gespeichert",
       "viewSaved": "{{actor}} hat eine Ansicht gespeichert",
-      "viewSaved_you": "Du hast eine Ansicht gespeichert",
+      "viewSaved_you": "Sie haben eine Ansicht gespeichert",
       "workspaceCreated": "{{actor}} hat einen Arbeitsbereich erstellt",
-      "workspaceCreated_you": "Du hast einen Arbeitsbereich erstellt",
+      "workspaceCreated_you": "Sie haben einen Arbeitsbereich erstellt",
       "workspaceUpdated": "{{actor}} hat einen Arbeitsbereich geändert",
-      "workspaceUpdated_you": "Du hast einen Arbeitsbereich geändert",
+      "workspaceUpdated_you": "Sie haben einen Arbeitsbereich geändert",
       "signedIn": "{{actor}} hat sich angemeldet",
       "workCreated": "{{actor}} hat ein Arbeitselement erstellt",
       "workReady": "{{actor}} hat ein Arbeitselement als bereit markiert",
@@ -265,7 +262,7 @@
       "policyDeleted_you": "Sie haben eine Richtlinie gelöscht"
     },
     "actors": {
-      "you": "Du",
+      "you": "Sie",
       "member": "Ein Mitglied",
       "token": "Ein API-Token",
       "system": "Olivares"
@@ -286,7 +283,7 @@
     "title": "Tastaturkürzel",
     "description": "Navigieren Sie die Konsole ohne die Tastatur zu verlassen.",
     "general": "Allgemein",
-    "navigation": "Gehe zu",
+    "navigation": "Wechseln zu",
     "openPalette": "Befehlspalette öffnen",
     "showHelp": "Diese Hilfe anzeigen"
   },
@@ -328,10 +325,8 @@
         "first": "Erste Sitzung",
         "last": "Letzte Sitzung",
         "open": "Sitzung öffnen",
-        "pin": "Anheften oder lösen"
-      },
-      "nav": {
-        "toggleRail": "Navigationsleiste ein- oder ausklappen"
+        "pin": "Anheften oder lösen",
+        "menu": "Aktionsmenü der Sitzung öffnen"
       },
       "navRail": {
         "next": "Nächstes Modul",
@@ -351,6 +346,10 @@
         "previousFile": "Vorherige Datei",
         "nextHunk": "Nächste Änderung",
         "previousHunk": "Vorherige Änderung"
+      },
+      "approvals": {
+        "approve": "Die geöffnete Anfrage einmal genehmigen",
+        "deny": "Die geöffnete Anfrage ablehnen"
       }
     },
     "when": {
@@ -358,10 +357,10 @@
       "launcherFocused": "im Starterfeld",
       "workSurface": "auf dem Sitzungsbildschirm",
       "sessionHistory": "wenn eine vorherige Sitzung verfügbar ist",
-      "paletteRecent": "in den Palettenergebnissen bei leerer Suche"
+      "paletteRecent": "in den Palettenergebnissen bei leerer Suche",
+      "approvalQueue": "in der Genehmigungsliste"
     },
     "precedence": "Teilen sich zwei Zeilen dieselben Tasten, gewinnt die letzte zutreffende.",
-    "modNote": "⌘ ist Strg unter Windows und Linux.",
     "problems_one": "{{count}} Tastenkürzel konnte nicht gelesen werden und löst nicht aus: {{commands}}",
     "problems_other": "{{count}} Tastenkürzel konnten nicht gelesen werden und lösen nicht aus: {{commands}}",
     "navRailNote": "Die Leiste ist ein einziger Tabstopp. Diese Tasten wirken, solange sie den Fokus hat."
@@ -395,12 +394,12 @@
         "retry": "Erneut laden"
       },
       "noAccess": {
-        "title": "Du kannst das nicht öffnen",
-        "description": "Deine Rolle umfasst es nicht. Mehr wird darüber nicht angezeigt."
+        "title": "Sie können das nicht öffnen",
+        "description": "Ihre Rolle umfasst es nicht. Mehr wird darüber nicht angezeigt."
       },
       "unknown": {
         "title": "Die Anfrage wurde gesendet, die Antwort ging verloren.",
-        "description": "Dieselbe Anfrage wird bei der Engine geprüft. Sende sie nicht erneut.",
+        "description": "Dieselbe Anfrage wird bei der Engine geprüft. Senden Sie sie nicht erneut.",
         "checking": "Anfrage {{id}} · Prüfung seit {{elapsed}}",
         "retry": "Erneut senden",
         "retryReason": "Verfügbar, sobald die Engine bestätigt, dass nichts gestartet wurde."
@@ -410,7 +409,19 @@
       "label": "Dasselbe im Terminal",
       "copy": "Befehl kopieren",
       "copied": "Kopiert",
-      "copyFailed": "Kopieren fehlgeschlagen. Markiere den Befehl und kopiere ihn."
+      "copyFailed": "Kopieren fehlgeschlagen. Markieren Sie den Befehl und kopieren Sie ihn."
+    },
+    "copy": {
+      "message": "Nachricht kopieren",
+      "code": "Code kopieren",
+      "copied": "Kopiert",
+      "failed": "Kopieren nicht möglich. Markieren Sie den Text und kopieren Sie ihn."
     }
+  },
+  "resize": {
+    "hint": "Ziehen oder Pfeiltasten verwenden. Doppelklick oder Eingabetaste setzt zurück."
+  },
+  "panes": {
+    "saveFailed": "Die Panelbreite konnte nicht gespeichert werden. Sie gilt nur für diesen Besuch."
   }
 }

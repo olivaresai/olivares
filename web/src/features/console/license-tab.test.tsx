@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PanelExtension } from '@/features/panels'
 import { ApiError } from '@/lib/api/errors'
 import { queryKeys } from '@/lib/api/query'
+import { toast } from '@/components/ui/toaster'
 import './i18n'
 
 const { api, authState, restart } = vi.hoisted(() => ({
@@ -65,6 +66,7 @@ vi.mock('./api', async (importOriginal) => {
 })
 
 import { consoleKeys } from './api'
+import { updatesApi } from '@/features/settings/updates-settings'
 import { LicenseTab } from './license-tab'
 
 function wrap(ui: ReactElement) {
@@ -146,7 +148,7 @@ describe('LicenseTab', () => {
         ),
       ).toBeInTheDocument()
       expect(
-        screen.getByRole('link', { name: `Switch to ${edition}` }),
+        screen.getByRole('link', { name: 'How the switch works' }),
       ).toHaveAttribute('href', NEXT_STEP)
       // What the edition adds is quoted from docs/editions.md, all of it, in order.
       expect(
@@ -171,9 +173,56 @@ describe('LicenseTab', () => {
     },
   )
 
+  it('offers the switch as the one action, with the command for this installation', async () => {
+    vi.spyOn(updatesApi, 'get').mockResolvedValue({
+      edition: 'community',
+      version: '0.4',
+      available: '0.4',
+      update_available: true,
+      running_sessions: 0,
+      edition_switch: {
+        to: 'business',
+        install: 'container',
+        command:
+          'docker compose exec olivares olivares upgrade --edition business --yes',
+        then: 'Then restart the container.',
+        console_action: true,
+      },
+    })
+    api.getLicense.mockResolvedValue({
+      ...validLicense,
+      edition: 'community',
+      support_profile: 'business',
+    })
+    wrap(<LicenseTab />)
+    expect(
+      await screen.findByRole('button', { name: 'Switch to Business' }),
+    ).toBeEnabled()
+    expect(
+      screen.getByText(
+        'docker compose exec olivares olivares upgrade --edition business --yes',
+      ),
+    ).toBeInTheDocument()
+  })
+
   it.each(['none', 'invalid', 'expired'])(
     'stays silent about an edition move for a %s license',
     async (status) => {
+      // Even if the engine's update status names a switch, the view offers none for a license
+      // that is not live.
+      vi.spyOn(updatesApi, 'get').mockResolvedValue({
+        edition: 'community',
+        version: '0.4',
+        update_available: true,
+        running_sessions: 0,
+        edition_switch: {
+          to: 'business',
+          install: 'binary',
+          command: 'olivares upgrade --edition business',
+          then: 'Then restart the service.',
+          console_action: true,
+        },
+      })
       api.getLicense.mockResolvedValue({
         ...validLicense,
         edition: 'community',
@@ -182,7 +231,10 @@ describe('LicenseTab', () => {
       })
       wrap(<LicenseTab />)
       expect(await screen.findByText('Acme Corp')).toBeInTheDocument()
-      expect(screen.queryByRole('link', { name: /^Switch to / })).toBeNull()
+      expect(
+        screen.queryByRole('link', { name: /^How the switch works/ }),
+      ).toBeNull()
+      expect(screen.queryByRole('button', { name: /^Switch to / })).toBeNull()
       expect(
         screen.getByText(/^Community edition: applying a verified license/),
       ).toBeInTheDocument()
@@ -198,7 +250,7 @@ describe('LicenseTab', () => {
     })
     wrap(<LicenseTab />)
     expect(
-      await screen.findByRole('link', { name: 'Switch to Business' }),
+      await screen.findByRole('link', { name: 'How the switch works' }),
     ).toHaveAttribute('href', NEXT_STEP)
   })
 
@@ -210,7 +262,9 @@ describe('LicenseTab', () => {
     })
     wrap(<LicenseTab />)
     expect(await screen.findByText('Acme Corp')).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /^Switch to / })).toBeNull()
+    expect(
+      screen.queryByRole('link', { name: /^How the switch works/ }),
+    ).toBeNull()
     expect(
       screen.queryByText(/^Community edition: applying a verified license/),
     ).toBeNull()
@@ -231,14 +285,16 @@ describe('LicenseTab', () => {
       </QueryClientProvider>,
     )
     expect(
-      await screen.findByRole('link', { name: 'Switch to Business' }),
+      await screen.findByRole('link', { name: 'How the switch works' }),
     ).toBeInTheDocument()
     api.getLicense.mockRejectedValue(new ApiError(500, 'internal', 'later'))
     await act(() => qc.refetchQueries({ queryKey: consoleKeys.license() }))
     expect(
       await screen.findByText(/could not be refreshed/i),
     ).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /^Switch to / })).toBeNull()
+    expect(
+      screen.queryByRole('link', { name: /^How the switch works/ }),
+    ).toBeNull()
   })
 
   it.each([
@@ -770,6 +826,192 @@ describe('Business activation — an apply that restarts the engine', () => {
     await waitFor(() =>
       expect(screen.queryByText('Restarting the engine…')).toBeNull(),
     )
+  })
+})
+
+describe('Business activation — turning a family on or off', () => {
+  const family = {
+    key: 'regulated',
+    title: 'Regulated Operations',
+    addons: ['rtbf-depth', 'retention-governor'],
+  }
+  const addon = (key: string, title: string, state: string) => ({
+    key,
+    title,
+    summary: `${title} summary.`,
+    env: '',
+    preset: 'regulated',
+    family: 'regulated',
+    state,
+  })
+  const status = (states: [string, string], restartRequired = false) => ({
+    edition: 'enterprise',
+    restart_required: restartRequired,
+    presets: [],
+    families: [
+      {
+        ...family,
+        active: family.addons.filter((_, i) => states[i] === 'active'),
+      },
+    ],
+    addons: [
+      addon('rtbf-depth', 'RTBF depth', states[0]),
+      addon('retention-governor', 'Retention floors', states[1]),
+    ],
+  })
+  const familyRow = async () =>
+    (await screen.findByText('Regulated Operations')).closest(
+      'li',
+    ) as HTMLElement
+
+  beforeEach(() => {
+    api.getLicense.mockResolvedValue(validLicense)
+  })
+
+  it('lists each family with how many of its add-ons are on', async () => {
+    api.getActivation.mockResolvedValue(status(['active', 'available']))
+    wrap(<LicenseTab />)
+    expect(within(await familyRow()).getByText('1 of 2 on')).toBeInTheDocument()
+  })
+
+  it('says how many add-ons of a family wait for input, and counts them off', async () => {
+    api.getActivation.mockResolvedValue(status(['active', 'pending']))
+    wrap(<LicenseTab />)
+    const text = (await familyRow()).textContent ?? ''
+    expect(text).toContain('1 of 2 on')
+    expect(text).toContain('1 needs your input')
+  })
+
+  it('turns a family on with one action and says nothing restarts', async () => {
+    api.getActivation.mockResolvedValue(status(['available', 'available']))
+    api.previewActivation.mockResolvedValue({
+      preset: 'family:regulated',
+      changes: true,
+      entries: [{ addon: 'rtbf-depth', action: 'activate' }],
+    })
+    api.applyActivation.mockResolvedValue(status(['active', 'active']))
+    const user = userEvent.setup()
+    wrap(<LicenseTab />)
+
+    await user.click(
+      within(await familyRow()).getByRole('button', { name: /turn on/i }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    expect(api.previewActivation).toHaveBeenCalledWith({ family: 'regulated' })
+    await user.click(within(dialog).getByRole('button', { name: /^apply$/i }))
+
+    await waitFor(() =>
+      expect(api.applyActivation).toHaveBeenCalledWith({
+        action: 'enable',
+        family: 'regulated',
+      }),
+    )
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith('Regulated Operations is on.'),
+    )
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(
+      screen.getByText(/changes apply to the running engine/i),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/restarts/i)).toBeNull()
+    expect(screen.queryByText('Restarting the engine…')).toBeNull()
+  })
+
+  it('turns a family off after naming what goes off, without a preview', async () => {
+    api.getActivation.mockResolvedValue(status(['active', 'active']))
+    api.applyActivation.mockResolvedValue(status(['available', 'available']))
+    const user = userEvent.setup()
+    wrap(<LicenseTab />)
+
+    await user.click(
+      within(await familyRow()).getByRole('button', { name: /turn off/i }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('RTBF depth')).toBeInTheDocument()
+    expect(within(dialog).getByText('Retention floors')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: /^apply$/i }))
+
+    await waitFor(() =>
+      expect(api.applyActivation).toHaveBeenCalledWith({
+        action: 'disable',
+        family: 'regulated',
+      }),
+    )
+    expect(api.previewActivation).not.toHaveBeenCalled()
+  })
+
+  it('lists only what turning the family off stops', async () => {
+    api.getActivation.mockResolvedValue(status(['active', 'available']))
+    const user = userEvent.setup()
+    wrap(<LicenseTab />)
+    await user.click(
+      within(await familyRow()).getByRole('button', { name: /turn off/i }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('RTBF depth')).toBeInTheDocument()
+    expect(within(dialog).queryByText('Retention floors')).toBeNull()
+  })
+
+  it('keeps the dialog open and says so when the change is refused', async () => {
+    api.getActivation.mockResolvedValue(status(['active', 'active']))
+    api.applyActivation.mockRejectedValue(new Error('the engine said no'))
+    const user = userEvent.setup()
+    wrap(<LicenseTab />)
+    await user.click(
+      within(await familyRow()).getByRole('button', { name: /turn off/i }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: /^apply$/i }))
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        'Could not change Regulated Operations.',
+        { description: 'the engine said no' },
+      ),
+    )
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('refreshes which modules run, so the pages of a family appear without a reload', async () => {
+    api.getActivation.mockResolvedValue(status(['available', 'available']))
+    api.previewActivation.mockResolvedValue({
+      preset: 'family:regulated',
+      changes: true,
+      entries: [{ addon: 'rtbf-depth', action: 'activate' }],
+    })
+    api.applyActivation.mockResolvedValue(status(['active', 'active']))
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    qc.setQueryData(queryKeys.serverInfo, {
+      modules_not_enabled: ['compliance'],
+    })
+    expect(qc.getQueryState(queryKeys.serverInfo)?.isInvalidated).toBe(false)
+    const user = userEvent.setup()
+    render(
+      <QueryClientProvider client={qc}>
+        <LicenseTab />
+      </QueryClientProvider>,
+    )
+    await user.click(
+      within(await familyRow()).getByRole('button', { name: /turn on/i }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: /^apply$/i }))
+    await waitFor(() =>
+      expect(qc.getQueryState(queryKeys.serverInfo)?.isInvalidated).toBe(true),
+    )
+  })
+
+  it('says a restart is needed only when the engine says so', async () => {
+    api.getActivation.mockResolvedValue(status(['active', 'available'], true))
+    wrap(<LicenseTab />)
+    await familyRow()
+    expect(
+      screen.getByText(/applies after the engine restarts/i),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(/changes apply to the running engine/i),
+    ).toBeNull()
   })
 })
 

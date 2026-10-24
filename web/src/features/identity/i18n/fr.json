@@ -42,7 +42,7 @@
       "providers": "Enregistrer ou retirer un identifiant de fournisseur",
       "generic": "Cette action",
       "console": "Gestion des connecteurs",
-      "stepUpPolicy": "Changing the extra check for administrative actions",
+      "stepUpPolicy": "Modifier la vérification supplémentaire des actions d’administration",
       "modules": "Activer ou désactiver des modules",
       "signing": "Activer ou désactiver la signature des rapports"
     },
@@ -67,8 +67,8 @@
     "cancelHint": "Fermer annule cette action. Un enregistrement ou une authentification déjà envoyés peuvent encore aboutir.",
     "registrationUnknownElsewhere": "L’inscription n’a pas pu être confirmée. La clé d’accès a peut-être été enregistrée. Fermez cette boîte de dialogue et vérifiez vos clés d’accès avant de commencer une nouvelle inscription.",
     "code": {
-      "title": "Sign in with your authenticator code",
-      "body": "{{action}} needs a sign-in with your authenticator code on this deployment. Sign in again and enter your code.",
+      "title": "Connectez-vous avec votre code d’authentificateur",
+      "body": "{{action}} exige une connexion avec votre code d’authentificateur sur ce déploiement. Connectez-vous de nouveau et saisissez votre code.",
       "signInAgain": "Sign in again"
     }
   },
@@ -224,7 +224,7 @@
     "methods": "Méthodes",
     "methodsUnknown": "Non signalé",
     "policy": {
-      "none": "Ce déploiement ne demande aucune vérification supplémentaire avant les actions d’administration. Un administrateur système peut en activer une dans Réglages › Connexion et sécurité.",
+      "none": "Ce déploiement ne demande aucune vérification supplémentaire avant les actions d’administration. Un administrateur système peut en activer une dans Paramètres › Connexion et sécurité.",
       "totp": "Sur ce déploiement, les actions d’administration demandent une connexion avec un code d’application d’authentification.",
       "passkey": "Sur ce déploiement, les actions d’administration demandent une clé d’accès."
     },

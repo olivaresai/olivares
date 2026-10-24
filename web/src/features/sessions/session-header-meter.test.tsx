@@ -258,7 +258,13 @@ describe('session header — the tool’s own mode', () => {
       run({ permission_mode: 'default', tool_mode: 'bypassPermissions' }),
     )
     const mode = screen.getByTestId('narrative-mode')
-    expect(mode.textContent).toBe('Mode: Never asks for permission')
+    // dev#3120: "Never asks for permission" alarmed and said nothing of the boundary.
+    expect(mode.textContent).toBe(
+      'Runs without asking: confined by Olivares policy',
+    )
+    expect(
+      within(mode).getByRole('link', { name: 'Olivares policy' }),
+    ).toHaveAttribute('href', '/claude-policy')
     expect(mode).toHaveAttribute(
       'title',
       'Claude Code reports: bypassPermissions',
@@ -289,7 +295,10 @@ describe('session header — the tool’s own mode', () => {
       'Mode: Asks before commands it does not trust',
     ],
     ['on-failure · workspaceWrite', 'Mode: Asks when a command fails'],
-    ['never · dangerFullAccess', 'Mode: Never asks for permission'],
+    [
+      'never · dangerFullAccess',
+      'Runs without asking: confined by Olivares policy',
+    ],
     ['granular · readOnly', 'Mode: Asks by its own rules'],
   ])(
     'words Codex’s approval policy in %s when the launch has no console wording, never its sandbox',
@@ -305,8 +314,9 @@ describe('session header — the tool’s own mode', () => {
       // Exactly the approval policy in plain words: no sandbox word, raw or reworded.
       expect(mode.textContent).toBe(words)
       expect(mode).not.toHaveTextContent(toolMode.split(' · ')[1])
-      // Codex's own words stay one hover away.
+      // Codex's own words stay one hover away; its policy has no page to link to.
       expect(mode).toHaveAttribute('title', `Codex reports: ${toolMode}`)
+      expect(within(mode).queryByRole('link')).toBeNull()
     },
   )
 

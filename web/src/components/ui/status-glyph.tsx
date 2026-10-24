@@ -13,9 +13,7 @@ import { StatusChip, StatusDot, type StatusTone } from './status-chip'
  *    shape is an image whose accessible name is the word. Color never carries a status
  *    alone. A blank word, or a status the component has no word for, throws at render.
  *
- * The green working dot pulses every 2 s and stops under reduced motion (the operating
- * system's preference or the console's Reduce motion setting); the word still says
- * "Working".
+ * The working dot is a solid green dot; the word still says "Working" (C2-DESIGN §3).
  */
 export type Status =
   'working' | 'needs-you' | 'done' | 'failed' | 'paused' | 'idle'
@@ -31,7 +29,7 @@ const WORD_KEY: Record<Status, string> = {
 
 /** Compatibility export for loading/checking callers; it uses the shared working dot. */
 export function RunningRing({ className }: { className?: string }) {
-  return <StatusDot tone="ok" working className={className} />
+  return <StatusDot tone="ok" className={className} />
 }
 
 const TONE: Record<Status, StatusTone> = {
@@ -84,7 +82,7 @@ export function StatusGlyph({
         className={cn('inline-flex shrink-0 items-center', className)}
         {...props}
       >
-        <StatusDot tone={TONE[status]} working={status === 'working'} />
+        <StatusDot tone={TONE[status]} />
       </span>
     )
   }
@@ -92,7 +90,6 @@ export function StatusGlyph({
   return (
     <StatusChip
       tone={TONE[status]}
-      working={status === 'working'}
       data-slot="status-glyph"
       data-status={status}
       className={className}

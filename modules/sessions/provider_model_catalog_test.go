@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -187,7 +188,11 @@ func TestProfileModelCatalogBoundProviderAndFallback(t *testing.T) {
 	}
 }
 
-func TestProfileModelCatalogOpenCodeFallbackDoesNotLaunchPlugins(t *testing.T) {
+// #2567: an OpenCode account's catalog is the tool's own list, read only with the
+// plugin-free form of its command: a configured plugin is not executed (measured on
+// v1.18.34: `opencode models --pure` leaves a plugin's marker unwritten, `opencode
+// models` writes it). The fake runner records the only command launched.
+func TestProfileModelCatalogOpenCodeReadsThePluginFreeList(t *testing.T) {
 	peer := &catalogToolPeer{t: t}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(peer), WithProviderDriver(NewOpenCodeDriver()))
 	m.UseExecutionEnvironmentRef(testEnvRef)
@@ -202,11 +207,11 @@ func TestProfileModelCatalogOpenCodeFallbackDoesNotLaunchPlugins(t *testing.T) {
 	}
 	profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "opencode", UserHome: home, ConfigHome: config, AuthSource: AuthSourceAccountHome})
 	out, err := m.ProfileModelCatalog(t.Context(), tenant, profile.Ref, true)
-	if err != nil || out.State != "unsupported" || !out.FreeText || out.DefaultModel != "" || len(out.Models) != 0 {
-		t.Fatalf("OpenCode fallback: %+v %v", out, err)
+	if err != nil || out.State != "fresh" || !out.FreeText || len(out.Models) != 6 || out.Models[2].ID != "opencode/glm-5.3-flash-free" {
+		t.Fatalf("OpenCode catalog: %+v %v", out, err)
 	}
-	if len(peer.specs) != 0 {
-		t.Fatal("catalog launched plugin-capable OpenCode command")
+	if len(peer.specs) != 1 || !reflect.DeepEqual(peer.specs[0].Args, []string{"models", "--pure"}) {
+		t.Fatalf("catalog launched something other than the plugin-free list: %+v", peer.specs)
 	}
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
 		t.Fatal("catalog executed a configured plugin")

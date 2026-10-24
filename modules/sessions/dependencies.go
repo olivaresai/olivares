@@ -57,6 +57,7 @@ type Dependencies struct {
 	SessionDecoys                    SessionDecoySource
 	GitRead                          SessionGitReadSource
 	GitReadDataDir                   string
+	CredentialBroker                 SessionCredentialBroker
 	Creds                            CredentialSource
 	LaunchGate                       LaunchGate
 	StopGate                         StopGate
@@ -66,6 +67,7 @@ type Dependencies struct {
 	CostSink                         SessionCostSink
 	ListPricer                       ListPricer
 	LimitResets                      LimitResetSource
+	SessionFacts                     SessionFactsSource
 	WorkSessionCreds                 WorkSessionCredentialSource
 	CommunicationSessionCreds        CommunicationSessionCredentialSource
 	// The enabled bit distinguishes an intentional K3 OFF posture from a lost
@@ -207,6 +209,7 @@ func (m *Module) dependencyChecks() []dependencyCheck {
 		{"Runner", configuredDependency(d.Runner), "session process launches", false},
 		{"SessionMCP", d.SessionMCP, "session MCP configuration", true},
 		{"GitRead", d.GitRead, "session repository credentials", false},
+		{"CredentialBroker", d.CredentialBroker, "session managed credentials", false},
 		{"Creds", configuredDependency(d.Creds), "legacy inference credential minting", false},
 		{"LaunchGate", configuredDependency(d.LaunchGate), "governed session admission", true},
 		{"StopGate", configuredDependency(d.StopGate), "emergency-stop admission", true},

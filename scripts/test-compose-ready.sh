@@ -76,6 +76,7 @@ no_ports=deploy/compose/docker-compose.ready-no-ports.ci.yml
 compose=deploy/compose/docker-compose.yml
 agentops=deploy/compose/docker-compose.agentops.yml
 postgres=deploy/compose/docker-compose.postgres.yml
+standby=deploy/compose/docker-compose.standby-not-ready.ci.yml
 compose_readme=deploy/compose/README.md
 view() (
 	shopt -s dotglob nullglob
@@ -99,7 +100,7 @@ view() (
 	link_except .github/actions olivares-tool-cache
 	link_except .github/actions/olivares-tool-cache action.yml
 	link_except deploy compose seccomp apparmor
-	link_except deploy/compose docker-compose.ready-no-ports.ci.yml docker-compose.yml docker-compose.agentops.yml docker-compose.postgres.yml README.md
+	link_except deploy/compose docker-compose.ready-no-ports.ci.yml docker-compose.yml docker-compose.agentops.yml docker-compose.postgres.yml docker-compose.standby-not-ready.ci.yml README.md
 	cp "$root/$workflow" "$dest/$workflow"
 	cp "$root/$mainline" "$dest/$mainline"
 	cp "$root/$cache_action" "$dest/$cache_action"
@@ -107,6 +108,7 @@ view() (
 	cp "$root/$compose" "$dest/$compose"
 	cp "$root/$agentops" "$dest/$agentops"
 	cp "$root/$postgres" "$dest/$postgres"
+	cp "$root/$standby" "$dest/$standby"
 	cp "$root/$compose_readme" "$dest/$compose_readme"
 	# The session profiles are copies too: a mutant must not write through a link.
 	cp -R "$root/deploy/seccomp" "$root/deploy/apparmor" "$dest/deploy/"
@@ -319,6 +321,32 @@ wiring 29i apparmor-deny-mount-restored 1 'must not deny mount, umount or remoun
 	sed -e 's/^  deny @{PROC}\/sysrq-trigger rwklx,$/  deny mount,\n&/'
 wiring 29j apparmor-mount-removed 1 "must allow the session helper's bind mounts" "$apparmor" \
 	sed -e '/^  mount,$/d'
+
+# The standby is a second Postgres engine on the leader's database: without the leader's admin
+# pool it exits at boot and never answers /readyz (the cause of the red negative step on 0.1,
+# 0.2 and 0.3), so each half of that pool is a mutant.
+anchor "$standby" 1 '^      - --admin-dsn=env:OLIVARES_ADMIN_DSN$'
+anchor "$standby" 1 '^      OLIVARES_ADMIN_DSN: '
+wiring 29k standby-admin-flag-dropped 1 'the standby fixture must carry --admin-dsn=env:OLIVARES_ADMIN_DSN' "$standby" \
+	sed -e '/^      - --admin-dsn=env:OLIVARES_ADMIN_DSN$/d'
+wiring 29l standby-admin-flag-commented-out 1 'the standby fixture must carry --admin-dsn=env:OLIVARES_ADMIN_DSN' "$standby" \
+	sed -e 's/^      - --admin-dsn=env:OLIVARES_ADMIN_DSN$/      # &/'
+wiring 29m standby-admin-dsn-dropped 1 'the standby fixture must carry the OLIVARES_ADMIN_DSN environment line' "$standby" \
+	sed -e '/^      OLIVARES_ADMIN_DSN: /d'
+wiring 29n standby-admin-dsn-elsewhere 1 'the standby fixture must carry the OLIVARES_ADMIN_DSN environment line' "$standby" \
+	sed -e '/^      OLIVARES_ADMIN_DSN: /s/@postgres:5432/@elsewhere:5432/'
+# The negative step's own assertions: each must stay a code line of the step, not a message or a comment.
+anchor "$workflow" 1 '^          grep -qF .HTTP 503. <<<"\$probes" \|\| fail '
+anchor "$workflow" 1 '^          \[ "\$health" = unhealthy \] \|\| fail '
+wiring 29o negative-step-503-grep-dropped 1 'must keep the assertion' "$workflow" \
+	sed -e "/^          grep -qF 'HTTP 503' <<<\"\$probes\" || fail /d"
+wiring 29p negative-step-health-assertion-dropped 1 'must keep the assertion' "$workflow" \
+	sed -e '/^          \[ "\$health" = unhealthy \] || fail /d'
+
+wiring 29q negative-step-log-unredacted 1 'must pipe through redact' "$workflow" \
+	sed -e 's/ 2>&1 | redact >&2/ >\&2/'
+wiring 29r negative-step-redaction-dropped 1 'must keep redact()' "$workflow" \
+	sed -e '/^          redact() {/d'
 
 # The runtime refusals the workflow runs before touching Docker and before `up`, on JSON and
 # environment fixtures shaped like `docker compose config --format json`. They are not a Docker

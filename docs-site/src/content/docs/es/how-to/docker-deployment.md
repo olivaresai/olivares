@@ -24,8 +24,8 @@ se publica en todas las interfaces, porque esto es un servidor: restríngelo del
 como se muestra abajo.
 
 <!-- release -->
-:::note[Olivares 0.3]
-La próxima release es `0.3`; todavía no está publicada en GitHub. Los comandos siguientes describen los artefactos previstos. Compila desde el código fuente hasta su publicación y verifica cada artefacto antes de usarlo. El estado observado está en `docs/releases/0.3-install-surfaces.json`.
+:::note[Olivares 0.4]
+La próxima release es `0.4`; todavía no está publicada en GitHub. Los comandos siguientes describen los artefactos previstos. Compila desde el código fuente hasta su publicación y verifica cada artefacto antes de usarlo. El estado observado está en `docs/releases/0.4-install-surfaces.json`.
 :::
 <!-- /release -->
 
@@ -40,7 +40,7 @@ La descarga principal del contenedor es **Docker Hub**:
 
 <!-- release -->
 ```bash
-docker pull docker.io/olivaresai/olivares:0.3
+docker pull docker.io/olivaresai/olivares:0.4
 ```
 <!-- /release -->
 
@@ -49,7 +49,7 @@ digest, usado como copia de respaldo y como registry de build. Docker Hub limita
 descargas **anónimas**; ghcr.io no limita las descargas anónimas de imágenes públicas, así que
 `docker login` o la coordenada de ghcr.io es la salida si un nodo de CI o una flota grande topa
 con el límite. Las tags no llevan **ningún `v` inicial**: <!-- release -->
-`:0.3`<!-- /release --> fija una release, `:latest` flota, y <!-- release -->`:0.3-fips`<!-- /release --> / <!-- release -->`:0.3-stig`<!-- /release --> son
+`:0.4`<!-- /release --> fija una release, `:latest` flota, y <!-- release -->`:0.4-fips`<!-- /release --> / <!-- release -->`:0.4-stig`<!-- /release --> son
 las variantes endurecidas. Las tags base y `:latest` son multi-arch
 (`linux/amd64`, `linux/arm64`); `fips`/`stig` son solo `amd64`.
 
@@ -61,7 +61,7 @@ Docker Hub mediante `cosign copy`, de modo que el digest es el mismo:
 <!-- release -->
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:0.3")"
+DIGEST="$(crane digest "$IMAGE:0.4")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
@@ -99,7 +99,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:0.3 \
+  docker.io/olivaresai/olivares:0.4 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -329,7 +329,7 @@ imagen antes de recrear.
 
 ## 8. Fija por digest para producción
 
-Las tags mutables (<!-- release -->`:0.3`<!-- /release -->, `:latest`) son para evaluación. En producción, fija el
+Las tags mutables (<!-- release -->`:0.4`<!-- /release -->, `:latest`) son para evaluación. En producción, fija el
 **digest** que verificaste — un digest es inmutable y es exactamente lo que aprobaste:
 
 ```bash

@@ -106,6 +106,8 @@ type approvalDTO struct {
 	EscalateAt        string          `json:"escalate_at,omitempty"`
 	Escalated         bool            `json:"escalated"`
 	DecidedAt         string          `json:"decided_at,omitempty"`
+	// CreatedAt is when the request was made: a console draws its wait from then.
+	CreatedAt string `json:"created_at,omitempty"`
 	// Consumed is set once a caller has spent this approval's single use. A caller
 	// that must not reuse a spent grant (a privileged launch) reads it, never who
 	// spent it.
@@ -128,6 +130,7 @@ func toApprovalDTO(rec model.Record, now model.Timestamp, tier ActionRiskTier) a
 		Review:    storedApprovalReview(rec),
 		ExpiresAt: rec.String(colExpiresAt), EscalateAt: rec.String(colEscalateAt),
 		Escalated: rec.String(colEscalatedAt) != "", DecidedAt: rec.String(colDecidedAt),
+		CreatedAt:   rec.String(model.ColCreatedAt),
 		Consumed:    rec.String(colConsumedBy) != "",
 		ChangeClass: rec.String(colChangeClass), ChangePaths: storedChangePaths(rec),
 	}

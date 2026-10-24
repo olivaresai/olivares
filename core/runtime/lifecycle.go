@@ -121,13 +121,13 @@ func (r *Runtime) outputHandler(o *outputReg) event.Handler {
 func (r *Runtime) startModules(ctx context.Context) {
 	for _, m := range r.modules {
 		m.host = &moduleHost{
-			bus:     r.bus,
-			log:     r.log.With("module", m.name),
-			cfg:     m.cfg,
-			name:    m.name,
-			class:   deliveryClassForModule(m.name),
-			dormant: m.dormant,
+			bus:   r.bus,
+			log:   r.log.With("module", m.name),
+			cfg:   m.cfg,
+			name:  m.name,
+			class: deliveryClassForModule(m.name),
 		}
+		m.host.dormant.Store(m.dormant)
 		if err := safe(func() error { return m.mod.Init(ctx, m.host) }); err != nil {
 			m.host.unsubscribeAll()
 			r.fail(&m.status, &m.err, "module", m.name, "init", err)
@@ -143,6 +143,71 @@ func (r *Runtime) startModules(ctx context.Context) {
 		}
 		r.setRunning(&m.status, &m.err)
 	}
+}
+
+// SetModuleActive turns a registered module on or off while the runtime runs, so a
+// node changes the modules it runs without a restart. Turning a module on delivers
+// the events it subscribed to in Init and, the first time, starts it; turning it off
+// stops its event delivery and leaves it initialized for direct calls, as a dormant
+// module is. It is not stopped: Stop runs once, at shutdown, for a module that ever
+// started. Changing a module to the state it is in is a no-op.
+func (r *Runtime) SetModuleActive(_ context.Context, name string, active bool) error {
+	r.reloadMu.Lock()
+	defer r.reloadMu.Unlock()
+
+	r.mu.Lock()
+	if !r.started || r.stopped {
+		r.mu.Unlock()
+		return ErrNotRunning
+	}
+	var reg *moduleReg
+	for _, m := range r.modules {
+		if m.name == name {
+			reg = m
+		}
+	}
+	if reg == nil {
+		r.mu.Unlock()
+		return fmt.Errorf("%w: %q", ErrModuleNotFound, name)
+	}
+	host, status, needsStart := reg.host, reg.status, reg.dormant && !reg.liveStarted
+	runCtx := r.runCtx
+	r.mu.Unlock()
+
+	if host == nil || status == StatusFailed {
+		return fmt.Errorf("runtime: module %q did not initialize, so it cannot change state", name)
+	}
+	if active == (status == StatusRunning) {
+		return nil
+	}
+	if !active {
+		if err := host.setActive(false); err != nil {
+			return err
+		}
+		r.set(&reg.status, &reg.err, StatusDormant, nil)
+		return nil
+	}
+	if err := host.setActive(true); err != nil {
+		return fmt.Errorf("runtime: module %q: %w", name, err)
+	}
+	if needsStart {
+		// The module lives as long as the runtime, not as long as the request that turned
+		// it on: Start gets the runtime's context, as at boot.
+		if err := safe(func() error { return reg.mod.Start(runCtx) }); err != nil {
+			// A change that is refused leaves the module as it was (dormant, nothing
+			// delivered) with the reason recorded, so it can be tried again; a module
+			// marked failed would be refused for good.
+			_ = host.setActive(false)
+			r.log.Warn("runtime: module could not be turned on", "module", name, "error", err)
+			r.set(&reg.status, &reg.err, StatusDormant, fmt.Errorf("start: %w", err))
+			return fmt.Errorf("runtime: module %q start: %w", name, err)
+		}
+		r.mu.Lock()
+		reg.liveStarted = true
+		r.mu.Unlock()
+	}
+	r.setRunning(&reg.status, &reg.err)
+	return nil
 }
 
 func (r *Runtime) startSources(ctx context.Context) {
@@ -507,7 +572,10 @@ func (r *Runtime) Stop(ctx context.Context) error {
 	// Stop modules in reverse registration order.
 	for i := len(modules) - 1; i >= 0; i-- {
 		m := modules[i]
-		if m.dormant {
+		r.mu.Lock()
+		neverStarted := m.dormant && !m.liveStarted
+		r.mu.Unlock()
+		if neverStarted {
 			continue
 		}
 		if m.host != nil {

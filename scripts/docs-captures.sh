@@ -13,6 +13,13 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
+# Every request this harness makes goes to its own loopback engines. The exclusion is exported as
+# well as passed per curl, so the shared helpers it sources or runs (select-console-modules.sh,
+# seed-guide-connectors.sh) cannot send a bearer token to an inherited proxy. The caller's own
+# exclusions are kept: replacing them would make an unrelated host the environment exempted unreachable.
+export no_proxy="127.0.0.1,localhost,::1${no_proxy:+,$no_proxy}"
+export NO_PROXY="127.0.0.1,localhost,::1${NO_PROXY:+,$NO_PROXY}"
+
 # Load the shared Git-environment isolation library before any build or probe.
 # Its recognized entry point prevents isolation probes from rebuilding the web bundle.
 _olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
@@ -25,6 +32,7 @@ unset _olivares_git_env
 # Use the shared build flags from scripts/lib/build-bin.sh.
 . "$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/build-bin.sh"
 . "$ROOT/scripts/lib/select-console-modules.sh"
+. "$ROOT/scripts/lib/redact-log.sh"
 # A view whose capture cannot be published yet keeps its published image and is listed in
 # scripts/docs-captures-held.txt (`id reason`, one per line). Every run leaves those views out, so the one
 # command never overwrites a held image; delete the line once the view passes the shutter checks.
@@ -57,7 +65,6 @@ demo_dir() {
 DATA="" WS_PARENT="" DATASET_ROOT=""
 cleanup() {
   [ -n "${PID:-}" ] && kill "$PID" 2>/dev/null || true
-  [ -n "${OLLAMA_PID:-}" ] && kill "$OLLAMA_PID" 2>/dev/null || true
   for d in "$DATA" "$WS_PARENT" "$DATASET_ROOT" ${EXEC_TMP:+"$EXEC_TMP"}; do
     [ -z "$d" ] || rm -rf "$d"
   done
@@ -121,15 +128,15 @@ fi
 printf 'demo-harness-inference-token-not-a-real-credential\n' >"$DATA/demo-inference-token"
 chmod 0600 "$DATA/demo-inference-token"
 
-# Activate the directory writer on the stopped seeded store, then reopen the same data
-# without --seed-demo. Both boots use the same custody files and activation settings.
+# Activate the directory writer on the stopped store, then reopen the same data.
+# Both boots use the same custody files and activation settings.
 # Disposable keyrings are mode 0600 inside a mode 0700 directory and never printed.
 # A routing probe cannot prove readiness: each handoffs capture needs an authorized
 # HTTP 200 collection read for its selected workspace.
 K3_CUSTODY="$DATA/custody"
 mkdir -p "$K3_CUSTODY"
 chmod 0700 "$K3_CUSTODY"
-python3 - "$K3_CUSTODY" <<'PYCUSTODIA'
+python3 -I - "$K3_CUSTODY" <<'PYCUSTODIA'
 import base64, json, os, secrets, sys
 
 d = sys.argv[1]
@@ -161,27 +168,11 @@ PYCUSTODIA
 
 # Use only the deterministic fixture runtime; admission, lifecycle and workspace confinement stay active.
 # The four AI tools of the demo estate: self-contained executables (a confined session child can read only
-# its own program) that speak each tool's wire protocol and answer from recorded transcripts, and a loopback
-# endpoint for the local model. No vendor account and no network.
+# its own program) that speak each tool's wire protocol and answer from recorded transcripts. No vendor
+# account and no network.
 # Built where connector plugins already run: a temporary directory may be mounted noexec.
 DEMO_TOOLS="${EXEC_TMP:-$DATA}/demo-tools"
 python3 -I "$ROOT/scripts/demo-tools/build-demo-tools.py" "$DEMO_TOOLS"
-OLLAMA_PORT="$((PORT + 40))"
-python3 -I "$ROOT/scripts/demo-tools/demo-ollama.py" "$OLLAMA_PORT" >"$DATA/demo-ollama.log" 2>&1 &
-OLLAMA_PID=$!
-# The endpoint must be OURS: another server on the port would satisfy the engine's probe with other models. Our
-# process writes its line only after it bound the port, so that line, and not an answer, proves the ownership.
-for _ in $(seq 1 100); do
-  grep -q "^demo-ollama: listening on 127.0.0.1:$OLLAMA_PORT\$" "$DATA/demo-ollama.log" 2>/dev/null && break
-  kill -0 "$OLLAMA_PID" 2>/dev/null || break
-  sleep 0.1
-done
-if ! grep -q "^demo-ollama: listening on 127.0.0.1:$OLLAMA_PORT\$" "$DATA/demo-ollama.log" 2>/dev/null \
-    || ! kill -0 "$OLLAMA_PID" 2>/dev/null; then
-  echo "docs-captures: ⛔ the local model endpoint could not start on port $OLLAMA_PORT:" >&2
-  cat "$DATA/demo-ollama.log" >&2
-  exit 2
-fi
 
 # Disable WIF for this engine so inherited configuration cannot replace the synthetic token issuer.
 # Both boots use the same activation and file-based custody settings.
@@ -209,32 +200,60 @@ arranca_motor() {
   PID=$!
 }
 
-echo "==> Booting engine (insecure, demo-seeded, K3 activation requested) on 127.0.0.1:$PORT"
-arranca_motor --seed-demo
+echo "==> Booting engine (insecure, fresh store, K3 activation requested) on 127.0.0.1:$PORT"
+arranca_motor
 
 echo "==> Waiting for the engine to accept connections"
 # Wait up to 240 seconds for health readiness; refusal includes the engine log.
 ARRIBA=0
 for _ in $(seq 1 480); do
-  if curl -sf "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then ARRIBA=1; break; fi
+  if curl --noproxy '*' -sf "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then ARRIBA=1; break; fi
   sleep 0.5
 done
 if [ "$ARRIBA" -ne 1 ]; then
   echo "docs-captures: ⛔ THE ENGINE DID NOT ACCEPT CONNECTIONS within 240 s (load1 $(cut -d' ' -f1 /proc/loadavg))." >&2
   echo "  Captures are unverified because no engine is available. Tail of its log:" >&2
-  tail -20 "$DATA/engine.log" >&2 2>/dev/null || echo "  (no log)" >&2
+  log_tail "$DATA/engine.log" 20
   exit 2
 fi
+
+# First-boot setup creates the demo administrator and the Northwind organization. The engine's
+# --seed-demo is deliberately NOT used: it also writes ten synthetic observed sessions into the same
+# tenant, and the home then counts them beside the canonical sixteen (dev#2562). The banner prints
+# the one-time token once; it is read here and never echoed. The setup reply is the user and its
+# organization, with no secret in it.
+SETUP_TOKEN="$(awk '/^=== FIRST-BOOT SETUP ===$/ { inside = 1; next }
+                    inside && /^  Token: / { print $2; exit }' "$DATA/engine.log")"
+if [ -z "$SETUP_TOKEN" ]; then
+  echo "docs-captures: ⛔ the fresh engine printed no first-boot token; its store was not empty." >&2
+  log_tail "$DATA/engine.log" 20
+  exit 2
+fi
+SETUP_BODY="$(DEMO_SETUP_TOKEN="$SETUP_TOKEN" python3 -I -c '
+import json, os
+print(json.dumps({"token": os.environ["DEMO_SETUP_TOKEN"], "email": "demo@olivares.local",
+                  "password": "olivares-demo-estate", "organization": "Northwind Labs"}))')"
+SETUP_HTTP="$(printf '%s' "$SETUP_BODY" | curl -sS --noproxy '*' -o "$DATA/setup.json" -w '%{http_code}' \
+  -X POST "http://127.0.0.1:$PORT/v1/setup" -H 'Content-Type: application/json' --data-binary @-)" || SETUP_HTTP=000
+case "$SETUP_HTTP" in
+2??) ;;
+*)
+  echo "docs-captures: ⛔ first-boot setup returned HTTP $SETUP_HTTP; without the demo administrator the canonical dataset refuses to run." >&2
+  exit 2
+  ;;
+esac
+unset SETUP_TOKEN SETUP_BODY
+echo "==> First-boot setup created the Northwind organization and the demo administrator"
 
 # Select the console modules while the first engine is up. The ceremony below stops it anyway, so the engine
 # that serves the captures starts with them selected. A module switched on in a running engine is not wired to
 # the sessions module: a skills import answers 503 (measured on the released 0.1 image) and
 # the communications evidence is unavailable until a restart. This order needs no restart of its own.
-TOKEN="$(printf '%s' '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' | curl -sf -X POST "http://127.0.0.1:$PORT/v1/auth/login" \
+TOKEN="$(printf '%s' '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' | curl --noproxy '*' -sf -X POST "http://127.0.0.1:$PORT/v1/auth/login" \
   -H 'Content-Type: application/json' --data-binary @- \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
-TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/auth/whoami" -H @- \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
+  | python3 -I -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
+TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl --noproxy '*' -sf "http://127.0.0.1:$PORT/v1/auth/whoami" -H @- \
+  | python3 -I -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
 [ -n "$TENANT" ] || { echo "ERROR: could not resolve the demo tenant on the first engine" >&2; exit 1; }
 enable_console_modules "http://127.0.0.1:$PORT" accessmap adoption catalog claude-agents compliance deploy evals finops gitpublish health inferenceproxy inventory knowledge models notify observability orchestration posture recording redteam reporting sandbox security sessions skills voice
 
@@ -271,12 +290,12 @@ if ! OLIVARES_COMMUNICATION_ACTIVATION=on \
   exit 2
 fi
 
-echo "==> Reopening the same store without --seed-demo, so readiness observes the enforced writer"
+echo "==> Reopening the same store, so readiness observes the enforced writer"
 arranca_motor
 ARRIBA=0
 for _ in $(seq 1 480); do
   kill -0 "$PID" 2>/dev/null || break
-  if curl -sf "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
+  if curl --noproxy '*' -sf "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
     ARRIBA=1
     break
   fi
@@ -284,7 +303,7 @@ for _ in $(seq 1 480); do
 done
 if [ "$ARRIBA" -ne 1 ]; then
   echo "docs-captures: ⛔ the reopened engine did not accept connections in 240 s, or it died. Tail of its log:" >&2
-  tail -20 "$DATA/engine.log" >&2 2>/dev/null || echo "  (no log)" >&2
+  log_tail "$DATA/engine.log" 20
   exit 2
 fi
 # The executable that really serves the captures, read from the running process and not from the path that was asked for.
@@ -293,29 +312,29 @@ DOCS_CAPTURE_BINARY_SHA256="$(sha256sum "/proc/$PID/exe" 2>/dev/null | cut -d' '
 export DOCS_CAPTURE_BINARY_SHA256
 echo "==> Engine executable sha256 $DOCS_CAPTURE_BINARY_SHA256"
 
-TOKEN="$(printf '%s' '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' | curl -sf -X POST "http://127.0.0.1:$PORT/v1/auth/login" \
+TOKEN="$(printf '%s' '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' | curl --noproxy '*' -sf -X POST "http://127.0.0.1:$PORT/v1/auth/login" \
   -H 'Content-Type: application/json' \
   --data-binary @- \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
-TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/auth/whoami" -H @- \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
+  | python3 -I -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
+TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl --noproxy '*' -sf "http://127.0.0.1:$PORT/v1/auth/whoami" -H @- \
+  | python3 -I -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
 if [ -z "$TENANT" ]; then
   echo "ERROR: could not resolve the demo tenant" >&2
-  cat "$DATA/engine.log" >&2
+  redact_log "$DATA/engine.log" <"$DATA/engine.log" >&2
   exit 1
 fi
 
 # Preliminary routing probe only. A 4xx can precede the module's readiness check and therefore
 # does not prove effective K3 readiness. Each captured handoffs view must independently obtain
 # an authorized HTTP 200 collection read for its selected workspace.
-K3_PROBE="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -s -o /dev/null -w '%{http_code}' \
+K3_PROBE="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl --noproxy '*' -s -o /dev/null -w '%{http_code}' \
   -H @- -H "X-Olivares-Tenant: $TENANT" \
   "http://127.0.0.1:$PORT/v1/m/sessions/inbox?workspace_id=00000000-0000-7000-8000-000000000000" || true)"
 case "$K3_PROBE" in
 2?? | 4??) echo "==> K3 preliminary routing probe HTTP $K3_PROBE; authorized collection proof remains required" ;;
 *)
   echo "docs-captures: ⛔ K3 preliminary routing probe failed after the ceremony (HTTP ${K3_PROBE:-none}). Tail of the engine log:" >&2
-  tail -20 "$DATA/engine.log" >&2 2>/dev/null || true
+  log_tail "$DATA/engine.log" 20
   exit 2
   ;;
 esac
@@ -335,26 +354,35 @@ echo "==> Demo tenant: $TENANT"
 # Only authenticated 200 and the published 501 refusal describe a capability.
 capability_status() {
   local status
-  status="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sS -o "$DATA/capability.json" -w '%{http_code}' \
+  status="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl --noproxy '*' -sS -o "$DATA/capability.json" -w '%{http_code}' \
     "http://127.0.0.1:$PORT$1" -H @- -H "X-Olivares-Tenant: $TENANT")" || return 1
   case "$status" in 200|501) printf '%s' "$status" ;; *) echo "ERROR: $1 returned HTTP $status; expected 200 or 501" >&2; return 1 ;; esac
 }
 GRAPH_STATUS="$(capability_status '/v1/m/accessmap/graph')"
 IDENTITY_STATUS="$(capability_status '/v1/m/governance/identities')"
-BUILD_EDITION="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/server-info" -H @- \
-  | python3 -c 'import json,sys; print(json.load(sys.stdin)["edition"])')"
+BUILD_EDITION="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl --noproxy '*' -sf "http://127.0.0.1:$PORT/v1/server-info" -H @- \
+  | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["edition"])')"
 case "$BUILD_EDITION" in community|enterprise|business) ;; *) echo "ERROR: unknown build edition: $BUILD_EDITION" >&2; exit 1 ;; esac
 if [ "$BUILD_EDITION" = community ] && { [ "$GRAPH_STATUS" != 200 ] || [ "$IDENTITY_STATUS" != 200 ]; }; then
   echo 'ERROR: Community must serve both the access graph and the identity inventory' >&2; exit 1
 fi
 echo "==> Build: $BUILD_EDITION; graph HTTP $GRAPH_STATUS; identity inventory HTTP $IDENTITY_STATUS"
 
+# The demo dataset first: it is the one source of the canonical Northwind estate — the six
+# people, the three waiting approvals, the five folders and the recorded sessions. The seeders below
+# fill the surfaces it does not own and must not add a second administrator, approval or run.
+echo "==> Seeding the canonical Northwind estate through the product API"
+if ! OLIVARES_TOKEN="$TOKEN" python3 -I "$ROOT/scripts/seed-demo-dataset.py" \
+    "http://127.0.0.1:$PORT" - "$TENANT" "$DATASET_ROOT"; then
+  echo "docs-captures: ⛔ the demo dataset could not be seeded; refusing the capture phase" >&2
+  exit 1
+fi
 
 # Seed work items through the product API after authentication, retaining lease and
 # acceptance-criteria validation.
 echo "==> Seeding work items through the product API"
-OLIVARES_TOKEN="$TOKEN" python3 "$ROOT/scripts/seed-demo-work.py" \
-  "http://127.0.0.1:$PORT" - "$TENANT" "$WS_ROOT"
+OLIVARES_TOKEN="$TOKEN" python3 -I "$ROOT/scripts/seed-demo-work.py" \
+  "http://127.0.0.1:$PORT" - "$TENANT" "$WS_ROOT" --canonical-estate
 
 # Fill each surface to its target with the idempotent seeder.
 # Below-target results warn and continue so the captures show the remaining gaps.
@@ -367,18 +395,31 @@ OLIVARES_TOKEN="$TOKEN" python3 "$ROOT/scripts/seed-demo-work.py" \
 #
 echo "==> Filling the estate to the per-surface target"
 # --prefijo: the rows are on screen in the lists; a name only this harness knows would date and mark the image.
-OLIVARES_TOKEN="$TOKEN" python3 "$ROOT/scripts/seed-estate-volume.py" \
-  "http://127.0.0.1:$PORT" - "$TENANT" --prefijo acme || {
-  echo "    (some surfaces remain below their targets; the distribution above identifies them)"
-}
+VOLUME_RC=0
+OLIVARES_TOKEN="$TOKEN" python3 -I "$ROOT/scripts/seed-estate-volume.py" \
+  "http://127.0.0.1:$PORT" - "$TENANT" --prefijo acme || VOLUME_RC=$?
+case "$VOLUME_RC" in
+0) ;;
+1) echo "    (some surfaces remain below their targets; the distribution above identifies them)" ;;
+*)
+  # 1 is an answer: the surfaces and their counts were read and are below target. Anything else
+  # means the seeder could not look (target file missing, an unreadable agent list): the capture
+  # must not publish empty Deploy and Health views as if the estate were complete.
+  echo "    ⛔ the estate volume seeder COULD NOT LOOK (rc $VOLUME_RC); refusing the capture phase" >&2
+  exit 2
+  ;;
+esac
 
 # Report synthetic health states through the product API; unreported checks stay
 # unknown.
 echo "==> Reporting a probe against each declared health check"
-OLIVARES_TOKEN="$TOKEN" python3 - "$PORT" "$TENANT" <<'PYHEALTH' || echo "   (health probes skipped; the panel keeps its Unknown rows)" >&2
+OLIVARES_TOKEN="$TOKEN" python3 -I - "$PORT" "$TENANT" "$ROOT" <<'PYHEALTH' || echo "   (health probes skipped; the panel keeps its Unknown rows)" >&2
 import json, os, sys, urllib.request
 
-port, tenant = sys.argv[1:3]
+port, tenant, root = sys.argv[1:4]
+sys.path.insert(0, os.path.join(root, "scripts", "lib"))
+from redaccion import abre
+
 token = os.environ["OLIVARES_TOKEN"]
 base = f"http://127.0.0.1:{port}"
 
@@ -389,7 +430,9 @@ def call(method, path, payload=None):
                                  headers={"Authorization": f"Bearer {token}",
                                           "X-Olivares-Tenant": tenant,
                                           "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=10) as r:
+    # The shared opener uses no proxy for loopback and refuses a cross-origin redirect, which would
+    # carry the Authorization header to another origin.
+    with abre(req, timeout=10) as r:
         return json.loads(r.read() or b"{}")
 
 checks = call("GET", "/v1/m/health/checks").get("items", [])
@@ -425,7 +468,7 @@ if PATH=/usr/local/bin:/usr/bin:/bin HOME="$DATA/home" "$BIN" sources set --name
   kill -HUP "$PID" 2>/dev/null || true
   OTLP_UP=0
   for _ in $(seq 1 20); do
-    if curl -sf --connect-timeout 1 --max-time 2 -o /dev/null \
+    if curl --noproxy '*' -sf --connect-timeout 1 --max-time 2 -o /dev/null \
       -X POST "http://127.0.0.1:$OTLP_PORT/v1/metrics" \
       -H 'Content-Type: application/json' -d '{"resourceMetrics":[]}'; then
       OTLP_UP=1
@@ -445,7 +488,7 @@ if PATH=/usr/local/bin:/usr/bin:/bin HOME="$DATA/home" "$BIN" sources set --name
     # and no name, so the volume is a team's, not a fleet's: four teams of two sessions
     # (the default of six teams of eight put 48 identical rows on the Sessions and
     # AgentOps views, #2268).
-    OLIVARES_TOKEN="$TOKEN" python3 "$ROOT/scripts/seed-adoption-otlp.py" \
+    OLIVARES_TOKEN="$TOKEN" python3 -I "$ROOT/scripts/seed-adoption-otlp.py" \
       "http://127.0.0.1:$PORT" - "$TENANT" \
       --otlp "http://127.0.0.1:$OTLP_PORT/v1/metrics" --equipos 4 --por-equipo 2 || {
       echo "    (adoption seeding failed; captures will show zero adoption)"
@@ -456,6 +499,16 @@ if PATH=/usr/local/bin:/usr/bin:/bin HOME="$DATA/home" "$BIN" sources set --name
   fi
 else
   echo "    ⛔ could not register the claude connector — captures will show ZERO adoption"
+fi
+
+# The home counts every observed row, including the adoption rows no run launched. The dataset's
+# own check ran before adoption; read the plane back now so a row that landed on today (or still
+# reads as live) refuses the capture instead of publishing a figure nobody seeded (dev#2562).
+echo "==> Reading back the live plane after adoption"
+if ! OLIVARES_TOKEN="$TOKEN" python3 -I "$ROOT/scripts/seed-demo-dataset.py" \
+    "http://127.0.0.1:$PORT" - "$TENANT" "$DATASET_ROOT" --verify-live-plane; then
+  echo "docs-captures: ⛔ an observed row outside the canonical runs would move the captured home; refusing the capture phase" >&2
+  exit 2
 fi
 
 # Capture /setup on a separate unseeded engine; the seeded engine redirects to login.
@@ -478,7 +531,7 @@ SETUP_PID=$!
 SETUP_UP=0
 for _ in $(seq 1 40); do
   kill -0 "$SETUP_PID" 2>/dev/null || break
-  if curl -sf --connect-timeout 2 --max-time 5 "http://127.0.0.1:$SETUP_PORT/healthz" >/dev/null 2>&1; then
+  if curl --noproxy '*' -sf --connect-timeout 2 --max-time 5 "http://127.0.0.1:$SETUP_PORT/healthz" >/dev/null 2>&1; then
     SETUP_UP=1
     break
   fi
@@ -489,8 +542,8 @@ done
 # this client cannot distinguish that result from a fresh installation.
 SETUP_REQUIRED=unknown
 if [ "$SETUP_UP" = "1" ]; then
-  SETUP_REQUIRED="$(python3 -c 'import sys,json;v=json.load(sys.stdin).get("setup_required");print("true" if v is True else ("false" if v is False else "unknown"))' \
-    <<<"$(curl -sf --connect-timeout 2 --max-time 10 "http://127.0.0.1:$SETUP_PORT/v1/server-info")" 2>/dev/null || echo unknown)"
+  SETUP_REQUIRED="$(python3 -I -c 'import sys,json;v=json.load(sys.stdin).get("setup_required");print("true" if v is True else ("false" if v is False else "unknown"))' \
+    <<<"$(curl --noproxy '*' -sf --connect-timeout 2 --max-time 10 "http://127.0.0.1:$SETUP_PORT/v1/server-info")" 2>/dev/null || echo unknown)"
 else
   echo "==> ⛔ the SECOND engine did not accept connections (or stopped): COULD NOT LOOK" >&2
 fi
@@ -499,24 +552,13 @@ if [ "$SETUP_REQUIRED" = "true" ]; then
   export SETUP_BASE_URL="http://127.0.0.1:$SETUP_PORT"
 else
   echo "==> ⚠ Second engine reports setup_required=$SETUP_REQUIRED — skipping /setup capture (could not look)" >&2
-  cat "$SETUP_DATA/engine.log" >&2 || true
-fi
-
-# The demo dataset: providers, profiles and accounts for every tool, git repositories as folders, templates,
-# policies, people, approvals, a skills pack and finished conversations, all through the product API.
-# Budgets are seeded only where the build serves FinOps; the seeder says so when it does not.
-echo "==> Seeding the demo dataset through the product API"
-if ! OLIVARES_TOKEN="$TOKEN" python3 -I "$ROOT/scripts/seed-demo-dataset.py" \
-    "http://127.0.0.1:$PORT" - "$TENANT" "$DATASET_ROOT" \
-    --ollama-url "http://127.0.0.1:$OLLAMA_PORT"; then
-  echo "docs-captures: ⛔ the demo dataset could not be seeded; refusing the capture phase" >&2
-  exit 1
+  redact_log "$SETUP_DATA/engine.log" <"$SETUP_DATA/engine.log" >&2 || true
 fi
 
 # Resolve the recording-session ID from the API and omit its viewer when none exists.
-DEMO_SESSION_ID="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/m/recording/sessions" \
+DEMO_SESSION_ID="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl --noproxy '*' -sf "http://127.0.0.1:$PORT/v1/m/recording/sessions" \
   -H @- -H "X-Olivares-Tenant: $TENANT" \
-  | python3 -c 'import sys,json;d=json.load(sys.stdin);i=(d.get("items") or []);print(i[0]["id"] if i else "")' 2>/dev/null || echo "")"
+  | python3 -I -c 'import sys,json;d=json.load(sys.stdin);i=(d.get("items") or []);print(i[0]["id"] if i else "")' 2>/dev/null || echo "")"
 if [ -n "$DEMO_SESSION_ID" ]; then
   echo "==> Demo recording session: $DEMO_SESSION_ID"
   export DEMO_SESSION_ID
@@ -554,7 +596,7 @@ PLAYWRIGHT_BASE_URL="http://localhost:$PORT" DEMO_TENANT="$TENANT" \
 
 # Merge per-capture evidence even after a failed run so missing captures remain visible.
 echo "==> Merging evidence from each capture into manifest.json"
-DOCS_DIR="$ROOT/web/playwright-report/docs" python3 - <<'PY' || true
+DOCS_DIR="$ROOT/web/playwright-report/docs" python3 -I - <<'PY' || true
 import glob, json, os, subprocess, time
 
 d = os.environ["DOCS_DIR"]

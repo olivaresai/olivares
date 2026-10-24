@@ -1,10 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
+import { toast } from '@/components/ui/toaster'
+import { ApiError } from '@/lib/api/errors'
 import { providersApi } from './api'
 import { ProviderCreateDialog } from './provider-create-dialog'
 import { PROVIDER_KINDS } from './kinds'
@@ -174,4 +177,161 @@ it('clears another provider endpoint when switching to Gemini', async () => {
       api_key: 'synthetic-gemini-key',
     }),
   )
+})
+
+// The providers view keeps the dialog mounted and reopens it, so a key typed before
+// Cancel must not survive the next opening (#2551).
+it('Cancel clears the typed key before the dialog closes', async () => {
+  const user = userEvent.setup()
+  function Openable() {
+    const [open, setOpen] = useState(true)
+    return (
+      <>
+        <button type="button" onClick={() => setOpen(true)}>
+          open
+        </button>
+        <ProviderCreateDialog
+          open={open}
+          onOpenChange={setOpen}
+          initialKind="anthropic"
+        />
+      </>
+    )
+  }
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Openable />
+    </QueryClientProvider>,
+  )
+  await user.type(screen.getByLabelText(/^API key/), 'synthetic-typed-key')
+  await user.click(screen.getByRole('button', { name: 'Cancel' }))
+  await user.click(screen.getByRole('button', { name: 'open' }))
+  expect(screen.getByLabelText(/^API key/)).toHaveValue('')
+})
+
+// Escape is the dialog's own close, not a button: it takes the same reset (#2551).
+it('Escape clears the typed key before the dialog closes', async () => {
+  const user = userEvent.setup()
+  function Openable() {
+    const [open, setOpen] = useState(true)
+    return (
+      <>
+        <button type="button" onClick={() => setOpen(true)}>
+          open
+        </button>
+        <ProviderCreateDialog
+          open={open}
+          onOpenChange={setOpen}
+          initialKind="anthropic"
+        />
+      </>
+    )
+  }
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Openable />
+    </QueryClientProvider>,
+  )
+  await user.type(screen.getByLabelText(/^API key/), 'synthetic-typed-key')
+  await user.keyboard('{Escape}')
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+  )
+  await user.click(screen.getByRole('button', { name: 'open' }))
+  expect(screen.getByLabelText(/^API key/)).toHaveValue('')
+})
+
+// A modal dialog hides the rest of the page from assistive technology, toasts
+// included (#2561): a refusal is announced inside the dialog, next to the form.
+it('announces a refused create inside the dialog', async () => {
+  const user = userEvent.setup()
+  vi.spyOn(providersApi, 'create').mockRejectedValue(
+    new Error('the engine refused the key'),
+  )
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <ProviderCreateDialog open initialKind="openai" onOpenChange={() => {}} />
+    </QueryClientProvider>,
+  )
+  await user.type(screen.getByLabelText(/^API key/), 'synthetic-test-key')
+  await user.click(screen.getByRole('button', { name: 'Add provider' }))
+  expect(
+    await within(screen.getByRole('dialog')).findByRole('alert'),
+  ).toHaveTextContent('the engine refused the key')
+})
+
+it('says a refusal without a message and clears it on a new attempt', async () => {
+  const user = userEvent.setup()
+  vi.spyOn(providersApi, 'create')
+    .mockRejectedValueOnce('no message')
+    .mockReturnValueOnce(new Promise(() => {}))
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <ProviderCreateDialog open initialKind="openai" onOpenChange={() => {}} />
+    </QueryClientProvider>,
+  )
+  await user.type(screen.getByLabelText(/^API key/), 'synthetic-test-key')
+  const submit = screen.getByRole('button', { name: 'Add provider' })
+  await user.click(submit)
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Something went wrong.',
+  )
+  await user.click(submit)
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+})
+
+// The providers page keeps this dialog mounted and only toggles it.
+it('does not show an old refusal when the dialog opens again', async () => {
+  const user = userEvent.setup()
+  vi.spyOn(providersApi, 'create').mockRejectedValue(
+    new Error('the engine refused the key'),
+  )
+  function Page() {
+    const [open, setOpen] = useState(true)
+    return (
+      <>
+        <button onClick={() => setOpen(true)}>Open</button>
+        <ProviderCreateDialog
+          open={open}
+          initialKind="openai"
+          onOpenChange={setOpen}
+        />
+      </>
+    )
+  }
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Page />
+    </QueryClientProvider>,
+  )
+  await user.type(screen.getByLabelText(/^API key/), 'synthetic-test-key')
+  await user.click(screen.getByRole('button', { name: 'Add provider' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('refused')
+  await user.click(screen.getByRole('button', { name: 'Cancel' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  await user.click(screen.getByRole('button', { name: 'Open' }))
+  expect(await screen.findByRole('dialog')).toBeInTheDocument()
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+})
+
+// A role refusal stays with the shared reporter; the dialog does not claim it.
+it('leaves a forbidden refusal to the shared reporter', async () => {
+  const user = userEvent.setup()
+  const create = vi
+    .spyOn(providersApi, 'create')
+    .mockRejectedValue(new ApiError(403, 'forbidden', 'not allowed'))
+  const warned = vi.spyOn(toast, 'warning').mockReturnValue('test-toast')
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <ProviderCreateDialog open initialKind="openai" onOpenChange={() => {}} />
+    </QueryClientProvider>,
+  )
+  await user.type(screen.getByLabelText(/^API key/), 'synthetic-test-key')
+  await user.click(screen.getByRole('button', { name: 'Add provider' }))
+  await waitFor(() => expect(create).toHaveBeenCalled())
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Add provider' })).toBeEnabled(),
+  )
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  expect(warned).toHaveBeenCalled()
 })

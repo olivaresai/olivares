@@ -13,7 +13,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { PageActionsProvider } from '@/components/ui/page-actions'
 import { useSessionStore } from '@/stores/session'
 
 const auth = vi.hoisted(() => ({
@@ -44,7 +43,7 @@ vi.mock('./api', async (orig) => {
   return { ...real, agentOpsApi: { ...(real.agentOpsApi as object), ...api } }
 })
 
-import { ProviderAdminView } from './provider-admin-view'
+import { AccountsAndKeys } from '@/features/agent-tools/accounts-and-keys'
 import type { ProviderAccountDTO } from './types'
 
 const account = (ref: string, name: string): ProviderAccountDTO => ({
@@ -143,9 +142,7 @@ function wrap() {
   })
   const tree = () => (
     <QueryClientProvider client={qc}>
-      <PageActionsProvider>
-        <ProviderAdminView entrance="accounts" />
-      </PageActionsProvider>
+      <AccountsAndKeys />
     </QueryClientProvider>
   )
   const ui = render(tree())

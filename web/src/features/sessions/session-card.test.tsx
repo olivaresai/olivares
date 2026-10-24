@@ -518,6 +518,10 @@ describe('SessionCard — control is what can be done, not what fits', () => {
     renderCard({ sessionRef: 'sess-ours' })
 
     await user.click(await screen.findByRole('button', { name: 'Stop' }))
+    // Stop asks first, as the person's setting says by default (#2549).
+    await user.click(
+      await screen.findByRole('button', { name: 'Stop the session' }),
+    )
 
     // The fence argument is now always passed: none for a run with no work stamp
     // (the request carries no body, as before).
@@ -543,6 +547,10 @@ describe('SessionCard — control is what can be done, not what fits', () => {
     })
     const view = renderCard({ sessionRef: 'sess-ours' })
     await user.click(await screen.findByRole('button', { name: 'Stop' }))
+    // Stop asks first, as the person's setting says by default (#2549).
+    await user.click(
+      await screen.findByRole('button', { name: 'Stop the session' }),
+    )
     await waitFor(() => expect(agentOpsApi.stop).toHaveBeenCalledTimes(1))
     expect(vi.mocked(agentOpsApi.stop).mock.calls[0]).toEqual([
       'run-1',
@@ -557,6 +565,10 @@ describe('SessionCard — control is what can be done, not what fits', () => {
     })
     renderCard({ sessionRef: 'sess-ours' })
     await user.click(await screen.findByRole('button', { name: 'Stop' }))
+    // Stop asks first, as the person's setting says by default (#2549).
+    await user.click(
+      await screen.findByRole('button', { name: 'Stop the session' }),
+    )
     await waitFor(() =>
       expect(agentOpsApi.stop).toHaveBeenCalledWith('run-1', 7),
     )
@@ -888,5 +900,36 @@ describe('SessionCard — a scoped row is named by its live_ref', () => {
     expect(await screen.findByText('Discovered')).toBeInTheDocument()
     expect(vi.mocked(sessionsApi.liveOne)).toHaveBeenCalledWith('sess-dup')
     expect(vi.mocked(sessionsApi.liveById)).not.toHaveBeenCalled()
+  })
+
+  it('extrapolates elapsed seconds only while active, from its last event', async () => {
+    vi.mocked(sessionsApi.liveOne).mockResolvedValue({
+      ...live,
+      last_event_at: new Date(Date.now() - 61_000).toISOString(),
+    })
+    renderCard({ sessionRef: 'sess-ours' })
+    const elapsed = await waitFor(() => {
+      const el = document.querySelector('[data-elapsed]')
+      if (!el) throw new Error('no elapsed figure')
+      return el
+    })
+    // 300 engine seconds + the 61+ that passed since the last event.
+    expect(elapsed.textContent).toMatch(/^6m [12]s$/)
+    expect(document.querySelector('[data-cost]')!.textContent).toContain('0.04')
+  })
+
+  it('never extrapolates an ended session past the engine value', async () => {
+    vi.mocked(sessionsApi.liveOne).mockResolvedValue({
+      ...live,
+      cc_state: 'ended',
+      last_event_at: new Date(Date.now() - 61_000).toISOString(),
+    })
+    renderCard({ sessionRef: 'sess-ours' })
+    const elapsed = await waitFor(() => {
+      const el = document.querySelector('[data-elapsed]')
+      if (!el) throw new Error('no elapsed figure')
+      return el
+    })
+    expect(elapsed.textContent).toBe('5m')
   })
 })

@@ -308,16 +308,22 @@ test.describe('model and effort are chosen where a session is started', () => {
       effort: 'high',
     })
 
-    // The header and the message bar say what the session runs on.
+    // The composer says what the session runs on, by name: the model the engine
+    // launched `sonnet` on (dev#2786), never the alias; the header names the session
+    // and its tool only (dev#3120).
     const composer = page.getByTestId('work-composer')
     await expect(composer).toHaveAttribute('data-attached', 'true', {
       timeout: 30_000,
     })
-    await expect(page.getByTestId('thread-tool-model')).toContainText(
-      'sonnet · high',
+    await expect(page.getByTestId('thread-tool')).toHaveText('Claude Code')
+    // Model and effort are two pickers (dev#3162).
+    await expect(composer.getByTestId('composer-tool-model')).toHaveText(
+      'Claude Sonnet 5.5',
     )
-    await expect(composer.getByTestId('composer-tool-model')).toContainText(
-      'sonnet · high',
+    await expect(composer.getByTestId('composer-effort')).toHaveText('High')
+    await expect(composer.getByTestId('composer-tool-model')).toHaveAttribute(
+      'title',
+      /claude-sonnet-5-5/,
     )
     // A production console shows no raw stdin line and no control named Advanced.
     await expect(composer.getByText(/advanced/i)).toHaveCount(0)

@@ -14,7 +14,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react'
-import { type ReactNode, useState, useRef, useEffect } from 'react'
+import { type ReactNode, useId, useState, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -42,6 +42,8 @@ import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { useOfferedPanels } from '@/features/panels'
 import {
   type ActivationAddonDTO,
+  type ActivationFamilyDTO,
+  type ActivationSelection,
   type ActivationStatusDTO,
   consoleApi,
   consoleKeys,
@@ -703,6 +705,10 @@ function ActivationSection() {
   const { t } = useTranslation(['console', 'common'])
   const queryClient = useQueryClient()
   const [enablePreset, setEnablePreset] = useState<string | null>(null)
+  const [familyChange, setFamilyChange] = useState<{
+    key: string
+    action: 'enable' | 'disable'
+  } | null>(null)
   // An apply that answered `restarting: true`: the engine goes down and comes back
   // with the new modules wired. Wait for it, then reload the catalog by itself.
   const [restarting, setRestarting] = useState(false)
@@ -713,10 +719,16 @@ function ActivationSection() {
       if (ctl.signal.aborted) return
       setRestarting(false)
       void queryClient.invalidateQueries({ queryKey: consoleKeys.activation() })
+      // The first read of which modules run may have reached the stopping engine.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.serverInfo })
     })
     return () => ctl.abort()
   }, [restarting, queryClient])
   const onApplied = (status: ActivationStatusDTO) => {
+    // The modules that run changed: the navigation and the route gate follow server-info.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.serverInfo })
+    // A plan computed before the change is no longer the plan of what is left to do.
+    queryClient.removeQueries({ queryKey: ['console', 'activation-preview'] })
     if (status.restarting) {
       // Show what the engine answered; a read now could reach the stopping
       // process and paint the section as unavailable.
@@ -751,6 +763,10 @@ function ActivationSection() {
     )
   }
   const data = query.data
+  // The family a dialog is about is read from the status as it is now.
+  const changing = familyChange
+    ? data.families?.find((f) => f.key === familyChange.key)
+    : undefined
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border p-5">
       <div>
@@ -778,6 +794,37 @@ function ActivationSection() {
           </Button>
         ))}
       </div>
+
+      {data.families && data.families.length > 0 && (
+        <section
+          aria-labelledby="activation-families"
+          className="flex flex-col gap-2"
+        >
+          <div>
+            <h4
+              id="activation-families"
+              className="text-body font-semibold text-foreground"
+            >
+              {t('console:activation.families')}
+            </h4>
+            <p className="text-caption text-muted-foreground">
+              {t('console:activation.familiesHint')}
+            </p>
+          </div>
+          <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+            {data.families.map((family) => (
+              <FamilyRow
+                key={family.key}
+                family={family}
+                addons={data.addons}
+                onChange={(action) =>
+                  setFamilyChange({ key: family.key, action })
+                }
+              />
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div className="overflow-x-auto">
         <StaticTable>
@@ -814,7 +861,9 @@ function ActivationSection() {
       ) : (
         <p className="flex items-start gap-2 text-caption text-muted-foreground">
           <RotateCw className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-          {t('console:activation.restartNote')}
+          {data.restart_required
+            ? t('console:activation.restartNote')
+            : t('console:activation.liveNote')}
         </p>
       )}
 
@@ -830,9 +879,13 @@ function ActivationSection() {
                 {t('console:activation.enableHint')}
               </DialogDescription>
             </DialogHeader>
-            <RequireAssurance minAal={AAL.HARDWARE} action="console">
+            <RequireAssurance minAal={AAL.HARDWARE} action="modules">
               <EnablePresetForm
-                preset={enablePreset}
+                selection={{ preset: enablePreset }}
+                enabledText={t('console:activation.enabled', {
+                  preset: enablePreset,
+                })}
+                failedText={t('console:activation.enableFailed')}
                 onClose={() => setEnablePreset(null)}
                 onApplied={onApplied}
               />
@@ -840,7 +893,192 @@ function ActivationSection() {
           </DialogContent>
         </Dialog>
       )}
+
+      {familyChange && changing && (
+        <Dialog open onOpenChange={(o) => !o && setFamilyChange(null)}>
+          <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+            {/* Title outside the gate — see the note on the license dialogs. */}
+            <DialogHeader>
+              <DialogTitle>
+                {t(
+                  familyChange.action === 'enable'
+                    ? 'console:activation.familyEnableTitle'
+                    : 'console:activation.familyDisableTitle',
+                  { family: changing.title },
+                )}
+              </DialogTitle>
+              <DialogDescription>
+                {familyChange.action === 'enable'
+                  ? t('console:activation.enableHint')
+                  : t('console:activation.familyDisableHint')}
+              </DialogDescription>
+            </DialogHeader>
+            <RequireAssurance minAal={AAL.HARDWARE} action="modules">
+              {familyChange.action === 'enable' ? (
+                <EnablePresetForm
+                  selection={{ family: changing.key }}
+                  enabledText={t('console:activation.familyEnabled', {
+                    family: changing.title,
+                  })}
+                  failedText={t('console:activation.familyChangeFailed', {
+                    family: changing.title,
+                  })}
+                  onClose={() => setFamilyChange(null)}
+                  onApplied={onApplied}
+                />
+              ) : (
+                <DisableFamilyForm
+                  family={changing}
+                  addons={data.addons}
+                  onClose={() => setFamilyChange(null)}
+                  onApplied={onApplied}
+                />
+              )}
+            </RequireAssurance>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
+  )
+}
+
+// FamilyRow is one family: how many of its add-ons are on, and the actions that
+// turn it on or off as a whole. A staged add-on that waits for input is not on.
+function FamilyRow({
+  family,
+  addons,
+  onChange,
+}: {
+  family: ActivationFamilyDTO
+  addons: ActivationAddonDTO[]
+  onChange: (action: 'enable' | 'disable') => void
+}) {
+  const { t } = useTranslation(['console'])
+  const titleId = useId()
+  const total = family.addons.length
+  const on = family.active.length
+  // Staged add-ons wait for a secret or a review the administrator provides.
+  const waiting = addons.filter(
+    (a) => family.addons.includes(a.key) && a.state === 'pending',
+  ).length
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+      <div className="min-w-0">
+        <div id={titleId} className="font-medium text-foreground">
+          {family.title}
+        </div>
+        <div className="text-caption text-muted-foreground">
+          {t('console:activation.familyCount', { on, total })}
+          {waiting > 0 &&
+            ` · ${t('console:activation.familyWaiting', { count: waiting })}`}
+        </div>
+      </div>
+      <div className="flex gap-2">
+        {on < total && (
+          <Button
+            variant="secondary"
+            size="sm"
+            aria-describedby={titleId}
+            onClick={() => onChange('enable')}
+          >
+            <Power className="size-3.5" aria-hidden />
+            {t('console:activation.turnOn')}
+          </Button>
+        )}
+        {on + waiting > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-describedby={titleId}
+            onClick={() => onChange('disable')}
+          >
+            {t('console:activation.turnOff')}
+          </Button>
+        )}
+      </div>
+    </li>
+  )
+}
+
+// DisableFamilyForm names what turns off and applies it (AAL3-gated by its
+// caller). There is no preview: turning off removes configuration, it never stages.
+function DisableFamilyForm({
+  family,
+  addons,
+  onClose,
+  onApplied,
+}: {
+  family: ActivationFamilyDTO
+  addons: ActivationAddonDTO[]
+  onClose: () => void
+  onApplied: (status: ActivationStatusDTO) => void
+}) {
+  const { t } = useTranslation(['console', 'common'])
+  const report = useFailedActionReporter('console')
+  const guardarReanudacion = useResumeGuard()
+  const retryRef = useRef<(() => void) | null>(null)
+  const apply = useMutation({
+    mutationFn: () =>
+      consoleApi.applyActivation({ action: 'disable', family: family.key }),
+    onSuccess: (status) => {
+      onApplied(status)
+      toast.success(
+        t('console:activation.familyDisabled', { family: family.title }),
+      )
+      onClose()
+    },
+    onError: (err) => {
+      if (err instanceof ApiError && err.isStepUpRequired) {
+        report(
+          err,
+          guardarReanudacion(() => retryRef.current?.()),
+        )
+        return
+      }
+      const description =
+        err instanceof Error && err.message ? err.message : undefined
+      toast.error(
+        t('console:activation.familyChangeFailed', { family: family.title }),
+        description ? { description } : undefined,
+      )
+    },
+  })
+  useEffect(() => {
+    retryRef.current = apply.mutate
+  }, [apply.mutate])
+  // What turning the family off stops: its add-ons that are on or waiting for input.
+  const affected = addons.filter(
+    (a) =>
+      family.addons.includes(a.key) &&
+      (a.state === 'active' || a.state === 'pending'),
+  )
+  return (
+    <>
+      <ul className="flex flex-col gap-1 rounded-lg border border-border p-3 text-caption">
+        {affected.map((a) => (
+          <li key={a.key} className="text-foreground">
+            {a.title}
+          </li>
+        ))}
+      </ul>
+      <DialogFooter>
+        <Button
+          variant="secondary"
+          onClick={onClose}
+          disabled={apply.isPending}
+        >
+          {t('common:actions.cancel')}
+        </Button>
+        <Button
+          variant="primary"
+          disabled={apply.isPending || affected.length === 0}
+          onClick={() => apply.mutate()}
+        >
+          {apply.isPending && <Spinner size="sm" aria-hidden />}
+          {t('console:activation.apply')}
+        </Button>
+      </DialogFooter>
+    </>
   )
 }
 
@@ -928,7 +1166,7 @@ function AddonRow({
                   {t('console:activation.promoteHint')}
                 </DialogDescription>
               </DialogHeader>
-              <RequireAssurance minAal={AAL.HARDWARE} action="console">
+              <RequireAssurance minAal={AAL.HARDWARE} action="modules">
                 <PromoteAddonForm
                   addon={addon}
                   onClose={() => setConfirmOpen(false)}
@@ -1025,30 +1263,36 @@ function PromoteAddonForm({
   )
 }
 
-// EnablePresetForm previews the enable diff then applies it (AAL3-gated).
+// EnablePresetForm previews the enable diff of a preset or a family, then applies
+// it (AAL3-gated).
 function EnablePresetForm({
-  preset,
+  selection,
+  enabledText,
+  failedText,
   onClose,
   onApplied,
 }: {
-  preset: string
+  selection: ActivationSelection
+  enabledText: string
+  failedText: string
   onClose: () => void
   onApplied: (status: ActivationStatusDTO) => void
 }) {
   const { t } = useTranslation(['console', 'common'])
   const preview = useQuery({
-    queryKey: ['console', 'activation-preview', preset],
-    queryFn: () => consoleApi.previewActivation(preset),
+    queryKey: ['console', 'activation-preview', selection],
+    queryFn: () => consoleApi.previewActivation(selection),
   })
   const report = useFailedActionReporter('console')
   // No ejecutes la escritura de un formulario ya desmontado: ver use-resume-guard.ts.
   const guardarReanudacion = useResumeGuard()
   const activarRef = useRef<(() => void) | null>(null)
   const apply = useMutation({
-    mutationFn: () => consoleApi.applyActivation({ action: 'enable', preset }),
+    mutationFn: () =>
+      consoleApi.applyActivation({ action: 'enable', ...selection }),
     onSuccess: (status) => {
       onApplied(status)
-      toast.success(t('console:activation.enabled', { preset }))
+      toast.success(enabledText)
       onClose()
     },
     onError: (err) => {
@@ -1067,10 +1311,7 @@ function EnablePresetForm({
       }
       const description =
         err instanceof Error && err.message ? err.message : undefined
-      toast.error(
-        t('console:activation.enableFailed'),
-        description ? { description } : undefined,
-      )
+      toast.error(failedText, description ? { description } : undefined)
     },
   })
   // ⛔ DENTRO DE UN EFFECT, no en render. Lo escribí en render diciendo «igual que el

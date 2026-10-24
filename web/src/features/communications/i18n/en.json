@@ -593,7 +593,6 @@
     "emptyTitle": "No generations",
     "emptyBody": "No stored grant generation matches the selected state and subject. A new grant adds one.",
     "temporalHint": "“Stored state” is what the engine persisted; “at observation” is whether the row was in force at the observed instant. An expiry that has passed is reported, not materialized: it does not revoke the row, and a successor for that subject still requires an explicit revocation first.",
-    "snapshotChanged": "The channel changed between two pages of this history, so every page read so far was discarded and the listing restarted from the beginning (restarted {{count}} time(s)).",
     "detail": {
       "title": "Generation detail",
       "id": "Grant ID",
@@ -641,7 +640,9 @@
       "revoked": "Revoked (stored)",
       "expired": "Expired (stored)",
       "all": "All (stored)"
-    }
+    },
+    "snapshotChanged_one": "The channel changed between two pages of this history, so every page read so far was discarded and the listing restarted from the beginning (restarted {{count}} time).",
+    "snapshotChanged_other": "The channel changed between two pages of this history, so every page read so far was discarded and the listing restarted from the beginning (restarted {{count}} times)."
   },
   "cursor": {
     "title": "Mark seen up to here",

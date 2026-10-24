@@ -113,7 +113,7 @@ zeilenbezogene ACL, die die Quelle nicht trägt, und legt diese Grenzen offen:
 | Situation | Verhalten des Connectors |
 |---|---|
 | Eine `owner_group`-/Rollenspalte | Bildet jeden Wert auf eine ACL-Referenz ab (`<acl_prefix><value>`). |
-| Keine `acl_columns` deklariert | Das Dokument erbt die **Standard-ACL** der Knowledge Base — beim Retrieval wird sie weiterhin erzwungen. |
+| Keine `acl_columns` deklariert | Das Dokument erbt die **Standard-ACL** der Knowledge Base. Ohne Standard-ACL wird es für alle **verweigert**; setzen Sie eine Standard-ACL an der Knowledge Base oder deklarieren Sie die Quelle mit `"public": "true"` in ihrer Konfiguration als öffentlich (jede Ingestion oder Synchronisierung, die Zeilen für den ganzen Tenant sichtbar speichert, hinterlässt einen Audit-Eintrag `knowledge.source.public`). Die Einstellung gilt für danach gespeicherte Dokumente; um bereits gespeicherte Zeilen zu ändern, erneut ingestieren. |
 | **Row-Level Security (RLS)** auf der Tabelle | Wird implizit respektiert: Die Rolle des Connectors sieht genau die Zeilen, die RLS ihr erlaubt. Der Connector implementiert RLS nicht erneut, sondern erbt es. |
 | Eine Berechtigung, die die Tabelle **nicht** als Spalte modelliert | **Nicht ableitbar** → nicht abgebildet. Modellieren Sie sie als Spalte (oder über `query` als gejointe ACL-Tabelle), wenn sie erzwungen werden soll. |
 

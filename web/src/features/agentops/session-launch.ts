@@ -131,8 +131,23 @@ export function needsApproval(err: unknown): boolean {
 /** A session's name from what it was asked first, so the sidebar and Home can list it
  * by name; '' when nothing was asked. */
 function promptName(message: string): string {
-  const prompt = message.trim().replace(/\s+/g, ' ')
+  const prompt = plainName(message)
   return prompt.length > 60 ? `${prompt.slice(0, 59)}…` : prompt
+}
+
+/** What the engine refuses in a session's name: control, format (zero-width, direction
+ * overrides) and separator characters, the ones Unicode ignores by default, and the
+ * braille blank. A name the person did not type leaves them out; one they typed is
+ * sent as it is and the engine's refusal is shown. */
+const HIDDEN_IN_NAME =
+  /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}\u2800]/gu
+
+function plainName(text: string): string {
+  return text
+    .replace(/\s+/g, ' ')
+    .replace(HIDDEN_IN_NAME, '')
+    .replace(/ {2,}/g, ' ')
+    .trim()
 }
 
 /** The quick form's run: the resolved profile, the folder record and the permission. */
@@ -169,7 +184,12 @@ async function quickRun(
 /** A quick session with no first message is named by its tool and folder. */
 function toolFolderName(quick: QuickLaunch): string {
   const tool = TOOL_NAMES[quick.driver]
-  const folder = quick.folder.trim().split('/').filter(Boolean).pop()
+  // At most 100 characters of the folder, so the name stays within the engine's 200.
+  const folder = Array.from(
+    plainName(quick.folder.trim().split('/').filter(Boolean).pop() ?? ''),
+  )
+    .slice(0, 100)
+    .join('')
   return folder ? `${tool} in ${folder}` : tool
 }
 

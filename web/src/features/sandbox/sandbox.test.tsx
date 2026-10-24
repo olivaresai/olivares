@@ -590,3 +590,29 @@ describe('SandboxView — las tres acciones y sus dos niveles de permiso', () =>
     ).toBeInTheDocument()
   })
 })
+
+/**
+ * ONE ORANGE PER FIRST SCREEN (dev#2673's console rule 2026-10-17): the scenarios
+ * section header already carries "New scenario" in orange, so the empty list repeats
+ * the verb in the secondary style.
+ */
+describe('SandboxView — one orange control on an empty scenario list', () => {
+  it('offers the empty-state verb in the secondary style; the header keeps the orange', async () => {
+    api.scenarios.mockResolvedValue({ items: [], has_more: false })
+    auth.perms = new Set(['sandbox:scenario:write'])
+    const user = userEvent.setup()
+    renderIntel(<SandboxView />)
+    await user.click(screen.getByRole('tab', { name: 'Scenarios' }))
+    const emptyState = (
+      await screen.findByText(/Record the first synthetic fixture/i)
+    ).closest('[data-slot="empty-state"]') as HTMLElement
+    const inEmpty = within(emptyState).getByRole('button', {
+      name: 'New scenario',
+    })
+    expect(inEmpty.className).not.toContain('bg-accent')
+    const inHeader = screen
+      .getAllByRole('button', { name: 'New scenario' })
+      .find((button) => button !== inEmpty)
+    expect(inHeader?.className).toContain('bg-accent')
+  })
+})

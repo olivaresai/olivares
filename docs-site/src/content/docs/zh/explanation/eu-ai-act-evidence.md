@@ -20,6 +20,8 @@ description: >-
 
 Olivares AI 早已观测领地以构建其[读/写访问图谱](/zh/explanation/#访问图谱读优先最小数据许可对比观测)及其仅追加、哈希链、Ed25519 签名的[审计账本](/zh/reference/glossary/#audit-ledger审计台账)。合规模块把这些相同的观测转化为**审计员可消费的证据包**：经密封、锚定于账本、可导出为 JSON、CSV 或 **OSCAL**，并带有一个实时的完整性证明。该文档是*从已发生之事派生*的，而非对意图为何的断言。
 
+框架映射、评估、DORA 视图、OSCAL 导出和报告属于 **Business**（合规包）：Community 服务器会以 `501` 应答这些路由。Community 保留签名账本、记录管理，以及已存储证据的 JSON/CSV 导出。
+
 两条诚实规则被接入产品，并直接延续到证据中：
 
 - 一个仅以架构为后盾的控制项报告为 **`by_design`**，绝不报告为 `satisfied`。“satisfied” 要求有关联的、真实的租户证据。

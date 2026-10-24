@@ -124,13 +124,13 @@
     "table": "Tableau"
   },
   "partial": {
-    "noLiveRead": "Les sessions observées ne sont pas affichées : votre rôle ne peut pas les lire. Les sessions lancées ci-dessous sont la part qui a pu être lue, pas le tableau complet.",
-    "noRunRead": "Les sessions lancées ne sont pas affichées : votre rôle ne peut pas les lire. Une session indiquée ci-dessous comme découverte peut avoir été lancée par Olivares — cette liste n’a pas pu le vérifier.",
-    "truncated": "Ceci est la page la plus récente, pas l’ensemble du parc. L’origine y est recoupée sur ce qui est chargé : une session dont l’exécution est sortie de la page peut apparaître comme découverte ; ouvrez la session pour que le moteur réponde.",
-    "runLookupFailed": "La moitié « lancées » n’a pas pu être lue : la requête sur les exécutions a échoué. Les lignes ci-dessous sont ce qu’a renvoyé la moitié observée ; l’origine est indiquée comme non lue plutôt que devinée.",
-    "liveLookupFailed": "La moitié observée n’a pas pu être lue : la requête en direct a échoué. Les lignes ci-dessous sont les sessions lancées ; les colonnes de télémétrie sont vides parce que rien n’a pu être lu, pas parce qu’il n’y a rien.",
-    "noProfileRead": "Les noms des profils de fournisseur ne sont pas affichés : votre rôle ne peut pas lire les profils. La colonne Instance porte à la place la référence du profil de chaque ligne.",
-    "profileLookupFailed": "Les noms des profils de fournisseur n’ont pas pu être lus : la requête sur les profils a échoué. La colonne Instance porte à la place la référence du profil de chaque ligne."
+    "noLiveRead": "Les sessions démarrées hors d’Olivares ne sont pas affichées : votre rôle ne permet pas de les voir.",
+    "noRunRead": "Les sessions démarrées dans Olivares ne sont pas affichées : votre rôle ne permet pas de les voir.",
+    "truncated": "Seules les sessions les plus récentes sont chargées : une session plus ancienne peut donc apparaître ici comme Découverte. Ouvrez-la pour voir d’où elle vient.",
+    "runLookupFailed": "Les sessions démarrées dans Olivares n’ont pas pu être chargées.",
+    "liveLookupFailed": "Les sessions démarrées hors d’Olivares n’ont pas pu être chargées.",
+    "noProfileRead": "Les noms des fournisseurs ne sont pas affichés : votre rôle ne permet pas de lire les profils de fournisseur.",
+    "profileLookupFailed": "Les noms des fournisseurs n’ont pas pu être chargés."
   },
   "move": {
     "open": "Déplacer vers…",
@@ -277,7 +277,7 @@
     "cleaned": "Nettoyée"
   },
   "address": {
-    "retired": "La session ouverte a été fermée. Votre accès à la moitié dont elle provient a changé. Sélectionnez une ligne pour ouvrir une session avec votre accès actuel."
+    "retired": "La session que vous aviez ouverte n’est plus disponible pour vous. Choisissez-en une autre dans la liste."
   },
   "work": {
     "worked": "a travaillé {{duration}}",
@@ -295,7 +295,14 @@
     "pinnedMark": "Épinglée",
     "rowMenu": "Actions pour {{name}}",
     "noObservation": "Aucune télémétrie n’est encore arrivée pour cette session.",
-    "pinFailed": "L’épinglage n’a pas pu être modifié."
+    "pinFailed": "L’épinglage n’a pas pu être modifié.",
+    "snoozeHour": "Reporter d’1 heure",
+    "snoozeDay": "Reporter d’1 jour",
+    "snoozeWeek": "Reporter d’1 semaine",
+    "unsnooze": "Ne plus reporter",
+    "markDone": "Marquer comme terminée",
+    "markNotDone": "Marquer comme non terminée",
+    "markFailed": "La marque n’a pas pu être modifiée."
   },
   "surface": {
     "openBeside": "Ouvrir à côté",
@@ -309,6 +316,11 @@
       "rail": "Sessions",
       "narrative": "Travail",
       "context": "Contexte"
+    },
+    "resize": {
+      "rail": "Redimensionner la liste des sessions",
+      "context": "Redimensionner le panneau de contexte",
+      "beside": "Redimensionner la session à côté"
     }
   },
   "narrative": {
@@ -321,14 +333,15 @@
   },
   "meter": {
     "mode": "Mode : {{mode}}",
+    "unasked": "S’exécute sans demander : encadrée par la <policy>politique d’Olivares</policy>",
+    "unaskedShort": "S’exécute sans demander",
+    "accessUnknown": "Accès non communiqué",
     "modeTitle": "{{tool}} indique : {{mode}}",
     "theTool": "l'outil",
     "toolWord": {
-      "bypassPermissions": "Ne demande jamais l’autorisation",
       "untrusted": "Demande avant les commandes auxquelles il ne fait pas confiance",
       "onFailure": "Demande quand une commande échoue",
       "onRequest": "Demande quand c’est nécessaire",
-      "never": "Ne demande jamais l’autorisation",
       "granular": "Demande selon ses propres règles"
     },
     "usageLabel": "Consommation de cette session",
@@ -439,9 +452,11 @@
   "conversation": {
     "log": "Conversation",
     "waiting": "En attente de la session…",
-    "empty": "Pas encore de tours. Envoyez une phrase ci-dessous.",
-    "ended": "Le flux d’E/S de la session est terminé.",
-    "lag": "{{count}} cadre(s) perdu(s) — la sortie ci-dessous reprend après le trou.",
+    "empty": "Aucun message pour l’instant.",
+    "ended": "La session est terminée.",
+    "lag_one": "Cadre perdu : {{count}} — la sortie ci-dessous reprend après le trou.",
+    "lag_many": "Cadres perdus : {{count}} — la sortie ci-dessous reprend après le trou.",
+    "lag_other": "Cadres perdus : {{count}} — la sortie ci-dessous reprend après le trou.",
     "tool": "Outil",
     "result": "Résultat",
     "unknown": "Cadre non reconnu",
@@ -449,6 +464,7 @@
     "args": "Arguments",
     "toolResult": "Résultat",
     "toolFailed": "Échec",
+    "toolStopped": "Arrêté",
     "tokens": "{{input}} entrées · {{output}} sorties",
     "protocol": "Trames de protocole : {{count}}",
     "stop": {
@@ -470,9 +486,70 @@
     "workingFolder": "Dossier de travail : {{cwd}}",
     "temporaryFolder": "Dossier de travail : dossier temporaire de cette session",
     "workedFor": "A travaillé {{duration}}",
-    "toolsFolded_one": "+{{count}} appel d'outil",
-    "toolsFolded_many": "+{{count}} appels d'outils",
-    "toolsFolded_other": "+{{count}} appels d'outils"
+    "modelChanged": "Modèle changé : {{from}} → {{to}}",
+    "modelChangedAt": "Modèle changé à {{time}} : {{from}} → {{to}}",
+    "sentPending": "Envoyé. En attente de sa prise en charge par l’outil.",
+    "sentNotTaken": "La session s’est terminée avant que l’outil ne le prenne.",
+    "finishedIn": "Terminé en {{duration}}",
+    "escToInterrupt": "Échap pour interrompre",
+    "background": "En arrière-plan",
+    "agentWorking": "En cours",
+    "work": {
+      "join": ", ",
+      "ran_one": "a exécuté {{count}} commande",
+      "ran_many": "a exécuté {{count}} commandes",
+      "ran_other": "a exécuté {{count}} commandes",
+      "edited_one": "a modifié {{count}} fichier",
+      "edited_many": "a modifié {{count}} fichiers",
+      "edited_other": "a modifié {{count}} fichiers",
+      "editedSome": "a modifié des fichiers",
+      "agents_one": "a lancé {{count}} agent",
+      "agents_many": "a lancé {{count}} agents",
+      "agents_other": "a lancé {{count}} agents",
+      "read_one": "a lu {{count}} fichier",
+      "read_many": "a lu {{count}} fichiers",
+      "read_other": "a lu {{count}} fichiers",
+      "readSome": "a lu des fichiers",
+      "searched_one": "a lancé {{count}} recherche",
+      "searched_many": "a lancé {{count}} recherches",
+      "searched_other": "a lancé {{count}} recherches",
+      "used_one": "a utilisé {{count}} outil",
+      "used_many": "a utilisé {{count}} outils",
+      "used_other": "a utilisé {{count}} outils",
+      "failed_one": "{{count}} échec",
+      "failed_many": "{{count}} échecs",
+      "failed_other": "{{count}} échecs",
+      "background_one": "{{count}} en arrière-plan",
+      "background_many": "{{count}} en arrière-plan",
+      "background_other": "{{count}} en arrière-plan",
+      "stopped_one": "{{count}} arrêté",
+      "stopped_many": "{{count}} arrêtés",
+      "stopped_other": "{{count}} arrêtés"
+    },
+    "running": {
+      "command_one": "Exécution de {{count}} commande shell",
+      "command_many": "Exécution de {{count}} commandes shell",
+      "command_other": "Exécution de {{count}} commandes shell",
+      "edit": "Modification de {{target}}",
+      "read": "Lecture de {{target}}",
+      "search": "Recherche de {{target}}",
+      "agent": "{{name}} travaille",
+      "tool": "Exécution de {{tool}}"
+    },
+    "limit": {
+      "reached": "Claude Code a atteint sa {{window}}",
+      "reachedUntil": "Claude Code a atteint sa {{window}} ; réinitialisation : {{time}}",
+      "reachedUsed": "Claude Code a atteint sa {{window}} ({{used}} % utilisés)",
+      "reachedUsedUntil": "Claude Code a atteint sa {{window}} ({{used}} % utilisés) ; réinitialisation : {{time}}",
+      "window": {
+        "fiveHour": "limite de 5 heures",
+        "weekly": "limite hebdomadaire",
+        "weeklyOpus": "limite hebdomadaire Opus",
+        "weeklySonnet": "limite hebdomadaire Sonnet",
+        "extra": "limite d'utilisation supplémentaire",
+        "usage": "limite d'utilisation"
+      }
+    }
   },
   "changes": {
     "title": "Modifications dans {{folder}}",
@@ -540,17 +617,24 @@
       "pinned": "Épinglées",
       "attention": "Vous attend",
       "active": "En cours",
-      "settled": "Plus tôt"
+      "today": "Terminées aujourd’hui",
+      "settled": "Plus tôt",
+      "snoozed": "Reportées",
+      "archived": "Archivées"
     },
     "more": "Plus",
     "back": "Retour aux sessions",
     "showTable": "Afficher en tableau",
     "filter": "Filtrer les sessions…",
+    "recent": "Affichage des {{n}} plus récentes",
+    "loadMore": "Charger plus",
     "noMatch": "Aucune session ne correspond."
   },
   "thread": {
     "copyReference": "Copier la référence",
-    "terminalHint": "La même session depuis un terminal."
+    "terminalHint": "La même session depuis un terminal.",
+    "modelMismatch": "{{requested}} demandé, {{inUse}} utilisé",
+    "modelTitle": "Demandé : {{requested}} · Utilisé : {{inUse}}"
   },
   "activity": {
     "workflowPhases": "Phases",
@@ -643,5 +727,34 @@
     "usageUntil": "Quota épuisé jusqu’à {{time}}",
     "usage": "Quota épuisé",
     "rate": "Le fournisseur limite les requêtes. Réessayez dans un instant."
+  },
+  "sheet": {
+    "title": "Session",
+    "open": "Ouvrir la session"
+  },
+  "rowActions": {
+    "rename": "Renommer…",
+    "renameTitle": "Renommer la session",
+    "renameDescription": "Le nom est conservé sur le serveur et affiché partout où cette session apparaît. Laissez-le vide pour revenir au nom qu’Olivares lui donne.",
+    "renameLabel": "Nom",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "archive": "Archiver",
+    "unarchive": "Désarchiver",
+    "archived": "Archivée. Elle se trouve sous Archivées, en fin de liste.",
+    "unarchived": "De retour dans la liste.",
+    "copyLink": "Copier le lien",
+    "copyId": "Copier l’identifiant de session",
+    "copyTranscript": "Copier la transcription",
+    "noTranscript": "L’outil de cette session n’a pas encore écrit de transcription à copier.",
+    "copyFailed": "Le navigateur n’a pas autorisé la copie.",
+    "you": "Vous",
+    "assistant": "Assistant",
+    "delete": "Supprimer…",
+    "stopFirst": "Arrêtez-la d’abord",
+    "copiedPartial": "Copié. {{n}} enregistrements de la transcription n’ont pas pu être lus et n’y figurent pas.",
+    "clipped": "Certains messages dépassent 64 Kio et ont été tronqués dans la copie ; chacun se termine par [...].",
+    "noWholeText": "Le moteur n’a envoyé que la première ligne de chaque message ; la transcription n’a donc pas été copiée.",
+    "transcriptChanged": "La transcription a changé pendant la copie. Réessayez."
   }
 }

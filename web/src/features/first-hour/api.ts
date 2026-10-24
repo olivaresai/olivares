@@ -19,7 +19,8 @@ import type {
 export type ToolKey = 'claude' | 'codex'
 export const FIRST_HOUR_TOOLS: readonly ToolKey[] = ['claude', 'codex']
 /** The tools whose own login the engine relays: the first-hour tools, Grok Build, whose
- * release is installed from AI tools (HU-R15), and OpenCode, which signs in with ChatGPT. */
+ * release is installed from AI tools (HU-R15), and OpenCode, which signs in with its own
+ * OpenCode key (Zen or Go) or with ChatGPT (#2567). */
 export type SignInTool = ToolKey | 'grok' | 'opencode' | 'gemini-cli'
 /** Every tool a session can start on: the engine's drivers (agentops/tool-names). */
 export {
@@ -35,9 +36,20 @@ export interface SignInStatus {
   method?: string
   account?: string
   account_ref?: string
+  /** The tool's official login methods, in the order to offer them, when it has several. */
+  methods?: SignInMethod[]
   /** The login still in progress on the server for this tool and organization, so a reload
    * picks it up instead of starting another. Absent on an engine that does not say. */
   pending?: SignInFlow
+}
+
+/** One official login method. `key`: the tool's own login waits for an API key the
+ * person types (the flow reaches needs_key). */
+export interface SignInMethod {
+  id: string
+  label: string
+  default?: boolean
+  key?: boolean
 }
 
 export interface SignInFlow {
@@ -45,7 +57,13 @@ export interface SignInFlow {
   driver: SignInTool
   account_ref?: string
   state:
-    'starting' | 'needs_code' | 'waiting' | 'checking' | 'signed_in' | 'failed'
+    | 'starting'
+    | 'needs_code'
+    | 'needs_key'
+    | 'waiting'
+    | 'checking'
+    | 'signed_in'
+    | 'failed'
   url?: string
   user_code?: string
   message?: string
@@ -79,6 +97,8 @@ export const signInApi = {
     tenant: string | null,
     accountRef?: string,
     options?: RequestOptions,
+    /** One of the status's method ids; omitted, the tool's default method. */
+    method?: string,
   ) =>
     http.post<SignInFlow>(
       SIGN_IN,
@@ -86,6 +106,7 @@ export const signInApi = {
         driver,
         tenant_id: tenant ?? '',
         ...(accountRef ? { account_ref: accountRef } : {}),
+        ...(method ? { method } : {}),
       },
       options,
     ),
@@ -94,6 +115,8 @@ export const signInApi = {
       ...options,
       signal: signal ?? options?.signal,
     }),
+  /** The code the sign-in page shows, or the key a needs_key login waits for: the
+   * engine hands it to the tool's own login and keeps none of it. */
   code: (id: string, code: string, options?: RequestOptions) =>
     http.post<SignInFlow>(
       `${SIGN_IN}/${encodeURIComponent(id)}/code`,

@@ -6,7 +6,8 @@
  *
  * GENERATED FILE — DO NOT EDIT. Source of truth: web/tokens/console/*.tokens.json
  * (DTCG 2025.10). Regenerate with `pnpm tokens`; `pnpm tokens:check` guards drift in CI.
- * Blocks, in order: the LIGHT theme (:root), the DARK theme (.dark), the Tailwind 4
+ * Blocks, in order: the LIGHT theme (:root), the DARK theme (.dark), the BLACK theme
+ * (.dark.black, dark on true black), the Tailwind 4
  * @theme inline mapping, density (comfortable by default, compact by attribute) and
  * motion (stopped under prefers-reduced-motion and under the Reduce motion setting).
  * Each theme holds the palette — four neutrals, three text tones, the single brand
@@ -15,7 +16,7 @@
  * palette. scripts/check-brand-parity.mjs pins the subset the website shares to this
  * file. Every text token is at least 4.5:1 and
  * every control boundary, focus ring and selection border at least 3:1 on every surface
- * of its theme (src/styles/tokens.test.ts measures the 500 pairs).
+ * of its theme (src/styles/tokens.test.ts measures the 750 pairs).
  */
 
 :root {
@@ -217,6 +218,101 @@
   --accent-strong: #ff9b3d;
 }
 
+.dark.black {
+  /* Palette — neutrals — BLACK */
+  --frame: #000000;
+  --canvas: #000000;
+  --surface: #0a0a0a;
+  --raised: #111111;
+  --hover: rgba(255, 255, 255, 0.05);
+  --active: #141414;
+  --line: #1f1f1f;
+  --line-strong: #262626;
+  --ctl-border: #8a8783;
+  --scrim: rgba(0, 0, 0, 0.7);
+
+  /* Palette — text — BLACK */
+  --text: #ededed;
+  --text-2: #8a8a8a;
+  --text-3: #8a8a8a;
+
+  /* Palette — the brand orange, by role — BLACK */
+  --accent: #f08000;
+  --on-accent: #1a1206;
+  --accent-text: #ff9b3d;
+  --accent-soft: #1f150a;
+  --accent-line: rgba(240, 128, 0, 0.42);
+  --accent-border: #ff9b3d;
+  --focus: #f08000;
+
+  /* Palette — status and diff — BLACK */
+  --ok: #9cc79c;
+  --ok-soft: #0d1a10;
+  --warn: #d9b45c;
+  --warn-soft: #1a160b;
+  --bad: #eb9999;
+  --bad-soft: #1d0e10;
+  --info: #9db9cf;
+  --info-soft: #0c141c;
+  --diff-add: #0d1a10;
+  --diff-del: #1d0e10;
+
+  /* Palette — tool data colours — BLACK */
+  --tool-claude: #3987e5;
+  --tool-codex: #199e70;
+  --tool-opencode: #9085e9;
+  --tool-gemini: #d55181;
+
+  /* Palette — depth — BLACK */
+  --shadow-raised:
+    0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px -16px rgba(0, 0, 0, 0.7);
+  --shadow-pop:
+    0 2px 6px -2px rgba(0, 0, 0, 0.4), 0 24px 48px -24px rgba(0, 0, 0, 0.85);
+  --shadow-card: none;
+
+  /* Roles — surfaces and text */
+  --background: #000000;
+  --elevated: #111111;
+  --overlay: rgba(0, 0, 0, 0.7);
+  --muted: #141414;
+  --muted-foreground: #8a8a8a;
+  --foreground: #ededed;
+  --border: #1f1f1f;
+  --border-strong: #262626;
+  --ring: #f08000;
+
+  /* Roles — the orange */
+  --accent-foreground: #1a1206;
+  --accent-hover: #df6d00;
+  --accent-active: #d87000;
+  --accent-soft-foreground: #ff9b3d;
+
+  /* Roles — status */
+  --success: #9cc79c;
+  --warning: #d9b45c;
+  --danger: #eb9999;
+  --danger-solid: #c5362f;
+  --danger-solid-foreground: #fff1ef;
+  --success-soft: #0d1a10;
+  --warning-soft: #1a160b;
+  --danger-soft: #1d0e10;
+
+  /* Roles — access-graph confidence (a cool axis apart from status) */
+  --confidence-attributed: #5be0d8;
+  --confidence-approximate: #9aa3b0;
+
+  /* Roles — elevation */
+  --elev-xs: none;
+  --elev-sm: none;
+  --elev-md: none;
+  --elev-lg: 0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px -16px rgba(0, 0, 0, 0.7);
+  --elev-xl:
+    0 2px 6px -2px rgba(0, 0, 0, 0.4), 0 24px 48px -24px rgba(0, 0, 0, 0.85);
+
+  /* Roles — selection indicator, >=3:1 on its neighbours (SC 1.4.11) */
+  --accent-strong: #ff9b3d;
+}
+
 @theme inline {
   /* Palette and roles — mapped to the theme vars */
   --color-frame: var(--frame);
@@ -323,7 +419,6 @@
   /* Motion — one easing curve, no bounce */
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
-  --animate-pulse-live: pulse-live 2s ease-in-out infinite;
   --default-transition-duration: var(--duration-fast);
   --default-transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
 

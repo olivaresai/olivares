@@ -45,10 +45,7 @@ for (const width of [1280, 390]) {
       }, testInfo) => {
         await prepare(page, baseURL, theme)
         await page.goto('/')
-        const account = page.getByRole('button', {
-          name: 'Account',
-          exact: true,
-        })
+        const account = page.getByRole('button', { name: /, Account$/ })
         const menu = page.getByRole('menu')
         const settings = menu.getByRole('menuitem', {
           name: 'Settings',

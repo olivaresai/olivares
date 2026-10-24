@@ -1,13 +1,13 @@
 {
   "title": "KI-Werkzeuge",
   "description": "Installieren Sie auf diesem Server die KI-Werkzeuge, die Sitzungen ausführen, und melden Sie sie an.",
+  "descriptionMember": "Sitzungen laufen mit diesen Konten und API-Schlüsseln. Ein Systemadministrator installiert die Werkzeuge und meldet sie an.",
   "refresh": "Aktualisieren",
-  "adminOnly": "Zum Verwalten der Serverwerkzeuge ist eine Sitzung als Systemadministrator erforderlich.",
   "readOnly": "Dieser Server ist schreibgeschützt. Die Installation ist deaktiviert.",
   "notInstalled": "Keine verwaltete Installation",
   "installedOutside": "Auf diesem Server installiert, nicht von Olivares",
   "version": "Version für {{name}}",
-  "versionRequired": "Gib eine Version ein, um die Installation zu prüfen.",
+  "versionRequired": "Geben Sie eine Version ein, um die Installation zu prüfen.",
   "review": "Installation prüfen",
   "reviewName": "Installation von {{name}} prüfen",
   "detect": "{{name}} erkennen",
@@ -58,7 +58,7 @@
     "hint": "Sein Endpunkt wird unter Anbieter dieser Organisation hinzugefügt, damit OpenCode-Sitzungen seine Modelle nutzen können; eine andere Organisation fügt ihn dort selbst hinzu. Modelle bleiben auf diesem Server.",
     "noModels": "Noch kein Modell.",
     "model": "Modell herunterladen",
-    "modelHint": "Verwende einen Ollama-Modellnamen oder eine öffentliche Hugging-Face-GGUF-Referenz.",
+    "modelHint": "Verwenden Sie einen Ollama-Modellnamen oder eine öffentliche Hugging-Face-GGUF-Referenz.",
     "download": "Herunterladen",
     "downloading": "{{model}} wird heruntergeladen…",
     "downloadingPercent": "{{model}} wird heruntergeladen · {{percent}} %",
@@ -79,7 +79,7 @@
     },
     "signedInAs": "Authentifiziert als {{email}}",
     "signedIn": "Authentifiziert",
-    "signInWith": "Auf dem Server mit dem eigenen Befehl des Tools anmelden",
+    "signInWith": "Auf dem Server mit dem eigenen Befehl des Werkzeugs anmelden",
     "installWith": "Aus der Liste unten oder in einem Terminal installieren",
     "stale": "Letzte gültige Antwort. Die letzte Prüfung schlug fehl: {{error}}",
     "staleBadge": "Veraltet",
@@ -106,7 +106,7 @@
     "ref": "Referenz",
     "environment": "Umgebung",
     "home": "Ordner",
-    "homeAdopted": "Der vorhandene Ordner des Tools",
+    "homeAdopted": "Der vorhandene Ordner des Werkzeugs",
     "homeManaged": "Ein eigener Ordner, von Olivares angelegt",
     "homeDefault": "Der Standard-Anmeldeordner dieser Organisation",
     "addTo": "Profil zu {{name}} hinzufügen",
@@ -127,20 +127,19 @@
   "tool": {
     "menu": "Optionen für {{name}}",
     "update": "Aktualisieren",
-    "details": "Installationsdetails",
-    "profilesPage": "Detailseite der Profile"
+    "details": "Installationsdetails"
   },
   "details": {
     "title": "{{name}}: Installationsdetails",
-    "description": "Woher das Tool stammt, seine Version und wie man sie prüft.",
-    "serverLogin": "Vom Tool gemeldete Anmeldungen",
+    "description": "Woher das Werkzeug stammt, seine Version und wie man sie prüft.",
+    "serverLogin": "Vom Werkzeug gemeldete Anmeldungen",
     "serverLoginHint": "Die Anmeldung des Serverbenutzers und die, die diese Organisation hier angelegt hat. Sitzungen verwenden nie die des Serverbenutzers."
   },
   "missing": "Nicht installiert: {{tools}}",
   "installMenu": "Installieren",
   "signIn": {
     "title": "{{name}} anmelden",
-    "description": "Nutzt die eigene Anmeldung des Tools, auf diesem Server ausgeführt. Olivares sieht dein Passwort nie.",
+    "description": "Nutzt die eigene Anmeldung des Werkzeugs, auf diesem Server ausgeführt. Olivares sieht Ihr Passwort nie.",
     "otherWays": "Andere Wege",
     "fromTerminal": "Im Terminal"
   },
@@ -149,14 +148,14 @@
     "description": "Ein Profil ist ein Weg, sich bei {{name}} anzumelden, mit eigener gespeicherter Anmeldung.",
     "name": "Name",
     "nameHint": "Kleinbuchstaben, Ziffern und Bindestriche.",
-    "nameInvalid": "Verwende Kleinbuchstaben, Ziffern und Bindestriche, beginnend mit einem Buchstaben.",
+    "nameInvalid": "Verwenden Sie Kleinbuchstaben, Ziffern und Bindestriche, beginnend mit einem Buchstaben.",
     "nameTaken": "Dieser Name ist bereits vergeben.",
-    "needName": "Gib einen Namen ein.",
-    "needKey": "Wähle einen Schlüssel.",
+    "needName": "Geben Sie einen Namen ein.",
+    "needKey": "Wählen Sie einen Schlüssel.",
     "method": "Meldet sich an mit",
     "account": "Konto",
     "key": "API-Schlüssel",
-    "accountHint": "Nutzt die eigene Anmeldung von {{name}}. Olivares sieht dein Passwort nie.",
+    "accountHint": "Nutzt die eigene Anmeldung von {{name}}. Olivares sieht Ihr Passwort nie.",
     "chooseKey": "Schlüssel wählen",
     "addKey": "Schlüssel hinzufügen …",
     "create": "Erstellen",
@@ -164,7 +163,7 @@
     "created": "Profil {{name}} erstellt",
     "failed": "Das Profil wurde nicht erstellt.",
     "bindFailed": "Der Schlüssel konnte nicht gesetzt werden.",
-    "keyNotSet": "Das Profil wurde erstellt, aber der Schlüssel wurde nicht gesetzt: {{error}} Öffne das Profil, um einen Schlüssel zu wählen.",
+    "keyNotSet": "Das Profil wurde erstellt, aber der Schlüssel wurde nicht gesetzt: {{error}} Öffnen Sie das Profil, um einen Schlüssel zu wählen.",
     "notNow": "Nicht jetzt",
     "close": "Schließen",
     "keyNeedsAccess": "Das Wählen eines Schlüssels erfordert die Berechtigung, Profile zu ändern."
@@ -175,7 +174,7 @@
     "version": "Festgelegte Version",
     "review": "Installation prüfen",
     "hint": "Lassen Sie das Werkzeug zuerst im Katalog zu. Die festgelegte Version und der SHA-256-Prüfwert werden vor der Installation geprüft.",
-    "tenant": "Wähle eine Organisation, um ihre zugelassenen Tools zu verwenden."
+    "tenant": "Wählen Sie eine Organisation, um ihre zugelassenen Werkzeuge zu verwenden."
   },
   "versions": {
     "title": "Sitzungsversionen",
@@ -202,7 +201,7 @@
     "workspace": "Was eine neue Sitzung in {{name}} erhält.",
     "reading": "Wird gelesen…",
     "readFailed": "Konnte nicht gelesen werden: {{message}}",
-    "tools": "KI-Tools",
+    "tools": "KI-Werkzeuge",
     "packages": "Programme und Registries",
     "egressHosts": "Netzwerk-Hosts",
     "skills": "Skills",
@@ -215,10 +214,16 @@
     "notReadable": "Ihre Rolle kann keine Skills lesen.",
     "skillsHint": "Eine Sitzung, die an einen Ordner, eine Vorlage oder einen Agenten gebunden ist, erhält auch die dort angehefteten Skills.",
     "workspacesTruncated": "Die Liste der Arbeitsbereiche endete vor dem Standard-Arbeitsbereich: Wählen Sie einen im Arbeitsbereich-Umschalter.",
-    "toolsHint": "Eine in den Installationsdetails eines Tools gespeicherte Sitzungsversion ersetzt diese für diesen registrierten Arbeitsbereich oder Agenten.",
+    "toolsHint": "Eine in den Installationsdetails eines Werkzeugs gespeicherte Sitzungsversion ersetzt diese für diesen registrierten Arbeitsbereich oder Agenten.",
     "profilesNotReadable": "Ihre Rolle kann keine Anbieterprofile lesen.",
-    "packagesHint": "Vom Anbieterprofil deklariert, das die neue Sitzung jedes Tools verwendet ({{profiles}}). Ein Tool ohne Profil erhält ein neues, das keine deklariert.",
-    "packagesNoProfile": "Sie stammen aus dem Anbieterprofil, unter dem die Sitzungen jedes Tools laufen. Es gibt noch keines, und ein neues deklariert keine.",
+    "packagesHint": "Vom Anbieterprofil deklariert, das die neue Sitzung jedes Werkzeugs verwendet ({{profiles}}). Ein Werkzeug ohne Profil erhält ein neues, das keine deklariert.",
+    "packagesNoProfile": "Sie stammen aus dem Anbieterprofil, unter dem die Sitzungen jedes Werkzeugs laufen. Es gibt noch keines, und ein neues deklariert keine.",
     "packagesRefused": "Nicht aufgeführt, weil noch keine Sitzung starten kann: {{tools}}."
+  },
+  "place": {
+    "title": "Konten und API-Schlüssel",
+    "accounts": "Konten",
+    "allAccounts": "Alle Konten: Details, Beschriftungen und Bindungen",
+    "noAccess": "Ihre Rolle kann die Konten und API-Schlüssel dieser Organisation nicht lesen."
   }
 }

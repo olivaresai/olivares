@@ -92,7 +92,6 @@ func TestCommunityFleetInventoryUnavailable(t *testing.T) {
 	h := newHarness(t)
 	tenant, tok := h.tenantAdmin()
 	hdr := tenantHdr(tenant)
-
 	for _, tc := range []struct {
 		name, method, path string
 		body               any
@@ -128,5 +127,37 @@ func TestCommunityFleetInventoryKeepsItsReadTier(t *testing.T) {
 	}
 	if r := h.do("GET", "/v1/m/claude-policy/inventory", "", nil, tenantHdr(tenant)); r.code != http.StatusUnauthorized {
 		t.Fatalf("anonymous GET /inventory = %d %s; want 401", r.code, r.raw)
+	}
+}
+
+// The other tools' managed files are fleet surfaces too: publishing them, their history,
+// the signed pull, the check-in and the drift view answer 501 and name Business.
+func TestCommunityFleetManagedSettingsOfOtherToolsUnavailable(t *testing.T) {
+	h := newHarness(t)
+	tenant, tok := h.tenantAdmin()
+	hdr := tenantHdr(tenant)
+	for _, tool := range otherToolSurfaces {
+		base := "/v1/m/claude-policy/" + tool.surface
+		for _, tc := range []struct {
+			method, path string
+			body         any
+		}{
+			{"POST", "/publish", map[string]any{"content": tool.good}},
+			{"GET", "/versions", nil},
+			{"GET", "/artifact", nil},
+			{"POST", "/checkin", map[string]any{"scope": "host-1"}},
+			{"GET", "/distribution", nil},
+		} {
+			t.Run(tool.surface+tc.path, func(t *testing.T) {
+				r := h.do(tc.method, base+tc.path, tok, tc.body, hdr)
+				if r.code != http.StatusNotImplemented {
+					t.Fatalf("Community %s %s%s = %d %s; want 501", tc.method, tool.surface, tc.path, r.code, r.raw)
+				}
+				errBody, _ := r.body["error"].(map[string]any)
+				if msg, _ := errBody["message"].(string); !strings.Contains(msg, "Business") {
+					t.Fatalf("the refusal must name Business in error.message: %s", r.raw)
+				}
+			})
+		}
 	}
 }

@@ -28,7 +28,7 @@
       "operator": "Betreiber",
       "baseUrl": "Basis-URL",
       "sigv4": "SigV4-Dienst",
-      "workspaceHeader": "Workspace-Header",
+      "workspaceHeader": "Arbeitsbereich-Header",
       "modelIdForm": "Modell-ID-Form",
       "billing": "Abrechnung",
       "hipaa": "HIPAA",
@@ -98,7 +98,7 @@
     }
   },
   "effectiveState": {
-    "label": "In dieser Umgebung:",
+    "label": "In diesem Bestand:",
     "models": "Modellkatalog",
     "modelOps": "Modellbetrieb"
   }

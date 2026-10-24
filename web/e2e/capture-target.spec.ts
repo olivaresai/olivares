@@ -38,10 +38,10 @@ const monta = (page: import('@playwright/test').Page, cuerpo: string) =>
 
 // The shell, which is what an oracle looking for "some heading" would find first.
 const SHELL = `
-  <aside aria-label="Primary">
+  <header data-slot="topbar">
     <h2>Favorites</h2>
     <h2>Recent</h2>
-  </aside>`
+  </header>`
 
 test.describe('capture target — páginas', () => {
   test('espera al H1 de la celda aunque el shell ya tenga los suyos', async ({
@@ -301,16 +301,16 @@ test.describe('capture target — el instante de la foto', () => {
 // product: no build number, no live counts, no date, no name that only the harness knows, no page
 // that is nothing but an empty state.
 test.describe('capture target — a capture that outlives its release', () => {
-  const SIDEBAR = `
-    <aside><span class="font-mono">${VERSION}</span>
-      <a href="/sessions">Sessions <span data-slot="count-badge">56</span></a></aside>`
+  const TOPBAR = `
+    <header><span class="font-mono">${VERSION}</span>
+      <a href="/sessions">Sessions <span data-slot="count-badge">56</span></a></header>`
 
   test('hides the version mark and the shell counts, and keeps the counts a page owns', async ({
     page,
   }) => {
     await monta(
       page,
-      `${SIDEBAR}<main><h1>Work</h1><span data-slot="count-badge">3</span>
+      `${TOPBAR}<main><h1>Work</h1><span data-slot="count-badge">3</span>
         <p class="font-mono">${VERSION}%</p></main>`,
     )
     await ocultarMarcasDeRelease(page, VERSION)
@@ -338,7 +338,7 @@ test.describe('capture target — a capture that outlives its release', () => {
   })
 
   test('rejects a build number that is still on screen', async ({ page }) => {
-    await monta(page, `${SIDEBAR}<main><h1>Work</h1></main>`)
+    await monta(page, `${TOPBAR}<main><h1>Work</h1></main>`)
     await expect(
       exigirInstanteLimpio(page, 'work', { version: VERSION }),
     ).rejects.toThrow(/release number/)
@@ -495,13 +495,12 @@ test.describe('capture target — a capture that outlives its release', () => {
 test.describe('capture target — session surfaces', () => {
   const VISTAS = [...VISTAS_DE_SESION]
   // The tile counts the live sessions (working, idle, gone silent) and captions the idle and silent ones.
-  const TILE = (vivas: number, ociosas: number, mudas = 0) =>
-    `<section><h2 style="text-transform:uppercase">Live sessions</h2><p>${vivas}</p><p>${ociosas} idle now</p>` +
-    (mudas ? `<p>${mudas} gone silent (possible evasion)</p>` : '') +
-    '</section>'
+  // Estate's summary sentence (#2546): the sessions open (not yet ended), then today's cost.
+  const SENTENCE = (open: number) =>
+    `<section><p>${open} sessions open · $6.84 today</p></section>`
   const FILA = (estado: string) =>
     `<li data-testid="home-recent-row"><span>${estado}</span> <span>dependency upgrade scan</span></li>`
-  // A live session on Now is a card: its tool first, its state in a cell of its own (#2245).
+  // A live session on Estate is a card: its tool first, its state in a cell of its own (#2245).
   const TARJETA = (estado: string) =>
     `<li><a data-testid="now-live-card"><span>Claude Code</span><span data-testid="now-live-card-state">${estado}</span></a></li>`
 
@@ -527,7 +526,7 @@ test.describe('capture target — session surfaces', () => {
       ]) {
         await monta(
           page,
-          `<main><h1>Session</h1><pre style="white-space:pre-wrap">${crudo}</pre>${id === 'home' ? TILE(0, 0) : ''}</main>`,
+          `<main><h1>Session</h1><pre style="white-space:pre-wrap">${crudo}</pre>${id === 'home' ? SENTENCE(0) : ''}</main>`,
         )
         await expect(
           exigirInstanteLimpio(page, id, { version: VERSION }),
@@ -537,7 +536,7 @@ test.describe('capture target — session surfaces', () => {
     }
   })
 
-  test('rejects the rows the console hides as quiet: thinking tokens and an allowed window below 90%', async ({
+  test('rejects the rows the console never paints: thinking tokens and a raw rate-limit report (dev#3119)', async ({
     page,
   }) => {
     for (const fila of [
@@ -546,6 +545,10 @@ test.describe('capture target — session surfaces', () => {
       'allowed · five hour',
       'allowed · seven day',
       'allowed · seven day opus · 42%',
+      'allowed warning · seven day · 93%',
+      'allowed · five hour · 95%',
+      'rejected · seven day',
+      'allowed · overage',
     ]) {
       await monta(page, `<main><h1>Session</h1><p>${fila}</p></main>`)
       await expect(
@@ -555,14 +558,12 @@ test.describe('capture target — session surfaces', () => {
     }
   })
 
-  test('accepts the rate-limit rows the console keeps because they are news', async ({
+  test('accepts the sentence of a limit that stopped the turn (dev#3119)', async ({
     page,
   }) => {
     for (const fila of [
-      'allowed warning · five hour · 91%',
-      'allowed · five hour · 95%',
-      'rejected · seven day',
-      'allowed · overage',
+      'Claude Code reached its weekly limit (93% used); it resets Mon 03:00',
+      'Claude Code reached its 5-hour limit',
     ]) {
       await monta(page, `<main><h1>Session</h1><p>${fila}</p></main>`)
       await exigirInstanteLimpio(page, 'sessions', { version: VERSION })
@@ -591,77 +592,89 @@ test.describe('capture target — session surfaces', () => {
     }
   })
 
-  test('rejects a Now page that lists more rows Working than the tile counts as working', async ({
+  test('rejects an Estate page that lists more rows Working than sessions open', async ({
     page,
   }) => {
-    // Five live, two idle: three are working. Five Working rows is the #1785 page.
+    // Three open; five Working rows is the #1785 page.
     await monta(
       page,
-      `<main><h1>Now</h1>${TILE(5, 2)}<ul>${FILA('Working').repeat(5)}</ul></main>`,
+      `<main><h1>Estate</h1>${SENTENCE(3)}<ul>${FILA('Working').repeat(5)}</ul></main>`,
     )
     await expect(
       exigirInstanteLimpio(page, 'home', { version: VERSION }),
     ).rejects.toThrow(
-      /5 recent rows and live cards read Working beside a tile that counts 5 live, 2 idle and 0 silent/,
+      /5 recent rows and live cards read Working beside a sentence that counts 3 sessions open/,
     )
-    // A session that went silent is not working either.
-    await monta(
-      page,
-      `<main><h1>Now</h1>${TILE(5, 2, 1)}<ul>${FILA('Working').repeat(3)}</ul></main>`,
-    )
-    await expect(
-      exigirInstanteLimpio(page, 'home', { version: VERSION }),
-    ).rejects.toThrow(/3 recent rows and live cards read Working/)
   })
 
-  test('accepts a Now page whose rows agree with its tile', async ({
+  test('accepts an Estate page whose rows agree with its sentence', async ({
     page,
   }) => {
     await monta(
       page,
-      `<main><h1>Now</h1>${TILE(5, 2)}<ul>${FILA('Working').repeat(3)}${FILA('Idle').repeat(2)}</ul></main>`,
+      `<main><h1>Estate</h1>${SENTENCE(5)}<ul>${FILA('Working').repeat(3)}${FILA('Idle').repeat(2)}</ul></main>`,
     )
     await exigirInstanteLimpio(page, 'home', { version: VERSION })
-    // More sessions are working than the recent list can hold.
+    // More sessions are open than the recent list can hold.
     await monta(
       page,
-      `<main><h1>Now</h1>${TILE(8, 2)}<ul>${FILA('Working').repeat(5)}</ul></main>`,
+      `<main><h1>Estate</h1>${SENTENCE(8)}<ul>${FILA('Working').repeat(5)}</ul></main>`,
+    )
+    await exigirInstanteLimpio(page, 'home', { version: VERSION })
+    // A quiet estate lists nothing and says so.
+    await monta(
+      page,
+      '<main><h1>Estate</h1><p>Nothing is running</p><ul></ul></main>',
     )
     await exigirInstanteLimpio(page, 'home', { version: VERSION })
   })
 
-  test('reads a live card the way it reads a row', async ({ page }) => {
-    // Two live, one idle: one is working. Two Working cards is the #1785 page again.
+  test('reads a sentence cut short at a page of sessions ("7+ sessions open")', async ({
+    page,
+  }) => {
+    // Now says "N+" when its live read stopped at a page; the gate still reads the count.
     await monta(
       page,
-      `<main><h1>Now</h1>${TILE(2, 1)}<ul>${TARJETA('Working').repeat(2)}</ul></main>`,
+      `<main><h1>Estate</h1><section><p>7+ sessions open · $6.84 today</p></section><ul>${FILA('Working').repeat(8)}</ul></main>`,
+    )
+    await expect(
+      exigirInstanteLimpio(page, 'home', { version: VERSION }),
+    ).rejects.toThrow(
+      /8 recent rows and live cards read Working beside a sentence that counts 7 sessions open/,
+    )
+  })
+
+  test('reads a live card the way it reads a row', async ({ page }) => {
+    await monta(
+      page,
+      `<main><h1>Estate</h1>${SENTENCE(1)}<ul>${TARJETA('Working').repeat(2)}</ul></main>`,
     )
     await expect(
       exigirInstanteLimpio(page, 'home', { version: VERSION }),
     ).rejects.toThrow(/2 recent rows and live cards read Working/)
     await monta(
       page,
-      `<main><h1>Now</h1>${TILE(2, 1)}<ul>${TARJETA('Working')}${TARJETA('Idle')}</ul></main>`,
+      `<main><h1>Estate</h1>${SENTENCE(2)}<ul>${TARJETA('Working')}${TARJETA('Idle')}</ul></main>`,
     )
     await exigirInstanteLimpio(page, 'home', { version: VERSION })
   })
 
-  test('refuses a Now page whose tile counts live sessions but lists none', async ({
+  test('refuses an Estate page whose sentence counts sessions open but lists none', async ({
     page,
   }) => {
-    await monta(page, `<main><h1>Now</h1>${TILE(3, 1)}<ul></ul></main>`)
+    await monta(page, `<main><h1>Estate</h1>${SENTENCE(3)}<ul></ul></main>`)
     await expect(
       exigirInstanteLimpio(page, 'home', { version: VERSION }),
     ).rejects.toThrow(/no recent row or live card is on the page/)
   })
 
-  test('refuses a Now page without its Live sessions tile', async ({
+  test('refuses an Estate page without its summary sentence', async ({
     page,
   }) => {
-    await monta(page, `<main><h1>Now</h1><ul>${FILA('Idle')}</ul></main>`)
+    await monta(page, `<main><h1>Estate</h1><ul>${FILA('Idle')}</ul></main>`)
     await expect(
       exigirInstanteLimpio(page, 'home', { version: VERSION }),
-    ).rejects.toThrow(/Live sessions tile is absent or unreadable/)
+    ).rejects.toThrow(/summary sentence is absent or unreadable/)
   })
 
   test('names only cells that exist in the capture spec', async () => {

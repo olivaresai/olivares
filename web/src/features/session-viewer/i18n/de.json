@@ -79,7 +79,7 @@
     "fileCount": "{{count}} Dateien"
   },
   "detail": {
-    "toolRef": "Tool-Referenz",
+    "toolRef": "Werkzeug-Referenz",
     "resourceRef": "Ressourcenreferenz",
     "mode": "Modus",
     "source": "Quelle",

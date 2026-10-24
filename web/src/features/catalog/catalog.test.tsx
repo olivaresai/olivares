@@ -194,6 +194,18 @@ describe('CatalogView — entries list', () => {
     ).closest('[data-slot="empty-state"]') as HTMLElement
     expect(within(vacio).queryByRole('button')).toBeNull()
   })
+
+  // The empty state owns the verb only once the list answered empty. A failed
+  // read leaves the tab-level button in place: the error state offers no action.
+  it('keeps the tab-level New entry while the list could not be read', async () => {
+    api.listEntries.mockRejectedValue(new Error('down'))
+    wrap(<CatalogView />)
+    await screen.findByRole('alert')
+    expect(
+      await screen.findByRole('button', { name: /new entry/i }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('No catalog entries created yet')).toBeNull()
+  })
 })
 
 // --- (b)/(c) verification posture is honest; signing shown honestly ----------
@@ -600,5 +612,23 @@ describe('CatalogView — la lista de instancias declara su recorte', () => {
     expect(
       screen.queryByText(/instances; there are more/i),
     ).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * ONE ORANGE PER FIRST SCREEN (dev#2673's console rule 2026-10-17). The
+ * merged mechanism (main e601803a8, dfff8c3ad): while a read list is empty the
+ * page header's verb steps aside, so the empty state's action is the one orange.
+ */
+describe('CatalogView — one orange control on an empty catalog', () => {
+  it('offers the verb in the empty state only, never as a page-level New entry button', async () => {
+    api.listEntries.mockResolvedValue({ items: [], has_more: false })
+    wrap(<CatalogView />)
+    expect(
+      await screen.findByText('No catalog entries created yet'),
+    ).toBeInTheDocument()
+    const buttons = await screen.findAllByRole('button', { name: 'New entry' })
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0].className).toContain('bg-accent')
   })
 })

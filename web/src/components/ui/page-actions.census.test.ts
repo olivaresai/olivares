@@ -95,7 +95,7 @@ const NO_VERB: ReadonlyArray<{ dir: string; why: string }> = [
   },
   {
     dir: 'features/home',
-    why: 'the front door sends the operator somewhere; it acts nowhere itself',
+    why: 'New session leads the start line under the title, with its status and the proof link, in a row held from the first paint',
   },
   {
     dir: 'features/identity',
@@ -133,6 +133,10 @@ const NO_VERB: ReadonlyArray<{ dir: string; why: string }> = [
   {
     dir: 'features/rate-limits',
     why: 'limits are read from configuration, not created here',
+  },
+  {
+    dir: 'features/reach',
+    why: 'a projection of the access map: what each tool reaches; the engine offers no create',
   },
   {
     dir: 'features/recordings',

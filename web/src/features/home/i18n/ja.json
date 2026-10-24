@@ -1,23 +1,4 @@
 {
-  "title": "概要",
-  "description": "AI エージェントが過去 30 日間に行ったことを、あなたが開ける範囲で表示します。",
-  "aside": "環境の概要",
-  "range": "過去30日間",
-  "next": {
-    "title": "次のステップ",
-    "provider": {
-      "title": "プロバイダーを追加",
-      "description": "Claude や Codex などのエンジンを接続すると、そのセッションが帰属付けされ、統制されます。"
-    },
-    "agent": {
-      "title": "エージェントをデプロイ",
-      "description": "ポリシーと改訂履歴とともに、エージェントをワークスペースへ展開します。"
-    },
-    "session": {
-      "title": "セッションを開始",
-      "description": "統制された実行を開始し、ツール呼び出しをその場で確認します。"
-    }
-  },
   "recent": {
     "title": "最近の作業",
     "description": "このデプロイメントが観測した直近 5 件のセッションです。",
@@ -26,71 +7,10 @@
     "emptyDescription": "接続したエンジンの実行がここに表示されます。何をしたか、どれだけかかったか、いくらかかったかが分かります。",
     "unavailableTitle": "最近の作業を読み込めませんでした",
     "unavailableDescription": "セッションの読み取りが応答しませんでした。上の数値には影響しません。",
-    "open": "セッションを開く: {{what}}",
     "untitled": "無題のセッション"
   },
   "live": {
     "title": "稼働中"
-  },
-  "tiles": {
-    "today": {
-      "label": "今日",
-      "caption_other": "今日稼働した {{count}} 件のセッションのコスト",
-      "unpriced_other": "{{count}} 件はコスト未報告"
-    },
-    "inventory": {
-      "label": "インベントリ",
-      "caption": "{{agents}}エージェント · {{active}}有効"
-    },
-    "sessions": {
-      "label": "ライブセッション",
-      "caption": "現在{{idle}}待機中",
-      "silent": "{{count}}が無応答（回避の可能性）"
-    },
-    "security": {
-      "label": "セキュリティ",
-      "caption": "{{count}}が重大または高",
-      "clear": "未対応の検出事項なし"
-    },
-    "compliance": {
-      "label": "コンプライアンス",
-      "caption": "{{gap}}ギャップ · {{unmapped}}未マッピング",
-      "noControls": "マッピング済みの統制がまだありません"
-    },
-    "spend": {
-      "label": "支出",
-      "caption": "{{range}}",
-      "projected": "ランレートで{{amount}}を予測",
-      "projectedOver": "ランレートで{{amount}}を予測 — これまでの支出を上回る"
-    },
-    "health": {
-      "label": "ヘルス & SLA",
-      "value": "{{healthy}}/{{total}}が正常",
-      "caption": "{{breaches}}件のSLA違反 · {{incidents}}件の未対応インシデント",
-      "noChecks": "ヘルスチェックがまだありません"
-    },
-    "budgets": {
-      "label": "予算",
-      "none": "予算はまだありません",
-      "nonePartial": "このページに有効な予算はありません。さらにあります",
-      "over_other": "{{count}} 件が上限超過",
-      "unknown_other": "{{count}} 件は金額不明",
-      "within": "上限超過なし",
-      "partial": "{{n}} 件の予算を読み込みました。さらに存在します"
-    }
-  },
-  "state": {
-    "unavailable": "読み込めませんでした — 開いて再試行してください",
-    "pendingIdle": "クエリ未開始 — 開いて読み込んでください",
-    "pendingPaused": "クエリ一時停止中 — 再開を待っています"
-  },
-  "availability": {
-    "loading": "{{source}}：読み込み中。",
-    "pendingIdle": "{{source}}：クエリ未開始。",
-    "pendingPaused": "{{source}}：クエリ一時停止中、再開を待っています。",
-    "unavailable": "{{source}}：読み込めませんでした。",
-    "partial": "{{source}}：数値を表示できます。部分的なデータです。",
-    "current": "{{source}}：数値を表示できます。"
   },
   "empty": {
     "title": "まだ表示できるものがありません",
@@ -103,5 +23,69 @@
     "install": "セッションを始めるには Claude Code か Codex をインストールしてください。",
     "installAction": "ツールを設定",
     "newSession": "新しいセッション"
+  },
+  "swimlane": {
+    "title": "直近1時間",
+    "subtitle": "{{from}}〜{{to}}。各バーは1回の実行で、ツール呼び出しが多いほど強く表示されます。",
+    "lanes": "直近1時間のセッション",
+    "now": "現在 {{at}}",
+    "range": "{{from}}〜{{to}}",
+    "selectSlot": "{{from}}〜{{to}}",
+    "active": "稼働 {{spans}}",
+    "noActivity": "直近1時間の活動はありません",
+    "unread": "活動を読み込めていません",
+    "toolCalls_other": "ツール呼び出し {{n}} 回",
+    "runTip_other": "実行 {{from}}〜{{to}}、ツール呼び出し {{count}} 回",
+    "waitingSince": "{{at}} から承認待ち",
+    "needsYouSince": "{{at}} からあなたの対応待ち",
+    "idleSince": "{{at}} から待機中",
+    "failedAt": "{{at}} に失敗",
+    "failed": "失敗",
+    "automation": "スケジュール",
+    "hint": "行の上をドラッグするか時刻を選ぶと、その範囲を台帳で表示できます。",
+    "openLedger": "台帳で開く",
+    "clear": "解除",
+    "legend": "凡例",
+    "legendRun": "実行（呼び出しが多いほど強い）",
+    "legendWait": "承認待ち",
+    "legendIdle": "待機中（指示待ち）",
+    "legendFailure": "失敗",
+    "table": "表で表示",
+    "colSession": "セッション",
+    "colActive": "稼働",
+    "colCalls": "ツール呼び出し",
+    "colNow": "現在",
+    "working": "作業中",
+    "reading": "活動を読み込み中",
+    "waiting": "承認待ち",
+    "needsYou": "あなたの対応待ち",
+    "idle": "待機中",
+    "approvalsUnread": "承認を読み込めなかったため、承認待ちは表示していません。"
+  },
+  "summary": {
+    "heading": "概要",
+    "nothingRunning": "実行中のものはありません",
+    "running_other": "開いているセッション {{count}} 件",
+    "runningFor_other": "{{people}}のために開いているセッション {{count}} 件",
+    "runningMore": "開いているセッション {{n}}+ 件",
+    "people_other": "{{count}} 人",
+    "today": "今日 {{amount}}",
+    "todayFloor": "今日 {{amount}} 以上",
+    "needs_other": "{{count}} 件があなたを待っています",
+    "needsMore": "{{n}}+ 件があなたを待っています",
+    "yesterday": "昨日 {{amount}}",
+    "unpriced_other": "{{count}} 件はコスト未報告",
+    "month": "今月 {{limit}} のうち {{spent}}",
+    "monthFloor": "今月 {{limit}} のうち {{spent}} 以上",
+    "monthLabel": "今月の支出"
+  },
+  "state": {
+    "pendingIdle": "クエリ未開始 — 開いて読み込んでください",
+    "pendingPaused": "クエリ一時停止中 — 再開を待っています"
+  },
+  "proof": {
+    "verified": "{{time}} にチェーンを検証済み",
+    "entries_other": "{{n}} 件のエントリ",
+    "broken": "チェーンが壊れています: 台帳を開く"
   }
 }

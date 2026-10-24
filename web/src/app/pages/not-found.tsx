@@ -6,17 +6,9 @@ import { Briefcase, Compass } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
-import { BUSINESS_BUILD } from '@/features/business-build'
-import census from '@/features/route-census.json'
+import { isBusinessOnlyPath } from '@/features/business-build'
 
 const BUSINESS_URL = 'https://olivares.ai/business'
-/** The census paths as patterns: a `$param` segment stands for any one segment. A Business
- * console serves them (or has a real 404 where it does not): only Community says "not here". */
-const BUSINESS_PATTERNS = BUSINESS_BUILD
-  ? []
-  : census.business_paths.map(
-      (path) => new RegExp(`^${path.replace(/\$\w+/g, '[^/]+')}$`, 'i'),
-    )
 
 /**
  * A bookmark of a page this edition does not include (route-census.json `business_paths`):
@@ -50,11 +42,8 @@ function BusinessNotice() {
 /** The application's 404 — a calm, navigable dead end (root notFoundComponent). */
 export function NotFoundPage() {
   const { t } = useTranslation('errors')
-  const pathname = useLocation({
-    select: (l) => l.pathname.replace(/\/+$/, ''),
-  })
-  if (BUSINESS_PATTERNS.some((pattern) => pattern.test(pathname)))
-    return <BusinessNotice />
+  const pathname = useLocation({ select: (l) => l.pathname })
+  if (isBusinessOnlyPath(pathname)) return <BusinessNotice />
   return (
     <main className="flex min-h-svh items-center justify-center bg-background p-6">
       <h1 className="sr-only">{t('notFound.title')}</h1>

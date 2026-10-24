@@ -26,11 +26,13 @@
   "lenses": {
     "analytics": {
       "title": "Pro Entwickler (Admin-Analytics)",
-      "description": "Maßgebliche Tagessummen pro Entwickler aus dem Admin-Analytics-Feed über {{developers}} Entwickler."
+      "description_one": "Maßgebliche Tagessummen pro Entwickler aus dem Admin-Analytics-Feed über {{count}} Entwickler.",
+      "description_other": "Maßgebliche Tagessummen pro Entwickler aus dem Admin-Analytics-Feed über {{count}} Entwickler."
     },
     "telemetry": {
       "title": "Pro Sitzung (Live-Telemetrie)",
-      "description": "Echtzeit-Aktivität pro Sitzung aus der OTLP-Ebene über {{teams}} Team(s); enthält die aktive Zeit."
+      "description_one": "Echtzeit-Aktivität pro Sitzung aus der OTLP-Ebene über {{count}} Team; enthält die aktive Zeit.",
+      "description_other": "Echtzeit-Aktivität pro Sitzung aus der OTLP-Ebene über {{count}} Teams; enthält die aktive Zeit."
     }
   },
   "comparison": {
@@ -62,7 +64,7 @@
     "addedRemoved": "+{{added}} / -{{removed}}",
     "commits": "Commits",
     "pullRequests": "Pull Requests",
-    "acceptance": "Tool-Akzeptanz",
+    "acceptance": "Werkzeug-Akzeptanz",
     "acceptedOfTotal": "{{accepted}} von {{total}} akzeptiert",
     "tokens": "Tokens",
     "activeTime": "Aktive Zeit"
@@ -72,9 +74,9 @@
     "empty": "Keine Modellnutzung in diesem Zeitraum."
   },
   "acceptance": {
-    "empty": "Keine Tool-Entscheidungen in diesem Zeitraum.",
+    "empty": "Keine Werkzeug-Entscheidungen in diesem Zeitraum.",
     "columns": {
-      "tool": "Tool",
+      "tool": "Werkzeug",
       "accepted": "Akzeptiert",
       "rejected": "Abgelehnt",
       "rate": "Akzeptanz"
@@ -117,8 +119,8 @@
   },
   "empty": {
     "acceptance": {
-      "title": "Noch keine Tool-Entscheidungen beobachtet",
-      "description": "Akzeptierte und abgelehnte Tool-Entscheidungen erscheinen, sobald Admin-Analytics-Feed oder OTLP-Telemetrie sie melden."
+      "title": "Noch keine Werkzeug-Entscheidungen beobachtet",
+      "description": "Akzeptierte und abgelehnte Werkzeug-Entscheidungen erscheinen, sobald Admin-Analytics-Feed oder OTLP-Telemetrie sie melden."
     },
     "developer": {
       "title": "Noch keine Entwickleraktivität gemeldet",

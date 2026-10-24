@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -287,7 +288,10 @@ func (m *Module) handleTimelineByID(w http.ResponseWriter, r *http.Request, mc a
 		writeJSON(w, http.StatusNotFound, errorBody("not found"))
 		return
 	}
-	q := listQuery(r)
+	q, ok := timelineQuery(w, r)
+	if !ok {
+		return
+	}
 	out := listResponse[timelineDTO]{Items: []timelineDTO{}}
 	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
 		live, err := findLiveByID(r.Context(), sc, id)
@@ -323,7 +327,10 @@ func (m *Module) handleTimeline(w http.ResponseWriter, r *http.Request, mc api.M
 		writeJSON(w, http.StatusBadRequest, errorBody("session ref required"))
 		return
 	}
-	q := listQuery(r)
+	q, ok := timelineQuery(w, r)
+	if !ok {
+		return
+	}
 	q.Filters = append(q.Filters, legacyTimelineFilters(ref)...)
 	out := listResponse[timelineDTO]{Items: []timelineDTO{}}
 	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
@@ -346,6 +353,22 @@ func (m *Module) handleTimeline(w http.ResponseWriter, r *http.Request, mc api.M
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// timelineQuery is listQuery plus ?since (RFC 3339): only the events at or after it, so a
+// reader of the last hour pages through an hour, not the session's whole life. A since
+// that is no time is refused (400), never read as "all of it". It writes the refusal.
+func timelineQuery(w http.ResponseWriter, r *http.Request) (model.Query, bool) {
+	q := listQuery(r)
+	if query := r.URL.Query(); query.Has("since") {
+		since, err := time.Parse(time.RFC3339, query.Get("since"))
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errorBody("since must be an RFC 3339 time"))
+			return q, false
+		}
+		q.Filters = append(q.Filters, model.Filter{Column: colTLAt, Op: model.OpGte, Value: model.NewTimestamp(since).String()})
+	}
+	return q, true
 }
 
 // listQuery builds a List query from ?limit and ?cursor.

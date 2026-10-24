@@ -47,6 +47,7 @@ vi.mock('@/lib/api/search', async (importOriginal) => {
 })
 
 import { CommandMenu } from './command-menu'
+import { useAreasSheet } from './areas-sheet-store'
 import { FEATURE_VIEWS } from '@/features/registry'
 import { queryKeys } from '@/lib/api/query'
 import { useCommandStore } from '@/stores/command'
@@ -147,6 +148,40 @@ describe('CommandMenu', () => {
       })
     },
   )
+
+  it('opens the AI tools section inside Settings from the palette (#2905)', async () => {
+    const user = userEvent.setup()
+    searchConsoleMock.mockResolvedValue({ results: [], truncated: false })
+    openPalette()
+    await user.type(screen.getByRole('combobox'), 'AI tools')
+    await waitFor(() => expect(searchConsoleMock).toHaveBeenCalled())
+    const entry = (await screen.findAllByRole('option')).find((option) =>
+      option.getAttribute('data-value')?.startsWith('settings:aiTools '),
+    )
+    expect(entry).toBeDefined()
+    await user.click(entry!)
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: '/settings',
+      search: { section: 'aiTools' },
+      hash: '',
+    })
+  })
+
+  it('does not offer the AI tools section to a person who may not open that page (#2905)', async () => {
+    const user = userEvent.setup()
+    searchConsoleMock.mockResolvedValue({ results: [], truncated: false })
+    authState.can = (permission) => permission !== 'sessions:provider:read'
+    openPalette()
+    await user.type(screen.getByRole('combobox'), 'AI tools')
+    await waitFor(() => expect(searchConsoleMock).toHaveBeenCalled())
+    expect(
+      screen
+        .queryAllByRole('option')
+        .some((option) =>
+          option.getAttribute('data-value')?.startsWith('settings:aiTools '),
+        ),
+    ).toBe(false)
+  })
 
   it('lists no hideInNav view and therefore no parameterized route', () => {
     // Every parameterized view the registry holds is hidden. (The only one, the session
@@ -414,6 +449,7 @@ describe('CommandMenu', () => {
         : []),
       'theme:light ',
       'theme:dark ',
+      'theme:black ',
       'signout ',
     ])
       expect(whole.some((v) => v.startsWith(entry))).toBe(true)
@@ -620,6 +656,41 @@ describe('the palette of a new installation', () => {
     )
     await user.click(hit)
     expect(navigateMock).toHaveBeenCalledWith({ to: '/eventing' })
+  })
+})
+
+// #2544: with no sidebar, every page is two actions away: ⌘K, then the page, with nothing
+// typed. And All areas, the directory the sidebar used to be, is one of the palette's rows.
+describe('the palette with no sidebar', () => {
+  it('lists every page the person may open with nothing typed, so each is two actions away', () => {
+    openPalette()
+    const offered = new Set(
+      optionValues()
+        .map((v) => /^view:(\S+) /.exec(v)?.[1])
+        .filter(Boolean),
+    )
+    // A door (/agentops, the folded provider pages, #2240) is reached through its room,
+    // which the palette offers.
+    const pages = FEATURE_VIEWS.filter(
+      (v) => !v.hideInNav && !v.doorTo && v.navigation.kind !== 'detail',
+    ).map((v) => v.id)
+    expect(pages.length).toBeGreaterThan(50)
+    expect(pages.filter((id) => !offered.has(id))).toEqual([])
+  })
+
+  it('opens All areas from its own row, giving focus back to what opened the palette', async () => {
+    const user = userEvent.setup()
+    useAreasSheet.setState({ open: false, opener: null })
+    const opener = document.createElement('button')
+    document.body.append(opener)
+    opener.focus()
+    openPalette()
+    await user.type(screen.getByRole('combobox'), 'all areas')
+    await user.click(screen.getByRole('option', { name: 'All areas' }))
+    expect(useAreasSheet.getState().open).toBe(true)
+    expect(useAreasSheet.getState().opener).toBe(opener)
+    expect(useCommandStore.getState().open).toBe(false)
+    opener.remove()
   })
 })
 

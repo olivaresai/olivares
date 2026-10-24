@@ -53,7 +53,8 @@ func communityDurableBus(getenv func(string) string, _ map[event.Type]natsbus.Pa
 	}
 	return nil, fmt.Errorf("%s is set but this is the community edition: the HA durable event-bus "+
 		"(at-least-once + dedup over NATS JetStream) is a Business capability (Identity & Scale) — run the Business "+
-		"edition, or unset %s to use the open in-proc / Core-NATS bridge backend", envDurableBusConfig, envDurableBusConfig)
+		"edition, or remove %s from the environment and from the activation manifest to use the open in-proc / Core-NATS bridge backend",
+		envDurableBusConfig, envDurableBusConfig)
 }
 
 const envDecoyCredentialsConfig = "OLIVARES_DECOY_CREDENTIALS_CONFIG"

@@ -88,7 +88,7 @@ func TestRedactionRequiredRedactsTheAnswer(t *testing.T) {
 	h.insertExtRaw(tenant, chunkKind, model.Record{
 		colKBRef: kbID, colDocRef: docs[0].String(model.ColID), colChunkIndex: int64(1),
 		colText: legacy, colTokenCount: int64(len(strings.Fields(legacy))),
-		colClassif: "internal", colACL: "[]", colContentHash: "legacy",
+		colClassif: "internal", colACL: `["anyone"]`, colContentHash: "legacy",
 		// Reuse the ingested chunk's vector and dimension so the legacy row ranks
 		// like a real one: the point of the fixture is its TEXT, not its embedding.
 		colEmbedding: seed[0][colEmbedding], colEmbedModel: seed[0].String(colEmbedModel),

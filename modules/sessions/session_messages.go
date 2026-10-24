@@ -32,7 +32,9 @@ import (
 const (
 	messagesPageDefault = 50
 	// A page is an index, not the conversation: the first line of each message.
-	messagesPageMax     = 200
+	messagesPageMax = 200
+	// A page of whole texts (text=1) is smaller: each item may be messageTextMax.
+	messagesTextPageMax = 50
 	messageFirstLineMax = 160 // runes
 	// One message read whole by id is bounded as a handoff turn is.
 	messageTextMax  = 64 << 10 // bytes
@@ -49,8 +51,9 @@ var errMessagesPending = errors.New("sessions: the rollout has no record yet")
 
 var errMessageNone = &runErr{http.StatusNotFound, "this session has no message with that id"}
 
-// messageDTO is one message of the index. Text and LaterSame are only present when one
-// message is read whole by id: LaterSame counts the later messages of the same sender
+// messageDTO is one message of the index. Text is present when one message is read
+// whole by id, and on every item of a page asked with text=1; LaterSame only when one
+// message is read by id: it counts the later messages of the same sender
 // with the same first line, which is how a reader that holds only the newest part of a
 // conversation tells which of several equal rows is this one.
 type messageDTO struct {
@@ -59,7 +62,17 @@ type messageDTO struct {
 	At        string `json:"at,omitempty"`
 	FirstLine string `json:"first_line"`
 	Text      string `json:"text,omitempty"`
-	LaterSame int    `json:"later_same,omitempty"`
+	// Clipped says Text was cut at messageTextMax and ends in " [...]": a reader that
+	// copies it must not pass it for the whole message.
+	Clipped   bool `json:"clipped,omitempty"`
+	LaterSame int  `json:"later_same,omitempty"`
+}
+
+// wholeText sets the item's text, bounded as every whole-text read is, and says when
+// the bound cut it.
+func (d *messageDTO) wholeText(text string) {
+	d.Text = clipBytes(text, messageTextMax)
+	d.Clipped = len(text) > messageTextMax
 }
 
 // messagesDTO is what GET /runs/{ref}/messages answers. Items are always oldest
@@ -94,6 +107,7 @@ type messageQuery struct {
 	cursor int // asc: ids after it; desc: ids before it (0 = from the end)
 	limit  int
 	id     int
+	text   bool // each item of the page carries its whole text
 }
 
 func parseMessageQuery(v url.Values) (messageQuery, error) {
@@ -139,7 +153,17 @@ func parseMessageQuery(v url.Values) (messageQuery, error) {
 		}
 		*p.dst = n
 	}
+	switch v.Get("text") {
+	case "":
+	case "1":
+		q.text = true
+	default:
+		return q, badRequest("text must be 1")
+	}
 	q.limit = min(q.limit, messagesPageMax)
+	if q.text {
+		q.limit = min(q.limit, messagesTextPageMax)
+	}
 	return q, nil
 }
 
@@ -392,7 +416,8 @@ func (m *Module) runMessages(ctx context.Context, tenant model.TenantID, runRef 
 				out.Total++
 				switch {
 				case msg.id == q.id:
-					one = &messageDTO{ID: msg.id, Role: msg.role, At: msg.at, FirstLine: messageFirstLine(msg.text), Text: clipBytes(msg.text, messageTextMax)}
+					one = &messageDTO{ID: msg.id, Role: msg.role, At: msg.at, FirstLine: messageFirstLine(msg.text)}
+					one.wholeText(msg.text)
 				case one != nil && msg.role == one.Role && messageFirstLine(msg.text) == one.FirstLine:
 					one.LaterSame++
 				}
@@ -402,16 +427,26 @@ func (m *Module) runMessages(ctx context.Context, tenant model.TenantID, runRef 
 				return
 			}
 			out.Total++
-			item := messageDTO{ID: msg.id, Role: msg.role, At: msg.at, FirstLine: messageFirstLine(msg.text)}
+			// The item is built where the page appends it: an ascending page builds none
+			// past its limit. A descending page keeps a sliding window, so it still builds
+			// one for every message below its cursor.
+			item := func() messageDTO {
+				d := messageDTO{ID: msg.id, Role: msg.role, At: msg.at, FirstLine: messageFirstLine(msg.text)}
+				if q.text {
+					// Bounded as one message read by id is; a page never counts repeats.
+					d.wholeText(msg.text)
+				}
+				return d
+			}
 			switch {
 			case q.desc && (q.cursor == 0 || msg.id < q.cursor):
 				// Keep the newest `limit` below the cursor; what falls off is "more".
-				if out.Items = append(out.Items, item); len(out.Items) > q.limit {
+				if out.Items = append(out.Items, item()); len(out.Items) > q.limit {
 					out.Items, more = out.Items[1:], true
 				}
 			case !q.desc && msg.id > q.cursor:
 				if len(out.Items) < q.limit {
-					out.Items = append(out.Items, item)
+					out.Items = append(out.Items, item())
 				} else {
 					more = true
 				}
@@ -457,7 +492,12 @@ func (m *Module) handleRunMessages(w http.ResponseWriter, r *http.Request, mc ap
 		writeRunErr(w, err)
 		return
 	}
-	// A message is conversation, so a read of it is recorded like the activity's.
-	m.auditActivityRead(r, mc, ref, "sessions.run.messages")
+	// A message is conversation, so a read of it is recorded like the activity's; a read
+	// of whole texts is a copy of the conversation and keeps a record of its own.
+	action := "sessions.run.messages"
+	if q.text {
+		action = "sessions.run.messages.text"
+	}
+	m.auditActivityRead(r, mc, ref, action)
 	writeJSON(w, http.StatusOK, dto)
 }

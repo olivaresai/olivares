@@ -570,6 +570,43 @@ describe('the same choices from either New session form', () => {
   })
 })
 
+// The engine refuses a session name with a control, invisible or blank character, and a
+// name taken from the first message or the folder is one the person never typed: a
+// pasted prompt with a zero-width space must not make the launch a 400.
+describe('the name a launch derives', () => {
+  it('leaves out the characters the engine refuses in a name', async () => {
+    await startSession({
+      driver: 'claude',
+      folder: '/home/fran/app',
+      permission: 'ask',
+      prompt:
+        'Fix the\u200b bug \u2800in\u0007 the\u202e app\ufe0f \u200b to run',
+    })
+    expect(ops.createRun.mock.calls[0][0]).toMatchObject({
+      name: 'Fix the bug in the app to run',
+    })
+    await startSession({
+      driver: 'claude',
+      folder: '/home/fran/a\u200bpp',
+      permission: 'ask',
+      prompt: '',
+    })
+    expect(ops.createRun.mock.calls[1][0]).toMatchObject({
+      name: expect.stringMatching(/ in app$/),
+    })
+    // A long folder name keeps the whole name within the engine's 200 characters.
+    await startSession({
+      driver: 'claude',
+      folder: `/home/fran/${'n'.repeat(250)}`,
+      permission: 'ask',
+      prompt: '',
+    })
+    expect(
+      Array.from(ops.createRun.mock.calls[2][0].name as string).length,
+    ).toBeLessThanOrEqual(200)
+  })
+})
+
 // #500: a launch that waits for an approval answers 202 waiting_approval. The console
 // posted the first message 20 times into the waiting run, gave up after 15 s and kept it
 // only as a "Not sent" note; after the approval the session ran with no turn.

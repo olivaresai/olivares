@@ -47,7 +47,7 @@
       "kind": "类型",
       "name": "名称",
       "nameHint": "小写字母、数字、点、短横线或下划线。路由通过此名称引用。",
-      "url": "Webhook URL",
+      "url": "Webhook 地址",
       "urlHint": {
         "slack": "你的 Slack 应用的传入 Webhook URL（hooks.slack.com）。",
         "teams": "“收到 Teams Webhook 请求时”工作流的 Webhook URL。",

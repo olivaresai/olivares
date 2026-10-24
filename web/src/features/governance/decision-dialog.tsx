@@ -16,128 +16,77 @@ import { ApprovalDetails, ApprovalPreview } from './approval-preview'
 import './i18n'
 import type { ApprovalDTO, DecisionInput, DecisionVerb } from './types'
 
-export interface DecisionDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  approvalId: string
-  /** The request as the list or the sheet holds it: what will run is shown above the
-   * note, before Approve or Reject (SC sweep, 09b). */
-  approval?: ApprovalDTO
-  /** 'approve' | 'reject' — both are HIGH risk (danger tone) and recorded permanently. */
-  verb: DecisionVerb | null
-  onDone?: () => void
-}
-
 /**
- * DecisionDialog records ONE human decision (approve|reject) on a pending approval
- * request — the APPROVE / REJECT action of the HITL queue. Both verbs are HIGH risk
- * (ConfirmDialog tone="danger") and irreversible in the immutable decision trail, so
- * the operator confirms deliberately; the optional note is collected here and sent in
- * the decision body. usePrivilegedMutation invalidates the queue + this request +
- * its decision trail, then toasts and closes (a 403 — e.g. separation-of-duties —
- * surfaces as a calm "not authorized" warning).
+ * DenyDialog records a denial of the open request. Approve once needs no dialog: the
+ * command, the rule and the reach are already on screen above it (#2548). A denial is
+ * confirmed here and can carry a note, which is sent in the decision body and kept in the
+ * immutable trail; red is for Deny, Stop and delete (Root, 09b capture review).
  *
  * The note state lives in this component, which Radix unmounts when closed, so it
  * resets each open without a resetting effect.
  */
-export function DecisionDialog({
+export function DenyDialog({
   open,
   onOpenChange,
-  approvalId,
   approval,
-  verb,
-  onDone,
-}: DecisionDialogProps) {
-  if (!open || !verb) return null
+  onDecided,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  /** The request on screen: what will run is shown above the note (SC sweep, 09b). */
+  approval: ApprovalDTO
+  /** Runs once the denial is recorded or refused as no longer pending (`useDecision`). */
+  onDecided?: () => void
+}) {
+  if (!open) return null
   return (
-    <DecisionBody
+    <DenyBody
       open={open}
       onOpenChange={onOpenChange}
-      approvalId={approvalId}
       approval={approval}
-      verb={verb}
-      onDone={onDone}
+      onDecided={onDecided}
     />
   )
 }
 
-function DecisionBody({
+function DenyBody({
   open,
   onOpenChange,
-  approvalId,
   approval,
-  verb,
-  onDone,
+  onDecided,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  approvalId: string
-  approval?: ApprovalDTO
-  verb: DecisionVerb
-  onDone?: () => void
+  approval: ApprovalDTO
+  onDecided?: () => void
 }) {
-  const { t } = useTranslation('governance')
-  const { activeTenant } = useAuth()
   const [note, setNote] = useState('')
-
-  const queryClient = useQueryClient()
-  const mutation = usePrivilegedMutation<DecisionInput, ApprovalDTO>({
-    mutationFn: (input) => governanceApi.decide(approvalId, input),
-    // A request that expired or was decided meanwhile answers 409. The dialog then has
-    // nothing left to decide: it closes, says so, and the queue is read again (SC 59
-    // item 1: it stayed open with its Approve button after the refusal).
-    onError: (err) => {
-      if (!(err instanceof ApiError) || err.status !== 409) return false
-      toast.warning(t('decide.notPending'), {
-        description: err.message || undefined,
-      })
-      void queryClient.invalidateQueries({
-        queryKey: governanceKeys.approvals(activeTenant),
-      })
-      onOpenChange(false)
-      return true
-    },
-    invalidateKeys: () => [
-      governanceKeys.approvals(activeTenant),
-      governanceKeys.approval(activeTenant, approvalId),
-      governanceKeys.decisions(activeTenant, approvalId),
-    ],
-    successMessage:
-      verb === 'approve' ? t('decide.approved') : t('decide.rejected'),
-    onDone: () => {
-      onOpenChange(false)
-      onDone?.()
-    },
+  const { t } = useTranslation('governance')
+  const mutation = useDecision(approval.id, 'reject', () => {
+    onOpenChange(false)
+    onDecided?.()
   })
-
-  const isApprove = verb === 'approve'
 
   return (
     <ConfirmDialog
       open={open}
       onOpenChange={onOpenChange}
-      title={isApprove ? t('decide.approveTitle') : t('decide.rejectTitle')}
-      description={isApprove ? t('decide.approveBody') : t('decide.rejectBody')}
-      // Red is for Reject, Stop and delete; Approve is the primary action (Root, 09b
-      // capture review). Both stay recorded and confirmed.
-      tone={isApprove ? 'default' : 'danger'}
-      confirmLabel={
-        isApprove ? t('decide.approveConfirm') : t('decide.rejectConfirm')
-      }
+      title={t('decide.rejectTitle')}
+      description={t('decide.rejectBody')}
+      tone="danger"
+      confirmLabel={t('decide.rejectConfirm')}
       pending={mutation.isPending}
       onConfirm={() =>
         mutation.mutate({
-          decision: verb,
+          decision: 'reject',
           ...(note.trim() ? { note: note.trim() } : {}),
         })
       }
     >
-      {approval ? (
-        <div className="flex min-w-0 flex-col gap-3">
-          <ApprovalPreview approval={approval} />
-          <ApprovalDetails approval={approval} />
-        </div>
-      ) : null}
+      <div className="flex min-w-0 flex-col gap-3">
+        <ApprovalPreview approval={approval} />
+        <ApprovalDetails approval={approval} />
+      </div>
       <Field
         label={t('decide.note')}
         htmlFor="decision-note"
@@ -153,4 +102,49 @@ function DecisionBody({
       </Field>
     </ConfirmDialog>
   )
+}
+
+/**
+ * Records ONE decision on a request: the panel's one-click Approve once and the Deny
+ * dialog both send it here, so both refresh the same reads and both treat a request that
+ * stopped waiting the same way. `onEnd` runs once the decision is recorded or refused
+ * as no longer pending; any other failure keeps the caller where it is.
+ */
+export function useDecision(
+  approvalId: string,
+  verb: DecisionVerb,
+  onEnd?: () => void,
+) {
+  const { t } = useTranslation('governance')
+  const { activeTenant } = useAuth()
+  const queryClient = useQueryClient()
+  return usePrivilegedMutation<DecisionInput, ApprovalDTO>({
+    mutationFn: (input) => governanceApi.decide(approvalId, input),
+    // A request that expired or was decided meanwhile answers 409. There is nothing left
+    // to decide: it says so and the queue is read again (SC 59 item 1: the dialog stayed
+    // open with its Approve button after the refusal).
+    onError: (err) => {
+      if (!(err instanceof ApiError) || err.status !== 409) return false
+      toast.warning(t('decide.notPending'), {
+        description: err.message || undefined,
+      })
+      // The queue and the open request are read again, so neither keeps offering it.
+      for (const queryKey of [
+        governanceKeys.approvals(activeTenant),
+        governanceKeys.approval(activeTenant, approvalId),
+        governanceKeys.decisions(activeTenant, approvalId),
+      ])
+        void queryClient.invalidateQueries({ queryKey })
+      onEnd?.()
+      return true
+    },
+    invalidateKeys: () => [
+      governanceKeys.approvals(activeTenant),
+      governanceKeys.approval(activeTenant, approvalId),
+      governanceKeys.decisions(activeTenant, approvalId),
+    ],
+    successMessage:
+      verb === 'approve' ? t('decide.approved') : t('decide.rejected'),
+    onDone: () => onEnd?.(),
+  })
 }

@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { Fragment, useEffect, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import { Folder, Play, Server, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/ui/page-header'
 import {
@@ -36,7 +34,6 @@ import { LicenseTab } from '@/features/console/license-tab'
 // way the console view does for its own tab.
 import '@/features/console/i18n'
 import {
-  SETTINGS_SECTIONS,
   settingsSections,
   type SettingsSectionId,
 } from '@/features/settings/sections'
@@ -46,7 +43,6 @@ import { SessionIdleSettings } from '@/features/settings/session-idle-settings'
 import { TracingSettings } from '@/features/settings/tracing-settings'
 import { useViewAccess } from '@/features/navigation/authorization'
 import { fold, viewById } from '@/features/navigation/model'
-import type { FeatureView } from '@/features/registry'
 import {
   CLIENT_SETTING_DEFAULTS,
   localTimeZone,
@@ -59,9 +55,9 @@ import {
 import { usePreferencesStore, type Density } from '@/stores/preferences'
 import { DEFAULT_THEME, useThemeStore, type Theme } from '@/stores/theme'
 
-const THEMES = ['system', 'light', 'dark'] as const
+const THEMES = ['system', 'light', 'dark', 'black'] as const
 
-/** Samples of the two frames. A child cannot escape `.dark` variable inheritance. */
+/** Samples of the three frames. A child cannot escape `.dark` variable inheritance. */
 const PREVIEW = {
   light: {
     frame: '#f2f2f1',
@@ -75,15 +71,13 @@ const PREVIEW = {
     bar: '#343434',
     accent: '#f08000',
   },
+  black: {
+    frame: '#000000',
+    canvas: '#000000',
+    bar: '#262626',
+    accent: '#f08000',
+  },
 } as const
-
-type SectionId = SettingsSectionId | 'notifications' | 'sessionDefaults'
-
-const SECTIONS: readonly SectionId[] = [
-  ...SETTINGS_SECTIONS.map((s) => s.id),
-  'notifications',
-  'sessionDefaults',
-]
 
 function ThemePreview({ kind }: { kind: Theme }) {
   if (kind === 'system') {
@@ -107,7 +101,7 @@ function ThemePreview({ kind }: { kind: Theme }) {
   )
 }
 
-function PreviewPane({ tone }: { tone: 'light' | 'dark' }) {
+function PreviewPane({ tone }: { tone: keyof typeof PREVIEW }) {
   const paint = PREVIEW[tone]
   return (
     <span className="flex h-full" style={{ background: paint.frame }}>
@@ -202,18 +196,11 @@ function RestoreAll() {
     setLanguage('en')
     restoreClient()
   }
-  const button = (
+  return (
     <Button type="button" variant="ghost" size="sm" onClick={onClick}>
       {t('restoreAll')}
     </Button>
   )
-  // The shell top bar is already in the document when this page renders. Tests
-  // that render the page alone have no slot, so the button stays in the header.
-  const host = document.querySelector(
-    'header[data-slot="topbar"] [data-slot="page-actions"]',
-  )
-  if (host) return createPortal(button, host)
-  return button
 }
 
 export function SettingsPage() {
@@ -233,13 +220,26 @@ export function SettingsPage() {
   const setStartPage = useClientSettings((s) => s.setStartPage)
   const confirmStop = useClientSettings((s) => s.confirmStop)
   const setConfirmStop = useClientSettings((s) => s.setConfirmStop)
-  const [url, patchUrl] = useUrlState(['section', 'q'])
-  const section = SECTIONS.find((s) => s === url.section) ?? 'general'
+  // `add` and `returnTo` belong to the AI tools room (the setup wizard's "Add an API key"):
+  // owned here only so that leaving a section can clear them.
+  const [url, patchUrl] = useUrlState(['section', 'q', 'add', 'returnTo'])
+  // A page this installation does not run, or this principal may not open, is neither a
+  // section nor offered as a start page: the same gate the sidebar uses (#474).
+  const { navigable } = useViewAccess()
+  const offered = settingsSections(isSuperadmin, navigable)
+  // An address to a section this person is not offered, or that does not exist, shows General.
+  const section = offered.find((s) => s.id === url.section)?.id ?? 'general'
+  const hostedView = offered.find((s) => s.id === section)?.view
   const query = url.q ?? ''
-  const setQuery = (q: string) => patchUrl({ q })
-  const setSection = (section: SectionId) => patchUrl({ section, q: undefined })
+  // The wizard's address stays behind when the hosted room goes away (another section, or a
+  // search in its place), or the add-a-key form would reopen when the room mounts again.
+  const wizardAddress = { add: undefined, returnTo: undefined }
+  const setQuery = (q: string) => patchUrl({ q, ...wizardAddress })
+  // A section is a place, not a filter: Back returns to the one before it, inside Settings.
+  const setSection = (section: SettingsSectionId) =>
+    patchUrl({ section, q: undefined, ...wizardAddress }, { history: 'push' })
   const sectionButton = (id: SettingsSectionId) => {
-    const entry = settingsSections(isSuperadmin).find((s) => s.id === id)
+    const entry = offered.find((s) => s.id === id)
     if (!entry) return null
     const Icon = entry.icon
     return (
@@ -252,16 +252,12 @@ export function SettingsPage() {
       </NavButton>
     )
   }
-  // A page this installation does not run, or this principal may not open, is neither
-  // linked nor offered as a start page: the same gate the sidebar uses (#474).
-  const { navigable } = useViewAccess()
   const linked = (id: string) => {
     const view = viewById(id)
     return view && navigable(view) ? view : undefined
   }
-  const aiTools = linked('providers')
-  const workspaces = linked('workspaceDashboard')
-  const deploy = linked('deploy')
+  const aiTools = sectionButton('aiTools')
+  const workspaces = sectionButton('workspaces')
   const lang = currentLanguage()
 
   useEffect(() => {
@@ -281,6 +277,11 @@ export function SettingsPage() {
   // Folded, like the palette's haystack: a query typed without diacritics
   // must find the accented label here too, or the two searches disagree.
   const q = fold(query.trim())
+  // A hosted page is the page's own element, mounted here instead of at its route: the
+  // same room, never a second copy of it (#2905). A search query replaces it, as it
+  // does every section.
+  const hostedRoom =
+    q.length === 0 && hostedView ? viewById(hostedView)?.element() : null
   const rowMatches = (name: string, description: string) =>
     q.length === 0 || fold(`${name} ${description}`).includes(q)
 
@@ -334,7 +335,7 @@ export function SettingsPage() {
         <div
           role="radiogroup"
           aria-label={themeName}
-          className="grid grid-cols-3 gap-3"
+          className="grid grid-cols-2 gap-3 sm:grid-cols-4"
         >
           {THEMES.map((value, index) => (
             <button
@@ -533,40 +534,21 @@ export function SettingsPage() {
           </label>
           <NavGroup label={t('groups.you')}>
             {sectionButton('general')}
-            {/* Notifications and Session defaults are not stored yet: no section is
-                offered until it does something (HU-14). */}
             {sectionButton('keyboard')}
           </NavGroup>
           {aiTools || workspaces ? (
             <NavGroup label={t('groups.work')}>
-              <RegistryLink
-                view={aiTools}
-                label={t('nav.aiTools')}
-                icon={<Sparkles aria-hidden className="size-3.5" />}
-              />
-              <RegistryLink
-                view={workspaces}
-                label={t('nav.workspaces')}
-                icon={<Folder aria-hidden className="size-3.5" />}
-              />
+              {aiTools}
+              {workspaces}
             </NavGroup>
           ) : null}
           <NavGroup label={t('groups.installation')}>
-            <RegistryLink
-              view={deploy}
-              label={t('nav.deploy')}
-              icon={<Server aria-hidden className="size-3.5" />}
-            />
+            {sectionButton('deploy')}
             {sectionButton('signIn')}
-            <a
-              href="/onboarding"
-              className="flex h-8 items-center gap-2.5 rounded-[7px] px-2.5 text-caption font-medium text-text-2 hover:bg-hover hover:text-text"
-            >
-              <Play aria-hidden className="size-3.5" />
-              {t('nav.setup')}
-            </a>
+            {sectionButton('setup')}
             {sectionButton('edition')}
             {sectionButton('updates')}
+            {sectionButton('sessionIdle')}
             {sectionButton('tracing')}
             {sectionButton('signing')}
             {sectionButton('about')}
@@ -600,18 +582,6 @@ export function SettingsPage() {
                 ) : null}
               </>
             ) : null}
-            {q.length === 0 && section === 'notifications' ? (
-              <Unavailable
-                title={t('nav.notifications')}
-                reason={t('unavailable.notifications')}
-              />
-            ) : null}
-            {q.length === 0 && section === 'sessionDefaults' ? (
-              <Unavailable
-                title={t('nav.sessionDefaults')}
-                reason={t('unavailable.sessionDefaults')}
-              />
-            ) : null}
             {q.length === 0 && section === 'signIn' ? (
               <>
                 <PageHeader title={t('nav.signIn')} />
@@ -619,6 +589,7 @@ export function SettingsPage() {
               </>
             ) : null}
             {q.length === 0 && section === 'keyboard' ? <KeyboardList /> : null}
+            {hostedRoom}
             {q.length === 0 && section === 'edition' ? (
               <>
                 {/* The section's h1 precedes the license panel's h2: heading
@@ -634,7 +605,7 @@ export function SettingsPage() {
                 />
               </>
             ) : null}
-            {q.length === 0 && section === 'updates' && isSuperadmin ? (
+            {q.length === 0 && section === 'updates' ? (
               <>
                 <PageHeader
                   title={t('nav.updates')}
@@ -643,13 +614,19 @@ export function SettingsPage() {
                 <UpdatesSettings key={principal?.user_id} />
               </>
             ) : null}
-            {q.length === 0 && section === 'sessionIdle' && isSuperadmin ? (
-              <SessionIdleSettings key={principal?.user_id} />
+            {q.length === 0 && section === 'sessionIdle' ? (
+              <>
+                <PageHeader
+                  title={t('nav.sessionIdle')}
+                  description={t('sessionIdle.description')}
+                />
+                <SessionIdleSettings key={principal?.user_id} />
+              </>
             ) : null}
-            {q.length === 0 && section === 'tracing' && isSuperadmin ? (
+            {q.length === 0 && section === 'tracing' ? (
               <TracingSettings key={principal?.user_id} />
             ) : null}
-            {q.length === 0 && section === 'signing' && isSuperadmin ? (
+            {q.length === 0 && section === 'signing' ? (
               <>
                 <PageHeader
                   title={t('nav.signing')}
@@ -722,35 +699,6 @@ function NavButton({
       {icon}
       {children}
     </button>
-  )
-}
-
-function RegistryLink({
-  view,
-  label,
-  icon,
-}: {
-  view: FeatureView | undefined
-  label: string
-  icon: ReactNode
-}) {
-  if (!view) return null
-  return (
-    <a
-      href={view.path}
-      className="flex h-8 items-center gap-2.5 rounded-[7px] px-2.5 text-caption font-medium text-text-2 hover:bg-hover hover:text-text"
-    >
-      {icon}
-      {label}
-    </a>
-  )
-}
-
-function Unavailable({ title, reason }: { title: string; reason: string }) {
-  return (
-    <>
-      <PageHeader title={title} description={reason} />
-    </>
   )
 }
 

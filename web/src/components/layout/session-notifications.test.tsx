@@ -12,6 +12,7 @@ import { useClientSettings } from '@/features/settings/preferences'
 import { useModulesStore } from '@/stores/modules'
 import { useSessionStore } from '@/stores/session'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { setPageTitle } from './document-title'
 import { SessionNotifications } from './session-notifications'
 import { useSessionRail } from './use-session-rail'
 import { toast } from 'sonner'
@@ -41,6 +42,7 @@ let removed: boolean
 let calls: string[]
 let failedSource: string | null
 let extraRuns: Record<string, unknown>[]
+let marks: Record<string, unknown>
 const notify = vi.fn()
 const closed = vi.fn()
 const run = {
@@ -59,8 +61,9 @@ beforeEach(() => {
   removed = false
   calls = []
   extraRuns = []
+  marks = {}
   failedSource = null
-  document.title = 'Olivares'
+  setPageTitle('Olivares')
   useModulesStore.setState({ off: new Set() })
   useWorkspaceStore.setState({ activeWorkspace: null })
   useClientSettings.getState().restore()
@@ -93,7 +96,10 @@ beforeEach(() => {
         return Response.json({
           items: removed
             ? []
-            : [{ ...run, state, last_activity_at: activity }, ...extraRuns],
+            : [
+                { ...run, state, last_activity_at: activity, ...marks },
+                ...extraRuns,
+              ],
           has_more: false,
         })
       if (path === '/v1/m/sessions/live')
@@ -360,6 +366,30 @@ it('closes the needs-you notification when the session no longer needs the perso
   expect(closed).toHaveBeenCalledTimes(1)
   expect(document.title).toBe('Olivares')
 })
+
+it.each([
+  { mark: 'snoozed', marks: { snoozed_until: '2030-01-02T09:00:00Z' } },
+  { mark: 'done', marks: { done: true } },
+])(
+  'closes the needs-you notification when the person marks the session $mark (#2480)',
+  async ({ marks: set }) => {
+    await mount()
+    state = 'waiting_approval'
+    await refresh()
+    expect(notify).toHaveBeenCalledTimes(1)
+    expect(document.title).toBe('(1) Olivares')
+    marks = set
+    await act(async () => {
+      await client.invalidateQueries()
+    })
+    await waitFor(() =>
+      expect(screen.getByTestId('rail-probe')).toHaveTextContent(/^$/),
+    )
+    expect(closed).toHaveBeenCalledTimes(1)
+    expect(document.title).toBe('Olivares')
+    expect(notify).toHaveBeenCalledTimes(1)
+  },
+)
 
 it('does not notify the same session twice inside five seconds', async () => {
   await mount()

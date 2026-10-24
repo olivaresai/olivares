@@ -351,7 +351,9 @@
       "subjectRef": "Référence du sujet",
       "reason": "Motif",
       "reasonHint": "Enregistré mot pour mot dans la chaîne de conservation.",
-      "alreadyHeld": "Mesures de conservation actives couvrant déjà cet élément : {{count}} ({{matters}})",
+      "alreadyHeld_one": "Déjà couvert par {{count}} mesure de conservation active : {{matters}}",
+      "alreadyHeld_many": "Déjà couvert par {{count}} mesures de conservation actives : {{matters}}",
+      "alreadyHeld_other": "Déjà couvert par {{count}} mesures de conservation actives : {{matters}}",
       "notHeld": "Aucune mesure ne préserve actuellement cet élément. Celle que vous allez placer serait la première.",
       "confirmCreate": "Placer la mesure",
       "created": "Mesure de conservation juridique placée — la conservation est active.",
@@ -464,10 +466,10 @@
     "accountLeg": "Volet compte",
     "providerLeg": "Volet fournisseur",
     "custody": "Custody",
-    "noCustody": "No custody events recorded for this request.",
+    "noCustody": "Aucun événement de garde enregistré pour cette demande.",
     "approvedBy": "approved by {{list}}",
     "anchored": "ledger #{{seq}} · {{hash}}",
-    "unanchored": "NOT anchored to the ledger — recorded, not provable"
+    "unanchored": "NON ancré au registre — enregistré, mais non prouvable"
   },
   "calendar": {
     "title": "Calendrier réglementaire",

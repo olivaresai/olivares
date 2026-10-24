@@ -10,7 +10,7 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
-[![Next release: 0.3](https://img.shields.io/badge/release-0.3-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.3)<!-- /release -->
+[![Next release: 0.4](https://img.shields.io/badge/release-0.4-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.4)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
@@ -68,6 +68,8 @@ Olivares AI 把答案汇集在一处。它连接你已经在用的 agent 和工�
 
 Community 保留本地可观测性、已保存的设置和备份导出。SIEM/ITSM 推送、外部遥测传输和安全态势导出包含在 Business 基础版中。
 
+**会话网络隔离覆盖绑定到提供商密钥的 Claude Code、Codex 和 OpenCode 会话，以及使用工具自身登录的 OpenCode 会话。** 这类会话只能通过其网络命名空间中的每会话代理访问其提供商的端点或其登录所用的主机，否则不会启动。对于使用提供商密钥的 OpenCode，主机列表基于先前的清单，而不是在代理之后实际演示过的一轮对话。Grok Build 会话以及其他工具的账户登录会话仍可访问网络允许的任何主机。在运行需要独占访问单一提供商的工作负载之前，请参阅[会话网络隔离](SECURITY.md#session-network-isolation)。
+
 ## 安装
 
 选择一种方法，复制对应的代码块。完成后，`olivares quickstart` 会输出控制台地址和用于创建首位管理员的一次性令牌。每个发布版本都有签名，每种方法都会在安装前验证下载内容（[自行验证下载](INSTALL.md#verifying-a-release)）。
@@ -85,7 +87,7 @@ olivares quickstart
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares:0.3 \
+  docker.io/olivaresai/olivares:0.4 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->
@@ -103,8 +105,8 @@ docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 
 <!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.deb
-sudo dpkg -i olivares_0.3_linux_amd64.deb && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.4/olivares_0.4_linux_amd64.deb
+sudo dpkg -i olivares_0.4_linux_amd64.deb && sudo systemctl enable --now olivares
 ```
 <!-- /release -->
 
@@ -112,8 +114,8 @@ sudo dpkg -i olivares_0.3_linux_amd64.deb && sudo systemctl enable --now olivare
 
 <!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.rpm
-sudo rpm -i olivares_0.3_linux_amd64.rpm && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.4/olivares_0.4_linux_amd64.rpm
+sudo rpm -i olivares_0.4_linux_amd64.rpm && sudo systemctl enable --now olivares
 ```
 <!-- /release -->
 
@@ -121,12 +123,12 @@ sudo rpm -i olivares_0.3_linux_amd64.rpm && sudo systemctl enable --now olivares
 
 <!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.apk
-sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk && sudo rc-service olivares start
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.4/olivares_0.4_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.4_linux_amd64.apk && sudo rc-service olivares start
 ```
 <!-- /release -->
 
-ARM 服务器请用 `arm64` 替换 `amd64`。全部发布文件见<!-- release -->[发布页面](https://github.com/olivaresai/olivares/releases/tag/0.3)<!-- /release -->。
+ARM 服务器请用 `arm64` 替换 `amd64`。全部发布文件见<!-- release -->[发布页面](https://github.com/olivaresai/olivares/releases/tag/0.4)<!-- /release -->。
 
 **Homebrew。** macOS 和 Linux。
 

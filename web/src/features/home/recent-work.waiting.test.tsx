@@ -108,8 +108,8 @@ describe('Recent work — the model', () => {
       />,
     )
     const item = screen.getByTestId('home-recent-row')
-    expect(within(item).getByText(/claude-haiku-5-5/)).toBeInTheDocument()
-    expect(within(item).queryByText(/claude-sonnet-5-5/)).toBeNull()
+    expect(within(item).getByText(/Claude Haiku 5\.5/)).toBeInTheDocument()
+    expect(within(item).queryByText(/Claude Sonnet 5\.5/)).toBeNull()
   })
 
   it("falls back to the provider's model, then to the observed one", () => {
@@ -122,7 +122,7 @@ describe('Recent work — the model', () => {
         state="ready"
       />,
     )
-    expect(screen.getByText(/claude-haiku-5-5/)).toBeInTheDocument()
+    expect(screen.getByText(/Claude Haiku 5\.5/)).toBeInTheDocument()
     unmount()
     renderIntel(
       <RecentWork
@@ -130,6 +130,6 @@ describe('Recent work — the model', () => {
         state="ready"
       />,
     )
-    expect(screen.getByText(/claude-sonnet-5-5/)).toBeInTheDocument()
+    expect(screen.getByText(/Claude Sonnet 5\.5/)).toBeInTheDocument()
   })
 })

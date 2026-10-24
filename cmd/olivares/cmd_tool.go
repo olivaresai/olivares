@@ -280,6 +280,19 @@ type toolSignInState struct {
 	SignedIn  bool   `json:"signed_in"`
 	Method    string `json:"method"`
 	Account   string `json:"account"`
+	// Methods are the tool's login methods in the order the engine offers them.
+	Methods []struct {
+		ID string `json:"id"`
+	} `json:"methods"`
+}
+
+// firstSignInMethod is the login method to start when none was chosen: the one the
+// engine lists first, or "" when it lists none or could not be asked.
+func firstSignInMethod(st toolSignInState, statusErr error) string {
+	if statusErr != nil || len(st.Methods) == 0 {
+		return ""
+	}
+	return st.Methods[0].ID
 }
 
 // toolSignInStatus asks the tool itself, through the engine, whether it is signed
@@ -341,62 +354,27 @@ func newToolInstallCmd() *cobra.Command {
 			if driver == "gemini" {
 				driver = "gemini-cli"
 			}
-			requestedVersion := version
-			if driver == "grok" && !cmd.Flags().Changed("version") {
-				requestedVersion = "stable"
-			}
+			requestedVersion := installRequestVersion(driver, version, cmd.Flags().Changed("version"))
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			ctx := cmd.Context()
 			w := cmd.ErrOrStderr()
 			request := map[string]any{"driver": driver, "version": requestedVersion}
 			if from != "" {
 				delete(request, "driver")
 				request["from"] = from
 			}
-			status, b, err := cfg.do(ctx, "POST", agentToolsPath+"/plans", request, http.StatusOK, http.StatusNotFound)
-			if err != nil {
-				return err
-			}
-			if status != http.StatusOK {
-				return toolHTTPErr(status, b)
-			}
-			var plan struct {
-				Driver       string `json:"driver"`
-				Digest       string `json:"digest"`
-				Version      string `json:"version"`
-				Verification string `json:"verification"`
-			}
-			if err := json.Unmarshal(b, &plan); err != nil {
-				return err
-			}
-			if from != "" {
-				driver = plan.Driver
-			}
-			fmt.Fprintf(w, "Installing %s %s (verified: %s)…\n", toolName(driver), plan.Version, plan.Verification)
-			reqID, err := uuid.NewV7()
-			if err != nil {
-				return err
-			}
-			status, b, err = cfg.do(ctx, "POST", agentToolsPath+"/installs",
-				map[string]any{"plan_digest": plan.Digest, "request_id": reqID.String()}, http.StatusAccepted)
-			if err != nil {
-				return err
-			}
-			if status != http.StatusAccepted {
-				return toolHTTPErr(status, b)
-			}
-			job, err := cfg.waitToolJob(ctx, b)
+			_, job, err := cfg.installTool(cmd.Context(), request, func(plan toolInstallPlan) {
+				if from != "" {
+					driver = plan.Driver
+				}
+				fmt.Fprintf(w, "Installing %s %s (verified: %s)…\n", toolName(driver), plan.Version, plan.Verification)
+			})
 			if err != nil {
 				return err
 			}
 			if job.State != "succeeded" {
-				msg := job.Error
-				if msg == "" {
-					msg = "the installation ended as " + job.State
-				}
-				return sentence(exitcode.Err, "%s was not installed: %s", toolName(driver), msg)
+				return sentence(exitcode.Err, "%s was not installed: %s", toolName(driver), job.failure())
 			}
 			return renderOut(cmd, func(out io.Writer) error {
 				_, err := fmt.Fprintf(out, "Installed %s %s.\n", toolName(driver), job.Version)
@@ -414,10 +392,71 @@ func newToolInstallCmd() *cobra.Command {
 	cmd.Flags().StringVar(&from, "from", "", "Git or release URL of a catalog-admitted tool")
 	cfg.addFlags(cmd)
 	cmd.Flags().StringVar(&version, "version", "latest", "release version, or the vendor's channel (latest; stable for Grok Build)")
-	// Resolving and verifying a release takes the engine up to 45 seconds.
-	cfg.timeout = 2 * time.Minute
+	cfg.timeout = toolInstallTimeout
 	cmd.Flags().Lookup("timeout").DefValue = cfg.timeout.String()
 	return cmd
+}
+
+// toolInstallTimeout is how long one request of an install may take: resolving
+// and verifying a release takes the engine up to 45 seconds.
+const toolInstallTimeout = 2 * time.Minute
+
+// toolInstallPlan is what the engine will install and how it checked it.
+type toolInstallPlan struct {
+	Driver       string `json:"driver"`
+	Digest       string `json:"digest"`
+	Version      string `json:"version"`
+	Verification string `json:"verification"`
+}
+
+// installRequestVersion is the release a request names: the one given, or the
+// console's default, which is the vendor's stable channel for Grok Build.
+func installRequestVersion(driver, version string, given bool) string {
+	if driver == "grok" && !given {
+		return "stable"
+	}
+	return version
+}
+
+// installTool asks the engine to plan one install, hands the plan to announce,
+// runs it and waits for the job. `olivares tool install` and the AI tools screen
+// both call it, so both leave the same events in the audit ledger. A job that
+// did not succeed is returned for the caller to explain.
+func (c *agentClientConfig) installTool(ctx context.Context, request map[string]any, announce func(toolInstallPlan)) (toolInstallPlan, toolJob, error) {
+	var plan toolInstallPlan
+	status, b, err := c.do(ctx, "POST", agentToolsPath+"/plans", request, http.StatusOK, http.StatusNotFound)
+	if err != nil {
+		return plan, toolJob{}, err
+	}
+	if status != http.StatusOK {
+		return plan, toolJob{}, toolHTTPErr(status, b)
+	}
+	if err := json.Unmarshal(b, &plan); err != nil {
+		return plan, toolJob{}, err
+	}
+	announce(plan)
+	reqID, err := uuid.NewV7()
+	if err != nil {
+		return plan, toolJob{}, err
+	}
+	status, b, err = c.do(ctx, "POST", agentToolsPath+"/installs",
+		map[string]any{"plan_digest": plan.Digest, "request_id": reqID.String()}, http.StatusAccepted)
+	if err != nil {
+		return plan, toolJob{}, err
+	}
+	if status != http.StatusAccepted {
+		return plan, toolJob{}, toolHTTPErr(status, b)
+	}
+	job, err := c.waitToolJob(ctx, b)
+	return plan, job, err
+}
+
+// failure is why a job that did not succeed ended, in the engine's words.
+func (j toolJob) failure() string {
+	if j.Error != "" {
+		return j.Error
+	}
+	return "the installation ended as " + j.State
 }
 
 type toolJob struct {
@@ -473,16 +512,20 @@ func newToolLoginCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "write"},
 		Use:         "login <" + strings.Join(signInToolWords(), "|") + ">",
-		Short:       "Sign an agent tool in with its own login (Claude, ChatGPT, xAI or Google account)",
+		Short:       "Sign an agent tool in with its own login (Claude, ChatGPT, xAI, Google or OpenCode account)",
 		Long: "login runs the tool's own sign-in on the engine's host and shows you its link. For\n" +
 			"Claude Code or Gemini CLI, open the link, sign in, and paste the code the page shows. For Codex,\n" +
-			"Grok Build and OpenCode (ChatGPT headless), open the link and enter the code shown here.\n" +
-			"The login is stored where the tool keeps it.\n\n" +
+			"Grok Build and OpenCode's ChatGPT method, open the link and enter the code shown here.\n" +
+			"For OpenCode's own providers, create an API key on the page shown and paste it: at a terminal\n" +
+			"it is not shown, and from a pipe it is read from standard input. The tool stores it; Olivares\n" +
+			"does not. The login is stored where the tool keeps it.\n\n" +
 			"Use --method <id> to choose among the official login methods a tool offers; without it\n" +
-			"the default runs. An unknown id is refused with the valid ones (exit 2).\n\n" +
+			"the first one the engine lists runs (OpenCode: opencode, then opencode-go and\n" +
+			"chatgpt-headless). An unknown id is refused with the valid ones (exit 2).\n\n" +
 			"Use --account <name> to sign in an existing provider account. Find account names with\n" +
 			"olivares provider account ls. You can also pass a profile reference to sign in that profile.",
 		Example: "  olivares tool login claude\n  olivares tool login codex\n  olivares tool login grok\n" +
+			"  olivares tool login opencode\n  olivares tool login opencode --method opencode-go < go-key.txt\n" +
 			"  olivares tool login claude --account work\n  olivares tool login gemini --account personal",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
@@ -533,8 +576,13 @@ func newToolLoginCmd() *cobra.Command {
 			}
 			if cmd.Flags().Changed("method") {
 				body["method"] = method
+			} else if first := firstSignInMethod(st, statusErr); first != "" {
+				body["method"] = first
+			} else if facts, _ := driverfacts.Lookup(driver); statusErr != nil && len(facts.LoginMethods) > 1 {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Could not read %s's login methods, so its default login runs. Choose another with --method.\n", toolName(driver))
 			}
-			status, b, err := cfg.do(ctx, "POST", agentToolsPath+"/sign-in", body, http.StatusAccepted, http.StatusNotFound)
+			var s toolSignIn
+			err = cfg.startToolSignIn(ctx, body, &s)
 			if err != nil && ctx.Err() != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "\nCancelled. A sign-in the engine had started ends by itself within 15 minutes.\n")
 				return exitcode.New(exitcode.Err, nil)
@@ -547,26 +595,16 @@ func newToolLoginCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if status != http.StatusAccepted {
-				return toolHTTPErr(status, b)
-			}
-			var s toolSignIn
-			if err := json.Unmarshal(b, &s); err != nil {
-				return err
-			}
 			// Ctrl-C, TERM or any failure below ends the login on the engine too.
 			defer func() {
 				if s.State == "signed_in" {
 					return
 				}
-				dctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				status, _, derr := cfg.do(dctx, "DELETE", agentToolsPath+"/sign-in/"+url.PathEscape(s.ID), nil,
-					http.StatusOK, http.StatusNotFound)
+				canceled := cfg.cancelToolSignIn(s.ID)
 				if ctx.Err() == nil {
 					return // not interrupted: the error already says what happened
 				}
-				if derr == nil && (status == http.StatusOK || status == http.StatusNotFound) {
+				if canceled {
 					fmt.Fprintf(cmd.ErrOrStderr(), "\nCancelled the sign-in of %s.\n", toolName(driver))
 				} else {
 					fmt.Fprintf(cmd.ErrOrStderr(), "\nCould not cancel the sign-in of %s on the engine; it ends by itself within 15 minutes.\n",
@@ -577,11 +615,15 @@ func newToolLoginCmd() *cobra.Command {
 			if s.State == "starting" {
 				fmt.Fprintf(out, "Starting %s sign-in...\n", toolName(driver))
 			}
-			flowCtx, cancelFlow := context.WithTimeout(ctx, 15*time.Minute)
+			flowCtx, cancelFlow := context.WithTimeout(ctx, signInWindow)
 			defer cancelFlow()
 			lines := toolLoginLines(flowCtx, cmd.InOrStdin())
 			linkShown := false
 			for {
+				if !linkShown && s.State == "needs_key" && s.URL != "" {
+					fmt.Fprintf(out, "Create an API key here, then paste it below:\n\n  %s\n\n", termSafe(s.URL))
+					linkShown = true
+				}
 				if !linkShown && s.State != "starting" && s.URL != "" {
 					fmt.Fprintf(out, "Open this link and sign in:\n\n  %s\n\n", termSafe(s.URL))
 					if driver != "claude" && s.UserCode != "" {
@@ -621,7 +663,14 @@ func newToolLoginCmd() *cobra.Command {
 						}
 						continue
 					}
-					status, b, err = cfg.do(flowCtx, "POST", agentToolsPath+"/sign-in/"+url.PathEscape(s.ID)+"/code", map[string]any{"code": code}, http.StatusOK, http.StatusAccepted)
+					err = cfg.sendToolSignInCode(flowCtx, &s, code)
+				case "needs_key":
+					key, kerr := readToolLoginKey(flowCtx, cmd, lines, driver)
+					if kerr != nil {
+						return kerr
+					}
+					// The key goes to the tool's own login on the engine and nowhere else.
+					err = cfg.sendToolSignInCode(flowCtx, &s, key)
 				default:
 					if s.State != "starting" && s.URL == "" {
 						return toolSignInFailed(driver, s)
@@ -631,15 +680,9 @@ func newToolLoginCmd() *cobra.Command {
 						return flowCtx.Err()
 					case <-time.After(2 * time.Second):
 					}
-					status, b, err = cfg.do(flowCtx, "GET", agentToolsPath+"/sign-in/"+url.PathEscape(s.ID), nil)
+					err = cfg.readToolSignIn(flowCtx, &s)
 				}
 				if err != nil {
-					return err
-				}
-				if status != http.StatusOK && status != http.StatusAccepted {
-					return toolHTTPErr(status, b)
-				}
-				if err := json.Unmarshal(b, &s); err != nil {
 					return err
 				}
 			}
@@ -647,8 +690,59 @@ func newToolLoginCmd() *cobra.Command {
 	}
 	cfg.addFlags(cmd)
 	cmd.Flags().StringVar(&accountName, "account", "", "sign in an existing provider account (name or profile reference)")
-	cmd.Flags().StringVar(&method, "method", "", "the tool's official login method, when it offers several (the default otherwise)")
+	cmd.Flags().StringVar(&method, "method", "", "the tool's official login method, when it offers several (the first one the engine lists otherwise)")
 	return cmd
+}
+
+// signInWindow is how long the engine keeps a tool's own login open, and so how
+// long `olivares tool login` and the AI tools screen wait for it.
+const signInWindow = 15 * time.Minute
+
+// startToolSignIn asks the engine to start the tool's own login and reads its
+// first state into s.
+func (c *agentClientConfig) startToolSignIn(ctx context.Context, body map[string]any, s *toolSignIn) error {
+	status, b, err := c.do(ctx, "POST", agentToolsPath+"/sign-in", body, http.StatusAccepted, http.StatusNotFound)
+	if err != nil {
+		return err
+	}
+	if status != http.StatusAccepted {
+		return toolHTTPErr(status, b)
+	}
+	return json.Unmarshal(b, s)
+}
+
+// readToolSignIn reads the login's state into s, keeping what the engine leaves out.
+func (c *agentClientConfig) readToolSignIn(ctx context.Context, s *toolSignIn) error {
+	status, b, err := c.do(ctx, "GET", agentToolsPath+"/sign-in/"+url.PathEscape(s.ID), nil)
+	return readToolSignInAnswer(s, status, b, err)
+}
+
+// sendToolSignInCode gives the login the code a person pasted from the sign-in page.
+func (c *agentClientConfig) sendToolSignInCode(ctx context.Context, s *toolSignIn, code string) error {
+	status, b, err := c.do(ctx, "POST", agentToolsPath+"/sign-in/"+url.PathEscape(s.ID)+"/code",
+		map[string]any{"code": code}, http.StatusOK, http.StatusAccepted)
+	return readToolSignInAnswer(s, status, b, err)
+}
+
+func readToolSignInAnswer(s *toolSignIn, status int, b []byte, err error) error {
+	if err != nil {
+		return err
+	}
+	if status != http.StatusOK && status != http.StatusAccepted {
+		return toolHTTPErr(status, b)
+	}
+	return json.Unmarshal(b, s)
+}
+
+// cancelToolSignIn ends a login on the engine, within five seconds, and reports
+// whether the engine confirmed it (or no longer knew it). A login nobody ends
+// ends by itself within 15 minutes.
+func (c *agentClientConfig) cancelToolSignIn(id string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	status, _, err := c.do(ctx, "DELETE", agentToolsPath+"/sign-in/"+url.PathEscape(id), nil,
+		http.StatusOK, http.StatusNotFound)
+	return err == nil && (status == http.StatusOK || status == http.StatusNotFound)
 }
 
 type toolAccount struct{ Ref, Name, Driver string }
@@ -763,6 +857,34 @@ func toolLoginLines(ctx context.Context, r io.Reader) <-chan toolLoginLine {
 		}
 	}()
 	return ch
+}
+
+// readToolLoginKey reads the API key a tool's own login waits for: at a terminal
+// with echo off (echo comes back once it is read, or when the login ends), from
+// a pipe as its next line. It never prints the key.
+func readToolLoginKey(ctx context.Context, cmd *cobra.Command, lines <-chan toolLoginLine, driver string) (string, error) {
+	out, in := cmd.OutOrStdout(), cmd.InOrStdin()
+	terminal := interactiveStdin(in)
+	if terminal {
+		restore, err := hideTerminalEcho(in)
+		if err != nil {
+			return "", sentence(exitcode.Usage, "This terminal cannot hide the key. Pipe it instead: olivares tool login %s < key-file", driver)
+		}
+		defer restore()
+	}
+	fmt.Fprint(out, "Paste the API key (it is not shown): ")
+	var line toolLoginLine
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case line = <-lines:
+	}
+	fmt.Fprintln(out) // neither a hidden terminal nor a pipe echoes the Enter
+	key := strings.TrimSpace(line.text)
+	if key == "" {
+		return "", sentence(exitcode.Usage, "No key was entered. Run olivares tool login %s again.", driver)
+	}
+	return key, nil
 }
 
 func toolSignInFailed(driver string, s toolSignIn) error {

@@ -24,6 +24,7 @@
 //      which the DOM only has in a browser.
 import { readFileSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
+import { browserSessionHeaders, type BrowserSession } from './browser-session'
 
 const demoTenant = process.env.DEMO_TENANT ?? ''
 const EMAIL = 'demo@olivares.local'
@@ -57,7 +58,7 @@ const LANGUAGES = [
   'zh',
 ] as const
 
-async function signIn(page: Page) {
+async function signIn(page: Page): Promise<BrowserSession> {
   await page.goto('/login')
   await expect(
     page.locator('input[type=password]'),
@@ -65,10 +66,42 @@ async function signIn(page: Page) {
   ).toHaveCount(1)
   await page.locator('input[type=email]').first().fill(EMAIL)
   await page.locator('input[type=password]').first().fill(PASSWORD)
+  const login = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/auth/login') &&
+      response.request().method() === 'POST',
+  )
   await page.locator('button[type=submit]').first().click()
+  const session = (await (await login).json()) as BrowserSession
   await page.waitForURL((url) => !url.pathname.startsWith('/login'), {
     timeout: 20_000,
   })
+  return session
+}
+
+/**
+ * `/catalog` with one entry in its list, so there is a list to add to. The demo estate seeds
+ * none, and an EMPTY list keeps its verb in its own empty state and takes it out of the page
+ * header (main e601803a8, dfff8c3ad: one filled control per first screen), so the header's
+ * slot is only measurable on a list that has a row. Each test makes its own slug: the
+ * registry keys an entry by (kind, slug, version).
+ */
+async function openCatalogWithARow(page: Page) {
+  const session = await signIn(page)
+  const slug = `wide-standard-${Date.now()}`
+  const created = await page.request.post('/v1/m/catalog/entries', {
+    headers: browserSessionHeaders(session, demoTenant),
+    data: { kind: 'skill', name: 'Wide standard', slug, version: '1.0.0' },
+  })
+  expect(created.status(), 'the catalog entry the list tests stand on').toBe(
+    201,
+  )
+  await page.goto('/catalog')
+  await page.waitForLoadState('networkidle').catch(() => {})
+  // The header's verb also shows while the list is still loading, so measure only once the
+  // row is on screen: that is the list the claim is about. The slug names this test's own
+  // row: the demo engine is shared by the whole run, so earlier tests' rows are listed too.
+  await expect(page.getByRole('row', { name: new RegExp(slug) })).toBeVisible()
 }
 
 /** Set the two persisted preferences BEFORE the first document of this origin. */
@@ -86,13 +119,38 @@ async function prefer(page: Page, theme: 'dark' | 'light', lang: string) {
   )
 }
 
-/** Every element in the sidebar whose text the browser is CUTTING. */
+/** The area directory: All areas, opened from the account menu (there is no sidebar). */
+const AREAS = '[role="dialog"]'
+
+/** The two names `openAllAreas` clicks, in `lang`, read from the catalogs the console is
+ * built from (as `tokensCss` is above), so a language's own words are stated once. */
+function areasNames(lang: string) {
+  const catalog = (ns: string) =>
+    JSON.parse(readFileSync(`src/lib/i18n/locales/${lang}/${ns}.json`, 'utf8'))
+  return {
+    account: catalog('auth').account.title as string,
+    allAreas: catalog('nav').shell.allAreas as string,
+  }
+}
+
+async function openAllAreas(page: Page, lang = 'en') {
+  const { account, allAreas } = areasNames(lang)
+  // The account button's name ends with its title, after the initials it shows.
+  const accountEnd = new RegExp(
+    `, ${account.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
+  )
+  await page.getByRole('button', { name: accountEnd }).click()
+  await page.getByRole('menuitem', { name: allAreas, exact: true }).click()
+  await expect(page.locator(AREAS)).toBeVisible()
+}
+
+/** Every element in All areas whose text the browser is CUTTING. */
 async function cutLabels(page: Page) {
-  return page.evaluate(() => {
-    const aside = document.querySelector('aside')
-    if (!aside) return ['no sidebar']
+  return page.evaluate((areas) => {
+    const directory = document.querySelector(areas)
+    if (!directory) return ['no area directory']
     const out: string[] = []
-    for (const el of aside.querySelectorAll('*')) {
+    for (const el of directory.querySelectorAll('*')) {
       if (el.children.length > 0) continue
       const text = el.textContent?.trim()
       if (!text) continue
@@ -104,7 +162,7 @@ async function cutLabels(page: Page) {
         out.push(`${text.slice(0, 40)} (+${el.scrollWidth - el.clientWidth}px)`)
     }
     return out
-  })
+  }, AREAS)
 }
 
 test.describe('the console-wide standard', () => {
@@ -140,9 +198,10 @@ test.describe('the console-wide standard', () => {
       const p = await context.newPage()
       await signIn(p)
       await p.goto('/')
+      await openAllAreas(p, lang)
       // Open every area, so the leaves and the section labels are measured too.
       for (let pass = 0; pass < 3; pass++) {
-        const closed = p.locator('aside button[aria-expanded="false"]')
+        const closed = p.locator(`${AREAS} button[aria-expanded="false"]`)
         if ((await closed.count()) === 0) break
         await closed
           .first()
@@ -161,26 +220,31 @@ test.describe('the console-wide standard', () => {
     await signIn(page)
     await page.goto('/inventory')
     await page.waitForLoadState('networkidle').catch(() => {})
+    await openAllAreas(page)
 
     // Measured before the fix: 85 focusable elements in the sidebar. The tree is now a
     // composite, so exactly one of its ROWS is tabbable.
     const tabbableRows = await page.evaluate(
       () =>
-        document.querySelectorAll('aside [data-nav-row][tabindex="0"]').length,
+        document.querySelectorAll(
+          '[role="dialog"] [data-nav-row][tabindex="0"]',
+        ).length,
     )
     expect(tabbableRows, 'exactly one rail row is in the tab order').toBe(1)
 
     // And it is the row that names the page, so "where am I" needs no keystroke.
     const current = await page.evaluate(() =>
       document
-        .querySelector('aside [data-nav-row][tabindex="0"]')
+        .querySelector('[role="dialog"] [data-nav-row][tabindex="0"]')
         ?.getAttribute('aria-current'),
     )
     expect(current, 'the tab stop starts on the current page').toBe('page')
 
     await page.evaluate(() =>
       document
-        .querySelector<HTMLElement>('aside [data-nav-row][tabindex="0"]')
+        .querySelector<HTMLElement>(
+          '[role="dialog"] [data-nav-row][tabindex="0"]',
+        )
         ?.focus(),
     )
     const before = await page.evaluate(
@@ -194,8 +258,9 @@ test.describe('the console-wide standard', () => {
     expect(
       await page.evaluate(
         () =>
-          document.querySelectorAll('aside [data-nav-row][tabindex="0"]')
-            .length,
+          document.querySelectorAll(
+            '[role="dialog"] [data-nav-row][tabindex="0"]',
+          ).length,
       ),
       'the tab stop moves with the focus — it never becomes two',
     ).toBe(1)
@@ -204,7 +269,8 @@ test.describe('the console-wide standard', () => {
   test('the rail names the pin and the key that does it', async ({ page }) => {
     await signIn(page)
     await page.goto('/')
-    const pin = page.locator('aside [data-rail-pin]').first()
+    await openAllAreas(page)
+    const pin = page.locator(`${AREAS} [data-rail-pin]`).first()
     // Named BEFORE it happens, and the name carries the key, so
     // the control and the keystroke are one offer rather than a key nobody can discover.
     await expect(pin).toHaveAttribute('aria-label', /\(p\)/)
@@ -351,9 +417,7 @@ test.describe('the console-wide standard', () => {
   test('a list: the verb is in the page header, not in the filter row', async ({
     page,
   }) => {
-    await signIn(page)
-    await page.goto('/catalog')
-    await page.waitForLoadState('networkidle').catch(() => {})
+    await openCatalogWithARow(page)
     const verb = page.getByRole('button', { name: /new entry/i }).first()
     await expect(verb).toBeVisible()
     const where = await verb.evaluate((el) => {
@@ -387,15 +451,17 @@ test.describe('the console-wide standard', () => {
     // The scope claim. `/catalog` under Entries offers *New entry*; under Policy that
     // verb does not exist, and a header that kept showing it would be lying about what
     // is on screen. This is why the slot exists instead of a page-level prop.
-    await signIn(page)
-    await page.goto('/catalog')
-    await page.waitForLoadState('networkidle').catch(() => {})
-    // The header's slot holds the verb once. An empty list offers it a second time in its
-    // own empty state, which is part of the tab's content and leaves with the tab.
+    await openCatalogWithARow(page)
+    // The header's slot holds the verb once: the list has a row, so its empty state, which
+    // would offer the verb a second time, is not on screen.
     await expect(
       page
         .locator('[data-page-primary-action]')
         .getByRole('button', { name: /new entry/i }),
+    ).toHaveCount(1)
+    await expect(
+      page.getByRole('button', { name: /new entry/i }),
+      'and it is the only one on the screen',
     ).toHaveCount(1)
     const policy = page.getByRole('tab', { name: /policy/i }).first()
     await policy.click()

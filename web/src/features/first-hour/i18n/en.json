@@ -31,8 +31,11 @@
   },
   "signIn": {
     "openLink": "Open the sign-in page",
+    "openKeyPage": "Open the key page",
     "codeLabel": "Code from the sign-in page",
     "codeHint": "After you approve access, the page shows a code. Paste it here.",
+    "keyLabel": "API key",
+    "keyHint": "Create a key on the page above, then paste it here. {{name}} stores it on this server; Olivares does not keep it.",
     "continue": "Continue",
     "enterCode": "On the sign-in page, enter this code:",
     "waiting": "Waiting for you to finish on the sign-in page…",
@@ -40,7 +43,13 @@
     "copy": "Copy",
     "copied": "Copied",
     "starting": "Starting the sign-in…",
-    "lostTouch": "Lost touch with the server. The sign-in may still be running."
+    "lostTouch": "Lost touch with the server. The sign-in may still be running.",
+    "method": "Sign-in method",
+    "methods": {
+      "opencode": "OpenCode Zen and free models (API key)",
+      "opencode-go": "OpenCode Go (API key)",
+      "chatgpt-headless": "ChatGPT Pro/Plus (headless)"
+    }
   },
   "errors": {
     "status": "The tool's status could not be read.",

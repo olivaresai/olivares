@@ -83,7 +83,7 @@ func (s *Server) secretSvc(w http.ResponseWriter, r *http.Request) (*auth.Secret
 // cannot inventory or replace provider, federation, or deployment-wide secrets.
 //
 // Any member of the tenant is admitted to it, because every member keeps a vault; the
-// mcp/ and env/ names stay with the tenant's admins (secretNameInScope, handleListSecrets).
+// mcp/, env/ and credential/ names stay with the tenant's admins (secretNameInScope, handleListSecrets).
 func (s *Server) secretScope(w http.ResponseWriter, r *http.Request) (auth.Principal, model.TenantID, bool) {
 	values, present := r.URL.Query()["scope"]
 	if !present {
@@ -108,9 +108,11 @@ func (s *Server) secretScope(w http.ResponseWriter, r *http.Request) (auth.Princ
 // (vault/<user-id>/<item>): only that person may write, list or reveal it.
 
 // tenantSecretName is the tenant scope's namespace: MCP credential handles,
-// session environment secrets and personal vault items.
+// session environment secrets, managed credentials (Business: modules/sessions
+// session_credentials.go; a session reaches one only through the broker's helper, never
+// as an environment variable) and personal vault items.
 func tenantSecretName(name string) bool {
-	return strings.HasPrefix(name, "mcp/") || strings.HasPrefix(name, "env/") || strings.HasPrefix(name, auth.PersonalVaultPrefix)
+	return strings.HasPrefix(name, "mcp/") || strings.HasPrefix(name, "env/") || strings.HasPrefix(name, "credential/") || strings.HasPrefix(name, auth.PersonalVaultPrefix)
 }
 
 // ownsVaultItem reports whether name is vault/<user-id>/<item> in p's own
@@ -129,7 +131,7 @@ func ownsVaultItem(p auth.Principal, name string) bool {
 }
 
 // tenantSecretVisible reports whether p may see name in a tenant scope: a vault item only
-// its owner, an mcp/ or env/ name only the tenant's admins.
+// its owner, an mcp/, env/ or credential/ name only the tenant's admins.
 func tenantSecretVisible(p auth.Principal, name string, tenantAdmin bool) bool {
 	if strings.HasPrefix(name, auth.PersonalVaultPrefix) {
 		return ownsVaultItem(p, name)
@@ -137,7 +139,7 @@ func tenantSecretVisible(p auth.Principal, name string, tenantAdmin bool) bool {
 	return tenantSecretName(name) && tenantAdmin
 }
 
-// isTenantAdmin reports whether p administers tenant's own mcp/ and env/ secrets. The
+// isTenantAdmin reports whether p administers tenant's own mcp/, env/ and credential/ secrets. The
 // scope admits every member; this is the second question, asked only for those names.
 // A refusal is false; a failure to decide (the policy engine, the store) is an error,
 // never a silent "not an admin" that would hide the organization's secrets from its admin.
@@ -159,7 +161,7 @@ func (s *Server) secretNameInScope(w http.ResponseWriter, r *http.Request, p aut
 		return true
 	}
 	if !tenantSecretName(name) {
-		s.badRequest(w, r, "tenant secret names must begin with mcp/, env/ or vault/")
+		s.badRequest(w, r, "tenant secret names must begin with mcp/, env/, credential/ or vault/")
 		return false
 	}
 	// A vault name is decided by its owner alone; the admin question is for the rest.
@@ -190,7 +192,7 @@ func (s *Server) handleListSecrets(w http.ResponseWriter, r *http.Request, mc Mo
 		return
 	}
 	out := secretsListDTO{Secrets: make([]secretDTO, 0, len(views)), SealerAvailable: svc.SealerWired()}
-	// Whether the caller administers the tenant matters only to its mcp/ and env/ names,
+	// Whether the caller administers the tenant matters only to its mcp/, env/ and credential/ names,
 	// so it is asked when the first one shows up.
 	var tenantAdmin, adminKnown bool
 	for _, v := range views {
@@ -311,7 +313,7 @@ func newRevealLimiter() *ratelimit.Limiter {
 // handleRevealSecret returns the plaintext of one personal vault item to its owner:
 // the single place the sealed store hands a value to a person. It answers only a
 // signed-in person (a token never passes the step-up), only for an item in their
-// own vault/<user-id>/ namespace of the tenant scope: global, mcp/ and env/ names,
+// own vault/<user-id>/ namespace of the tenant scope: global, mcp/, env/ and credential/ names,
 // and everyone else's items, stay write-only. Each success is one ledger entry
 // without the value (SecretStore.Reveal), and the response is never cached.
 func (s *Server) handleRevealSecret(w http.ResponseWriter, r *http.Request, mc ModuleContext) {

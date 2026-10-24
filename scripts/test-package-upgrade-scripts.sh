@@ -154,6 +154,17 @@ case "$verb" in
   *) echo "systemctl stub: unmodelled verb $verb" >&2; exit 1 ;;
 esac
 STUB
+	# restorecon: logged; an SELinux host relabels the snapshot request with the type the engine may read (dev#3048).
+	# selinuxenabled: an SELinux host unless the cell says state/selinux-disabled.
+	cat >"$box/bin/selinuxenabled" <<'STUB'
+#!/bin/sh
+[ ! -f "$OLIVARES_TEST_BOX/state/selinux-disabled" ]
+STUB
+	cat >"$box/bin/restorecon" <<'STUB'
+#!/bin/sh
+printf 'restorecon %s\n' "$*" >>"$OLIVARES_TEST_BOX/calls"
+[ ! -f "$OLIVARES_TEST_BOX/state/restorecon-fails" ]
+STUB
 	cat >"$box/bin/sync" <<'STUB'
 #!/bin/sh
 printf 'sync %s\n' "$*" >>"$OLIVARES_TEST_BOX/calls"
@@ -536,6 +547,43 @@ for fmt in deb rpm; do
 	done
 done
 
+# SELinux: the request is created under the package state directory's label, so the script relabels it after the
+# rename; without that the engine is denied it and its first start after the upgrade refuses (dev#3048).
+case_id="upgrade relabels the published snapshot request"
+new_box relabel-request
+if seed_install deb new; then
+	set_state enabled active
+	run new postinstall.sh configure 1.0
+	mv_line=$(grep -nE "^mv .* $box/var/lib/olivares-package/upgrade-snapshot\$" "$box/calls" | tail -1 | cut -d: -f1 || true)
+	rc_line=$(grep -nE "^restorecon .*$box/var/lib/olivares-package/upgrade-snapshot\$" "$box/calls" | tail -1 | cut -d: -f1 || true)
+	if [[ "$last_rc" != 0 ]]; then not_ok "$case_id: rc=$last_rc $(tail -1 "$last_out.stderr" 2>/dev/null)"
+	elif [[ -z "$mv_line" ]]; then not_ok "$case_id: no rename onto the request was logged"
+	elif [[ -z "$rc_line" ]]; then not_ok "$case_id: the request was not relabeled"
+	elif (( rc_line < mv_line )); then not_ok "$case_id: relabeled before the rename"
+	else ok "$case_id: relabeled after the rename"; fi
+fi
+case_id="upgrade on a host with SELinux disabled does not relabel the request"
+new_box relabel-disabled
+if seed_install deb new; then
+	set_state enabled active
+	: >"$box/state/selinux-disabled"
+	run new postinstall.sh configure 1.0
+	if [[ "$last_rc" != 0 ]]; then not_ok "$case_id: rc=$last_rc $(tail -1 "$last_out.stderr" 2>/dev/null)"
+	elif grep -q '^restorecon ' "$box/calls"; then not_ok "$case_id: restorecon ran"
+	elif grep -q 'could not relabel' "$last_out.stderr"; then not_ok "$case_id: warned about a relabel"
+	else ok "$case_id: no relabel, no warning"; fi
+fi
+case_id="upgrade whose relabel fails still completes and names the relabel"
+new_box relabel-fails
+if seed_install deb new; then
+	set_state enabled active
+	: >"$box/state/restorecon-fails"
+	run new postinstall.sh configure 1.0
+	if [[ "$last_rc" != 0 ]]; then not_ok "$case_id: rc=$last_rc, want 0 (the engine refuses its first start; the package step does not)"
+	elif ! grep -q "could not relabel $box/var/lib/olivares-package/upgrade-snapshot" "$last_out.stderr"; then not_ok "$case_id: no warning naming the request"
+	elif [[ ! -s "$box/var/lib/olivares-package/upgrade-snapshot" ]]; then not_ok "$case_id: the request is gone"
+	else ok "$case_id: rc=0, the relabel named on stderr, the request kept"; fi
+fi
 # A failed request or restart must be visible, with no start past a failed request.
 for failure in request request-sync directory-sync parent-sync restart; do
 	case_id="upgrade $failure failure"

@@ -681,14 +681,20 @@ export function operatorName(s: UnifiedSession): string | null {
  */
 export function sessionPlace(s: UnifiedSession): string | null {
   const tool = sessionTool(s)
-  const run = primaryRun(s.runs)
-  // A launched run's own folder is named by its id and means nothing to a person
-  // (`runFolder` refuses it), and its hooks report that same folder as the project.
-  const reported = s.live?.project
-  const folder =
-    runFolder(run) ?? (reported && reported !== run?.run_ref ? reported : null)
+  const folder = sessionFolder(s)
   if (!tool) return folder
   return folder ? `${tool} \u00b7 ${folder}` : tool
+}
+
+/** The folder a session works in, by its name, or null when nothing named one. A launched
+ * run's own folder is named by its id and means nothing to a person (`runFolder` refuses
+ * it), and its hooks report that same folder as the project. */
+export function sessionFolder(s: UnifiedSession): string | null {
+  const run = primaryRun(s.runs)
+  const reported = s.live?.project
+  return (
+    runFolder(run) ?? (reported && reported !== run?.run_ref ? reported : null)
+  )
 }
 
 /** The tool a session runs, by its product name; `null` when nothing declared one. */

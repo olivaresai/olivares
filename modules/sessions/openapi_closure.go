@@ -58,6 +58,11 @@ func sessionsClosureRequestBodyDeclarationFor(method, pattern string) (sessionsC
 		return sessionsClosureBodyDeclaration(true, sessionsCreateRunSchema()), true
 	case http.MethodPut + " /runs/{ref}/peers":
 		return sessionsClosureBodyDeclaration(true, sessionsSetRunPeersSchema()), true
+	case http.MethodPut + " /runs/{ref}/name":
+		return sessionsClosureBodyDeclaration(true, sessionsClosureClosedObject(oas.Obj(
+			"name", oas.Obj("type", "string", "maxLength", maxRunNameRunes,
+				"description", "The session's new name, trimmed; at most 200 characters, no control or invisible (format, line or paragraph separator) characters. An empty name clears it."),
+		), "name")), true
 	case http.MethodPost + " /runs/{ref}/move":
 		return sessionsClosureBodyDeclaration(true, sessionsMoveRunSchema()), true
 	case http.MethodPost + " /runs/{ref}/handoff":
@@ -136,6 +141,12 @@ func sessionsClosureRequestBodyDeclarationFor(method, pattern string) (sessionsC
 		// The tool names the ring and the ring holds the rest: a body would be a second
 		// place to say which version and which group.
 		return sessionsClosureRequestBodyDeclaration{kind: sessionsClosureBodyless}, true
+	case http.MethodPost + " /runs/{ref}/snooze":
+		// The one mark with something to say: the moment the snooze ends (run_mark.go).
+		return sessionsClosureBodyDeclaration(true, sessionsClosureClosedObject(oas.Obj(
+			"until", oas.Obj("type", "string", "format", "date-time",
+				"description", "When the session comes back to the caller's list, an RFC 3339 time in the future. A second snooze moves it."),
+		), "until")), true
 	case http.MethodPost + " /runs/{ref}/cleanup":
 		// An OPTIONAL body since the worktree option: the confirmation to discard the
 		// session's worktree and branch. It was bodyless, and a call with no body is
@@ -146,6 +157,13 @@ func sessionsClosureRequestBodyDeclarationFor(method, pattern string) (sessionsC
 		// reference IS the request, and there is nothing else to say (run_pin.go).
 		http.MethodPost + " /runs/{ref}/pin",
 		http.MethodDelete + " /runs/{ref}/pin",
+		// So are the caller's done mark and the end of a snooze (run_mark.go).
+		http.MethodDelete + " /runs/{ref}/snooze",
+		http.MethodPost + " /runs/{ref}/done",
+		http.MethodDelete + " /runs/{ref}/done",
+		// So is the archive toggle (run_name_archive.go).
+		http.MethodPost + " /runs/{ref}/archive",
+		http.MethodDelete + " /runs/{ref}/archive",
 		http.MethodPost + " /runs/{ref}/resume",
 		http.MethodDelete + " /templates/{id}",
 		http.MethodDelete + " /workspaces/{ref}",
@@ -197,7 +215,7 @@ func sessionsCreateRunSchema() map[string]any {
 		"description", "After trimming, must be a 1..128-byte shell name ([A-Za-z_][A-Za-z0-9_]*). Names beginning OLIVARES_, ANTHROPIC_, or CLAUDE_CODE_, plus DISABLE_AUTOUPDATER, are reserved.",
 	)
 	return sessionsClosureNullable(sessionsClosureClosedObject(oas.Obj(
-		"name", sessionsClosureOptionalString("Trimmed before persistence."),
+		"name", sessionsClosureOptionalString("Trimmed before persistence. At most 200 characters, with no control, invisible or separator characters; otherwise 400."),
 		"transport", sessionsClosureNullable(oas.Obj("type", "string", "enum", oas.Enum("", "stream-json", "remote-control"), "description", "Empty/null defaults to stream-json.")),
 		"permission_mode", sessionsClosureNullable(oas.Obj("type", "string", "enum", oas.Enum("", "default", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions"), "description", "Empty/null defaults to default.")),
 		"effort", sessionsClosureNullable(oas.Obj("type", "string", "maxLength", 64, "description", "Claude Code accepts low, medium, high, xhigh and max; other non-empty values return 400 even when its catalog lists them. This is the final Claude launch contract. Other drivers pass a bounded printable term to the tool. Empty/null keeps the tool default.")),
@@ -213,6 +231,7 @@ func sessionsCreateRunSchema() map[string]any {
 		"worktree_from", sessionsClosureOptionalString("With worktree: start the new worktree at this commit id or local branch of the workspace's repository instead of its current commit (for example the branch and sha a handoff names). Absent keeps the current start. Refused without worktree, and when the commit or branch is not in the repository."),
 		"secret_env", sessionsSecretEnvSchema(),
 		"git_read", sessionsClosureOptionalString("When non-empty, one approved Git-host repository binding (<binding id>:<owner>/<name>) the session gets a short-lived GitHub read credential for: an installation token with contents:read for that repository, served to git by a credential helper (never in the environment) and revoked when the session ends. Needs tenant administration. A GitLab binding is refused (422)."),
+		"credentials", sessionsClosureNullable(oas.Obj("type", "array", "maxItems", 8, "uniqueItems", true, "items", oas.Obj("type", "string", "pattern", "^[a-z0-9][a-z0-9._-]{0,63}$"), "description", "Business. Names of managed credentials (an SSH key or certificate, a database login, an API account) the session gets a way to use: an SSH agent socket, a database proxy or a local reverse proxy that the engine holds, never the secret itself. Needs tenant administration. A Community engine answers 501 business_required.")),
 		"provider_profile_ref", sessionsClosureOptionalString("When non-empty, names the provider profile the session launches under; the server resolves its homes and refuses a disabled, retired, foreign-environment or non-operable profile, and one whose driver requires an authorized authentication source it does not have. Only the reference is accepted: no home, environment, driver, binding, session id or authentication source."),
 	)))
 }

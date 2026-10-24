@@ -76,6 +76,10 @@ type resultUsage struct {
 	// Reported is false for a frame that carries no metering at all, which is
 	// recorded as UNKNOWN and never as zero.
 	Reported bool
+	// CostReported is true when the tool stated the cost itself, a zero included
+	// (an ACP agent's usage_update on a free model). Only then is a zero recorded,
+	// and the tool's figure is never replaced by a list price.
+	CostReported bool
 	// Provider is who serves the model, as the tool named it ("openai"); "" when
 	// it names none. It is what a list price is looked up under.
 	Provider string
@@ -433,7 +437,9 @@ func (m *Module) creditUsage(ctx context.Context, lr *liveRun, r resultUsage, at
 	if len(deltas) == 0 {
 		return false
 	}
-	m.priceUnpriced(r.Provider, deltas)
+	if !r.CostReported {
+		m.priceUnpriced(r.Provider, deltas)
+	}
 	var input, output, cost int64
 	primary, primaryOut := "", int64(-1)
 	for _, d := range deltas {
@@ -444,7 +450,7 @@ func (m *Module) creditUsage(ctx context.Context, lr *liveRun, r resultUsage, at
 			primary, primaryOut = d.ModelRef, d.Usage.OutputTokens
 		}
 	}
-	if !m.advanceRunUsage(ctx, lr, input, output, cost, primary, at) {
+	if !m.advanceRunUsage(ctx, lr, input, output, cost, r.CostReported, primary, at) {
 		lr.mu.Lock()
 		// Roll the credit back so the next cumulative frame re-offers it.
 		for _, d := range deltas {
@@ -460,7 +466,7 @@ func (m *Module) creditUsage(ctx context.Context, lr *liveRun, r resultUsage, at
 		lr.mu.Unlock()
 		return false
 	}
-	m.postSpendRows(ctx, lr, deltas, at)
+	m.postSpendRows(ctx, lr, deltas, r.CostReported, at)
 	return true
 }
 
@@ -491,7 +497,7 @@ func (m *Module) priceUnpriced(provider string, deltas []creditedDelta) {
 // counters are SUMS of credited deltas, so they survive a resume that restarts
 // the provider's own cumulative count.
 func (m *Module) advanceRunUsage(
-	ctx context.Context, lr *liveRun, input, output, cost int64, modelRef string, at time.Time,
+	ctx context.Context, lr *liveRun, input, output, cost int64, costReported bool, modelRef string, at time.Time,
 ) bool {
 	written := false
 	m.mutateRunBest(ctx, lr, func(rec model.Record) {
@@ -503,7 +509,9 @@ func (m *Module) advanceRunUsage(
 		// An official CLI that meters tokens without pricing them is an ordinary
 		// shape, not a corner, and it would record `cost_micro_usd = 0`. Adding nothing to an already-present total is a no-op, so the
 		// guard costs a priced session nothing.
-		if cost > 0 {
+		// A cost the tool itself reported is written even when it is 0: that is the
+		// tool's claim of a free turn, not one this plane makes.
+		if cost > 0 || costReported {
 			rec[colRunCostMicroUSD] = rec.Int(colRunCostMicroUSD) + cost
 		}
 		if modelRef != "" {
@@ -519,7 +527,7 @@ func (m *Module) advanceRunUsage(
 // the composition-root port. Unwired, it says so ONCE per run rather than per
 // frame: a session whose cost reaches no ledger is a real gap, and a line per
 // turn would bury it.
-func (m *Module) postSpendRows(ctx context.Context, lr *liveRun, deltas []creditedDelta, at time.Time) {
+func (m *Module) postSpendRows(ctx context.Context, lr *liveRun, deltas []creditedDelta, costReported bool, at time.Time) {
 	sink := m.rt.CostSink
 	if sink == nil {
 		lr.mu.Lock()
@@ -546,7 +554,7 @@ func (m *Module) postSpendRows(ctx context.Context, lr *liveRun, deltas []credit
 			CacheReadTokens:        d.Usage.CacheReadTokens,
 			CacheCreationTokens:    d.Usage.CacheCreationTokens,
 			CostMicroUSD:           d.Usage.CostMicroUSD + d.PricedMicroUSD,
-			CostFromProviderClient: d.Usage.CostMicroUSD > 0,
+			CostFromProviderClient: d.Usage.CostMicroUSD > 0 || costReported,
 			OccurredAt:             at,
 		}
 		if err := sink.PublishSessionCost(ctx, lr.tenant, sample); err != nil {

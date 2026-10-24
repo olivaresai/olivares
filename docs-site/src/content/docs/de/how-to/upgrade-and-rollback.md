@@ -23,11 +23,12 @@ und seine private Passphrase oder sein KEK für die Rückkehr zum vorigen Releas
 
 ## Welcher Upgrade-Pfad ist Ihrer?
 
-Es gibt drei Wege, das Binary vorwärtszubringen; alle führen zum selben Ziel.
+Es gibt vier Wege, das Binary vorwärtszubringen; alle führen zum selben Ziel.
 
 | Ihre Installation | Pfad |
 |---|---|
-| Binary auf einem Host, systemd | `olivares upgrade` — diese Seite |
+| Ein deb-, rpm-, apk- oder AUR-Paket | Der Paketmanager. [Aus einem Paket installieren](/de/how-to/install-from-packages/) |
+| Binary auf einem Host, systemd (nicht aus einem Paket) | `olivares upgrade` — diese Seite |
 | Ein Docker- oder Podman-Container | `docker compose exec olivares olivares upgrade`, danach den Container neu erstellen. Das Image kann sich nicht ändern; daher wird das Release im Datenvolume abgelegt (`ota/` im Datenverzeichnis), und jeder Start des Image-Binary startet es, solange es neuer ist als das Image oder dieselbe Version anders gebaut ist. Wenn Sie `ota/` entfernen, kehrt der Container zum Binary seines Images zurück. [Docker und Compose](/de/how-to/install-a-license/#docker-und-compose) enthält die Befehle. |
 | Kubernetes / Helm | Setzen Sie das Image und lassen Sie den Operator den Rollout durchführen. Führen Sie `olivares upgrade` nicht in einem Pod aus: Die Bereitstellung ist deklarativ, und der nächste Reconcile würde die Änderung rückgängig machen. |
 
@@ -55,7 +56,7 @@ Schutzmechanismen aktiv:
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.3
+olivares upgrade --check --current-version 0.4
 ```
 <!-- /release -->
 
@@ -106,6 +107,9 @@ GA-Linie.
 ```sh
 olivares upgrade
 ```
+
+Auf einer Paketinstallation (deb, rpm, apk, AUR) wird das mit Exit-Code 2 abgelehnt, bevor etwas
+heruntergeladen wird: Nutzen Sie den Paketmanager, wie die Tabelle oben zeigt. `--check` zeigt weiterhin den Plan.
 
 Der Befehl führt der Reihe nach folgende Schritte aus:
 
@@ -168,6 +172,12 @@ olivares upgrade --install-timer --timer-schedule 'Sun *-*-* 03:00:00'
 
 Standardmäßig gibt der Befehl die Units aus; `--timer-dir` schreibt sie in das von
 Ihnen angegebene Verzeichnis. Das ist opt-in — nichts plant sich selbst ein.
+
+Bei einer Paketinstallation verweigert der Befehl das: `/usr/bin/olivares` gehört dem Paketmanager,
+daher endet er mit dem Exit-Code 2, schreibt keine Unit und nennt den Weg: den Paketmanager des Hosts, auf der
+Olivares-Appliance `systemctl start olivares-appliance-update.service`. Mit `--enterprise --connect` nennt er zusätzlich
+`olivares license connect refresh`. Die Prüfung erfolgt über den Pfad; eine Binärdatei, die
+`install.sh --bindir /usr/bin` dort abgelegt hat, wird also ebenfalls verweigert.
 
 Die Konsole bietet die schreibgeschützte Hälfte derselben Information:
 **Settings → update status** ruft `POST /v1/console/update-check` auf und führt bei

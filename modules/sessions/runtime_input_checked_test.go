@@ -162,22 +162,18 @@ type checkedBarrierFault struct {
 
 const maxCheckedBarrierAttempts = 3
 
-// runtimeInputCheckedBarrierRetryingForTest runs the barrier attempt. One 250ms
-// lease (maxCheckedRuntimeInputLease) covers the run lock, the whole authority
-// transaction and its COMMIT. A slow build on PostgreSQL can spend it inside
-// COMMIT; the store then answers commit-outcome-unknown, the correct answer to
-// an expired lease, which says nothing about the barrier or order asserted here.
+// retryWhileLeaseSpent runs attempt (numbered from 1) until one is not spent. One
+// 250ms lease (maxCheckedRuntimeInputLease) covers the run lock, the whole
+// authority transaction and its COMMIT. A slow build on PostgreSQL can spend it,
+// e.g. inside COMMIT, where the store answers commit-outcome-unknown, the correct
+// answer to an expired lease, which says nothing about what the attempt asserts.
 // Only such an attempt (see checkedLeaseSpent) is repeated, on a fresh fixture;
 // an invariant violation, any other failure, or three spent leases in a row
-// fails. faults[i] is injected into attempt i+1.
-func runtimeInputCheckedBarrierRetryingForTest(t *testing.T, config func(*testing.T) store.Config, faults []checkedBarrierFault) (attempts int, err error) {
+// fails. A pass therefore always ran the attempt's assertions to the end.
+func retryWhileLeaseSpent(t *testing.T, attempt func(n int) (spent bool, err error)) (attempts int, err error) {
 	t.Helper()
 	for attempts = 1; attempts <= maxCheckedBarrierAttempts; attempts++ {
-		var fault checkedBarrierFault
-		if attempts <= len(faults) {
-			fault = faults[attempts-1]
-		}
-		spent, err := runtimeInputCheckedBarrierAttemptForTest(t, config(t), fault)
+		spent, err := attempt(attempts)
 		if err != nil || !spent {
 			return attempts, err
 		}
@@ -186,11 +182,27 @@ func runtimeInputCheckedBarrierRetryingForTest(t *testing.T, config func(*testin
 	return maxCheckedBarrierAttempts, errors.New("three checked deliveries in a row spent the whole lease")
 }
 
+// runtimeInputCheckedBarrierRetryingForTest runs the barrier attempt under
+// retryWhileLeaseSpent. faults[i] is injected into attempt i+1.
+func runtimeInputCheckedBarrierRetryingForTest(t *testing.T, config func(*testing.T) store.Config, faults []checkedBarrierFault) (int, error) {
+	t.Helper()
+	return retryWhileLeaseSpent(t, func(n int) (bool, error) {
+		var fault checkedBarrierFault
+		if n <= len(faults) {
+			fault = faults[n-1]
+		}
+		return runtimeInputCheckedBarrierAttemptForTest(t, config(t), fault)
+	})
+}
+
 // checkedLeaseSpent reports whether a delivery that was not accepted says only
 // that the original deadline ran out: the deadline expired, nothing was sent,
 // and the outcome is a deadline refusal or an unknown commit with Attempted=false.
 // callbackErr is the callbacks' own non-invariant error (BeforeTarget/BeforeSend
-// errors reach the caller only as ErrRuntimeInputRefused).
+// errors reach the caller only as ErrRuntimeInputRefused). The store flattens a
+// deadline met while reading the epoch with %v, so that refusal carries only
+// ErrAuthorizationEpochUnavailable; with the deadline expired and nothing sent
+// it says the same thing.
 func checkedLeaseSpent(ctx context.Context, result RuntimeInputResult, err, callbackErr error, sent int) bool {
 	if result.Attempted || sent != 0 || !errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return false
@@ -200,6 +212,7 @@ func checkedLeaseSpent(ctx context.Context, result RuntimeInputResult, err, call
 		return errors.Is(err, ErrRuntimeInputUnknown) && errors.Is(err, store.ErrCommitOutcomeUnknown)
 	case RuntimeInputRefused:
 		return errors.Is(err, context.DeadlineExceeded) ||
+			errors.Is(err, store.ErrAuthorizationEpochUnavailable) ||
 			(errors.Is(err, ErrRuntimeInputRefused) && errors.Is(callbackErr, context.DeadlineExceeded))
 	}
 	return false
@@ -336,6 +349,7 @@ func runtimeInputCheckedBarrierAttemptForTest(t *testing.T, cfg store.Config, fa
 	}
 	if err != nil || result.Outcome != RuntimeInputAccepted {
 		if checkedLeaseSpent(ctx, result, err, callbackErr, proc.sentCount()) {
+			t.Logf("lease spent: %#v %v", result, err)
 			return true, nil
 		}
 		return false, fmt.Errorf("checked delivery: %#v %v (sent %d)", result, err, proc.sentCount())
@@ -368,7 +382,7 @@ func TestRuntimeInputCheckedBarrierRetriesOnlyASpentLease(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		faults   []checkedBarrierFault
-		attempts int    // attempts used; 0: any
+		attempts int    // attempts used at least; 0: any
 		wantErr  string // empty: the test passes
 	}{
 		{"deadline refusal retries and passes", []checkedBarrierFault{{spendLease: true}}, 2, ""},
@@ -383,8 +397,8 @@ func TestRuntimeInputCheckedBarrierRetriesOnlyASpentLease(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			attempts, err := runtimeInputCheckedBarrierRetryingForTest(t, sqlite, tc.faults)
-			if tc.attempts != 0 && attempts != tc.attempts {
-				t.Fatalf("attempts = %d, want %d (err %v)", attempts, tc.attempts, err)
+			if attempts < tc.attempts {
+				t.Fatalf("attempts = %d, want at least %d (err %v)", attempts, tc.attempts, err)
 			}
 			switch {
 			case tc.wantErr == "" && err != nil:
@@ -405,6 +419,8 @@ func TestCheckedLeaseSpentNeedsEveryCondition(t *testing.T) {
 	cancelNow()
 	other := errors.New("claim read failed")
 	unknown := errors.Join(ErrRuntimeInputUnknown, store.ErrCommitOutcomeUnknown)
+	// The shape the store returns: the deadline cause is flattened with %v.
+	epochUnavailable := fmt.Errorf("%w: read: %v", store.ErrAuthorizationEpochUnavailable, context.DeadlineExceeded)
 	for _, tc := range []struct {
 		name        string
 		ctx         context.Context
@@ -417,6 +433,10 @@ func TestCheckedLeaseSpentNeedsEveryCondition(t *testing.T) {
 		{"unknown commit at the deadline", expired, RuntimeInputResult{Outcome: RuntimeInputUnknown}, unknown, nil, 0, true},
 		{"deadline refusal", expired, RuntimeInputResult{Outcome: RuntimeInputRefused}, context.DeadlineExceeded, nil, 0, true},
 		{"callback read ran out of time", expired, RuntimeInputResult{Outcome: RuntimeInputRefused}, ErrRuntimeInputRefused, context.DeadlineExceeded, 0, true},
+		{"epoch read ran out of time", expired, RuntimeInputResult{Outcome: RuntimeInputRefused}, epochUnavailable, nil, 0, true},
+		{"epoch unavailable, deadline not expired", context.Background(), RuntimeInputResult{Outcome: RuntimeInputRefused}, epochUnavailable, nil, 0, false},
+		{"epoch unavailable with bytes sent", expired, RuntimeInputResult{Outcome: RuntimeInputRefused}, epochUnavailable, nil, 1, false},
+		{"epoch unavailable after an attempt", expired, RuntimeInputResult{Outcome: RuntimeInputRefused, Attempted: true}, epochUnavailable, nil, 0, false},
 		{"deadline not expired", context.Background(), RuntimeInputResult{Outcome: RuntimeInputUnknown}, unknown, nil, 0, false},
 		{"canceled, not expired", canceled, RuntimeInputResult{Outcome: RuntimeInputUnknown}, unknown, nil, 0, false},
 		{"unknown without the commit sentinel", expired, RuntimeInputResult{Outcome: RuntimeInputUnknown}, ErrRuntimeInputUnknown, nil, 0, false},
@@ -874,64 +894,275 @@ func runtimeInputAuthorityWithoutEpochForTest(t *testing.T, f *managedStopFixtur
 	f.clock.set(time.Now().UTC())
 	return a
 }
+
+// epochBumpFault shapes one attempt of the epoch-bump test.
+type epochBumpFault struct {
+	bumpDelay       time.Duration // holds the bump back, as a slow host does
+	sendSpendsLease bool          // the send returns only after the lease ran out
+}
+
+// runtimeInputCheckedEpochBumpAttemptForTest admits an input that waits on the run
+// lock while the authorization epoch is bumped, and asserts the admission pins
+// the bumped epoch. The bump commits before the lock is released, so whenever the
+// barrier ran its bundle is checked, whatever the outcome. spent=true only when
+// the lease ran out and epochAttemptLeaseSpent holds.
+func runtimeInputCheckedEpochBumpAttemptForTest(t *testing.T, cfg store.Config, fault epochBumpFault) (bool, error) {
+	t.Helper()
+	f, proc, request := runtimeInputRawFixtureWith(t, cfg)
+	request.Authority = runtimeInputAuthorityWithoutEpochForTest(t, f, request.Target, request.Authority)
+	release, err := f.m.rt.lockRunContext(context.Background(), liveKey(f.tenant, request.Target.RunRef))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var once sync.Once
+	unlock := func() { once.Do(release) }
+	defer unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+	defer cancel()
+	observed := &runtimeInputObservedData{ModuleData: f.m.Data, watched: ctx}
+	f.m.Data = observed
+	if fault.sendSpendsLease {
+		proc.setAfterSend(func() { <-ctx.Done() })
+	}
+	started := make(chan struct{})
+	type reply struct {
+		result RuntimeInputResult
+		err    error
+	}
+	done := make(chan reply, 1)
+	go func() {
+		close(started)
+		result, err := f.m.DeliverRuntimeInputChecked(ctx, request, runtimeInputChecksAllowForTest())
+		done <- reply{result, err}
+	}()
+	<-started
+	time.Sleep(fault.bumpDelay)
+	var bumped store.AuthorizationFactRef
+	if err := f.st.Mutate(context.Background(), f.tenant, func(sc store.Scope) error {
+		epochs := sc.(store.AuthorizationEpochStore)
+		fact, err := epochs.ReadAuthorizationEpoch(context.Background())
+		if err != nil {
+			return err
+		}
+		bumped, err = epochs.BumpAuthorizationEpoch(context.Background(), fact)
+		return err
+	}); err != nil {
+		unlock()
+		<-done
+		t.Fatal(err)
+	}
+	unlock()
+	got := <-done
+	spent, err := epochAttemptVerdict(ctx, got.result, got.err, proc.lastSendError(), proc.sentCount(), observed.barriers, observed.bundle, bumped)
+	if spent {
+		t.Logf("lease spent: %#v %v", got.result, got.err)
+	}
+	return spent, err
+}
+
+// epochAttemptVerdict judges one epoch-bump attempt. The bump commits before the
+// run lock is released, so whenever the barrier ran its bundle must pin the bumped
+// epoch, whatever the outcome: the pin is checked before any outcome is forgiven.
+// spent=true only when no assertion was skipped by a spent lease
+// (epochAttemptLeaseSpent).
+func epochAttemptVerdict(ctx context.Context, result RuntimeInputResult, err, sendErr error, sent, barriers int, bundle store.AuthoritySnapshotBundle, bumped store.AuthorizationFactRef) (spent bool, _ error) {
+	if barriers > 1 {
+		return false, fmt.Errorf("fresh admission after epoch bump ran the barrier %d times: %#v %v", barriers, result, err)
+	}
+	pinned := barriers == 1
+	if pinned {
+		if perr := epochPinError(bundle, bumped); perr != nil {
+			return false, perr
+		}
+	}
+	if err == nil && result.Outcome == RuntimeInputAccepted {
+		if sent != 1 || !pinned {
+			return false, fmt.Errorf("fresh admission after epoch bump: %#v sent=%d barriers=%d", result, sent, barriers)
+		}
+		return false, nil
+	}
+	if epochAttemptLeaseSpent(ctx, result, err, sendErr, sent, pinned) {
+		return true, nil
+	}
+	return false, fmt.Errorf("fresh admission after epoch bump: %#v %v", result, err)
+}
+
+// epochPinError reports whether the barrier's bundle pins the epoch the bump committed.
+func epochPinError(bundle store.AuthoritySnapshotBundle, bumped store.AuthorizationFactRef) error {
+	found := false
+	for _, fact := range bundle.Facts {
+		if fact.Kind == model.AuthorizationEpochKind {
+			if fact != bumped {
+				return fmt.Errorf("pinned stale epoch: %#v want %#v", fact, bumped)
+			}
+			found = true
+		}
+	}
+	if !found {
+		return errors.New("complete barrier omitted the epoch committed while input waited")
+	}
+	return nil
+}
+
+// epochAttemptLeaseSpent is checkedLeaseSpent plus the one shape only this attempt
+// may call spent: the barrier ran and pinned the bumped epoch (pinned), the send
+// went through and returned no error (sendErr nil), and the post-send deadline
+// check turned the result unknown.
+func epochAttemptLeaseSpent(ctx context.Context, result RuntimeInputResult, err, sendErr error, sent int, pinned bool) bool {
+	if checkedLeaseSpent(ctx, result, err, nil, sent) {
+		return true
+	}
+	return pinned && result.Outcome == RuntimeInputUnknown && result.Attempted && sent == 1 && sendErr == nil &&
+		errors.Is(ctx.Err(), context.DeadlineExceeded) && errors.Is(err, ErrRuntimeInputUnknown)
+}
+
+// runtimeInputCheckedEpochBumpRetryingForTest runs the epoch attempt under
+// retryWhileLeaseSpent. faults[i] is injected into attempt i+1.
+func runtimeInputCheckedEpochBumpRetryingForTest(t *testing.T, config func(*testing.T) store.Config, faults []epochBumpFault) (int, error) {
+	t.Helper()
+	return retryWhileLeaseSpent(t, func(n int) (bool, error) {
+		var fault epochBumpFault
+		if n <= len(faults) {
+			fault = faults[n-1]
+		}
+		return runtimeInputCheckedEpochBumpAttemptForTest(t, config(t), fault)
+	})
+}
+
 func TestRuntimeInputCheckedEpochBumpDuringRunWait(t *testing.T) {
 	for _, be := range managedStopBackends(t) {
 		t.Run(be.name, func(t *testing.T) {
-			f, proc, request := runtimeInputRawFixtureWith(t, be.config(t))
-			request.Authority = runtimeInputAuthorityWithoutEpochForTest(t, f, request.Target, request.Authority)
-			release, err := f.m.rt.lockRunContext(context.Background(), liveKey(f.tenant, request.Target.RunRef))
-			if err != nil {
+			if _, err := runtimeInputCheckedEpochBumpRetryingForTest(t, be.config, nil); err != nil {
 				t.Fatal(err)
 			}
-			var once sync.Once
-			unlock := func() { once.Do(release) }
-			defer unlock()
-			ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
-			defer cancel()
-			observed := &runtimeInputObservedData{ModuleData: f.m.Data, watched: ctx}
-			f.m.Data = observed
-			started := make(chan struct{})
-			type reply struct {
-				result RuntimeInputResult
-				err    error
+		})
+	}
+}
+
+// A bump slower than the lease, or a send that returns after it, costs a retry on
+// a fresh fixture, never a skipped epoch assertion: a pass always ran it, and a
+// host where every attempt is that slow fails after three. A slower host may spend
+// more leases than a row names, so a row bounds the attempts from below.
+func TestRuntimeInputCheckedEpochBumpRetriesOnlyASpentLease(t *testing.T) {
+	sqlite := func(*testing.T) store.Config {
+		return store.Config{Engine: store.EngineSQLite, DSN: ":memory:", Debug: true}
+	}
+	slow := epochBumpFault{bumpDelay: 300 * time.Millisecond}
+	late := epochBumpFault{sendSpendsLease: true}
+	for _, tc := range []struct {
+		name        string
+		faults      []epochBumpFault
+		minAttempts int
+		wantErr     string // empty: the test passes
+	}{
+		{"fast bump passes", nil, 1, ""},
+		{"slow bump retries and passes", []epochBumpFault{slow}, 2, ""},
+		{"two slow bumps retry twice and pass", []epochBumpFault{slow, slow}, 3, ""},
+		{"three slow bumps fail", []epochBumpFault{slow, slow, slow}, 3, "three checked deliveries in a row spent the whole lease"},
+		{"send after the lease retries and passes", []epochBumpFault{late}, 2, ""},
+		{"three late sends fail", []epochBumpFault{late, late, late}, 3, "three checked deliveries in a row spent the whole lease"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			attempts, err := runtimeInputCheckedEpochBumpRetryingForTest(t, sqlite, tc.faults)
+			if attempts < tc.minAttempts {
+				t.Fatalf("attempts = %d, want at least %d (err %v)", attempts, tc.minAttempts, err)
 			}
-			done := make(chan reply, 1)
-			go func() {
-				close(started)
-				result, err := f.m.DeliverRuntimeInputChecked(ctx, request, runtimeInputChecksAllowForTest())
-				done <- reply{result, err}
-			}()
-			<-started
-			var bumped store.AuthorizationFactRef
-			if err := f.st.Mutate(context.Background(), f.tenant, func(sc store.Scope) error {
-				epochs := sc.(store.AuthorizationEpochStore)
-				fact, err := epochs.ReadAuthorizationEpoch(context.Background())
-				if err != nil {
-					return err
-				}
-				bumped, err = epochs.BumpAuthorizationEpoch(context.Background(), fact)
-				return err
-			}); err != nil {
-				unlock()
-				<-done
-				t.Fatal(err)
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Fatalf("unexpected failure: %v", err)
+			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+				t.Fatalf("error = %v, want one containing %q", err, tc.wantErr)
 			}
-			unlock()
-			got := <-done
-			if got.err != nil || got.result.Outcome != RuntimeInputAccepted || proc.sentCount() != 1 || observed.barriers != 1 {
-				t.Fatalf("fresh admission after epoch bump: %#v %v", got.result, got.err)
+		})
+	}
+}
+
+// epochAttemptLeaseSpent adds one shape to checkedLeaseSpent; each row drops one
+// condition of it.
+func TestEpochAttemptLeaseSpentNeedsEveryCondition(t *testing.T) {
+	expired, cancelExpired := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancelExpired()
+	canceled, cancelNow := context.WithCancel(context.Background())
+	cancelNow()
+	late := RuntimeInputResult{Outcome: RuntimeInputUnknown, Attempted: true}
+	for _, tc := range []struct {
+		name    string
+		ctx     context.Context
+		result  RuntimeInputResult
+		err     error
+		sendErr error
+		sent    int
+		pinned  bool
+		want    bool
+	}{
+		{"send answered after the deadline", expired, late, ErrRuntimeInputUnknown, nil, 1, true, true},
+		{"send failed after its write", expired, late, ErrRuntimeInputUnknown, errors.New("response lost after write"), 1, true, false},
+		{"epoch not pinned", expired, late, ErrRuntimeInputUnknown, nil, 1, false, false},
+		{"deadline not expired", context.Background(), late, ErrRuntimeInputUnknown, nil, 1, true, false},
+		{"canceled, not expired", canceled, late, ErrRuntimeInputUnknown, nil, 1, true, false},
+		{"not attempted", expired, RuntimeInputResult{Outcome: RuntimeInputUnknown}, ErrRuntimeInputUnknown, nil, 1, true, false},
+		{"nothing sent", expired, late, ErrRuntimeInputUnknown, nil, 0, true, false},
+		{"two sends", expired, late, ErrRuntimeInputUnknown, nil, 2, true, false},
+		{"refused after an attempt", expired, RuntimeInputResult{Outcome: RuntimeInputRefused, Attempted: true}, ErrRuntimeInputRefused, nil, 1, true, false},
+		{"unknown without the sentinel", expired, late, errors.New("send failed"), nil, 1, true, false},
+		{"unspent lease rows still apply", expired, RuntimeInputResult{Outcome: RuntimeInputRefused}, context.DeadlineExceeded, nil, 0, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := epochAttemptLeaseSpent(tc.ctx, tc.result, tc.err, tc.sendErr, tc.sent, tc.pinned); got != tc.want {
+				t.Fatalf("epochAttemptLeaseSpent = %v, want %v", got, tc.want)
 			}
-			found := false
-			for _, fact := range observed.bundle.Facts {
-				if fact.Kind == model.AuthorizationEpochKind {
-					if fact != bumped {
-						t.Fatalf("pinned stale epoch: %#v want %#v", fact, bumped)
-					}
-					found = true
-				}
+		})
+	}
+}
+
+// The pin is judged before the outcome: a stale or missing epoch fails whatever
+// the outcome was, even one a spent lease would forgive.
+func TestEpochAttemptVerdictPinsBeforeForgiving(t *testing.T) {
+	expired, cancelExpired := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancelExpired()
+	bumped := store.AuthorizationFactRef{Kind: model.AuthorizationEpochKind, ID: "epoch", Version: 7}
+	stale := store.AuthorizationFactRef{Kind: model.AuthorizationEpochKind, ID: "epoch", Version: 6}
+	other := store.AuthorizationFactRef{Kind: model.Kind("other"), ID: "x", Version: 1}
+	pins := func(f ...store.AuthorizationFactRef) store.AuthoritySnapshotBundle {
+		return store.AuthoritySnapshotBundle{Facts: f}
+	}
+	accepted := RuntimeInputResult{Outcome: RuntimeInputAccepted, Attempted: true}
+	late := RuntimeInputResult{Outcome: RuntimeInputUnknown, Attempted: true}
+	for _, tc := range []struct {
+		name     string
+		result   RuntimeInputResult
+		err      error
+		sendErr  error
+		sent     int
+		barriers int
+		bundle   store.AuthoritySnapshotBundle
+		wantSpnt bool
+		wantErr  string // empty: no error
+	}{
+		{"accepted and pinned", accepted, nil, nil, 1, 1, pins(other, bumped), false, ""},
+		{"accepted with a stale pin", accepted, nil, nil, 1, 1, pins(stale), false, "pinned stale epoch"},
+		{"accepted without an epoch fact", accepted, nil, nil, 1, 1, pins(other), false, "omitted the epoch"},
+		{"accepted without the barrier", accepted, nil, nil, 1, 0, pins(), false, "barriers=0"},
+		{"accepted without a send", accepted, nil, nil, 0, 1, pins(bumped), false, "sent=0"},
+		{"late send, pinned", late, ErrRuntimeInputUnknown, nil, 1, 1, pins(bumped), true, ""},
+		{"late send that failed", late, ErrRuntimeInputUnknown, errors.New("response lost after write"), 1, 1, pins(bumped), false, "fresh admission"},
+		{"late send with a stale pin", late, ErrRuntimeInputUnknown, nil, 1, 1, pins(stale), false, "pinned stale epoch"},
+		{"late send without an epoch fact", late, ErrRuntimeInputUnknown, nil, 1, 1, pins(other), false, "omitted the epoch"},
+		{"refusal before the barrier", RuntimeInputResult{Outcome: RuntimeInputRefused}, context.DeadlineExceeded, nil, 0, 0, pins(), true, ""},
+		{"refusal after a stale pin", RuntimeInputResult{Outcome: RuntimeInputRefused}, context.DeadlineExceeded, nil, 0, 1, pins(stale), false, "pinned stale epoch"},
+		{"refusal for another reason", RuntimeInputResult{Outcome: RuntimeInputRefused}, ErrRuntimeInputAuthority, nil, 0, 1, pins(bumped), false, "fresh admission"},
+		{"barrier ran twice", RuntimeInputResult{Outcome: RuntimeInputRefused}, context.DeadlineExceeded, nil, 0, 2, pins(bumped), false, "2 times"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			spent, err := epochAttemptVerdict(expired, tc.result, tc.err, tc.sendErr, tc.sent, tc.barriers, tc.bundle, bumped)
+			if spent != tc.wantSpnt {
+				t.Fatalf("spent = %v, want %v (err %v)", spent, tc.wantSpnt, err)
 			}
-			if !found {
-				t.Fatal("complete barrier omitted the epoch committed while input waited")
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Fatalf("unexpected error: %v", err)
+			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+				t.Fatalf("error = %v, want one containing %q", err, tc.wantErr)
 			}
 		})
 	}

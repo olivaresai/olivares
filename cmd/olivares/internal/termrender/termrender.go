@@ -722,3 +722,53 @@ func StripANSI(s string) string {
 	}
 	return b.String()
 }
+
+// Safe removes what a terminal would act on instead of print: escape sequences
+// (CSI, and OSC/DCS/SOS/PM/APC up to their terminator — an OSC 52 would write
+// the clipboard) and every other C0/C1 control except newline and tab. Text that
+// comes from the engine or an agent goes through it before it reaches a terminal.
+func Safe(s string) string {
+	if !strings.ContainsFunc(s, func(r rune) bool { return r < 0x20 || (r >= 0x7f && r <= 0x9f) }) {
+		return s
+	}
+	rs := []rune(s)
+	var b strings.Builder
+	for i := 0; i < len(rs); i++ {
+		switch r := rs[i]; {
+		case r == 0x1b:
+			i = escapeEnd(rs, i)
+		case r == '\n' || r == '\t':
+			b.WriteRune(r)
+		case r < 0x20 || (r >= 0x7f && r <= 0x9f):
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// escapeEnd returns the index of the last rune of the escape sequence at rs[i].
+func escapeEnd(rs []rune, i int) int {
+	if i+1 >= len(rs) {
+		return i
+	}
+	switch rs[i+1] {
+	case '[':
+		j := i + 2
+		for j < len(rs) && (rs[j] < 0x40 || rs[j] > 0x7e) {
+			j++
+		}
+		return min(j, len(rs)-1)
+	case ']', 'P', 'X', '^', '_':
+		for j := i + 2; j < len(rs); j++ {
+			if rs[j] == 0x07 {
+				return j
+			}
+			if rs[j] == 0x1b && j+1 < len(rs) && rs[j+1] == '\\' {
+				return j + 1
+			}
+		}
+		return len(rs) - 1
+	}
+	return i + 1
+}

@@ -77,13 +77,6 @@ describe.each(LANGUAGE_CODES)('session state words (%s)', (locale) => {
     ['agentops', 'summary.idle', agentops, 'idle'],
   ]
 
-  // Sentences carry the word inside their own grammar (case, plural): the rail's word,
-  // less its inflected ending, must be in the sentence.
-  const stem = (w: string) => (w.length > 6 ? w.slice(0, -2) : w).toLowerCase()
-  it("the Now tile caption says Idle in the rail's word", () => {
-    const caption = at(featureFile(locale, 'home'), 'tiles.sessions.caption')
-    expect(caption.toLowerCase()).toContain(stem(word.idle))
-  })
   it("the sessions count says Working in the rail's word (English)", () => {
     if (locale !== 'en') return
     expect(at(sessions, 'summary.running')).toBe(

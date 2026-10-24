@@ -12,7 +12,8 @@
     "published_26100": true,
     "config_defaults": {},
     "console_entries": [
-      "accessMap"
+      "accessMap",
+      "reach"
     ]
   },
   {
@@ -612,6 +613,7 @@
       "providerProfiles",
       "providerBindings",
       "providerAccounts",
+      "agent-tools",
       "workspace-templates"
     ],
     "retirement_order": 4

@@ -26,11 +26,15 @@
   "lenses": {
     "analytics": {
       "title": "Per sviluppatore (Analytics di amministrazione)",
-      "description": "Totali autorevoli per sviluppatore e per giorno dal feed Analytics di amministrazione, su {{developers}} sviluppatore/i."
+      "description_one": "Totali autorevoli per sviluppatore e per giorno dal feed Analytics di amministrazione, su {{count}} sviluppatore.",
+      "description_many": "Totali autorevoli per sviluppatore e per giorno dal feed Analytics di amministrazione, su {{count}} sviluppatori.",
+      "description_other": "Totali autorevoli per sviluppatore e per giorno dal feed Analytics di amministrazione, su {{count}} sviluppatori."
     },
     "telemetry": {
       "title": "Per sessione (telemetria in tempo reale)",
-      "description": "Attività per sessione in tempo reale dal piano OTLP, su {{teams}} team; include il tempo attivo."
+      "description_one": "Attività per sessione in tempo reale dal piano OTLP, su {{count}} team; include il tempo attivo.",
+      "description_many": "Attività per sessione in tempo reale dal piano OTLP, su {{count}} team; include il tempo attivo.",
+      "description_other": "Attività per sessione in tempo reale dal piano OTLP, su {{count}} team; include il tempo attivo."
     }
   },
   "comparison": {

@@ -42,10 +42,12 @@ test('fresh install opens its only workspace overview without a selection step',
       .getByRole('link', { name: 'Now', exact: true }),
   ).toBeVisible()
 
-  // A fresh install lists every area from the first sign-in: the Workspace page is in the
-  // sidebar's area groups beside Sessions, and its address opens it.
+  // A fresh install lists every area from the first sign-in: the Workspace page is in
+  // All areas (the account menu) beside Sessions, and its address opens it.
   await page.reload()
-  const areas = page.locator('[data-slot="sidebar-areas"]')
+  await page.getByRole('button', { name: /, Account$/ }).click()
+  await page.getByRole('menuitem', { name: 'All areas', exact: true }).click()
+  const areas = page.getByRole('dialog', { name: 'All areas', exact: true })
   await expect(areas.locator('a[href="/sessions"]')).toHaveCount(1)
   await expect(areas.locator('a[href="/workspace"]')).toHaveCount(1)
   const workspacesResponse = page.waitForResponse(
@@ -87,9 +89,10 @@ test('fresh install opens its only workspace overview without a selection step',
     ).toBeVisible()
   } finally {
     for (const theme of ['light', 'dark']) {
-      await page.getByRole('button', { name: /toggle theme/i }).click()
+      // The theme is chosen in the account menu (#3161).
+      await page.getByRole('button', { name: /, Account$/ }).click()
       await page
-        .getByRole('menuitem', { name: new RegExp(`^${theme}$`, 'i') })
+        .getByRole('menuitemradio', { name: new RegExp(`^${theme}$`, 'i') })
         .click()
       for (const width of [1280, 390]) {
         await page.setViewportSize({ width, height: 900 })

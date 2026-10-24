@@ -117,9 +117,6 @@
     "title": "承認キュー",
     "caption": "判断を待っているリクエストです。承認・却下・キャンセルはすべて記録されます。",
     "search": "要求を検索…",
-    "requestedBy": "要求者",
-    "status": "ステータス",
-    "progress": "承認",
     "age": "経過時間",
     "expires": "有効期限",
     "escalates": "エスカレーション",
@@ -139,12 +136,14 @@
     "emptyPending": "保留中の承認はありません",
     "emptyPendingHint": "キューは空です。決定を待っているものはありません。",
     "approve": "承認",
-    "reject": "却下",
     "cancel": "キャンセル",
     "viewDetail": "詳細を表示",
     "actorHint": "監査アクターのハンドルであり、メールアドレスではありません。アイデンティティはディレクトリから解決され、ここには表示されません。",
     "expiredAt": "期限切れ {{time}}",
-    "request": "リクエスト"
+    "approveOnce": "今回だけ承認",
+    "deny": "却下",
+    "noMatch": "検索に一致するリクエストはありません",
+    "noMatchHint": "検索を消去すると、この一覧のすべてのリクエストが表示されます。"
   },
   "status": {
     "pending": "保留中",
@@ -154,11 +153,8 @@
     "expired": "期限切れ"
   },
   "decide": {
-    "approveTitle": "この要求を承認しますか？",
-    "approveBody": "あなたの承認は、このリクエストに必要な承認の数に加算されます。",
     "rejectTitle": "この要求を却下しますか？",
     "rejectBody": "1 件の却下で要求は終了します。",
-    "approveConfirm": "承認",
     "rejectConfirm": "却下",
     "note": "メモ",
     "noteHint": "任意です。",
@@ -224,7 +220,10 @@
     "decisionReject": "却下",
     "reenableNeedsAdmins": "ほかの管理者アカウント 2 つの承認が必要です。「アイデンティティとアクセス」または `olivares users create` で作成してください。",
     "openIdentity": "「アイデンティティとアクセス」を開く",
-    "cannotDecideOwn": "自分のリクエストは承認できません。別の管理者が判断する必要があります。"
+    "cannotDecideOwn": "自分のリクエストは承認できません。別の管理者が判断する必要があります。",
+    "requesterCannotApprove": "リクエストした本人は、そのリクエストを承認できません。",
+    "launchedBy": "起動したユーザー",
+    "decidedByYou": "このリクエストは承認済みです。別の承認者を待っています。"
   },
   "policies": {
     "title": "ポリシー",
@@ -677,9 +676,23 @@
     "you": "あなた",
     "member": "メンバー",
     "apiToken": "API トークン",
-    "requestSummary": "リクエスト"
+    "requestSummary": "リクエスト",
+    "matched": "該当ルール: {{rule}}",
+    "matchedDefault": "該当ルール: なし（既定値を適用）",
+    "matchedUnreadable": "該当ルール: 閲覧権限のないルール",
+    "reaches": "到達先: {{list}}",
+    "reachFolder": {
+      "write": "{{path}}（書き込み）",
+      "read": "{{path}}（読み取り専用）",
+      "unknown": "{{path}}（アクセス不明）"
+    },
+    "matchedUnknown": "該当ルール: 読み取れなかったルール",
+    "reachIncomplete": "読み取れなかった項目あり"
   },
   "list": {
     "loadedOnly": "検索は読み込み済みの行のみが対象です。続きを読み込んでください。"
+  },
+  "queue": {
+    "needsYou": "あなたの判断待ち"
   }
 }

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/BurntSushi/toml"
 	cedar "github.com/cedar-policy/cedar-go"
 	cedartypes "github.com/cedar-policy/cedar-go/types"
 	cedarast "github.com/cedar-policy/cedar-go/x/exp/ast"
@@ -22,10 +23,12 @@ import (
 )
 
 // The counted formats. Each counted surface has exactly one representation
-// owner: the JSON token stream for the managed surfaces and the Cedar AST for
-// the policy engines.
+// owner: the JSON token stream for the managed surfaces, the TOML decoder for
+// the managed surfaces whose native file is TOML, and the Cedar AST for the
+// policy engines.
 const (
 	formatJSON  = "json"
+	formatTOML  = "toml"
 	formatCedar = "cedar"
 )
 
@@ -36,7 +39,7 @@ const (
 )
 
 // ContentError refuses counted content its format's representation owner
-// cannot read. Format is "json" or "cedar"; Reason is "syntax" or "utf8". It is
+// cannot read. Format is "json", "toml" or "cedar"; Reason is "syntax" or "utf8". It is
 // not retryable: the content must change first.
 type ContentError struct {
 	Format string
@@ -70,6 +73,8 @@ func surfaceDocument(surface, content string, lim auth.MatchLimits) (auth.Docume
 	switch format {
 	case formatJSON:
 		err = jsonDocumentStrings(content, &sink)
+	case formatTOML:
+		err = tomlDocumentStrings(content, &sink)
 	case formatCedar:
 		err = cedarDocumentStrings(surface, content, &sink)
 	}
@@ -85,6 +90,9 @@ func countedFormat(surface string) (string, bool) {
 	for _, e := range surfaces.entries {
 		if e.name != surface || e.content == nil || !e.content.Counted() {
 			continue
+		}
+		if e.format != "" {
+			return e.format, true
 		}
 		switch e.family {
 		case surfaceFamilyManaged:
@@ -162,6 +170,50 @@ func jsonDocumentStrings(content string, d *decodedStrings) error {
 			}
 		}
 	}
+}
+
+// tomlDocumentStrings decodes content as one TOML document and emits every table and
+// key name and every string value, in sorted key order. Any syntax error refuses it.
+func tomlDocumentStrings(content string, d *decodedStrings) error {
+	var doc map[string]any
+	if _, err := toml.Decode(content, &doc); err != nil {
+		return ContentError{Format: formatTOML, Reason: reasonSyntax}
+	}
+	return emitTOMLValue(doc, d)
+}
+
+func emitTOMLValue(v any, d *decodedStrings) error {
+	switch x := v.(type) {
+	case string:
+		return d.emit(x)
+	case []any:
+		for _, item := range x {
+			if err := emitTOMLValue(item, d); err != nil {
+				return err
+			}
+		}
+	case []map[string]any:
+		for _, item := range x {
+			if err := emitTOMLValue(item, d); err != nil {
+				return err
+			}
+		}
+	case map[string]any:
+		keys := make([]string, 0, len(x))
+		for k := range x {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			if err := d.emit(k); err != nil {
+				return err
+			}
+			if err := emitTOMLValue(x[k], d); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // cedarDocumentStrings parses content as a Cedar policy set and emits, once each, the

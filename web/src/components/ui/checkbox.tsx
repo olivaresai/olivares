@@ -7,10 +7,12 @@ import type { ComponentProps } from 'react'
 import { cn } from '@/lib/utils'
 
 /**
- * Checkbox — Radix checkbox with a copper-filled checked state and a crisp lucide
- * Check glyph. Hairline border when unchecked, accent fill when checked; focus is a
- * ring. Supports the indeterminate state Radix exposes (`checked="indeterminate"`),
- * which renders the same fill (callers can swap the glyph if they need a dash).
+ * Checkbox — Radix checkbox with a crisp lucide Check glyph. Hairline border when
+ * unchecked; checked and indeterminate fill the box with the neutral ink — state,
+ * not an action, so it never counts as one of a screen's orange verb controls
+ * (#2701, the #2696 Switch decision). Focus is a ring. Supports the indeterminate
+ * state Radix exposes (`checked="indeterminate"`), which renders the same fill
+ * (callers can swap the glyph if they need a dash).
  */
 export function Checkbox({
   className,
@@ -27,8 +29,8 @@ export function Checkbox({
         "before:absolute before:-inset-1 before:content-['']",
         'transition-colors outline-none',
         'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-        'data-[state=checked]:border-accent-text data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground',
-        'data-[state=indeterminate]:border-accent-text data-[state=indeterminate]:bg-accent data-[state=indeterminate]:text-accent-foreground',
+        'data-[state=checked]:bg-foreground data-[state=checked]:text-surface',
+        'data-[state=indeterminate]:bg-foreground data-[state=indeterminate]:text-surface',
         'disabled:pointer-events-none disabled:opacity-50',
         className,
       )}

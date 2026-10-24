@@ -446,7 +446,7 @@ func TestRuntime_FullLifecycle(t *testing.T) {
 	if cd.State != stateCleaned || cd.ClaudeSessionID != "" {
 		t.Fatalf("after cleanup: state=%s claudeID=%q", cd.State, cd.ClaudeSessionID)
 	}
-	if err := m.deleteRun(ctx, tenant, ref); err != nil {
+	if err := m.deleteRun(ctx, tenant, ref, "test", model.ActorSystem); err != nil {
 		t.Fatalf("deleteRun: %v", err)
 	}
 	if _, err := m.getRun(ctx, tenant, ref); err == nil {

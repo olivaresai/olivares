@@ -34,15 +34,19 @@ const authState = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 // Exercise the Community composition even when the tests are assembled into a paid tree.
-vi.mock('@/features/extensions', () => ({
-  PANEL_EXTENSIONS: {
-    capabilitiesTabs: [],
-    complianceTabs: [],
-    reportingCards: [],
-    licenseCards: [],
-    governanceTabs: [],
-  },
-}))
+vi.mock('@/features/extensions', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/extensions')>()
+  return {
+    ...actual,
+    PANEL_EXTENSIONS: {
+      capabilitiesTabs: [],
+      complianceTabs: [],
+      reportingCards: [],
+      licenseCards: [],
+      governanceTabs: [],
+    },
+  }
+})
 
 const api = vi.hoisted(() => ({
   listIdentities: vi.fn(),
@@ -82,6 +86,12 @@ function wrap(ui: ReactNode) {
   })
   return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>)
 }
+
+/** The queue's rows (each one a button that opens the request beside the queue). */
+const queueRows = () =>
+  screen
+    .getAllByRole('button')
+    .filter((b) => b.hasAttribute('data-approval-row'))
 
 const pendingApproval: ApprovalDTO = {
   id: 'a1',
@@ -153,26 +163,23 @@ describe('GovernanceView — approval queue (HITL)', () => {
       has_more: false,
     })
     wrap(<GovernanceView />)
-    expect(await screen.findAllByText(ROW_REASON)).toHaveLength(2)
-    expect(screen.queryByText('deploy.release')).toBeNull()
-    expect(screen.queryByText('data.purge')).toBeNull()
-    // requester rendered as an audit-actor handle, never an email.
-    expect(screen.getByText('user:u-7')).toBeInTheDocument()
-    expect(screen.getByText('token:t-3')).toBeInTheDocument()
-    const requesterDetails = screen.getByText('user:u-7').closest('details')!
-    expect(requesterDetails).not.toHaveAttribute('open')
-    expect(screen.getByText('A member')).toBeVisible()
-    const requesterSummary = within(requesterDetails).getByText('Details')
-    await userEvent.click(requesterSummary)
-    expect(requesterDetails).toHaveAttribute('open')
-    expect(screen.queryByRole('dialog')).toBeNull()
-    requesterSummary.focus()
-    await userEvent.keyboard('{Enter}')
-    expect(screen.queryByRole('dialog')).toBeNull()
-    await userEvent.keyboard(' ')
-    expect(screen.queryByRole('dialog')).toBeNull()
+    await waitFor(() => expect(queueRows()).toHaveLength(2))
+    const [first, second] = queueRows()
+    for (const row of [first, second]) {
+      expect(within(row).getByText(ROW_REASON)).toBeInTheDocument()
+      // The engine's action names stay behind Details, never in the row.
+      expect(within(row).queryByText('deploy.release')).toBeNull()
+      expect(within(row).queryByText('data.purge')).toBeNull()
+    }
+    // The row names who asks in words; the audit-actor handle (never an email) is in
+    // the open request's Details.
+    expect(within(first).getByText('A member')).toBeVisible()
+    expect(within(second).getByText('An API token')).toBeVisible()
+    const panel = screen.getByRole('complementary', { name: 'Request' })
+    const details = within(panel).getByText('user:u-7').closest('details')!
+    expect(details).not.toHaveAttribute('open')
     // escalated request carries the warning badge.
-    expect(screen.getByText('Escalated')).toBeInTheDocument()
+    expect(within(second).getByText('Escalated')).toBeInTheDocument()
   })
 
   it('an approval that expired says so with its stored time, never "—" (HU 039)', async () => {
@@ -206,9 +213,9 @@ describe('GovernanceView — approval queue (HITL)', () => {
       has_more: false,
     })
     wrap(<GovernanceView />)
-    await screen.findByText(ROW_REASON)
-    expect(screen.queryByRole('button', { name: /^approve$/i })).toBeNull()
-    expect(screen.queryByRole('button', { name: /^reject$/i })).toBeNull()
+    await waitFor(() => expect(queueRows()).toHaveLength(1))
+    expect(screen.queryByRole('button', { name: /^approve once$/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^deny$/i })).toBeNull()
     // The sweep ("Expire and escalate overdue requests", SC item 7 wording) is also admin-only.
     expect(
       screen.queryByRole('button', {
@@ -225,16 +232,16 @@ describe('GovernanceView — approval queue (HITL)', () => {
       has_more: false,
     })
     wrap(<GovernanceView />)
-    await screen.findByText(ROW_REASON)
-    expect(screen.queryByRole('button', { name: /^approve$/i })).toBeNull()
-    expect(screen.queryByRole('button', { name: /^reject$/i })).toBeNull()
+    await waitFor(() => expect(queueRows()).toHaveLength(1))
+    expect(screen.queryByRole('button', { name: /^approve once$/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^deny$/i })).toBeNull()
     // Cancel (write tier) is still offered to the requester.
     expect(
       screen.getByRole('button', { name: /^cancel$/i }),
     ).toBeInTheDocument()
   })
 
-  it('approve flow: click → confirm dialog → api.decide(approve, note) → success toast', async () => {
+  it('approve flow: Approve once → api.decide(approve) → success toast', async () => {
     api.listApprovals.mockResolvedValue({
       items: [pendingApproval],
       has_more: false,
@@ -242,24 +249,38 @@ describe('GovernanceView — approval queue (HITL)', () => {
     api.decide.mockResolvedValue({ ...pendingApproval, approve_count: 1 })
     wrap(<GovernanceView />)
 
-    await screen.findByText(ROW_REASON)
-    await userEvent.click(screen.getByRole('button', { name: /^approve$/i }))
-
-    // The confirm dialog gates the high-risk decision and collects a note.
-    const dialog = await screen.findByRole('dialog')
-    const note = within(dialog).getByLabelText(/^note$/i)
-    await userEvent.type(note, 'looks good')
     await userEvent.click(
-      within(dialog).getByRole('button', { name: /^approve$/i }),
+      await screen.findByRole('button', { name: /^approve once$/i }),
     )
 
     await waitFor(() => expect(api.decide).toHaveBeenCalledTimes(1))
-    expect(api.decide.mock.calls[0][0]).toBe('a1')
-    expect(api.decide.mock.calls[0][1]).toMatchObject({
-      decision: 'approve',
-      note: 'looks good',
-    })
+    expect(api.decide).toHaveBeenCalledWith('a1', { decision: 'approve' })
     await waitFor(() => expect(toast.success).toHaveBeenCalled())
+  })
+
+  it('deny flow: Deny → dialog with the note → api.decide(reject, note)', async () => {
+    api.listApprovals.mockResolvedValue({
+      items: [pendingApproval],
+      has_more: false,
+    })
+    api.decide.mockResolvedValue({ ...pendingApproval, status: 'rejected' })
+    wrap(<GovernanceView />)
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: /^deny$/i }),
+    )
+    // A denial is confirmed and can carry a note.
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.type(within(dialog).getByLabelText(/^note$/i), 'not now')
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: /^deny$/i }),
+    )
+
+    await waitFor(() => expect(api.decide).toHaveBeenCalledTimes(1))
+    expect(api.decide).toHaveBeenCalledWith('a1', {
+      decision: 'reject',
+      note: 'not now',
+    })
   })
 
   it('runs the admin sweep through a confirm dialog', async () => {
@@ -299,12 +320,13 @@ describe('Approve after the request is no longer pending', () => {
       new ApiError(409, 'conflict', 'approval is not pending (expired)'),
     )
     wrap(<GovernanceView />)
-    await screen.findByText(ROW_REASON)
-    await user.click(screen.getByRole('button', { name: /^approve$/i }))
-    const dialog = await screen.findByRole('dialog')
+    const approve = await screen.findByRole('button', {
+      name: /^approve once$/i,
+    })
     const reads = api.listApprovals.mock.calls.length
-    await user.click(within(dialog).getByRole('button', { name: /^approve$/i }))
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await user.click(approve)
+    await waitFor(() => expect(toast.warning).toHaveBeenCalled())
+    expect(screen.queryByRole('dialog')).toBeNull()
     expect(toast.warning).toHaveBeenCalledWith(
       'This request is no longer waiting for a decision.',
       { description: 'approval is not pending (expired)' },
@@ -808,27 +830,28 @@ describe('GovernanceView — ?tab= deep link (console remake slice 4)', () => {
   })
 })
 
-// Root, 09b capture review: Approve used the destructive red. Red is for Reject.
-describe('the decision dialog styles', () => {
-  it('Approve is the primary action; Reject stays red', async () => {
+// Root, 09b capture review: Approve used the destructive red. Red is for Deny.
+describe('the decision styles', () => {
+  it('Approve once is the one orange action; Deny stays red', async () => {
     const user = userEvent.setup()
     api.listApprovals.mockResolvedValue({
       items: [pendingApproval],
       has_more: false,
     })
     wrap(<GovernanceView />)
-    await screen.findByText(ROW_REASON)
-    await user.click(screen.getByRole('button', { name: /^approve$/i }))
-    let dialog = await screen.findByRole('dialog')
-    const approve = within(dialog).getByRole('button', { name: /^approve$/i })
+    const approve = await screen.findByRole('button', {
+      name: /^approve once$/i,
+    })
     expect(approve.className).toMatch(/bg-accent/)
     expect(approve.className).not.toMatch(/danger/)
-    await user.click(within(dialog).getByRole('button', { name: /^cancel$/i }))
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    await user.click(screen.getByRole('button', { name: /^reject$/i }))
-    dialog = await screen.findByRole('dialog')
+    // While a request waits for this person, New request is not a second orange.
     expect(
-      within(dialog).getByRole('button', { name: /^reject$/i }).className,
+      screen.getByRole('button', { name: /^new request$/i }).className,
+    ).not.toMatch(/bg-accent/)
+    await user.click(screen.getByRole('button', { name: /^deny$/i }))
+    const dialog = await screen.findByRole('dialog')
+    expect(
+      within(dialog).getByRole('button', { name: /^deny$/i }).className,
     ).toMatch(/danger/)
   })
 })

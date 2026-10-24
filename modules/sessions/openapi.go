@@ -89,6 +89,9 @@ func sessionsResponses(method, pattern string) (map[string]any, bool) {
 	if responses, ok := sessionsRunPreviewResponses(method, pattern); ok {
 		return responses, true
 	}
+	if responses, ok := sessionsRunFactsResponses(method, pattern); ok {
+		return responses, true
+	}
 	if responses, ok := sessionsRunAttachmentResponses(method, pattern); ok {
 		return responses, true
 	}
@@ -105,6 +108,25 @@ func sessionsResponses(method, pattern string) (map[string]any, bool) {
 		resp["200"] = oas.Obj(
 			"description", "the run's pin state for the caller",
 			"content", oas.Obj("application/json", oas.Obj("schema", sessionsRunPinStateSchema())),
+		)
+		return resp, true
+	}
+	if sessionsRunMarkRoute(method, pattern) {
+		// The caller's own snooze and done marks (run_mark.go): closed, like the pin's.
+		resp := api.GenericModuleResponses()
+		resp["200"] = oas.Obj(
+			"description", "the caller's snooze and done marks on the run",
+			"content", oas.Obj("application/json", oas.Obj("schema", sessionsRunMarkStateSchema())),
+		)
+		return resp, true
+	}
+	if sessionsRunNameArchiveRoute(method, pattern) {
+		// The session's name and archived mark (run_name_archive.go): each answers
+		// the run as it now is.
+		resp := api.GenericModuleResponses()
+		resp["200"] = oas.Obj(
+			"description", "the run resource after the change",
+			"content", oas.Obj("application/json", oas.Obj("schema", sessionsRunResourceSchema())),
 		)
 		return resp, true
 	}
@@ -218,6 +240,9 @@ func sessionsParameters(method, pattern string) []map[string]any {
 			oas.Param("limit", "query", limit, false, oas.Obj("type", "integer", "minimum", 1, "maximum", 1000)),
 			oas.Param("cursor", "query", "Opaque cursor returned by the previous page; used only with pagination=cursor.", false, oas.Obj("type", "string")),
 		}
+	}
+	if method == http.MethodGet && pattern == "/runs/{ref}/messages" {
+		return sessionsRunMessagesParameters()
 	}
 
 	if sessionsResolvePreviewRoute(method, pattern) {
@@ -506,6 +531,31 @@ func sessionsRunPinRoute(method, pattern string) bool {
 	return method == http.MethodPost || method == http.MethodDelete
 }
 
+// sessionsRunNameArchiveRoute is the rename and the archive toggle
+// (run_name_archive.go).
+func sessionsRunNameArchiveRoute(method, pattern string) bool {
+	switch method + " " + pattern {
+	case http.MethodPut + " /runs/{ref}/name", http.MethodPost + " /runs/{ref}/archive", http.MethodDelete + " /runs/{ref}/archive":
+		return true
+	}
+	return false
+}
+
+// sessionsRunMessagesParameters are the query parameters parseMessageQuery accepts
+// (session_messages.go); any other value of them is a 400.
+func sessionsRunMessagesParameters() []map[string]any {
+	return []map[string]any{
+		oas.Param("role", "query", "user (default) lists what the person sent; all adds the tool's answers.", false, oas.Obj("type", "string", "enum", oas.Enum("user", "all"))),
+		oas.Param("order", "query", "asc (default) pages from the first message, desc from the newest. Items are always oldest first.", false, oas.Obj("type", "string", "enum", oas.Enum("asc", "desc"))),
+		oas.Param("q", "query", "Keeps messages with this phrase anywhere in them, case-insensitive.", false, oas.Obj("type", "string", "maxLength", messageQueryMax)),
+		oas.Param("at", "query", "Keeps messages at or after this time.", false, oas.Obj("type", "string", "format", "date-time")),
+		oas.Param("limit", "query", "Page size; default 50, at most 200.", false, oas.Obj("type", "integer", "minimum", 1)),
+		oas.Param("cursor", "query", "The id a page continues from: next of the previous page.", false, oas.Obj("type", "integer", "minimum", 0)),
+		oas.Param("id", "query", "Reads one message whole, with text and later_same; the filters do not apply.", false, oas.Obj("type", "integer", "minimum", 1)),
+		oas.Param("text", "query", "1: every item of the page carries its whole text, bounded at 64 KiB per message as a read by id is, and the page holds at most 50 messages; later_same is not added.", false, oas.Obj("type", "string", "enum", oas.Enum("1"))),
+	}
+}
+
 // sessionsRunPinStateSchema is the exact body both pin routes answer with. It is
 // closed because the handlers write this one shape and nothing else.
 func sessionsRunPinStateSchema() map[string]any {
@@ -516,6 +566,27 @@ func sessionsRunPinStateSchema() map[string]any {
 			"run_ref", oas.Obj("type", "string", "description", "The operated session's stable reference."),
 			"pinned", oas.Obj("type", "boolean", "description", "Whether THIS caller has the session pinned; both directions are idempotent."),
 			"pinned_at", oas.Obj("type", "string", "description", "When this caller pinned it; present when pinned is true. Run list and get reads carry the same per-caller fields."),
+		),
+	)
+}
+
+// sessionsRunMarkRoute is the caller's own snooze and done marks (run_mark.go).
+func sessionsRunMarkRoute(method, pattern string) bool {
+	if pattern != "/runs/{ref}/snooze" && pattern != "/runs/{ref}/done" {
+		return false
+	}
+	return method == http.MethodPost || method == http.MethodDelete
+}
+
+// sessionsRunMarkStateSchema is the exact body all four mark routes answer with.
+func sessionsRunMarkStateSchema() map[string]any {
+	return oas.Obj(
+		"type", "object", "additionalProperties", false,
+		"required", oas.Enum("run_ref", "done"),
+		"properties", oas.Obj(
+			"run_ref", oas.Obj("type", "string", "description", "The operated session's stable reference."),
+			"snoozed_until", oas.Obj("type", "string", "format", "date-time", "description", "When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields."),
+			"done", oas.Obj("type", "boolean", "description", "Whether THIS caller has marked the session done; every direction is idempotent."),
 		),
 	)
 }

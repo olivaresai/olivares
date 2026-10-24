@@ -39,6 +39,7 @@ export function HashChip({
   const [copied, setCopied] = useState(false)
 
   if (!hash) return <span className="text-muted-foreground">—</span>
+  const short = truncateHash(hash, head, tail)
 
   const copy = async () => {
     try {
@@ -62,15 +63,19 @@ export function HashChip({
             'outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
             className,
           )}
-          aria-label={t('hash.copy')}
+          // The name starts with the text the chip shows (WCAG 2.5.3).
+          aria-label={`${label ? `${label} ` : ''}${short}, ${t('hash.copy')}`}
         >
           {label ? (
             // No `/70`: the label is real text, and the extra transparency put
             // it at 3.54:1 (dark) / 3.26:1 (light) on `bg-muted`. At full opacity
-            // the same token clears AA on that surface.
-            <span className="text-muted-foreground">{label}</span>
+            // the same token clears AA on that surface. The space keeps label and
+            // hash two words for assistive technology; the flex gap draws it.
+            <>
+              <span className="text-muted-foreground">{label}</span>{' '}
+            </>
           ) : null}
-          <span>{truncateHash(hash, head, tail)}</span>
+          <span>{short}</span>
           {copied ? (
             <Check className="size-3 text-success" />
           ) : (

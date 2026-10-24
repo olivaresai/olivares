@@ -6,7 +6,7 @@ description: >-
 draft: false
 ---
 
-The next release is <!-- release -->`0.3`<!-- /release -->; its GitHub release is not published yet. The commands below describe the planned artifacts. Build from source until publication, then verify each artifact before use. See <!-- release -->`docs/releases/0.3-install-surfaces.json`<!-- /release --> for the observed publication state.
+The next release is <!-- release -->`0.4`<!-- /release -->; its GitHub release is not published yet. The commands below describe the planned artifacts. Build from source until publication, then verify each artifact before use. See <!-- release -->`docs/releases/0.4-install-surfaces.json`<!-- /release --> for the observed publication state.
 
 This is the macOS path that `INSTALL.md` names as recommended. It installs the
 signed `olivares` binary through the Homebrew cask and clears the Gatekeeper

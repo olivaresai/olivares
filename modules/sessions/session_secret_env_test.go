@@ -219,6 +219,7 @@ func TestSecretEnv_RefusesReservedAndMalformedNames(t *testing.T) {
 		{{Env: "", Secret: "env/github"}},
 		{{Env: "GITHUB_TOKEN", Secret: "mcp/github"}},
 		{{Env: "GITHUB_TOKEN", Secret: "sessions/provider/x"}},
+		{{Env: "GITHUB_TOKEN", Secret: "credential/prod-db"}}, // a managed credential reaches a session only through its helper
 		{{Env: "GITHUB_TOKEN", Secret: "env/"}},
 		{{Env: "GITHUB_TOKEN", Secret: "env/github"}, {Env: "GITHUB_TOKEN", Secret: "env/quoted"}},
 	} {

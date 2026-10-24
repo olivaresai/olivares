@@ -25,10 +25,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from '@/components/ui/toaster'
 import { SectionCard } from '@/features/_intel'
 import { useAuth } from '@/lib/auth/context'
-import { ApiError } from '@/lib/api/errors'
+import { ApiError, isOpenCoreSeam } from '@/lib/api/errors'
 import type { ReactNode } from 'react'
 import { claudePolicyApi, claudePolicyKeys, isContractPending } from './api'
 import {
+  BusinessRequiredNotice,
   ContractPendingNotice,
   DeclaredSection,
   ValidationPanel,
@@ -146,6 +147,11 @@ export function PolicyAuthoringPanel({
       toast.success(t('publish.done'))
     },
     onError: (e) => {
+      if (isOpenCoreSeam(e)) {
+        setPublishPending(false)
+        setConfirmOpen(false)
+        return
+      }
       if (isContractPending(e)) {
         setPublishPending(true)
         setConfirmOpen(false)
@@ -167,6 +173,8 @@ export function PolicyAuthoringPanel({
       )
     },
   })
+  const publishEditionGated =
+    publishMutation.isError && isOpenCoreSeam(publishMutation.error)
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_22rem]">
@@ -279,6 +287,7 @@ export function PolicyAuthoringPanel({
         {publishPending && (
           <ContractPendingNotice what={t('panel.publishWhat')} />
         )}
+        {publishEditionGated && <BusinessRequiredNotice />}
         {published && <PublishResultPanel result={published} />}
       </div>
 

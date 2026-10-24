@@ -29,6 +29,7 @@
     "inventory": "Inventario",
     "sessions": "Sessioni",
     "accessMap": "Mappa degli accessi",
+    "reach": "Portata",
     "health": "Stato e SLA",
     "capabilities": "MCP e skill",
     "skills": "Catalogo skill",
@@ -43,7 +44,7 @@
     "permissions": "Permessi",
     "identity": "Identità e accesso",
     "vault": "Cassaforte",
-    "claudePolicy": "Governance di Claude Code",
+    "claudePolicy": "Policy gestita",
     "routinePolicies": "Policy delle routine",
     "deploy": "Deployment",
     "gitPublication": "Pubblicazione Git",
@@ -55,7 +56,7 @@
     "agentArtifacts": "Artefatti degli agenti",
     "models": "Modelli",
     "modelOps": "Operazioni sui modelli",
-    "adoption": "Adozione di Claude Code",
+    "adoption": "Adozione",
     "evals": "Eval",
     "security": "Sicurezza",
     "recordings": "Registrazioni",
@@ -79,7 +80,7 @@
     "logs": "Log",
     "inferenceProxy": "Proxy di inferenza",
     "alerting": "Avvisi",
-    "agentcoreExport": "Esportazione AgentCore",
+    "agentcoreExport": "Esportazione delle policy",
     "providers": "Provider",
     "providerProfiles": "Profili provider",
     "providerBindings": "Binding delle sorgenti",
@@ -105,6 +106,7 @@
     "inventory": "Individua e cataloga gli agenti, i server MCP e i modelli osservati dai connettori.",
     "sessions": "Avvia sessioni e segui che cosa fa ciascuna, comprese quelle che Olivares trova",
     "accessMap": "Che cosa legge e scrive ogni agente (R/RW)",
+    "reach": "Vedi quali destinazioni può raggiungere ogni strumento e quali attendono approvazione.",
     "health": "Uptime e SLA di agenti e MCP",
     "capabilities": "Governa server MCP, skill e strumenti",
     "skills": "Sfoglia i pacchetti di skill e assegnali a reparti, gruppi di agenti e agenti",
@@ -128,7 +130,7 @@
     "agentops": "Avvia sessioni e segui che cosa fa ciascuna, comprese quelle che Olivares trova",
     "agentArtifacts": "Skill, estensioni MCP e file di istruzioni: registro, postura e BOM della supply chain",
     "models": "Modelli, instradamento e chiavi dei provider",
-    "agent-tools": "Rileva, installa e aggiorna gli strumenti per agenti su questo host e segui ogni installazione; solo per gli amministratori del deployment",
+    "agent-tools": "Vedi gli account e le chiavi API con cui girano le sessioni; installare gli strumenti ed eseguirne l'accesso spetta agli amministratori del deployment",
     "mcpServers": "Collega server MCP remoti a questa organizzazione, provali e scegli quali strumenti possono usare le sessioni",
     "modelOps": "Modelli di proprietà, ammissione e deployment",
     "finops": "Costo dei token, budget e spesa",
@@ -186,6 +188,9 @@
     }
   },
   "aliases": {
+    "claudePolicy": "Governance di Claude Code · Claude Code",
+    "adoption": "Adozione di Claude Code · Claude Code",
+    "agentcoreExport": "Esportazione AgentCore · AgentCore",
     "sessions": "Sessioni · Osserva sessioni · Gestisci sessioni · Claude Code · agentops",
     "agentops": "Gestisci sessioni · Claude Code · agentops · Portale operativo di Claude Code",
     "console": "Console di controllo · Amministrazione del tenant"
@@ -242,14 +247,14 @@
       }
     },
     "deployment": {
-      "label": "Deployment",
+      "label": "Consegna",
       "question": "Come preparo e controllo un deployment?",
       "sections": {
         "deployments": "Deployment"
       }
     },
     "observation": {
-      "label": "Osservabilità ed evidenze",
+      "label": "Supervisione",
       "question": "Che cosa sta succedendo, quanto costa e che cosa posso dimostrare?",
       "sections": {
         "operations": "Stato e attività",
@@ -272,8 +277,6 @@
     "areas": "Aree",
     "expand": "Mostra i moduli di {{area}}",
     "collapse": "Nascondi i moduli di {{area}}",
-    "expandAll": "Espandi tutte le aree",
-    "collapseAll": "Comprimi tutte le aree",
     "modulesOf": "Moduli di {{area}}",
     "empty": "Nessuna voce di quest'area è disponibile per te",
     "emptyHint": "Le voci compaiono qui quando il tuo ruolo nell'organizzazione corrente dà accesso a un modulo di quest'area.",
@@ -327,7 +330,9 @@
     "noProfileRead": "Una sessione viene eseguita come profilo provider e il tuo ruolo non include il permesso di leggerli.",
     "readFailed": "Non è stato possibile leggere i profili provider, quindi da qui non si può avviare una sessione.",
     "send": "Invia",
-    "turnPlaceholder": "Invia una frase…",
+    "ended": "Questa sessione è terminata.",
+    "starting": "La sessione si sta avviando…",
+    "startAgain": "Riavvia la sessione per inviare un messaggio.",
     "turnAria": "Turno della sessione",
     "attachedWaiting": "Ti aspetta",
     "rawLine": "Riga grezza",
@@ -337,7 +342,6 @@
     "turnFailed": "La sessione non ha potuto accettare questo turno.",
     "draftSaveFailed": "Non è stato possibile salvare la bozza in questa scheda. Tieni aperta questa pagina o copia il messaggio prima di uscire.",
     "sendBackgroundHint": "Ctrl+Invio invia e tiene pronta la bozza per la frase successiva.",
-    "messagePlaceholder": "Scrivi a {{title}}…",
     "slashLabel": "Comandi e skill",
     "slashOption": "{{name}}, {{i}} di {{n}}",
     "slashNoMatch": "Nessun comando corrisponde a “{{query}}”.",
@@ -354,27 +358,33 @@
         "plugin": "Plugin"
       }
     },
-    "modelAria": "Modello e livello di impegno di questa sessione: {{value}}",
     "sessionKeeps": "Questa sessione mantiene {{value}}. Una scelta diversa avvia una nuova sessione.",
-    "startWithChoice": "Avvia una nuova sessione con questa scelta"
+    "startWithChoice": "Avvia una nuova sessione con questa scelta",
+    "askPlaceholder": "Chiedi qualsiasi cosa, / per comandi e skill",
+    "modelPicker": "Modello: {{value}}",
+    "effortPicker": "Impegno: {{value}}",
+    "accessPicker": "Accesso: {{value}}",
+    "accessKeeps": "Questa sessione mantiene il suo accesso. Un accesso diverso avvia una nuova sessione."
   },
   "shell": {
     "journeysLabel": "Percorsi",
     "journeys": {
       "home": "Adesso",
       "sessions": "Sessioni",
-      "approvals": "Approvazioni",
-      "storedBudgets": "Budget",
-      "agent-tools": "Strumenti IA"
+      "agent-tools": "Strumenti",
+      "rules": "Regole",
+      "audit": "Registro",
+      "organization": "Organizzazione",
+      "storedBudgets": "Budget"
     },
     "phoneBarLabel": "Principale",
     "newSession": "Nuova sessione",
     "searchCommands": "Cerca e comandi",
-    "brandHome": "Olivares AI, home",
+    "search": "Cerca",
+    "stopAll": "Ferma tutto",
     "allAreas": "Tutte le aree",
     "more": "Altro",
     "moreLabel": "Altro: tutte le aree",
-    "workspaceSwitch": "Cambia workspace. Corrente: {{name}}",
     "workspaceCount": "Workspace: {{count}}",
     "rail": {
       "title": "Sessioni",
@@ -412,7 +422,8 @@
     "panel": {
       "show": "Mostra {{title}}",
       "hide": "Nascondi {{title}}",
-      "close": "Chiudi il pannello"
+      "close": "Chiudi il pannello",
+      "resize": "Ridimensiona {{title}}"
     },
     "keys": {
       "command": {
@@ -432,6 +443,19 @@
       "agentStops_many": "{{count}} arresti di agenti attivi",
       "agentStops_other": "{{count}} arresti di agenti attivi",
       "none": "Nulla è fermo. Sessioni e agenti funzionano normalmente."
+    },
+    "status": {
+      "label": "Stato",
+      "running_one": "{{count}} sessione aperta",
+      "running_many": "{{count}} sessioni aperte",
+      "running_other": "{{count}} sessioni aperte",
+      "usage": "Utilizzo di {{tool}}",
+      "fiveHour": "5 h",
+      "week": "sett.",
+      "version": "Versione"
+    },
+    "account": {
+      "version": "Versione {{version}}"
     }
   }
 }

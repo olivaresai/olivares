@@ -7,9 +7,20 @@ import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 import type { ConversationItem } from './conversation-frames'
 
-/** A first message the console sent to a session it started. */
+/** A message the console sent to a session: the first one of a launch, or one from the
+ * message bar (dev#2787). */
 export interface SentTurn {
   text: string
+  /** The attach `seq` of the newest frame the session had shown when this one was sent:
+   * only a row a later frame started can be its echo. A seq never moves, where a row's
+   * place in the shown window does (review of #2855). Absent on a launch's first
+   * message, which any row can echo. */
+  after?: number
+  /** How many rows of its words the session showed when it was sent. More of them now
+   * means the tool showed it, even where the frame that did is gone: a Codex thread read
+   * back from its store after a remount, or after the run left this node (review round 2
+   * of #2855). Absent with `after`. */
+  shown?: number
   /** Why the engine did not take it; absent when it did. */
   refused?: string
   /** Held until its launch is approved and the session runs (#500); absent once sent. */
@@ -38,12 +49,64 @@ export function sentTurnsPartition(): string {
  * session shows. */
 export const useSentTurns = create<{
   byRun: Record<string, readonly OwnedTurn[]>
+  /** The attach `seq` of the newest frame each run's conversation has shown. Kept across
+   * a remount: the frames it names do not change. */
+  seen: Record<string, number>
+  /** How many operator rows of each words each run's conversation showed, as of `seen`. */
+  said: Record<string, Readonly<Record<string, number>>>
+  see: (
+    runRef: string,
+    seq: number,
+    said: Readonly<Record<string, number>>,
+  ) => void
+  /** Forgets the notes the tool has shown: its own rows tell them from now on. A note of
+   * the same words still waiting needs a row after that one. */
+  drop: (runRef: string, echoed: readonly Echo[]) => void
   /** `partition` is sentTurnsPartition() taken when the start BEGAN: a start that
    * completes after a sign-out or an organization change notes nothing. A note settles
    * the run's held turn with the same words. */
   note: (partition: string, runRef: string, turn: SentTurn) => void
 }>((set) => ({
   byRun: {},
+  seen: {},
+  said: {},
+  see: (runRef, seq, said) =>
+    set((s) =>
+      s.seen[runRef] === seq && s.said[runRef] === said
+        ? s
+        : {
+            seen: { ...s.seen, [runRef]: seq },
+            said: { ...s.said, [runRef]: said },
+          },
+    ),
+  drop: (runRef, echoed) =>
+    set((s) => {
+      const partition = sentTurnsPartition()
+      let left = [...(s.byRun[runRef] ?? [])]
+      for (const { turn, seq } of echoed) {
+        const same = (t: OwnedTurn) =>
+          t.partition === partition &&
+          t.text === turn.text &&
+          !t.refused &&
+          !t.waiting
+        const at = left.findIndex(same)
+        if (at < 0) continue
+        left.splice(at, 1)
+        left = left.map((t) =>
+          same(t)
+            ? {
+                ...t,
+                ...(t.after !== undefined && seq !== undefined && seq > t.after
+                  ? { after: seq }
+                  : {}),
+                ...(t.shown === undefined ? {} : { shown: t.shown + 1 }),
+              }
+            : t,
+        )
+      }
+      if (left.length === (s.byRun[runRef] ?? []).length) return s
+      return { byRun: { ...s.byRun, [runRef]: left } }
+    }),
   note: (partition, runRef, turn) => {
     if (partition !== sentTurnsPartition()) return
     set((s) => ({
@@ -53,7 +116,10 @@ export const useSentTurns = create<{
           ...(s.byRun[runRef] ?? []).filter(
             (t) => !(t.waiting && t.text === turn.text),
           ),
-          { ...turn, partition },
+          {
+            ...turn,
+            partition,
+          },
         ],
       },
     }))
@@ -64,10 +130,11 @@ export const useSentTurns = create<{
 // leaves no person's words behind in this tab.
 useSessionStore.subscribe((s, prev) => {
   if (s.credentialGeneration !== prev.credentialGeneration)
-    useSentTurns.setState({ byRun: {} })
+    useSentTurns.setState({ byRun: {}, seen: {}, said: {} })
 })
 useTenantStore.subscribe((s, prev) => {
-  if (s.activeTenant !== prev.activeTenant) useSentTurns.setState({ byRun: {} })
+  if (s.activeTenant !== prev.activeTenant)
+    useSentTurns.setState({ byRun: {}, seen: {}, said: {} })
 })
 
 function owned(
@@ -76,8 +143,10 @@ function owned(
 ): readonly SentTurn[] | undefined {
   const own = turns
     ?.filter((t) => t.partition === partition)
-    .map(({ text, refused, waiting }) => ({
+    .map(({ text, after, shown, refused, waiting }) => ({
       text,
+      ...(after === undefined ? {} : { after }),
+      ...(shown === undefined ? {} : { shown }),
       ...(refused === undefined ? {} : { refused }),
       ...(waiting ? { waiting } : {}),
     }))
@@ -105,21 +174,72 @@ export function useRunSentTurns(
 
 const words = (value: string) => value.replace(/\s+/g, ' ').trim()
 
-/** The sent messages the tool has not shown yet: one the tool echoed (the same words as
- * one of its operator rows, each row counted once) is shown by that row instead. A
- * refused or held message never reached the tool, so it stays. */
-export function unechoedTurns(
+/** How many operator rows of each words a conversation shows. */
+export function wordsShown(
+  items: readonly ConversationItem[],
+): Record<string, number> {
+  const said: Record<string, number> = {}
+  for (const item of items)
+    if (item.kind === 'operator') {
+      const w = words(item.text ?? item.summary)
+      said[w] = (said[w] ?? 0) + 1
+    }
+  return said
+}
+
+/** Where a message sent now goes in its run's conversation: read at the send, because
+ * the tool's echo can render before the engine's answer (dev#2787). */
+export function sentPlace(
+  runRef: string,
+  text: string,
+): Pick<SentTurn, 'after' | 'shown'> {
+  const { seen, said } = useSentTurns.getState()
+  const after = seen[runRef]
+  if (after === undefined) return {}
+  return { after, shown: said[runRef]?.[words(text)] ?? 0 }
+}
+
+/** A sent message the tool showed, and the `seq` of the row that shows it. */
+export interface Echo {
+  turn: SentTurn
+  seq?: number
+}
+
+/** The sent messages the tool has not shown yet, and the ones it has: one the tool
+ * echoed is shown by that row instead, each row counted once. Its echo is a row of the
+ * same words started by a frame after the newest one shown when it was sent, or, where
+ * that frame is gone, one more row of its words than were shown then. A refused or held
+ * message never reached the tool, so it stays. */
+export function settleTurns(
   items: readonly ConversationItem[],
   sent: readonly SentTurn[],
-): SentTurn[] {
-  const echoed = items
+): { pending: SentTurn[]; echoed: Echo[] } {
+  const rows: ({ seq?: number; words: string } | null)[] = items
     .filter((i) => i.kind === 'operator')
-    .map((i) => words(i.text ?? i.summary))
-  return sent.filter((turn) => {
-    if (turn.refused || turn.waiting) return true
-    const at = echoed.indexOf(words(turn.text))
-    if (at < 0) return true
-    echoed.splice(at, 1)
-    return false
-  })
+    .map((i) => ({ seq: i.seq, words: words(i.text ?? i.summary) }))
+  const pending: SentTurn[] = []
+  const echoed: Echo[] = []
+  for (const turn of sent) {
+    if (turn.refused || turn.waiting) {
+      pending.push(turn)
+      continue
+    }
+    const { after, shown } = turn
+    const same = rows.flatMap((row, i) =>
+      row?.words === words(turn.text) ? [i] : [],
+    )
+    let at = same.find((i) => {
+      const seq = rows[i]!.seq
+      return after === undefined || (seq !== undefined && seq > after)
+    })
+    if (at === undefined && shown !== undefined && same.length > shown)
+      at = same[same.length - 1]
+    if (at === undefined) {
+      pending.push(turn)
+      continue
+    }
+    echoed.push({ turn, seq: rows[at]!.seq })
+    rows[at] = null
+  }
+  return { pending, echoed }
 }

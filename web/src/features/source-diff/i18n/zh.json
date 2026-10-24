@@ -28,7 +28,7 @@
   "forbidden": "此比较需要 system:admin。只有超级管理员拥有它。所有者或管理员不能授予它。",
   "hostForbidden": "Git 主机拒绝了读取。",
   "hostForbiddenBody": "缺少的不是 system:admin。",
-  "unknownRef": "unknown ref",
+  "unknownRef": "未知引用",
   "upstream": "读取 Git 主机失败",
   "tryAgain": "重试",
   "returnToSources": "返回来源",

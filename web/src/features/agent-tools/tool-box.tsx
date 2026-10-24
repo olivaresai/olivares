@@ -24,7 +24,6 @@ export function ToolBox({
   onUpdate,
   onDetails,
   updateDisabled,
-  profilesHref,
   onAdd,
   children,
 }: {
@@ -36,8 +35,6 @@ export function ToolBox({
   updateDisabled?: boolean
   /** Open the install details sheet. */
   onDetails: () => void
-  /** The detailed profiles page; omitted for a tool that has no profiles. */
-  profilesHref?: string
   /** Open Add profile; omitted for a tool that has no profiles. */
   onAdd?: () => void
   /** The profile rows (`li`) or, for a service, its own panel. */
@@ -82,11 +79,6 @@ export function ToolBox({
             <DropdownMenuItem onSelect={onDetails}>
               {t('tool.details')}
             </DropdownMenuItem>
-            {profilesHref ? (
-              <DropdownMenuItem asChild>
-                <a href={profilesHref}>{t('tool.profilesPage')}</a>
-              </DropdownMenuItem>
-            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

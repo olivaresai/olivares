@@ -17,7 +17,10 @@ import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { firstHourKeys } from '@/features/first-hour/api'
 import { useAuth } from '@/lib/auth/context'
-import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
+import {
+  failureText,
+  usePrivilegedMutation,
+} from '@/lib/hooks/use-privileged-mutation'
 import { providerKeys, providersApi } from './api'
 import { useProviderBoundary } from './auth-boundary'
 import type { ProviderRecordDTO } from './types'
@@ -42,10 +45,11 @@ export function ProviderRotateDialog({
   open: boolean
   onOpenChange: (o: boolean) => void
 }) {
-  const { t } = useTranslation('providers')
+  const { t } = useTranslation(['providers', 'errors'])
   const { activeTenant } = useAuth()
   const boundary = useProviderBoundary()
   const [apiKey, setApiKey] = useState('')
+  const [error, setError] = useState<string>()
 
   const rotate = usePrivilegedMutation<void, ProviderRecordDTO>({
     mutationFn: () =>
@@ -61,11 +65,18 @@ export function ProviderRotateDialog({
       setApiKey('')
       onOpenChange(false)
     },
+    // The open dialog hides the toast from screen readers: say it on the field.
+    onError: (err) => {
+      setError(failureText(err) ?? t('errors:generic'))
+      return true
+    },
   })
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
-    if (apiKey.trim() !== '' && !rotate.isPending) rotate.mutate()
+    if (apiKey.trim() === '' || rotate.isPending) return
+    setError(undefined)
+    rotate.mutate()
   }
 
   return (
@@ -85,6 +96,7 @@ export function ProviderRotateDialog({
           <Field
             label={t('create.apiKey')}
             description={t('create.apiKeyHint')}
+            error={error}
           >
             <Input
               type="password"

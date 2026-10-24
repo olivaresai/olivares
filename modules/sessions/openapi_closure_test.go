@@ -73,6 +73,9 @@ func TestSessionsClosureRequestBodyCensus(t *testing.T) {
 		{http.MethodPost, "/runs/{ref}/move", sessionsClosureBodyful, true},
 		{http.MethodPost, "/runs/{ref}/handoff", sessionsClosureBodyful, true},
 		{http.MethodPut, "/runs/{ref}/peers", sessionsClosureBodyful, true},
+		{http.MethodPut, "/runs/{ref}/name", sessionsClosureBodyful, true},
+		{http.MethodPost, "/runs/{ref}/archive", sessionsClosureBodyless, false},
+		{http.MethodDelete, "/runs/{ref}/archive", sessionsClosureBodyless, false},
 		{http.MethodPost, "/runs/{ref}/preview", sessionsClosureBodyful, true},
 		{http.MethodPost, "/templates", sessionsClosureBodyful, true},
 		{http.MethodDelete, "/templates/{id}", sessionsClosureBodyless, false},
@@ -109,7 +112,7 @@ func TestSessionsClosureRequestBodyCensus(t *testing.T) {
 		}
 		counts[test.kind]++
 	}
-	want := map[sessionsClosureRequestBodyKind]int{sessionsClosureBodyful: 17, sessionsClosureBodyless: 9}
+	want := map[sessionsClosureRequestBodyKind]int{sessionsClosureBodyful: 18, sessionsClosureBodyless: 11}
 	if !reflect.DeepEqual(counts, want) {
 		t.Fatalf("census = %#v, want %#v", counts, want)
 	}
@@ -123,6 +126,45 @@ func TestSessionsClosureRequestBodyCensus(t *testing.T) {
 	interrupt := operation{method: http.MethodPost, pattern: "/runs/{ref}/interrupt"}
 	if decl, ok := sessionsClosureRequestBodyDeclarationFor(interrupt.method, interrupt.pattern); ok {
 		t.Fatalf("interrupt is declared in the closure census as %#v; its body belongs with /input and /stop", decl)
+	}
+}
+
+// #2795: the rename body is the closed object its strict decoder reads, the two
+// archive routes and the rename answer with the run, and the messages read
+// publishes its parameters, text among them, with the values the handler accepts.
+func TestSessionsRunNameArchiveAndMessagesAreDocumented(t *testing.T) {
+	t.Parallel()
+	m := New()
+	rename := oastest.Op(t, m, "put", "/v1/m/sessions/runs/{ref}/name")
+	body := oastest.Map(t, oastest.Map(t, oastest.Map(t, rename["requestBody"], "request body")["content"], "content")["application/json"], "JSON body")
+	schema := oastest.Map(t, body["schema"], "schema")
+	name := oastest.Map(t, oastest.Map(t, schema["properties"], "properties")["name"], "name")
+	if schema["additionalProperties"] != false || !reflect.DeepEqual(oastest.Strings(schema["required"]), []string{"name"}) ||
+		name["type"] != "string" || name["maxLength"] != maxRunNameRunes {
+		t.Fatalf("rename schema = %#v", schema)
+	}
+	for _, op := range []map[string]any{rename,
+		oastest.Op(t, m, "post", "/v1/m/sessions/runs/{ref}/archive"),
+		oastest.Op(t, m, "delete", "/v1/m/sessions/runs/{ref}/archive"),
+	} {
+		ok := oastest.Map(t, oastest.Map(t, op["responses"], "responses")["200"], "200")
+		run := oastest.Map(t, oastest.Map(t, oastest.Map(t, ok["content"], "content")["application/json"], "JSON")["schema"], "run schema")
+		if !slices.Contains(oastest.Strings(run["required"]), "run_ref") {
+			t.Fatalf("200 answer = %#v, want the run resource", run)
+		}
+	}
+	params := map[string]map[string]any{}
+	for _, raw := range oastest.Op(t, m, "get", "/v1/m/sessions/runs/{ref}/messages")["parameters"].([]any) {
+		p := oastest.Map(t, raw, "parameter")
+		params[p["name"].(string)] = p
+	}
+	for _, want := range []string{"role", "order", "q", "at", "limit", "cursor", "id", "text"} {
+		if params[want] == nil || params[want]["in"] != "query" || params[want]["required"] == true {
+			t.Fatalf("messages parameter %s = %#v", want, params[want])
+		}
+	}
+	if got := oastest.Strings(oastest.Map(t, params["text"]["schema"], "text schema")["enum"]); !reflect.DeepEqual(got, []string{"1"}) {
+		t.Fatalf("text enum = %v, want only 1", got)
 	}
 }
 

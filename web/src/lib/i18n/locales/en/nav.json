@@ -29,6 +29,7 @@
     "inventory": "Inventory",
     "sessions": "Sessions",
     "accessMap": "Access map",
+    "reach": "Reach",
     "health": "Health & SLA",
     "capabilities": "MCP & skills",
     "skills": "Skills catalog",
@@ -43,7 +44,7 @@
     "permissions": "Permissions",
     "identity": "Identity & access",
     "vault": "Vault",
-    "claudePolicy": "Claude Code governance",
+    "claudePolicy": "Managed policy",
     "routinePolicies": "Routine policies",
     "deploy": "Deployment",
     "gitPublication": "Git publication",
@@ -55,7 +56,7 @@
     "agentArtifacts": "Agent Artifacts",
     "models": "Models",
     "modelOps": "Model Operations",
-    "adoption": "Claude Code Adoption",
+    "adoption": "Adoption",
     "evals": "Evals",
     "security": "Security",
     "recordings": "Recordings",
@@ -79,7 +80,7 @@
     "logs": "Logs",
     "inferenceProxy": "Inference proxy",
     "alerting": "Alerting",
-    "agentcoreExport": "AgentCore export",
+    "agentcoreExport": "Policy export",
     "providers": "Providers",
     "providerProfiles": "Provider profiles",
     "providerBindings": "Source bindings",
@@ -105,6 +106,7 @@
     "inventory": "Discover and catalog the agents, MCP servers and models that connectors observed.",
     "sessions": "Start sessions and follow what each one does, including the ones Olivares finds",
     "accessMap": "What each agent reads and writes (R/RW)",
+    "reach": "See which destinations each tool can reach, and which are waiting for approval.",
     "health": "Agent and MCP uptime and SLAs",
     "capabilities": "Govern MCP servers, skills and tools",
     "skills": "Browse skill packs and assign them to departments, agent groups and agents",
@@ -128,7 +130,7 @@
     "agentops": "Start sessions and follow what each one does, including the ones Olivares finds",
     "agentArtifacts": "Skills, MCP extensions and instruction files — registry, posture and supply-chain BOM",
     "models": "Models, routing and provider keys",
-    "agent-tools": "Detect, install and update the agent tools on this host and follow each install; deployment administrators only",
+    "agent-tools": "See the accounts and API keys sessions run as; installing and signing in the tools is for deployment administrators",
     "mcpServers": "Connect remote MCP servers to this organization, test them and choose which tools sessions may use",
     "modelOps": "Owned models, admission and deployments",
     "finops": "Token cost, budgets and spend",
@@ -186,6 +188,9 @@
     }
   },
   "aliases": {
+    "claudePolicy": "Claude Code governance · Claude Code",
+    "adoption": "Claude Code Adoption · Claude Code",
+    "agentcoreExport": "AgentCore export · AgentCore",
     "sessions": "Sessions · Observe sessions · Operate sessions · Claude Code · agentops",
     "agentops": "Operate sessions · Claude Code · agentops · Claude Code operate portal",
     "console": "Control console · Tenant administration"
@@ -242,14 +247,14 @@
       }
     },
     "deployment": {
-      "label": "Deployment",
+      "label": "Delivery",
       "question": "How do I prepare and control a deployment?",
       "sections": {
         "deployments": "Deployments"
       }
     },
     "observation": {
-      "label": "Observability & evidence",
+      "label": "Oversight",
       "question": "What is happening, what does it cost, and what can I prove?",
       "sections": {
         "operations": "Status and activity",
@@ -272,8 +277,6 @@
     "areas": "Areas",
     "expand": "Show {{area}} modules",
     "collapse": "Hide {{area}} modules",
-    "expandAll": "Expand all areas",
-    "collapseAll": "Collapse all areas",
     "modulesOf": "{{area}} modules",
     "empty": "No entries in this area are available to you",
     "emptyHint": "Entries appear here when your role in the current organization grants access to a module of this area.",
@@ -327,7 +330,9 @@
     "noProfileRead": "A session runs as a provider profile, and your role does not include permission to read them.",
     "readFailed": "The provider profiles could not be read, so a session cannot be started from here.",
     "send": "Send",
-    "turnPlaceholder": "Send a sentence…",
+    "ended": "This session has ended.",
+    "starting": "The session is starting…",
+    "startAgain": "Start the session again to send a message.",
     "turnAria": "Session turn",
     "attachedWaiting": "Needs you",
     "rawLine": "Raw line",
@@ -337,7 +342,6 @@
     "turnFailed": "The session could not accept this turn.",
     "draftSaveFailed": "Draft could not be saved in this tab. Keep this page open or copy your message before leaving.",
     "sendBackgroundHint": "Ctrl+Enter sends and keeps the draft ready for the next sentence.",
-    "messagePlaceholder": "Message {{title}}…",
     "slashLabel": "Commands and skills",
     "slashOption": "{{name}}, {{i}} of {{n}}",
     "slashNoMatch": "No command matches “{{query}}”.",
@@ -354,27 +358,33 @@
         "plugin": "Plugin"
       }
     },
-    "modelAria": "Model and effort of this session: {{value}}",
     "sessionKeeps": "This session keeps {{value}}. A different choice starts a new session.",
-    "startWithChoice": "Start a new session with this choice"
+    "startWithChoice": "Start a new session with this choice",
+    "askPlaceholder": "Ask anything, / for commands and skills",
+    "modelPicker": "Model: {{value}}",
+    "effortPicker": "Effort: {{value}}",
+    "accessPicker": "Access: {{value}}",
+    "accessKeeps": "This session keeps its access. A different access starts a new session."
   },
   "shell": {
     "journeysLabel": "Journeys",
     "journeys": {
       "home": "Now",
       "sessions": "Sessions",
-      "approvals": "Approvals",
-      "storedBudgets": "Budgets",
-      "agent-tools": "AI tools"
+      "agent-tools": "Tools",
+      "rules": "Rules",
+      "audit": "Ledger",
+      "organization": "Organization",
+      "storedBudgets": "Budgets"
     },
     "phoneBarLabel": "Main",
     "newSession": "New session",
     "searchCommands": "Search and commands",
-    "brandHome": "Olivares AI, home",
+    "search": "Search",
+    "stopAll": "Stop all",
     "allAreas": "All areas",
     "more": "More",
     "moreLabel": "More: all areas",
-    "workspaceSwitch": "Switch workspace. Current: {{name}}",
     "workspaceCount": "Workspaces: {{count}}",
     "rail": {
       "title": "Sessions",
@@ -412,7 +422,8 @@
     "panel": {
       "show": "Show {{title}}",
       "hide": "Hide {{title}}",
-      "close": "Close the panel"
+      "close": "Close the panel",
+      "resize": "Resize {{title}}"
     },
     "keys": {
       "command": {
@@ -431,6 +442,18 @@
       "agentStops_one": "{{count}} agent stop active",
       "agentStops_other": "{{count}} agent stops active",
       "none": "Nothing is stopped. Sessions and agents run normally."
+    },
+    "status": {
+      "label": "Status",
+      "running_one": "{{count}} session open",
+      "running_other": "{{count}} sessions open",
+      "usage": "{{tool}} usage",
+      "fiveHour": "5h",
+      "week": "wk",
+      "version": "Version"
+    },
+    "account": {
+      "version": "Version {{version}}"
     }
   }
 }

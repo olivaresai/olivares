@@ -10,8 +10,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ApiError } from '@/lib/api/errors'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError, NetworkError } from '@/lib/api/errors'
 
 const mockNavigate = vi.fn()
 vi.mock('@tanstack/react-router', () => ({
@@ -189,5 +189,61 @@ describe('AcceptInvitePage', () => {
     )
     await user.click(screen.getByRole('button', { name: /activate account/i }))
     expect(await screen.findByRole('alert')).toHaveTextContent(/at least 8/i)
+  })
+})
+
+// olivares#2781: an invite whose request gets no answer is worded by how the page was opened.
+describe('AcceptInvitePage: a request that gets no answer', () => {
+  const realLocation = window.location
+  afterEach(() => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: realLocation,
+    })
+  })
+
+  async function submitFailing(error: Error, openedAs: string) {
+    setUrl('#token=olvi_sel_secret')
+    const { protocol, origin } = new URL(openedAs)
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...realLocation, protocol, origin },
+    })
+    mockAcceptInvite.mockRejectedValue(error)
+    const user = userEvent.setup()
+    render(<AcceptInvitePage />, { wrapper: Wrapper })
+    await user.type(screen.getByLabelText(/new password/i), 'long-enough-pass')
+    await user.type(
+      screen.getByLabelText(/confirm password/i),
+      'long-enough-pass',
+    )
+    await user.click(screen.getByRole('button', { name: /activate account/i }))
+    return screen.findByRole('alert')
+  }
+
+  it('over http says the control plane is unreachable', async () => {
+    const alert = await submitFailing(
+      new NetworkError('down'),
+      'http://localhost:8080/',
+    )
+    expect(alert).toHaveTextContent('Control plane unreachable')
+  })
+
+  it('over https names the certificate and the next step', async () => {
+    const alert = await submitFailing(
+      new NetworkError('down'),
+      'https://192.168.8.17:8443/',
+    )
+    expect(alert).not.toHaveTextContent('Control plane unreachable')
+    expect(alert).toHaveTextContent('https://192.168.8.17:8443')
+    expect(alert).toHaveTextContent('tls.crt.ca')
+  })
+
+  it('over https a failure that is not a transport failure keeps the old line', async () => {
+    const alert = await submitFailing(
+      new TypeError('boom'),
+      'https://192.168.8.17:8443/',
+    )
+    expect(alert).toHaveTextContent('Control plane unreachable')
   })
 })

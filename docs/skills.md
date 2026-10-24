@@ -20,17 +20,33 @@ profile; a caller without those rights receives not found.
 
 Claude Code discovers them at `$HOME/.claude/skills/<name>/SKILL.md` through the
 session's `olivares` plugin; its skill names are `olivares:<name>`. Codex, Gemini
-CLI, Grok Build and OpenCode discover them at
-`$HOME/.agents/skills/<name>/SKILL.md`. These locations are in a temporary
+CLI and Grok Build discover them at `$HOME/.agents/skills/<name>/SKILL.md`, and
+OpenCode at `$HOME/.opencode/skills/<name>/SKILL.md`, its own configuration folder.
+OpenCode sessions turn off its scans for Claude Code and shared agent skill
+folders (`OPENCODE_DISABLE_EXTERNAL_SKILLS`). In a session folder that is not a
+git repository, those scans would otherwise read every folder above the session
+folder. The session folder's own two skill folders of those kinds are listed again
+in the launch's inline `skills.paths`, which replaces a `skills.paths` set in the
+account's configuration. A session in a subfolder of a git repository therefore
+no longer lists those skill folders at the repository root; OpenCode's own
+configuration folders above the session folder are still read (#3011). These locations are in a temporary
 HOME managed by the engine. The account's configuration home remains in use.
 For Gemini CLI, `GEMINI_CLI_HOME` also names this temporary home, whose `.gemini`
 links to the selected profile's configuration directory.
 The engine never places assigned skills in the session's repository.
 
-The `.agents/skills` alias is documented by [Gemini CLI](https://geminicli.com/docs/cli/skills/),
-[Grok Build](https://github.com/xai-org/grok-build/blob/main/crates/codegen/xai-grok-pager/docs/user-guide/08-skills.md)
-and [OpenCode](https://opencode.ai/docs/skills/). A tool without a documented native
+The `.agents/skills` alias is documented by [Gemini CLI](https://geminicli.com/docs/cli/skills/)
+and [Grok Build](https://github.com/xai-org/grok-build/blob/main/crates/codegen/xai-grok-pager/docs/user-guide/08-skills.md),
+and the `.opencode/skills` folder by [OpenCode](https://opencode.ai/docs/skills/). A tool without a documented native
 skills folder refuses assigned delivery with its name and the reason.
+OpenCode also offers each skill as a `/command` and expands it like one, outside the
+session's approvals, so an OpenCode launch refuses a skill with shell interpolation
+(``!`cmd` ``), with a `$ARGUMENTS` or `$1` placeholder next to `!`, a backtick or `@`,
+or with a reference (`@name`) to a `.env` file, a path in the home folder, an existing
+path outside the session folder, or an agent. OpenCode resolves such a path from the
+folder's git repository, or from `/`, so the check runs at launch against what exists on
+the host then. A bare word such as CSS `@media` that names a folder is allowed: OpenCode
+lists that folder's names, not its files, to the model.
 
 The delivered tree and its discovery directory are read-only. Cache directories
 remain writable. Assigned delivery requires a native session and filesystem
@@ -174,7 +190,8 @@ olivares skills diff <pack-id> --diff
 olivares skills selection --workspace <workspace-id> --folder <folder-ref>
 ```
 
-Agents and commands are delivered only to Claude Code, in the session plugin's
+Agents, commands and rules are delivered to Claude Code and OpenCode. Claude Code
+gets agents and commands in the session plugin's
 `agents/` and `commands/` directories. Claude reports them under the `olivares:`
 namespace in its own catalog and the session's `/` menu. Rules have no plugin
 slot: the engine places them in Claude Code's user rules directory within the
@@ -182,11 +199,29 @@ session's private HOME. It passes that HOME as an explicit additional memory
 directory, using
 [Claude Code's documented discovery mechanism](https://code.claude.com/docs/en/memory#load-from-additional-directories).
 The account configuration and governed settings restrictions stay in effect.
-A launch using another tool refuses these kinds by tool name.
+
+OpenCode reads agents and commands from `.opencode/agents/` and
+`.opencode/commands/` in the session's private HOME, and rules from the files its
+inline configuration lists in `instructions`, after the account's own. The account
+configuration directory is not changed. The engine rewrites each agent and command
+with only its description. An agent becomes a subagent: the OpenCode built-in tools
+its `tools` list does not name, or its `disallowedTools` names, are denied, and every
+other tool, MCP tools included, stays under the session's permissions. A model, a
+command tool pre-approval and an argument hint are dropped. An OpenCode session starts
+no subagent, so a delivered agent is listed but does not run: OpenCode does not pass a
+subagent's approval requests to Olivares, which would leave the agent waiting or acting
+unaudited. For the same reason a session refuses OpenCode's built-in `/review`, which
+always runs as a subagent; ask for the review in your own words. A command that the
+session folder's own OpenCode configuration marks as a subagent task is not yet refused.
+OpenCode runs a command's shell interpolation (``!`cmd` ``) and reads its file
+references (`@path`) outside the session's approvals, so such a command refuses the
+launch. So does a command whose `$ARGUMENTS` or `$1` placeholder sits next to `!`, a
+backtick or `@`, which typed arguments could complete; an agent named after one of
+OpenCode's built-in agents; and a `tools` value that is not a list. A launch using another tool refuses these kinds by tool name.
 
 Rules without path scopes or file imports are supported. Path-scoped rules
 (`paths` frontmatter) and rules containing `@file` imports refuse
-a governed Claude Code launch: the additional-directory route cannot preserve
+a governed Claude Code or OpenCode launch: neither route can preserve
 their scope or source-relative import paths against the session's workspace. Their bytes remain installable and
 reviewable in the catalog. Rules do not enforce behavior outside the tool's
 instruction context.
@@ -203,6 +238,6 @@ immutable revision path for every kind.
 Rule `@file` imports require approval in the catalog, including metadata and examples
 in code blocks, and refuse launch because composition cannot preserve their paths.
 Copy the referenced instructions into the rule to use it in a governed session. A skill and command with the same native slash name refuse
-a Claude launch rather than hiding either member. The console assignment form lets
+a Claude Code or OpenCode launch rather than hiding either member. The console assignment form lets
 you choose individual members; packs above the 64-member assignment limit require
 a choice.

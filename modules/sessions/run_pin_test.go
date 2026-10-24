@@ -247,7 +247,7 @@ func TestRunPinLeavesWhenTheSessionIsReleasedOrDeleted(t *testing.T) {
 		t.Fatalf("%d pin rows after the release, want 0", n)
 	}
 
-	if err := m.deleteRun(ctx, tenant, "run-old"); err != nil {
+	if err := m.deleteRun(ctx, tenant, "run-old", "test", model.ActorSystem); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 	if n := countRunPins(t, h.st, tenant); n != 0 {
@@ -576,7 +576,7 @@ func TestRunPinReleaseAndDeleteDropEveryPersonsPin(t *testing.T) {
 	if n := countRunPins(t, h.st, tenant); n != 2 {
 		t.Fatalf("%d pin rows before the delete, want the 2 left behind", n)
 	}
-	if err := m.deleteRun(ctx, tenant, "run-del"); err != nil {
+	if err := m.deleteRun(ctx, tenant, "run-del", "test", model.ActorSystem); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 	if n := countRunPins(t, h.st, tenant); n != 0 {

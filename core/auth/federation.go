@@ -26,6 +26,13 @@ var ErrSSONotConfigured = errors.New("auth: SSO not configured")
 // ErrSSONotConfigured so an operator can tell a misconfiguration from an absent IdP.
 var ErrSSOProviderUnavailable = errors.New("auth: SSO provider unavailable")
 
+// ErrSSOGroupsIndeterminate refuses a sign-in whose IdP said it did not send the user's
+// full group list (Entra group overage: more than 200 groups in a token, 150 in a SAML
+// assertion). Group membership is a security fact that deny rules reason over, so
+// "unknown" must never be read as "no groups". The text reaches the person who signed
+// in, so it names the fix and carries nothing from the assertion.
+var ErrSSOGroupsIndeterminate = errors.New("auth: sso_groups_indeterminate: the identity provider did not send this user's full group list, so sign-in is refused; in Entra, emit only the groups assigned to the application")
+
 // Protocol names the federation protocol a provider speaks.
 const (
 	// ProtocolOIDC is OpenID Connect (Authorization Code + PKCE).
@@ -108,6 +115,13 @@ type FederatedIdentity struct {
 	// operator-owned mapping resolves them (the IdP names the groups, the operator
 	// decides what they mean).
 	Groups []string
+	// GroupsIndeterminate is true when the IdP signalled that Groups is NOT the user's
+	// full list: the OIDC claim named by the groups claim is listed in `_claim_names`
+	// (aggregated or distributed claim, Entra group overage), or the SAML assertion
+	// carries Entra's groups.link attribute instead of the groups. Only set when the
+	// config reads groups at all. CompleteSSO refuses such a login wherever it would
+	// have used Groups, so unknown membership never becomes "no groups".
+	GroupsIndeterminate bool
 	// AAL is at most AAL2, based only on the selected provider's verified
 	// assertion and its operator-owned mapping. Zero is legacy AAL1.
 	AAL int

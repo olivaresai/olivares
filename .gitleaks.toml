@@ -885,6 +885,9 @@ regexes = [
     '''^EE6DB7B98F5BF5EDD9DA0DE5DEE5C11CC2A1E572$''',
     '''^de390fc168eae5ab2852e9e93d34a0b9ddf05cf9ce90ee28d97de26a4b1f6b93$''',
     '''^7D8D15CBFC4E62688591FB2633D98517E37ED158$''',
+    # Docker's release key: its fingerprint and the digest of the key file kept beside the recipe.
+    '''^060A61C51B558A7F742B77AAC52FEB6B621E9F35$''',
+    '''^e6c650e0700b1bf4868b693b30761b926844befc8a0acb7ac0dd9b1faf1b7423$''',
   ]
 
 # ── 2026-10-02 · generic-api-key · cmd/olivares/cli_error_safety_invalid_json_test.go:32,79

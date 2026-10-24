@@ -100,7 +100,7 @@ values in your declared `acl_columns` (e.g. an `owner_group` column → `group:e
 | Situation | What the connector does |
 |---|---|
 | An `owner_group` / role column | Maps each value to an ACL reference (`<acl_prefix><value>`). |
-| No `acl_columns` declared | The document inherits the knowledge base's **default ACL** — retrieval still enforces it. |
+| No `acl_columns` declared | The document inherits the knowledge base's **default ACL**. With no default ACL either, it is **denied** to everyone, so nothing in the table is visible until you decide: set a default ACL on the knowledge base, or declare the source public with `"public": "true"` in its config (every ingest or sync that stores rows as visible to the whole tenant leaves a `knowledge.source.public` audit entry). The setting applies to documents stored after it is set; re-ingest to change rows already stored. |
 | **Row-level security (RLS)** on the table | Respected implicitly: the connector's role sees exactly the rows RLS permits it to see. The connector does not re-implement RLS; it inherits it. |
 | A permission the table does **not** model as a column | **Not derivable** → not mapped. Model it as a column (or a joined ACL table via `query`) if you want it enforced. |
 

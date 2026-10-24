@@ -98,38 +98,20 @@ describe('area expansion (N1)', () => {
     ])
   })
 
-  it('expands and collapses every named area at once', () => {
-    reset()
-    const ids = ['ai', 'system', 'observation']
-    usePreferencesStore.getState().setAreasOpen(ids, true)
-    for (const id of ids)
-      expect(
-        isAreaOpen(usePreferencesStore.getState().navAreas, id, null),
-      ).toBe(true)
-    usePreferencesStore.getState().setAreasOpen(ids, false)
-    for (const id of ids)
-      expect(isAreaOpen(usePreferencesStore.getState().navAreas, id, id)).toBe(
-        false,
-      )
-  })
-
-  it('touches neither density, the sidebar state nor the retired hub list', () => {
+  it('touches neither density nor the retired hub list', () => {
     reset()
     usePreferencesStore.setState({
       density: 'compact',
-      sidebarCollapsed: true,
       collapsedNavGroups: ['operate'],
     })
     usePreferencesStore.getState().setAreaOpen('ai', true)
-    usePreferencesStore.getState().setAreasOpen(['ai', 'system'], false)
+    usePreferencesStore.getState().setAreaOpen('system', false)
     usePreferencesStore.getState().revealArea('ai')
     const s = usePreferencesStore.getState()
     expect(s.density).toBe('compact')
-    expect(s.sidebarCollapsed).toBe(true)
     expect(s.collapsedNavGroups).toEqual(['operate'])
     usePreferencesStore.setState({
       density: 'comfortable',
-      sidebarCollapsed: false,
       collapsedNavGroups: [],
     })
   })
@@ -141,7 +123,8 @@ describe('area expansion (N1)', () => {
     expect(isAreaExpansion({ v: 1, open: [1], closed: [] })).toBe(false)
     expect(isAreaExpansion(null)).toBe(false)
     expect(isAreaExpansion('ai')).toBe(false)
-    // The persist merge: the rest of the blob survives, a bad navAreas does not.
+    // The persist merge: the rest of the blob survives, a bad navAreas does not,
+    // and the retired pre-Estate sidebar fields are dropped, not rehydrated.
     const merge = usePreferencesStore.persist.getOptions().merge as unknown as (
       persisted: unknown,
       current: unknown,
@@ -151,14 +134,24 @@ describe('area expansion (N1)', () => {
     const merged = merge(
       {
         density: 'compact',
+        reduceMotion: true,
+        collapsedNavGroups: ['operate'],
         sidebarCollapsed: true,
+        sidebarChoices: {
+          'user:fixture-a': { collapsed: true, pending: true },
+        },
+        sidebarUnsent: true,
         navAreas: { v: 99, open: 'x' },
       },
       current,
     )
     expect(merged.density).toBe('compact')
-    expect(merged.sidebarCollapsed).toBe(true)
+    expect(merged.reduceMotion).toBe(true)
+    expect(merged.collapsedNavGroups).toEqual(['operate'])
     expect(merged.navAreas).toEqual(DEFAULT_AREA_EXPANSION)
+    expect('sidebarCollapsed' in merged).toBe(false)
+    expect('sidebarChoices' in merged).toBe(false)
+    expect('sidebarUnsent' in merged).toBe(false)
     const kept = merge(
       { navAreas: { v: 1, open: ['system'], closed: ['ai'] } },
       current,

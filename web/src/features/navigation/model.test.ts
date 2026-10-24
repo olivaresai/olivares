@@ -8,7 +8,7 @@
 // from it silently: moving a view to another area, renaming a section or forgetting a new
 // entry's place turns this file red with the id in the message. Structural facts the shell
 // relies on — every leaf placed, every area non-empty, one detail per parent, the utility's
-// place — and the navigation behaviours (breadcrumbs, union visibility,
+// place — and the navigation behaviours (union visibility,
 // ranking, the fold) are pinned beside it.
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -27,9 +27,7 @@ import {
   activeAreaId,
   authorizedEntries,
   authorizedSections,
-  breadcrumbTrail,
   buildNavSearchIndex,
-  currentViewId,
   fold,
   isAreaVisible,
   permissionGate,
@@ -54,6 +52,8 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   'agent-tools': ['ai', 'environments'],
   mcpServers: ['ai', 'environments'],
   'workspace-templates': ['ai', 'environments'],
+  // Added after the ratification: the Reach view sits here until the Tools area (#2552) lands.
+  reach: ['ai', 'environments'],
   models: ['ai', 'models'],
   modelOps: ['ai', 'models'],
   voice: ['ai', 'execution'],
@@ -257,7 +257,7 @@ describe('directory descriptions (regression)', () => {
   })
 })
 
-describe('resolveLocation and the trail', () => {
+describe('resolveLocation', () => {
   it('resolves every kind of location', () => {
     expect(resolveLocation('/').kind).toBe('home')
     expect(resolveLocation('/areas/ai')).toMatchObject({
@@ -286,37 +286,13 @@ describe('resolveLocation and the trail', () => {
   })
 
   it('prefers the longest registry prefix (no shorter-path shadowing)', () => {
-    expect(currentViewId('/model-operations')).toBe('modelOps')
-    expect(currentViewId('/models')).toBe('models')
-    expect(currentViewId('/audit/some/detail')).toBe('audit')
-  })
-
-  it('builds the trails the proposal names, ancestors linked and the page not', () => {
-    const labels = (path: string) =>
-      breadcrumbTrail(t, resolveLocation(path)).map((c) => [c.label, c.to])
-    expect(labels('/')).toEqual([['Now', undefined]])
-    expect(labels('/areas/ai')).toEqual([
-      ['Now', '/'],
-      ['AI', undefined],
-    ])
-    expect(labels('/agentops')).toEqual([
-      ['AI', '/areas/ai'],
-      ['Operate sessions', undefined],
-    ])
-    expect(labels('/session-viewer/sess-a11y')).toEqual(
-      businessBuild
-        ? [
-            ['Observability & evidence', '/areas/observation'],
-            ['Recordings', '/recordings'],
-            ['Session viewer', undefined],
-          ]
-        : [],
-    )
-    expect(labels('/settings')).toEqual([
-      ['System & settings', '/areas/system'],
-      ['Settings', undefined],
-    ])
-    expect(labels('/nowhere')).toEqual([])
+    const viewAt = (path: string) => {
+      const loc = resolveLocation(path)
+      return loc.kind === 'view' ? loc.view.id : null
+    }
+    expect(viewAt('/model-operations')).toBe('modelOps')
+    expect(viewAt('/models')).toBe('models')
+    expect(viewAt('/audit/some/detail')).toBe('audit')
   })
 
   it('derives the active area from the url, Settings included', () => {
@@ -363,16 +339,25 @@ describe('visibility is the union of authorized leaves', () => {
   // #2240: Provider profiles, Source bindings and Provider accounts fold into AI tools, whose
   // tool menu opens their room. Each page stays a door under its own permission for a
   // principal who cannot open AI tools, and its address keeps working.
-  it('folds the provider profile, binding and account pages into AI tools', () => {
-    const folded = ['providerProfiles', 'providerBindings', 'providerAccounts']
+  // #2552: the API key, account, profile and binding pages are doors into Tools, which
+  // opens on the account read tier. A door is listed only to a principal who cannot open
+  // Tools, under the tier it keeps.
+  it('folds the API key, profile, binding and account pages into Tools', () => {
+    const folded = [
+      'providers',
+      'providerProfiles',
+      'providerBindings',
+      'providerAccounts',
+    ]
     const leaves = (gate: typeof allow) =>
       authorizedSections('ai', gate).flatMap((s) => s.views.map((v) => v.id))
     expect(leaves(allow)).toContain('agent-tools')
     for (const id of folded) expect(leaves(allow)).not.toContain(id)
     for (const [permission, id] of [
+      ['sessions:provider:read', 'providers'],
       ['sessions:profile:read', 'providerProfiles'],
       ['sessions:profile-binding:read', 'providerBindings'],
-      ['sessions:account:read', 'providerAccounts'],
+      ['sessions:account:read', 'agent-tools'],
     ])
       expect(leaves(permissionGate((p: string) => p === permission))).toEqual([
         id,

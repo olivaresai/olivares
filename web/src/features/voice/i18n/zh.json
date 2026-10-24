@@ -103,7 +103,7 @@
     "decisionsError": "无法读取决策记录。",
     "noDecisions": "该会话没有决策记录。",
     "noReason": "未记录原因",
-    "frames": "{{count}} 条实时更新",
+    "frames_other": "{{count}} 条实时更新",
     "open": "开启会话（受管控）",
     "stream": {
       "connecting": "连接中",

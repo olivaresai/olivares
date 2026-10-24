@@ -118,6 +118,11 @@ func (m *Module) bridge(lr *liveRun) {
 			m.onStdout(ctx, lr, frame.Data, at)
 			continue
 		}
+		// A driver takes its tool's own log lines from stderr (OpenCode's errors, #2937):
+		// what they say reaches the session as the driver's notice, not as raw output.
+		if t, ok := lr.session.(stderrTaker); ok && frame.Stream == streamStderr && t.takeStderr(frame.Data) {
+			continue
+		}
 		seq := m.publishRuntimeOutput(lr, frame.Stream, frame.Data, at)
 		if seq == 0 {
 			if !sequenceExhausted {
@@ -169,8 +174,8 @@ type replayingSession interface{ replaying() bool }
 // withholdsReplay reports whether a stdout line may be part of a replayed
 // conversation that this launch must not publish. The launch's redactor holds the
 // secrets' current values and the tokens of this launch only, so after a resume
-// that follows a launch of a run given vault secrets, a repository credential or
-// a registry token it cannot withhold what the replay quotes (a secret rotated or
+// that follows a launch of a run given vault secrets, a repository credential, a managed
+// credential or a registry token it cannot withhold what the replay quotes (a secret rotated or
 // removed since, the earlier launch's read token): the same condition under which
 // a stored conversation is not read (earlierLaunchValuesMayBeUnheld).
 //
@@ -206,8 +211,13 @@ func (lr *liveRun) withholdsReplay(data []byte) bool {
 // It says what was held (what the tool sent while restoring), not that it was history.
 var replayWithheldNotice = []byte(`{"type":"olivares_notice","code":"history_withheld",` +
 	`"message":"Olivares held back what this tool sent while it restored the conversation, ` +
-	`because an earlier launch of this session used a vault secret, a repository credential or a package registry token ` +
+	`because an earlier launch of this session used a vault secret, a repository credential, a managed credential or a package registry token ` +
 	`that this launch may not be able to withhold."}`)
+
+// stderrTaker is a driver session that reads its tool's own log lines on stderr.
+type stderrTaker interface {
+	takeStderr(line []byte) bool
+}
 
 // onStdout drives stored state from a stream-json output line: it captures the
 // resumable session id from the init message and tracks activity (throttled).
