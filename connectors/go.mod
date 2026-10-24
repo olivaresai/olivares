@@ -10,14 +10,14 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/beevik/etree v1.8.1
 	github.com/cedar-policy/cedar-go v1.8.0
-	github.com/cilium/cilium v1.20.2
+	github.com/cilium/cilium v1.20.3
 	github.com/envoyproxy/go-control-plane/envoy v1.40.0
-	github.com/go-jose/go-jose/v4 v4.1.5
+	github.com/go-jose/go-jose/v4 v4.1.6
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/olivaresai/olivares/sdk v0.0.0
 	github.com/olivaresai/olivares/sdk/plugin v0.0.0
-	github.com/pydantic/genai-prices/packages/go v0.1.11
+	github.com/pydantic/genai-prices/packages/go v0.1.13
 	github.com/russellhaering/goxmldsig v1.6.1
 	github.com/spiffe/go-spiffe/v2 v2.9.0
 	github.com/stretchr/testify v1.12.1

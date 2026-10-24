@@ -8,7 +8,7 @@ go 1.26.5
 require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/cedar-policy/cedar-go v1.8.0
-	github.com/go-chi/chi/v5 v5.4.0
+	github.com/go-chi/chi/v5 v5.5.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/olivaresai/olivares/connectors v0.0.0
@@ -36,7 +36,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.6 // indirect
-	github.com/go-jose/go-jose/v4 v4.1.5 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.6 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
@@ -66,7 +66,7 @@ require (
 	github.com/prometheus/client_model v0.6.3 // indirect
 	github.com/prometheus/common v0.72.0 // indirect
 	github.com/prometheus/procfs v0.22.0 // indirect
-	github.com/pydantic/genai-prices/packages/go v0.1.11 // indirect
+	github.com/pydantic/genai-prices/packages/go v0.1.13 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect

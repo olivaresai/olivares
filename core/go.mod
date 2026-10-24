@@ -5,8 +5,8 @@ module github.com/olivaresai/olivares/core
 go 1.26.5
 
 require (
-	github.com/go-chi/chi/v5 v5.4.0
-	github.com/go-jose/go-jose/v4 v4.1.5
+	github.com/go-chi/chi/v5 v5.5.0
+	github.com/go-jose/go-jose/v4 v4.1.6
 	github.com/jackc/pgx/v5 v5.11.0
 	golang.org/x/crypto v0.58.0
 	golang.org/x/net v0.61.0
