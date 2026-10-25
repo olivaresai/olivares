@@ -28,7 +28,7 @@ Werkzeug-Abonnement sind unterschiedliche Wege, sich zu verbinden. Ollama benöt
 einen erreichbaren Endpunkt und ein Modell, aber keinen API-Schlüssel. Siehe
 [Anbieter hinzufügen](/de/how-to/add-a-provider/).
 
-Für Claude-Profile mit `managed_injection`, die **keinen** Anbieter nennen,
+Für Claude-Profile mit `managed_injection`, die keinen Anbieter nennen,
 liefern `OLIVARES_SESSION_RUNTIME_WIF` oder `OLIVARES_SESSION_RUNTIME_TOKEN_FILE`
 die Inferenz-Zugangsdaten des Hosts. Ein Profil, das an einen Anbieter-Eintrag
 gebunden ist, verwendet stattdessen diesen Eintrag; kann dessen Zugangsdaten nicht

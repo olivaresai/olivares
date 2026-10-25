@@ -140,11 +140,13 @@ class MajorMinorRelease(unittest.TestCase):
     def test_first_stable_package_journey_does_not_fetch_a_retired_release(self):
         source = (ROOT / '.github/workflows/pr-ci.yml').read_text()
         metadata = re.search(r'          remove_package\(\) \{.*?^          }\n(.*?)^          for fmt in deb rpm; do', source, re.M | re.S)[1]
-        for published in (False, True):
-            with self.subTest(published=published), tempfile.TemporaryDirectory() as folder:
+        # A 0.1 rebuild has no lower release to upgrade from, published or not;
+        # 0.2 upgrades from the published 0.1. No case reads a retired 26.x release.
+        for version, published, expected in (('0.1', False, None), ('0.1', True, None), ('0.2', True, '0.1')):
+            with self.subTest(version=version, published=published), tempfile.TemporaryDirectory() as folder:
                 root = Path(folder)
                 (root / 'bin').mkdir()
-                (root / 'RELEASE-VERSION').write_text('0.1\n')
+                (root / 'RELEASE-VERSION').write_text(version + '\n')
                 for name in ('scripts/build-ldflags.sh', 'scripts/lib/git-env.sh', 'scripts/userspace/resolve_baseline.py'):
                     target = root / name
                     target.parent.mkdir(parents=True, exist_ok=True)
@@ -182,11 +184,11 @@ urllib.request.urlopen = urlopen
                                         capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 baseline = json.loads((root / 'baseline.json').read_text())
-                if not published:
+                if expected is None:
                     self.assertIsNone(baseline)
                     self.assertFalse(recorder.exists())
                     continue
-                self.assertEqual(baseline['tag_name'], '0.1')
+                self.assertEqual(baseline['tag_name'], expected)
                 base = 'https://github.com/olivaresai/olivares/releases/download/0.1'
                 expected = [f'-fSL --retry 2 --max-time 90 {base}/{asset} -o {root}/{asset}'
                             for asset in ('checksums.txt', 'checksums.txt.sig', 'checksums.txt.pem')]
