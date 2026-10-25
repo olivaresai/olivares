@@ -433,7 +433,10 @@ jobs:
             [[ ! -e /usr/bin/olivares ]]
           }
           candidate_version="$(sh scripts/build-ldflags.sh --version)"
-          python3 scripts/userspace/resolve_baseline.py --candidate-version "$candidate_version" > "$proof/baseline.json"
+          # The upgrade needs a lower version: the candidate builds as X.Y~ci.<run>, below a published
+          # X.Y, so --release-cut takes the newest published release below RELEASE-VERSION.
+          # The userspace contract check still protects the current release.
+          python3 scripts/userspace/resolve_baseline.py --candidate-version "$candidate_version" --release-cut > "$proof/baseline.json"
           baseline="$(jq -r '.tag_name // empty' "$proof/baseline.json")"
           if [[ -n "$baseline" ]]; then
             base="https://github.com/olivaresai/olivares/releases/download/$baseline"
