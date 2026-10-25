@@ -21,7 +21,7 @@ description: >-
 Ollama 需要一个可访问的端点和一个模型，无需 API 密钥。参见
 [添加提供商](/how-to/add-a-provider/)。
 
-对于指定了 **未** 绑定提供商的 `managed_injection` Claude 配置文件，
+对于未指定提供商的 `managed_injection` Claude 配置文件，
 `OLIVARES_SESSION_RUNTIME_WIF` 或 `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` 提供主机范围的
 推理凭据。绑定到提供商记录的配置文件则使用该记录；若其凭据无法打开，则拒绝启动，
 而不会回退到主机凭据。`provider_account_home` 配置文件使用其已授权的工具登录，两个

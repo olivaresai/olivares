@@ -29,7 +29,7 @@ herramienta son formas distintas de conectarse. Ollama necesita un endpoint
 accesible y un modelo, sin clave de API. Consulta
 [Añadir un proveedor](/how-to/add-a-provider/).
 
-Para los perfiles de Claude con `managed_injection` que no nombran **ningún**
+Para los perfiles de Claude con `managed_injection` que no nombran un
 proveedor, `OLIVARES_SESSION_RUNTIME_WIF` o `OLIVARES_SESSION_RUNTIME_TOKEN_FILE`
 aporta la credencial de inferencia de todo el host. Un perfil vinculado a un
 registro de Proveedores usa ese registro en su lugar; si no se puede abrir su

@@ -28,7 +28,7 @@ abonnement à un outil sont deux façons différentes de se connecter. Ollama n�
 un point de terminaison accessible et un modèle, sans clé d’API. Voir
 [Ajouter un fournisseur](/how-to/add-a-provider/).
 
-Pour les profils Claude avec `managed_injection` qui ne désignent **aucun**
+Pour les profils Claude avec `managed_injection` qui ne désignent aucun
 fournisseur, `OLIVARES_SESSION_RUNTIME_WIF` ou `OLIVARES_SESSION_RUNTIME_TOKEN_FILE`
 fournit l’identifiant d’inférence à l’échelle de l’hôte. Un profil lié à un
 enregistrement de **Fournisseurs** utilise cet enregistrement à la place ; si son
