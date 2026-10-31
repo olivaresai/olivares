@@ -7,7 +7,6 @@ import claudeStream from './fixtures/claude-2.1.309-subagents.jsonl?raw'
 import {
   conversationCwd,
   conversationModel,
-  cutMiddle,
   isQuiet,
   mapConversationFrames,
   sameModel,
@@ -230,7 +229,7 @@ describe('mapConversationFrames — kinds from the golden-path attach', () => {
     expect(items[2]?.cwd).toBe('/home/operator/project')
     expect(items[2]?.summary).toContain('claude-opus-5[1m]')
     expect(items[2]?.summary).toContain('4 tools')
-    // A limit warning that did not stop the turn is no row (dev#3119): it joins the line
+    // A limit warning that did not stop the turn is no row: it joins the line
     // before it, for the inspector.
     expect(items[2]?.raw).toEqual([INIT, RATE_LIMIT])
     expect(items[3]?.text).toBe('Reply with the single word OK')
@@ -306,7 +305,7 @@ describe('mapConversationFrames — streaming and quiet lines', () => {
 })
 
 describe('mapConversationFrames — unknown frames never hide data', () => {
-  // Changed, stated (HU2-23): a non-JSON line is the tool's output, one quiet line.
+  // Changed, stated: a non-JSON line is the tool's output, one quiet line.
   it('keeps a non-JSON line, as tool output', () => {
     const items = mapConversationFrames(['not a frame at all'])
     expect(kindsOf(['not a frame at all'])).toEqual(['system'])
@@ -346,7 +345,7 @@ describe('mapConversationFrames — unknown frames never hide data', () => {
   })
 })
 
-// HU 025 (refresh 05, real Claude Code 2.1.287): a long Bash turn printed
+// acceptance (refresh 05, real Claude Code 2.1.287): a long Bash turn printed
 // "Unrecognised frame" twice. The shapes below are the ones that binary emits
 // (read from the build the product installs): `tool_progress` while a tool runs,
 // and `control_response` answering a control request the plane sent (the interrupt).
@@ -429,7 +428,7 @@ describe('mapConversationFrames — Claude Code tool progress and control replie
     expect(items[0]?.raw).toHaveLength(3)
   })
 
-  it('makes no row of progress for a call it has not seen (dev#3119)', () => {
+  it('makes no row of progress for a call it has not seen', () => {
     const items = mapConversationFrames([
       progress('toolu_other', 5),
       progress('toolu_other', 10),
@@ -495,8 +494,8 @@ describe('Codex app-server frames', () => {
   })
 })
 
-// HU2-01: an OpenCode session on a local Ollama model, as the attach stream carried it
-// (HU2/captures/B1-cli/09-follow-json.txt, OpenCode 1.18.34, verbatim): initialize and
+// acceptance: an OpenCode session on a local Ollama model, as the attach stream carried it
+// (acceptance/captures/B1-cli/09-follow-json.txt, OpenCode 1.18.34, verbatim): initialize and
 // session/new results, the commands update, the first turn's result, then the second
 // reply streamed as agent_message_chunk pieces of one messageId and its result.
 const OPENCODE_ACP_FRAMES = [
@@ -551,7 +550,7 @@ describe('ACP frames (OpenCode, Grok)', () => {
     expect(items[0]).toMatchObject({ kind: 'operator', text: 'Say hello' })
   })
 
-  // SR2C on 0df0c254: a status-only "completed" replaced the output with "completed".
+  // review on 0df0c254: a status-only "completed" replaced the output with "completed".
   it('keeps the output a tool sent when its completion carries only a status', () => {
     const frame = (update: Record<string, unknown>) =>
       JSON.stringify({
@@ -579,7 +578,7 @@ describe('ACP frames (OpenCode, Grok)', () => {
     expect(items[0].toolResultSummary).toBe('a.txt')
   })
 
-  // SR2C on e2083ea8: a status-only "failed" vanished with the output-only rule.
+  // review on e2083ea8: a status-only "failed" vanished with the output-only rule.
   it('marks a tool failed on a status-only failure, and keeps its output', () => {
     const frame = (update: Record<string, unknown>) =>
       JSON.stringify({
@@ -646,7 +645,7 @@ describe('ACP frames (OpenCode, Grok)', () => {
   })
 })
 
-// HU2-12: Codex's retries and a failed turn, from HU2's B2 runs. The four `error` frames are
+// acceptance: Codex's retries and a failed turn, from acceptance's B2 runs. The four `error` frames are
 // verbatim (B2-cli/01-codex-follow-json.txt); the failed turn carries the provider error the
 // CLI printed for the Codex + Ollama run (B2-cli/03-codex-ollama-follow.txt) in the turn
 // object the app-server sends (id, items, status, error), as turn/started shows it there.
@@ -672,7 +671,7 @@ const CODEX_FAILED_TURN = JSON.stringify({
   },
 })
 
-describe('Codex failures (HU2-12)', () => {
+describe('Codex failures', () => {
   it("reads a failed turn as failed, with the provider's own sentence", () => {
     const items = mapConversationFrames([CODEX_FAILED_TURN])
     expect(items).toHaveLength(1)
@@ -706,7 +705,7 @@ describe('Codex failures (HU2-12)', () => {
   })
 })
 
-// HU2-13: Claude Code retrying a provider call. HU2 recorded these fields on every frame of
+// acceptance: Claude Code retrying a provider call. acceptance recorded these fields on every frame of
 // a session with a refused API key (error_status 401, error authentication_failed, seven
 // retries); nothing else of the frame drives the reading, so nothing else is assumed here.
 const apiRetry = (error: string, status: number) =>
@@ -717,7 +716,7 @@ const apiRetry = (error: string, status: number) =>
     error,
   })
 
-describe('Claude Code api_retry (HU2-13)', () => {
+describe('Claude Code api_retry', () => {
   it('folds the retries of a refused key into one line that keeps the status', () => {
     const frames = Array.from({ length: 7 }, () =>
       apiRetry('authentication_failed', 401),
@@ -735,8 +734,8 @@ describe('Claude Code api_retry (HU2-13)', () => {
   })
 })
 
-// HU2-23: OpenCode with Ollama stopped. Its stderr dump is the 18 lines the CLI printed
-// (HU2/captures/F1-cli/02-start-help-opencode.txt, verbatim); the session/prompt reply is
+// acceptance: OpenCode with Ollama stopped. Its stderr dump is the 18 lines the CLI printed
+// (acceptance/captures/F1-cli/02-start-help-opencode.txt, verbatim); the session/prompt reply is
 // the JSON-RPC error with the code, message and data that dump shows.
 const OPENCODE_DOWN_STDERR = [
   'Error handling request {',
@@ -769,7 +768,7 @@ const OPENCODE_DOWN_REPLY = JSON.stringify({
   },
 })
 
-describe("a tool's own output (HU2-23)", () => {
+describe("a tool's own output", () => {
   it('folds the stderr dump into one line and keeps the failed reply', () => {
     const items = mapConversationFrames([
       ...OPENCODE_DOWN_STDERR,
@@ -782,15 +781,15 @@ describe("a tool's own output (HU2-23)", () => {
   })
 })
 
-// HU2-27: Codex with a refused OpenAI key. The console showed this line with its escape
-// codes. Its start up to the target is J1's page text (HU2/captures/J1-web2-hu2b); the
+// acceptance: Codex with a refused OpenAI key. The console showed this line with its escape
+// codes. Its start up to the target is J1's page text (acceptance/captures/J1-web2-acceptance); the
 // rest is J1-cli/01-codex-follow.txt, joined by the dim ":" tracing writes after a target.
 const CODEX_401_STDERR =
   '\u001b[2m2026-10-02T19:30:41.144666Z\u001b[0m \u001b[31mERROR\u001b[0m ' +
   '\u001b[2mcodex_api::endpoint::responses_websocket\u001b[0m\u001b[2m:\u001b[0m ' +
   'failed to connect to websocket: HTTP error: 401 Unauthorized, url: wss://api.openai.com/v1/responses'
 
-describe('a tool line in colour (HU2-27)', () => {
+describe('a tool line in colour', () => {
   it('reads without its escape codes and keeps the line as it came', () => {
     const items = mapConversationFrames([CODEX_401_STDERR])
     expect(items).toHaveLength(1)
@@ -817,7 +816,7 @@ describe('a tool line in colour (HU2-27)', () => {
   })
 })
 
-// SR4C on 906647d5: two server_error retries answered 503 then 529, and the folded line
+// review on 906647d5: two server_error retries answered 503 then 529, and the folded line
 // kept only 503. Identical retries still fold.
 describe('retries with different HTTP statuses', () => {
   const retry = (status: number) =>
@@ -970,7 +969,7 @@ describe('mapConversationFrames — the tool’s own bookkeeping is no row (#178
     expect(items[0]?.text).toBe('Hello')
   })
 
-  it('keeps only a refusal, the limit that stopped the turn, as a row (dev#3119)', () => {
+  it('keeps only a refusal, the limit that stopped the turn, as a row', () => {
     const items = mapConversationFrames([RATE_LIMIT, RATE_LIMIT_REJECTED])
     expect(items.map((i) => i.systemKind)).toEqual(['quiet', 'rate_limit'])
     expect(items[1]).toMatchObject({
@@ -979,7 +978,7 @@ describe('mapConversationFrames — the tool’s own bookkeeping is no row (#178
     })
   })
 
-  it('leaves every limit state that did not stop the turn off the conversation (dev#3119)', () => {
+  it('leaves every limit state that did not stop the turn off the conversation', () => {
     const allowed = (info: Record<string, unknown>) =>
       JSON.stringify({
         type: 'rate_limit_event',
@@ -1079,7 +1078,7 @@ describe('a message with attached images', () => {
   })
 })
 
-// dev#2786: one session started on claude-opus-5-5 and went on on claude-opus-4-8 with no
+// the regression: one session started on claude-opus-5-5 and went on on claude-opus-4-8 with no
 // word of it. The conversation names the model of each turn and says when it changes.
 describe('the model in use', () => {
   const init = JSON.stringify({
@@ -1200,7 +1199,7 @@ describe('the model in use — what is not a change', () => {
   })
 })
 
-// A REAL CLAUDE CODE STREAM (dev#3119). Recorded 2026-10-23 from Claude Code 2.1.309 with
+// A REAL CLAUDE CODE STREAM. Recorded 2026-10-23 from Claude Code 2.1.309 with
 // the engine's own argv (cliruntime/argv.go: --input-format stream-json --output-format
 // stream-json --verbose --print --replay-user-messages) on claude-haiku-5-5 in a scratch
 // folder: a 35 s command, a background command, a background subagent with calls of its
@@ -1212,7 +1211,7 @@ const REAL = claudeStream.trim().split('\n')
 const byCommand = (items: ConversationItem[], part: string) =>
   items.find((item) => item.toolCommand?.includes(part))
 
-describe('a real Claude Code 2.1.309 stream (dev#3119)', () => {
+describe('a real Claude Code 2.1.309 stream', () => {
   it('keeps task and background-task frames off the conversation, every line still reachable', () => {
     const items = mapConversationFrames(REAL)
     expect(
@@ -1342,7 +1341,7 @@ describe('a real Claude Code 2.1.309 stream (dev#3119)', () => {
   })
 })
 
-describe('a tool call in its own short form (dev#3119)', () => {
+describe('a tool call in its own short form', () => {
   const toolCall = (name: string, input: Record<string, unknown>) =>
     JSON.stringify({
       type: 'assistant',
@@ -1380,20 +1379,35 @@ describe('a tool call in its own short form (dev#3119)', () => {
     expect(shown).toBe('sql select 1 · limit 5')
   })
 
-  it('cuts a long path in the middle and keeps its first folder and its file', () => {
-    const cut = cutMiddle(
-      'web/src/features/sessions/very/deep/folder/session-conversation.tsx',
-      44,
-    )
-    expect(cut.length).toBeLessThanOrEqual(44)
-    expect(cut.startsWith('web/')).toBe(true)
-    expect(cut.endsWith('/session-conversation.tsx')).toBe(true)
-    expect(cut).toContain('…')
-    expect(cutMiddle('src/a.ts', 44)).toBe('src/a.ts')
+  // #3135: the path stays whole; the console cuts it in its middle (PathText) and keeps it all.
+  it('keeps a long path whole, and gives it as the path the call acts on', () => {
+    const long =
+      'web/src/features/sessions/very/deep/folder/session-conversation.tsx'
+    const item = mapConversationFrames([
+      JSON.stringify({
+        type: 'system',
+        subtype: 'init',
+        cwd: '/home/dev/shop',
+      }),
+      toolCall('Read', { file_path: `/home/dev/shop/${long}` }),
+    ])[1]
+    expect(item?.toolArgsSummary).toBe(long)
+    expect(item?.toolPath).toBe(long)
+    const search = mapConversationFrames([
+      JSON.stringify({
+        type: 'system',
+        subtype: 'init',
+        cwd: '/home/dev/shop',
+      }),
+      toolCall('Grep', { pattern: 'TODO', path: `/home/dev/shop/${long}` }),
+    ])[1]
+    expect(search?.toolArgsSummary).toBe(`TODO · ${long}`)
+    expect(search?.toolPath).toBe(long)
+    expect(target('Bash', { command: 'ls' })).toBe('ls')
   })
 })
 
-describe('how a call ended, from every tool (dev#3119)', () => {
+describe('how a call ended, from every tool', () => {
   it('reads an ACP call that completed without output as ended', () => {
     const [item] = mapConversationFrames([
       JSON.stringify({
@@ -1440,7 +1454,7 @@ describe('how a call ended, from every tool (dev#3119)', () => {
     expect(stopped?.toolFailed).toBeUndefined()
   })
 
-  it('cuts a long path inside the folder when it names the call', () => {
+  it('reads a long path from inside the folder, whole, when it names the call', () => {
     const [, item] = mapConversationFrames([
       JSON.stringify({
         type: 'system',
@@ -1464,13 +1478,15 @@ describe('how a call ended, from every tool (dev#3119)', () => {
         },
       }),
     ])
-    expect(item?.toolArgsSummary).toBe(
-      'web/…/sessions/very/deep/folder/session-conversation.tsx',
-    )
+    // Whole: the console cuts it in its middle (PathText) and keeps all of it (#3135).
+    const whole =
+      'web/src/features/sessions/very/deep/folder/session-conversation.tsx'
+    expect(item?.toolArgsSummary).toBe(whole)
+    expect(item?.toolPath).toBe(whole)
   })
 })
 
-describe('what the reviews of dev#3119 found', () => {
+describe('what the reviews of the regression found', () => {
   const codex = (item: Record<string, unknown>) =>
     mapConversationFrames([
       JSON.stringify({
@@ -1568,5 +1584,42 @@ describe('what the reviews of dev#3119 found', () => {
     const huge = limit({ status: 'rejected', resetsAt: 1e20 })
     expect(huge?.systemKind).toBe('rate_limit')
     expect(huge?.limitResetsAt).toBeUndefined()
+  })
+})
+
+describe('mapConversationFrames — ids that outlive the frame window', () => {
+  // The console keeps the last 5000 frames: past that, each new frame drops the oldest and
+  // the whole window is mapped again. An item's id is its React key, so it must not move
+  // when the window does.
+  const line = (i: number) =>
+    i % 2 === 0
+      ? JSON.stringify({
+          type: 'user',
+          message: { role: 'user', content: `question ${i}` },
+        })
+      : JSON.stringify({
+          type: 'assistant',
+          message: {
+            id: `msg_${i}`,
+            role: 'assistant',
+            content: [{ type: 'text', text: `answer ${i}` }],
+          },
+        })
+  const window = (from: number, to: number) => {
+    const seqs = Array.from({ length: to - from }, (_, k) => from + k)
+    return mapConversationFrames(seqs.map(line), undefined, seqs)
+  }
+
+  it('keeps the id of every item whose frame is still in the window', () => {
+    const before = window(0, 40)
+    const after = window(1, 41)
+    const ids = (items: ReturnType<typeof window>) =>
+      items
+        .filter(
+          (item) => item.seq !== undefined && item.seq >= 1 && item.seq < 40,
+        )
+        .map((item) => item.id)
+    expect(ids(after)).toEqual(ids(before))
+    expect(new Set(after.map((item) => item.id)).size).toBe(after.length)
   })
 })

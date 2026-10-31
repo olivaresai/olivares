@@ -159,6 +159,15 @@ func WithExternalPDP(pdp auth.PolicyEvaluator) Option {
 	return func(m *Module) { m.pdp = pdp }
 }
 
+// WithBusinessApprovals wires the Business build's licence gate for approval policies
+// beyond the Community line (a tier or approval count different from the action's default,
+// a change class, a change record): authoring or saving an enabled one asks it, and its
+// error answers 403 addon_requires_license. nil asks nothing, as in Community, which refuses
+// those policies with 501 before any gate.
+func WithBusinessApprovals(gate func() error) Option {
+	return func(m *Module) { m.businessApprovals = gate }
+}
+
 // WithAgentAutonomySource wires a richer agent-autonomy signal for the
 // risk-tier heuristic. Without it the classifier uses only observed
 // access edges and findings.
@@ -205,7 +214,9 @@ type Module struct {
 	// NHI lifecycle: the governed HITL gate (deny-closed default) and the
 	// per-(tenant,source) write-capable actuators the composition root wires.
 	lifecycleGate LifecycleGate
-	actuators     map[model.TenantID]map[string]identitysource.LifecycleActuator
+	// businessApprovals is the licence gate for approval policies beyond the Community line.
+	businessApprovals func() error
+	actuators         map[model.TenantID]map[string]identitysource.LifecycleActuator
 	// break-glass mandatory session recording (deny-closed default).
 	recordingGate RecordingGate
 	// per-agent autonomy signal for the risk-tier heuristic. Without it
@@ -223,6 +234,13 @@ type Module struct {
 	standing              auth.StandingReader
 	approvalAuthenticator *auth.Authenticator
 	approvalAuthorizer    *auth.Authorizer
+
+	// changeRecords reads the record a change-record policy names. Nil in Community,
+	// which cannot author such a policy: one that is stored anyway approves nothing.
+	changeRecords ChangeRecordReader
+	// checkRefused is the last refusal a status check recorded for each approval (the
+	// sentence), so a gate that polls does not write one ledger entry per poll.
+	checkRefused sync.Map // model.ID -> string
 }
 
 // Compile-time proof the module satisfies the SDK lifecycle, the engine-side

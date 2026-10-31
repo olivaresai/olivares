@@ -327,3 +327,39 @@ func TestWorkspaceParentOpenAPI(t *testing.T) {
 		t.Fatal("OpenAPI omits the workspace parent_id")
 	}
 }
+
+// Creating a department under another is the Business department surface too: with no
+// department service, or one that does not create, the owner's create with a parent_id
+// answers 501 departments_unavailable and creates nothing, while a create without one
+// still makes a root.
+func TestSubDepartmentCreateIsBusiness(t *testing.T) {
+	for name, wire := range map[string]func(*api.Options){
+		"no department service":          func(*api.Options) {},
+		"a service that does not create": groupDepartments,
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := newHarnessOpts(t, wire)
+			admin := h.adminLogin()
+			tenant := h.createOrg(admin, "sub-department-community")
+			h.elevate(admin)
+			create := func(token string, body map[string]any) resp {
+				return h.do(http.MethodPost, "/v1/workspaces", token, body, tenantHdr(tenant))
+			}
+			root := create(admin, map[string]any{"name": "Sales", "slug": "sales"})
+			if root.code != http.StatusCreated || root.body["parent_id"] != nil {
+				t.Fatalf("owner root create = %d %s", root.code, root.raw)
+			}
+			sales := root.body["id"].(string)
+			r := create(admin, map[string]any{"name": "EMEA", "slug": "emea", "parent_id": sales})
+			if r.code != http.StatusNotImplemented || errorCodeOf(r) != "departments_unavailable" {
+				t.Errorf("owner create under a parent = %d %s, want 501 departments_unavailable", r.code, r.raw)
+			}
+			list := h.do(http.MethodGet, "/v1/workspaces", admin, nil, tenantHdr(tenant))
+			for _, row := range list.body["items"].([]any) {
+				if row.(map[string]any)["slug"] == "emea" {
+					t.Fatal("a refused create under a parent stored the department")
+				}
+			}
+		})
+	}
+}

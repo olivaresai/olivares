@@ -31,6 +31,7 @@ import {
 import { DisabledReason } from '@/components/ui/disabled-reason'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { PathText } from '@/components/ui/path-text'
 import { Segmented } from '@/components/ui/segmented'
 import { Spinner } from '@/components/ui/spinner'
 import {
@@ -42,11 +43,14 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
+import { PANEL_EXTENSIONS, RUN_ON_EXTENSION } from '@/features/extensions'
 import type { ToolReadinessDTO, WorkspaceDTO } from '@/features/agentops/types'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import { ModelEffortFields } from '@/features/agentops/model-effort-picker'
+import { AccountUsage, AtLimit } from '@/features/agentops/account-usage'
 import { useModelChoices } from '@/features/agentops/model-choices'
 import { LaunchSpeedFields } from '@/features/agentops/launch-speed-fields'
+import { LaunchPreflight } from '@/features/agentops/launch-identity'
 import type { ProviderKind } from '@/features/providers/types'
 import { useAuth } from '@/lib/auth/context'
 import { ApiError } from '@/lib/api/errors'
@@ -58,17 +62,22 @@ import { stoppedAtStartReason } from '@/features/agentops/launch-readiness'
 import {
   DEFAULT_PERMISSION,
   launchSession,
+  mayChoosePermission,
   needsApproval,
+  PERMISSION_CHOICES,
+  PERMISSION_NAME,
   type PermissionChoice,
 } from '@/features/agentops/session-launch'
 import {
   FIRST_HOUR_TOOLS,
-  SESSION_TOOLS,
-  TOOL_NAMES,
+  sessionTools,
+  toolName,
   firstHourKeys,
   installLatest,
+  isSigningIn,
   lastFolder,
   signInApi,
+  SIGNING_IN_POLL_MS,
   type SecretEnvChoice,
   type SessionTool,
   type SignInTool,
@@ -76,6 +85,7 @@ import {
   type SignInMethod,
   type ToolKey,
 } from './api'
+import { SessionCredentials } from './session-credentials'
 import { SessionSecrets } from './session-secrets'
 import { useReuseProfile, useSessionProfiles } from './session-profiles'
 import {
@@ -85,6 +95,7 @@ import {
   useKeyTriggerFocus,
 } from './key-instead'
 import './i18n'
+import { useClientSettings } from '@/features/settings/preferences'
 
 function errorText(err: unknown): string {
   // A session that stopped as it started: the engine's 409 carries the run, whose
@@ -121,6 +132,8 @@ export function useToolStatus(driver: SignInTool, enabled = true) {
     queryKey: firstHourKeys.signIn(tenant, driver),
     queryFn: ({ signal }) => signInApi.status(driver, tenant, signal),
     enabled: isSuperadmin && enabled,
+    refetchInterval: (query) =>
+      isSigningIn(query.state.data) ? SIGNING_IN_POLL_MS : false,
   })
 }
 
@@ -149,16 +162,16 @@ export function useToolReadiness(driver: string): ToolReadinessDTO | undefined {
 /** Which tools can start a session: every tool the engine drives (Claude Code, Codex,
  * Grok Build, OpenCode), each as the engine answers it. Now and the New session dialog both
  * read this, so they cannot disagree with each other or with the start. A tool that is
- * not ready carries the engine's own sentence (HU 043). */
+ * not ready carries the engine's own sentence. */
 export function useReadyTools(enabled = true) {
   const answer = useToolsReadiness(enabled)
   const { t } = useTranslation('firstHour')
   const of = (driver: SessionTool) =>
     answer.data?.tools.find((tool) => tool.driver === driver)
-  const ready = SESSION_TOOLS.filter((driver) => of(driver)?.ready === true)
+  const ready = sessionTools().filter((driver) => of(driver)?.ready === true)
   const refusal = (driver: SessionTool): string | undefined => {
     const tool = of(driver)
-    // The key's refusal reads in the person's language, with the key's name (HU2-17).
+    // The key's refusal reads in the person's language, with the key's name.
     if (tool?.code === KEY_REFUSED && tool.provider)
       return t('status.keyRefused', {
         name: tool.provider.display_name || tool.provider.kind,
@@ -229,7 +242,7 @@ export function ToolCard({
   const signedIn = status.data?.signed_in ?? false
   const key =
     !signedIn && answer?.reason === 'api_key' ? answer.provider : undefined
-  // The provider refused this key at its last test: the tool runs on nothing (HU2-17).
+  // The provider refused this key at its last test: the tool runs on nothing.
   const keyRefused = answer?.code === KEY_REFUSED
   const ready = signedIn || (!!key && answer?.ready === true)
   const failedJob =
@@ -288,7 +301,7 @@ export function ToolCard({
       {!status.isLoading && !installed && part !== 'signIn' ? (
         <div className="flex flex-col gap-2">
           {/* Secondary on purpose: several tool rows offer Install at once, and
-              one orange control per first screen is the rule (dev#2673). The
+              one orange control per first screen is the rule. The
               wizard's one next step — Start — keeps the orange. */}
           <Button
             variant="secondary"
@@ -407,7 +420,7 @@ export function SignIn({
     authority.current = options
     return options
   }
-  // HU2-06: the login the server still holds survives a reload. It is taken up once, from the
+  // acceptance: the login the server still holds survives a reload. It is taken up once, from the
   // status the row already reads; a cancelled one is not brought back. Only the default row
   // does this: the status it reads is the organization's default account, not another one's.
   const ownsDefault = !accountRef && tenant === activeTenant
@@ -537,19 +550,23 @@ export function SignIn({
       onSignedIn?.()
     }
   }, [flow?.state, driver, qc, tenant, accountRef, onSignedIn, addingKey])
-  // Stops the tool's login on this server (its process ends) and forgets it here.
-  const cancel = () => {
-    if (flow) {
+  // Stops the tool's login on this server and forgets it here only after
+  // the server confirms; a failed cancellation leaves the flow ready to retry.
+  const cancel = useMutation({
+    mutationKey: mutationScope && [...mutationScope, 'cancel'],
+    gcTime: mutationScope ? 0 : undefined,
+    mutationFn: (options?: RequestOptions) =>
+      accountRef
+        ? signInApi.cancel(flow!.id, options)
+        : signInApi.cancel(flow!.id),
+    onSuccess: () => {
       setResumeSpent(true)
-      void (
-        accountRef
-          ? signInApi.cancel(flow.id, captureRequest())
-          : signInApi.cancel(flow.id)
-      ).catch(() => undefined)
-    }
-    setFlow(null)
-    setCode('')
-  }
+      setFlow(null)
+      setCode('')
+      setError(null)
+    },
+    onError: (err) => setError(errorText(err)),
+  })
 
   if (addingKey && keyKind) {
     return (
@@ -605,9 +622,11 @@ export function SignIn({
                   ? t('actions.signInGoogle')
                   : driver === 'grok'
                     ? t('actions.signInGrok')
-                    : driver === 'codex' || driver === 'opencode'
-                      ? t('actions.signInChatGPT')
-                      : t('actions.signIn')}
+                    : driver === 'cursor'
+                      ? t('actions.signInCursor')
+                      : driver === 'codex' || driver === 'opencode'
+                        ? t('actions.signInChatGPT')
+                        : t('actions.signIn')}
           </Button>
           {keyKind ? (
             <Button
@@ -667,24 +686,34 @@ export function SignIn({
           </a>
         </Button>
       ) : null}
-      {driver !== 'claude' && flow.user_code ? (
+      {driver !== 'claude' && (flow.user_code || flow.state === 'waiting') ? (
         <div className="flex flex-col gap-1">
-          <span className="text-caption text-text-2">
-            {t('signIn.enterCode')}
-          </span>
-          <DeviceCode code={flow.user_code} />
-          <span className="flex items-center gap-2 text-caption text-text-2">
+          {flow.user_code ? (
+            <>
+              <span className="text-caption text-text-2">
+                {t('signIn.enterCode')}
+              </span>
+              <DeviceCode code={flow.user_code} />
+            </>
+          ) : null}
+          <span
+            role="status"
+            className="flex items-center gap-2 text-caption text-text-2"
+          >
             <Loader2 aria-hidden className="size-3.5 animate-spin" />
             {t('signIn.waiting')}
           </span>
-          <span className="text-caption text-text-3">
-            {t('signIn.expires')}
-          </span>
+          {flow.user_code ? (
+            <span className="text-caption text-text-3">
+              {t('signIn.expires')}
+            </span>
+          ) : null}
           <Button
             type="button"
             variant="ghost"
             className="self-start"
-            onClick={cancel}
+            onClick={() => cancel.mutate(captureRequest())}
+            disabled={cancel.isPending}
           >
             {t('actions.cancel')}
           </Button>
@@ -703,7 +732,7 @@ export function SignIn({
             description={
               flow.message ||
               (keyAsked
-                ? t('signIn.keyHint', { name: TOOL_NAMES[driver] })
+                ? t('signIn.keyHint', { name: toolName(driver) })
                 : t('signIn.codeHint'))
             }
           >
@@ -729,7 +758,12 @@ export function SignIn({
               ) : null}
               {t('signIn.continue')}
             </Button>
-            <Button type="button" variant="ghost" onClick={cancel}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => cancel.mutate(captureRequest())}
+              disabled={cancel.isPending}
+            >
               {t('actions.cancel')}
             </Button>
           </div>
@@ -755,7 +789,8 @@ const FOLDER_NEW = ' new-folder'
 const FOLDER_TYPED = ' typed-folder'
 /** A folder row is one line however long its path: the name stays, the path is cut, and
  * the whole label is the tooltip. */
-const FOLDER_ITEM = '[&>span:last-child]:min-w-0 [&>span:last-child]:truncate'
+const FOLDER_ITEM =
+  '[&>span:last-child]:min-w-0 [&>span:last-child]:overflow-hidden [&>span:last-child]:whitespace-nowrap'
 
 /** A registered folder in the list: its name when it has one, always its path. */
 function folderLabel(w: Pick<WorkspaceDTO, 'name' | 'root_path'>): string {
@@ -764,12 +799,28 @@ function folderLabel(w: Pick<WorkspaceDTO, 'name' | 'root_path'>): string {
     : w.root_path
 }
 
-const PERMISSIONS: PermissionChoice[] = [
-  'editsAndCommands',
-  'editsOnly',
-  'readOnly',
-  'ask',
-]
+/** The same label as rich text: the path keeps its own middle cut and tooltip, while the
+ * select's textValue keeps the whole label for typeahead. */
+function FolderLabel({
+  workspace,
+}: {
+  workspace: Pick<WorkspaceDTO, 'name' | 'root_path'>
+}) {
+  const named = workspace.name && workspace.name !== workspace.root_path
+  return named ? (
+    <span className="flex w-full min-w-0 items-baseline">
+      <span className="shrink-0">{workspace.name} (</span>
+      <PathText
+        value={workspace.root_path}
+        copy={false}
+        className="min-w-0 flex-1"
+      />
+      <span className="shrink-0">)</span>
+    </span>
+  ) : (
+    <PathText value={workspace.root_path} copy={false} />
+  )
+}
 
 /** How many recent sessions the "Start a session" step looks at for one that ran, and
  * the New session form for the last folder. */
@@ -796,10 +847,35 @@ export function StartSessionForm({
   const tenant = useTenantStore((s) => s.activeTenant)
   const boundary = useAuthBoundary()
   const { epoch } = boundary
+  const defaults = useClientSettings((s) => s.sessionDefaults)
+  const profileList = useProfileList()
   const [driver, setDriver] = useState<SessionTool | null>(null)
+  const defaultScope = JSON.stringify([
+    defaults.tool,
+    defaults.account,
+    tenant,
+    epoch,
+  ])
+  const [unusableDefault, setUnusableDefault] = useState<string | null>(null)
   // Every tool can be chosen; one that cannot start yet says why in ONE line, for the
   // chosen tool only (Root, 09b capture review: three "Install X first" lines at once).
-  const tool = driver ?? ready[0] ?? SESSION_TOOLS[0]
+  const preferredTool =
+    defaults.tool ||
+    profileList.data?.accounts.find((a) => a.account_ref === defaults.account)
+      ?.driver
+  const defaultTool = sessionTools().find(
+    (d) =>
+      d === preferredTool &&
+      (ready.includes(d) ||
+        profileList.data?.accounts.some((a) => a.driver === d)),
+  )
+  const tool =
+    driver ??
+    (unusableDefault === defaultScope ? undefined : defaultTool) ??
+    ready[0] ??
+    sessionTools()[0]
+  const defaultAccount =
+    !defaults.tool || tool === defaults.tool ? defaults.account : ''
   // Start points at the sentence under the tool choice when that tool cannot start (#1083).
   const notReadyId = useId()
   // The product fills the folder in, shows it, and asks for a path only after Change
@@ -835,16 +911,27 @@ export function StartSessionForm({
   })
   // A sole named account still supplies its reference. Readiness belongs to the
   // selected profile; the default login cannot qualify another home.
-  const profileList = useProfileList()
   const profiles = useSessionProfiles(
     tool,
     runs.data?.items ?? [],
     !!tool && ready.includes(tool),
+    defaultAccount,
   )
   const profileRef = profiles?.selected ?? ''
   const selectedProfile = profiles?.choices.find((c) => c.value === profileRef)
+  if (
+    !driver &&
+    tool === defaultTool &&
+    profiles &&
+    !profiles.loading &&
+    !profiles.choices.some((c) => c.ready) &&
+    ready.some((d) => d !== tool) &&
+    unusableDefault !== defaultScope
+  )
+    setUnusableDefault(defaultScope)
   const toolReady =
     !profileList.isLoading &&
+    !(defaultAccount && profiles?.loading) &&
     !!tool &&
     (profiles ? selectedProfile?.ready === true : ready.includes(tool))
   // Taken once the reads settle and kept, so a refetch never moves the folder under the
@@ -860,6 +947,15 @@ export function StartSessionForm({
      * swaps the field under what the user is typing. */
     typing?: boolean
   } | null>(null)
+  const pickable = (registered.data?.items ?? []).filter(
+    (w) => w.state === 'active' && w.root_path,
+  )
+  const preferredFolder = pickable.find(
+    (w) => w.workspace_ref === defaults.folder,
+  )
+  const defaultFolder = defaults.folder
+    ? (preferredFolder ?? pickable[0])
+    : undefined
   if (
     chosen?.scope !== folderScope &&
     !runs.isFetching &&
@@ -867,20 +963,38 @@ export function StartSessionForm({
   )
     setChosen({
       scope: folderScope,
-      ...lastFolder(runs.data?.items ?? [], registered.data?.items ?? []),
+      ...(defaults.folder
+        ? {
+            folder: defaultFolder?.root_path ?? '',
+            workspace_ref: defaultFolder?.workspace_ref,
+          }
+        : lastFolder(runs.data?.items ?? [], registered.data?.items ?? [])),
       editing: false,
     })
   const current = chosen?.scope === folderScope ? chosen : null
   const folder = current?.folder ?? ''
   // The folders sessions already use, to pick from; a path is typed only as the fallback.
-  const pickable = (registered.data?.items ?? []).filter(
-    (w) => w.state === 'active' && w.root_path,
-  )
   const [prompt, setPrompt] = useState('')
+  const [runOn, setRunOn] = useState('')
   const [more, setMore] = useState(false)
-  const [permission, setPermission] =
-    useState<PermissionChoice>(DEFAULT_PERMISSION)
+  // The person's own pick; until there is one, the permission the folder stores, else the
+  // usual default. A stored Full is offered only to someone who may run it: the engine
+  // refuses anyone else, so for them it is as if the folder had none.
+  const [picked, setPicked] = useState<PermissionChoice | null>(null)
+  const storedPermission = (registered.data?.items ?? []).find(
+    (w) =>
+      !!current?.workspace_ref && w.workspace_ref === current.workspace_ref,
+  )?.default_permission
+  const folderPermission = PERMISSION_CHOICES.find(
+    (c) =>
+      !!storedPermission &&
+      PERMISSION_NAME[c] === storedPermission &&
+      mayChoosePermission(c, can('sessions:run:admin')),
+  )
+  const permission = picked ?? folderPermission ?? DEFAULT_PERMISSION
+  const setPermission = setPicked
   const [secretEnv, setSecretEnv] = useState<SecretEnvChoice[]>([])
+  const [credentials, setCredentials] = useState<string[]>([])
   // The model, for a tool that runs on a key: its saved default unless the user picks one.
   // A pick belongs to the tool, key and sign-in it was made for; another one forgets it.
   const key = tool && toolReady && !profileRef ? boundKey(tool) : undefined
@@ -888,9 +1002,16 @@ export function StartSessionForm({
   const tested = key?.record.models ?? []
   const noDefault = key?.modelRequired === true && !saved
   const scope = `${tool}:${key?.record.provider_ref ?? ''}:${profileRef}:${tenant}:${epoch}`
-  const [pick, setPick] = useState({ scope, model: '', effort: '' })
-  if (pick.scope !== scope) setPick({ scope, model: '', effort: '' })
-  const model = pick.scope === scope ? pick.model : ''
+  const [pick, setPick] = useState<{
+    scope: string
+    model: string | null
+    effort: string
+  }>({ scope, model: null, effort: '' })
+  if (pick.scope !== scope) setPick({ scope, model: null, effort: '' })
+  const defaultModel =
+    !defaults.tool || defaults.tool === tool ? defaults.model : ''
+  const requestedModel =
+    pick.scope === scope ? (pick.model ?? defaultModel) : defaultModel
   const effort = pick.scope === scope ? pick.effort : ''
   // The catalog of the profile the session runs under: the chosen one, else the profile
   // the engine's own rule would reuse (read only, nothing is created). A key has no
@@ -904,10 +1025,42 @@ export function StartSessionForm({
   const modelChoices = useModelChoices({
     profileRef: catalogProfile,
     driver: tool ?? '',
-    model,
+    model: requestedModel,
     enabled: toolReady,
     fallbackModel: saved,
   })
+  const offeredModels = key
+    ? tested
+    : modelChoices.catalog?.models.map((m) => m.id)
+  const usingDefaultModel = pick.scope !== scope || pick.model === null
+  const model = usingDefaultModel
+    ? defaultModel
+      ? offeredModels?.includes(defaultModel)
+        ? defaultModel
+        : (offeredModels?.[0] ?? '')
+      : ''
+    : requestedModel
+  const defaultsLoading =
+    (!!defaultAccount && !!profiles?.loading) ||
+    (usingDefaultModel &&
+      !!defaultModel &&
+      !key &&
+      (reuse.isFetching || modelChoices.status === 'loading'))
+  const unavailableDefault =
+    (!driver &&
+      !!preferredTool &&
+      (!defaultTool || unusableDefault === defaultScope) &&
+      !isLoading &&
+      !profileList.isLoading) ||
+    (!!defaultAccount &&
+      !profiles?.loading &&
+      !profileList.isLoading &&
+      !profiles?.choices.some((c) => c.value === defaultAccount && c.ready)) ||
+    (!!defaults.folder && !!current && !preferredFolder) ||
+    (usingDefaultModel &&
+      !!defaultModel &&
+      !defaultsLoading &&
+      !offeredModels?.includes(defaultModel))
   const account = profileList.data?.accounts.find(
     (a) => a.account_ref === catalogProfile,
   )
@@ -933,7 +1086,8 @@ export function StartSessionForm({
     account?.provider_record_ref ||
     reuse.data?.profile?.provider_record_ref
       ? undefined
-      : modelChoices.start
+      : (modelChoices.catalog?.models.find((m) => m.id === model) ??
+        modelChoices.start)
   const speedUnavailable =
     (speed?.fastMode === true && speedModel?.supports_fast_mode !== true) ||
     (!!speed?.serviceTier &&
@@ -956,6 +1110,11 @@ export function StartSessionForm({
     }: {
       tenant: string | null
       attempt: StepUpAttempt
+      access: {
+        sourceType: 'profile' | 'tool'
+        sourceRef: string
+        workspaceRef: string
+      }
     }) =>
       launchSession(
         {
@@ -965,6 +1124,8 @@ export function StartSessionForm({
             workspace_ref: current?.workspace_ref,
             permission,
             secretEnv,
+            ...(credentials.length ? { credentials } : {}),
+            ...(runOn ? { runOn } : {}),
             ...(model ? { model } : {}),
             ...(effort ? { effort } : {}),
             ...(speed?.fastMode !== undefined
@@ -992,6 +1153,14 @@ export function StartSessionForm({
       })
     },
   })
+  const AccessRequestAction = PANEL_EXTENSIONS.accessRequestAction
+  const failureReason = start.isError ? errorText(start.error) : ''
+  const accessSourceType =
+    start.variables?.access.sourceType ?? (profileRef ? 'profile' : 'tool')
+  const accessSourceRef =
+    start.variables?.access.sourceRef ?? (profileRef || tool)
+  const accessWorkspaceRef =
+    start.variables?.access.workspaceRef ?? current?.workspace_ref ?? ''
   if (isLoading) {
     return <Loader2 aria-hidden className="size-5 animate-spin text-text-3" />
   }
@@ -1000,26 +1169,46 @@ export function StartSessionForm({
   }
   return (
     <form
-      className="flex flex-col gap-4"
+      className="flex min-w-0 flex-col gap-4"
       onSubmit={(e) => {
         e.preventDefault()
         // A second Start would retire the launch in flight and leave its run unopened.
-        if (start.isPending || !toolReady || speedUnavailable) return
+        if (
+          start.isPending ||
+          !current ||
+          defaultsLoading ||
+          !toolReady ||
+          speedUnavailable
+        )
+          return
         const owner = captureOwner()
-        start.mutate({ tenant: owner.tenant, attempt: owner.begin() })
+        start.mutate({
+          tenant: owner.tenant,
+          attempt: owner.begin(),
+          access: {
+            sourceType: profileRef ? 'profile' : 'tool',
+            sourceRef: profileRef || tool,
+            workspaceRef: current?.workspace_ref ?? '',
+          },
+        })
       }}
     >
-      {/* Every tool the engine drives (HU 043); the chosen one, when it cannot start yet,
+      {/* Every tool the engine drives; the chosen one, when it cannot start yet,
           says why in the engine's own sentence, with the way to AI tools. */}
+      {unavailableDefault ? (
+        <p role="status" className="text-caption text-text-2">
+          {t('settings:newSessions.fallback')}
+        </p>
+      ) : null}
       <Field label={t('start.tool')}>
         <Segmented
           aria-label={t('start.tool')}
           className="flex-wrap"
           value={tool}
           onValueChange={(v) => setDriver(v as SessionTool)}
-          options={SESSION_TOOLS.map((d) => ({
+          options={sessionTools().map((d) => ({
             value: d,
-            label: TOOL_NAMES[d],
+            label: toolName(d),
           }))}
         />
       </Field>
@@ -1034,20 +1223,26 @@ export function StartSessionForm({
             <SelectTrigger aria-label={t('start.profile')}>
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-w-[var(--radix-select-content-available-width)]">
               {profiles.choices.map((c) => (
                 <SelectItem
                   key={c.value || DEFAULT_PROFILE}
+                  className="h-auto min-h-8 whitespace-normal"
                   value={c.value || DEFAULT_PROFILE}
                   disabled={!c.ready && c.value !== ''}
                 >
                   {c.ready
                     ? c.label
                     : `${c.label} · ${t(c.missing === 'key' ? 'start.profileNeedsKey' : 'start.profileNotSignedIn')}`}
+                  {c.usage ? (
+                    <AccountUsage usage={c.usage} className="ms-2" />
+                  ) : null}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {/* An account at its limit is said before Start, with when it resets. */}
+          <AtLimit usage={selectedProfile?.usage} className="mt-1 block" />
         </Field>
       ) : null}
       {tool && !toolReady ? (
@@ -1060,7 +1255,7 @@ export function StartSessionForm({
           {profileRef && selectedProfile
             ? `${selectedProfile.label} · ${t(selectedProfile.missing === 'key' ? 'start.profileNeedsKey' : 'start.profileNotSignedIn')}`
             : (refusal(tool) ??
-              t('start.notReady', { tool: TOOL_NAMES[tool] }))}{' '}
+              t('start.notReady', { tool: toolName(tool) }))}{' '}
           <Button
             type="button"
             variant="link"
@@ -1096,7 +1291,7 @@ export function StartSessionForm({
                 <SelectItem value={DEFAULT_MODEL}>
                   {saved
                     ? t('start.providerDefault', { model: saved })
-                    : t('start.nativeDefault', { tool: TOOL_NAMES[tool] })}
+                    : t('start.nativeDefault', { tool: toolName(tool) })}
                 </SelectItem>
               )}
               {tested.map((m) => (
@@ -1196,20 +1391,22 @@ export function StartSessionForm({
               ) ? (
                 <SelectItem
                   value={current.workspace_ref}
+                  textValue={folder}
                   title={folder}
                   className={FOLDER_ITEM}
                 >
-                  {folder}
+                  <PathText value={folder} copy={false} />
                 </SelectItem>
               ) : null}
               {pickable.map((w) => (
                 <SelectItem
                   key={w.workspace_ref}
                   value={w.workspace_ref}
+                  textValue={folderLabel(w)}
                   title={folderLabel(w)}
                   className={FOLDER_ITEM}
                 >
-                  {folderLabel(w)}
+                  <FolderLabel workspace={w} />
                 </SelectItem>
               ))}
               <SelectItem value={FOLDER_NEW}>{t('start.folderNew')}</SelectItem>
@@ -1251,9 +1448,11 @@ export function StartSessionForm({
           </span>
           {current ? (
             <p className="flex flex-wrap items-center gap-x-2 text-body">
-              <span className="break-all font-mono text-text">
-                {folder || t('start.folderNew')}
-              </span>
+              {folder ? (
+                <PathText value={folder} />
+              ) : (
+                <span className="text-text">{t('start.folderNew')}</span>
+              )}
               <Button
                 type="button"
                 variant="link"
@@ -1291,6 +1490,13 @@ export function StartSessionForm({
         hint={t('lists.foldersHint')}
         className="p-0 [&_span]:leading-relaxed [&_span]:whitespace-normal"
       />
+      {RUN_ON_EXTENSION ? (
+        <RUN_ON_EXTENSION
+          value={runOn}
+          onChange={setRunOn}
+          pending={start.isPending}
+        />
+      ) : null}
       <Field label={t('start.prompt')}>
         <Textarea
           value={prompt}
@@ -1299,6 +1505,7 @@ export function StartSessionForm({
           rows={3}
         />
       </Field>
+      <LaunchPreflight />
       <div>
         <Button
           type="button"
@@ -1318,26 +1525,41 @@ export function StartSessionForm({
             role="radiogroup"
             aria-label={t('start.permission')}
           >
-            {PERMISSIONS.map((p) => (
-              <label
-                key={p}
-                className="flex items-center gap-2 text-body text-text"
-              >
-                <input
-                  type="radio"
-                  name="permission"
-                  value={p}
-                  checked={permission === p}
-                  onChange={() => setPermission(p)}
-                />
-                {t(`permission.${p}`)}
-              </label>
+            {PERMISSION_CHOICES.filter(
+              // The engine refuses Full and Auto to anyone who does not run sessions as
+              // an administrator, so only they are offered them.
+              (p) => mayChoosePermission(p, can('sessions:run:admin')),
+            ).map((p) => (
+              <div key={p} className="flex flex-col">
+                <label
+                  className={`flex items-center gap-2 text-body ${p === 'full' ? 'text-warning' : 'text-text'}`}
+                >
+                  <input
+                    type="radio"
+                    name="permission"
+                    value={p}
+                    checked={permission === p}
+                    onChange={() => setPermission(p)}
+                    aria-describedby={`permission-${p}`}
+                  />
+                  {t(`permission.${p}`)}
+                </label>
+                <p
+                  id={`permission-${p}`}
+                  className="ml-6 text-caption text-text-3"
+                >
+                  {t(`permissionSummary.${p}`)}
+                </p>
+              </div>
             ))}
           </div>
         </Field>
       ) : null}
       {more ? (
         <SessionSecrets value={secretEnv} onChange={setSecretEnv} />
+      ) : null}
+      {more ? (
+        <SessionCredentials value={credentials} onChange={setCredentials} />
       ) : null}
       {more && onAdvanced ? (
         <Button
@@ -1356,6 +1578,7 @@ export function StartSessionForm({
                     profileRef: catalogProfile,
                     model,
                     effort,
+                    ...(runOn ? { runOn } : {}),
                     ...(speed?.fastMode !== undefined
                       ? { fastMode: speed.fastMode }
                       : {}),
@@ -1363,7 +1586,7 @@ export function StartSessionForm({
                       ? { serviceTier: speed.serviceTier }
                       : {}),
                   }
-                : { driver: tool },
+                : { driver: tool, ...(runOn ? { runOn } : {}) },
             )
           }
         >
@@ -1400,6 +1623,33 @@ export function StartSessionForm({
           </p>
         )
       ) : null}
+      {AccessRequestAction &&
+      failureReason.includes('request access') &&
+      (profileRef || tool) ? (
+        <AccessRequestAction
+          key={`${accessSourceType}:${accessSourceRef}:${accessWorkspaceRef}`}
+          sourceType={accessSourceType}
+          sourceRef={accessSourceRef}
+          workspaceRef={accessWorkspaceRef}
+        />
+      ) : null}
+      {picked === null && folderPermission ? (
+        // The start is one click, so a folder's stored permission is said before it is used.
+        <p
+          className={`text-caption ${folderPermission === 'full' ? 'text-warning' : 'text-text-3'}`}
+        >
+          {t('start.folderPermission', {
+            name: t(`permission.${folderPermission}`),
+          })}
+        </p>
+      ) : null}
+      {permission === 'auto' && tool && tool !== 'claude' ? (
+        // Only Claude Code has an automatic mode; the engine makes any other tool ask,
+        // and the person who chose Auto is told so before Start.
+        <p className="text-caption text-text-3">
+          {t('start.autoAsks', { tool: toolName(tool) })}
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-center gap-3">
         {/* A tool that cannot start says why under the tool choice; a key that needs a
             model says it here, beside Start. */}
@@ -1425,6 +1675,7 @@ export function StartSessionForm({
             aria-describedby={tool && !toolReady ? notReadyId : undefined}
             disabled={
               !current ||
+              defaultsLoading ||
               start.isPending ||
               !toolReady ||
               speedUnavailable ||
@@ -1493,7 +1744,7 @@ export function SessionReady({
   if (
     ready.length > 0 ||
     profiles.data?.accounts.some((a) =>
-      SESSION_TOOLS.some((d) => d === a.driver),
+      sessionTools().some((d) => d === a.driver),
     )
   )
     return <StartSessionForm onStarted={onStarted} onAdvanced={onAdvanced} />
@@ -1564,12 +1815,17 @@ export function FirstHourSteps() {
     grok: useToolStatus('grok'),
     opencode: useToolStatus('opencode'),
     'gemini-cli': useToolStatus('gemini-cli'),
+    cursor: useToolStatus('cursor'),
   }
-  const installedTools = SESSION_TOOLS.filter(
+  // The steps install and sign in the session tools whose own login the console relays.
+  const signInTools = sessionTools().filter(
+    (driver): driver is SignInTool => driver in status,
+  )
+  const installedTools = signInTools.filter(
     (driver) => status[driver].data?.installed,
   )
   const readyTools = useReadyTools()
-  const tools = SESSION_TOOLS.filter(
+  const tools = signInTools.filter(
     (driver) =>
       FIRST_HOUR_TOOLS.some((tool) => tool === driver) ||
       installedTools.includes(driver) ||

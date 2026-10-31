@@ -42,6 +42,10 @@ export interface UpdateTargetInput {
 
 export type PublicationEffect = 'push' | 'pull_request' | 'merge'
 
+/** Every effect an intent can record. The console launches only PublicationEffect; an
+ * issue comment is written by API callers and shows here as an intent to follow up. */
+export type IntentEffect = PublicationEffect | 'issue_comment'
+
 /** Intent states (§3.14). `dispatching` is also the ANSWER a replay gets when it does not
  * own the dispatch. */
 export type IntentState =
@@ -77,6 +81,8 @@ export interface IntentObserved {
   merged: boolean
   merge_commit_sha?: string
   merge_tree?: string
+  /** A pull request's page on the host, when the repository's address is known. */
+  url?: string
   source?: string
   at?: string
 }
@@ -94,7 +100,7 @@ export interface PublicationIntent {
   id: string
   target_id: string
   target_version: number
-  effect: PublicationEffect
+  effect: IntentEffect
   operation_id: string
   attempt: number
   state: IntentState
@@ -158,4 +164,29 @@ export interface MergeInput {
 /** The module's list envelope: `{ items }`, with no cursor. */
 export interface ItemsResponse<T> {
   items: T[]
+}
+
+/** One ship: commit the session's folder, push it, open the pull request. */
+export interface ShipInput {
+  operation_id: string
+  session_run: string
+  message: string
+  title: string
+  body: string
+  base?: string
+  draft: boolean
+}
+
+/** How far a ship got: `awaiting_approval` stops before the push, `incomplete` after a push
+ * that did not apply or a pull request that was not opened. */
+export interface ShipResult {
+  state: 'shipped' | 'awaiting_approval' | 'incomplete'
+  branch?: string
+  commit?: string
+  committed: boolean
+  approval_id?: string
+  push?: PublicationIntent
+  pull_request?: PublicationIntent
+  pull_request_url?: string
+  pull_request_error?: string
 }

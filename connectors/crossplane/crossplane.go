@@ -25,7 +25,7 @@ import (
 const Name = "olivares.crossplane"
 
 // SignalCrossplane is the package-local SignalSource for this connector
-//. FindingReport carries no Source field, so this provenance value is
+// . FindingReport carries no Source field, so this provenance value is
 // woven into the finding Kind/Title and kept here for documentation and consistency
 // with the other IaC posture connectors (each declares its own open-string source).
 // It is NOT added to sdk/model/enums.go (the SDK enum stays untouched; an

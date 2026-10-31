@@ -171,8 +171,8 @@ func TestDeniedRunDoesNotRevealExistenceThroughOPALatency(t *testing.T) {
 	}
 }
 
-// Catch both the missing-row skip and scoped-denial short circuit: actions and
-// concealed reads evaluate read policy once even when confinement rejects read.
+// Catch both the missing-row skip and scoped-denial short circuit: absent and
+// present runs must do equal read-policy work, including the output compatibility check.
 // Exercise the real adapter and routes; an equal status alone misses the oracle.
 func TestRunActionDisclosureHasEqualOPAWork(t *testing.T) {
 	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
@@ -300,8 +300,12 @@ func TestRunActionDisclosureHasEqualOPAWork(t *testing.T) {
 							if absent.code != http.StatusNotFound || present.code != want {
 								t.Errorf("absent=%d present=%d want_present=%d", absent.code, present.code, want)
 							}
-							if absentCalls != 1 || presentCalls != 1 {
-								t.Errorf("existence-dependent read-PDP work: absent=%d present=%d, want 1 each", absentCalls, presentCalls)
+							wantCalls := int64(1)
+							if action.name == "events" || action.name == "attach" {
+								wantCalls = 2
+							}
+							if absentCalls != wantCalls || presentCalls != wantCalls {
+								t.Errorf("existence-dependent read-PDP work: absent=%d present=%d, want %d each", absentCalls, presentCalls, wantCalls)
 							}
 							if want == http.StatusNotFound && present.raw != absent.raw {
 								t.Errorf("concealed response differs: present=%s absent=%s", present.raw, absent.raw)

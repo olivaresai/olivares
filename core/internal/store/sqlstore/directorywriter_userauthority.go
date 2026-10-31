@@ -396,7 +396,7 @@ func pepServiceCredentialAuthorityRepo(
 	ts *tenantScope,
 	inner store.Repository[model.PEPServiceCredential],
 ) store.Repository[model.PEPServiceCredential] {
-	tokens := newTypedRepo(ts.repo(apiTokenDescriptor), apiTokenCodec)
+	tokens := newTypedRepo(ts.repo(apiTokenDescriptorV29), apiTokenCodec)
 	validate := func(ctx context.Context, credential model.PEPServiceCredential) error {
 		if credential.TokenID.IsZero() {
 			return directoryUnavailable("PEP credential token is absent", nil)
@@ -573,14 +573,14 @@ func delegationHandleAuthorityRepo(
 		}
 		switch handle.SourceCredKind {
 		case "user":
-			sessions := newTypedRepo(ts.repo(authSessionDescriptor), authSessionCodec)
+			sessions := newTypedRepo(ts.repo(authSessionDescriptorV28), authSessionCodec)
 			session, err := sessions.Get(ctx, handle.SourceCredID)
 			if err != nil {
 				return unavailableAuthoritySource("delegation session", err)
 			}
 			return validateAuthorityUsers(ctx, ts, session.UserID)
 		case "token":
-			tokens := newTypedRepo(ts.repo(apiTokenDescriptor), apiTokenCodec)
+			tokens := newTypedRepo(ts.repo(apiTokenDescriptorV29), apiTokenCodec)
 			token, err := tokens.Get(ctx, handle.SourceCredID)
 			if err != nil {
 				return unavailableAuthoritySource("delegation token", err)

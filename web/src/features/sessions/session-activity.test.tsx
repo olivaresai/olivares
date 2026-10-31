@@ -329,7 +329,7 @@ describe('SessionActivity', () => {
     expect(files[0]).toHaveTextContent('1 added, 1 removed')
 
     const context = screen.getByTestId('activity-context')
-    // The model by its name, its id on the hover (dev#3120).
+    // The model by its name, its id on the hover.
     const model = within(context).getByText('Claude Haiku 5.5 · medium')
     expect(model).toHaveAttribute('title', 'claude-haiku-5-5')
     expect(

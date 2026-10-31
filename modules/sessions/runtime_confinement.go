@@ -34,6 +34,19 @@ func WithConfinement(protect []string, required bool) Option {
 	}
 }
 
+// WithCredentialDataDir names the engine data directory for credential grants. A broker may grant
+// a file in that directory's own run directory (DataDir/run/<run ref>) even though the directory
+// is protected, or lies inside a protected folder; the run directory of any other folder stays
+// protected. Unset, nothing is granted from a protected folder.
+func WithCredentialDataDir(dataDir string) Option {
+	return func(m *Module) {
+		m.rt.credentialDataDir = ""
+		if dataDir = strings.TrimSpace(dataDir); filepath.IsAbs(dataDir) {
+			m.rt.credentialDataDir = filepath.Clean(dataDir)
+		}
+	}
+}
+
 // ConfinementPolicy is the policy for a child that may write readWrite and read
 // readOnly, with this node's protected paths. It is nil when confinement is not
 // wired, which runs the child unconfined.
@@ -96,15 +109,26 @@ func (m *Module) sessionConfinement(dir string, home *ProviderHomeSnapshot, pres
 	// A linked worktree needs its own index/HEAD and the repository's shared
 	// objects, refs and logs; a normal clone's metadata is already in its folder.
 	var linked []string
+	gitNamed := false
 	if layout, ok := gitlayout.Read(dir); ok && layout.Linked() {
 		linked = []string{layout.GitDir, layout.CommonDir}
+		gitNamed = strings.HasSuffix(filepath.Base(layout.CommonDir), ".git")
 	}
-	// Inferred grants must not reopen a named directory beneath Protect.
+	// Inferred grants must not reopen a named directory beneath Protect for a
+	// session outside it. A worktree below protected data still gets only its
+	// own Git directory and its repository's common directory, and only when
+	// that is a Git directory by name (.git, or name.git for a bare one): the
+	// pointer files are the session's own, so the name is what keeps a forged
+	// entry from naming the data directory or any other ancestor.
+	// ponytail: a common directory with another name (--separate-git-dir, a bare
+	// repository without the suffix) stays closed beneath Protect, as it always
+	// was; upgrade when sessionConfinement can check it against the registered
+	// workspace's own repository.
 gitDirs:
 	for _, path := range linked {
 		for _, protected := range p.Protect {
 			protected = resolvedPath(protected)
-			if path == protected || strings.HasPrefix(path, strings.TrimSuffix(protected, string(filepath.Separator))+string(filepath.Separator)) {
+			if pathWithin(path, protected) && (!gitNamed || !pathWithin(dir, protected)) {
 				continue gitDirs
 			}
 		}

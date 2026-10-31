@@ -47,10 +47,14 @@ const communicationChannelRetireAudit = "sessions.communication.channel.retire"
 
 // retirementCovers are the counted columns this module's step reads.
 var retirementCovers = []string{
+	string(limitResumeSettingsKind) + "." + colLimitResumeOwner,
+	"sessions.share.owner_id",
+	"sessions.share.guest_id",
 	string(runKind) + "." + colRunQueuedActor,
 	string(runKind) + "." + colRunQueuedUserID,
 	string(runKind) + "." + colRunQueuedCredentialID,
 	string(runKind) + "." + colRunResumeCredentialID,
+	string(runKind) + "." + colLimitResumeCredentialID,
 	string(channelGrantKind) + "." + colCommSubjectRef,
 	string(channelSubscriptionKind) + "." + colCommSubscriberRef,
 	string(communicationEndpointKind) + "." + colCommOwnerRef,
@@ -88,6 +92,22 @@ func (s retirementStep) RetireUser(ctx context.Context, req auth.RetirementReque
 		out = auth.RetirementOutcome{}
 		fact, err := auth.PinRetirement(ctx, sc, req)
 		if err != nil {
+			return err
+		}
+		row, err := limitResumeSettingsRow(ctx, sc, req.User)
+		if err != nil {
+			return err
+		}
+		if row != nil {
+			repo, err := sc.Ext(limitResumeSettingsKind)
+			if err != nil {
+				return err
+			}
+			if err := repo.Delete(ctx, model.ID(row.String(model.ColID))); err != nil {
+				return err
+			}
+		}
+		if err := retireCollaborationShares(ctx, sc, req.User); err != nil {
 			return err
 		}
 		if err := retireChannelGrants(ctx, sc, req.User); err != nil {
@@ -295,6 +315,8 @@ func retirementBlockers(ctx context.Context, sc store.Scope, req auth.Retirement
 		// The credential the engine's next start would resume the run with: only a run that
 		// stop left waiting for that resume holds the account to it.
 		{runKind, colRunResumeCredentialID, nil, awaitsEngineResume},
+		// A pending reset schedule retains its initiating credential as authority.
+		{runKind, colLimitResumeCredentialID, nil, func(r model.Record) bool { return r.String(colRunResumeAt) != "" }},
 		{channelSubscriptionKind, colCommSubscriberRef,
 			userRefFilters(colCommSubscriberKind, colCommSubscriberRef, user),
 			stateOutside(colCommState, string(SubscriptionRevoked))},

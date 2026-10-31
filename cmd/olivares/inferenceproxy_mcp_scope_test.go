@@ -48,7 +48,7 @@ func twoServerParams() map[string]any {
 	return p
 }
 
-// TestProxyMCPEgressApprovalPrivacyMixedLegacyNotification is Root's R-MCP-1 control against
+// TestProxyMCPEgressApprovalPrivacyMixedLegacyNotification is the maintainer's R-MCP-1 control against
 // the REAL engine: a request that declares MCP and is denied by a legacy family (no MCP
 // code) keeps its deny, sends nothing upstream, consumes no break-glass, and still opens the
 // legitimate legacy notification with the adapter's identifiers and plan binding — but the

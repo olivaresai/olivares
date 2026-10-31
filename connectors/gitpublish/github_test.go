@@ -100,11 +100,13 @@ func verifyJWT(t *testing.T, pub *rsa.PublicKey, tok string) {
 func TestInstallationTokenNarrowedToOneRepositoryAndEffect(t *testing.T) {
 	k, key := testKey(t)
 	cases := map[Effect]map[string]string{
-		EffectPush:        {"contents": "write"},
-		EffectPullRequest: {"pull_requests": "write", "contents": "read"},
-		EffectMerge:       {"contents": "write", "pull_requests": "read"},
-		EffectObserve:     {"contents": "read", "pull_requests": "read"},
-		EffectRead:        {"contents": "read"},
+		EffectPush:                {"contents": "write"},
+		EffectPullRequest:         {"pull_requests": "write", "contents": "read"},
+		EffectMerge:               {"contents": "write", "pull_requests": "read"},
+		EffectObserve:             {"contents": "read", "pull_requests": "read"},
+		EffectRead:                {"contents": "read"},
+		EffectIssueComment:        {"issues": "write"},
+		EffectIssueCommentObserve: {"issues": "read"},
 	}
 	for eff, want := range cases {
 		var body map[string]any
@@ -158,6 +160,23 @@ func TestMintedTokenWiderThanTheRepositoryIsReleasedAndRefused(t *testing.T) {
 	}
 	if !revoked {
 		t.Fatal("a token with a wider repository list must be released before refusing")
+	}
+}
+
+func TestMintedTokenScopeAndReleaseFailuresAreBothReturned(t *testing.T) {
+	k, key := testKey(t)
+	mint := mintHandler(t, &k.PublicKey, []string{"widgets", "other"}, nil)
+	d := newFake(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		mint(w, r)
+	})
+	g := githubFor(t, d, key)
+	_, err := g.Mint(context.Background(), EffectPush)
+	if !errors.Is(err, ErrTokenScope) || !errors.Is(err, ErrHostUnavailable) {
+		t.Fatalf("scope and release errors = %v", err)
 	}
 }
 
@@ -393,6 +412,25 @@ func TestCreateAndMergeClassification(t *testing.T) {
 		if _, ok := m["auto_merge"]; ok {
 			t.Fatal("auto_merge must never be sent")
 		}
+	}
+}
+
+func TestGitHubMergeSuccessRequiresConfirmation(t *testing.T) {
+	_, key := testKey(t)
+	for name, body := range map[string]string{
+		"malformed":   `{`,
+		"not merged":  `{"merged":false,"sha":"m1"}`,
+		"missing sha": `{"merged":true}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			d := newFake(t, func(w http.ResponseWriter, r *http.Request) {
+				_, _ = io.WriteString(w, body)
+			})
+			g := githubFor(t, d, key)
+			if _, res := g.MergeChange(context.Background(), Token{secret: NewSecret("t")}, 9, "c1", "merge"); res.Class != Ambiguous {
+				t.Fatalf("unconfirmed merge = %+v", res)
+			}
+		})
 	}
 }
 

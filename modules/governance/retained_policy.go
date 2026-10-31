@@ -23,6 +23,8 @@ const retainedAuthorizationEngine = "olivares-authorization-v1"
 const (
 	retainedCedarScopeV1 = "cedar-scope-v1"
 	retainedCedarScopeV2 = "cedar-scope-v2"
+	// v3 retains the session permission split semantics; older readers return UNKNOWN.
+	retainedCedarScopeV3 = "cedar-scope-v3"
 )
 
 var (
@@ -75,6 +77,9 @@ func captureScopedCedar(ctx context.Context, state scopedTenantState, em cedar.E
 	if len(marks) > 0 {
 		engine = retainedCedarScopeV2
 	}
+	if _, split := legacySessionRequest(req); split {
+		engine = retainedCedarScopeV3
+	}
 	auth.CaptureAuthorizationInputs(ctx, true, engine, retainedCedar{
 		Policies: policies, Entities: em, Request: req, GrantUsable: usable, Filtered: marks,
 		Authored: state.selection.authored, Managed: state.selection.managed, Adopted: state.selection.adopted,
@@ -114,12 +119,16 @@ func evaluateRetainedAuthorization(content string, tenant model.TenantID, questi
 	for _, in := range snapshot.Scoped {
 		switch in.Engine {
 		case "none-v1":
-		case retainedCedarScopeV1, retainedCedarScopeV2:
+		case retainedCedarScopeV1, retainedCedarScopeV2, retainedCedarScopeV3:
 			var c retainedCedar
 			if err := json.Unmarshal(in.Inputs, &c); err != nil || c.Policies == nil {
 				return auth.EvidenceUnknown, errors.New("governance: retained Cedar inputs invalid")
 			}
-			dec, diag := cedar.Authorize(c.Policies, c.Entities, c.Request)
+			evaluate := cedar.Authorize
+			if in.Engine == retainedCedarScopeV3 {
+				evaluate = authorizeCedar
+			}
+			dec, diag := evaluate(c.Policies, c.Entities, c.Request)
 			switch {
 			// A matched forbid is independently established even if an unrelated
 			// permit errored, matching the live typed evaluator's precedence.
@@ -141,7 +150,7 @@ func evaluateRetainedAuthorization(content string, tenant model.TenantID, questi
 	for _, in := range snapshot.Policy {
 		switch in.Engine {
 		case "none-v1":
-		case "abac-v1":
+		case "abac-v1", "abac-v2":
 			var a retainedABAC
 			if err := json.Unmarshal(in.Inputs, &a); err != nil {
 				return auth.EvidenceUnknown, err
@@ -149,16 +158,20 @@ func evaluateRetainedAuthorization(content string, tenant model.TenantID, questi
 			req := auth.Request{Principal: auth.Principal{Kind: snapshot.Kind, AAL: snapshot.AAL},
 				Permission: snapshot.Permission, Tenant: snapshot.Tenant, Resource: snapshot.Resource, Route: snapshot.Route}
 			for _, r := range a.Rules {
-				if r.matches(req) {
+				if in.Engine == "abac-v1" && r.matchesExact(req) || in.Engine == "abac-v2" && r.matches(req) {
 					policy = auth.Decision{Allow: false, Class: auth.ClassPolicy}
 				}
 			}
-		case "cedar-overlay-v1":
+		case "cedar-overlay-v1", "cedar-overlay-v2":
 			var c retainedCedar
 			if err := json.Unmarshal(in.Inputs, &c); err != nil || c.Policies == nil {
 				return auth.EvidenceUnknown, errors.New("governance: retained Cedar inputs invalid")
 			}
-			dec, diag := cedar.Authorize(c.Policies, c.Entities, c.Request)
+			evaluate := cedar.Authorize
+			if in.Engine == "cedar-overlay-v2" {
+				evaluate = authorizeCedar
+			}
+			dec, diag := evaluate(c.Policies, c.Entities, c.Request)
 			if dec != cedar.Allow || hasErroredForbid(c.Policies, diag) {
 				policy.Allow = false
 			}

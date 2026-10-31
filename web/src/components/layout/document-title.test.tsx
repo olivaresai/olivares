@@ -18,6 +18,7 @@ import i18n from 'i18next'
 import { afterEach, describe, expect, it } from 'vitest'
 import { routeTree } from '@/app/routes'
 import { BUSINESS_BUILD } from '@/features/business-build'
+import { ROUTE_ALIASES } from '@/features/registry'
 import census from '@/features/route-census.json'
 // The title's root-closure import registers this dictionary too; the census reads it loaded.
 import '@/features/health/i18n'
@@ -49,7 +50,16 @@ describe('the document title of every census route', () => {
 
   // A Business console serves /deploy as the one leaf of its Deployment area: the area page
   // and the leaf are both "Deployment".
-  const titled = mounted.filter((p) => !(BUSINESS_BUILD && p === '/deploy'))
+  // A retired address with no page of its own reads as where it lands (/mcp-servers as MCP &
+  // skills, #3388): its title is its target's, so it is not a second page to tell apart.
+  const redirectsOnly = new Set(
+    ROUTE_ALIASES.filter((a) => !a.from.startsWith('/areas/')).map(
+      (a) => a.from,
+    ),
+  )
+  const titled = mounted.filter(
+    (p) => !(BUSINESS_BUILD && p === '/deploy') && !redirectsOnly.has(p),
+  )
 
   it('is unique per mounted route', () => {
     expect(mounted.length).toBeGreaterThan(0)
@@ -94,7 +104,9 @@ describe('the document title of every census route', () => {
 
   // The approval queue is the Rules place of the Estate top bar (APPROVALS_SECTION).
   it('names a section address by its place', () => {
-    expect(pageLabel(t, '/permissions', { tab: 'approvals' })).toBe('Rules')
+    expect(pageLabel(t, '/permissions', { tab: 'approvals' })).toBe(
+      'Rules & approvals',
+    )
   })
 
   it.skipIf(BUSINESS_BUILD)('names a Business bookmark in Community', () => {

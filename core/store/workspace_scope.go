@@ -879,7 +879,7 @@ func (s *workspaceConfinedScope) Org(ctx context.Context) (model.Org, error) {
 	return model.Org{}, denied("the tenant org row")
 }
 
-func (s *workspaceConfinedScope) SetOrgSettings(ctx context.Context, settings map[string]any) (model.Org, error) {
+func (s *workspaceConfinedScope) SetOrgSettings(ctx context.Context, settings map[string]any, expectedVersion ...int64) (model.Org, error) {
 	return model.Org{}, deniedWrite("tenant-wide org settings are not writable by a workspace-confined caller")
 }
 

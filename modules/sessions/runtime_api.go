@@ -27,17 +27,19 @@ import (
 )
 
 // Permission tiers for the OPERATE surface (verb-namespaced so roles grant by
-// tier). Read covers list/get/events/attach; write covers create/input/stop/
-// resume; admin covers the destructive cleanup/delete.
+// tier). Listing and output are separate; stopping grants no input authority.
+// Admin covers destructive cleanup/delete.
 const (
-	permRunRead  auth.Permission = "sessions:run:read"
-	permRunWrite auth.Permission = "sessions:run:write"
-	permRunAdmin auth.Permission = "sessions:run:admin"
+	permRunRead   auth.Permission = "sessions:run:read"
+	permRunWrite  auth.Permission = "sessions:run:write"
+	permRunAdmin  auth.Permission = "sessions:run:admin"
+	permRunStop   auth.Permission = "sessions:stop:write"
+	permRunOutput auth.Permission = "sessions:output:read"
 )
 
 // runtimePermissions are the operate permissions, appended to the module's set.
 func runtimePermissions() []auth.Permission {
-	return []auth.Permission{permRunRead, permRunWrite, permRunAdmin}
+	return []auth.Permission{permRunRead, permRunWrite, permRunAdmin, permRunStop, permRunOutput}
 }
 
 // runtimeRoutes mounts the operate endpoints under /v1/m/sessions/.
@@ -46,33 +48,47 @@ func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
 	// Every point route authorizes its stored core workspace before runtime access.
 	runEntity := api.EntityRef{
 		Kind: runKind, IDParam: "ref", LookupColumn: colRunRef,
+		ResourceKind:    permRunRead.Resource(),
 		WorkspaceColumn: colRunAuthzWorkspaceID, ConcealDeniedAsNotFound: true,
 	}
 	reg.Handle("POST", "/runs", permRunWrite, m.handleCreateRun)
 	reg.Handle("GET", "/runs", permRunRead, m.handleListRuns)
+	reg.Handle("GET", "/limit-resume-settings", permRunRead, m.handleLimitResumeSettings)
+	reg.Handle("PUT", "/limit-resume-settings", permRunWrite, m.handleLimitResumeSettings)
+	// The tools a run can name, from the engine's one table (tools_api.go).
+	reg.Handle("GET", "/tools", permRunRead, m.handleListTools)
+	// The issue or pull request a start names (session_source_item.go), read with the
+	// approved repository binding; it changes nothing on the host.
+	reg.Handle("GET", "/source-items", permRunWrite, m.handleSourceItem)
 	reg.HandleEntity("GET", "/runs/{ref}", permRunRead, runEntity, m.handleGetRun)
-	reg.HandleEntity("GET", "/runs/{ref}/events", permRunRead, runEntity, m.handleRunEvents)
-	reg.HandleEntity("GET", "/runs/{ref}/attach", permRunRead, runEntity, m.handleAttachRun)
+	// Output refusals are 403 only for callers who can read this stored run.
+	outputEntity := runEntity
+	outputEntity.DeniedReadPermission = permRunRead
+	reg.HandleEntity("GET", "/runs/{ref}/events", permRunOutput, outputEntity, m.handleRunEvents)
+	reg.HandleEntity("GET", "/runs/{ref}/attach", permRunOutput, outputEntity, m.handleAttachRun)
 	// What the session changed in its folder (run_changes.go): read-only, nothing executed.
-	reg.HandleEntity("GET", "/runs/{ref}/changes", permRunRead, runEntity, m.handleRunChanges)
-	reg.HandleEntity("GET", "/runs/{ref}/changes/file", permRunRead, runEntity, m.handleRunChangedFile)
-	reg.HandleEntity("GET", "/runs/{ref}/git", permRunRead, runEntity, m.handleRunGit)
+	reg.HandleEntity("GET", "/runs/{ref}/changes", permRunOutput, outputEntity, m.handleRunChanges)
+	reg.HandleEntity("GET", "/runs/{ref}/changes/file", permRunOutput, outputEntity, m.handleRunChangedFile)
+	reg.HandleEntity("GET", "/runs/{ref}/git", permRunOutput, outputEntity, m.handleRunGit)
 	// What the branch of the session's own worktree holds against where it began
 	// (run_worktree_diff.go): committed objects only, plumbing git, read-only.
-	reg.HandleEntity("GET", "/runs/{ref}/diff", permRunRead, runEntity, m.handleRunWorktreeDiff)
-	reg.HandleEntity("GET", "/runs/{ref}/diff/file", permRunRead, runEntity, m.handleRunWorktreeDiffFile)
+	reg.HandleEntity("GET", "/runs/{ref}/diff", permRunOutput, outputEntity, m.handleRunWorktreeDiff)
+	reg.HandleEntity("GET", "/runs/{ref}/diff/file", permRunOutput, outputEntity, m.handleRunWorktreeDiffFile)
 	// The ports the session's own processes listen on (preview.go).
 	reg.HandleEntity("GET", "/runs/{ref}/preview", permRunRead, runEntity, m.handleRunPreviewPorts)
 	// The summary a handoff to another tool would start from (session_handoff.go):
 	// generated, read-only, for the person to review.
-	reg.HandleEntity("GET", "/runs/{ref}/handoff", permRunRead, runEntity, m.handleHandoffPreview)
+	reg.HandleEntity("GET", "/runs/{ref}/handoff", permRunOutput, outputEntity, m.handleHandoffPreview)
 	// What the session's tool is doing, from the transcript it keeps (session_activity.go):
 	// its agents, background tasks, changed files, task list and context. Read-only.
-	reg.HandleEntity("GET", "/runs/{ref}/activity", permRunRead, runEntity, m.handleRunActivity)
-	reg.HandleEntity("GET", "/runs/{ref}/activity/agents/{agent}", permRunRead, runEntity, m.handleRunAgentTranscript)
+	reg.HandleEntity("GET", "/runs/{ref}/activity", permRunOutput, outputEntity, m.handleRunActivity)
+	reg.HandleEntity("GET", "/runs/{ref}/activity/agents/{agent}", permRunOutput, outputEntity, m.handleRunAgentTranscript)
 	// The messages of the session, from the same transcript (session_messages.go): its
 	// index, its search and a time anchor, in pages. Read-only.
-	reg.HandleEntity("GET", "/runs/{ref}/messages", permRunRead, runEntity, m.handleRunMessages)
+	reg.HandleEntity("GET", "/runs/{ref}/messages", permRunOutput, outputEntity, m.handleRunMessages)
+	// The messages lined up for the session's next turns (run_queue.go): what the people
+	// who may message it typed, so the same read as its transcript.
+	reg.HandleEntity("GET", "/runs/{ref}/queue", permRunOutput, outputEntity, m.handleRunQueueGet)
 	// Readers may learn a denied action as 403. Foreign, unreadable and absent
 	// runs retain the same concealed 404.
 	runEntity.DeniedReadPermission = permRunRead
@@ -84,12 +100,19 @@ func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
 	// that asks the tool through the session's stdin, as an interrupt does: write.
 	reg.HandleEntity("GET", "/runs/{ref}/commands", permRunWrite, runEntity, m.handleRunCommands)
 	reg.HandleEntity("POST", "/runs/{ref}/input", permRunWrite, runEntity, m.handleRunInput)
+	// Lining messages up while the tool works, and steering one into the running turn
+	// (run_queue.go): the same write permission and edition rule as /input.
+	reg.HandleEntity("POST", "/runs/{ref}/queue", permRunWrite, runEntity, m.handleRunQueueAdd)
+	reg.HandleEntity("PUT", "/runs/{ref}/queue", permRunWrite, runEntity, m.handleRunQueueOrder)
+	reg.HandleEntity("PATCH", "/runs/{ref}/queue/{id}", permRunWrite, runEntity, m.handleRunQueueEdit)
+	reg.HandleEntity("DELETE", "/runs/{ref}/queue/{id}", permRunWrite, runEntity, m.handleRunQueueRemove)
+	reg.HandleEntity("POST", "/runs/{ref}/queue/{id}/steer", permRunWrite, runEntity, m.handleRunQueueSteer)
 	// Images attached to a message (run_attachment.go): stored with the session under
 	// the tenant, delivered to the tool by /input, shown again by the GET.
 	reg.HandleEntity("POST", "/runs/{ref}/attachments", permRunWrite, runEntity, m.handleRunAttachmentUpload)
-	reg.HandleEntity("GET", "/runs/{ref}/attachments/{id}", permRunRead, runEntity, m.handleRunAttachmentGet)
+	reg.HandleEntity("GET", "/runs/{ref}/attachments/{id}", permRunOutput, outputEntity, m.handleRunAttachmentGet)
 	reg.HandleEntity("POST", "/runs/{ref}/interrupt", permRunWrite, runEntity, m.handleInterruptRun)
-	reg.HandleEntity("POST", "/runs/{ref}/stop", permRunWrite, runEntity, m.handleStopRun)
+	reg.HandleEntity("POST", "/runs/{ref}/stop", permRunStop, runEntity, m.handleStopRun)
 	reg.HandleEntity("POST", "/runs/{ref}/resume", permRunWrite, runEntity, m.handleResumeRun)
 	// Rebinds a stopped session to another profile of its tool, carrying the tool's
 	// own conversation state (session_move.go). It starts nothing.
@@ -113,6 +136,8 @@ func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
 	// The session's own name and archived mark (run_name_archive.go): one value on
 	// the run that every reader sees, so WRITE and ledgered, unlike a pin.
 	reg.HandleEntity("PUT", "/runs/{ref}/name", permRunWrite, runEntity, m.handleSetRunName)
+	// Its title, cut from the first message (run_title.go); the handler also asks for output read.
+	reg.HandleEntity("POST", "/runs/{ref}/title", permRunWrite, runEntity, m.handleGenerateRunTitle)
 	reg.HandleEntity("POST", "/runs/{ref}/archive", permRunWrite, runEntity, m.handleArchiveRun)
 	reg.HandleEntity("DELETE", "/runs/{ref}/archive", permRunWrite, runEntity, m.handleUnarchiveRun)
 	// A browser preview sends the person's requests into the session's app.
@@ -137,6 +162,16 @@ func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.
 		writeRunErr(w, err)
 		return
 	}
+	if body.RunOn != "" {
+		if _, err := m.checkRunPlacement(r.Context(), mc.Tenant, body.RunOn, mc.Principal); err != nil {
+			writeRunErr(w, err)
+			return
+		}
+	}
+	if err := m.refuseRemoteInputs(CreateRunParams{RunOn: body.RunOn, GitRead: body.GitRead, Credentials: body.Credentials, Worktree: body.Worktree, WorktreeFrom: body.WorktreeFrom, WorkspaceRef: body.WorkspaceRef, RepositoryURL: body.RepositoryURL, Isolation: Isolation(body.Isolation), Transport: Transport(body.Transport)}); err != nil {
+		writeRunErr(w, err)
+		return
+	}
 	if err := m.refuseUnsupportedIsolation(r.Context(), Isolation(body.Isolation)); err != nil {
 		writeRunErr(w, err)
 		return
@@ -158,22 +193,25 @@ func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.
 	dto, err := m.createRun(r.Context(), mc.Tenant, CreateRunParams{
 		queuedCredential: credential,
 		Name:             body.Name,
-		Transport:        Transport(body.Transport),
-		PermissionMode:   body.PermissionMode,
-		Effort:           body.Effort,
-		Model:            body.Model,
-		FastMode:         body.FastMode,
-		ServiceTier:      body.ServiceTier,
-		WorkspaceRef:     body.WorkspaceRef,
-		Worktree:         body.Worktree,
-		NoSetup:          body.NoSetup,
-		WorktreeFrom:     body.WorktreeFrom,
-		TemplateID:       body.TemplateID,
-		Isolation:        Isolation(body.Isolation),
-		EnvAllow:         body.EnvAllow,
-		SecretEnv:        body.SecretEnv,
-		GitRead:          body.GitRead,
-		Credentials:      body.Credentials,
+		RepositoryURL:    body.RepositoryURL, RepositoryRef: body.RepositoryRef, CostCapMicroUSD: body.CostCapMicroUSD, TimeoutSeconds: body.TimeoutSeconds,
+		Transport:      Transport(body.Transport),
+		PermissionMode: body.PermissionMode,
+		Effort:         body.Effort,
+		Model:          body.Model,
+		FastMode:       body.FastMode,
+		ServiceTier:    body.ServiceTier,
+		WorkspaceRef:   body.WorkspaceRef,
+		Worktree:       body.Worktree,
+		NoSetup:        body.NoSetup,
+		WorktreeFrom:   body.WorktreeFrom,
+		SourceURL:      body.SourceURL,
+		TemplateID:     body.TemplateID,
+		Isolation:      Isolation(body.Isolation),
+		EnvAllow:       body.EnvAllow,
+		SecretEnv:      body.SecretEnv,
+		GitRead:        body.GitRead,
+		Credentials:    body.Credentials,
+		RunOn:          body.RunOn,
 		// The profile is a REFERENCE; its homes are resolved and validated on the
 		// server. The DTO has no field for a home, an environment or a snapshot.
 		ProviderProfileRef: body.ProviderProfileRef,
@@ -216,6 +254,8 @@ func (m *Module) callerQuestions(ctx context.Context, mc api.ModuleContext) call
 		runUnrestricted: sync.OnceValue(func() bool { return m.mayRunUnrestricted(ctx, mc) }),
 		secretEnv:       sync.OnceValue(func() bool { return m.mayUseSecretEnv(ctx, mc) }),
 		profileAccess:   m.askProfileAccess(ctx, mc.Tenant, mc.Principal),
+		standing:        m.askStanding(ctx, mc.Tenant, mc.Principal),
+		workspaceRights: m.askWorkspaceRights(ctx, mc.Tenant, mc.Principal, func(q auth.Request) bool { return mc.Admission != nil && mc.Admission(ctx, q) }),
 	}
 }
 
@@ -228,7 +268,7 @@ func (m *Module) mayRunUnrestricted(ctx context.Context, mc api.ModuleContext) b
 
 // principalMayRunUnrestricted is that one question for any principal: the caller of
 // a launch or resume, or the launcher of a queued launch as it is restored, CURRENT,
-// when its approval arrives (Root on FH 048).
+// when its approval arrives (Root on first-hour check).
 func (m *Module) principalMayRunUnrestricted(ctx context.Context, tenant model.TenantID, p auth.Principal) bool {
 	if m.WorkAuthorizer == nil {
 		return false
@@ -249,6 +289,10 @@ func (m *Module) principalAsks(ctx context.Context, tenant model.TenantID, p aut
 		runUnrestricted: func() bool { return m.principalMayRunUnrestricted(ctx, tenant, p) },
 		secretEnv:       func() bool { return m.principalMayUseSecretEnv(ctx, tenant, p) },
 		profileAccess:   m.askProfileAccess(ctx, tenant, p),
+		standing:        m.askStanding(ctx, tenant, p),
+		workspaceRights: m.askWorkspaceRights(ctx, tenant, p, func(q auth.Request) bool {
+			return m.WorkAuthorizer != nil && m.WorkAuthorizer.Authorize(ctx, q).Allow
+		}),
 	}
 }
 
@@ -490,6 +534,9 @@ func (m *Module) handleListRuns(w http.ResponseWriter, r *http.Request, mc api.M
 		return
 	}
 	m.attachSourcedFacts(r.Context(), mc.Tenant, out.Items, shown)
+	for i := range out.Items {
+		m.showTitle(r.Context(), mc, shown[i], &out.Items[i])
+	}
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -535,6 +582,7 @@ func (m *Module) handleGetRun(w http.ResponseWriter, r *http.Request, mc api.Mod
 	}
 	one := []runDTO{dto}
 	m.attachSourcedFacts(r.Context(), mc.Tenant, one, []model.Record{rec})
+	m.showTitle(r.Context(), mc, rec, &one[0])
 	writeJSON(w, http.StatusOK, one[0])
 }
 
@@ -583,6 +631,16 @@ func (m *Module) handleRunInput(w http.ResponseWriter, r *http.Request, mc api.M
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid request body"))
 		return
 	}
+	if body.ReviewComment != nil {
+		if !body.ReviewComment.valid() {
+			writeJSON(w, http.StatusBadRequest, errorBody("invalid review_comment: send a path of the diff, a line from 1 and the side original or modified"))
+			return
+		}
+		if len(body.Attachments) > 0 {
+			writeJSON(w, http.StatusBadRequest, errorBody("a review comment carries no attachments"))
+			return
+		}
+	}
 	if len(body.Attachments) > 0 {
 		m.handleRunInputWithImages(w, r, mc, ref, body)
 		return
@@ -615,6 +673,7 @@ func (m *Module) handleRunInput(w http.ResponseWriter, r *http.Request, mc api.M
 			writeRuntimeControlErr(w, err)
 			return
 		}
+		m.auditReviewComment(r, mc, ref, body.ReviewComment)
 		writeJSON(w, http.StatusAccepted, map[string]any{"accepted": true})
 		return
 	}
@@ -636,6 +695,7 @@ func (m *Module) handleRunInput(w http.ResponseWriter, r *http.Request, mc api.M
 		writeRuntimeControlErr(w, err)
 		return
 	}
+	m.auditReviewComment(r, mc, ref, body.ReviewComment)
 	writeJSON(w, http.StatusAccepted, map[string]any{"accepted": true})
 }
 
@@ -715,13 +775,53 @@ func (m *Module) handleResumeRun(w http.ResponseWriter, r *http.Request, mc api.
 	if m.refuseForeignSteering(w, r, mc) {
 		return
 	}
+	var body struct {
+		AtReset     bool `json:"at_reset"`
+		CancelReset bool `json:"cancel_reset"`
+	}
+	if !decodeOptionalJSONBody(w, r, &body) {
+		return
+	}
+	if body.AtReset && body.CancelReset {
+		writeJSON(w, http.StatusBadRequest, errorBody("choose schedule or cancel"))
+		return
+	}
 	ref := chi.URLParam(r, "ref")
+	if body.AtReset {
+		credential, _ := auth.QueuedCredentialFrom(mc.Principal)
+		dto, err := m.scheduleLimitResume(r.Context(), mc.Tenant, ref, mc.Principal, credential)
+		if err != nil {
+			writeRunErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, dto)
+		return
+	}
+	if body.CancelReset {
+		release, err := m.rt.lockRunContext(r.Context(), liveKey(mc.Tenant, ref))
+		if err != nil {
+			writeRunErr(w, err)
+			return
+		}
+		defer release()
+		if err := m.cancelLimitResume(r.Context(), mc.Tenant, ref, mc.Principal.Actor(), mc.Principal.ActorKind()); err != nil {
+			writeRunErr(w, err)
+			return
+		}
+		dto, err := m.getRun(r.Context(), mc.Tenant, ref)
+		if err != nil {
+			writeRunErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, dto)
+		return
+	}
 	asks := m.callerQuestions(r.Context(), mc)
-	// A "full" session is resumed only by a run administrator, as it is started: refused
-	// here, before any side effect of the resume, when its stored mode is full. The
-	// resume judges the effective mode again after today's template.
-	if rec, err := m.loadRun(r.Context(), mc.Tenant, ref); err == nil && strings.TrimSpace(rec.String(colPermissionMode)) == permModeBypass {
-		if err := refuseUnrestrictedFor(permModeBypass, asks.runUnrestricted()); err != nil {
+	// A "full" or "auto" session is resumed only by a run administrator, as it is
+	// started: refused here, before any side effect of the resume, when its stored mode
+	// is one of them. The resume judges the effective mode again after today's template.
+	if rec, err := m.loadRun(r.Context(), mc.Tenant, ref); err == nil && needsRunAdministration(rec.String(colPermissionMode)) {
+		if err := refuseUnrestrictedFor(rec.String(colPermissionMode), asks.runUnrestricted()); err != nil {
 			writeRunErr(w, err)
 			return
 		}
@@ -732,6 +832,9 @@ func (m *Module) handleResumeRun(w http.ResponseWriter, r *http.Request, mc api.
 		return
 	}
 	writeJSON(w, http.StatusOK, dto)
+	// A stopped session kept its queue (run_queue.go); no turn ends to send it now, so the
+	// resume is the moment it goes.
+	m.drainRunQueue(context.WithoutCancel(r.Context()), mc.Tenant, ref)
 }
 
 func (m *Module) handleMoveRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
@@ -796,12 +899,17 @@ func (m *Module) handleCleanupRun(w http.ResponseWriter, r *http.Request, mc api
 		raw, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 		_ = json.Unmarshal(raw, &body)
 	}
-	dto, err := m.cleanupRunWith(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), mc.Principal.Actor(), mc.Principal.ActorKind(),
+	// What the release throws away is read first and handed back: the person sees the
+	// messages that were still waiting and can copy them (run_queue.go).
+	ref := chi.URLParam(r, "ref")
+	discarded := m.queueSnapshot(r.Context(), mc.Tenant, ref)
+	dto, err := m.cleanupRunWith(r.Context(), mc.Tenant, ref, mc.Principal.Actor(), mc.Principal.ActorKind(),
 		cleanupOptions{DiscardWorktree: body.DiscardWorktree})
 	if err != nil {
 		writeRunErr(w, err)
 		return
 	}
+	dto.DiscardedQueue = discarded
 	writeJSON(w, http.StatusOK, dto)
 }
 
@@ -819,7 +927,9 @@ func (m *Module) handleDeleteRun(w http.ResponseWriter, r *http.Request, mc api.
 // ring replay immediately. It reuses the observe overlay's
 // SSE plumbing (per-frame write deadline + heartbeat) but reads from the
 // sequenced ring (lossless within retention, with an explicit gap marker) — NOT
-// the lossy observe broker.
+// the lossy observe broker. A long session pages its buffer: ?tail=<n> on a fresh
+// attach opens on the last n buffered frames, and ?before=<seq> reads one page, the
+// buffered frames from the cursor up to seq, then a page event, and closes.
 func (m *Module) handleAttachRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	ref := chi.URLParam(r, "ref")
 	if ref == "" {
@@ -845,7 +955,8 @@ func (m *Module) handleAttachRun(w http.ResponseWriter, r *http.Request, mc api.
 		return
 	}
 
-	cursor := parseFromSeq(r)
+	cursor := parseSeqParam(r, "from")
+	before := parseSeqParam(r, "before")
 	if cursor == 0 && r.URL.Query().Get("history") == "1" {
 		line, historyErr := m.conversationHistory(r.Context(), mc.Tenant, rec)
 		if historyErr != nil {
@@ -876,6 +987,14 @@ func (m *Module) handleAttachRun(w http.ResponseWriter, r *http.Request, mc api.
 		return
 	}
 
+	// A tail open says first whether earlier frames are buffered; a page says it last.
+	tail := parseSeqParam(r, "tail")
+	if cursor != 0 || before > 0 {
+		tail = 0
+	}
+	if tail > 0 {
+		cursor = lr.ring.tailCursor(tail)
+	}
 	ticker := time.NewTicker(heartbeatInterval)
 	defer ticker.Stop()
 	ctx := r.Context()
@@ -893,10 +1012,24 @@ func (m *Module) handleAttachRun(w http.ResponseWriter, r *http.Request, mc api.
 				return
 			}
 		}
+		if tail > 0 {
+			if writeSSE(rc, w, "page", attachPage{Type: "page", Earlier: rd.earlier}) != nil {
+				return
+			}
+			tail = 0
+		}
 		for _, f := range rd.frames {
+			if before > 0 && f.Seq >= before {
+				break
+			}
 			if writeSSE(rc, w, "output", attachFrame{Seq: f.Seq, Stream: f.Stream, Line: string(f.Data), At: attachFrameTime(f.At)}) != nil {
 				return
 			}
+		}
+		if before > 0 {
+			// The frames below before were all buffered before the reader asked for them: one read is the page.
+			_ = writeSSE(rc, w, "page", attachPage{Type: "page", Earlier: rd.earlier})
+			return
 		}
 		cursor = rd.next
 		if rd.closed {
@@ -916,7 +1049,7 @@ func (m *Module) handleAttachRun(w http.ResponseWriter, r *http.Request, mc api.
 }
 
 // attachFrame is the SSE payload for one bridged output frame. At is when the
-// engine read it, so a replay keeps the frame's own time (dev#2786).
+// engine read it, so a replay keeps the frame's own time.
 type attachFrame struct {
 	Seq    int64  `json:"seq"`
 	Stream string `json:"stream"`
@@ -1011,10 +1144,37 @@ func (m *Module) appendRunReadAudit(r *http.Request, mc api.ModuleContext, ref, 
 	})
 }
 
-// parseFromSeq reads the ?from=<seq> attach cursor (default 0 = from the start of
-// the buffered tail).
-func parseFromSeq(r *http.Request) int64 {
-	if s := r.URL.Query().Get("from"); s != "" {
+// auditReviewComment records, once the input was accepted, where on the session's branch
+// diff the person made the comment they sent. The ledger keeps the place (file, line and
+// side), never the comment: that is the message the tool received. Like auditAttach it is
+// best-effort, because the input has already reached the tool and cannot be taken back.
+func (m *Module) auditReviewComment(r *http.Request, mc api.ModuleContext, ref string, place *reviewCommentPlace) {
+	if place == nil {
+		return
+	}
+	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+		_, e := sc.Audit().Append(r.Context(), model.AuditDraft{
+			Actor: mc.Principal.Actor(), ActorKind: mc.Principal.ActorKind(),
+			Action: "sessions.run.review_comment", TargetKind: runKind,
+			Meta: map[string]any{"run_ref": ref, "path": place.Path, "line": place.Line, "side": place.Side},
+		})
+		return e
+	})
+	if err != nil {
+		m.debugf("sessions: review comment audit failed", "err", err)
+	}
+}
+
+// attachPage tells a paging reader whether the buffer holds frames before the ones it was sent.
+type attachPage struct {
+	Type    string `json:"type"`
+	Earlier bool   `json:"earlier"`
+}
+
+// parseSeqParam reads an attach sequence parameter: the ?from=<seq> cursor (default 0 =
+// from the start of the buffered tail), ?tail=<n> or ?before=<seq> (0 = not set).
+func parseSeqParam(r *http.Request, name string) int64 {
+	if s := r.URL.Query().Get(name); s != "" {
 		if n, err := strconv.ParseInt(s, 10, 64); err == nil && n >= 0 {
 			return n
 		}

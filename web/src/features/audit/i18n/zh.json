@@ -1,26 +1,8 @@
 {
   "title": "审计账本",
-  "subtitle": "防篡改的证据链。验证它，并导出到你的 WORM/SIEM。",
+  "subtitle": "查看 AI 活动的签名记录。",
   "subtitleSystem": "记录跨租户管理操作的系统租户链（只读）。",
   "searchLoaded": "仅筛选已加载的行（客户端）…",
-  "filters": {
-    "open": "筛选",
-    "title": "服务端账本筛选器",
-    "q": "搜索账本",
-    "qPlaceholder": "操作、主体、目标类型或 ID",
-    "actor": "主体",
-    "actorPlaceholder": "精确主体",
-    "action": "操作前缀",
-    "actionPlaceholder": "例如 agent.",
-    "targetKind": "目标类型",
-    "targetKindPlaceholder": "精确目标类型",
-    "targetId": "目标 ID",
-    "targetIdPlaceholder": "精确目标 ID",
-    "since": "起始时间",
-    "until": "截止时间",
-    "clearOne": "清除 {{filter}} 筛选器",
-    "clearAll": "清除所有筛选器"
-  },
   "scan": {
     "incomplete": "已扫描至 seq {{seq}}——非完整账本；点击「加载更多」继续扫描。"
   },
@@ -29,14 +11,6 @@
     "tenant": "租户账本",
     "system": "系统账本",
     "systemHint": "系统租户链记录跨租户的管理操作，此处仅供只读。验证与导出针对租户账本进行。"
-  },
-  "cols": {
-    "seq": "序号",
-    "occurred": "时间",
-    "action": "操作",
-    "actor": "主体",
-    "target": "目标",
-    "hash": "哈希"
   },
   "actorKind": {
     "user": "用户",
@@ -55,7 +29,6 @@
     "checkpointBreak": "检查点签名在序号 {{seq}} 处验证失败"
   },
   "pubkey": {
-    "action": "验证密钥",
     "label": "账本签名密钥",
     "key": "密钥",
     "hint": "共享此 Ed25519 公钥，外部方即可离线验证导出的事件与检查点 — 二者由同一密钥签名。",
@@ -63,7 +36,6 @@
   },
   "export": {
     "action": "导出",
-    "options": "导出选项",
     "formatLabel": "导出格式",
     "fromSeq": "起始 seq",
     "toSeq": "结束 seq",
@@ -80,7 +52,8 @@
     },
     "done": "导出已下载。",
     "failed": "导出失败。",
-    "forbidden": "你无权导出该账本。"
+    "forbidden": "你无权导出该账本。",
+    "download": "下载"
   },
   "detail": {
     "title": "证据事件",
@@ -93,15 +66,12 @@
     "actorSystem": "系统",
     "target": "目标",
     "id": "事件 ID",
-    "chainTitle": "链完整性",
     "prevHash": "前一哈希",
     "prev": "前",
     "hash": "事件哈希",
     "this": "本",
     "sig": "事件签名",
     "checkpoint": "签名",
-    "chainHint": "每个事件的哈希都与前一个相连。指纹背后没有任何载荷——哈希本身即是证据（按设计的最小化数据）。",
-    "details": "详情",
     "actorMember": "成员"
   },
   "empty": {
@@ -144,5 +114,54 @@
     "show": "显示内部记录",
     "hide": "隐藏内部记录",
     "allHidden": "目前已加载的全部是内部记录。"
+  },
+  "ledger": {
+    "query": "账本查询",
+    "placeholder": "person:  action:  since:7d  或关键词",
+    "addFilter": "添加筛选",
+    "remove": "移除 {{token}}",
+    "add": "将 {{token}} 加入查询",
+    "commands": "搜索与命令",
+    "problem": {
+      "key": "{{token}} 不是账本筛选。请使用 person:、action:、kind:、target:、since:、until: 或关键词。",
+      "time": "{{token}} 不是时间。请使用 90m、24h、7d、2w 或 2026-10-20 这样的日期。",
+      "person": "没有人匹配 {{token}}。请使用姓名、邮箱或 user:<id>。",
+      "several": "{{token}} 匹配多个人。请使用全名、邮箱或 user:<id>。",
+      "names": "此处无法查找 {{token}}。请使用 user:<id>。"
+    },
+    "entries": "账本条目",
+    "group": {
+      "label": "显示",
+      "session": "按会话",
+      "events": "全部条目"
+    },
+    "needsYou": "需要你处理",
+    "outside": "不属于任何会话",
+    "session": "会话 {{ref}}",
+    "count_other": "{{count}} 条",
+    "sentence": "{{who}}：{{what}}",
+    "signed": "已签名",
+    "histogram": {
+      "hour": "每小时条目",
+      "day": "每日条目",
+      "week": "每周条目",
+      "bar_other": "{{at}}，{{count}} 条",
+      "loaded_other": "已加载 {{count}} 条",
+      "sessions_other": "{{count}} 个会话",
+      "people_other": "{{count}} 人",
+      "more": "还可加载更多",
+      "now": "现在"
+    },
+    "entry": {
+      "title": "条目 {{seq}}",
+      "chain": "在链中的位置",
+      "previous": "上一条 · {{seq}}",
+      "this": "本条 · {{seq}}",
+      "next": "下一条 · {{seq}}",
+      "newest": "最新条目",
+      "nextUnread": "下一条未读取",
+      "chainHint": "每条记录都带有上一条的哈希。改动其中一条，之后的每个哈希都会失效。",
+      "signedEntry": "已签名的条目"
+    }
   }
 }

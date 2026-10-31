@@ -9,8 +9,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
+
+	"github.com/olivaresai/olivares/connectors/managedsettings"
 )
 
 // ClaudeHookPEPClientTimeout bounds the whole helper, including input, host path
@@ -20,9 +23,9 @@ const ClaudeHookPEPClientTimeout = 2 * time.Minute
 const ClaudeHookPEPCommandTimeout = 3 * time.Minute
 
 // ConfigureClaudeHookPEP adds the engine's tool hooks to one Claude launch. Call
-// after the launch gate has supplied Env, for both create and resume. The caller
-// must expose dataDir/run/runRef read-only to the agent. Account homes are untouched;
-// credentials remain exclusively in Env. olivaresBinary must be an absolute path.
+// after the launch gate has supplied Env, for both create and resume. A native caller
+// must expose dataDir/run/runRef read-only to the agent; a container takes the document inline.
+// Account homes are untouched; credentials remain exclusively in Env. olivaresBinary must be an absolute path.
 func ConfigureClaudeHookPEP(spec *LaunchSpec, dataDir, runRef, olivaresBinary string) error {
 	if spec == nil || !filepath.IsAbs(dataDir) || !filepath.IsAbs(olivaresBinary) || runRef == "" || runRef == "." || runRef == ".." || strings.ContainsAny(runRef, "/\\\x00") {
 		return errors.New("invalid Claude hook launch path")
@@ -59,14 +62,11 @@ func ConfigureClaudeHookPEP(spec *LaunchSpec, dataDir, runRef, olivaresBinary st
 	command := quote(olivaresBinary) + " claude-hook --server " + quote(endpoint) + " --timeout " + ClaudeHookPEPClientTimeout.String()
 	hooks := map[string]any{}
 	for _, event := range []string{"PreToolUse", "PostToolUse", "PostToolUseFailure"} {
-		// Even stalled stdin must yield the denial schema this invocation honors.
-		eventCommand := command + " --hook-event " + quote(event)
-		if spec.Isolation == IsolationContainer {
-			// Claude Code lets a tool call proceed when a hook fails for any reason but exit 2.
-			// A container whose image cannot run the program (another architecture, no shell)
-			// would then run its tool calls ungoverned; here that blocks them.
-			eventCommand += " || exit 2"
-		}
+		// Even stalled stdin must yield the denial schema this invocation honors. Claude Code lets a tool call
+		// proceed when a hook fails for any reason but exit 2, so a hook that cannot run (a container whose image
+		// cannot run the program, a host whose policy refuses it, a missing program) must exit 2: the tool call is
+		// blocked, never run ungoverned (deny closed, the regression).
+		eventCommand := managedsettings.DenyClosed(command + " --hook-event " + quote(event))
 		hooks[event] = []any{map[string]any{"matcher": "*", "hooks": []any{map[string]any{"type": "command", "command": eventCommand, "timeout": int(ClaudeHookPEPCommandTimeout / time.Second)}}}}
 	}
 	settings := map[string]any{"disableAllHooks": false, "hooks": hooks}
@@ -91,6 +91,12 @@ func ConfigureClaudeHookPEP(spec *LaunchSpec, dataDir, runRef, olivaresBinary st
 	if err != nil {
 		return err
 	}
+	if spec.Isolation == IsolationContainer {
+		// Claude accepts one settings document inline. A container needs no host settings path
+		// to mount or vet; the hook credential stays in the environment, not this document.
+		spec.Args = append(spec.Args, claudeSettingsFlag, string(body), "--setting-sources", "")
+		return nil
+	}
 	dir := filepath.Join(dataDir, "run", runRef)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
@@ -108,6 +114,10 @@ func ConfigureClaudeHookPEP(spec *LaunchSpec, dataDir, runRef, olivaresBinary st
 	path := filepath.Join(dir, "pep-settings.json")
 	if err := os.Rename(file.Name(), path); err != nil {
 		return err
+	}
+	if spec.RunOn != "" {
+		spec.LaunchFiles = append(spec.LaunchFiles, LaunchFile{Path: path, Data: slices.Clone(body), Mode: 0o600})
+		spec.HelperPath = olivaresBinary
 	}
 	// Matching native hooks run in parallel. A user/project hook could return
 	// updatedInput after PEP approval, so mutable setting sources cannot join

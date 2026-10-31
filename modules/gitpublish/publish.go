@@ -111,6 +111,7 @@ type spec struct {
 	capabilities gp.TargetCapabilities // facts of the credential binding's kind
 	session      string                // push: the session run whose folder feeds the server repository
 	proposal     Proposal
+	digest       string
 }
 
 // Validate reports the push's own shape refusal, or nil: the checks Push
@@ -201,9 +202,14 @@ func (m *Module) Merge(ctx context.Context, c Caller, in MergeInput) (Receipt, e
 func digestOf(tenant model.TenantID, s spec, sub Subject) string {
 	h := sha256.New()
 	h.Write([]byte("olivares.gitpublish.intent.v1\x00"))
-	for _, f := range []string{tenant.String(), s.target.String(), s.effect, s.op, sub.ActorKind, sub.Actor,
+	fields := []string{tenant.String(), s.target.String(), s.effect, s.op, sub.ActorKind, sub.Actor,
 		s.req.Ref, s.req.ExpectedOld, s.req.Commit, s.req.Tree, s.req.HeadRef, s.req.Base, s.req.Title,
-		strconv.Itoa(s.req.Number), s.req.ExpectedHead, s.req.Method, s.body, strconv.FormatBool(s.draft)} {
+		strconv.Itoa(s.req.Number), s.req.ExpectedHead, s.req.Method}
+	if s.effect == effectIssueComment {
+		fields = append(fields, s.req.CommentState, s.req.PullRequestURL, commentCostDigest(s.req.CostMicroUSD))
+	}
+	fields = append(fields, s.body, strconv.FormatBool(s.draft))
+	for _, f := range fields {
 		var n [8]byte
 		binary.BigEndian.PutUint64(n[:], uint64(len(f)))
 		h.Write(n[:])
@@ -306,10 +312,28 @@ func (m *Module) publish(ctx context.Context, c Caller, s spec) (Receipt, error)
 	if !s.capabilities.Supports(s.host, s.req.Method) {
 		return Receipt{}, errUnsupported
 	}
+	webBase := ""
+	if s.effect == effectIssueComment && s.req.PullRequestURL != "" {
+		resolver, ok := m.opts.Custody.(WebBaseResolver)
+		if !ok {
+			return Receipt{}, refuse("link_not_allowed", http.StatusUnprocessableEntity)
+		}
+		webBase, err = resolver.RepositoryWebBase(actx, c.Tenant, tg.Workspace, tg.RepositoryBinding)
+		if errors.Is(err, ErrBindingNotApproved) {
+			return Receipt{}, refuse("binding_not_approved", http.StatusUnprocessableEntity)
+		}
+		if err != nil {
+			return Receipt{}, errUnavailable
+		}
+	}
+	if s.effect == effectIssueComment && !commentLinkAllowed(s.req.PullRequestURL, rb, webBase, cb.Host) {
+		return Receipt{}, refuse("link_not_allowed", http.StatusUnprocessableEntity)
+	}
 	if e := targetRules(tg, s); e != nil {
 		return Receipt{}, e
 	}
 	digest := digestOf(c.Tenant, s, sub)
+	s.digest = digest
 
 	// A2: replay by operation id; refuse a new or re-armed operation in a held scope.
 	var existing Intent
@@ -355,7 +379,7 @@ func (m *Module) publish(ctx context.Context, c Caller, s spec) (Receipt, error)
 	if e := m.feed(actx, c, tg, rb, s); e != nil {
 		return Receipt{}, e
 	}
-	if s.effect != effectMerge {
+	if s.effect != effectMerge && s.effect != effectIssueComment {
 		tree, err := m.opts.Git.CommitTree(actx, rb.LocalPath, s.req.Commit)
 		if err != nil || (s.req.Tree != "" && tree != s.req.Tree) {
 			return Receipt{}, refuse("content_mismatch", http.StatusUnprocessableEntity)
@@ -367,6 +391,9 @@ func (m *Module) publish(ctx context.Context, c Caller, s spec) (Receipt, error)
 	}
 	tok, err := host.Mint(actx, s.host)
 	if err != nil {
+		if errors.Is(err, gp.ErrTokenScope) && errors.Is(err, gp.ErrHostUnavailable) {
+			m.recordReleaseFailure(ctx, c, "", tg.ID, hostCode(err))
+		}
 		if errors.Is(err, gp.ErrCredentialRefused) || errors.Is(err, gp.ErrTokenScope) {
 			return Receipt{}, refuse("host_credential_refused", http.StatusBadGateway)
 		}
@@ -381,6 +408,7 @@ func (m *Module) publish(ctx context.Context, c Caller, s spec) (Receipt, error)
 	}()
 	pre, e := m.preflight(actx, host, tok, tg, rb, s)
 	if e != nil {
+		m.lookupFailed(tg.ID, e)
 		return Receipt{}, e
 	}
 	if s.effect == effectMerge {
@@ -435,17 +463,28 @@ func (m *Module) publish(ctx context.Context, c Caller, s spec) (Receipt, error)
 
 	// A4: the last local check before dispatch.
 	if e := m.effectGate(actx, c, adm, claimed, writeDeadline, view); e != nil {
-		claimed = m.settleNotDispatched(ctx, c, claimed, e.Code)
+		settled, err := m.settleNotDispatched(ctx, c, claimed, e.Code)
+		claimed = settled
+		if err != nil {
+			return Receipt{Intent: claimed, Answer: claimed.State}, err
+		}
 		return Receipt{Intent: claimed, Answer: claimed.State}, withIntent(e, claimed.ID)
 	}
 	if err := m.data.Mutate(actx, c.Tenant, func(sc store.Scope) error { return auditIntent(actx, sc, claimed, "dispatched") }); err != nil {
-		claimed = m.settleNotDispatched(ctx, c, claimed, "audit_unavailable")
+		settled, settleErr := m.settleNotDispatched(ctx, c, claimed, "audit_unavailable")
+		claimed = settled
+		if settleErr != nil {
+			return Receipt{Intent: claimed, Answer: claimed.State}, settleErr
+		}
 		return Receipt{Intent: claimed, Answer: claimed.State}, withIntent(errUnavailable, claimed.ID)
 	}
 	wctx, wcancel := context.WithDeadline(context.WithoutCancel(ctx), writeDeadline)
 	out := m.dispatch(wctx, host, tok, rb, claimed, s)
 	wcancel()
-	settled := m.settle(ctx, c, host, tok, claimed, out)
+	settled, err := m.settle(ctx, c, host, tok, claimed, out)
+	if err != nil {
+		return Receipt{Intent: settled, Answer: settled.State}, err
+	}
 	return m.finish(ctx, c, rel, settled)
 }
 
@@ -470,15 +509,20 @@ func (m *Module) recordReleaseFailure(ctx context.Context, c Caller, intent, tar
 		return Intent{}, false
 	}
 	var out Intent
-	err := m.data.Mutate(context.WithoutCancel(ctx), c.Tenant, func(sc store.Scope) error {
-		cur, err := loadIntent(ctx, sc, intent)
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), settleTimeout)
+	defer cancel()
+	err := m.data.Mutate(rctx, c.Tenant, func(sc store.Scope) error {
+		cur, err := loadIntent(rctx, sc, intent)
 		if err != nil {
 			return err
 		}
 		cur.ReleaseFailure = code
-		out, err = update(ctx, sc, cur)
+		out, err = update(rctx, sc, cur)
 		return err
 	})
+	if err != nil && m.opts.OnReleaseFailure != nil {
+		m.opts.OnReleaseFailure(target, code)
+	}
 	return out, err == nil
 }
 
@@ -601,7 +645,7 @@ func (m *Module) preflight(ctx context.Context, host gp.Host, tok gp.Token, tg T
 		// read refuses; it is never taken as "unprotected".
 		info, err := host.Branch(ctx, tok, s.branch)
 		if err != nil {
-			return refused("lookup_incomplete", http.StatusServiceUnavailable)
+			return preflight{}, incomplete(err)
 		}
 		if info.Default == s.branch {
 			return refused("default_branch_refused", http.StatusUnprocessableEntity)
@@ -628,7 +672,7 @@ func (m *Module) preflight(ctx context.Context, host gp.Host, tok gp.Token, tg T
 	case effectPullRequest:
 		open, err := host.OpenChanges(ctx, tok, s.req.HeadRef, s.req.Base)
 		if err != nil {
-			return refused("lookup_incomplete", http.StatusServiceUnavailable)
+			return preflight{}, incomplete(err)
 		}
 		for _, ch := range openOnly(open) {
 			if ch.HeadSHA == s.req.Commit {
@@ -649,10 +693,18 @@ func (m *Module) preflight(ctx context.Context, host gp.Host, tok gp.Token, tg T
 		if e := workflows(sha, s.req.Commit); e != nil {
 			return preflight{}, e
 		}
+	case effectIssueComment:
+		comments, err := gp.ListComments(ctx, host, tok, s.req.Number)
+		if err != nil {
+			return preflight{}, incomplete(err)
+		}
+		if comment, ok := findComment(comments, commentBody(s.req, s.digest)); ok {
+			return preflight{adopt: true, observed: Observed{Present: true, CommentID: comment.ID, CommentURL: comment.URL, Source: "preflight", At: now}}, nil
+		}
 	case effectMerge:
 		ch, err := host.GetChange(ctx, tok, s.req.Number)
 		if err != nil {
-			return refused("lookup_incomplete", http.StatusServiceUnavailable)
+			return preflight{}, incomplete(err)
 		}
 		if !ch.Open {
 			if ch.Merged && ch.HeadSHA == s.req.ExpectedHead {
@@ -717,7 +769,10 @@ func (m *Module) claim(ctx context.Context, c Caller, adm Admission, in Intent, 
 	var out Intent
 	won := false
 	err := m.data.Mutate(ctx, c.Tenant, func(sc store.Scope) error {
-		now := txNow(ctx, sc, m.now())
+		now, err := txNow(ctx, sc)
+		if err != nil {
+			return err
+		}
 		if err := adm.Lock(ctx, sc, now); err != nil {
 			return err
 		}
@@ -741,6 +796,9 @@ func (m *Module) claim(ctx context.Context, c Caller, adm Admission, in Intent, 
 				return err
 			}
 			cur.State, cur.Reason, cur.Attempt = StateDispatching, "", cur.Attempt+1
+			if in.State == StateAdopted {
+				cur.State, cur.Receipt, cur.Observed = in.State, in.Receipt, in.Observed
+			}
 			cur.TargetVersion, cur.CredentialVersion, cur.RepositoryVersion = in.TargetVersion, in.CredentialVersion, in.RepositoryVersion
 			cur.ClaimedAt, cur.DispatchDeadline = now, now.Add(m.opts.DispatchTimeout)
 			out, err = update(ctx, sc, cur)
@@ -750,6 +808,9 @@ func (m *Module) claim(ctx context.Context, c Caller, adm Admission, in Intent, 
 			won = true
 			if err := auditIntent(ctx, sc, out, "admitted"); err != nil {
 				return err
+			}
+			if out.State == StateAdopted {
+				return auditIntent(ctx, sc, out, "adopted")
 			}
 			return auditIntent(ctx, sc, out, "claimed")
 		}
@@ -841,10 +902,12 @@ func (m *Module) effectGate(ctx context.Context, c Caller, adm Admission, in Int
 }
 
 // settleNotDispatched records a proven no-dispatch.
-func (m *Module) settleNotDispatched(ctx context.Context, c Caller, in Intent, reason string) Intent {
+func (m *Module) settleNotDispatched(ctx context.Context, c Caller, in Intent, reason string) (Intent, error) {
 	out := in
-	_ = m.data.Mutate(context.WithoutCancel(ctx), c.Tenant, func(sc store.Scope) error {
-		cur, err := loadIntent(ctx, sc, in.ID)
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), settleTimeout)
+	defer cancel()
+	err := m.data.Mutate(rctx, c.Tenant, func(sc store.Scope) error {
+		cur, err := loadIntent(rctx, sc, in.ID)
 		if err != nil || cur.State != StateDispatching || cur.Attempt != in.Attempt {
 			if err == nil {
 				out = cur
@@ -852,23 +915,27 @@ func (m *Module) settleNotDispatched(ctx context.Context, c Caller, in Intent, r
 			return err
 		}
 		cur.State, cur.Reason = StateNotDispatched, reason
-		if out, err = update(ctx, sc, cur); err != nil {
+		if out, err = update(rctx, sc, cur); err != nil {
 			return err
 		}
-		if err := appendObservation(ctx, sc, out, Observation{Source: "gate", Result: StateNotDispatched, HostObject: reason, At: m.now()}, out.SubjectActor); err != nil {
+		if err := appendObservation(rctx, sc, out, Observation{Source: "gate", Result: StateNotDispatched, HostObject: reason, At: m.now()}, out.SubjectActor); err != nil {
 			return err
 		}
-		return auditIntent(ctx, sc, out, "settled")
+		return auditIntent(rctx, sc, out, "settled")
 	})
-	return out
+	if err != nil {
+		return in, intentStoreError(err, in.ID)
+	}
+	return out, nil
 }
 
 // outcome is what one dispatch returned.
 type outcome struct {
-	res    gp.Result
-	local  error
-	change gp.Change
-	merge  gp.MergeOutcome
+	res     gp.Result
+	local   error
+	change  gp.Change
+	merge   gp.MergeOutcome
+	comment gp.Comment
 }
 
 func (m *Module) dispatch(ctx context.Context, host gp.Host, tok gp.Token, rb RepositoryBinding, in Intent, s spec) outcome {
@@ -886,6 +953,9 @@ func (m *Module) dispatch(ctx context.Context, host gp.Host, tok gp.Token, rb Re
 	case effectPullRequest:
 		ch, res := host.CreateChange(ctx, tok, gp.ChangeSpec{Head: in.Requested.HeadRef, Base: in.Requested.Base, Title: in.Requested.Title, Body: s.body, Draft: s.draft})
 		return outcome{res: res, change: ch}
+	case effectIssueComment:
+		comment, res := gp.CreateComment(ctx, host, tok, gp.CommentSpec{Number: in.Requested.Number, Body: commentBody(in.Requested, in.Digest)})
+		return outcome{res: res, comment: comment}
 	default:
 		mo, res := host.MergeChange(ctx, tok, in.Requested.Number, in.Requested.ExpectedHead, in.Requested.Method)
 		return outcome{res: res, merge: mo}
@@ -893,7 +963,7 @@ func (m *Module) dispatch(ctx context.Context, host gp.Host, tok gp.Token, rb Re
 }
 
 // settle reads the host evidence and writes W2. It never re-arms.
-func (m *Module) settle(ctx context.Context, c Caller, host gp.Host, tok gp.Token, in Intent, out outcome) Intent {
+func (m *Module) settle(ctx context.Context, c Caller, host gp.Host, tok gp.Token, in Intent, out outcome) (Intent, error) {
 	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), settleTimeout)
 	defer cancel()
 	now := m.now()
@@ -968,7 +1038,7 @@ func (m *Module) settle(ctx context.Context, c Caller, host gp.Host, tok gp.Toke
 			return err
 		}
 		next.Version = cur.Version
-		if err := appendObservation(rctx, sc, next, Observation{Source: "dispatcher", Result: next.State, HostObject: next.Observed.SHA + next.Observed.HeadSHA, Status: out.res.Host.Status, RequestID: out.res.Host.RequestID, At: now}, in.SubjectActor); err != nil {
+		if err := appendObservation(rctx, sc, next, Observation{Source: "dispatcher", Result: next.State, HostObject: next.Observed.SHA + next.Observed.HeadSHA + next.Observed.CommentID, Status: out.res.Host.Status, RequestID: out.res.Host.RequestID, At: now}, in.SubjectActor); err != nil {
 			return err
 		}
 		if result, err = update(rctx, sc, next); err != nil {
@@ -977,14 +1047,16 @@ func (m *Module) settle(ctx context.Context, c Caller, host gp.Host, tok gp.Toke
 		return auditIntent(rctx, sc, result, "settled")
 	})
 	if err != nil {
-		return in
+		return in, intentStoreError(err, in.ID)
 	}
 	if result.State == StateUncertain {
-		if r, e := m.observeWith(ctx, c, host, tok, result, "dispatcher", ""); e == nil {
-			result = r.Intent
+		r, err := m.observeWith(ctx, c, host, tok, result, "dispatcher", "")
+		if err != nil {
+			return r.Intent, err
 		}
+		result = r.Intent
 	}
-	return result
+	return result, nil
 }
 
 // evidence reads the host state an applied write must show, and names what
@@ -1009,6 +1081,18 @@ func (m *Module) evidence(ctx context.Context, host gp.Host, tok gp.Token, in In
 			ch, why = out.change, "evidence_unavailable"
 		}
 		return Observed{Present: ch.Open, HeadSHA: ch.HeadSHA, Number: ch.Number, Source: "dispatcher", At: now}, why
+	case effectIssueComment:
+		obs := Observed{Present: true, CommentID: out.comment.ID, CommentURL: out.comment.URL, Source: "dispatcher", At: now}
+		comments, err := gp.ListComments(ctx, host, tok, in.Requested.Number)
+		if err != nil {
+			return obs, "evidence_unavailable"
+		}
+		comment, ok := findComment(comments, commentBody(in.Requested, in.Digest))
+		if !ok || comment.ID != out.comment.ID {
+			return obs, "evidence_contradiction"
+		}
+		obs.CommentID, obs.CommentURL = comment.ID, comment.URL
+		return obs, ""
 	default:
 		ch, err := host.GetChange(ctx, tok, in.Requested.Number)
 		o := Observed{Merged: out.merge.Merged, MergeCommitSHA: out.merge.MergeCommitSHA, Number: in.Requested.Number, Source: "dispatcher", At: now}

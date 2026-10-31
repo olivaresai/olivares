@@ -5,7 +5,11 @@
 // STOP ASKS FIRST IN EVERY FORM (#2549): the thread header's icon and the session card's
 // labelled button read the same setting. The card's Stop used to stop at once, so "Full
 // controls" stopped a session the header would have asked about.
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -35,6 +39,7 @@ import { agentOpsApi } from '@/features/agentops/api'
 import type { RunDTO } from '@/features/agentops/types'
 import { useClientSettings } from '@/features/settings/preferences'
 import type { Capability } from './provenance'
+import { governanceKeys } from '@/features/governance/api'
 import { RunActions } from './run-actions'
 
 const caps: Capability[] = [{ id: 'stop', available: true }]
@@ -59,8 +64,22 @@ function actions(compact: boolean, offered = caps) {
 
 function show(compact: boolean) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
-    <QueryClientProvider client={qc}>{actions(compact)}</QueryClientProvider>,
+  return {
+    ...render(
+      <QueryClientProvider client={qc}>{actions(compact)}</QueryClientProvider>,
+    ),
+    qc,
+  }
+}
+
+function PendingQueue() {
+  const query = useQuery({
+    queryKey: governanceKeys.approvals('t1', { status: 'pending' }),
+    queryFn: async () => ({ items: [] }),
+    staleTime: Infinity,
+  })
+  return (
+    <output aria-label="Pending approvals">{query.data?.items.length}</output>
   )
 }
 
@@ -83,6 +102,24 @@ describe.each([
     await user.click(dialog.getByRole('button', { name: 'Stop the session' }))
     await waitFor(() =>
       expect(agentOpsApi.stop).toHaveBeenCalledWith('run_1', undefined),
+    )
+  })
+
+  it('refreshes pending approvals as soon as Stop succeeds', async () => {
+    const user = userEvent.setup()
+    useClientSettings.setState({ confirmStop: false })
+    const { qc } = show(compact)
+    const key = governanceKeys.approvals('t1', { status: 'pending' })
+    qc.setQueryData(key, { items: [{ id: 'pending' }] })
+    render(
+      <QueryClientProvider client={qc}>
+        <PendingQueue />
+      </QueryClientProvider>,
+    )
+    expect(screen.getByLabelText('Pending approvals')).toHaveTextContent('1')
+    await user.click(screen.getByRole('button', { name: 'Stop' }))
+    await waitFor(() =>
+      expect(screen.getByLabelText('Pending approvals')).toHaveTextContent('0'),
     )
   })
 

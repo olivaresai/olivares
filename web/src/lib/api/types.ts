@@ -66,6 +66,8 @@ export interface ServerInfo {
   version: string
   engine: string
   setup_required: boolean
+  backup_key_required?: boolean
+  backup_key_path?: string
   /** Background jobs this node composes but cannot run, and why ("no_tenant_inventory":
    * PostgreSQL that cannot list every tenant). Absent: every job runs. */
   jobs_not_running?: JobNotRunning[]
@@ -346,6 +348,7 @@ export interface LoginRequest {
 }
 
 export interface SetupRequest {
+  backup_key_saved?: boolean
   token: string
   email: string
   password: string

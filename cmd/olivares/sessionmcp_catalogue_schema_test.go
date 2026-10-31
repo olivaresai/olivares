@@ -19,7 +19,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 )
 
-// HU030: Claude rejects the entire catalogue if one optional object or hint is
+// acceptance: Claude rejects the entire catalogue if one optional object or hint is
 // null. Assert the Tool/ToolAnnotations field types from the negotiated schema:
 // https://modelcontextprotocol.io/specification/2025-11-25/schema#tool
 func TestSessionMCPAggregatedToolListKeepsOptionalHintsSchemaValid(t *testing.T) {

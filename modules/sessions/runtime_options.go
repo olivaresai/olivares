@@ -29,6 +29,16 @@ func WithRunner(r Runner) Option {
 	}
 }
 
+// WithRunPlacement wires the Business fleet runner. Community leaves it nil, so
+// run_on answers business_required rather than silently launching locally.
+func WithRunPlacement(p RunPlacement) Option {
+	return func(m *Module) {
+		if p != nil {
+			m.rt.RunPlacement = p
+		}
+	}
+}
+
 // WithCredentialSource wires the secret-less inference credential source (a WIF
 // exchange). Without it, a stream-json launch fails closed.
 func WithCredentialSource(c CredentialSource) Option {
@@ -187,7 +197,8 @@ func WithClaudeHookPEP(dataDir, olivaresBinary string) Option {
 // no explicit program is pinned for it (WithProgram, WithDriverProgram): the
 // engine's newest verified managed install, then its PATH. An empty answer keeps
 // the official program name, which the runner's own inspection reports as
-// missing with the action that installs it. The optional exact-version resolver
+// missing with the action that installs it; a tool whose facts say NoPATHFallback
+// has no such name and its launch is refused instead. The optional exact-version resolver
 // serves persisted workspace and agent pins; its errors refuse launch.
 func WithProgramResolver(resolve func(driver string) string, version ...func(context.Context, string, string) (string, error)) Option {
 	return func(m *Module) {
@@ -225,7 +236,7 @@ func WithOpenCodeSearchDir(dir, ripgrepSHA256 string) Option {
 
 // WithDriverProgram overrides the executable a registered driver spawns (the
 // operator's pinned official binary). Absent, the driver's own program name is
-// used and resolved through PATH.
+// used and resolved through PATH, except for a tool whose facts say NoPATHFallback.
 func WithDriverProgram(driver, program string) Option {
 	return func(m *Module) {
 		key, err := normalizeDriverKey(driver)
@@ -260,6 +271,16 @@ func WithProviderApprovalGate(g ProviderApprovalGate) Option {
 	return func(m *Module) {
 		if g != nil {
 			m.rt.ApprovalGate = g
+		}
+	}
+}
+
+// WithPushSender wires the Web Push application server (push.go). Without it the push
+// routes answer 503 and no session pushes anything.
+func WithPushSender(s PushSender) Option {
+	return func(m *Module) {
+		if s != nil {
+			m.rt.PushSender = s
 		}
 	}
 }
@@ -463,6 +484,17 @@ func WithProviderSecretVault(v ProviderSecretVault) Option {
 	return func(m *Module) {
 		if v != nil {
 			m.rt.ProviderVault = v
+		}
+	}
+}
+
+// WithConnectionSecrets wires the closed door governed connections read a credential
+// through: it opens one connection/<name> entry of the secret store. Unwired, a
+// connection's credential cannot be read and the Business edition refuses to save one.
+func WithConnectionSecrets(open func(context.Context, string) ([]byte, error)) Option {
+	return func(m *Module) {
+		if open != nil {
+			m.rt.ConnectionSecrets = open
 		}
 	}
 }

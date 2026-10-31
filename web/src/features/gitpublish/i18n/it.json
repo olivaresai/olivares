@@ -67,7 +67,8 @@
   "effects": {
     "push": "Push",
     "pull_request": "Pull request",
-    "merge": "Merge"
+    "merge": "Merge",
+    "issue_comment": "Commento sul ticket"
   },
   "authority": {
     "requires": "Richiede {{permission}}",
@@ -174,6 +175,7 @@
     "field_not_accepted": "La richiesta conteneva un campo che questa route non accetta.",
     "forbidden": "La tua autorità attuale non consente questa azione su questa destinazione.",
     "head_mismatch": "La head della pull request non è più il commit rivisto.",
+    "link_not_allowed": "Il link deve puntare a una pull request del repository approvato.",
     "host_credential_refused": "L’host Git ha rifiutato la credenziale del binding o il suo ambito. Non è stato inviato nulla.",
     "host_unavailable": "L'host Git non è raggiungibile. Non è stato inviato nulla.",
     "intent_settled": "L'intent è già concluso, quindi non può essere abbandonato.",
@@ -201,7 +203,13 @@
     "unsupported_requirement": "L'host non può soddisfare questo requisito, ad esempio un merge con rebase su GitLab.",
     "version_conflict": "La destinazione è cambiata da quando l'hai aperta. Riaprila per vedere la versione attuale.",
     "workflow_change_refused": "Il commit modifica i file di workflow CI, che questa destinazione rifiuta di pubblicare.",
-    "unknown": "Il motore ha rifiutato la richiesta con un codice che questa console non descrive."
+    "unknown": "Il motore ha rifiutato la richiesta con un codice che questa console non descrive.",
+    "no_branch": "La cartella della sessione non è su alcun branch. Passa a un branch, poi consegna di nuovo.",
+    "no_commit": "Il branch della sessione non ha ancora alcun commit.",
+    "nothing_to_ship": "Il commit della sessione non aggiunge nulla al branch in cui verrebbe unito.",
+    "commit_refused": "La cartella della sessione ha rifiutato il commit: è di sola lettura, sta ancora lavorando oppure il tuo profilo non ha nome ed e-mail.",
+    "approval_denied": "Una persona non ha approvato questo push, oppure la sua approvazione è terminata. Consegna di nuovo per chiedere una nuova revisione.",
+    "approval_unavailable": "Il servizio di approvazione non ha potuto rispondere. Consegna di nuovo tra un momento."
   },
   "intents": {
     "title": "Intent",
@@ -254,5 +262,24 @@
     "abandonTitle": "Abbandonare l'intent {{id}}?",
     "abandonDescription": "Abbandonare registra che ti assumi la responsabilità di questo intent non risolto. Non modifica né legge l'host, e l'ambito resta trattenuto finché una nuova richiesta non riconosce questo intent.",
     "abandonReason": "Motivo (al massimo 256 caratteri)"
+  },
+  "ship": {
+    "button": "Consegna",
+    "shipTo": "Consegna a {{prefix}}",
+    "title": "Consegna questa sessione",
+    "description": "Esegue il commit delle modifiche della sessione a tuo nome, le invia a un branch sotto {{prefix}} e apre una pull request, in una sola azione.",
+    "submit": "Consegna",
+    "message": "Messaggio del commit",
+    "messageHint": "Usato solo se la cartella della sessione ha modifiche. Per impostazione predefinita, il titolo.",
+    "shipped": "Consegnato: {{branch}} è stato inviato.",
+    "pullRequest": "Pull request n. {{number}}",
+    "pullRequestOpen": "Apri la pull request",
+    "awaitingTitle": "In attesa dell'approvazione di un'altra persona",
+    "awaitingBody": "Le tue modifiche sono nel commit. Un'altra persona deve approvare il push (approvazione {{id}}) prima che parta. Quando lo avrà fatto, consegna di nuovo.",
+    "again": "Consegna di nuovo",
+    "incompleteTitle": "La consegna non è terminata",
+    "incompletePush": "Il push di {{branch}} non è stato applicato ({{state}}). Controlla gli intent di questa destinazione, poi consegna di nuovo.",
+    "incompletePullRequest": "{{branch}} è stato inviato, ma la pull request non è stata aperta ({{code}}). Consegna di nuovo per riprovare.",
+    "pullRequests": "Pull request"
   }
 }

@@ -70,6 +70,26 @@ func TestCodexNativeSandboxProbeKeepsOrRefusesBeforeFallback(t *testing.T) {
 	}
 }
 
+func TestCodexSandboxProbeKeepsNetworkBoundaryFailure(t *testing.T) {
+	launchErr := networkBoundaryErr(errors.New("namespace fixture"))
+	err := codexSandboxReadinessError(launchErr, nil, nil, context.Background())
+	if err == nil || !strings.Contains(err.Error(), "network boundary could not be set up") || !strings.Contains(err.Error(), "namespace fixture") {
+		t.Fatalf("the probe hid its network boundary failure: %v", err)
+	}
+}
+
+func TestCodexSandboxUnreapedProbeKeepsProcessForLaunchCustody(t *testing.T) {
+	proc := &fakeProc{}
+	err := codexSandboxStopError(proc, ErrChildNotReaped, nil)
+	var probeErr *codexSandboxLaunchError
+	if !errors.As(err, &probeErr) || probeErr.proc != proc {
+		t.Fatalf("probe error = %#v, want its unreaped process", err)
+	}
+	if got := launchPreparationProcess(err); got != proc {
+		t.Fatalf("launch preparation returned %v, want the unreaped probe for caller custody", got)
+	}
+}
+
 // A credential broker binds its helpers to the first process OnStart reports. The
 // probe is a copy of the session's spec, but it is not the session: reporting it
 // would bind the helpers to a process that exits at once and leave the real child

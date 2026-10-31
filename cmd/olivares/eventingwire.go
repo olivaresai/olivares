@@ -102,19 +102,9 @@ func eventingAllowLoopback(getenv func(string) string) bool {
 // (minted on first boot). Fail-closed: a malformed env key or an unreadable/
 // over-permissive key file is an error, never a silent downgrade.
 func newEventingSealer(dataDir string, getenv func(string) string) (eventing.SecretSealer, error) {
-	var key []byte
-	if raw := strings.TrimSpace(getenv(eventingSecretKeyEnv)); raw != "" {
-		k, err := base64.StdEncoding.DecodeString(raw)
-		if err != nil || len(k) != 32 {
-			return nil, fmt.Errorf("eventing: %s must be 32 base64-encoded bytes", eventingSecretKeyEnv)
-		}
-		key = k
-	} else {
-		k, err := loadOrCreateAEADKey(filepath.Join(dataDir, eventingSecretKeyFile))
-		if err != nil {
-			return nil, err
-		}
-		key = k
+	key, err := eventingKeyMaterial(dataDir, getenv)
+	if err != nil {
+		return nil, err
 	}
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -125,6 +115,21 @@ func newEventingSealer(dataDir string, getenv func(string) string) (eventing.Sec
 		return nil, fmt.Errorf("eventing: sealer aead: %w", err)
 	}
 	return &eventingSealer{aead: aead}, nil
+}
+
+// eventingKeyMaterial is the engine-held 32-byte key of the eventing module: the env value
+// when set (the HA path, one key on every node), else the key file minted on first boot. The
+// sealer uses it as it is; the Web Push application server derives its own key from it
+// (webpushwire.go), so the engine keeps one key to back up for both.
+func eventingKeyMaterial(dataDir string, getenv func(string) string) ([]byte, error) {
+	if raw := strings.TrimSpace(getenv(eventingSecretKeyEnv)); raw != "" {
+		k, err := base64.StdEncoding.DecodeString(raw)
+		if err != nil || len(k) != 32 {
+			return nil, fmt.Errorf("eventing: %s must be 32 base64-encoded bytes", eventingSecretKeyEnv)
+		}
+		return k, nil
+	}
+	return loadOrCreateAEADKey(filepath.Join(dataDir, eventingSecretKeyFile))
 }
 
 // loadOrCreateAEADKey loads the 32-byte sealer key at path, or mints and

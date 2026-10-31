@@ -15,7 +15,7 @@ import {
 import '@/features/agent-tools/i18n'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
-import type { RunDTO } from '@/features/agentops/types'
+import type { ProviderAccountUsage, RunDTO } from '@/features/agentops/types'
 import { useAuth } from '@/lib/auth/context'
 import { signInApi } from './api'
 import type { SignInTool } from './api'
@@ -49,6 +49,8 @@ export interface SessionProfileChoice {
   value: string
   label: string
   ready: boolean
+  /** The windows the account's tool last reported; none for the default login. */
+  usage?: ProviderAccountUsage[]
   /** Why it cannot start: its login is missing, or the key it runs on is. */
   missing?: 'signIn' | 'key'
 }
@@ -58,6 +60,7 @@ export interface SessionProfiles {
   /** The chosen profile's value. */
   selected: string
   select: (value: string) => void
+  loading: boolean
 }
 
 /**
@@ -70,6 +73,7 @@ export function useSessionProfiles(
   driver: string | undefined,
   runs: readonly Pick<RunDTO, 'provider_profile_ref' | 'provider_driver'>[],
   defaultReady: boolean,
+  preferred = '',
 ): SessionProfiles | null {
   const { activeTenant, isSuperadmin } = useAuth()
   const boundary = useAuthBoundary()
@@ -129,6 +133,7 @@ export function useSessionProfiles(
         value: a.account_ref,
         label: a.name,
         ready,
+        usage: a.usage,
         ...(ready
           ? {}
           : {
@@ -163,10 +168,23 @@ export function useSessionProfiles(
   const selected =
     pick?.scope === scope && choices.some((c) => c.value === pick.value)
       ? pick.value
-      : (recent ?? fallback)
+      : preferred
+        ? readyValues.has(preferred)
+          ? preferred
+          : fallback
+        : (recent ?? fallback)
   return {
     choices,
     selected,
     select: (value) => setPick({ scope, value }),
+    loading:
+      list.isLoading ||
+      (isSuperadmin &&
+        statuses.some(
+          (s, i) =>
+            accounts[i].auth_source !== 'managed_injection' &&
+            s.isPending &&
+            s.isFetching,
+        )),
   }
 }

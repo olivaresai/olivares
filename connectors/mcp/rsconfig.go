@@ -156,6 +156,10 @@ type ResourceServerConfig struct {
 	// working — no rug-pull). The enterprise implementation runs the
 	// prompt-injection / exfiltration / unsafe-action detectors on the HTML.
 	RenderInspector RenderInspector
+	// RenderInspectorSource says what is in force NOW, for a host whose administrator can
+	// change the inspector while the server runs. When set it replaces RenderInspector, and a
+	// nil answer means no inspection, exactly as a nil RenderInspector does.
+	RenderInspectorSource func() RenderInspector
 	// ElicitationMediator governs runtime elicitation and sampling
 	// messages (the "future seam" surface.go named). Nil = no mediation (the
 	// surface.go detective still inventories the capability — no rug-pull).
@@ -229,6 +233,8 @@ type ResourceServer struct {
 	pinVerifier ToolPinVerifier
 	// renderInspector: the render content-inspection seam; nil = no inspection.
 	renderInspector RenderInspector
+	// renderLive: the live answer, when the host gave one; see renderInspectorNow.
+	renderLive func() RenderInspector
 	// elicitationMediator: the elicitation/sampling runtime PEP; nil = no mediation.
 	elicitationMediator ElicitationMediator
 	// coazEvaluator: the COAZ evaluator; nil = no AuthZEN evaluation (community build).
@@ -384,6 +390,7 @@ func NewResourceServer(cfg ResourceServerConfig) (*ResourceServer, error) {
 		renderInspector:      cfg.RenderInspector,     // nil OK: no deep inspection
 		elicitationMediator:  cfg.ElicitationMediator, // nil OK: no mediation
 		coazEvaluator:        cfg.COAZEvaluator,       // nil OK: no COAZ evaluation
+		renderLive:           cfg.RenderInspectorSource,
 	}
 	if rs.gate == nil {
 		rs.gate = denyApprovalGate{}

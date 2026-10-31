@@ -4,7 +4,7 @@ description: "The verified configuration surface of the Olivares AI control plan
 ---
 
 :::note[Business]
-Audit export (`GET /v1/audit/export`, `olivares audit export`), directory archives and external archive verification require Business. Community keeps the signed ledger, `olivares audit verify` and `olivares dr backup`; export routes and commands return HTTP 501 or exit 9. Audit forwarding and DDIL air-gap transfer also require Business.
+Audit export (`GET /v1/audit/export`, `olivares audit export`), ledger verification (`GET /v1/audit/verify`, `olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`), directory archives and external archive verification require Business. Community keeps the signed ledger, its reads and `olivares dr backup`; evidence routes and commands return HTTP 501 or exit 9. Audit forwarding and DDIL transfers carrying audit segments also require Business.
 :::
 
 From 0.1, KMS-sealed signing keys and configuration files (CMEK) require the Business build. Community keeps operator-provided signing keys and `keys status`. The custody assertions BYOK (`OLIVARES_KEY_CUSTODY=byok`) and HYOK (`OLIVARES_LEDGER_CUSTODY=hyok`), the off-box checkpoint signer (`OLIVARES_LEDGER_SIGNER`) and `olivares audit key-transition` require the Business build; Community refuses them with exit code 9. Community refuses a configured CMEK installation before opening the store or creating keys. Use Business with the customer’s key service for `dr backup` and `keys unseal`; recovery needs no active license.
@@ -171,7 +171,7 @@ Process environment values take precedence over activation defaults. Unknown
 
 ### Complete variable reference
 
-The table below is generated from the product's own sources: 301 variables and 19 runtime-constructed families, covering the engine, the CLI and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
+The table below is generated from the product's own sources: 304 variables and 19 runtime-constructed families, covering the engine, the CLI and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
 
 **Required** means the feature that reads the variable does not start without it; most variables are optional and the engine runs with none of them set.
 
@@ -354,6 +354,7 @@ The table below is generated from the product's own sources: 301 variables and 1
 | `OLIVARES_OIDC_CLIENT_SECRET` | Yes | — | OIDC client secret for this engine. Required when the protocol is `oidc`. |
 | `OLIVARES_OIDC_GROUPS_CLAIM` | No | — | ID-token or UserInfo claim carrying group membership. Unset leaves group mapping off. |
 | `OLIVARES_OIDC_ISSUER` | Yes | — | OIDC issuer URL. Required when the protocol is `oidc`. |
+| `OLIVARES_OLLAMA_CONTAINER_IMAGE` | No | `docker.io/ollama/ollama:latest` | Image `olivares tool start ollama --container` runs through Podman or Docker, with the engine's models directory mounted at `/models`. On an AMD host with this unset, the ROCm build is used. Read at start; the value must be an image name, not an option. An NVIDIA GPU is given as `--gpus all`, which needs the NVIDIA container toolkit on the host (on Podman, its CDI spec from `nvidia-ctk cdi generate`); without it the start fails. |
 | `OLIVARES_ONBOARDING_CONFIG` | No | — | Path to the JSON configuration of the onboarding readiness assessor. Read by the Business edition each time `olivares enterprise readiness` runs, not when the engine starts. `{}` selects the standard profile. Unset, or a file that cannot be read or parsed, makes that command report that onboarding readiness is not configured. |
 | `OLIVARES_ORCH_CADENCE_INTERVAL` | No | — | How often the orchestration cadence loop runs, as a Go duration. `0` disables it. Read only by the Business edition; a Community binary refuses to serve while it is set. |
 | `OLIVARES_ORCH_DISPATCH_CONFIG` | No | — | Path to the JSON configuration for orchestration dispatch targets. |
@@ -424,11 +425,12 @@ The table below is generated from the product's own sources: 301 variables and 1
 | `OLIVARES_SECRET_STORE_KEY` | No | — | Key that encrypts operator secrets held in the store. |
 | `OLIVARES_SERVERTOOL_EGRESS_CONFIG` | No | — | Path to the JSON grants file of the egress gate for provider server tools (web search, web fetch, code execution) in the inline proxy. Read only by the Business edition (AI Runtime Security). Unset keeps those tools observe-only; a file that cannot be read or parsed denies every recognized egress server tool until the file is fixed and the engine is restarted. |
 | `OLIVARES_SERVER_URL` | No | — | Base URL of the engine the CLI talks to, when `--server` is not given. |
+| `OLIVARES_SESSIONS_AGENT_BOOTSTRAP_LISTEN` | No | — | Listen address of the agent enrollment endpoint, as `host:port`: the server-only TLS endpoint where a node agent enrolls with a one-use token before it holds a certificate. Read at startup; empty, the default, means no listener. Read only by the Business edition; a Community binary refuses to serve while it is set. |
 | `OLIVARES_SESSIONS_AGENT_LINK_LISTEN` | No | — | Listen address of the agent link, as `host:port`: the mutual-TLS endpoint an edition built on this tree serves for its node agents. Read at startup; empty, the default, means no listener. Read only by the Business edition; a Community binary refuses to serve while it is set. |
 | `OLIVARES_SESSIONS_MANAGED_STOP_ADMISSION_TIMEOUT` | No | `10s` | Maximum time to admit a managed Stop request, as a positive Go duration with units. Read at startup; invalid or nonpositive values prevent startup. This does not bound process teardown. |
 | `OLIVARES_SESSION_BUDGET_AVAILABILITY` | No | — | Whether session budget enforcement is required, and what happens when the budget service cannot answer. |
 | `OLIVARES_SESSION_CONTAINER_IMAGE` | No | `localhost/olivares-session:latest` | Image that container sessions (`isolation=container`) run in. It must hold what the tool shells out to, such as git and a shell, and run the host's tool program, which is mounted into it read-only. |
-| `OLIVARES_SESSION_CONTAINER_RUNTIME` | No | `auto` | Container runtime for `isolation=container`: `auto` uses podman, then docker, whichever is installed; `podman` or `docker` pins one; `off` turns container isolation off. Read at engine start. |
+| `OLIVARES_SESSION_CONTAINER_RUNTIME` | No | `auto` | Container runtime for `isolation=container` and for `olivares tool start ollama --container`: `auto` uses podman, then docker, whichever is installed; `podman` or `docker` pins one; `off` turns both off. Read at engine start. |
 | `OLIVARES_SESSION_CONTEXT_AVAILABILITY` | No | — | Whether session context governance is required, and what happens when the context service cannot answer. |
 | `OLIVARES_SESSION_KILLSWITCH_SWEEP` | No | `15s` | How often an active session is re-checked against the kill switch, as a Go duration. `0` leaves only the check at launch. |
 | `OLIVARES_SESSION_PEP_TOKEN_FILE` | No | — | Path to the file holding the token the session enforcement point requires. |
@@ -436,6 +438,7 @@ The table below is generated from the product's own sources: 301 variables and 1
 | `OLIVARES_SESSION_RUNTIME_BASE_URL` | No | — | Base URL the launched session runtime calls back to. |
 | `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN` | No | `claude` | Executable the session runtime launches. |
 | `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | No | — | Explicit override selecting the official Codex executable instead of the newest verified managed install or `codex` on the engine's `PATH`. The driver is registered at boot even when unset; launch is refused if no executable resolves. |
+| `OLIVARES_SESSION_RUNTIME_CURSOR_BIN` | No | — | Pinned official Cursor CLI (`agent`) executable the session runtime may operate; unset, the Cursor CLI installed on this node is found when a session launches. |
 | `OLIVARES_SESSION_RUNTIME_GEMINI_BIN` | No | — | Pinned official Gemini CLI executable the session runtime may operate; unset, the Gemini CLI installed on this node is found when a session launches. |
 | `OLIVARES_SESSION_RUNTIME_GROK_BIN` | No | — | Explicit override selecting the official Grok executable instead of the newest verified managed install or `grok` on the engine's `PATH`. The driver is registered at boot even when unset; launch is refused if no executable resolves. |
 | `OLIVARES_SESSION_RUNTIME_OPENCODE_BIN` | No | — | Explicit override selecting the official OpenCode executable instead of the newest verified managed install or `opencode` on the engine's `PATH`. The driver is registered at boot even when unset; launch is refused if no executable resolves. |

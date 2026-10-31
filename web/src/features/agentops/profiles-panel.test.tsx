@@ -337,7 +337,7 @@ describe('ProfilesPanel — the list', () => {
     expect(api.profileLaunchReadiness).not.toHaveBeenCalled()
   })
 
-  // FH 036: a profile made before the product had its own login home points at this
+  // first-hour check: a profile made before the product had its own login home points at this
   // server's user login. It is shown as such, never as enabled, and not launched.
   it('marks a profile on the server user login instead of calling it enabled', async () => {
     api.listProfiles.mockResolvedValue(

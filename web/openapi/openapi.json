@@ -546,6 +546,57 @@
         ],
         "type": "object"
       },
+      "AuthSession": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "current": {
+            "type": "boolean"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "description": "Display-only transport of the latest observed use, or pairing for a pending link. Unknown is possible for a legacy row.",
+            "enum": [
+              "browser",
+              "token",
+              "unknown",
+              "pairing"
+            ],
+            "type": "string"
+          },
+          "last_used_at": {
+            "description": "The latest observed authentication, to within a minute; null only for a legacy row not yet observed.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "description": "Owner-chosen paired device label; empty for ordinary sign-ins.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "last_used_at",
+          "kind",
+          "name",
+          "current",
+          "expires_at"
+        ],
+        "type": "object"
+      },
       "BrowserSessionResponse": {
         "properties": {
           "csrf_token": {
@@ -1158,6 +1209,10 @@
           "name": {
             "type": "string"
           },
+          "parent_id": {
+            "description": "The parent department of the same tenant; absent or empty creates a root.",
+            "type": "string"
+          },
           "settings": {
             "additionalProperties": true,
             "type": "object"
@@ -1301,6 +1356,44 @@
         ],
         "type": "object"
       },
+      "DRGFS": {
+        "additionalProperties": false,
+        "properties": {
+          "daily": {
+            "maximum": 3650,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "keep_last": {
+            "maximum": 3650,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "monthly": {
+            "maximum": 3650,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "weekly": {
+            "maximum": 3650,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "yearly": {
+            "maximum": 3650,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "daily",
+          "weekly",
+          "monthly",
+          "yearly",
+          "keep_last"
+        ],
+        "type": "object"
+      },
       "DRJob": {
         "properties": {
           "bundle_id": {
@@ -1382,6 +1475,38 @@
         ],
         "type": "object"
       },
+      "DROffsite": {
+        "additionalProperties": false,
+        "properties": {
+          "bucket": {
+            "description": "An empty bucket disables the offsite copy.",
+            "type": "string"
+          },
+          "credential_ref": {
+            "description": "store:\u003cname\u003e of a global sealed secret containing JSON access_key_id, secret_access_key and optional session_token. Values never appear in schedule state.",
+            "type": "string"
+          },
+          "endpoint": {
+            "description": "HTTPS S3-compatible endpoint without userinfo; empty uses AWS S3.",
+            "type": "string"
+          },
+          "gfs": {
+            "$ref": "#/components/schemas/DRGFS"
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "bucket",
+          "credential_ref",
+          "gfs"
+        ],
+        "type": "object"
+      },
       "DRPendingRestore": {
         "properties": {
           "created_at": {
@@ -1450,6 +1575,10 @@
       },
       "DRSchedule": {
         "properties": {
+          "backup_age_seconds": {
+            "minimum": 0,
+            "type": "integer"
+          },
           "cron": {
             "type": "string"
           },
@@ -1463,6 +1592,11 @@
           "enabled": {
             "type": "boolean"
           },
+          "last_backup": {
+            "description": "Start of the last successfully written scheduled backup, including when its later offsite copy failed.",
+            "format": "date-time",
+            "type": "string"
+          },
           "last_run": {
             "format": "date-time",
             "type": "string"
@@ -1473,13 +1607,47 @@
           "last_run_status": {
             "description": "The most recent scheduled run's outcome, so a failing schedule is not a silent gap.",
             "enum": [
+              "running",
               "completed",
               "failed"
             ],
             "type": "string"
           },
+          "last_verify": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_verify_error": {
+            "type": "string"
+          },
+          "last_verify_status": {
+            "enum": [
+              "running",
+              "completed",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "local_target": {
+            "description": "Managed local backup disk mountpoint; absent uses the original backup directory.",
+            "type": "string"
+          },
           "next_run": {
             "format": "date-time",
+            "type": "string"
+          },
+          "offsite": {
+            "$ref": "#/components/schemas/DROffsite"
+          },
+          "offsite_lock": {
+            "description": "The offsite bucket's S3 Object Lock as the last scheduled copy read it. Only compliance (a default COMPLIANCE retention) keeps the engine's copies from a stolen server credential; absent until a copy ran against this bucket.",
+            "enum": [
+              "compliance",
+              "governance",
+              "no_default",
+              "none",
+              "unknown"
+            ],
             "type": "string"
           },
           "require_dual_control_restore": {
@@ -1489,6 +1657,23 @@
           "retain_days": {
             "minimum": 0,
             "type": "integer"
+          },
+          "rpo_exceeded": {
+            "type": "boolean"
+          },
+          "rpo_hours": {
+            "maximum": 8760,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "target_free_bytes": {
+            "description": "Linux target filesystem space available to the service; absent when unavailable.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "verify_cron": {
+            "description": "Independent scratch-restore verification cadence in UTC; empty disables verification.",
+            "type": "string"
           }
         },
         "required": [
@@ -1510,6 +1695,13 @@
           "enabled": {
             "type": "boolean"
           },
+          "local_target": {
+            "description": "Managed writable ext4 backup mountpoint under /mnt/olivares-backups/\u003cfilesystem-uuid\u003e; omitted preserves it, empty restores the default directory.",
+            "type": "string"
+          },
+          "offsite": {
+            "$ref": "#/components/schemas/DROffsite"
+          },
           "require_dual_control_restore": {
             "description": "Arm (true) or request the disarm of (false) the dual-control restore gate. Disarm takes effect at the engine's persisted instant, never immediately.",
             "type": "boolean"
@@ -1517,6 +1709,15 @@
           "retain_days": {
             "minimum": 0,
             "type": "integer"
+          },
+          "rpo_hours": {
+            "maximum": 8760,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "verify_cron": {
+            "description": "UTC cron for scratch verification; omitted preserves it, empty disables it.",
+            "type": "string"
           }
         },
         "required": [
@@ -1623,6 +1824,11 @@
             "description": "The authenticator assurance level the subject was evaluated at.",
             "type": "integer"
           },
+          "membership_as_of": {
+            "description": "The oldest update timestamp of the directory group and membership rows used for this subject; absent without directory groups.",
+            "format": "date-time",
+            "type": "string"
+          },
           "node": {
             "$ref": "#/components/schemas/EffectiveRightsRef"
           },
@@ -1636,8 +1842,22 @@
           "rights": {
             "items": {
               "properties": {
+                "because": {
+                  "description": "The determining grants, when the right is held by policy.",
+                  "items": {
+                    "$ref": "#/components/schemas/EffectiveRightsGrant"
+                  },
+                  "type": "array"
+                },
                 "name": {
                   "type": "string"
+                },
+                "removed_by": {
+                  "description": "The inheritance filter or forbid that removed the right.",
+                  "items": {
+                    "$ref": "#/components/schemas/EffectiveRightsRemoval"
+                  },
+                  "type": "array"
                 },
                 "state": {
                   "description": "The right's decision state as the engine reports it.",
@@ -1665,6 +1885,29 @@
         ],
         "type": "object"
       },
+      "EffectiveRightsGrant": {
+        "properties": {
+          "grant_id": {
+            "description": "The stored scoped-grant row, when this grant came from one.",
+            "type": "string"
+          },
+          "node": {
+            "$ref": "#/components/schemas/EffectiveRightsStep"
+          },
+          "policy_id": {
+            "description": "The determining Cedar policy, for a free-form grant without a scoped-grant row.",
+            "type": "string"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/EffectiveRightsSubject"
+          }
+        },
+        "required": [
+          "node",
+          "subject"
+        ],
+        "type": "object"
+      },
       "EffectiveRightsRef": {
         "properties": {
           "id": {
@@ -1680,6 +1923,25 @@
         ],
         "type": "object"
       },
+      "EffectiveRightsRemoval": {
+        "properties": {
+          "id": {
+            "description": "The filter row or forbid policy that removed the right.",
+            "type": "string"
+          },
+          "kind": {
+            "description": "irf for an inherited-rights filter, or forbid for an authored forbid.",
+            "type": "string"
+          },
+          "node": {
+            "$ref": "#/components/schemas/EffectiveRightsStep"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
       "EffectiveRightsStep": {
         "properties": {
           "kind": {
@@ -1690,6 +1952,28 @@
           },
           "workspace": {
             "description": "Set only on an agent group that lives in a different workspace than the node.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "ref"
+        ],
+        "type": "object"
+      },
+      "EffectiveRightsSubject": {
+        "properties": {
+          "chain": {
+            "description": "The user followed by the direct and ancestor directory groups that reached the matched group.",
+            "items": {
+              "$ref": "#/components/schemas/EffectiveRightsStep"
+            },
+            "type": "array"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "ref": {
             "type": "string"
           }
         },
@@ -3746,6 +4030,14 @@
       },
       "ServerInfo": {
         "properties": {
+          "backup_key_path": {
+            "description": "The appliance's configured recovery-secret file, including an explicit passphrase-file override; absent when DR is unavailable.",
+            "type": "string"
+          },
+          "backup_key_required": {
+            "description": "Appliance setup requires confirmation that the recovery key was saved separately.",
+            "type": "boolean"
+          },
           "communication_ready": {
             "type": "boolean"
           },
@@ -3897,6 +4189,46 @@
         ],
         "type": "object"
       },
+      "SessionPairing": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "expires_at"
+        ],
+        "type": "object"
+      },
+      "SessionPairingAcceptInput": {
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "type": "object"
+      },
+      "SessionPairingInput": {
+        "properties": {
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
       "SessionResponse": {
         "oneOf": [
           {
@@ -3937,6 +4269,10 @@
       },
       "SetupInput": {
         "properties": {
+          "backup_key_saved": {
+            "description": "Required true on an appliance: the operator confirms saving the recovery key separately from the server and its backups.",
+            "type": "boolean"
+          },
           "email": {
             "format": "email",
             "type": "string"
@@ -9771,6 +10107,408 @@
         "x-stability": "stable"
       }
     },
+    "/v1/auth/sessions": {
+      "get": {
+        "description": "Lists the calling person's live sign-ins: when each was created and last used, whether it is a browser or a token, and which one is the caller's own. Own sign-ins only, for session principals.",
+        "operationId": "listAuthSessions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "cursor": {
+                      "type": "string"
+                    },
+                    "has_more": {
+                      "type": "boolean"
+                    },
+                    "items": {
+                      "items": {
+                        "$ref": "#/components/schemas/AuthSession"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "has_more"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "List the calling person's live sign-ins with creation and last-use metadata, client kind and the current session marked",
+        "tags": [
+          "auth"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/v1/auth/sessions/pairing": {
+      "post": {
+        "description": "Creates a ten-minute one-time pairing link for an owner-named device; only the signed-in person can grant it.",
+        "operationId": "createSessionPairing",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionPairingInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionPairing"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Create a ten-minute one-time link for a named device",
+        "tags": [
+          "auth"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/v1/auth/sessions/pairing/accept": {
+      "post": {
+        "description": "Consumes a pairing link once and returns a new independently revocable session; browser callers receive a protected cookie.",
+        "operationId": "acceptSessionPairing",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionPairingAcceptInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "Consume a one-time link and sign in this device",
+        "tags": [
+          "auth"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/v1/auth/sessions/{id}": {
+      "delete": {
+        "description": "Ends one of the calling person's other sign-ins and records it in the ledger. The current sign-in is refused with 400: sign out ends it. An id that is not the caller's is 404.",
+        "operationId": "deleteAuthSession",
+        "parameters": [
+          {
+            "description": "Resource identifier (UUIDv7).",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "End one of the calling person's other sessions; cross-user ids are concealed and the current session is refused",
+        "tags": [
+          "auth"
+        ],
+        "x-stability": "stable"
+      }
+    },
     "/v1/auth/step-up-policy": {
       "get": {
         "description": "Returns what administrative actions demand beyond the sign-in: nothing (the default), an authenticator code or a passkey. Requires system administration authority.",
@@ -11987,6 +12725,148 @@
         "x-stability": "stable"
       }
     },
+    "/v1/console/appliance/storage/authorize": {
+      "post": {
+        "description": "Asks the current product authorizer about one storage act, disk identity and confirmation digest, including current deny rules. It changes no disk and accepts no caller-asserted identity or permission.",
+        "operationId": "authorizeStorageIntent",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "intent_digest": {
+                    "pattern": "^[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  "target": {
+                    "pattern": "^drive:[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  "task": {
+                    "enum": [
+                      "storage.backup",
+                      "storage.grow"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "task",
+                  "target",
+                  "intent_digest"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "actor": {
+                      "type": "string"
+                    },
+                    "allowed": {
+                      "type": "boolean"
+                    },
+                    "valid_until": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "allowed",
+                    "actor",
+                    "valid_until"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Authorize one exact storage intent without changing a disk",
+        "tags": [
+          "console"
+        ],
+        "x-required-permission": "system:admin",
+        "x-stability": "stable"
+      }
+    },
     "/v1/console/bus": {
       "get": {
         "description": "Returns the privileged event-bus snapshot: subscribers, saturation, loss counters and the bridge state when one is configured.",
@@ -13767,7 +14647,7 @@
     },
     "/v1/console/dr/schedule": {
       "get": {
-        "description": "Returns the scheduled-backup configuration: enabled, cron, retention, the last scheduled run's outcome, and the effective dual-control restore gate with any pending disarm instant.",
+        "description": "Returns backup and verification schedules, reference-only offsite settings, run outcomes, backup age against the recovery point target, target free space and the effective dual-control restore gate.",
         "operationId": "getDRSchedule",
         "responses": {
           "200": {
@@ -13857,7 +14737,7 @@
         "x-stability": "stable"
       },
       "put": {
-        "description": "Saves the schedule's operator-owned fields (enabled, cron in the runner's grammar, retention days). The dual-control gate's armed state is preserved; server-owned bookkeeping fields in a read-modify-write round trip are ignored.",
+        "description": "Saves backup cadence, retention, verification cadence, recovery point target and reference-only offsite settings. Omitted protection fields preserve their current values; server-owned bookkeeping is ignored. Arming the restore gate is immediate and disarming is delayed.",
         "operationId": "putDRSchedule",
         "requestBody": {
           "content": {
@@ -23510,6 +24390,113 @@
         "x-stability": "stable"
       }
     },
+    "/v1/users/{id}/sessions": {
+      "delete": {
+        "description": "Ends a selected tenant member's sign-ins in this organization: scoped sessions are revoked and account sessions are excluded from the tenant, never from another organization. Requires membership write authority and AAL3, and refuses the caller themself, a member above the caller's role, and a workspace-confined caller.",
+        "operationId": "deleteUserSessions",
+        "parameters": [
+          {
+            "description": "Resource identifier (UUIDv7).",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "End every live session of a member in the selected organization (user:write and step-up required; audited)",
+        "tags": [
+          "users"
+        ],
+        "x-required-permission": "user:write",
+        "x-stability": "stable"
+      }
+    },
     "/v1/users/{id}/totp": {
       "get": {
         "description": "Returns a member's factor status in the selected tenant. Foreign accounts return not found. Requires membership read authority.",
@@ -23752,7 +24739,7 @@
         "tags": [
           "auth"
         ],
-        "x-required-permission": "membership:write",
+        "x-required-permission": "authenticator:write",
         "x-stability": "stable"
       }
     },
@@ -23899,7 +24886,7 @@
         "x-stability": "stable"
       },
       "post": {
-        "description": "Creates one workspace. Beyond the tenant admin permission the caller must be the tenant owner or a superadmin, because a workspace admin administers within a workspace and does not mint them.",
+        "description": "Creates one workspace. Without parent_id it creates a root: beyond the tenant admin permission the caller must be the tenant owner or a superadmin, because a workspace admin administers within a workspace and does not mint roots. With parent_id it creates a department under that parent in one write: the owner may name any parent, and anyone else needs governance:rbac:admin and must administer the parent (tenant administration or an admin-capable scoped grant that contains it); a caller confined to a workspace is refused. Both need the administrative step-up. Creating under a parent is the Business edition: a Community build answers 501 departments_unavailable.",
         "operationId": "createWorkspace",
         "parameters": [
           {

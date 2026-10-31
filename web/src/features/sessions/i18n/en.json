@@ -1,4 +1,13 @@
 {
+  "compact": {
+    "context": "Context",
+    "now": "Compact now",
+    "beforeSend": "Compact before send",
+    "working": "Compacting…",
+    "hint": "Summarize earlier turns to free context. Your draft is kept until compaction is confirmed.",
+    "unavailable": "Available when the session is idle and its tool reports native compaction.",
+    "failed": "Compaction was not confirmed. Your message was not sent."
+  },
   "git": {
     "title": "Git",
     "branch": "Branch",
@@ -307,16 +316,17 @@
     "currentSession": "Current session",
     "besideSession": "Session beside",
     "switchSession": "Switch session",
-    "closeContext": "Close the context",
+    "details": "Session details",
+    "closeContext": "Close details",
     "backTo": "Back to {{pane}}",
     "pane": {
       "rail": "Sessions",
       "narrative": "Work",
-      "context": "Context"
+      "context": "Details"
     },
     "resize": {
       "rail": "Resize the session list",
-      "context": "Resize the context pane",
+      "context": "Resize the details pane",
       "beside": "Resize the session beside"
     }
   },
@@ -351,7 +361,9 @@
     "planNotRead": "plan window not read",
     "resets": "Resets {{when}} ({{at}})",
     "stale": "last known",
-    "readAt": "Read {{at}}"
+    "readAt": "Read {{at}}",
+    "permission": "{{name}}: {{what}}",
+    "full": "Full: runs without asking, confined by <policy>Olivares policy</policy>"
   },
   "evidence": {
     "checks": {
@@ -430,7 +442,7 @@
       "worker": "Worker",
       "orchestrator": "Orchestrator"
     },
-    "details": "Details",
+    "details": "References",
     "echoes": "Also reported as",
     "folder": "Folder",
     "temporaryFolder": "Temporary folder for this session",
@@ -442,12 +454,29 @@
     "noChanges": "Olivares did not start this session, so it has no changes to show.",
     "filesUnavailable": "This folder is not available to browse.",
     "filesNoAccess": "Your role cannot browse this folder.",
-    "filesFailed": "The folder could not be read."
+    "filesFailed": "The folder could not be read.",
+    "facts": {
+      "title": "Session",
+      "state": "State",
+      "workspace": "Workspace",
+      "tool": "Tool",
+      "account": "Account",
+      "model": "Model",
+      "access": "Access",
+      "cost": "Cost"
+    },
+    "usage": {
+      "title": "Account usage",
+      "fiveHour": "{{percent}}% of 5 hours",
+      "week": "{{percent}}% of the week"
+    }
   },
   "conversation": {
     "log": "Conversation",
     "waiting": "Waiting for the session…",
     "empty": "No messages yet.",
+    "earlier": "Show earlier output",
+    "earlierFailed": "Earlier output could not be loaded.",
     "ended": "The session ended.",
     "lag_one": "{{count}} frame dropped — output below resumes after the gap.",
     "lag_other": "{{count}} frames dropped — output below resumes after the gap.",
@@ -475,8 +504,8 @@
     "startedTools_one": "{{count}} tool",
     "startedTools_other": "{{count}} tools",
     "notSent": "Not sent: {{reason}}",
-    "waitingApproval": "Sent when the launch is approved and the session starts.",
-    "workingFolder": "Working folder: {{cwd}}",
+    "waitingApproval": "Sent when the session is ready.",
+    "workingFolder": "Working folder: <path />",
     "temporaryFolder": "Working folder: temporary folder for this session",
     "workedFor": "Worked for {{duration}}",
     "modelChanged": "Model changed: {{from}} → {{to}}",
@@ -514,8 +543,11 @@
       "command_one": "Running {{count}} shell command",
       "command_other": "Running {{count}} shell commands",
       "edit": "Editing {{target}}",
+      "editPath": "Editing <path/>",
       "read": "Reading {{target}}",
+      "readPath": "Reading <path/>",
       "search": "Searching {{target}}",
+      "searchPath": "Searching <lead/><path/>",
       "agent": "{{name}} is working",
       "tool": "Running {{tool}}"
     },
@@ -532,6 +564,14 @@
         "extra": "extra usage limit",
         "usage": "usage limit"
       }
+    },
+    "card": {
+      "question": "Question",
+      "plan": "Proposed plan",
+      "todos": "Todo list ({{done}} of {{total}} done)",
+      "send": "Send answer",
+      "answered": "Answer sent: {{answer}}",
+      "sendFailed": "The answer could not be sent."
     }
   },
   "changes": {
@@ -580,6 +620,22 @@
       "added": "Added",
       "modified": "Modified",
       "deleted": "Deleted"
+    },
+    "comment": {
+      "title": "Comment on a line",
+      "line": "Line",
+      "version": "Version",
+      "text": "Comment",
+      "send": "Send to the session",
+      "sent": "Comment sent to the session.",
+      "failed": "The comment could not be sent. Try again in a moment.",
+      "notLive": "Resume the session to send a comment.",
+      "noPermission": "You need permission to write to sessions to send a comment.",
+      "needLine": "Choose a line: click its number or type it.",
+      "noSuchLine": "The file has no line {{line}} {{version}}.",
+      "empty": "Write the comment.",
+      "atBase": "at the base",
+      "atTip": "at the branch tip"
     }
   },
   "peers": {
@@ -703,6 +759,13 @@
     "unreadable": "{{n}} records of the transcript could not be read."
   },
   "limit": {
+    "settingsSaved": "Automatic resume preference saved.",
+    "resumeAtReset": "Resume at reset",
+    "snoozeUntilReset": "Snooze until reset",
+    "automatic": "Resume automatically when a limit resets",
+    "resumes": "Resumes {{time}}",
+    "cancel": "Cancel",
+    "cancelled": "Scheduled resume cancelled.",
     "usageUntil": "Out of quota until {{time}}",
     "usage": "Out of quota",
     "rate": "Rate limited by the provider. Try again in a moment."
@@ -713,6 +776,10 @@
   },
   "rowActions": {
     "rename": "Rename…",
+    "regenerateTitle": "Regenerate title",
+    "titleShort": "Short",
+    "titleSentence": "Normal",
+    "titleLong": "Long",
     "renameTitle": "Rename session",
     "renameDescription": "The name is kept on the server and shown wherever this session is listed. Leave it empty to go back to the name Olivares gives it.",
     "renameLabel": "Name",
@@ -734,6 +801,52 @@
     "copiedPartial": "Copied. {{n}} records of the transcript could not be read and are not in it.",
     "clipped": "Some messages are longer than 64 KiB and were cut short in the copy; each one ends in [...].",
     "noWholeText": "The engine sent only the first line of each message, so the transcript was not copied.",
-    "transcriptChanged": "The transcript changed while it was being copied. Try again."
+    "transcriptChanged": "The transcript changed while it was being copied. Try again.",
+    "undo": "Undo"
+  },
+  "approval": {
+    "declineSend": "Decline and send this",
+    "feedbackUnsupported": "This tool cannot receive your feedback. Your reply will be saved with the denial.",
+    "title": "Approval needed",
+    "why": "Why",
+    "rule": "Rule",
+    "reach": "Reach",
+    "requestedBy": "Requested by",
+    "reachUnknown": "Not reported",
+    "notYours": "Someone else with approval rights decides this request.",
+    "approved": "Approved",
+    "denied": "Denied",
+    "ended": "No longer waiting",
+    "unreadable": "The request could not be read."
+  },
+  "terminal": {
+    "title": "Terminal",
+    "hint": "A shell in this session's folder, inside the same limits as the session. It runs as you; each command line you type is recorded.",
+    "open": "Open terminal",
+    "close": "Close",
+    "copy": "Copy",
+    "paste": "Paste",
+    "again": "Open a new terminal",
+    "reconnecting": "Reconnecting…",
+    "ended": "The terminal ended.",
+    "endedWith": "The terminal ended (exit {{code}}).",
+    "input": "Terminal input",
+    "label": "Terminal",
+    "noFolder": "This session has no folder, so there is nowhere to open a terminal.",
+    "unavailable": "The session's folder is not available here, so a terminal cannot open in it.",
+    "problem": {
+      "step_up": "Confirm your identity first, then open the terminal again.",
+      "refused": "You do not have the right to open a terminal in this folder.",
+      "busy": "You have too many terminals open. Close one first.",
+      "failed": "The terminal could not be opened. Try again in a moment."
+    },
+    "keys": {
+      "esc": "Esc",
+      "tab": "Tab",
+      "ctrlC": "Ctrl+C",
+      "up": "Up",
+      "down": "Down"
+    },
+    "closeLabel": "Close terminal"
   }
 }

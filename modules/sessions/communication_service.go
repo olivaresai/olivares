@@ -880,11 +880,6 @@ func normalizeDirectNoticePublishCommand(
 	if err := ValidateCommunicationPrincipalForScope(principal, scope); err != nil {
 		return DirectNoticePublishCommand{}, nil, nil, nil, err
 	}
-	if principal.System {
-		return DirectNoticePublishCommand{}, nil, nil, nil, communicationError(
-			ErrInvalidCommunicationModel, "direct notice sender must be an authenticated principal",
-		)
-	}
 	_, idempotencyErr := model.ParseID(cmd.IdempotencyKey)
 	if !validCanonicalCommunicationID(cmd.ChannelID) ||
 		cmd.Recipient.Validate() != nil || cmd.IdempotencyKey == "" || idempotencyErr != nil {
@@ -946,19 +941,24 @@ func normalizeDirectNoticePublishCommand(
 	}
 	sender := cmd.sender
 	if sender == (CommunicationActorRef{}) {
-		recipient, ok := CanonicalPrincipalRecipient(principal)
-		if !ok {
-			return DirectNoticePublishCommand{}, nil, nil, nil, communicationError(
-				ErrCommunicationEvidenceUnknown,
-				"direct notice sender canonical identity is unavailable",
-			)
+		if principal.System {
+			sender = CommunicationActorRef{Kind: ActorSystem, Ref: principal.SystemActorRef}
+			cmd.sender = sender
+		} else {
+			recipient, ok := CanonicalPrincipalRecipient(principal)
+			if !ok {
+				return DirectNoticePublishCommand{}, nil, nil, nil, communicationError(
+					ErrCommunicationEvidenceUnknown,
+					"direct notice sender canonical identity is unavailable",
+				)
+			}
+			var err error
+			sender, err = communicationActorForRecipient(recipient)
+			if err != nil {
+				return DirectNoticePublishCommand{}, nil, nil, nil, err
+			}
+			cmd.sender = sender
 		}
-		var err error
-		sender, err = communicationActorForRecipient(recipient)
-		if err != nil {
-			return DirectNoticePublishCommand{}, nil, nil, nil, err
-		}
-		cmd.sender = sender
 	}
 	if err := sender.Validate(); err != nil {
 		return DirectNoticePublishCommand{}, nil, nil, nil, err

@@ -32,41 +32,61 @@ var guardCommercialTables = [...]string{
 // goes into durable events and receipts.
 const guardDeltaCommercial guardEditionDelta = 1 << 7
 
+// Negative IDs name profile predecessors, not durable code epochs. Each additional
+// layer has its own range so Business can also compile pre-AI-terms Community histories.
+const guardProfileNodeStride int64 = 1000
+
 func guardNodeEpoch(node int64) int64 {
 	if node < 0 {
-		return -node
+		return -node % guardProfileNodeStride
 	}
 	return node
 }
 
+func guardProfileParent(node int64) int64 {
+	if node > 0 {
+		return -node
+	}
+	return node - guardProfileNodeStride
+}
+
+func guardProfileTables(current guardManifest) []string {
+	present := make(map[string]bool, len(current.Specs))
+	for _, spec := range current.Specs {
+		present[spec.Key.Relation] = true
+	}
+	set := guardAITermsTables[:]
+	if slices.ContainsFunc(guardCommercialTables[:], func(table string) bool { return present[table] }) {
+		set = guardCommercialTables[:]
+	}
+	if slices.ContainsFunc(set, func(table string) bool { return !present[table] }) {
+		return nil
+	}
+	return set
+}
+
 func addGuardCommunityPredecessors(g guardEditionGraph, current guardManifest) (guardEditionGraph, error) {
-	commercial := make(map[string]bool, len(guardCommercialTables))
-	for _, table := range guardCommercialTables {
-		commercial[table] = true
+	profile := guardProfileTables(current)
+	if profile == nil {
+		return g, nil
 	}
 	tables := make([]string, 0, len(current.Specs))
-	found := 0
 	for _, spec := range current.Specs {
-		if commercial[spec.Key.Relation] {
-			found++
-		} else {
+		if !slices.Contains(profile, spec.Key.Relation) {
 			tables = append(tables, spec.Key.Relation)
 		}
-	}
-	if found != len(commercial) {
-		return g, nil
 	}
 	community, err := buildGuardManifestAtEpoch(tables, current.CodeEpoch)
 	if err != nil {
 		return g, err
 	}
-	ancestors, err := guardEditionGraphFor(community)
+	ancestors, err := buildGuardAdmissionGraph(community)
 	if err != nil {
 		return g, err
 	}
 	for _, epoch := range ancestors.order {
 		node, _ := ancestors.node(epoch)
-		node.Epoch = -epoch
+		node.Epoch = guardProfileParent(epoch)
 		g.nodes[node.Epoch] = node
 		g.order = append(g.order, node.Epoch)
 	}
@@ -139,19 +159,32 @@ func bootGuardCensus(ctx context.Context, db guardEditionQuerier, dia dialect.Di
 	if !foreign {
 		return registered, manifest, graph, nil
 	}
-	census := append(append([]string(nil), registered...), guardCommercialTables[:]...)
-	sort.Strings(census)
-	wide, wideGraph, err := build(census)
-	if err != nil {
-		return nil, guardManifest{}, guardEditionGraph{}, err
+	// A Business-written directory retains its wider census. The AI terms
+	// predecessor is now admitted by the current census's reviewed profile edge.
+	candidates := [][]string{append(append([]string(nil), registered...), guardCommercialTables[:]...)}
+	for _, census := range candidates {
+		sort.Strings(census)
+		other, otherGraph, err := build(census)
+		if err != nil {
+			return nil, guardManifest{}, guardEditionGraph{}, err
+		}
+		known := guardGraphDigests(otherGraph)
+		// Every receipt must be a digest one of the two censuses compiles: a stray or unknown one
+		// leaves the registry census, which refuses the history. This only selects a census. A
+		// ledger that mixes the two passes it, and the exact history verification of the selected
+		// census is what refuses it: that verification must stay exact.
+		if !slices.ContainsFunc(receipts, func(r guardReceipt) bool { return !own[r.CodeSHA256] && !known[r.CodeSHA256] }) {
+			return census, other, otherGraph, nil
+		}
 	}
-	widened := guardGraphDigests(wideGraph)
-	// Every receipt must be a digest one of the two censuses compiles: a stray or unknown one
-	// leaves the registry census, which refuses the history.
-	if slices.ContainsFunc(receipts, func(r guardReceipt) bool { return !own[r.CodeSHA256] && !widened[r.CodeSHA256] }) {
-		return registered, manifest, graph, nil
-	}
-	return census, wide, wideGraph, nil
+	return registered, manifest, graph, nil
+}
+
+// Community has registered the two append-only AI terms relations since 0.5 (modules/aiterms), at
+// the code epoch a directory an earlier Community release wrote already records without them.
+var guardAITermsTables = [...]string{
+	"aiterms_acceptance",
+	"aiterms_policy",
 }
 
 // guardGraphDigests is the set of code digests a graph's compiled editions carry.

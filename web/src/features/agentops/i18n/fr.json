@@ -119,7 +119,7 @@
     "detach": "Détacher"
   },
   "discardWorktree": {
-    "label": "Supprimer aussi le worktree et la branche {{branch}}",
+    "label": "Supprimer aussi le worktree et la branche <branch />",
     "hint": "Supprimés lorsque la branche est fusionnée et que le worktree est propre. Cochez pour abandonner un travail non fusionné ou non validé."
   },
   "create": {
@@ -148,8 +148,11 @@
     "worktree": "Travailler dans un nouveau worktree git",
     "worktreeHint": "Crée une nouvelle branche dans un worktree dédié, pour que les sessions d'un même dépôt ne partagent pas de fichiers. Le dossier doit être la racine du dépôt.",
     "worktreeFrom": "Part de",
+    "sourceUrl": "Issue ou pull request GitHub",
+    "sourceUrlHint": "Démarre dans un worktree, sur une branche portant son nom, et envoie son titre et son texte comme premier message. Demande un identifiant de dépôt enregistré pour ce dossier.",
+    "sourceUrlPlaceholder": "https://github.com/owner/repo/issues/17",
     "isolation": "Isolation",
-    "isolationContainerHint": "Conteneur exécute la session dans podman ou Docker sur ce serveur. Une session sur un fournisseur de Fournisseurs exige native.",
+    "isolationContainerHint": "Conteneur exécute la session dans podman ou Docker sur ce serveur.",
     "envAllow": "Transférer l’env de l’hôte (noms)",
     "envAllowPlaceholder": "PATH, HOME, TERM",
     "envAllowHint": "Liste d’autorisation des NOMS de variables d’env de l’hôte à transmettre (les valeurs ne sont jamais envoyées).",
@@ -233,6 +236,7 @@
     "workspaceDirectory": "Répertoire de travail",
     "workspaceDirectoryOwn": "son propre répertoire pour cette session",
     "worktreeBranch": "Branche du worktree",
+    "sourceItem": "Démarrée depuis",
     "created": "Créée",
     "started": "Démarrée",
     "lastActivity": "Dernière activité",
@@ -391,6 +395,15 @@
       "discard": "Annuler les modifications",
       "save": "Enregistrer les dossiers",
       "saved": "Dossiers en lecture seule enregistrés."
+    },
+    "defaultPermission": {
+      "title": "Autorisation par défaut",
+      "description": "Les sessions démarrées dans ce dossier proposent d’abord cette autorisation. La personne qui en démarre une peut en choisir une autre.",
+      "label": "Autorisation par défaut",
+      "none": "Aucune par défaut",
+      "save": "Enregistrer la valeur par défaut",
+      "saved": "Autorisation par défaut enregistrée.",
+      "discard": "Annuler les modifications"
     }
   },
   "browser": {
@@ -401,6 +414,9 @@
     "newFile": "Nouveau fichier",
     "refresh": "Actualiser",
     "download": "Télécharger",
+    "source": "Source",
+    "rendered": "Rendu",
+    "htmlPreview": "Aperçu HTML : {{name}}",
     "edit": "Modifier",
     "save": "Enregistrer",
     "saving": "Enregistrement…",
@@ -423,7 +439,7 @@
     "moveTitle": "Déplacer / renommer",
     "moveFromLabel": "De",
     "moveToLabel": "Vers (chemin relatif)",
-    "deleteTitle": "Supprimer {{name}}",
+    "deleteTitle": "Supprimer <path />",
     "deleteBody": "Ceci supprime l’entrée de l’espace de travail de l’hôte. Cette action est irréversible.",
     "deleteRecursive": "Supprimer le dossier et tout son contenu (récursif)",
     "created": "Créé",
@@ -896,6 +912,7 @@
       "runner_ready": "Le runner de session peut être inspecté.",
       "runner_not_configured": "Le runner de session n’est pas configuré sur ce runtime.",
       "isolation_unsupported": "Ce serveur ne peut pas offrir cet isolement. Conservez native, ou installez podman ou Docker sur le serveur pour utiliser conteneur.",
+      "container_image_missing": "Ce serveur n’a pas encore l’image dans laquelle s’exécutent les sessions en conteneur. Construisez-la une fois (olivares doctor montre comment), ou conservez native.",
       "runner_inspection_unavailable": "Le runner configuré ne peut pas être inspecté sans lancer. Ce n’est pas une installation manquante.",
       "program_present": "Le programme résolu est présent et exécutable pour cette identité.",
       "program_missing": "Le programme résolu n’est pas présent. Configurez le CLI officiel selon la procédure existante ; pour Claude, cela peut nommer OLIVARES_SESSION_RUNTIME_CLAUDE_BIN. Cette lecture n’installe rien.",
@@ -934,6 +951,7 @@
       "configure_provider_credential_adapter": "Configurez l’adaptateur d’identifiants de cet outil.",
       "review_runtime_credential_composition": "Examinez la composition des identifiants de runtime work/K3.",
       "select_supported_selection": "Choisissez un transport et un isolement que ce runtime démontre.",
+      "provide_session_image": "Construire l’image de session : olivares doctor montre la commande.",
       "retry_inspection": "Relisez les exigences."
     },
     "remainingCheck": {
@@ -951,6 +969,7 @@
       "grok_acp": "Grok ACP",
       "opencode_acp": "OpenCode ACP",
       "gemini_acp": "Gemini CLI ACP",
+      "cursor_acp": "Cursor CLI ACP",
       "unknown": "Protocole inconnu"
     }
   },
@@ -1020,5 +1039,19 @@
     "fullSize": "L’image jointe en taille réelle",
     "unavailable": "Image indisponible",
     "movedOn": "vous avez changé de session avant son enregistrement"
+  },
+  "usage": {
+    "fiveHour": "5 heures",
+    "week": "Hebdo",
+    "percent": "{{window}} {{percent}} %",
+    "unknown": "Utilisation inconnue",
+    "limit": {
+      "fiveHour": "Limite de 5 heures atteinte",
+      "fiveHourResets": "Limite de 5 heures atteinte, réinitialisation {{time}}",
+      "week": "Limite hebdomadaire atteinte",
+      "weekResets": "Limite hebdomadaire atteinte, réinitialisation {{time}}",
+      "other": "Limite {{label}} atteinte",
+      "otherResets": "Limite {{label}} atteinte, réinitialisation {{time}}"
+    }
   }
 }

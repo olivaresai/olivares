@@ -1,14 +1,14 @@
 # Changelog
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Releases use `MAJOR.MINOR`, with no patch number or `v` prefix. The next release is <!-- release -->`0.4`<!-- /release -->.
+Releases use `MAJOR.MINOR`, with no patch number or `v` prefix. The next release is <!-- release -->`0.5`<!-- /release -->.
 See [versioning](INSTALL.md#versioning) for the release policy.
 
-> **Draft: Community <!-- release -->`0.4`<!-- /release --> is unreleased.** Dated sections remain unchanged;
+> **Draft: Community <!-- release -->`0.5`<!-- /release --> is unreleased.** Dated sections remain unchanged;
 > the release-preparation section awaits publication. Other dated sections record published releases. [GitHub releases](https://github.com/olivaresai/olivares/releases)
 > lists their notes and artifacts. Published CLI commands and flags, API routes and
 > fields, configuration keys, defaults, paths and stored data follow the compatibility policy.
-> The <!-- release -->0.4<!-- /release --> edition changes are described in [Editions](docs/editions.md).
+> The <!-- release -->0.5<!-- /release --> edition changes are described in [Editions](docs/editions.md).
 > Announce deprecations in an earlier release and provide an automatic migration
 > before removal. A release never permits a regression. Any breaking change must
 > be explicit under **Changed** or **Removed**.
@@ -27,6 +27,468 @@ See [versioning](INSTALL.md#versioning) for the release policy.
   fix and keep private reports undisclosed.
 
 ## [Unreleased]
+
+## [0.5] - 2026-10-31
+
+### Added
+
+- The console installs as an app (Add to Home Screen on iOS and Android, Install on desktop
+  browsers) and, under Settings, **Session notifications**, **Notify me** also registers the
+  browser for Web Push: a session you started that asks for an approval or ends reaches it with
+  the tab closed, and a tap opens that session. The engine encrypts each message to the browser
+  (RFC 8291) and signs with a VAPID key derived from its eventing key, so the push service
+  relays text it cannot read and there is no new key file. A person can register 10 browsers.
+  The engine needs HTTPS to be installed, must reach the push service on port 443, and does not
+  apply the eventing egress policy to it. On an iPhone or iPad notifications work only from the
+  installed app. No native app is built.
+- `olivares session ship <session>` and a Ship button on the Session screen commit a session's
+  changes as you, push them to a branch of the workspace's publication target and open the pull
+  request, in one action on the engine and with the target's own credential. It refuses, and names
+  why, before it touches the folder when the target's credential is not approved, and after it when
+  the folder is on no branch, has no commit or adds nothing; shipping again after more work updates
+  the same branch and pull request. When an approval policy asks for a review of `gitpublish.push`,
+  the ship stops before the push (exit code 11 on the command line) until another person approves it,
+  and the same command then goes on. The Session screen links the pull request, and
+  `olivares session rm` still removes the worktree once its branch is merged.
+- Comment on a line of a worktree session's branch changes. On the Session screen, click a
+  line number (or type it) and write the comment: it goes to the session as its next message,
+  for any tool, and the ledger records the file, line and side as `sessions.run.review_comment`
+  (not the comment). `olivares session diff <session> [path...]` prints the same branch changes
+  as a unified diff, as text or with `-o json`.
+- The container image ships `gh` and `ssh`/`scp` (Debian `gh` and `openssh-client`), so a coding
+  session can use them without an operator mount. `gh` follows the profile's `--egress-host`
+  HTTPS rule like any session program.
+- A host a provider profile declares with `--egress-host` is now also reachable over SSH on
+  port 22, as a raw tunnel through the session's proxy to that name only, at its public
+  addresses. The container image carries `netcat-openbsd` and a block in `/etc/ssh/ssh_config`
+  that routes `ssh` and `scp` through the proxy when a session is confined.
+- `olivares session start --wait --json` returns one pipeline result with stable
+  outcome codes. Runs can carry a timeout and cost ceiling, and start from an
+  HTTPS repository URL and ref without a pre-existing folder.
+
+- `olivares session start --credential <name>` (repeatable, at most 8), the matching
+  `olivares agent session create` flag and a picker in the console's New session name the
+  managed credentials a Business session may use, instead of the API field alone. The
+  sealed values still never leave the engine.
+- Manage your sign-ins in the console or with `olivares auth sessions`: see active sign-ins,
+  end one or all, and pair a named device with a one-time code. Organization administrators can
+  end member sign-ins within their organization. Ending a sign-in requires confirmation.
+- **Models** opens on **Available**, showing the models each installed tool and configured
+  provider can use, with session counts and explicit unavailable or unchecked states.
+- Provider setup uses one preset catalog across the API and CLI, including OpenCode
+  endpoints and the credential requirements of each provider.
+- A provider account reports the usage windows its tool supplies. Sessions shows the account's
+  usage in Details; a failed refresh is unknown usage, never zero.
+- **Activity & audit** accepts a typed query over people, actions and dates, with filters kept in
+  the address. A date in `until:` includes that whole day; ambiguous person names ask you to choose.
+- The Access map keeps its view in the address, links origins to their pages, and explains when
+  an expansion limit or a refused link prevents it from showing more.
+- Run the Cursor CLI as a session tool. Install it and sign in through its own login link from
+  AI tools. Its package has no publisher signature; the console states that limit.
+- An approved worktree setup command runs once before the session's first start. Cancellation
+  stops setup, and a launch is refused when setup cannot be confined or cleanup cannot be confirmed.
+- Registered session folders carry resource permissions, checked both when browsing and when
+  launching. Effective-rights explanations show the policies that determine access.
+- Publish a session's results as an issue comment through the Git publication API, with recorded
+  links and recovery after an uncertain result. The console does not yet offer this action.
+- Workflows can name a registered session folder in their launch inputs.
+- Session permission modes have names specific to each tool, with a table of the permissions
+  each mode gives it. The older launch phrases remain aliases; automatic approval requires
+  session administration.
+- `olivares finops spend changes` requests cost per merged change and department. It requires
+  Business; Community returns the edition requirement.
+- Business workstation check-ins can report installed AI tools, their versions and sign-in
+  states with `olivares claude-policy checkin <surface> --tools`, without sending account or configuration paths.
+- Business integrations can bind an approval policy to a change record. A grant is checked
+  again against that record before it is used; a spent or canceled grant cannot authorize work.
+
+- `OLIVARES_SESSIONS_AGENT_BOOTSTRAP_LISTEN` names the address of the session cockpit's agent
+  enrollment endpoint, beside `OLIVARES_SESSIONS_AGENT_LINK_LISTEN`. It is read only by the Business
+  edition; empty, the default, opens no listener, and a Community binary refuses to serve while it is set.
+- `olivares dr verify --scratch-dsn` proves a PostgreSQL backup restorable: it restores the bundle
+  into a throwaway database on a server you name, re-verifies the whole ledger there, and removes
+  the database and its roles afterwards. Without the flag a PostgreSQL bundle is still checked
+  for its digest and keys only, and the output now says the ledger was not restored.
+- `olivares dr drill --scratch-dsn` runs the backup-and-restore drill on PostgreSQL and prints
+  its measured RTO next to the SQLite one. The runbook now records point-in-time recovery, restore
+  over an occupied database and the drill as measured on PostgreSQL 15, 16, 17 and 18.
+- A department can carry its standards. A session template's custom instructions can be assigned to a
+  department or to a directory group (`olivares sourcescope bindings create --source-type instructions`,
+  with `--scope-tree workspace` or `user_group`), and every Claude Code launch of the people it reaches
+  is given them, a parent department's first and ahead of the launch's own; the template assigned with
+  `--source-type template` governs a launch that names none. The same text is the instructions file
+  of the department's workstations: `olivares claude-policy validate`, `dry-run`, `publish`, `versions`
+  and `pull` take the surface `managed-instructions@<department>`, which needs no document, and
+  `pull` writes `/etc/claude-code/CLAUDE.md`. Assigning and publishing are Business; Community keeps
+  applying the assignments already stored and answers a new one with 501 `business_required`. The
+  `--content-file` of `validate`, `dry-run` and `publish` is optional for that surface and required
+  for every other, as before.
+  Taking an assignment off a department, or lifting it with a forbid, waits for a second administrator;
+  assigning one does not. Changing a template that is assigned, or the skills pinned to it, needs
+  template administration. That administrator alone can still empty an assigned instructions template
+  or edit a default template so that it no longer governs: the second administrator guards the
+  assignment, not the template's text. An assigned template that is archived or gone refuses the
+  launches it would have shaped. A resumed session keeps the standards it was launched with, and
+  continues without a template that was taken off its department and then archived.
+- Open a session's file in your own editor. A file in a session's **Changes** or **Files** tab has
+  an **Open in** link for VS Code, Zed or a JetBrains IDE, which opens it at the first line that
+  differs from git HEAD. Choose the editor in **Settings**, under **General**. When the session's
+  folder is on another machine, the link uses the editor's SSH form: the host this console is
+  served from, or the one you type in Settings. The link is opened by your editor, so nothing is
+  sent to the engine. Zed and JetBrains links use the editors' own URL handlers, which their
+  documentation describes only in part, and a JetBrains IDE over SSH opens the project, not the file.
+- **Copy Markdown block** beside each paragraph, list, quote, table or heading of a reply copies
+  that block as the tool wrote it, markers included. **Quote reply** under a reply adds the words
+  you selected in it (the whole reply when nothing is selected) to the message bar as a Markdown
+  quote, after whatever you already typed, and leaves the message for you to send. It shows only
+  where you can send messages to that session; the quote is kept in that session's draft like any
+  other text you type.
+- A session with no name gets a title from its first message. The engine cuts a short phrase
+  from the first message you sent, on its own host: no model is asked, so nothing leaves the
+  session's provider, and a session signed in with your own account is titled the same way as
+  one on a key. The console asks once when a session you may write to and read shows activity, and
+  its menu's **Regenerate title** cuts it again in the style you pick (short, normal or long,
+  which the command line and the API call `sentence`; the console keeps your choice); `olivares session title <session> [--style short|sentence|long]`
+  does the same from the command line, and `olivares session ls` and `show` print the title. The
+  title never replaces the name, which stays your handle for the session, and it is never an
+  address. The API adds `POST /v1/m/sessions/runs/{ref}/title` (run write and output read
+  permissions) and run reads carry `title` for callers who may read the session's output (the
+  title is your own words, so a viewer reads the run without it); each title made is recorded in
+  the audit ledger, without the title. Only Claude Code and Codex sessions have a transcript to cut from, and a
+  session given secrets or credentials is not read for it, so those keep showing what they showed
+  before.
+- While an agent is working, Enter queues a message on the server; **Steer** (or Ctrl+Enter)
+  sends it into the running turn when the tool supports that. Queued messages can be edited,
+  reordered or removed, survive a reload, and the first goes by itself when the turn ends.
+- Supported Codex permission requests offer **Approve for this session** in the conversation and
+  approval queue. Every required reviewer must choose that scope for a session grant; a mixed
+  quorum and **Approve once** remain single-use. Other requests reject the scope without recording
+  a decision.
+- Custom roles can grant authenticator reset (`authenticator:write`), session stop
+  (`sessions:stop:write`), session output (`sessions:output:read`), and tenant-wide audit,
+  authorization and Access map reads (`audit:read`, `authz:read`, `accessgraph:read`) independently.
+  A viewer can still list sessions and keep personal marks, but reading output requires its own
+  grant; stored explicit role and group permission lists keep their previous coverage.
+- **Copy Markdown block** beside each paragraph, list, quote, table or heading of a reply copies
+  that block as the tool wrote it, markers included. **Quote reply** under a reply adds the words
+  you selected in it (the whole reply when nothing is selected) to the message bar as a Markdown
+  quote, after whatever you already typed, and leaves the message for you to send. It shows only
+  where you can send messages to that session; the quote is kept in that session's draft like any
+  other text you type.
+- `dr backup --offsite-immutable` writes an append-only copy with S3 Object Lock in COMPLIANCE
+  mode and never prunes it. `dr prune --offsite` applies GFS retention with a separate credential
+  and extends the lock of kept bundles. The CLI and scheduled copy check the target's lock
+  configuration, and the console warns when it cannot protect the copy.
+- Tool names and binding rules come from the engine, with classification metadata and edition
+  admission hooks, so session tools have one identity and policy surface across the console and CLI.
+- Remote placement is deny-closed: a session is placed only when a node is explicitly assigned.
+- Business capabilities run only under an active licence, with one shared-route seam and edition gate.
+- Appliance backups can set up a dedicated data disk and grow the online data volume.
+- Start a session from a GitHub issue or pull request page, preserving its repository context.
+- Preview workspace documents and images, with folder and file kept in the URL.
+- A confined session can SSH to the hosts its profile declares, with provider and destination
+  isolation preserved.
+- The Sessions list uses one state vocabulary to show what needs you.
+- A context meter and native compaction controls make a session's remaining context and
+  compaction behavior explicit.
+
+### Changed
+
+- `olivares ui`: **Security** has the approval
+  queue (read a request with the rule that asked, then Approve or Reject with an optional reason,
+  as `governance approvals approve` and `reject` do), the kill switch (Stop all asks for a reason
+  and the word `stop`) and the audit ledger (filter by person, text, action and time, and Verify
+  now, which runs `olivares audit verify`).
+
+- Business: a sign-in whose groups could not be read is refused too, not admitted with none. An OIDC
+  groups claim that is present but unreadable, and an ID token without groups whose UserInfo call
+  failed or answered for another subject, give 403 `sso_groups_indeterminate`; the server log names
+  the cause. UserInfo's groups now also replace an empty groups claim in the ID token. A login-time
+  group reconciliation that fails withdraws the session, records `auth.login.blocked` with the reason
+  `sso_group_reconcile_failed` and answers 503 `sso_group_reconcile_failed`; a later attempt may
+  succeed. A SAML assertion without the groups attribute is still read as no groups.
+
+- Run Ollama from its own image. `olivares tool start ollama --container` runs Ollama's
+  official image as a service of the server through Podman or Docker instead of the
+  installed program, with the models directory mounted so models persist across restarts.
+  The container has a read-only root, no capabilities and no way to gain privileges, is
+  given the host's NVIDIA or AMD GPU when it has one, and starts again with the server
+  until `olivares tool stop`; its endpoint is added to your organization's Providers as
+  before. `OLIVARES_SESSION_CONTAINER_RUNTIME` selects the runtime (`off` refuses it) and
+  `OLIVARES_OLLAMA_CONTAINER_IMAGE` names the image (default
+  `docker.io/ollama/ollama:latest`; the ROCm build on an AMD host). Without `--container`,
+  Ollama still runs from the installed program. The API start request accepts
+  `"container": true`, and the Ollama row reports `runtime` as `process` or `container`.
+  A container start is refused while `DOCKER_HOST`, `CONTAINER_HOST`,
+  `CONTAINER_CONNECTION` or `DOCKER_CONTEXT` in the server's environment points the CLI at
+  another daemon; a daemon chosen only in the CLI's own configuration file is not checked.
+  Both kinds of Ollama start are now remembered before they run, so the server can stop what
+  it started: a start whose record cannot be written is refused, a Stop whose record cannot
+  be removed answers 409 `not_forgotten`, a Stop that does not finish in the time the server
+  waits answers 409 `not_stopped` (it answered 200 before), and a record that cannot be read
+  is kept with a warning until a start replaces it. Stop is now refused on a read-only
+  control plane, as Start already was.
+
+- The console has one navigation: a left sidebar with four groups — Work (Now, Sessions, Files &
+  workspaces, Work & communications), Tools (AI tools, Models, MCP & skills, Sources), Control
+  (Rules & approvals, Usage & cost, Activity & audit, Access map) and Admin (People & groups,
+  Security, Operations, License) — and Settings at the bottom. It replaces the places of the top
+  bar, the All areas sheet and the phone's bottom bar. A place shows only when your permissions
+  open one of its pages, and the row above a page moves between the pages of its place. The
+  sidebar folds to its icons and opens again; below 761 px the same sidebar is a drawer behind the
+  menu button. The top bar keeps the page title, search, notifications and the account menu; the
+  organization and workspace switcher moved to the top of the sidebar. Every page keeps its
+  address. The nine area directory addresses (`/areas/…`) now open the place that holds their
+  pages, with the query and the fragment kept. Favorites and Recent, which only All areas showed,
+  are no longer shown; what you saved stays stored.
+- Files & workspaces opens with "Find a folder" focused: type part of a session folder's name or
+  path, and one click opens that folder's wiki.
+- Sessions keeps the whole job on one screen. On a desktop the list, the conversation and the
+  session's Details sit side by side: Details is open by default from 1120 px (the list 292 px and
+  Details 304 px wide, 264 and 280 px at 1350 px and below), and the console remembers when you
+  close it. Narrower, Details opens as a sheet over the list and the conversation; on a phone it is
+  in the conversation's menu, and the back arrow opens the session list.
+- A request a session waits on is answered in its conversation: it says what will run, why, the
+  rule that asked, what it reaches and who asks, with Approve once and Deny in place. Alt+A approves
+  it while the whole request is on screen and no dialog is open. A denied request says Denied. While a
+  running session waits, the reply field still sends, so a typed message can tell the agent to do
+  something else. The message bar no longer links the request to the approvals page.
+- Archiving a session offers Undo until you close the notice. The session list, the Sessions badge
+  and "N sessions open" count the same sessions, so an archive and its Undo change all three; Stop
+  all still counts every session it would end.
+- Usage & cost opens on a new Usage page: each signed-in account's official 5-hour and weekly
+  limits, the account nearest its limit first with when that window resets, then today's
+  sessions with the input and output tokens and the cost they reported. A figure no tool reported
+  is left out, never shown as 0, and the page says how many sessions reported no cost or no
+  tokens. The account limits are shown to a system administrator, as in the status bar; other
+  members are told so. Budgets and Adoption follow it in the row above the page.
+- The command palette (Ctrl+K) names each page by its place in the sidebar (for example
+  "Control › Usage & cost") and no longer offers the retired areas such as Oversight; their names
+  still find the pages they held.
+- Reach keeps the graph or table choice in the address (`?view=table`), as Access map keeps its
+  selection and filters, so a copied link opens the same view.
+
+- A session folder's own OpenCode configuration needs an approval before an
+  OpenCode session starts there, as Claude Code's, Codex's and Gemini CLI's
+  project files do. The `opencode.json` and `opencode.jsonc` files and the
+  `.opencode/` folder (agents, commands, plugins, tools) are listed in
+  `olivares agent workspace project-config`, and an approval binds their
+  content, including installed dependencies. Prepare `.opencode/` dependencies
+  with the pinned OpenCode version before approval; an incomplete installation
+  is refused before launch. Some cannot be bound, such as an `{env:…}` token or a `.opencode/`
+  folder too large to hash, and are refused until changed. A registered folder
+  with an approved configuration that also holds OpenCode files has a new hash
+  after the upgrade, so it needs one new approval.
+- Background provider-usage refreshes no longer append an audit event for each read. The status
+  bar and Usage & cost keep their current refresh cadence, including faster refreshes while a
+  probe runs, without growing the signed ledger.
+- Conversation rendering now paints only the rows a new frame changes, reducing unnecessary
+  redraws during long sessions.
+
+### Fixed
+
+- Lifting a kill-switch stop (re-enable) and an approved guardian containment now spend their approval
+  in the same transaction as the act, as every other approved action does. An approval that expired,
+  or fell below the live approval floor, before the act is refused instead of acted on; a second
+  re-enable cannot reuse a spent approval, and a refused re-enable keeps the stop and answers 409
+  with the reason. When the approval policy names a change record (Business), the record is read
+  again at that moment, so a canceled record no longer lifts a stop or lets a containment run.
+  Generic approval consumption refuses these act-bound grants with 409 `approval_act_required`,
+  so it cannot spend the grant ahead of the protected action.
+- A session that reported a cost and no tokens no longer shows "0 in / 0 out tokens" in its
+  header and Context pane; the cost is shown alone.
+- Stopping a session also ends commands it left running in the background. A forced end is
+  reported as killed, and cleanup failures remain visible instead of being reported as success.
+- An unsigned tool installation cannot run its first probe or model-catalog read without
+  confinement. A confinement failure stays visible in availability and catalog diagnostics.
+- Reading a tool's status, health, models or usage does not start a session or load the user's
+  OpenCode plugins. Installation probes run in a temporary home.
+- A session using a local model can reach its loopback model port through the network helper.
+  Governed DeepSeek sessions keep the credential and endpoint selected for that launch.
+- Linked Git worktrees can use their shared Git metadata under protected storage without
+  granting access to overlapping folders. Git network operations report confinement failures
+  before running, and SSH operations have a bounded wait.
+- Read-only SQLite connections keep their temporary storage in memory, including after a
+  connection is replaced. Backup snapshots keep temporary database storage in memory too.
+- Package installation can place its manifest when the data directory is a separate volume.
+- The disaster-recovery runbook includes measured offsite backup and restore checks against
+  MinIO and SeaweedFS. The installation guides retain the path that needs no provider key.
+- Deferred session work wakes after its transaction commits, and a drain that leaves work behind
+  schedules another attempt.
+- Console paths and branch names keep both ends visible, including on phones. Session pickers
+  wrap, tables support keyboard scrolling, and action headers have accessible names.
+- After an upgrade reload, the console says “Updated, reloaded” once. A failed lazy-loaded page
+  keeps the upgrade notice visible.
+- The home page respects snoozed and completed sessions and links approval requests only when
+  the signed-in person may open them.
+- Deleting an agent also removes its group memberships and records those removals in the audit
+  ledger. Legacy managed grants keep their identity across an upgrade.
+- On Olivares AI Server, Git is installed for session work, the Appliance Console certificate is
+  signed by the local certificate authority, and the product console uses port 443 when available.
+  License activation or removal switches the installed edition.
+
+- The first request after the database connection is reset answers a retryable 503 instead of
+  a wrong answer. After a PostgreSQL restart, a failover or a cut connection, the first request
+  through the server's store leaked the driver's own error: a signed-in client was told
+  `401 unauthenticated` for its valid token (the auth middleware read the outage as a bad
+  credential) or `500 internal error` where the request could not start, and the next request
+  worked. The store now reports the pool reset as its unavailable sentinel — including pgx's
+  raw `conn closed` and the 57P01–57P03/57P05 session-ending codes — at the start of each
+  store transaction (reads, writes, the selective envelopes, System, the audit reader and
+  rollout transitions). REST answers 503 `store_unavailable`, gRPC `Unavailable`, and the
+  token-exchange endpoint answers 503 `temporarily_unavailable` instead of an invalid-token
+  refusal. The session tools endpoint and the apps gateway answer 503 too, where they answered
+  401, and a session credential that met the outage works again on the next request instead of
+  staying refused. A write whose commit answer was lost keeps its own no-retry answer
+  (`commit_outcome_unknown`). Measured on PostgreSQL 16 by cutting the pooled connections with
+  the server still running.
+- `olivares dr restore --force` now replaces a PostgreSQL database that already holds an estate.
+  With `--operator`, `--reason` and `--admin-dsn`, it first saves a `pg_dump` of the database
+  beside the previous signing keys, then replaces the database in one transaction: whole or not
+  at all. Before, such a restore always failed. On PostgreSQL 18 the default
+  `max_locks_per_transaction` is too small for it; the restore then fails whole and says so.
+- The Appliance Console on port 9443 obeys the product's step-up policy. A product
+  superadministrator whose session has not met the policy the deployment asks for (an
+  authenticator code or a passkey) is refused host status, the Updates page and licence
+  activation, and is told to complete the step-up in the product console and reload; before,
+  being a superadministrator was enough. Anyone else still reads one phrase that names no
+  check.
+- Reconciling a Git publication intent now needs the publish permission `gitpublish:push:write`.
+  `POST /v1/m/gitpublish/intents/{id}/reconcile` can record an observation and move an uncertain
+  intent to adopted, but its door held only the read permission, so a viewer was admitted and
+  refused only by the intent's own check, concealed as 404. A caller without the publish
+  permission now gets 403, and still reads the intent and its observations. Every built-in role
+  that may publish keeps reconcile. A custom role or scoped grant that holds only
+  `gitpublish:pull_request:write` or `gitpublish:merge:admin`, without `gitpublish:push:write`,
+  could reconcile pull-request and merge intents before and now gets 403: add
+  `gitpublish:push:write` to it to keep that.
+- Claude Code presets for DeepSeek and Z.ai pass the selected provider's model IDs to main,
+  background and subagent roles, including saved default and native overrides. An explicit full
+  Claude model ID still takes precedence.
+- Stopping one session cancels its pending approval requests before reporting success. A later
+  decision is refused and a canceled request cannot grant access; requests from other sessions
+  and tenants stay pending.
+- Work commands and protocol-binding changes now wake deferred work as soon as their transaction
+  commits instead of waiting for the five-minute safety tick.
+- A Codex session stopped before its first input opens as an empty conversation. A failure to
+  read a conversation that may exist still reports the read failure instead of hiding it.
+- On Olivares AI Server with enforcing SELinux, installing, replacing, renewing or removing a
+  license now re-triggers the entitled-channel path unit through a public, empty marker; private
+  license and key files remain inaccessible to PID 1.
+- The service installer waits up to 180 seconds for first boot (was 60) and reports how long a
+  healthy first boot took. A failed wait still leaves the service, configuration and data exactly
+  as installed, and the JSON result schema is unchanged.
+- Business workstation check-ins report the tools installed on the workstation running
+  `olivares claude-policy checkin --tools`, rather than copying the selected fleet server's
+  inventory. Existing native sign-in and version reporting remain in place, without forwarding
+  provider keys.
+- Container-session hooks now run in their own MCS-constrained SELinux domain, so the hook can
+  read procfs and its own container's files without gaining another container's. The packaged
+  entrypoint and labels are installed for enforcing container launches.
+- Disaster recovery reapplies erasures that a restored backup predates, rather than treating them
+  as missing work.
+- Break-glass is consulted when an approval is refused, and staged revisions are flushed once with
+  syncfs on Linux.
+- AI terms schema is registered in Community, and organization settings writes conflict when the
+  caller-read version is stale, preventing an older write from restoring a concurrent revoke.
+- Launchers check folder rights at session launch and resume, refusing a folder the session cannot
+  safely use.
+- Command-line session handling fixes ten cases that had failed in mainline testing, including
+  launch, approval and recovery behavior.
+- Migration history is preserved during upgrades: historical schemas stay frozen while new schema
+  versions and behavior-preserving refactors are added.
+- Approval requests explain decisions and decline with typed feedback instead of failing silently.
+- Department admins can create sub-departments under their own department, and department-scoped
+  budget collections group related spend.
+- A terminal in the browser runs inside the session's folder, while long conversations paint only
+  the rows near the screen and name frameless items by their frame.
+- Accounts show monthly usage and credit balances beside the existing 5-hour and weekly limits.
+- A store written by the previous Community release opens again after the upgrade.
+- API tokens follow group-derived role revocation on the next authentication without invalidating
+  roles granted directly to the token's owner.
+- Account retirement removes reset-resume preferences and retains only live reset schedules as
+  blockers, so the consent census can complete instead of leaving the account retiring forever.
+- Offline dictation downloads and caches its speech runtime correctly, and an interrupted recording
+  releases its microphone.
+- The first-hour container journey installs Codex with its execution helper, resumes native-tool
+  conversations with their first queued answer, avoids unsupported Web Push registration on a
+  directly served local certificate, and explains the disabled device-pairing action.
+
+### Changed
+
+- A session folder's own OpenCode configuration needs an approval before an
+  OpenCode session starts there, as Claude Code's, Codex's and Gemini CLI's
+  project files do. The `opencode.json` and `opencode.jsonc` files and the
+  `.opencode/` folder (agents, commands, plugins, tools) are listed in
+  `olivares agent workspace project-config`, and an approval binds their
+  content, including installed dependencies. Prepare `.opencode/` dependencies
+  with the pinned OpenCode version before approval; an incomplete installation
+  is refused before launch. Some cannot be bound, such as an `{env:…}` token or a `.opencode/`
+  folder too large to hash, and are refused until changed. A registered folder
+  with an approved configuration that also holds OpenCode files has a new hash
+  after the upgrade, so it needs one new approval.
+
+### Security
+
+- The Server image's optional Nginx Proxy Manager ships an OpenResty build without five medium
+  nginx fixes ([nginx advisories](https://nginx.org/en/security_advisories.html)). No Nginx Proxy
+  Manager release carries them yet; the Server image moves to the first one that carries them.
+  The app stays off until you install it. With the
+  configuration the app writes, one of them applies: a host with a Let's Encrypt certificate shares a
+  TLS session cache, so nginx rotates its session ticket keys, and CVE-2026-97629 can let a client
+  forge a session. To close it, write `ssl_session_tickets off;` to
+  `/var/lib/olivares-apps/nginx-proxy-manager/data/nginx/custom/http_top.conf`, then stop and start
+  the app; clients then make a full TLS handshake instead of resuming with a ticket. The other
+  four need HTTP/3 (CVE-2026-95101), SSI with AIO (CVE-2026-97205) or `alias` with `rewrite`
+  (CVE-2026-15176), which the app's configuration does not use, or an nginx from 1.31.2 to 1.31.6
+  (CVE-2026-93479). Custom nginx configuration that turns on HTTP/3, SSI with AIO or `alias` with
+  `rewrite` is exposed.
+- The engine updates go-jose to bound RSA key parameters before validating JWKs,
+  preventing excessive CPU use from a crafted key
+  ([CVE-2026-116587](https://github.com/advisories/GHSA-mgcc-cww5-fp2q)).
+- The container images replace npm's bundled undici 6.29.0 with bundled undici 6.29.1, fixing crashes
+  from excessive content encodings and TLS renegotiation, and preserving custom TLS
+  certificate validation
+  ([CVE-2026-109869](https://github.com/advisories/GHSA-xjj6-f33q-929c),
+  [CVE-2026-87018](https://github.com/advisories/GHSA-qrxm-fqhp-jwvm),
+  [CVE-2026-109383](https://github.com/advisories/GHSA-2m5v-pch6-74hx)).
+- The console and the documentation site take the patched undici (8.12.3 and, inside
+  miniflare, 7.30.1) for [GHSA-2m5v-pch6-74hx](https://github.com/advisories/GHSA-2m5v-pch6-74hx),
+  [GHSA-4qv8-2p9j-2685](https://github.com/advisories/GHSA-4qv8-2p9j-2685),
+  [GHSA-4w7w-5xrc-9h26](https://github.com/advisories/GHSA-4w7w-5xrc-9h26),
+  [GHSA-55wc-3pg8-jfw6](https://github.com/advisories/GHSA-55wc-3pg8-jfw6),
+  [GHSA-9fm3-97px-rjf6](https://github.com/advisories/GHSA-9fm3-97px-rjf6),
+  [GHSA-f72v-6w45-q472](https://github.com/advisories/GHSA-f72v-6w45-q472),
+  [GHSA-qrxm-fqhp-jwvm](https://github.com/advisories/GHSA-qrxm-fqhp-jwvm) and
+  [GHSA-xjj6-f33q-929c](https://github.com/advisories/GHSA-xjj6-f33q-929c). The documentation site
+  also takes the fixed Astro ([GHSA-mpr7-6m5w-76rw](https://github.com/advisories/GHSA-mpr7-6m5w-76rw)),
+  zod ([GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)) and fast-uri
+  ([GHSA-333x-w4r6-6crp](https://github.com/advisories/GHSA-333x-w4r6-6crp),
+  [GHSA-hrr3-gc8f-f4qj](https://github.com/advisories/GHSA-hrr3-gc8f-f4qj),
+  [GHSA-w74x-v6f9-j3xg](https://github.com/advisories/GHSA-w74x-v6f9-j3xg),
+  [GHSA-wjr9-j795-jxcr](https://github.com/advisories/GHSA-wjr9-j795-jxcr),
+  [GHSA-xhq7-xmqj-769h](https://github.com/advisories/GHSA-xhq7-xmqj-769h)), and its build and the
+  TypeScript client's tests the fixed Vite
+  ([GHSA-587h-7wmj-h5pm](https://github.com/advisories/GHSA-587h-7wmj-h5pm),
+  [GHSA-698v-4r3x-3vcv](https://github.com/advisories/GHSA-698v-4r3x-3vcv),
+  [GHSA-9jrq-w75r-8gcw](https://github.com/advisories/GHSA-9jrq-w75r-8gcw),
+  [GHSA-r825-w8mm-5pxw](https://github.com/advisories/GHSA-r825-w8mm-5pxw),
+  [GHSA-rq7h-c2jc-7f22](https://github.com/advisories/GHSA-rq7h-c2jc-7f22),
+  [GHSA-vfpm-58rq-9qcg](https://github.com/advisories/GHSA-vfpm-58rq-9qcg)) and Vitest
+  ([GHSA-qxg6-89mg-rqv8](https://github.com/advisories/GHSA-qxg6-89mg-rqv8),
+  [GHSA-xp26-3454-mjgp](https://github.com/advisories/GHSA-xp26-3454-mjgp)). The fabworks
+  bring-your-own-protocol example takes the fixed golang.org/x/net
+  ([GO-2026-6860](https://osv.dev/vulnerability/GO-2026-6860),
+  [GO-2026-6866](https://osv.dev/vulnerability/GO-2026-6866)). None is part of the engine binary.
+- Container sessions are isolated with MCS-constrained SELinux domains, and the hook entry's type
+  attributes are emitted in valid `.te` syntax. Remote runs refuse vault secret environment values.
+- The container egress relay is confined, and measured relay runtime access is permitted without
+  weakening session isolation.
+- A scheduled approval keeps its requester's stable identity in engine-written owner fields;
+  wire input cannot replace that requester or take separation-of-duty and cancellation rights.
+- `gh` comes from GitHub's signed apt repository, with VEX statements that match the engine binary.
+- Runtime images replace npm's bundled ip-address with a patched release and raise `golang.org/x/net`
+  to v0.62.0 in engine modules.
 
 ## [0.4] - 2026-10-24
 

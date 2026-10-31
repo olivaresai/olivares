@@ -54,8 +54,14 @@ func sessionsClosureRequestBodyDeclarationFor(method, pattern string) (sessionsC
 		return sessionsClosureBodyDeclaration(true, sessionsHandoffResponseSchema()), true
 	case http.MethodPost + " /decision-requests/{id}/responses":
 		return sessionsClosureBodyDeclaration(true, sessionsDecisionRequestResponseSchema()), true
+	case http.MethodPost + " /runs/{ref}/resume":
+		return sessionsClosureBodyDeclaration(false, sessionsClosureClosedObject(oas.Obj("at_reset", oas.Obj("type", "boolean"), "cancel_reset", oas.Obj("type", "boolean")))), true
+	case http.MethodPut + " /limit-resume-settings":
+		return sessionsClosureBodyDeclaration(true, sessionsClosureClosedObject(oas.Obj("automatic", oas.Obj("type", "boolean")), "automatic")), true
 	case http.MethodPost + " /runs":
 		return sessionsClosureBodyDeclaration(true, sessionsCreateRunSchema()), true
+	case http.MethodPost + " /push/subscriptions":
+		return sessionsClosureBodyDeclaration(true, sessionsPushSubscribeSchema()), true
 	case http.MethodPut + " /runs/{ref}/peers":
 		return sessionsClosureBodyDeclaration(true, sessionsSetRunPeersSchema()), true
 	case http.MethodPut + " /runs/{ref}/name":
@@ -63,6 +69,14 @@ func sessionsClosureRequestBodyDeclarationFor(method, pattern string) (sessionsC
 			"name", oas.Obj("type", "string", "maxLength", maxRunNameRunes,
 				"description", "The session's new name, trimmed; at most 200 characters, no control or invisible (format, line or paragraph separator) characters. An empty name clears it."),
 		), "name")), true
+	case http.MethodPost + " /runs/{ref}/title":
+		// An optional body: no body is the default style (run_title.go).
+		return sessionsClosureBodyDeclaration(false, sessionsClosureClosedObject(oas.Obj(
+			"style", oas.Obj("type", "string", "enum", oas.Enum(titleStyleShort, titleStyleSentence, titleStyleLong),
+				"description", "How much of the first message the title keeps: short (28 characters), sentence (60, the default) or long (100)."),
+			"if_untitled", oas.Obj("type", "boolean",
+				"description", "True makes a title only for a session that has neither a name nor a title, and otherwise answers the session unchanged."),
+		))), true
 	case http.MethodPost + " /runs/{ref}/move":
 		return sessionsClosureBodyDeclaration(true, sessionsMoveRunSchema()), true
 	case http.MethodPost + " /runs/{ref}/handoff":
@@ -93,6 +107,15 @@ func sessionsClosureRequestBodyDeclarationFor(method, pattern string) (sessionsC
 		return sessionsClosureBodyDeclaration(true, sessionsProjectConfigApproveSchema()), true
 	case http.MethodPost + " /workspaces/{ref}/files/move":
 		return sessionsClosureBodyDeclaration(true, sessionsMoveFileSchema()), true
+	case http.MethodPost + " /workspaces/{ref}/terminals":
+		return sessionsClosureBodyDeclaration(false, sessionsTerminalSizeSchema()), true
+	case http.MethodPost + " /workspaces/{ref}/terminals/{tid}/size":
+		return sessionsClosureBodyDeclaration(true, sessionsTerminalSizeSchema()), true
+	case http.MethodPost + " /workspaces/{ref}/terminals/{tid}/input":
+		return sessionsClosureBodyDeclaration(true, sessionsClosureClosedObject(oas.Obj(
+			"data", oas.Obj("type", "string", "maxLength", terminalMaxInputBytes,
+				"description", "Text typed into the terminal, at most 65536 bytes. A newline ends a command line, which is recorded in the audit ledger before the shell receives it."),
+		), "data")), true
 	case http.MethodPost + " /provider-profiles":
 		return sessionsClosureBodyDeclaration(true, sessionsCreateProviderProfileSchema()), true
 	case http.MethodPatch + " /provider-profiles/{ref}":
@@ -147,12 +170,34 @@ func sessionsClosureRequestBodyDeclarationFor(method, pattern string) (sessionsC
 			"until", oas.Obj("type", "string", "format", "date-time",
 				"description", "When the session comes back to the caller's list, an RFC 3339 time in the future. A second snooze moves it."),
 		), "until")), true
+	case http.MethodPut + " /connections/{name}":
+		return sessionsClosureBodyDeclaration(true, sessionsClosureClosedObject(oas.Obj(
+			"kind", oas.Obj("type", "string", "enum", oas.Enum("database", "ssh", "http", "tcp"),
+				"description", "What the connection reaches."),
+			"target", oas.Obj("type", "string", "minLength", 1, "maxLength", 512,
+				"description", "host:port, or the base URL of an http service. Never a user name or a password."),
+			"credential_ref", oas.Obj("type", "string", "maxLength", 256,
+				"description", "A reference to a connection/ entry of the secret store: store:connection/<name>. Never the secret."),
+			"options", oas.Obj("type", "object", "additionalProperties", oas.Obj("type", "string"),
+				"description", "Non-secret settings of the kind: a database's engine, name and user; an ssh host's user and host key fingerprint."),
+			"description", oas.Obj("type", "string", "maxLength", 512,
+				"description", "What the connection is for, shown to the sessions that may use it."),
+			"enabled", oas.Obj("type", "boolean", "description", "A disabled connection serves no session. A new connection is on; a change that omits this keeps the switch as it is."),
+		), "kind", "target")), true
+	case http.MethodDelete + " /connections/{name}",
+		http.MethodPost + " /connections/{name}/test",
+		http.MethodPut + " /connections/{name}/grants/{workspace}",
+		http.MethodDelete + " /connections/{name}/grants/{workspace}":
+		// The path names the connection and the department: a body would be a second place to say them.
+		return sessionsClosureRequestBodyDeclaration{kind: sessionsClosureBodyless}, true
 	case http.MethodPost + " /runs/{ref}/cleanup":
 		// An OPTIONAL body since the worktree option: the confirmation to discard the
 		// session's worktree and branch. It was bodyless, and a call with no body is
 		// still the call it always was.
 		return sessionsClosureBodyDeclaration(false, sessionsCleanupRunSchema()), true
 	case http.MethodDelete + " /runs/{ref}",
+		// A device is named by its id in the path (push.go).
+		http.MethodDelete + " /push/subscriptions/{id}",
 		// The pin toggle is bodyless for the reason the revoke is: the run
 		// reference IS the request, and there is nothing else to say (run_pin.go).
 		http.MethodPost + " /runs/{ref}/pin",
@@ -164,17 +209,19 @@ func sessionsClosureRequestBodyDeclarationFor(method, pattern string) (sessionsC
 		// So is the archive toggle (run_name_archive.go).
 		http.MethodPost + " /runs/{ref}/archive",
 		http.MethodDelete + " /runs/{ref}/archive",
-		http.MethodPost + " /runs/{ref}/resume",
 		http.MethodDelete + " /templates/{id}",
 		http.MethodDelete + " /workspaces/{ref}",
 		http.MethodDelete + " /workspaces/{ref}/files",
+		// The terminal to end is named by its path: the reference IS the request.
+		http.MethodDelete + " /workspaces/{ref}/terminals/{tid}",
 		http.MethodPost + " /workspaces/{ref}/files/dir",
 		http.MethodPost + " /workspaces/{ref}/wiki",
 		http.MethodPost + " /channels/{id}/grants/{grant_id}/revoke",
 		http.MethodPost + " /deliveries/{id}/ack":
 		return sessionsClosureRequestBodyDeclaration{kind: sessionsClosureBodyless}, true
 	default:
-		return sessionsClosureRequestBodyDeclaration{}, false
+		// The message queue's routes (run_queue.go).
+		return sessionsRunQueueBody(method, pattern)
 	}
 }
 
@@ -223,15 +270,21 @@ func sessionsCreateRunSchema() map[string]any {
 		"fast_mode", sessionsClosureNullable(oas.Obj("type", "boolean", "description", "Claude Code only. Explicit false turns Fast mode off; omitted/null keeps the tool default. True requires a catalog model that supports it and an own-account profile; provider-bound launches refuse it to preserve endpoint isolation.")),
 		"service_tier", sessionsClosureNullable(oas.Obj("type", "string", "maxLength", 200, "description", "Codex only. A non-empty, whitespace-free service tier is passed unchanged to thread/start and thread/resume; empty/null keeps the tool default. Other drivers refuse a non-empty choice.")),
 		"workspace_ref", sessionsClosureOptionalString("Trimmed and, when non-empty, resolved to a registered workspace."),
+		"run_on", sessionsClosureOptionalString("Business. The enrolled, online remote node that runs this session. Empty/null runs on this engine. Community answers 501 business_required; an unavailable or unauthorized node returns 409 node_unavailable; a node-check service failure returns 503."),
 		"template_id", sessionsClosureOptionalString("When non-empty, identifies the stored template whose terms govern the launch."),
 		"isolation", sessionsClosureNullable(oas.Obj("type", "string", "enum", oas.Enum("", "native", "container", "sandbox"), "description", "Empty/null defaults to native; unavailable runners refuse rather than downgrade.")),
 		"env_allow", sessionsClosureNullable(oas.Obj("type", "array", "maxItems", 64, "uniqueItems", true, "items", envName)),
 		"worktree", sessionsClosureNullable(oas.Obj("type", "boolean", "description", "Opt in to a git worktree and a new branch of the session's own, made from the named workspace's repository (which must be the repository's top folder, native isolation, with no read-only folders). Absent, null or false keeps the session in the workspace folder itself.")),
 		"no_setup", sessionsClosureNullable(oas.Obj("type", "boolean", "description", "Skip the folder's setup command for this start only; leaves its stored command and approval unchanged.")),
+		"repository_url", sessionsClosureOptionalString("HTTPS repository URL fetched into a new engine-owned session directory, without URL credentials, redirects or ambient authentication. Cannot be combined with workspace_ref or worktree."),
+		"repository_ref", sessionsClosureOptionalString("Branch, tag or commit to fetch for repository_url; empty uses HEAD."),
+		"cost_cap_micro_usd", sessionsClosureNullable(oas.Obj("type", "integer", "format", "int64", "minimum", 0, "description", "Per-run cost ceiling in millionths of a US dollar. Zero is unbounded. The engine stops the process on reported usage reaching the cap; provider reporting can lag spending.")),
+		"timeout_seconds", sessionsClosureNullable(oas.Obj("type", "number", "format", "double", "minimum", 0, "maximum", 2592000, "description", "Per-run timeout, persisted as an absolute engine deadline. Zero is unbounded. Cannot extend a template ceiling.")),
 		"worktree_from", sessionsClosureOptionalString("With worktree: start the new worktree at this commit id or local branch of the workspace's repository instead of its current commit (for example the branch and sha a handoff names). Absent keeps the current start. Refused without worktree, and when the commit or branch is not in the repository."),
+		"source_url", sessionsClosureOptionalString("The page of a GitHub issue or pull request (https://github.com/<owner>/<repo>/issues/<number> or /pull/<number>) the session starts from. It implies worktree, names the session's branch after the item (olivares/issue-<number>-<suffix> or olivares/pr-<number>-<suffix>) and stays on the session as a link; the client reads the item's title and body with GET source-items and sends them as the first message. Cannot be combined with repository_url; any other page is refused with 400."),
 		"secret_env", sessionsSecretEnvSchema(),
 		"git_read", sessionsClosureOptionalString("When non-empty, one approved Git-host repository binding (<binding id>:<owner>/<name>) the session gets a short-lived GitHub read credential for: an installation token with contents:read for that repository, served to git by a credential helper (never in the environment) and revoked when the session ends. Needs tenant administration. A GitLab binding is refused (422)."),
-		"credentials", sessionsClosureNullable(oas.Obj("type", "array", "maxItems", 8, "uniqueItems", true, "items", oas.Obj("type", "string", "pattern", "^[a-z0-9][a-z0-9._-]{0,63}$"), "description", "Business. Names of managed credentials (an SSH key or certificate, a database login, an API account) the session gets a way to use: an SSH agent socket, a database proxy or a local reverse proxy that the engine holds, never the secret itself. Needs tenant administration. A Community engine answers 501 business_required.")),
+		"credentials", sessionsClosureNullable(oas.Obj("type", "array", "maxItems", CredentialMaxNames, "uniqueItems", true, "items", oas.Obj("type", "string", "pattern", "^[a-z0-9][a-z0-9._-]{0,63}$"), "description", "Business. Names of managed credentials (an SSH key or certificate, a database login, an API account) the session gets a way to use: an SSH agent socket, a database proxy or a local reverse proxy that the engine holds, never the secret itself. Needs tenant administration. A Community engine answers 501 business_required.")),
 		"provider_profile_ref", sessionsClosureOptionalString("When non-empty, names the provider profile the session launches under; the server resolves its homes and refuses a disabled, retired, foreign-environment or non-operable profile, and one whose driver requires an authorized authentication source it does not have. Only the reference is accepted: no home, environment, driver, binding, session id or authentication source."),
 	)))
 }
@@ -373,6 +426,8 @@ func sessionsCreateWorkspaceSchema() map[string]any {
 			"type", "array", "description", "Relative, NUL-free paths that cannot escape the workspace root.",
 			"items", sessionsClosureNullable(oas.Obj("type", "string")),
 		)),
+		"backup", sessionsClosureNullable(oas.Obj("type", "boolean", "description", "Folder file-backup selection metadata; absent defaults to true.")),
+		"data_class", sessionsDataClassSchema(),
 		"read_only_folders", sessionsClosureNullable(sessionsWorkspaceReadOnlyFoldersSchema()),
 		"max_read_bytes", sessionsClosureNullable(oas.Obj("type", "integer", "format", "int64", "minimum", 0)),
 		"dlp_mode", sessionsClosureNullable(sessionsWorkspaceDLPModeSchema("Empty/null defaults to off.")),
@@ -383,12 +438,27 @@ func sessionsCreateWorkspaceSchema() map[string]any {
 // settings, at least one; a setting left out or null is not changed.
 func sessionsPatchWorkspaceSchema() map[string]any {
 	schema := sessionsClosureClosedObject(oas.Obj(
+		"backup", sessionsClosureNullable(oas.Obj("type", "boolean", "description", "Folder file-backup selection metadata; absent defaults to true.")),
+		"data_class", sessionsDataClassSchema(),
 		"read_only_folders", sessionsClosureNullable(sessionsWorkspaceReadOnlyFoldersSchema()),
 		"dlp_mode", sessionsClosureNullable(sessionsWorkspaceDLPModeSchema("Empty selects off, as on registration.")),
+		"default_permission", sessionsClosureNullable(sessionsWorkspaceDefaultPermissionSchema()),
 	))
 	schema["minProperties"] = 1
 	schema["description"] = "Name at least one setting with a value. A setting left out or null is not changed."
 	return schema
+}
+
+// sessionsWorkspaceDefaultPermissionSchema lists exactly what ResolvePermission
+// accepts (permission_modes.go): names, labels and older names or launch phrases.
+func sessionsWorkspaceDefaultPermissionSchema() map[string]any {
+	values := []string{""}
+	for _, n := range PermissionNames() {
+		values = append(values, n.Name, n.Label)
+		values = append(values, n.Aliases...)
+	}
+	return oas.Obj("type", "string", "enum", oas.Enum(values...),
+		"description", "The permission a session started in this folder is offered by default, by name (an older name is stored as its name). Empty takes the default away. full and auto need run administration. Leaving it out or null changes nothing.")
 }
 
 func sessionsWorkspaceDLPModeSchema(description string) map[string]any {
@@ -398,6 +468,17 @@ func sessionsWorkspaceDLPModeSchema(description string) map[string]any {
 func sessionsWorkspaceReadOnlyFoldersSchema() map[string]any {
 	return oas.Obj("type", "array", "description", "Additional read-only host folders for native sessions. Read-only folders protect file content and directory entries (no write, truncate, create, remove or rename); permissions, ownership, extended attributes and timestamps follow the host's normal permissions. Must be absolute, existing directories outside protected engine folders. The server stores canonical paths. Omitted on create or an empty array grants no extra access.",
 		"items", oas.Obj("type", "string", "minLength", 1))
+}
+
+// sessionsTerminalSizeSchema mirrors the window size a terminal start or resize decodes
+// (terminal_api.go): rows and columns, both optional, 0 meaning the default 24x80.
+func sessionsTerminalSizeSchema() map[string]any {
+	return sessionsClosureClosedObject(oas.Obj(
+		"rows", oas.Obj("type", "integer", "minimum", 0, "maximum", 65535,
+			"description", "Window height in rows; absent or 0 means 24, and it is limited to 500."),
+		"cols", oas.Obj("type", "integer", "minimum", 0, "maximum", 65535,
+			"description", "Window width in columns; absent or 0 means 80, and it is limited to 1000."),
+	))
 }
 
 func sessionsMoveFileSchema() map[string]any {
@@ -414,6 +495,7 @@ func sessionsMoveFileSchema() map[string]any {
 // environment — and never created as a fallback. No credential value is accepted.
 func sessionsCreateProviderProfileSchema() map[string]any {
 	return sessionsClosureClosedObject(oas.Obj(
+		"max_data_class", sessionsDataClassSchema(),
 		"session_work_grant", sessionsProfileWorkGrantSchema(),
 		"driver", oas.Obj("type", "string", "minLength", 1, "description", "Provider driver key, lower-cased ([a-z0-9][a-z0-9._-]*). Open set; only drivers with an operated runner on this node are launchable."),
 		"config_home", oas.Obj("type", "string", "minLength", 1, "description", "Absolute path of the provider configuration directory on this node; symlinks are resolved and the canonical path is stored."),
@@ -433,6 +515,7 @@ func sessionsCreateProviderProfileSchema() map[string]any {
 // and homes are immutable and are not keys of this body.
 func sessionsPatchProviderProfileSchema() map[string]any {
 	return sessionsClosureClosedObject(oas.Obj(
+		"max_data_class", sessionsDataClassSchema(),
 		"session_work_grant", sessionsProfileWorkGrantSchema(),
 		"display_name", sessionsClosureOptionalString("An explicit string replaces the stored label; null/omission preserves it."),
 		"state", sessionsClosureNullable(oas.Obj("type", "string", "enum", oas.Enum("active", "disabled"), "description", "Reversible lifecycle transition; retired is refused here.")),
@@ -476,7 +559,7 @@ func sessionsProfileRegistriesSchema() map[string]any {
 // both clients ask instead of choosing.
 func sessionsResolveProviderProfileSchema() map[string]any {
 	return sessionsClosureClosedObject(oas.Obj(
-		"driver", oas.Obj("type", "string", "enum", oas.Enum("claude", "codex", "grok", "opencode", "gemini-cli"), "description", "The coding tool the new session runs. The answer is a profile this node can launch it with, reused or created; a tool with nothing to run on is refused with the step that fixes it."),
+		"driver", oas.Obj("type", "string", "enum", oas.Enum("claude", "codex", "grok", "opencode", "gemini-cli", "cursor"), "description", "The coding tool the new session runs. The answer is a profile this node can launch it with, reused or created; a tool with nothing to run on is refused with the step that fixes it."),
 		"account", oas.Obj("type", "string", "description", "Optional. An account name (as shown by the provider-accounts list) or a profile reference of the same tool: the answer is that account's profile, nothing is created and the engine's own choice does not run. Unknown: 404. Another tool's, foreign, disabled or retired: 409. Omit it and the rule above answers, exactly as before."),
 	), "driver")
 }
@@ -490,7 +573,7 @@ func sessionsResolvePreviewRoute(method, pattern string) bool {
 func sessionsResolvePreviewParameters() []map[string]any {
 	return []map[string]any{oas.Param("driver", "query",
 		"The coding tool a new session would run. Answered with the reason (own_login or api_key) and, for a key, the provider record; a tool with nothing to run on is refused 409 with the sentence the resolve gives.",
-		true, oas.Obj("type", "string", "enum", oas.Enum("claude", "codex", "grok", "opencode", "gemini-cli")))}
+		true, oas.Obj("type", "string", "enum", oas.Enum("claude", "codex", "grok", "opencode", "gemini-cli", "cursor")))}
 }
 
 // sessionsCreateProviderSchema mirrors createProviderRecordRequest. api_key is
@@ -502,7 +585,7 @@ func sessionsResolvePreviewParameters() []map[string]any {
 func sessionsCreateProviderSchema() map[string]any {
 	return sessionsClosureClosedObject(oas.Obj(
 		"kind", oas.Obj("type", "string", "enum", oas.Enum("anthropic", "openai", "xai", "gemini", "openai_compatible"), "description", "What the credential IS, independent of which CLI reads it. The set is closed because a kind decides which environment variables a launched child receives."),
-		"service", sessionsClosureOptionalString("Optional immutable API service identifier. Empty/null keeps the provider's normal endpoint and discovery; deepseek requires openai_compatible and its documented endpoint."),
+		"service", sessionsClosureOptionalString("Optional immutable vendor preset: a ref from GET /provider-presets. A preset fixes the kind and the vendor's documented endpoint, so base_url may be omitted or must equal it; an unknown ref is refused with the valid refs. deepseek registers the governed inference service, which no tool session uses. Empty/null keeps the provider's normal endpoint and discovery."),
 		"display_name", oas.Obj("type", "string", "minLength", 1, "description", "Your own name for this credential; it is what a picker shows. Unique among active providers of the same kind, case-folded."),
 		"base_url", sessionsClosureOptionalString("Absolute https endpoint override, or plain http at a loopback or private-network address for anthropic, xai and openai_compatible. Empty uses the provider's official endpoint; REQUIRED for openai_compatible. A URL carrying userinfo is refused: a credential must not travel in a field that is published in every read."),
 		"default_model", sessionsClosureOptionalString("Model for fresh bound sessions unless another model is selected. Omission awaits the first usable successful connection test; an empty string clears the saved default and disables automatic selection."),
@@ -709,4 +792,8 @@ func sessionsProfileWorkGrantSchema() map[string]any {
 		"workspace_id", oas.Obj("type", "string", "format", "uuid", "description", "One active tenant workspace; UUIDv7."),
 		"capabilities", oas.Obj("type", "array", "minItems", 1, "maxItems", 6, "uniqueItems", true, "items", oas.Obj("type", "string", "enum", oas.Enum("work.read", "work.create", "work.assign", "work.review", "decision.read", "decision.write"))),
 	), "role", "workspace_id", "capabilities"))
+}
+
+func sessionsDataClassSchema() map[string]any {
+	return sessionsClosureNullable(oas.Obj("type", "string", "enum", oas.Enum(dataClassValues...), "description", "Classification metadata; empty leaves it undeclared."))
 }

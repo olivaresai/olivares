@@ -22,7 +22,8 @@
     "kind": "Kind",
     "key": "Key",
     "state": "State",
-    "connection": "Connection"
+    "connection": "Connection",
+    "actions": "Actions"
   },
   "kinds": {
     "anthropic": "Anthropic",

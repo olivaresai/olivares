@@ -14,7 +14,7 @@ import (
 //
 // Findings themselves are the CORE Finding entity (sc.Findings()), not a module
 // table — the security module is the first producer/consumer of persisted findings
-//. What the module owns is the FORENSIC layer on top: an incident CASE, its
+// . What the module owns is the FORENSIC layer on top: an incident CASE, its
 // append-only chain-of-custody LINKS, and the inline-ENFORCEMENT policy. The case
 // links are APPEND-ONLY because the set of evidence attached to an incident is
 // itself evidence and must not be silently rewritten (docs/SECURITY-HARDENING.md).

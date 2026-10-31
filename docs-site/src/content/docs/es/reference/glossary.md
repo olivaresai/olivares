@@ -187,7 +187,7 @@ proceso a un agente. Ver [eBPF/Tetragon](/es/how-to/connectors/ebpf-tetragon/).
 
 ### live_ref
 
-Identidad asignada por el servidor de **una** fila de sesión viva. Olivares <!-- release -->0.4<!-- /release -->
+Identidad asignada por el servidor de **una** fila de sesión viva. Olivares <!-- release -->0.5<!-- /release -->
 clavea la observación por `(ámbito de observación, id externo)` para que dos
 homes de proveedor que anuncian el mismo id de sesión sigan siendo dos filas.
 Las lecturas de consola y API que significan «esta fila» usan `live_ref`, no

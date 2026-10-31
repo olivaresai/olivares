@@ -43,6 +43,8 @@
     "empty": "Noch keine Sitzungsordner. Ein Ordner erscheint hier, sobald eine Sitzung darin startet.",
     "loading": "Sitzungsordner werden gelesen …",
     "unavailable": "Sitzungsordner sind nicht verfügbar.",
-    "truncationHint": "Öffnen Sie Sitzungen, um alle Ordner zu sehen."
+    "truncationHint": "Öffnen Sie Sitzungen, um alle Ordner zu sehen.",
+    "filter": "Ordner suchen",
+    "noMatch": "Kein Ordner passt zu „{{query}}“."
   }
 }

@@ -56,7 +56,6 @@ describe.each(LANGUAGE_CODES)('session state words (%s)', (locale) => {
   const spelled: [string, string, Tree, keyof typeof word][] = [
     ['nav', 'shell.rail.groups.needsYou', nav, 'need'],
     ['nav', 'shell.rail.groups.working', nav, 'live'],
-    ['nav', 'launcher.attachedWaiting', nav, 'need'],
     ['common', 'ui.status.needsYou', common, 'need'],
     ['common', 'ui.status.working', common, 'live'],
     ['sessions', 'list.group.attention', sessions, 'need'],

@@ -1,26 +1,8 @@
 {
   "title": "감사 원장",
-  "subtitle": "변조 증거가 남는 증거 체인입니다. 검증하고 WORM/SIEM으로 내보내십시오.",
+  "subtitle": "AI 활동의 서명된 기록을 확인합니다.",
   "subtitleSystem": "교차 테넌트 관리 작업의 시스템 테넌트 체인입니다(읽기 전용).",
   "searchLoaded": "불러온 행만 필터(클라이언트 측)…",
-  "filters": {
-    "open": "필터",
-    "title": "서버 측 원장 필터",
-    "q": "원장 검색",
-    "qPlaceholder": "작업, 행위자, 대상 종류 또는 ID",
-    "actor": "행위자",
-    "actorPlaceholder": "정확한 행위자",
-    "action": "작업 접두사",
-    "actionPlaceholder": "예: agent.",
-    "targetKind": "대상 종류",
-    "targetKindPlaceholder": "정확한 대상 종류",
-    "targetId": "대상 ID",
-    "targetIdPlaceholder": "정확한 대상 ID",
-    "since": "이후",
-    "until": "이전",
-    "clearOne": "{{filter}} 필터 지우기",
-    "clearAll": "모든 필터 지우기"
-  },
   "scan": {
     "incomplete": "seq {{seq}}까지 스캔했습니다 — 전체 원장이 아니며 더 불러오면 스캔을 계속합니다."
   },
@@ -29,14 +11,6 @@
     "tenant": "테넌트 원장",
     "system": "시스템 원장",
     "systemHint": "시스템 테넌트 체인은 교차 테넌트 관리 작업을 기록하며 여기서는 읽기 전용입니다. 검증 및 내보내기는 테넌트 원장에서 작동합니다."
-  },
-  "cols": {
-    "seq": "Seq",
-    "occurred": "시각",
-    "action": "작업",
-    "actor": "행위자",
-    "target": "대상",
-    "hash": "해시"
   },
   "actorKind": {
     "user": "사용자",
@@ -55,7 +29,6 @@
     "checkpointBreak": "seq {{seq}}에서 체크포인트 서명 실패"
   },
   "pubkey": {
-    "action": "검증 키",
     "label": "원장 서명 키",
     "key": "키",
     "hint": "이 Ed25519 공개 키를 공유하면 외부 당사자가 내보낸 이벤트와 체크포인트를 오프라인에서 검증할 수 있습니다 — 같은 키가 둘 다 서명합니다.",
@@ -63,7 +36,6 @@
   },
   "export": {
     "action": "내보내기",
-    "options": "내보내기 옵션",
     "formatLabel": "내보내기 형식",
     "fromSeq": "시작 seq",
     "toSeq": "종료 seq",
@@ -80,7 +52,8 @@
     },
     "done": "내보내기를 다운로드했습니다.",
     "failed": "내보내기 실패.",
-    "forbidden": "원장을 내보낼 권한이 없습니다."
+    "forbidden": "원장을 내보낼 권한이 없습니다.",
+    "download": "다운로드"
   },
   "detail": {
     "title": "증거 이벤트",
@@ -93,15 +66,12 @@
     "actorSystem": "시스템",
     "target": "대상",
     "id": "이벤트 ID",
-    "chainTitle": "체인 무결성",
     "prevHash": "이전 해시",
     "prev": "이전",
     "hash": "이벤트 해시",
     "this": "현재",
     "sig": "이벤트 서명",
     "checkpoint": "서명",
-    "chainHint": "각 이벤트의 해시는 이전 이벤트에 연결됩니다. 지문 뒤에 페이로드는 없습니다 — 해시가 증거입니다(설계상 최소 데이터).",
-    "details": "세부 정보",
     "actorMember": "구성원"
   },
   "empty": {
@@ -144,5 +114,54 @@
     "show": "내부 레코드 표시",
     "hide": "내부 레코드 숨기기",
     "allHidden": "지금까지 불러온 모든 항목이 내부 레코드입니다."
+  },
+  "ledger": {
+    "query": "원장 쿼리",
+    "placeholder": "person:  action:  since:7d  또는 단어",
+    "addFilter": "필터 추가",
+    "remove": "{{token}} 제거",
+    "add": "{{token}}을(를) 쿼리에 추가",
+    "commands": "검색 및 명령",
+    "problem": {
+      "key": "{{token}}은(는) 원장 필터가 아닙니다. person:, action:, kind:, target:, since:, until: 또는 단어를 사용하세요.",
+      "time": "{{token}}은(는) 시간이 아닙니다. 90m, 24h, 7d, 2w 또는 2026-10-20 같은 날짜를 사용하세요.",
+      "person": "{{token}}과(와) 일치하는 사람이 없습니다. 이름, 이메일 또는 user:<id>를 사용하세요.",
+      "several": "{{token}}과(와) 일치하는 사람이 여러 명입니다. 전체 이름, 이메일 또는 user:<id>를 사용하세요.",
+      "names": "여기서는 {{token}}을(를) 찾을 수 없습니다. user:<id>를 사용하세요."
+    },
+    "entries": "원장 항목",
+    "group": {
+      "label": "보기",
+      "session": "세션별",
+      "events": "모든 항목"
+    },
+    "needsYou": "확인 필요",
+    "outside": "세션 밖",
+    "session": "세션 {{ref}}",
+    "count_other": "{{count}}개 항목",
+    "sentence": "{{what}} · {{who}}",
+    "signed": "서명됨",
+    "histogram": {
+      "hour": "시간별 항목",
+      "day": "일별 항목",
+      "week": "주별 항목",
+      "bar_other": "{{at}}, {{count}}개 항목",
+      "loaded_other": "{{count}}개 항목 불러옴",
+      "sessions_other": "세션 {{count}}개",
+      "people_other": "{{count}}명",
+      "more": "더 불러올 수 있음",
+      "now": "지금"
+    },
+    "entry": {
+      "title": "항목 {{seq}}",
+      "chain": "체인 내 위치",
+      "previous": "이전 · {{seq}}",
+      "this": "이 항목 · {{seq}}",
+      "next": "다음 · {{seq}}",
+      "newest": "최신 항목",
+      "nextUnread": "다음 항목 읽지 않음",
+      "chainHint": "각 항목은 이전 항목의 해시를 담고 있습니다. 하나를 바꾸면 이후의 모든 해시가 깨집니다.",
+      "signedEntry": "서명된 항목"
+    }
   }
 }

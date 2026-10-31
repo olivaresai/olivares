@@ -25,12 +25,14 @@ import (
 // still ask for a launch under a declared incomplete check, and nothing here
 // promotes that unknown to ready or presents it as "not installed".
 //
-// ⛔ AND IT NEVER RUNS ANYTHING. The whole point of a separate method is that
+// ⛔ AND IT NEVER RUNS THE PROGRAM. The whole point of a separate method is that
 // the program is examined by METADATA — resolution plus a stat — and not by
 // spawning it, not even with `--version`. Finding an executable proves it is an
 // executable file the Runner would resolve; it proves nothing about the vendor,
 // the version, the compatibility or whether the CLI works. Those are the
-// provider handshake's answers and they stay in remaining_checks.
+// provider handshake's answers and they stay in remaining_checks. The container
+// runner's image question is the one process: it asks its own runtime CLI
+// whether the image exists, which starts no container and changes nothing.
 //
 // The observation returns CLASSIFIED states rather than an error, because the
 // distinction the caller needs is exactly the one an error loses: "there is no
@@ -73,16 +75,40 @@ const (
 	RunnerProgramUnknown       RunnerProgramState = ""
 )
 
+// RunnerImageState is a container Runner's answer about the image its sessions run in.
+type RunnerImageState string
+
+// The image answers. Missing is said only when the runtime itself says the image is not
+// on the host and nothing else could provide it; Unavailable when it was asked and gave
+// no usable answer; Unknown covers every other case, including "not asked" (another
+// isolation, or an image the runtime pulls on first use).
+const (
+	RunnerImagePresent RunnerImageState = "present"
+	RunnerImageMissing RunnerImageState = "missing"
+	// RunnerImageUnavailable is asked-but-no-answer: a broken runtime, a denied socket
+	// or a timeout. It is NOT Missing, so the readiness read never tells the operator to
+	// build an image that may already be there.
+	RunnerImageUnavailable RunnerImageState = "unavailable"
+	RunnerImageUnknown     RunnerImageState = ""
+)
+
 // RunnerObservation is one Runner's dated, effect-free answer.
 type RunnerObservation struct {
 	Isolation RunnerIsolationState
 	Program   RunnerProgramState
+	// Image is the container runner's answer for isolation=container; every other
+	// runner and posture leaves it Unknown.
+	Image RunnerImageState
 }
 
 // RunnerInspector is the optional half of a Runner that can describe what it
 // would resolve WITHOUT launching it. An implementation must not spawn, connect,
 // mint or write anything, and must not return a path, an argv or a raw OS error
 // — the caller publishes closed codes and cannot redact what it never receives.
+//
+// The one exception is the container runner's image answer: it asks its own runtime CLI
+// whether the image exists (`podman image exists`, `docker image inspect`), a read that
+// starts no container, pulls nothing and changes nothing, bounded by a short timeout.
 type RunnerInspector interface {
 	InspectLaunch(ctx context.Context, in RunnerInspection) (RunnerObservation, error)
 }
@@ -114,6 +140,14 @@ func (m *Module) refuseUnsupportedIsolation(ctx context.Context, isolation Isola
 	}
 	// Only the isolation answer is needed; no provider program has been resolved yet.
 	obs, err := inspector.InspectLaunch(ctx, RunnerInspection{Isolation: isolation})
+	if err == nil && obs.Isolation == RunnerIsolationSupported && obs.Image == RunnerImageMissing {
+		// The same answer the launch-readiness read gives, before any launch effect: the
+		// runtime would otherwise fail the first launch with its own message. It names
+		// doctor only: a resumed run cannot change the isolation it was created with.
+		return &codedRunErr{&runErr{http.StatusUnprocessableEntity,
+			"the image that container sessions run in is not on this server; `olivares doctor` shows how to build it"},
+			codeContainerImageMissing}
+	}
 	if err != nil || obs.Isolation != RunnerIsolationUnsupported {
 		return nil
 	}

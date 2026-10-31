@@ -10,6 +10,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -619,7 +622,7 @@ func TestAgentToolDetectCorroboratesWithSignedManifestOnly(t *testing.T) {
 			if c.Match != "manifest-corroborated" || c.Version != "2.1.261" || c.Probe != nil {
 				t.Fatalf("candidate %+v", c)
 			}
-			// dev#2614: only the host observer skips the digest; the CLI's JSON keeps it.
+			// the regression: only the host observer skips the digest; the CLI's JSON keeps it.
 			if len(c.SHA256) != 64 {
 				t.Fatalf("detect -o json dropped the sha256 of %s: %+v", c.Path, c)
 			}
@@ -788,8 +791,8 @@ func TestAgentToolProductionWiringTrustsOnlyTheEmbeddedKey(t *testing.T) {
 			t.Fatalf("%s must not wire the test-only HashMatchingVerifier", name)
 		}
 	}
-	if !bytes.Contains(src, []byte("toolinstall.NewOfficialCatalog(nil, verifier)")) {
-		t.Fatal("cmd_agent_tool.go no longer wires the production catalog with its verifier")
+	if !bytes.Contains(src, []byte("toolinstall.NewOfficialCatalog(nil, toolinstall.NativeOpenPGPVerifier{})")) {
+		t.Fatal("cmd_agent_tool.go no longer wires the production catalog with the in-process OpenPGP verifier")
 	}
 	for _, flag := range []string{`"key"`, `"fingerprint"`, `"trust"`, `"insecure"`} {
 		if bytes.Contains(src, []byte("Flags().StringVar(&"+flag)) || bytes.Contains(src, []byte(", "+flag+", ")) {
@@ -802,8 +805,24 @@ func TestAgentToolProductionWiringTrustsOnlyTheEmbeddedKey(t *testing.T) {
 		t.Fatalf("v1 catalog %v", keys)
 	}
 	got := strings.Join(eng.DriverKeys(), ",")
-	if got != "claude,codex,gemini-cli,grok,ollama,opencode" {
+	if got != "claude,codex,cursor,gemini-cli,grok,ollama,opencode" {
 		t.Fatalf("driver keys %q", got)
+	}
+}
+
+// The production engine verifies the release manifest in process and never
+// looks up or runs gpg: the Server's SELinux policy denies the product gpg, so
+// a lookup alone is a denial in the journal at every session launch.
+func TestAgentToolProductionEngineNeverRunsGPG(t *testing.T) {
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "gpg.ran")
+	writeHostToolCanary(t, filepath.Join(dir, "bin", "gpg"), marker)
+	t.Setenv("PATH", filepath.Join(dir, "bin")+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	toolInstallEngine(context.Background())
+
+	if n := hostToolCanaryRuns(marker); n != 0 {
+		t.Fatalf("building the production engine ran the gpg on PATH %d time(s)", n)
 	}
 }
 
@@ -812,4 +831,57 @@ func must[T any](v T, err error) T {
 		panic(err)
 	}
 	return v
+}
+
+// the regression, the operator-visible refusal: an engine with no confined child
+// builder reads as a host that cannot confine whatever the kernel says, so
+// the CLI install of an unsigned driver (grok, none-origin-only) refuses
+// before its staged bytes run, names Landlock, and exits Indeterminate.
+// Signed drivers keep installing through this command
+// (TestAgentToolInstallPositiveNoopSecondVersionAndList).
+func TestAgentToolInstallRefusesUnsignedUnconfinedThroughTheCLI(t *testing.T) {
+	dir := toolinstalltest.ExecCapableDir(t)
+	const version = "1.0.13"
+	marker := filepath.Join(dir, "ran.marker")
+	files := map[string][]byte{
+		"/latest":                            []byte(version + "\n"),
+		"/grok-" + version + "-linux-x86_64": toolinstalltest.VersionReporter("Grok", version, marker),
+	}
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, ok := files[r.URL.Path]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Length", fmt.Sprint(len(b)))
+		_, _ = w.Write(b)
+	}))
+	t.Cleanup(srv.Close)
+
+	prev := toolInstallEngine
+	toolInstallEngine = func(context.Context) *toolinstall.Engine {
+		g := toolinstall.NewGrok(toolinstall.GrokOptions{BaseURL: srv.URL, Client: srv.Client(), ProbeBudget: 5 * time.Second, ProbeGrace: 500 * time.Millisecond})
+		cat, err := toolinstall.NewCapabilityCatalog(toolinstall.NewCatalog(), g)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// No SetChildCommand: the composition cannot confine.
+		return toolinstall.NewEngineWithCapabilities(cat, toolinstall.EngineOptions{InstallerVersion: "test"})
+	}
+	t.Cleanup(func() { toolInstallEngine = prev })
+
+	f := &agentToolFixture{t: t}
+	root := filepath.Join(dir, "tools")
+	code, _, stderr := f.run("agent", "tool", "install", "--driver", "grok", "--platform", "linux-x64", "--root", root, "--source", srv.URL, "--version", version, "--yes")
+	if code != exitcode.Indeterminate {
+		t.Fatalf("code %d stderr %s", code, stderr)
+	}
+	for _, want := range []string{"no publisher signature", "Landlock", "olivares doctor"} {
+		if !strings.Contains(stderr, want) {
+			t.Fatalf("stderr missing %q: %s", want, stderr)
+		}
+	}
+	if _, statErr := os.Stat(marker); !os.IsNotExist(statErr) {
+		t.Fatalf("the staged grok bytes executed: marker stat=%v", statErr)
+	}
 }

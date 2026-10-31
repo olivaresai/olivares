@@ -29,7 +29,7 @@ export const TITLE = 'Olivares AI documentation'
  * when the table gains its row, never before: the other tools the docs name are observed through
  * connectors, which is a different capability.
  */
-export const SESSION_TOOLS = ['Claude Code', 'Codex', 'Grok Build', 'OpenCode', 'Gemini CLI']
+export const SESSION_TOOLS = ['Claude Code', 'Codex', 'Grok Build', 'OpenCode', 'Gemini CLI', 'Cursor CLI']
 
 /** Top-level docs folders, in reading order, with the heading each gets in llms.txt. */
 const SECTIONS = [

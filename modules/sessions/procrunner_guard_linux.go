@@ -7,6 +7,7 @@
 package sessions
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -31,6 +32,15 @@ import (
 // sessionGuardArg selects the session guard among the private reexec stages.
 const sessionGuardArg = "--session-guard-v1"
 
+// sessionGuardKillTreeArg selects the same guard with a typed cleanup outcome for
+// the engine, used only by one-shot worktree setup commands: every guard kills the
+// tree when its program exits, only this one reports whether it could.
+const sessionGuardKillTreeArg = "--session-guard-kill-tree-v1"
+
+// sessionGuardCleanupFailedCode reports unconfirmed setup cleanup. Its trusted
+// counterpart is the outcome byte, never this status alone or setup output.
+const sessionGuardCleanupFailedCode = 125
+
 // maxGuardFD bounds the descriptor number the guard is told: the engine passes a
 // handful of descriptors, never thousands.
 const maxGuardFD = 1024
@@ -50,24 +60,28 @@ const maxGuardFD = 1024
 // host), and by the kernel's rules its init drops SIGTERM from outside, so a
 // graceful Stop would turn into SIGKILL.
 //
-// Limits: the guard covers the session while the program it started runs. After
-// that program exits the guard exits, and what the program left running is out of
-// its reach, as it was before (a dev server may outlive the tool). A Stop that has
-// to escalate kills the process group, the guard with it, so a process that left
-// the group with setsid survives that Stop. A process in uninterruptible sleep
-// cannot be killed until it wakes; the guard gives up on it after about ten seconds.
+// The guard covers the session to its end: when the program it started exits —
+// the tool finishing, or a stop's signal reaching it — the guard kills every
+// remaining descendant before it exits, so a command the session left running
+// in the background ends with the session even after it left the process group
+// with setsid. A stop that has to escalate closes the guard's watch instead of
+// killing the group: the guard then kills the whole tree rather than dying with
+// it. What the guard cannot kill it says plainly on the diagnostic stream. A
+// process in uninterruptible sleep cannot be killed until it wakes; the guard
+// gives up on it after about ten seconds. A guard whose wait itself fails has no
+// child left to wait for and ends without the pass.
 
-// engineWatch is the engine's side of the guard's pipe. read goes to the guard
-// and is closed here once the guard has started; hold stays open for the
-// session's life, and the engine's death is what closes it.
-type engineWatch struct{ read, hold *os.File }
+// engineWatch is the engine's side of the guard's pipes. read and hold watch the
+// engine's lifetime. outcomeRead receives the setup tree's typed cleanup outcome;
+// outcomeWrite is the guard's end, closed here once the guard has started.
+type engineWatch struct{ read, hold, outcomeRead, outcomeWrite *os.File }
 
 // watchEngine puts the guard in front of cmd and returns the pipe's engine side.
 // It runs last, after the confinement and network stages have rewritten cmd, so
 // the guard is the process the engine starts and the stages below it are unchanged.
 // The guard replaces the parent-death signal on the process the engine starts: a
 // guard that is killed with the engine cannot kill the tree.
-func watchEngine(cmd *exec.Cmd) (*engineWatch, error) {
+func watchEngine(cmd *exec.Cmd, killTreeOnExit bool) (*engineWatch, error) {
 	// What Start would have reported for a program that cannot run, now that the
 	// process the engine starts is the guard and always can.
 	if cmd.Err != nil {
@@ -97,32 +111,67 @@ func watchEngine(cmd *exec.Cmd) (*engineWatch, error) {
 	if err != nil {
 		return nil, fmt.Errorf("sessions: session guard pipe: %w", err)
 	}
+	var outcomeRead, outcomeWrite *os.File
+	if killTreeOnExit {
+		outcomeRead, outcomeWrite, err = os.Pipe()
+		if err != nil {
+			_ = read.Close()
+			_ = hold.Close()
+			return nil, fmt.Errorf("sessions: setup guard outcome pipe: %w", err)
+		}
+	}
 	argv := cmd.Args
 	if len(argv) == 0 {
 		argv = []string{cmd.Path}
 	}
 	fd := 3 + len(cmd.ExtraFiles)
 	cmd.ExtraFiles = append(cmd.ExtraFiles, read)
-	cmd.Args = append([]string{self, confine.HelperArg, sessionGuardArg, strconv.Itoa(fd), cmd.Path, "--"}, argv...)
+	stage := sessionGuardArg
+	guardArgs := []string{self, confine.HelperArg, stage, strconv.Itoa(fd), cmd.Path, "--"}
+	if killTreeOnExit {
+		stage = sessionGuardKillTreeArg
+		cmd.ExtraFiles = append(cmd.ExtraFiles, outcomeWrite)
+		guardArgs = []string{self, confine.HelperArg, stage, strconv.Itoa(fd), strconv.Itoa(fd + 1), cmd.Path, "--"}
+	}
+	cmd.Args = append(guardArgs, argv...)
 	cmd.Path = self
 	if cmd.SysProcAttr != nil {
 		cmd.SysProcAttr.Pdeathsig = 0
 	}
-	return &engineWatch{read: read, hold: hold}, nil
+	return &engineWatch{read: read, hold: hold, outcomeRead: outcomeRead, outcomeWrite: outcomeWrite}, nil
 }
 
 // started closes the engine's copy of the guard's end once the guard has it.
 func (w *engineWatch) started() {
 	if w != nil {
 		_ = w.read.Close()
+		_ = w.outcomeWrite.Close()
+	}
+}
+
+// guardOutcome is the engine's read end of the setup's typed outcome channel.
+func (w *engineWatch) guardOutcome() *os.File {
+	if w == nil {
+		return nil
+	}
+	return w.outcomeRead
+}
+
+// endLifetime closes only the lifetime watch. The outcome reader stays open until
+// the process waiter collects the guard's verdict.
+func (w *engineWatch) endLifetime() {
+	if w != nil {
+		_ = w.read.Close()
+		_ = w.hold.Close()
 	}
 }
 
 // close ends the watch: with the guard gone nothing reads the pipe any more.
 func (w *engineWatch) close() {
+	w.endLifetime()
 	if w != nil {
-		_ = w.read.Close()
-		_ = w.hold.Close()
+		_ = w.outcomeRead.Close()
+		_ = w.outcomeWrite.Close()
 	}
 }
 
@@ -137,14 +186,20 @@ func (w *engineWatch) with(release func()) func() {
 
 // handlesSessionGuard reports whether args select the guard stage.
 func handlesSessionGuard(args []string) bool {
-	return len(args) > 0 && args[0] == sessionGuardArg
+	return len(args) > 0 && (args[0] == sessionGuardArg || args[0] == sessionGuardKillTreeArg)
 }
 
-// runSessionGuard is the guard stage: args are the stage's flag, the descriptor
-// of the pipe, the program's path, "--" and the program's argv. It returns the
-// program's exit code, or ends by the signal that ended the program.
+// runSessionGuard is the guard stage: args are the stage's flag, the lifetime
+// descriptor, the program's path, "--" and the program's argv. Setup adds an
+// outcome descriptor after the lifetime descriptor. It returns the program's exit
+// code, or ends by the signal that ended the program.
 func runSessionGuard(args []string) int {
-	if len(args) < 5 || args[3] != "--" {
+	killOnExit := len(args) > 0 && args[0] == sessionGuardKillTreeArg
+	if killOnExit {
+		if len(args) < 6 || args[4] != "--" {
+			return guardFailed("malformed setup arguments")
+		}
+	} else if len(args) < 5 || args[3] != "--" {
 		return guardFailed("malformed arguments")
 	}
 	fd, err := strconv.Atoi(args[1])
@@ -152,6 +207,16 @@ func runSessionGuard(args []string) int {
 		return guardFailed("bad descriptor " + strconv.Quote(args[1]))
 	}
 	path, argv := args[2], args[4:]
+	var outcome *os.File
+	if killOnExit {
+		outcomeFD, err := strconv.Atoi(args[2])
+		if err != nil || outcomeFD < 3 || outcomeFD > maxGuardFD {
+			return guardFailed("bad setup outcome descriptor " + strconv.Quote(args[2]))
+		}
+		outcome = os.NewFile(uintptr(outcomeFD), "session-guard-outcome")
+		unix.CloseOnExec(outcomeFD)
+		path, argv = args[3], args[5:]
+	}
 	// Pdeathsig fires when the thread that forked the child exits: stay on this one.
 	runtime.LockOSThread()
 	engine := os.NewFile(uintptr(fd), "session-guard-engine")
@@ -185,6 +250,9 @@ func runSessionGuard(args []string) int {
 			return
 		}
 		engineGone.Store(true)
+		if killOnExit {
+			os.Exit(endSetupTree(outcome))
+		}
 		os.Exit(endTree())
 	}()
 	for {
@@ -194,6 +262,10 @@ func runSessionGuard(args []string) int {
 			continue
 		}
 		if err != nil {
+			if killOnExit {
+				fmt.Fprintln(os.Stderr, "olivares: session guard: wait:", err)
+				return endSetupTree(outcome)
+			}
 			return guardFailed("wait: " + err.Error())
 		}
 		if pid != child {
@@ -202,6 +274,36 @@ func runSessionGuard(args []string) int {
 		// The program ended while the engine died: the tree is still to be killed.
 		if engineGone.Load() || engineClosed(fd) {
 			select {} // endTree ends the guard when it is done
+		}
+		// The session is over: what it started ends with it. A command the tool
+		// left running in the background is the guard's child by the subreaper,
+		// whatever process group it left for, so this pass reaches what a stop's
+		// group signal cannot.
+		survivors, err := killTree(os.Getpid())
+		if killOnExit {
+			failed := err != nil || survivors > 0
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "olivares: session guard: cannot list the setup's processes:", err)
+			}
+			if survivors > 0 {
+				fmt.Fprintf(os.Stderr, "olivares: session guard: %d setup processes could not be killed\n", survivors)
+			}
+			reportSessionGuardOutcome(outcome, failed)
+			if failed {
+				return sessionGuardCleanupFailedCode
+			}
+		} else {
+			// Unlike endTree, which has only the group left to signal, a program that
+			// ended by itself keeps its own exit status: the group kill would take this
+			// guard with it and turn that status into SIGKILL. So when the tree cannot be
+			// fully listed the guard kills what it did list, says what it could not on its
+			// stderr, the session's diagnostic output, and a later Stop still ends the group's members.
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "olivares: session guard: cannot list the session's processes, what it left running may still run:", err)
+			}
+			if survivors > 0 {
+				fmt.Fprintf(os.Stderr, "olivares: session guard: %d processes of the session could not be killed\n", survivors)
+			}
 		}
 		if status.Signaled() {
 			return egress.DieOfSignal(status.Signal())
@@ -245,12 +347,42 @@ func endTree() int {
 	case err != nil:
 		// Without /proc the tree cannot be listed. The group is all that is left to
 		// signal, and it holds the guard too.
-		fmt.Fprintln(os.Stderr, "olivares: session guard: cannot list the session's processes, killing its process group:", err)
+		fmt.Fprintln(os.Stderr, "olivares: session guard: cannot list the session's processes, killing its process group; what left the group may still run:", err)
 		_ = syscall.Kill(-os.Getpid(), syscall.SIGKILL)
 	case survivors > 0:
 		fmt.Fprintf(os.Stderr, "olivares: session guard: %d processes of the session could not be killed\n", survivors)
 	}
+	// End by SIGKILL, as the group kill this replaces did: the engine reads a forced
+	// end as killed, not as the tool's own failure.
+	return egress.DieOfSignal(syscall.SIGKILL)
+}
+
+// endSetupTree is endTree for a one-shot setup: its typed outcome reaches the
+// engine even when cancellation was the reason the guard ended.
+func endSetupTree(outcome *os.File) int {
+	survivors, err := killTree(os.Getpid())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "olivares: session guard: cannot list the setup's processes:", err)
+	}
+	if survivors > 0 {
+		fmt.Fprintf(os.Stderr, "olivares: session guard: %d setup processes could not be killed\n", survivors)
+	}
+	reportSessionGuardOutcome(outcome, err != nil || survivors > 0)
 	return 1
+}
+
+// reportSessionGuardOutcome writes one trusted byte: 0 means the setup tree is
+// empty, 1 means cleanup is unconfirmed. Setup output is never this channel.
+func reportSessionGuardOutcome(outcome *os.File, failed bool) {
+	if outcome == nil {
+		return
+	}
+	status := byte(0)
+	if failed {
+		status = 1
+	}
+	_, _ = outcome.Write([]byte{status})
+	_ = outcome.Close()
 }
 
 // dropCapabilities gives up what the guard holds after the program has started
@@ -277,23 +409,120 @@ func dropCapabilities() {
 // and the next one that kills theirs end it. A process with SIGKILL pending cannot
 // finish a fork, so a pass that finds none is the end.
 func killTree(guard int) (survivors int, err error) {
+	return killTreeAt("/proc", guard)
+}
+
+// killPassPause is the wait between two kill passes, long enough for a killed
+// process to die and hand its children to the guard. A variable so a test can
+// widen the window it changes the listing in.
+var killPassPause = 5 * time.Millisecond
+
+// killTreeAt is killTree at a procfs root. A pass kills every child it lists before
+// it looks at the error: a child whose state cannot be read is still killed, and
+// the error says the tree could not be proven empty. Such a child cannot be told
+// from a zombie, so it is signalled once and the passes go on until one finds
+// nothing new to kill: what it had started is the guard's child by then.
+func killTreeAt(procfs string, guard int) (survivors int, err error) {
+	signalled := map[int]bool{}
+	var unread error
 	for range 2000 {
-		live, err := liveChildren(guard)
-		if err != nil || len(live) == 0 {
-			return 0, err
+		live, err := liveChildrenAt(procfs, guard)
+		if unread == nil {
+			unread = err
 		}
+		fresh := false
 		for _, pid := range live {
+			fresh = fresh || !signalled[pid]
+			signalled[pid] = true
 			_ = syscall.Kill(pid, syscall.SIGKILL) // ESRCH: gone already; anything else shows as a survivor
 		}
-		time.Sleep(5 * time.Millisecond)
+		if len(live) == 0 || (err != nil && !fresh) {
+			return 0, unread
+		}
+		time.Sleep(killPassPause)
 	}
-	live, err := liveChildren(guard)
+	live, err := liveChildrenAt(procfs, guard)
+	if err == nil {
+		err = unread
+	}
 	return len(live), err
 }
 
-// liveChildren lists the children of pid that are not zombies, from /proc.
-func liveChildren(pid int) ([]int, error) {
-	entries, err := os.ReadDir("/proc")
+// liveChildrenAt lists the children of pid that are not zombies, from the procfs
+// at root. The kernel keeps the list of a process's children in its own /proc
+// entry (one file per thread), so the guard reads only what it needs: under
+// SELinux the engine may read the state of its tool's and commands' domains and no
+// other, and a walk of every pid died at the first process of anyone else. A
+// kernel without that file (CONFIG_PROC_CHILDREN) gets the walk. Only a process
+// that vanished between the listing and its stat read is ignored; every other
+// failure is an error, never evidence that the tree is empty. A listed child whose
+// state cannot be read stays in the list with the error, so a kill pass can still
+// end it.
+func liveChildrenAt(procfs string, pid int) ([]int, error) {
+	kids, ok, err := listedChildren(procfs, pid)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return scannedChildren(procfs, pid)
+	}
+	var out []int
+	var unread error
+	for _, child := range kids {
+		state, _, err := processState(procfs, child)
+		if err != nil {
+			out = append(out, child) // state unknown: kill it, and say it could not be read
+			if unread == nil {
+				unread = err
+			}
+			continue
+		}
+		if isLive(state) {
+			out = append(out, child)
+		}
+	}
+	return out, unread
+}
+
+// listedChildren reads pid's children from /proc/<pid>/task/<tid>/children, each
+// thread's own list: an orphan of the session goes to the guard's thread the
+// kernel picks, not always the one that forked. ok is false when no thread has the
+// file, as on a kernel built without it.
+func listedChildren(procfs string, pid int) (kids []int, ok bool, err error) {
+	taskDir := filepath.Join(procfs, strconv.Itoa(pid), "task")
+	tasks, err := os.ReadDir(taskDir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	for _, task := range tasks {
+		raw, err := os.ReadFile(filepath.Join(taskDir, task.Name(), "children"))
+		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ESRCH) {
+			continue // no such file here, or the thread ended since the listing
+		}
+		if err != nil {
+			return nil, false, fmt.Errorf("read the children of process %d: %w", pid, err)
+		}
+		ok = true
+		for _, field := range strings.Fields(string(raw)) {
+			child, err := strconv.Atoi(field)
+			if err != nil {
+				return nil, false, fmt.Errorf("parse the children of process %d: %w", pid, err)
+			}
+			kids = append(kids, child)
+		}
+	}
+	return kids, ok, nil
+}
+
+// scannedChildren is liveChildrenAt without the kernel's list: every process's
+// parent, read from its stat. A record it cannot read leaves it unable to say whose
+// child that process is, so it returns the error and lists nothing, and the pass
+// kills nothing: only a kernel without CONFIG_PROC_CHILDREN reaches this.
+func scannedChildren(procfs string, pid int) ([]int, error) {
+	entries, err := os.ReadDir(procfs)
 	if err != nil {
 		return nil, err
 	}
@@ -303,24 +532,45 @@ func liveChildren(pid int) ([]int, error) {
 		if err != nil {
 			continue
 		}
-		stat, err := os.ReadFile("/proc/" + e.Name() + "/stat")
+		state, ppid, err := processState(procfs, child)
 		if err != nil {
-			continue
+			return nil, err
 		}
-		// "pid (comm) S ppid ...": comm may hold spaces and parentheses, so cut at the last ')'.
-		i := strings.LastIndexByte(string(stat), ')')
-		if i < 0 {
-			continue
-		}
-		fields := strings.Fields(string(stat[i+1:]))
-		if len(fields) < 2 || fields[0] == "Z" || fields[0] == "X" {
-			continue
-		}
-		if ppid, err := strconv.Atoi(fields[1]); err == nil && ppid == pid {
+		if isLive(state) && ppid == pid {
 			out = append(out, child)
 		}
 	}
 	return out, nil
+}
+
+// isLive reports whether a state letter from processState is a process that still
+// runs: not vanished, not a zombie, not dead.
+func isLive(state string) bool { return state != "" && state != "Z" && state != "X" }
+
+// processState reads a process's state letter and parent from /proc/<pid>/stat.
+// An empty state means the process vanished between the listing and this read.
+func processState(procfs string, pid int) (state string, ppid int, err error) {
+	stat, err := os.ReadFile(filepath.Join(procfs, strconv.Itoa(pid), "stat"))
+	if err != nil {
+		if os.IsNotExist(err) || errors.Is(err, syscall.ESRCH) {
+			return "", 0, nil
+		}
+		return "", 0, fmt.Errorf("read process %d stat: %w", pid, err)
+	}
+	// "pid (comm) S ppid ...": comm may hold spaces and parentheses, so cut at the last ')'.
+	i := strings.LastIndexByte(string(stat), ')')
+	if i < 0 {
+		return "", 0, fmt.Errorf("parse process %d stat", pid)
+	}
+	fields := strings.Fields(string(stat[i+1:]))
+	if len(fields) < 2 {
+		return "", 0, fmt.Errorf("parse process %d stat", pid)
+	}
+	ppid, err = strconv.Atoi(fields[1])
+	if err != nil {
+		return "", 0, fmt.Errorf("parse process %d parent: %w", pid, err)
+	}
+	return fields[0], ppid, nil
 }
 
 // isSessionGuard reports whether pid is a session guard, from its argument vector.
@@ -330,5 +580,5 @@ func isSessionGuard(procfs string, pid int) bool {
 		return false
 	}
 	args := strings.Split(string(raw), "\x00")
-	return len(args) > 2 && args[1] == confine.HelperArg && args[2] == sessionGuardArg
+	return len(args) > 2 && args[1] == confine.HelperArg && (args[2] == sessionGuardArg || args[2] == sessionGuardKillTreeArg)
 }

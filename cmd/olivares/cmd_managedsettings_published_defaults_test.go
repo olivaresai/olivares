@@ -25,6 +25,9 @@ func TestManagedSettingsOmittedFlagsMatchPublished26100Bytes(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("published omitted-flag invocation failed: %v", err)
 	}
+	// the regression: the one change since 26.10.0 is the deny-closed suffix after each hook
+	// command; every other byte is the published output.
+	want = bytes.ReplaceAll(want, []byte(`"command": "olivares claude-hook"`), []byte(`"command": "olivares claude-hook || exit 2"`))
 	if !bytes.Equal(out.Bytes(), want) {
 		t.Fatalf("published omitted-flag bytes changed:\nwant:\n%s\ngot:\n%s", want, out.Bytes())
 	}

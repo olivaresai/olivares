@@ -40,6 +40,7 @@
   "retryIn": "{{seconds}} 秒後に再試行できます。",
   "signIn": "比較するにはサインインしてください。",
   "diffLabel": "{{path}} の統一差分",
+  "diffLabelRich": "<path /> の統一差分",
   "colOld": "旧",
   "colNew": "新",
   "colChange": "変更",

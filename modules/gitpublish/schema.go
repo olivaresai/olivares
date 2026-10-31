@@ -73,6 +73,10 @@ const (
 	reasonObservationAt      = "an RFC 3339 UTC instant written as a time: records.go:319, records.go:129-134"
 	reasonProposalRun        = "the session run whose approved proposal the intent carries out, a validated run id, only checked for presence, rendered and audited: publish.go:62-68, publish.go:585-600, audit.go:43"
 	reasonProposalApproval   = "the governance approval id the proposal spent, matched against the operation alphabet and only rendered and audited: publish.go:62-68, audit.go:43, routes.go:202"
+	reasonCommentState       = "a run result from a closed set, rendered in the external comment: comments.go:38-41, comments.go:72"
+	reasonPullRequestURL     = "an optional HTTPS pull-request URL bound to the approved repository, rendered in the external comment: publish.go:329, comments.go:73-74"
+	reasonObservedCommentID  = "a host issue-comment id read from the host, recorded as observation evidence and rendered only: publish.go:1040, routes.go:253"
+	reasonObservedCommentURL = "a host issue-comment URL returned for evidence, never fetched by the module: records.go:224, routes.go:253"
 )
 
 func none(reason string) *model.ColumnDecl { return model.None(reason) }
@@ -93,7 +97,10 @@ func nullText(name, reason string) model.FieldSpec {
 	return f
 }
 
-func intField(name string) model.FieldSpec  { return model.FieldSpec{Name: name, Kind: model.KindInt} }
+func intField(name string) model.FieldSpec { return model.FieldSpec{Name: name, Kind: model.KindInt} }
+func nullIntField(name string) model.FieldSpec {
+	return model.FieldSpec{Name: name, Kind: model.KindInt, Nullable: true}
+}
 func boolField(name string) model.FieldSpec { return model.FieldSpec{Name: name, Kind: model.KindBool} }
 
 func lineage() model.WorkspaceLineageSpec {
@@ -157,6 +164,11 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		// existing table.
 		nullText("proposal_session_run", reasonProposalRun),
 		nullText("proposal_approval", reasonProposalApproval),
+		nullText("req_comment_state", reasonCommentState),
+		nullText("req_pull_request_url", reasonPullRequestURL),
+		nullIntField("req_cost_micro_usd"),
+		nullText("obs_comment_id", reasonObservedCommentID),
+		nullText("obs_comment_url", reasonObservedCommentURL),
 	}
 	if err := reg.Register(model.EntityDescriptor{
 		Kind:   kindIntent,

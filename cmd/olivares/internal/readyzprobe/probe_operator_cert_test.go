@@ -93,7 +93,7 @@ func anchorFile(t *testing.T, cert tls.Certificate) string {
 }
 
 // The shipped Compose healthcheck probes 127.0.0.1 and trusts the certificate the
-// engine serves. An operator certificate for the host address (dev#2763) has no
+// engine serves. An operator certificate for the host address has no
 // loopback name, and the container stayed unhealthy on a hostname mismatch.
 func TestCheckTrustsAnOperatorCertificateThatDoesNotNameLoopback(t *testing.T) {
 	for _, tc := range []struct{ name, dns string }{

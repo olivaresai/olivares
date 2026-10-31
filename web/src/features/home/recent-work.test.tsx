@@ -117,6 +117,19 @@ describe('sessionNameLadder — one ladder for every surface', () => {
     ).toEqual({ text: 'deploy-api', from: 'run' })
   })
 
+  it('the title the engine cut sits under the name and over the live sentence', () => {
+    expect(
+      sessionNameLadder(null, row({ summary: 'S' }), 'U', 'Fix the login bug'),
+    ).toEqual({ text: 'Fix the login bug', from: 'title' })
+    expect(
+      sessionNameLadder('deploy-api', null, 'U', 'Fix the login bug'),
+    ).toEqual({ text: 'deploy-api', from: 'run' })
+    // A blank title is no title.
+    expect(sessionNameLadder(null, row({ goal: 'G' }), 'U', '  ').from).toBe(
+      'goal',
+    )
+  })
+
   it('then the front door\u2019s own rungs, in its own order', () => {
     expect(
       sessionNameLadder(null, row({ summary: 'S', goal: 'G' }), 'U'),
@@ -177,7 +190,7 @@ describe('RecentWork', () => {
   it('uses the singular form for one tool call', () => {
     // i18next falls back to `_other` when the category is missing, which is how
     // "1 open incidents" shipped once already (features/shared/i18n-plurals.test.ts).
-    // Equal counts say the tool calls only (dev#3120), so each singular has its own row.
+    // Equal counts say the tool calls only, so each singular has its own row.
     const calls = renderIntel(
       <RecentWork
         sessions={asSessions([row({ tool_call_count: 1, event_count: 2 })])}

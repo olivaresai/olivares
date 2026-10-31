@@ -40,6 +40,7 @@
   "retryIn": "{{seconds}}초 후 다시 시도하십시오.",
   "signIn": "비교하려면 로그인하십시오.",
   "diffLabel": "{{path}}의 통합 차이",
+  "diffLabelRich": "<path />의 통합 차이",
   "colOld": "이전",
   "colNew": "새",
   "colChange": "변경",

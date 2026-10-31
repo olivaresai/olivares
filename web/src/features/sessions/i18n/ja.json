@@ -1,4 +1,13 @@
 {
+  "compact": {
+    "context": "コンテキスト",
+    "now": "今すぐ圧縮",
+    "beforeSend": "送信前に圧縮",
+    "working": "圧縮中…",
+    "hint": "以前のやり取りを要約してコンテキストを空けます。圧縮が確認されるまで下書きは保持されます。",
+    "unavailable": "セッションが待機中で、ツールがネイティブ圧縮に対応している場合に利用できます。",
+    "failed": "圧縮を確認できませんでした。メッセージは送信されていません。"
+  },
   "git": {
     "title": "Git",
     "branch": "ブランチ",
@@ -304,16 +313,17 @@
     "currentSession": "現在のセッション",
     "besideSession": "隣のセッション",
     "switchSession": "セッションを切り替える",
-    "closeContext": "コンテキストを閉じる",
+    "details": "セッションの詳細",
+    "closeContext": "詳細を閉じる",
     "backTo": "{{pane}} に戻る",
     "pane": {
       "rail": "セッション",
       "narrative": "作業",
-      "context": "コンテキスト"
+      "context": "詳細"
     },
     "resize": {
       "rail": "セッション一覧の幅を変更",
-      "context": "コンテキストパネルの幅を変更",
+      "context": "詳細パネルの幅を変更",
       "beside": "隣のセッションの幅を変更"
     }
   },
@@ -348,7 +358,9 @@
     "planNotRead": "プランの使用枠を読み取れませんでした",
     "resets": "{{when}}にリセット ({{at}})",
     "stale": "最終確認値",
-    "readAt": "{{at}} に読み取り"
+    "readAt": "{{at}} に読み取り",
+    "permission": "{{name}}：{{what}}",
+    "full": "フルアクセス: 確認なしで実行され、<policy>Olivares のポリシー</policy>で制限されます"
   },
   "evidence": {
     "checks": {
@@ -425,7 +437,7 @@
       "worker": "ワーカー",
       "orchestrator": "オーケストレーター"
     },
-    "details": "詳細",
+    "details": "参照",
     "echoes": "別チャネルの記録",
     "folder": "フォルダー",
     "temporaryFolder": "このセッションの一時フォルダー",
@@ -437,12 +449,29 @@
     "noChanges": "このセッションは Olivares が開始していないため、表示できる変更はありません。",
     "filesUnavailable": "このフォルダーは参照できません。",
     "filesNoAccess": "このフォルダーを参照する権限がありません。",
-    "filesFailed": "フォルダーを読み込めませんでした。"
+    "filesFailed": "フォルダーを読み込めませんでした。",
+    "facts": {
+      "title": "セッション",
+      "state": "状態",
+      "workspace": "ワークスペース",
+      "tool": "ツール",
+      "account": "アカウント",
+      "model": "モデル",
+      "access": "アクセス",
+      "cost": "コスト"
+    },
+    "usage": {
+      "title": "アカウントの使用量",
+      "fiveHour": "5時間の{{percent}}%",
+      "week": "週の{{percent}}%"
+    }
   },
   "conversation": {
     "log": "会話",
     "waiting": "セッションを待っています…",
     "empty": "まだメッセージはありません。",
+    "earlier": "以前の出力を表示",
+    "earlierFailed": "以前の出力を読み込めませんでした。",
     "ended": "セッションは終了しました。",
     "lag_other": "{{count}} フレームが欠落しました。以降の出力は欠落の後から再開します。",
     "tool": "ツール",
@@ -468,8 +497,8 @@
     "started": "セッションを開始しました",
     "startedTools_other": "ツール {{count}} 件",
     "notSent": "送信されませんでした: {{reason}}",
-    "waitingApproval": "起動が承認されセッションが開始すると送信されます。",
-    "workingFolder": "作業フォルダー: {{cwd}}",
+    "waitingApproval": "セッションの準備ができると送信されます。",
+    "workingFolder": "作業フォルダー: <path />",
     "temporaryFolder": "作業フォルダー: このセッションの一時フォルダー",
     "workedFor": "{{duration}} 作業",
     "modelChanged": "モデルが変わりました: {{from}} → {{to}}",
@@ -497,8 +526,11 @@
     "running": {
       "command_other": "シェルコマンドを {{count}} 件実行中",
       "edit": "{{target}} を編集中",
+      "editPath": "<path/> を編集中",
       "read": "{{target}} を読み取り中",
+      "readPath": "<path/> を読み取り中",
       "search": "{{target}} を検索中",
+      "searchPath": "<lead/><path/> を検索中",
       "agent": "{{name}} が作業中",
       "tool": "{{tool}} を実行中"
     },
@@ -515,6 +547,14 @@
         "extra": "追加使用の上限",
         "usage": "使用上限"
       }
+    },
+    "card": {
+      "question": "質問",
+      "plan": "提案されたプラン",
+      "todos": "ToDoリスト（{{total}}件中{{done}}件完了）",
+      "send": "回答を送信",
+      "answered": "回答を送信しました: {{answer}}",
+      "sendFailed": "回答を送信できませんでした。"
     }
   },
   "changes": {
@@ -563,6 +603,22 @@
       "added": "追加",
       "modified": "変更",
       "deleted": "削除"
+    },
+    "comment": {
+      "title": "行にコメントする",
+      "line": "行",
+      "version": "バージョン",
+      "text": "コメント",
+      "send": "セッションに送信",
+      "sent": "コメントをセッションに送信しました。",
+      "failed": "コメントを送信できませんでした。しばらくしてからもう一度お試しください。",
+      "notLive": "コメントを送信するには、セッションを再開してください。",
+      "noPermission": "コメントを送信するには、セッションへの書き込み権限が必要です。",
+      "needLine": "行を選んでください。行番号をクリックするか、番号を入力します。",
+      "noSuchLine": "ファイルには{{version}}の{{line}}行目がありません。",
+      "empty": "コメントを入力してください。",
+      "atBase": "開始時点",
+      "atTip": "ブランチの先端"
     }
   },
   "peers": {
@@ -682,6 +738,13 @@
     "unreadable": "トランスクリプトの {{n}} 件のレコードを読み取れませんでした。"
   },
   "limit": {
+    "settingsSaved": "自動再開の設定を保存しました。",
+    "resumeAtReset": "リセット時に再開",
+    "snoozeUntilReset": "リセットまで非表示",
+    "automatic": "上限のリセット時に自動的に再開",
+    "resumes": "{{time}} に再開",
+    "cancel": "キャンセル",
+    "cancelled": "予約した再開をキャンセルしました。",
     "usageUntil": "{{time}}まで利用枠を使い切りました",
     "usage": "利用枠を使い切りました",
     "rate": "プロバイダーがリクエストを制限しています。少し待ってからもう一度お試しください。"
@@ -692,6 +755,10 @@
   },
   "rowActions": {
     "rename": "名前を変更…",
+    "regenerateTitle": "タイトルを再生成",
+    "titleShort": "短い",
+    "titleSentence": "標準",
+    "titleLong": "長い",
     "renameTitle": "セッション名を変更",
     "renameDescription": "名前はサーバーに保存され、このセッションが表示されるすべての場所に表示されます。空にすると Olivares が付ける名前に戻ります。",
     "renameLabel": "名前",
@@ -713,6 +780,52 @@
     "copiedPartial": "コピーしました。トランスクリプトのうち {{n}} 件のレコードは読み取れなかったため含まれていません。",
     "clipped": "64 KiB を超えるメッセージはコピーで切り詰められ、末尾に [...] が付いています。",
     "noWholeText": "エンジンが各メッセージの最初の行しか送らなかったため、トランスクリプトはコピーしませんでした。",
-    "transcriptChanged": "コピー中にトランスクリプトが変わりました。もう一度お試しください。"
+    "transcriptChanged": "コピー中にトランスクリプトが変わりました。もう一度お試しください。",
+    "undo": "元に戻す"
+  },
+  "approval": {
+    "declineSend": "拒否して送信",
+    "feedbackUnsupported": "このツールはフィードバックを受け取れません。返信は拒否とともに保存されます。",
+    "title": "承認が必要です",
+    "why": "理由",
+    "rule": "ルール",
+    "reach": "影響範囲",
+    "requestedBy": "依頼元",
+    "reachUnknown": "報告なし",
+    "notYours": "このリクエストは承認権限を持つ別の人が判断します。",
+    "approved": "承認済み",
+    "denied": "拒否済み",
+    "ended": "待機は終了しました",
+    "unreadable": "リクエストを読み込めませんでした。"
+  },
+  "terminal": {
+    "title": "ターミナル",
+    "hint": "このセッションのフォルダー内で動くシェルです。セッションと同じ制限がかかり、あなたとして実行されます。入力したコマンド行はすべて記録されます。",
+    "open": "ターミナルを開く",
+    "close": "閉じる",
+    "copy": "コピー",
+    "paste": "貼り付け",
+    "again": "新しいターミナルを開く",
+    "reconnecting": "再接続しています…",
+    "ended": "ターミナルが終了しました。",
+    "endedWith": "ターミナルが終了しました（終了コード {{code}}）。",
+    "input": "ターミナル入力",
+    "label": "ターミナル",
+    "noFolder": "このセッションにはフォルダーがないため、ターミナルを開けません。",
+    "unavailable": "セッションのフォルダーはここでは利用できないため、ターミナルを開けません。",
+    "problem": {
+      "step_up": "先に本人確認を行い、もう一度ターミナルを開いてください。",
+      "refused": "このフォルダーでターミナルを開く権限がありません。",
+      "busy": "開いているターミナルが多すぎます。先にどれかを閉じてください。",
+      "failed": "ターミナルを開けませんでした。しばらくしてからもう一度お試しください。"
+    },
+    "keys": {
+      "esc": "Esc",
+      "tab": "Tab",
+      "ctrlC": "Ctrl+C",
+      "up": "上",
+      "down": "下"
+    },
+    "closeLabel": "ターミナルを閉じる"
   }
 }

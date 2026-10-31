@@ -54,7 +54,7 @@ exec "$REAL_GO" "\$@"
 EOF
 printf '#!/usr/bin/env bash\nexit 0\n' >"$WORK/bin/gosec"
 chmod +x "$WORK/bin/gitleaks" "$WORK/bin/task" "$WORK/bin/go" "$WORK/bin/gosec"
-unset GOWORK GOFLAGS
+unset GOWORK GOFLAGS OLIVARES_MIGRATION_BASE
 export PATH="$WORK/bin:$PATH" PRE_PUSH_TEST_LOG="$WORK/gitleaks.log" PRE_PUSH_TEST_CALLS="$WORK/calls.log" \
 	PRE_PUSH_TEST_IDENTITY_ENV="$WORK/identity-env.log"
 
@@ -65,6 +65,14 @@ git config user.email t@example.invalid
 git config user.name test
 mkdir -p .githooks scripts/lib core
 cp "$ROOT/.githooks/pre-push" .githooks/
+# Record the command label through the same task-call probe used below.
+mkdir -p "$R/scripts"
+cat >"$R/scripts/hub-leg.sh" <<'EOF'
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+exec task "$1"
+EOF
 cp "$ROOT/scripts/check-spdx.sh" "$ROOT/scripts/changed-go-packages.sh" scripts/
 cp "$ROOT/scripts/check-web-bundle-freshness.sh" scripts/
 cp "$ROOT/scripts/lib/git-env.sh" scripts/lib/
@@ -265,7 +273,7 @@ check "it runs the export tests and then the identity leg" "$(calls)" \
 	"task lint:export-release,task lint:commit-identity"
 check "a failing export test refuses the push" "$(PRE_PUSH_TEST_TASK_RC=1 push origin "$exportchange" "$zero")" 1
 # The closure scan is the exporter tests' input: its NUL probe began to need wc and tr, and the
-# fixture they run it under had neither, so main went red (dev#2625) with no push check run.
+# fixture they run it under had neither, so main went red with no push check run.
 #
 # export-closure: absent-by-design scripts/check-export-closure.sh — fixture data, not a
 #   dependency: `good` writes an empty file of that name into this throwaway repository so the

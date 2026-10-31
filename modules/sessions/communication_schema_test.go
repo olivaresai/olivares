@@ -91,12 +91,23 @@ var providerProfileDescriptorKinds = map[model.Kind]string{
 	accountHomeOperationKind: accountHomeOperationTable,
 }
 
-// personalStateDescriptorKinds is the manifest of a person's own interface state: the
-// pins (#2130) and snooze and done marks (#2480) on operated sessions. Like B1 and K5 it is absent from the pre-K3
-// schema the upgrade tests reopen from, and a new kind must be listed here.
+// personalStateDescriptorKinds is the manifest of the state a person makes: their own
+// pins (#2130) and snooze and done marks (#2480) on operated sessions, the messages they
+// queue for a session's tool (#3125), and the share links
+// they make of a folder (written by Business only), and the run shares an owner makes with a
+// guest and the guest's proposals on them (collaboration storage, collaboration_schema.go), and
+// the browsers they registered to be told in by Web Push (#2840).
+// Like B1 and K5 it is absent from the pre-K3 schema the upgrade tests reopen from, and a new
+// kind must be listed here.
 var personalStateDescriptorKinds = map[model.Kind]string{
-	runPinKind:  runPinTable,
-	runMarkKind: runMarkTable,
+	limitResumeSettingsKind: "sessions_limit_resume_settings",
+	runPinKind:              runPinTable,
+	runMarkKind:             runMarkTable,
+	pushSubscriptionKind:    pushSubscriptionTable,
+	shareKind:               shareTable,
+	"sessions.share":        "sessions_share",
+	"sessions.proposal":     "sessions_proposal",
+	runQueueKind:            runQueueTable,
 }
 
 type communicationCapturedMigration struct {
@@ -366,6 +377,7 @@ func TestCommunicationSchemaRegistersNamespaceOnce(t *testing.T) {
 			// are within PostgreSQL's regular-expression repetition limit.
 			"0025_communication_token_bounds.sql",
 			"0026_provider_account_name_uniq.sql",
+			"0027_workspace_resources.sql",
 		},
 		"sqlite": communicationSQLiteMigrationNames(),
 	}
@@ -511,6 +523,7 @@ func communicationSQLiteMigrationNames() []string {
 		"0096_work_handoff_vacant_transfer_ins.sql",
 		"0097_work_handoff_vacant_transfer_upd.sql",
 		"0098_provider_account_name_uniq.sql",
+		"0099_workspace_resources.sql",
 	)
 }
 

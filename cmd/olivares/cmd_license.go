@@ -63,7 +63,9 @@ func licenseLongFor(business bool) string {
 // against this build's embedded key and writes <data-dir>/license.key (0600) — the
 // canonical at-rest license the engine reads by default. A running engine applies it
 // WITHOUT a restart (SIGHUP / POST /v1/console/runtime/reload / the console); it also
-// loads on the next start. It gates nothing (LICENSING.md).
+// loads on the next start. In the Business build the license turns on the commercial
+// capabilities its grants include (LICENSING.md); in the Community build it is stored for an
+// in-place swap.
 func licenseInstallCmd() *cobra.Command {
 	var dataDir, pubB64 string
 	var force bool
@@ -74,9 +76,9 @@ func licenseInstallCmd() *cobra.Command {
 		Long: "install verifies a signed license against this deployment's license trust (the key embedded in this\n" +
 			"build plus <data-dir>/" + licenseTrustFileName + ", see `license trust`) and persists it to\n" +
 			"<data-dir>/" + licenseFileName + " (mode 0600) — the canonical at-rest license the engine reads by\n" +
-			"default. Pass a file path, or - to read the blob from stdin. It gates NO feature (LICENSING.md): in\n" +
-			"the community build it stores the attestation ready for an in-place swap to the Business edition;\n" +
-			"in the Business edition it entitles the commercial add-ons. It never caps user accounts: self-\n" +
+			"default. Pass a file path, or - to read the blob from stdin. In the Business build the license turns\n" +
+			"on the commercial capabilities its grants include (LICENSING.md); in the community build it is\n" +
+			"stored, ready for an in-place swap to the Business edition. It never caps user accounts: self-\n" +
 			"hosted users are unlimited in every tier. Apply to a RUNNING engine with no\n" +
 			"restart via `kill -HUP <pid>`, POST /v1/console/runtime/reload, or the console.\n\n" +
 			"Installing over an existing license REPLACES it, atomically, and says which one it replaced.\n" +
@@ -159,6 +161,9 @@ func licenseInstallCmd() *cobra.Command {
 			// previous license to make room for the new one.
 			if err := writeKeyFile(path, []byte(blob+"\n"), 0o600, true, "the installed license"); err != nil {
 				return fmt.Errorf("write license: %w", err)
+			}
+			if err := notifyLicenseChanged(dir); err != nil {
+				return err
 			}
 			now := time.Now().UTC()
 			status := lic.Status(now)
@@ -319,6 +324,9 @@ func licenseUninstallCmd() *cobra.Command {
 			}
 			if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return fmt.Errorf("remove license %q: %w", path, err)
+			}
+			if err := notifyLicenseChanged(dir); err != nil {
+				return err
 			}
 			report := map[string]any{"removed": true, "path": path}
 			if describing != "" {

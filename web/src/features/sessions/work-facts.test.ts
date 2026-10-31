@@ -20,7 +20,7 @@ function live(over: Partial<LiveDTO>): LiveDTO {
   } as LiveDTO
 }
 
-describe('workFacts (dev#3120)', () => {
+describe('workFacts', () => {
   it('says the events only when they are not the tool calls again', () => {
     // 0.3 read "188 tool calls · 188 events": the second figure added nothing.
     expect(

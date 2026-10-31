@@ -1,13 +1,15 @@
 {
-  "title": "Models & providers",
-  "description": "The governed model estate — declared capabilities and pricing, routing policy, and provider key references. Secrets are never shown; only masked references.",
+  "title": "Models",
+  "description": "Models your tools and providers can run now, the sessions using them, and model governance.",
   "tabs": {
+    "available": "Available",
     "catalog": "Catalog",
     "estate": "Estate",
     "routing": "Routing",
     "keys": "Provider keys",
     "gpai": "GPAI posture",
-    "access": "Access"
+    "access": "Access",
+    "governance": "Governance"
   },
   "catalog": {
     "title": "Capability matrix",
@@ -271,5 +273,59 @@
     "truncatedHint": "There are more access rules than shown; this page takes rows by id. The marks on these rows reflect ONLY the loaded rules: allows that would introduce confinement or add permitted targets may be missing, and forbids that subtract access may be missing too — so this page can read wider OR narrower than reality, and a subject with no loaded rule does not appear at all. Do not infer effective access from it: the engine drains every page before deciding, and it resolves a principal across user, role and group, which a row cannot show.",
     "groupsTruncated": "Loaded {{n}} groups; there are more",
     "groupsTruncatedHint": "There are more model groups than shown; this page takes rows by id. A group not listed here does not demonstrate that it does not exist — a rule may still target it."
+  },
+  "available": {
+    "title": "Available now",
+    "description": "The models your tools and providers can run right now, and the sessions using them.",
+    "columns": {
+      "model": "Model",
+      "runsOn": "Tool or provider",
+      "source": "Source",
+      "state": "State",
+      "sessions": "Sessions"
+    },
+    "source": {
+      "tool": "Live list of the tool",
+      "ollama": "Installed in Ollama",
+      "providerList": "Model list of the provider",
+      "provider": "API provider",
+      "session": "Live session"
+    },
+    "state": {
+      "ready": "Ready",
+      "checkingModels": "Checking models",
+      "stopped": "Ollama stopped",
+      "unlisted": "Does not list its models",
+      "listsNone": "Lists no models",
+      "failed": "List unavailable",
+      "starting": "Ollama starting",
+      "ollamaFailed": "Ollama failed"
+    },
+    "ownDefault": "Its own default model",
+    "providerModels": "Model list",
+    "ollamaModels": "Installed models",
+    "openAiTools": "Open AI tools",
+    "sessions_one": "{{count}} session",
+    "sessions_other": "{{count}} sessions",
+    "openSessions": "Sessions running {{model}}",
+    "empty": "No model available yet",
+    "emptyHint": "Install a model in Ollama or add a provider, and it is listed here.",
+    "noAccess": "No access to model lists",
+    "noAccessHint": "Your role cannot read the tool, provider, Ollama or session model lists. Ask an administrator for access.",
+    "installModel": "Install a model",
+    "addProvider": "Add a provider",
+    "sourceFailed": "{{source}} could not be read. The other sources are still shown.",
+    "sources": {
+      "tools": "The tools' model lists",
+      "ollama": "Ollama",
+      "availability": "The provider models",
+      "runs": "The running sessions"
+    },
+    "profilesTruncated": "The first {{n}} tool profiles are shown; there are more.",
+    "runsTruncated": "Session counts cover the {{n}} most recent sessions of each state; there are more.",
+    "runsFailed": "The running sessions could not be read; session counts are missing.",
+    "sessionsUnknown": "Session counts are not available.",
+    "unmatched_one": "{{count}} live session runs a model not listed here.",
+    "unmatched_other": "{{count}} live sessions run models not listed here."
   }
 }

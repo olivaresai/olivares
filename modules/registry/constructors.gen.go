@@ -10,6 +10,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/api"
 	accessmap "github.com/olivaresai/olivares/modules/access-map"
+	aiterms "github.com/olivaresai/olivares/modules/aiterms"
 	capabilities "github.com/olivaresai/olivares/modules/capabilities"
 	catalog "github.com/olivaresai/olivares/modules/catalog"
 	claudeadoption "github.com/olivaresai/olivares/modules/claudeadoption"
@@ -120,6 +121,8 @@ func newDefault(namespace string, built map[string]api.Module) (api.Module, erro
 		return sessions.New(), nil
 	case "voice":
 		return voice.New(), nil
+	case "aiterms":
+		return aiterms.New(), nil
 	case "session-cockpit":
 		return sessioncockpit.NewPlaceholder(), nil
 	default:

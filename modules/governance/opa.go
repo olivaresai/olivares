@@ -15,6 +15,8 @@ import (
 	"strings"
 	"time"
 
+	cedar "github.com/cedar-policy/cedar-go"
+
 	"github.com/olivaresai/olivares/core/auth"
 )
 
@@ -105,6 +107,18 @@ type opaResource struct {
 // or non-2xx failure returns an error (Authorizer fails closed). The decision_id, when
 // OPA decision logging is enabled, is surfaced in the Reason for ledger correlation.
 func (o *OPAEvaluator) Evaluate(ctx context.Context, req auth.Request) (auth.Decision, error) {
+	decision, err := o.evaluateExact(ctx, req)
+	if err != nil || !decision.Allow {
+		return decision, err
+	}
+	if old, split := legacySessionPermissions[cedar.String(req.Permission)]; split {
+		req.Permission = auth.Permission(old)
+		return o.evaluateExact(ctx, req)
+	}
+	return decision, nil
+}
+
+func (o *OPAEvaluator) evaluateExact(ctx context.Context, req auth.Request) (auth.Decision, error) {
 	input := opaInput{
 		Principal: opaPrincipal{
 			Kind: string(req.Principal.Kind), UserID: string(req.Principal.UserID),

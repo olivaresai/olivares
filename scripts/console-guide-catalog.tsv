@@ -26,19 +26,11 @@
 #
 /accept-invite	Accept an invitation	Where an emailed invitation link lands: the invitee sets a password and joins the workspace, with no prior session.
 /agentcore-export	-	-
-/areas/ai	AI	Directory of the AI area: observe and operate sessions, provider profiles and environments, models, specialized execution and provider reference. Lists the entries your permissions allow.
-/areas/automation	Automation	Directory of the Automation area: flows and orchestration, events and notifications. Lists the entries your permissions allow.
-/areas/data-context	Data & context	Directory of the Data & context area: capabilities, knowledge and artifacts. Lists the entries your permissions allow.
-/areas/deployment	Delivery	Directory of the Delivery area: how deployments are prepared and controlled. Lists the entries your permissions allow.
-/areas/infrastructure	Infrastructure	Directory of the Infrastructure area: the inventory and workspaces of the estate. Lists the entries your permissions allow.
-/areas/observation	Oversight	Directory of the Oversight area: status and activity, costs and adoption, audit, evaluation and evidence. Lists the entries your permissions allow.
-/areas/security-identity	Security & identity	Directory of the Security & identity area: identity and access, policies and governance boundaries, protection and response. Lists the entries your permissions allow.
-/areas/system	System & settings	Directory of the System & settings area: administration, installation and maintenance, developer tools and personal preferences. Lists the entries your permissions allow.
-/areas/work-communications	Work & communications	Directory of the Work & communications area: the durable cross-session work backlog and governed communications. Lists the entries your permissions allow.
 /backups	-	-
 /eventing	-	-
 /login	Sign in	The credential and token sign-in page for an already provisioned account.
 /logs	-	-
+/pair	Pair a device	Where a one-time device-pairing link lands: the new device signs in with no prior session.
 /routine-policies	-	-
 /setup	First-run setup	The one-time page that turns a fresh deployment into a usable one: it consumes the setup token and creates the first owner account.
 /status-page	Public status	Component health for people who are not signed in, refreshed on its own while the page is open.

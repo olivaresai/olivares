@@ -14,3 +14,7 @@ import (
 func (s *Server) handleAuditExport(w http.ResponseWriter, r *http.Request, _ ModuleContext) {
 	s.writeError(w, r, audit.ErrBusinessAudit)
 }
+
+func (s *Server) handleAuditVerify(w http.ResponseWriter, r *http.Request, _ ModuleContext) {
+	s.writeError(w, r, audit.ErrBusinessAudit)
+}

@@ -218,7 +218,7 @@ func (m *Module) recordLimit(ctx context.Context, lr *liveRun, rep limitReport) 
 	if _, err := m.transition(ctx, lr.tenant, lr.runRef, transitionInput{
 		event: eventLimitReached, actorKind: model.ActorSystem, detail: detail,
 		keepReason: true, guard: guardRuntimeLaunch(lr.launchID),
-		mutate: func(rec model.Record) { rec[colRunUsageLimit] = string(raw) },
+		mutate: func(rec model.Record) { rec[colRunUsageLimit] = string(raw); rec[colRunResumeDismissed] = false },
 	}); err != nil {
 		lr.mu.Lock()
 		lr.limitClear = wasClear
@@ -244,7 +244,11 @@ func (m *Module) clearLimit(ctx context.Context, lr *liveRun) {
 		return
 	}
 	if rec.String(colRunUsageLimit) != "" {
-		if err := m.mutateRun(ctx, lr, func(rec model.Record) { rec[colRunUsageLimit] = nil }); err != nil {
+		if err := m.mutateRun(ctx, lr, func(rec model.Record) {
+			rec[colRunUsageLimit] = nil
+			rec[colRunResumeAfterLimit] = false
+			rec[colRunResumeCancelled] = false
+		}); err != nil {
 			m.warnf("sessions: could not clear the limit of a run whose turn succeeded", "run_ref", lr.runRef, "err", redactErr(err))
 			return
 		}

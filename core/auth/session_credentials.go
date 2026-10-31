@@ -419,7 +419,10 @@ func (c *SessionCredentials) finishResolve(ctx context.Context, hash [32]byte, i
 	current, exists := c.entries[hash]
 	accessLost := errors.Is(err, ErrSessionAccessChanged) || errors.Is(err, ErrSessionAccessEnded) || errors.Is(err, ErrSessionCredentialExpired)
 	notify := exists && !current.revoked && accessLost && c.runs[sessionRunKey{item.scope.TenantID, item.scope.RunRef}] == hash
-	if err != nil && exists {
+	// A store that could not be read says nothing about the credential, so it does
+	// not end it: the request that met the outage is refused, and the next one
+	// resolves again. Every other refusal still ends this generation.
+	if err != nil && exists && !errors.Is(err, store.ErrStoreUnavailable) {
 		current.revoked = true
 		c.entries[hash] = current
 	}

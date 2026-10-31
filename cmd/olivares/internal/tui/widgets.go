@@ -142,6 +142,13 @@ func (f *Form) Prev() {
 	f.focus = (f.focus + len(f.fields) - 1) % len(f.fields)
 }
 
+// SetFocus moves focus to field i; an index outside the fields is ignored.
+func (f *Form) SetFocus(i int) {
+	if i >= 0 && i < len(f.fields) {
+		f.focus = i
+	}
+}
+
 // Len is the number of fields.
 func (f *Form) Len() int { return len(f.fields) }
 

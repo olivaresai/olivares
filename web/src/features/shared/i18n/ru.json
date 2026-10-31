@@ -51,6 +51,7 @@
     "unknownUser": "Неизвестный пользователь",
     "unknownWorkspace": "Неизвестная рабочая область"
   },
+  "openInEditor": "Открыть в {{editor}}",
   "headDiff": {
     "file": "Файл",
     "changes": "Изменения относительно HEAD",

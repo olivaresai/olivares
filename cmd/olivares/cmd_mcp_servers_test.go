@@ -211,7 +211,7 @@ func TestMCPAddWarnsWhenEnvFlagsFollowTheTerminator(t *testing.T) {
 	}
 }
 
-// TestMCPTestAndListSayWhyALocalServerFailed is HU 019: a local server that could not
+// TestMCPTestAndListSayWhyALocalServerFailed is acceptance: a local server that could not
 // start was shown as "unreachable" with no reason. The engine now records a reason and
 // one redacted detail line; `mcp test` and `mcp ls` print it.
 func TestMCPTestAndListSayWhyALocalServerFailed(t *testing.T) {
@@ -268,7 +268,7 @@ func TestMCPEnableKeepsTheServerAndSaysWhenSessionsDoNotUseIt(t *testing.T) {
 	}
 }
 
-// TestMCPEnableLetsSessionsCallTheTestedTools is HU 025 (MC): enable copied the saved
+// TestMCPEnableLetsSessionsCallTheTestedTools is acceptance (MC): enable copied the saved
 // row's allowed_tools [] (the engine stores [] for every new server) into the enable
 // call, so no tool was allowed while the CLI said "on". Enable alone sends no list, so the
 // engine applies its default to the tested tools; a list someone set stays as set; the CLI

@@ -190,6 +190,20 @@ record and the bindings are kept on purpose — a profile that silently stopped 
 anything would read as a profile nobody configured. Revoking here does not revoke the
 key at the provider; do that in their own console.
 
+## A local model runtime on the Olivares Server
+
+On the Olivares Server (the appliance, SELinux enforcing), a session bound to a provider on a loopback address can reach it
+only on a port the policy labels for local model runtimes: 11434 (Ollama), 1234 (LM Studio), 8000 (vLLM) and 8080
+(llama.cpp's `llama-server`). For a runtime on another port, label it once, as root:
+
+```bash
+semanage port -a -t olivares_model_runtime_port_t -p tcp 11435
+# If the base policy already labels that port (semanage port -l | grep -w 11435), modify it instead:
+semanage port -m -t olivares_model_runtime_port_t -p tcp 11435
+```
+
+Until then the session does not start, and its error names this command.
+
 ## What the engine refuses, and why
 
 | You see | It means |

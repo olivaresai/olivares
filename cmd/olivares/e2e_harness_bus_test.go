@@ -61,7 +61,7 @@ func (b *delayedCostBus) wrap(h event.Handler) event.Handler {
 }
 
 // TestHarnessSettlesWhenBusDeliveryOutlastsAFixedGracePeriod reproduces
-// dev#2592: the seeded estate was healthy, but the first cost.sampled handlers
+// the regression: the seeded estate was healthy, but the first cost.sampled handlers
 // were still running after the old fixed 10s grace period, so the harness failed
 // with "model/provider catalog not yet materialized (cost samples not
 // drained)". The seed source has already returned when those handlers run

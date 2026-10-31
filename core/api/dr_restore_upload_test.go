@@ -6,6 +6,7 @@ package api_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,8 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/dr"
+	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 // restoreUploadBundle returns the bytes of a small authenticated DR bundle, as a
@@ -127,4 +130,46 @@ func TestDRRestoreUploadCreatesMissingBackupDir(t *testing.T) {
 			t.Fatalf("rejected upload left %d file(s) in the backup dir", len(entries))
 		}
 	})
+}
+
+func TestDRRestoreUploadAndScheduleEditingWorkWithAnAbsentBackupDisk(t *testing.T) {
+	dir := t.TempDir()
+	st := openDRStore(t, dir)
+	target := "/mnt/olivares-backups/617359a8-818f-4d2d-a901-cc4b7b2911a1"
+	err := st.Mutate(context.Background(), model.SystemTenantID, func(sc store.Scope) error {
+		org, err := sc.Org(context.Background())
+		if err != nil {
+			return err
+		}
+		if org.Settings == nil {
+			org.Settings = map[string]any{}
+		}
+		org.Settings["dr.schedule"] = `{"enabled":false,"cron":"0 2 * * *","retain_days":30,"local_target":"` + target + `"}`
+		_, err = sc.SetOrgSettings(context.Background(), org.Settings)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newDRHarness(t, dir, st, "")
+	admin := h.adminLogin()
+	got := h.do("GET", "/v1/console/dr/schedule", admin, nil, nil)
+	if got.code != 200 || got.body["local_target"] != target {
+		t.Fatalf("stored disk lost: %d %s", got.code, got.raw)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "backups")); !os.IsNotExist(err) {
+		t.Fatalf("schedule read created backup files: %v", err)
+	}
+	got = h.do("PUT", "/v1/console/dr/schedule", admin, map[string]any{"enabled": true, "cron": "0 2 * * *", "retain_days": 7}, nil)
+	if got.code != 200 || got.body["local_target"] != target {
+		t.Fatalf("omitted target changed it: %d %s", got.code, got.raw)
+	}
+	h2 := newDRHarness(t, dir, st, "")
+	reloaded := h2.do("GET", "/v1/console/dr/schedule", admin, nil, nil)
+	if reloaded.code != 200 || reloaded.body["local_target"] != target {
+		t.Fatalf("restart lost target: %d %s", reloaded.code, reloaded.raw)
+	}
+	if code, raw := uploadRestoreBundle(h, admin, restoreUploadBundle(t)); code != http.StatusOK {
+		t.Fatalf("missing backup disk blocked recovery upload: %d %s", code, raw)
+	}
 }

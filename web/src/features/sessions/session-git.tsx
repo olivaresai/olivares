@@ -7,6 +7,7 @@ import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PathText } from '@/components/ui/path-text'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import {
   useAuthBoundary,
@@ -260,12 +261,7 @@ function SessionGitPanel({
                     {file.index}
                     {file.worktree}
                   </span>
-                  <span
-                    className="min-w-0 flex-1 break-all font-mono text-caption"
-                    title={file.path}
-                  >
-                    {file.path}
-                  </span>
+                  <PathText value={file.path} copy={false} className="flex-1" />
                   {file.index !== ' ' && file.index !== '?' ? (
                     <Button
                       variant="ghost"

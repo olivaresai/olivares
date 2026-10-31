@@ -27,9 +27,35 @@ env.allowRemoteModels = false
 env.allowLocalModels = true
 // The model is served at /assets/voice/<revision>/<file>; its id is its revision.
 env.localModelPath = '/assets/voice/'
-// The runtime imports its glue by URL; the cached copy would be a blob: import.
+// The runtime imports its glue by URL (the library's own cache would import a blob:, which
+// this worker's policy refuses) and takes its WebAssembly from runtimeBinary below.
 env.useWasmCache = false
 env.backends.onnx.wasm!.wasmPaths = { mjs: ortMjs, wasm: ortWasm }
+
+/**
+ * The runtime's 27 MB of WebAssembly, kept in the Cache API beside the model: the HTTP cache
+ * refuses an entry that large, so a take with no network would find nothing. The entry is
+ * keyed by the content-hashed URL, and an upgrade drops the previous one. The cache is a
+ * convenience: where the browser refuses it (a private window, a full disk) the fetched bytes
+ * serve all the same.
+ */
+async function runtimeBinary(): Promise<ArrayBuffer> {
+  const url = new URL(ortWasm, self.location.href).href
+  const cache =
+    typeof caches === 'undefined'
+      ? null
+      : await caches.open('olivares-dictation-runtime').catch(() => null)
+  const cached = await cache?.match(url).catch(() => undefined)
+  if (cached) return cached.arrayBuffer()
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`${url} answered ${response.status}`)
+  if (cache) {
+    await cache.put(url, response.clone()).catch(() => undefined)
+    for (const old of await cache.keys().catch(() => []))
+      if (old.url !== url) await cache.delete(old).catch(() => false)
+  }
+  return response.arrayBuffer()
+}
 
 type Device = 'webgpu' | 'wasm'
 type Recognizer = { device: Device; run: AutomaticSpeechRecognitionPipeline }
@@ -42,6 +68,7 @@ let recognizer: Promise<Recognizer> | null = null
 let gpuFailed = false
 
 async function load(): Promise<Recognizer> {
+  env.backends.onnx.wasm!.wasmBinary ??= await runtimeBinary()
   const open = async (device: Device) => ({
     device,
     run: await pipeline('automatic-speech-recognition', model.revision, {

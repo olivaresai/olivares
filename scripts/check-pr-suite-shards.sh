@@ -31,13 +31,11 @@
 #   4. THE CEILINGS EACH WORKFLOW DECLARES ARE THE ONES THE SPEC DECLARES, and the Go
 #      timeout stays under the step ceiling. Go's timeout fires with a goroutine dump and
 #      the package name; the step ceiling only cancels. Inverting them costs the diagnosis.
-#   5. EVERY TEST OF A PACKAGE SPLIT BY NAME BELONGS TO EXACTLY ONE GROUP. This is (1) one
-#      level down and the failure is worse, because `go test -run` over an expression that
-#      matches nothing EXITS 0: an orphaned test is not merely unreported, the shard that
-#      should have run it publishes a SUCCESS. Hence: a remainder group per partitioned
-#      package, no test in two groups, no group that selects nothing, no package split by
-#      name and ALSO sent whole to a shard by a pattern, and a `-run` expression the kernel
-#      will still carry as one argument.
+#   5. EVERY TEST OF A PACKAGE SPLIT BY NAME BELONGS TO EXACTLY ONE GENERATED GROUP. This is
+#      (1) one level down and the failure is worse, because `go test -run` over an expression
+#      that matches nothing EXITS 0. The reader's generated expressions must cover the source
+#      inventory exactly once, select something in every group, avoid a whole-package duplicate,
+#      and fit in one kernel argument.
 #
 # Three answers: 0 CLEAN · 1 FINDING · 2 COULD NOT LOOK.
 set -uo pipefail
@@ -48,6 +46,10 @@ cd "$ROOT" || { echo "check-pr-suite-shards: COULD NOT LOOK — cannot enter $RO
 SPEC="${OLIVARES_PR_SUITE_SHARDS:-ci/pr-suite-shards.txt}"
 WF="${OLIVARES_PR_CI_WF:-.github/workflows/pr-ci.yml}"
 MAINLINE_WF="${OLIVARES_MAINLINE_CI_WF:-.github/workflows/mainline-ci.yml}"
+CANDIDATE_WF="${OLIVARES_CANDIDATE_SHARDS_WF:-.github/workflows/candidate-shards.yml}"
+# The export script is hub-only and the candidate workflow is dev-only: a tree with the script must
+# carry the workflow; a public tree has neither, and the candidate pin does not apply there.
+EXPORT_SCRIPT="${OLIVARES_EXPORT_SCRIPT:-scripts/export-public.sh}"
 TASKFILE="${OLIVARES_TASKFILE:-Taskfile.yml}"
 READER="${OLIVARES_PR_SUITE_READER:-scripts/pr-suite-shards.sh}"
 
@@ -69,7 +71,10 @@ trap 'rm -f "$UNI" "$RAW"' EXIT
 if [ -n "${OLIVARES_PR_SUITE_PACKAGES:-}" ]; then
   [ -r "$OLIVARES_PR_SUITE_PACKAGES" ] ||
     cannot "OLIVARES_PR_SUITE_PACKAGES=$OLIVARES_PR_SUITE_PACKAGES is not readable"
-  grep -v '^[[:space:]]*$' "$OLIVARES_PR_SUITE_PACKAGES" | LC_ALL=C sort -u > "$UNI"
+  URC=0
+  grep -v '^[[:space:]]*$' "$OLIVARES_PR_SUITE_PACKAGES" | LC_ALL=C sort -u > "$UNI" || URC=$?
+  [ "$URC" -le 1 ] ||
+    cannot "could not write the package universe from $OLIVARES_PR_SUITE_PACKAGES"
   SOURCE="the file $OLIVARES_PR_SUITE_PACKAGES"
 else
   [ -f go.work ] || cannot "go.work is not at $ROOT and no package file was given"
@@ -89,7 +94,10 @@ else
     ( cd "$m" && go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./... ) >> "$RAW" ||
       cannot "go list failed in $m: the universe cannot be finished, so none of it can be certified"
   done <<< "$MODS"
-  grep -v '^[[:space:]]*$' "$RAW" | LC_ALL=C sort -u > "$UNI"
+  URC=0
+  grep -v '^[[:space:]]*$' "$RAW" | LC_ALL=C sort -u > "$UNI" || URC=$?
+  [ "$URC" -le 1 ] ||
+    cannot "could not write the package universe from the go.work modules"
   SOURCE="go list over the go.work modules"
 fi
 [ -s "$UNI" ] || cannot "the package universe came back empty — a partition of nothing certifies nothing"
@@ -132,7 +140,7 @@ SPEC_MATRIX="$(printf '%s\n' "$SHARDS" | paste -sd, -)"
 PINNED=""
 # The body is not indented because the reader below is a heredoc that must stay at column 0.
 pin_workflow() {
-local WF="$1" WFOUT WF_JOB WF_MATRIX WF_JOBCEIL WF_STEPCEILS
+local WF="$1" WFOUT WF_JOB WF_MATRIX WF_JOBCEIL WF_STEPCEILS NOMATRIX_RC
 WFOUT="$(WF="$WF" python3 - <<'PY'
 import os, re, sys
 
@@ -204,17 +212,29 @@ PY
 
 case "$WFOUT" in CANNOT*) cannot "${WFOUT#CANNOT }" ;; esac
 
-if grep -qx 'NOMATRIX' <<<"$WFOUT"; then
+NOMATRIX_RC=0
+grep -qx 'NOMATRIX' <<<"$WFOUT" || NOMATRIX_RC=$?
+case "$NOMATRIX_RC" in
+0)
   finding "no job in $WF declares a \`shard:\` matrix, so $SPEC partitions a suite that nothing runs in parts. A shard list nobody reads is a list that stops being true the day after it is written."
   RC=1
   WF_MATRIX=""
   WF_JOB=""
-else
-  WF_JOB="$(printf '%s\n' "$WFOUT" | sed -n 's/^JOB //p')"
-  WF_MATRIX="$(printf '%s\n' "$WFOUT" | sed -n 's/^MATRIX //p')"
-  WF_JOBCEIL="$(printf '%s\n' "$WFOUT" | sed -n 's/^JOBCEILING //p')"
-  WF_STEPCEILS="$(printf '%s\n' "$WFOUT" | sed -n 's/^STEPCEILINGS //p')"
-fi
+  ;;
+1)
+  WF_JOB="$(printf '%s\n' "$WFOUT" | sed -n 's/^JOB //p')" ||
+    cannot "could not read the workflow job name from $WF"
+  WF_MATRIX="$(printf '%s\n' "$WFOUT" | sed -n 's/^MATRIX //p')" ||
+    cannot "could not read the workflow matrix from $WF"
+  WF_JOBCEIL="$(printf '%s\n' "$WFOUT" | sed -n 's/^JOBCEILING //p')" ||
+    cannot "could not read the workflow job ceiling from $WF"
+  WF_STEPCEILS="$(printf '%s\n' "$WFOUT" | sed -n 's/^STEPCEILINGS //p')" ||
+    cannot "could not read the workflow step ceilings from $WF"
+  ;;
+*)
+  cannot "could not inspect the workflow shape in $WF (grep exited $NOMATRIX_RC)"
+  ;;
+esac
 
 if [ -n "$WF_JOB" ] && [ "$WF_MATRIX" != "$SPEC_MATRIX" ]; then
   finding "the matrix of job '$WF_JOB' in $WF and the shard list disagree."
@@ -241,6 +261,21 @@ fi
 }
 pin_workflow "$WF"
 pin_workflow "$MAINLINE_WF"
+if [ -r "$CANDIDATE_WF" ]; then
+  pin_workflow "$CANDIDATE_WF"
+  # The trigger is the battery's only start: the `on:` block is exactly a push to the candidate branches.
+  CANDIDATE_ON="$(awk '/^on:/{f=1;next} f&&/^[^ #]/{exit} f&&NF&&$1!~/^#/' "$CANDIDATE_WF")"
+  CANDIDATE_ON_WANT="  push:
+    branches: ['release/*-candidate']"
+  if [ "$CANDIDATE_ON" != "$CANDIDATE_ON_WANT" ]; then
+    finding "$CANDIDATE_WF triggers on something other than a push to ['release/*-candidate']: a candidate push would start no shard, and every shard would stay green. It declares: ${CANDIDATE_ON:-nothing}"
+    RC=1
+  fi
+elif [ -e "$EXPORT_SCRIPT" ]; then
+  cannot "missing $CANDIDATE_WF"
+else
+  say "NOTICE: $CANDIDATE_WF is not in this tree (the public export removes it); its pin does not apply here." >&2
+fi
 
 # ── the legs are real tasks ──────────────────────────────────────────────────────────
 # Same predicate check-gate-parity.sh uses to know what IS a task: a name that is not a
@@ -270,8 +305,8 @@ with open(spec, encoding="utf-8") as fh:
             pairs.append((f[1], f[2]))
         elif len(f) == 2 and f[0] == "optional":
             optional.add(f[1])
-        elif len(f) >= 5 and f[0] == "group":
-            groups.append({"shard": f[1], "pkg": f[2], "name": f[3], "fams": f[4:]})
+        elif len(f) == 4 and f[0] == "group":
+            groups.append({"shard": f[1], "pkg": f[2], "name": f[3]})
 
 split = {g["pkg"] for g in groups}
 
@@ -365,9 +400,9 @@ for s in shards:
               "is a job that starts a database, runs nothing and reports success." % s)
 
 
-# (5) THE NAME GROUPS ─────────────────────────────────────────────────────────────────
-# The universe of a partitioned package comes through the SAME reader the runner uses, so
-# the gate cannot certify a set the run will not see.
+# (5) THE GENERATED NAME GROUPS ─────────────────────────────────────────────────────
+# The universe and every expression come through the SAME reader the runner uses. Matching
+# those expressions against the inventory proves exact-once coverage without a family census.
 group_report = []
 for pkg in sorted(split):
     if pkg not in pkgs:
@@ -377,7 +412,6 @@ for pkg in sorted(split):
         continue
 
     # A pattern that names this package EXACTLY was written to send it whole to one shard.
-    # Beside a name split it is not a second opinion, it is the same tests a second time.
     for name, pat in pairs:
         base = pat[:-4] if pat.endswith("/...") else pat
         if base == pkg:
@@ -389,16 +423,6 @@ for pkg in sorted(split):
                   "splitting the package." % (pkg, pat, name, name))
 
     mine = [g for g in groups if g["pkg"] == pkg]
-    rest = [g for g in mine if g["fams"] == ["*"]]
-    if len(rest) > 1:
-        print("FINDING the package %s declares two remainder groups (%s): every test no other "
-              "group names would run twice, in two shards, and the file would read as if each "
-              "of them ran it once." % (pkg, " and ".join(sorted(g["name"] for g in rest))))
-    if not rest:
-        print("FINDING the package %s is split into name groups and none of them is the "
-              "remainder `*`: a test added tomorrow would match no group and would never run, "
-              "and every shard would stay green while it did not." % pkg)
-
     out = subprocess.run(["bash", reader, "tests", pkg], capture_output=True, text=True)
     if out.returncode != 0:
         print("CANNOT the reader could not enumerate the tests of %s: %s"
@@ -412,46 +436,6 @@ for pkg in sorted(split):
 
     hits, sizes = {}, {}
     for g in mine:
-        if g["fams"] == ["*"]:
-            continue
-        own = [t for t in tests if any(t.startswith("Test" + fam) for fam in g["fams"])]
-        sizes[g["name"]] = len(own)
-        if not own:
-            print("FINDING the group %s of %s names no test in this tree: its families are "
-                  "stale, its `-run` would match nothing, `go test` would exit 0 and the shard "
-                  "would report a success having run no test." % (g["name"], pkg))
-        for t in own:
-            hits.setdefault(t, []).append(g["name"])
-
-    dobles = sorted(t for t, v in hits.items() if len(v) > 1)
-    if dobles:
-        print("FINDING %d test(s) of %s are named by TWO name groups (a family is a prefix of "
-              "another group's family): they would run twice, in two shards, and the group that "
-              "bounds its shard is not the one the file says." % (len(dobles), pkg))
-        for t in dobles[:20]:
-            print("DETAIL %s -> %s" % (t, " and ".join(hits[t])))
-
-    huerfanos = sorted(t for t in tests if t not in hits)
-    if rest:
-        sizes[rest[0]["name"]] = len(huerfanos)
-        # An empty remainder is not an idle group. Its `-run` selects nothing, and `go test`
-        # answers 0 to that, so the shard that carries it reports a success having run none
-        # of the package's tests. Name more letters, or stop declaring the group.
-        if not huerfanos:
-            print("FINDING the remainder group %s of %s selects no test: the other groups "
-                  "already name all %d of them, so its `-run` would match nothing and the "
-                  "shard that carries it would report success having run none."
-                  % (rest[0]["name"], pkg, len(tests)))
-    elif huerfanos:
-        print("FINDING %d test(s) of %s belong to NO name group. Nothing would run them, no "
-              "shard would notice, and `go test -run` answers 0 to an expression that selects "
-              "nothing — so the silence would arrive as a green check." % (len(huerfanos), pkg))
-        for t in huerfanos[:20]:
-            print("DETAIL %s" % t)
-
-    # The expression itself, built by the reader — the same call the runner makes — because a
-    # limit checked here and applied there is a limit that does not hold.
-    for g in mine:
         ex = subprocess.run(["bash", reader, "run-expr", pkg, g["name"]],
                             capture_output=True, text=True)
         if ex.returncode == 2:
@@ -461,6 +445,29 @@ for pkg in sorted(split):
         if ex.returncode != 0:
             for line in ex.stderr.strip().splitlines():
                 print("FINDING " + line.replace("pr-suite-shards: FAIL — ", ""))
+            continue
+        expression = ex.stdout.strip()
+        own = [t for t in tests if expression and re.search(expression, t)]
+        sizes[g["name"]] = len(own)
+        if not own:
+            print("FINDING group %s of %s selects no test: its generated -run would match "
+                  "nothing, `go test` would exit 0 and the shard would report success."
+                  % (g["name"], pkg))
+        for t in own:
+            hits.setdefault(t, []).append(g["name"])
+
+    dobles = sorted(t for t, v in hits.items() if len(v) > 1)
+    if dobles:
+        print("FINDING %d test(s) of %s are selected by TWO generated groups: they would run "
+              "twice, in two shards." % (len(dobles), pkg))
+        for t in dobles[:20]:
+            print("DETAIL %s -> %s" % (t, " and ".join(hits[t])))
+    huerfanos = sorted(t for t in tests if t not in hits)
+    if huerfanos:
+        print("FINDING %d test(s) of %s belong to NO generated group. Nothing would run them, "
+              "and `go test -run` over an empty selection exits 0." % (len(huerfanos), pkg))
+        for t in huerfanos[:20]:
+            print("DETAIL %s" % t)
 
     group_report.append("%s: %s" % (pkg, " ".join(
         "%s->%s(%d)" % (g["name"], g["shard"], sizes.get(g["name"], 0)) for g in mine)))
@@ -475,15 +482,22 @@ PY
 
 # The partition reader can also refuse to look — a package it cannot enumerate is not a
 # partition it can certify — and COULD NOT LOOK is never CLEAN.
-PARTCANNOT="$(printf '%s\n' "$PART" | sed -n 's/^CANNOT //p')"
+PARTCANNOT="$(printf '%s\n' "$PART" | sed -n 's/^CANNOT //p')" ||
+  cannot "could not read the partition CANNOT records"
 [ -z "$PARTCANNOT" ] || cannot "$(printf '%s' "$PARTCANNOT" | head -1)"
 
-NOTICES="$(printf '%s\n' "$PART" | sed -n 's/^NOTICE //p')"
-FINDINGS="$(printf '%s\n' "$PART" | sed -n 's/^FINDING //p')"
-DETAILS="$(printf '%s\n' "$PART" | sed -n 's/^DETAIL //p')"
-REPARTO="$(printf '%s\n' "$PART" | sed -n 's/^REPARTO //p')"
-GROUPSPLIT="$(printf '%s\n' "$PART" | sed -n 's/^GROUPS //p')"
-TOTAL="$(printf '%s\n' "$PART" | sed -n 's/^TOTAL //p')"
+NOTICES="$(printf '%s\n' "$PART" | sed -n 's/^NOTICE //p')" ||
+  cannot "could not read the partition NOTICE records"
+FINDINGS="$(printf '%s\n' "$PART" | sed -n 's/^FINDING //p')" ||
+  cannot "could not read the partition FINDING records"
+DETAILS="$(printf '%s\n' "$PART" | sed -n 's/^DETAIL //p')" ||
+  cannot "could not read the partition DETAIL records"
+REPARTO="$(printf '%s\n' "$PART" | sed -n 's/^REPARTO //p')" ||
+  cannot "could not read the partition REPARTO records"
+GROUPSPLIT="$(printf '%s\n' "$PART" | sed -n 's/^GROUPS //p')" ||
+  cannot "could not read the partition GROUPS records"
+TOTAL="$(printf '%s\n' "$PART" | sed -n 's/^TOTAL //p')" ||
+  cannot "could not read the partition TOTAL records"
 
 if [ -n "$FINDINGS" ]; then
   while IFS= read -r line; do [ -n "$line" ] && finding "$line"; done <<< "$FINDINGS"

@@ -42,7 +42,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Kbd } from '@/components/ui/kbd'
 import { toast } from '@/components/ui/toaster'
-import { toolName } from '@/features/agentops/tool-names'
+import {
+  AccountUsage,
+  AtLimit,
+  useAccountUsageOf,
+} from '@/features/agentops/account-usage'
+import { toolName } from '@/features/agentops/engine-tools'
 import type { RunDTO } from '@/features/agentops/types'
 import { cn } from '@/lib/utils'
 import { runFolder } from './folder'
@@ -154,11 +159,14 @@ export function ThreadHeader({
   const [terminalOpen, setTerminalOpen] = useState(false)
   const folder = runFolder(run)
   const driver = run?.provider_driver || live?.provider || live?.engine
-  // THE SESSION, THEN ITS TOOL (dev#3120). Two panes beside each other must say which
+  // THE SESSION, THEN ITS TOOL. Two panes beside each other must say which
   // session each is, so the header is the name and the tool; the model and the effort
   // are said once per pane, by the composer's picker, and a model other than the one
   // asked for is the narrative's warning.
   const tool = driver ? toolName(driver) : null
+  const accountUsage = useAccountUsageOf(
+    live?.provider_profile_ref || run?.provider_profile_ref,
+  )
   const usage = sessionUsage(session.runs, live)
   const marks = useSessionMarks()
   // The person's own snooze and done (#2480) need a run the engine still lists; an observed
@@ -170,7 +178,8 @@ export function ThreadHeader({
   // The one-line form gives way by the width of ITS PANE, not the window's (a container
   // query): two panes beside each other at 1280 px are 340 px each, and there the name
   // and the controls stay while the usage, the folder and then the tool step aside
-  // (dev#3120). The stacked form shows them all, on their own line.
+  //. The stacked form shows them all, on their own line.
+  const stackedFacts = stacked || !!run?.limit?.resets_at
   const facts = (
     <>
       {tool ? (
@@ -178,19 +187,29 @@ export function ThreadHeader({
           data-testid="thread-tool"
           className={cn(
             'min-w-0 truncate text-caption text-text-2',
-            !stacked && 'hidden @min-[26rem]/thread:inline',
+            !stackedFacts && 'hidden @min-[26rem]/thread:inline',
           )}
         >
           {tool}
         </span>
       ) : null}
+      {accountUsage ? (
+        <AccountUsage
+          usage={accountUsage}
+          className={cn(
+            'min-w-0 shrink-0 truncate',
+            !stackedFacts && 'hidden @min-[26rem]/thread:inline',
+          )}
+        />
+      ) : null}
+      <AtLimit usage={accountUsage} className="min-w-0 truncate" />
       {folder ? (
         <span
           data-testid="narrative-folder"
           title={run?.workspace_path}
           className={cn(
             'max-w-40 shrink-0 truncate rounded-[6px] bg-muted px-1.5 py-0.5 text-overline font-normal text-text-2',
-            !stacked && 'hidden @min-[40rem]/thread:inline-block',
+            !stackedFacts && 'hidden @min-[40rem]/thread:inline-block',
           )}
         >
           {folder}
@@ -200,7 +219,7 @@ export function ThreadHeader({
       <span
         className={cn(
           'min-w-0 items-center gap-2 truncate',
-          stacked ? 'flex' : 'hidden flex-1 @min-[48rem]/thread:flex',
+          stackedFacts ? 'flex' : 'hidden flex-1 @min-[48rem]/thread:flex',
         )}
       >
         <SessionMeter run={run} usage={usage} />
@@ -213,7 +232,7 @@ export function ThreadHeader({
       data-slot="thread-header"
       className={cn(
         '@container/thread flex shrink-0 items-center border-b border-line px-3',
-        stacked ? 'min-h-12 flex-wrap gap-x-2 gap-y-1 py-2' : 'h-12 gap-2',
+        stackedFacts ? 'min-h-12 flex-wrap gap-x-2 gap-y-1 py-2' : 'h-12 gap-2',
       )}
     >
       {back}
@@ -224,13 +243,13 @@ export function ThreadHeader({
           'min-w-0 truncate text-body-l font-semibold text-text',
           // A zero basis keeps a long name on the controls' line, cut, instead of
           // wrapping the controls under it.
-          stacked && 'flex-1 basis-0',
+          stackedFacts && 'flex-1 basis-0',
           titleMono && 'font-mono',
         )}
       >
         {title}
       </h2>
-      {stacked ? (
+      {stackedFacts ? (
         <div
           data-slot="thread-facts"
           className="order-last flex min-w-0 basis-full flex-wrap items-center gap-x-2 gap-y-1"

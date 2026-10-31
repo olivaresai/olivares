@@ -82,8 +82,12 @@ func TestReadOnlyCommandsDoNotInstallAnything(t *testing.T) {
 				t.Fatalf("`olivares %s` succeeded against a directory with no installation; "+
 					"it must report that there is nothing there, not build one", strings.Join(argv, " "))
 			}
-			if got := exitcode.From(err); got != exitcode.NotFound {
-				t.Errorf("exit = %d, want %d (not found): %v", got, exitcode.NotFound, err)
+			want := exitcode.NotFound
+			if argv[0] == "audit" && argv[1] == "verify" && !auditVerificationAvailable {
+				want = exitcode.Edition
+			}
+			if got := exitcode.From(err); got != want {
+				t.Errorf("exit = %d, want %d (not found): %v", got, want, err)
 			}
 			left := filesUnder(t, dir)
 			if len(left) > 0 {

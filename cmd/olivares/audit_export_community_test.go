@@ -105,3 +105,64 @@ func TestCommunityDirectoryArchiveRefusesStartup(t *testing.T) {
 		t.Fatalf("refusal created archive: %v", err)
 	}
 }
+
+func TestCommunityAuditVerifyUnavailableBeforeBoot(t *testing.T) {
+	for _, existing := range []bool{false, true} {
+		t.Run(map[bool]string{false: "fresh", true: "existing"}[existing], func(t *testing.T) {
+			dir := filepath.Join(t.TempDir(), "not-created")
+			tenant := "22222222-2222-7222-8222-222222222222"
+			if existing {
+				f := newRecoveryCLIFixture(t, true, false)
+				dir = f.dataDir
+				tenant = f.tenant.String()
+			}
+			before := recoveryDirectorySnapshot(t, dir)
+			cmd := newAuditCmd()
+			cmd.SetOut(io.Discard)
+			cmd.SetErr(io.Discard)
+			cmd.SetArgs([]string{"verify", "--tenant", tenant, "--data-dir", dir, "--strict"})
+			err := cmd.Execute()
+			if err == nil || exitcode.From(err) != exitcode.Edition {
+				t.Fatalf("verify = %v (exit %d), want Business refusal, exit 9", err, exitcode.From(err))
+			}
+			if after := recoveryDirectorySnapshot(t, dir); !reflect.DeepEqual(before, after) {
+				t.Fatal("Community verification changed stored data")
+			}
+		})
+	}
+}
+
+func TestCommunityAuditTreeEvidenceUnavailableBeforeBoot(t *testing.T) {
+	for _, verb := range []string{"verify", "prove"} {
+		t.Run(verb, func(t *testing.T) {
+			dir := filepath.Join(t.TempDir(), "not-created")
+			before := recoveryDirectorySnapshot(t, dir)
+			cmd := newAuditCmd()
+			cmd.SetOut(io.Discard)
+			cmd.SetErr(io.Discard)
+			cmd.SetArgs([]string{"tree", verb, "--data-dir", dir, "--tenant", "22222222-2222-7222-8222-222222222222"})
+			err := cmd.Execute()
+			if err == nil || exitcode.From(err) != exitcode.Edition {
+				t.Fatalf("tree %s = %v (exit %d), want Business refusal, exit 9", verb, err, exitcode.From(err))
+			}
+			if after := recoveryDirectorySnapshot(t, dir); !reflect.DeepEqual(before, after) {
+				t.Fatal("Community tree evidence changed stored data")
+			}
+		})
+	}
+}
+
+func TestCommunityAuditTreeCheckpointRemainsAvailable(t *testing.T) {
+	f := newRecoveryCLIFixture(t, false, false)
+	cmd := newAuditCmd()
+	var out strings.Builder
+	cmd.SetOut(&out)
+	cmd.SetErr(io.Discard)
+	cmd.SetArgs([]string{"tree", "checkpoint", "--data-dir", f.dataDir, "--tenant", f.tenant.String()})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(out.String(), "olivares.ai/audit/"+f.tenant.String()+"\n") {
+		t.Fatalf("checkpoint is not a signed note: %q", out.String())
+	}
+}

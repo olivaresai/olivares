@@ -44,7 +44,7 @@ func (m *Module) ReserveProtocolBinding(
 		if fenceErr != nil {
 			return ProtocolBinding{}, fenceErr
 		}
-		err = m.workData(tenant).Mutate(ctx, func(sc store.Scope) error {
+		err = m.mutateWorkWakingOutbox(ctx, tenant, func(sc store.Scope) error {
 			if len(ownerRefs) > 0 {
 				if _, err := auth.PinFence(ctx, sc, auth.FenceDirectory, ownerRefs); err != nil {
 					return err
@@ -151,6 +151,7 @@ func (m *Module) ReserveProtocolBinding(
 			if err != nil {
 				return err
 			}
+			m.noteWorkOutboxInsert()
 			value.LastCommandID, value.LastEventID, value.LastEventSeq = commandID, eventID, eventSeq
 			created, err := repo.CreateWithID(ctx, bindingID, encodeProtocolBinding(value))
 			if err != nil {
@@ -185,7 +186,7 @@ func (m *Module) SettleProtocolBinding(
 		return ProtocolBinding{}, err
 	}
 	var result ProtocolBinding
-	err = m.workData(tenant).Mutate(ctx, func(sc store.Scope) error {
+	err = m.mutateWorkWakingOutbox(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(protocolBindingKind)
 		if err != nil {
 			return err
@@ -247,6 +248,7 @@ func (m *Module) SettleProtocolBinding(
 		if err != nil {
 			return err
 		}
+		m.noteWorkOutboxInsert()
 		stored.LastCommandID, stored.LastEventID, stored.LastEventSeq = commandID, eventID, eventSeq
 		updated, err := repo.Update(ctx, encodeProtocolBinding(stored))
 		if err != nil {
@@ -277,7 +279,7 @@ func (m *Module) ObserveProtocolBinding(
 		return ProtocolBinding{}, err
 	}
 	var result ProtocolBinding
-	err = m.workData(tenant).Mutate(ctx, func(sc store.Scope) error {
+	err = m.mutateWorkWakingOutbox(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(protocolBindingKind)
 		if err != nil {
 			return err
@@ -345,6 +347,7 @@ func (m *Module) ObserveProtocolBinding(
 		if err != nil {
 			return err
 		}
+		m.noteWorkOutboxInsert()
 		stored.LastCommandID, stored.LastEventID, stored.LastEventSeq = commandID, eventID, eventSeq
 		updated, err := repo.Update(ctx, encodeProtocolBinding(stored))
 		if err != nil {
@@ -375,7 +378,7 @@ func (m *Module) RequestProtocolBindingCancel(
 		return ProtocolBinding{}, err
 	}
 	var result ProtocolBinding
-	err = m.workData(tenant).Mutate(ctx, func(sc store.Scope) error {
+	err = m.mutateWorkWakingOutbox(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(protocolBindingKind)
 		if err != nil {
 			return err
@@ -417,6 +420,7 @@ func (m *Module) RequestProtocolBindingCancel(
 		if err != nil {
 			return err
 		}
+		m.noteWorkOutboxInsert()
 		stored.LastCommandID, stored.LastEventID, stored.LastEventSeq = commandID, eventID, eventSeq
 		updated, err := repo.Update(ctx, encodeProtocolBinding(stored))
 		if err != nil {
@@ -1147,6 +1151,20 @@ func protocolBindingObservationEventType(verdict ProtocolObservationVerdict) str
 		return "work.binding.ambiguous"
 	}
 	return "work.binding.observed"
+}
+
+// mutateWorkWakingOutbox is the work data's Mutate for a protocol binding mutation: its
+// work-outbox inserts are written without communicationTx.create and counted with
+// noteWorkOutboxInsert, so the pump wakes after the commit that made them durable (#3316).
+func (m *Module) mutateWorkWakingOutbox(
+	ctx context.Context,
+	tenant model.TenantID,
+	fn func(store.Scope) error,
+) error {
+	mark := m.workOutboxMark()
+	err := m.workData(tenant).Mutate(ctx, fn)
+	m.nudgeWorkOutboxSince(mark, err)
+	return err
 }
 
 func reconcileProtocolBindingWork(

@@ -7,7 +7,7 @@ description: >-
 ---
 
 :::note[Business]
-L’export d’audit (`GET /v1/audit/export`, `olivares audit export`), les archives en répertoire et la vérification d’archives externes nécessitent Business. Community conserve le registre signé, `olivares audit verify` et `olivares dr backup` ; l’export renvoie HTTP 501 ou le code de sortie 9. Le transfert d’audit et le transfert DDIL entre sites isolés nécessitent aussi Business.
+L’export d’audit (`GET /v1/audit/export`, `olivares audit export`), la vérification du registre (`GET /v1/audit/verify`, `olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`), les archives en répertoire et la vérification d’archives externes nécessitent Business. Community conserve le registre signé, sa lecture et `olivares dr backup` ; les routes et commandes de preuve renvoient HTTP 501 ou le code de sortie 9. Le transfert d’audit et les transferts DDIL contenant des segments d’audit nécessitent aussi Business.
 :::
 
 Un control plane (plan de contrôle) pour l'IA est un produit de sécurité. S'il
@@ -50,7 +50,7 @@ dit plutôt que de laisser entendre le contraire.
 - **Les versions sont signées et vérifiables.** La signature, la provenance SLSA, le SBOM et l'OpenVEX peuvent tous être
   [vérifiés](/fr/how-to/verify-a-release/). La vérification n'est pas encore entièrement hors ligne : les vérifications sans clé
   ont besoin du matériel de racine de confiance Sigstore et l'étape SLSA n'a pas de mode hors ligne. Le produit livre un
-  [bundle air-gap](/fr/how-to/air-gap-install/). La prochaine version est **<!-- release -->0.4<!-- /release -->**, pas encore publiée. Compilez depuis les sources jusqu'à sa publication.
+  [bundle air-gap](/fr/how-to/air-gap-install/). La prochaine version est **<!-- release -->0.5<!-- /release -->**, pas encore publiée. Compilez depuis les sources jusqu'à sa publication.
 
 ## Open core — ce qui est ouvert vs commercial
 

@@ -30,7 +30,7 @@ test('fresh skills catalog installs a builtin and assigns its immutable revision
   const workspaces = page.waitForResponse(
     (r) => new URL(r.url()).pathname === '/v1/workspaces' && r.ok(),
   )
-  await page.goto('/skills')
+  await page.goto('/capabilities?tab=skills')
   const workspace = (await (await workspaces).json()).items[0]
   expect(workspace.id).toBeTruthy()
   await expect(
@@ -228,7 +228,7 @@ test('fresh skills catalog installs a builtin and assigns its immutable revision
     await page
       .getByRole('menuitemradio', { name: new RegExp(`^${theme}$`, 'i') })
       .click()
-    await page.goto('/skills')
+    await page.goto('/capabilities?tab=skills')
     await expect(
       page.getByRole('gridcell', { name: 'review-console', exact: true }),
     ).toBeVisible()

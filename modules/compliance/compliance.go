@@ -11,6 +11,7 @@ import (
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/sdk"
 )
 
@@ -290,6 +291,8 @@ func WithNIS2IncidentPackager(p NIS2IncidentPackager) Option {
 // break the evidence invariants (destruction is itself evidence-producing,
 // hold-gated and append-only certified).
 type Module struct {
+	evidenceSupplement func(context.Context, store.Scope, int64) (map[string]any, error)
+
 	packsAuthorize   func(string) error
 	log              *slog.Logger
 	data             api.ModuleData
@@ -311,6 +314,7 @@ type Module struct {
 	depthPackager    ComplianceDepthPackager // Compliance-depth seam (US laws + sector + CCM + FedRAMP); nil ⇒ depth endpoints 501
 	nis2Packager     NIS2IncidentPackager    // NIS 2 incident seam; nil ⇒ NIS2 incident endpoints 501
 	businessRecords  bool                    // legal holds + erasure are Business (records_edition.go); false ⇒ their routes answer 501 business_required
+	tombstones       TombstoneLog            // erasure tombstones a restore replays (tombstones.go); nil ⇒ none kept
 }
 
 // Compile-time proof the module satisfies the SDK lifecycle, the API route/permission
@@ -631,4 +635,13 @@ func (m *Module) debugf(msg string, args ...any) {
 	if m.log != nil {
 		m.log.Debug(msg, args...)
 	}
+}
+
+// WithEvidenceSupplement supplies ledger-derived evidence for JSON package exports.
+// The reader runs in the export transaction and must bound its records to the supplied
+// sealed ledger sequence. It must not substitute live state for the sealed snapshot.
+// Supplements reference the ledger anchor; they are outside the controls manifest.
+// nil keeps exports unchanged. A read failure refuses the export.
+func WithEvidenceSupplement(read func(context.Context, store.Scope, int64) (map[string]any, error)) Option {
+	return func(m *Module) { m.evidenceSupplement = read }
 }

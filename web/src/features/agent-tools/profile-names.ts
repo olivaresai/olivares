@@ -7,7 +7,7 @@
 // wins. This only fills the field in with the name the engine would pick, so the person
 // sees it before pressing Create.
 
-import { toolName } from '@/features/agentops/tool-names'
+import { engineTool } from '@/features/agentops/engine-tools'
 
 const MAX_LENGTH = 32
 const SHAPE = /^[a-z][a-z0-9-]*$/
@@ -43,11 +43,11 @@ export function nextFreeName(stem: string, taken: ReadonlySet<string>): string {
 }
 
 /**
- * What a tool's profile names start from: the first word of its product name (Claude Code
- * is claude, Gemini CLI is gemini), else the tool key. The engine is the authority and
- * takes any valid name; this is the one the person sees filled in.
+ * What a tool's profile names start from: the engine's stem for it (driverfacts NameStem:
+ * Gemini CLI is gemini), else the tool key. The engine is the authority and takes any
+ * valid name; this is the one the person sees filled in.
  */
 export function profileStem(driver: string): string {
-  const word = toolName(driver).split(' ')[0].toLowerCase()
-  return isProfileName(word) ? word : driver
+  const stem = engineTool(driver)?.name_stem ?? ''
+  return isProfileName(stem) ? stem : driver
 }

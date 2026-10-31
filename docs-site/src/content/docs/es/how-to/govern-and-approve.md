@@ -4,7 +4,7 @@ description: "Cómo un operador gobierna el estate: identidad y permisos, el mod
 ---
 
 :::note[Business]
-La exportación de auditoría (`GET /v1/audit/export`, `olivares audit export`), los archivos en directorios y la verificación de archivos externos requieren Business. Community conserva el registro firmado, `olivares audit verify` y `olivares dr backup`; la exportación devuelve HTTP 501 o código de salida 9. El reenvío de auditoría y la transferencia DDIL entre sitios aislados también requieren Business.
+La exportación de auditoría (`GET /v1/audit/export`, `olivares audit export`), la verificación del registro (`GET /v1/audit/verify`, `olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`), los archivos en directorios y la verificación de archivos externos requieren Business. Community conserva el registro firmado, su lectura y `olivares dr backup`; las rutas y los comandos de evidencias devuelven HTTP 501 o código de salida 9. El reenvío de auditoría y las transferencias DDIL con segmentos de auditoría también requieren Business.
 :::
 
 Esta página es para el operador que ha conectado al menos una fuente y ahora necesita

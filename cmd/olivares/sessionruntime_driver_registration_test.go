@@ -24,38 +24,55 @@ import (
 // fetched-object digest both name the bytes on disk. Nothing here is a mock of the
 // installer — it is the artifact the installer writes, so the observer that reads
 // it is under test rather than simulated.
-func writeManagedGrokInstall(t *testing.T, root string) string {
+func writeManagedInstall(t *testing.T, root, driver, program string) string {
 	t.Helper()
 	const version, vendorPlatform = "9.9.9", "linux-x86_64"
-	releaseDir := filepath.Join(root, "grok", version+"-"+vendorPlatform)
+	releaseDir := filepath.Join(root, driver, version+"-"+vendorPlatform)
 	binDir := filepath.Join(releaseDir, "bin")
 	if err := os.MkdirAll(binDir, 0o700); err != nil {
 		t.Fatalf("mkdir release: %v", err)
 	}
-	exe := filepath.Join(binDir, "grok")
+	exe := filepath.Join(binDir, program)
 	body := []byte("#!/bin/sh\nexit 0\n")
 	if err := os.WriteFile(exe, body, 0o700); err != nil {
 		t.Fatalf("write executable: %v", err)
 	}
 	sum := sha256.Sum256(body)
 	digest := hex.EncodeToString(sum[:])
+	policyID, verification := "origin-only-v1", toolinstall.VerificationNoneOriginOnly
+	members := []toolinstall.ObservedMember{
+		{Path: "bin", Kind: "directory", Mode: 0o700},
+		{Path: "bin/" + program, Kind: "regular", SHA256: digest, Size: int64(len(body)), Mode: 0o700},
+	}
+	if driver == "cursor" {
+		policyID, verification = toolinstall.PackagePolicyOriginTarballV1, toolinstall.VerificationOriginTarball
+		libDir := filepath.Join(releaseDir, "lib", "agent")
+		if err := os.MkdirAll(libDir, 0o700); err != nil {
+			t.Fatalf("mkdir Cursor library: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(libDir, "cursor-agent"), body, 0o700); err != nil {
+			t.Fatalf("write Cursor launcher: %v", err)
+		}
+		members = append(members,
+			toolinstall.ObservedMember{Path: "lib", Kind: "directory", Mode: 0o700},
+			toolinstall.ObservedMember{Path: "lib/agent", Kind: "directory", Mode: 0o700},
+			toolinstall.ObservedMember{Path: "lib/agent/cursor-agent", Kind: "regular", SHA256: digest, Size: int64(len(body)), Mode: 0o700},
+		)
+	}
 	receipt := toolinstall.ReceiptV2{
-		Schema: toolinstall.ReceiptSchemaV2, Driver: "grok", Version: version,
+		Schema: toolinstall.ReceiptSchemaV2, Driver: driver, Version: version,
 		VendorPlatform: vendorPlatform,
 		Platform:       toolinstall.PlatformV2{OS: "linux", Arch: "amd64"},
 		Destination: toolinstall.Destination{
 			Root: root, ReleaseDir: releaseDir, Executable: exe,
 		},
 		PlanDigest:       hex.EncodeToString(sha256.New().Sum(nil)),
-		PackagePolicyID:  "origin-only-v1",
-		VerificationKind: toolinstall.VerificationNoneOriginOnly,
+		PackagePolicyID:  policyID,
+		VerificationKind: verification,
 		FetchedObject: toolinstall.FetchedObjectObserved{
 			SHA256: digest, Size: int64(len(body)),
 		},
-		Payload: toolinstall.ObservedPayloadInventory{Members: []toolinstall.ObservedMember{
-			{Path: "bin", Kind: "directory", Mode: 0o700},
-			{Path: "bin/grok", Kind: "regular", SHA256: digest, Size: int64(len(body)), Mode: 0o700},
-		}},
+		Payload:     toolinstall.ObservedPayloadInventory{Members: members},
 		InstalledAt: time.Now().UTC(), InstallerVersion: "test",
 	}
 	blob, err := json.Marshal(receipt)
@@ -66,6 +83,11 @@ func writeManagedGrokInstall(t *testing.T, root string) string {
 		t.Fatalf("write receipt: %v", err)
 	}
 	return exe
+}
+
+func writeManagedGrokInstall(t *testing.T, root string) string {
+	t.Helper()
+	return writeManagedInstall(t, root, "grok", "grok")
 }
 
 // TestManagedInstallRegistersTheDriverFromTheEnginesOwnDataDirectory pins what
@@ -145,6 +167,29 @@ func TestInstalledSessionProgramFallsBackToThePath(t *testing.T) {
 		return "", os.ErrNotExist
 	}); got != "/usr/local/bin/gemini" {
 		t.Fatalf("gemini-cli = %q, want the PATH binary named by its facts", got)
+	}
+}
+
+func TestCursorSessionProgramRefusesAnUnmanagedPATHBinary(t *testing.T) {
+	empty := newHostToolObserverForDataDir(t.TempDir(), func(string) string { return "" })
+	lookPath := func(name string) (string, error) {
+		if name == "agent" {
+			return "/usr/local/bin/agent", nil
+		}
+		return "", os.ErrNotExist
+	}
+	if got := installedSessionProgram(empty, "cursor", lookPath); got != "" {
+		t.Fatalf("cursor = %q, want no unverified generic agent from PATH", got)
+	}
+}
+
+func TestCursorSessionProgramUsesTheManagedInstall(t *testing.T) {
+	dataDir := t.TempDir()
+	exe := writeManagedInstall(t, filepath.Join(dataDir, "tools"), "cursor", "agent")
+	observer := newHostToolObserverForDataDir(dataDir, func(string) string { return "" })
+	notOnPath := func(string) (string, error) { return "", os.ErrNotExist }
+	if got := installedSessionProgram(observer, "cursor", notOnPath); got != exe {
+		t.Fatalf("cursor = %q, want the managed install %s", got, exe)
 	}
 }
 

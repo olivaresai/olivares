@@ -217,6 +217,8 @@ func TestMain(m *testing.M) {
 				execGuardWithRaceGuardEnv()
 			}
 			os.Exit(RunConfinementHelper(args[1:]))
+		case "fixture-container-egress":
+			os.Exit(containerEgressProbe())
 		case "fixture-grandchild":
 			// A grandchild that holds the inherited stdout open. Only a PROCESS GROUP
 			// teardown ends it; a signal to the direct child alone leaves it running

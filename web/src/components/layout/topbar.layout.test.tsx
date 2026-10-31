@@ -2,12 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Structure of the top bar (console Estate #2544, slimmed in #3161). jsdom does not lay
-// out, so the pixel facts (no overlap at 1280 and 1920, light, dark and black) live in the
-// browser captures; what is pinned here is what those pixels depend on: ONE 56 px ROW and
-// no sidebar, the five places and four controls (the scope, search, notifications and the
-// account) and nothing else, the scope named once, and the Tab order equal to the reading
-// order. The version, Stop all and the stops live in the status bar (status-bar.test.tsx).
+// Structure of the top bar (0.5, after #2544 and #3161). jsdom does not lay out, so the pixel
+// facts live in the browser captures; what is pinned here is what those pixels depend on: ONE
+// 56 px ROW with the page title and four controls (the menu button below 761 px, search,
+// notifications and the account) and no places, and the Tab order equal to the reading order.
+// The version, Stop all and the stops live in the status bar (status-bar.test.tsx).
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -114,7 +113,7 @@ vi.mock('./notification-bell', () => ({
 vi.mock('./use-session-rail', () => ({
   // Working and Needs you are 5; with the idle ones, 7 sessions have not ended.
   useSessionRail: () => ({
-    sessionCounts: { needsYou: 1, live: 5, running: 7 },
+    sessionCounts: { needsYou: 1, live: 5, running: 7, open: 7 },
   }),
 }))
 vi.mock('@/features/governance/use-pending-approvals', () => ({
@@ -146,6 +145,7 @@ vi.mock('@/lib/auth/capabilities', async (importOriginal) => ({
 import { afterEach } from 'vitest'
 import { useCommandStore } from '@/stores/command'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { ScopeSwitcher } from './scope-switcher'
 import { Topbar } from './topbar'
 
 afterEach(() => {
@@ -163,45 +163,52 @@ afterEach(() => {
   })
 })
 
-/** Every control a person can reach in the bar that is not one of the places. */
-function controlsOutsidePlaces(header: HTMLElement): HTMLElement[] {
-  const places = within(header).getByRole('navigation', { name: 'Journeys' })
-  return [...header.querySelectorAll<HTMLElement>('a, button')].filter(
-    (el) => !places.contains(el),
-  )
-}
+/** Every control a person can reach in the bar. */
+const controls = (header: HTMLElement) => [
+  ...header.querySelectorAll<HTMLElement>('a, button'),
+]
 
-describe('the top bar holds the places and four controls, nothing else (#3161)', () => {
-  it('is one 56 px row: the scope, the five places, search, notifications and the account', async () => {
-    const { container } = renderIntel(<Topbar />)
+describe('the top bar holds the title and four controls, nothing else (0.5)', () => {
+  it('is one 56 px row: the menu button, the page title, search, notifications and the account', async () => {
+    const { container } = renderIntel(<Topbar onMenu={() => {}} />)
     const header = container.querySelector('header') as HTMLElement
     expect(header.getAttribute('data-slot')).toBe('topbar')
     expect(header.className).toContain('h-14')
     expect(header.className).toContain('flex-nowrap')
-    const places = within(header).getByRole('navigation', { name: 'Journeys' })
+    // No places: the left navigation is the only one.
+    expect(within(header).queryByRole('navigation')).toBeNull()
+    expect(within(header).queryAllByRole('link')).toEqual([])
     expect(
-      within(places)
-        .getAllByRole('link')
-        .map((a) => a.getAttribute('title')),
-    ).toEqual(['Now', 'Sessions', 'Tools', 'Rules', 'Ledger'])
-    // The counts: the sessions open (the status bar's number, idle ones too), and
-    // the requests that wait for a person.
+      header.querySelector('[data-slot="topbar-title"]'),
+    ).toHaveTextContent('Administration')
+    await waitFor(() => expect(controls(header)).toHaveLength(4))
+    const [menu, search, bell, account] = controls(header)
+    expect(menu).toHaveAccessibleName('Open navigation')
+    expect(menu.className).toContain('min-[761px]:hidden')
+    expect(search).toHaveAccessibleName('Search and commands')
+    expect(bell).toHaveAccessibleName('Notifications')
+    expect(account).toHaveAccessibleName(/, Account$/)
+  })
+
+  it('opens the navigation drawer from its menu button', async () => {
+    const user = userEvent.setup()
+    const onMenu = vi.fn()
+    renderIntel(<Topbar onMenu={onMenu} />)
+    await user.click(screen.getByRole('button', { name: 'Open navigation' }))
+    expect(onMenu).toHaveBeenCalledOnce()
+  })
+
+  it('names the page the address is: a place of its own by its place name', () => {
+    routerState.pathname = '/permissions'
+    routerState.search = { tab: 'approvals' }
+    const { container } = renderIntel(<Topbar onMenu={() => {}} />)
     expect(
-      within(places)
-        .getAllByRole('link')
-        .map((a) => a.textContent),
-    ).toEqual(['Now', 'Sessions, 7, Needs you', 'Tools', 'Rules, 3', 'Ledger'])
-    // Four controls, and still four once the workspaces answered after the first paint.
-    await waitFor(() => expect(controlsOutsidePlaces(header)).toHaveLength(4))
-    const controls = controlsOutsidePlaces(header)
-    expect(controls[0]).toHaveAttribute('data-slot', 'scope-switcher')
-    expect(controls[1]).toHaveAccessibleName('Search and commands')
-    expect(controls[2]).toHaveAccessibleName('Notifications')
-    expect(controls[3]).toHaveAccessibleName(/, Account$/)
+      container.querySelector('[data-slot="topbar-title"]'),
+    ).toHaveTextContent('Rules & approvals')
   })
 
   it('moves the version, theme, favorites, the mark and Stop all out of the bar', () => {
-    const { container } = renderIntel(<Topbar />)
+    const { container } = renderIntel(<Topbar onMenu={() => {}} />)
     const header = container.querySelector('header') as HTMLElement
     expect(within(header).queryByTestId('deployment-identity')).toBeNull()
     expect(within(header).queryByText('1.0', { exact: true })).toBeNull()
@@ -220,20 +227,54 @@ describe('the top bar holds the places and four controls, nothing else (#3161)',
     expect(
       within(header).queryByRole('navigation', { name: 'Breadcrumb' }),
     ).toBeNull()
+    expect(header.querySelector('[data-slot="scope-switcher"]')).toBeNull()
   })
 
+  it('names search by its visible word, and folds it to its icon below 1101 px', () => {
+    const { container } = renderIntel(<Topbar onMenu={() => {}} />)
+    const search = within(container).getByRole('button', {
+      name: 'Search and commands',
+    })
+    expect(search).toHaveTextContent(/^Search/)
+    expect(search).toHaveAttribute('aria-keyshortcuts', 'Control+K Meta+K')
+    expect(search.className).toContain('max-[1100px]:w-9')
+  })
+
+  it('Tab order is the reading order: menu, search, notifications, account', async () => {
+    const user = userEvent.setup()
+    const { container } = renderIntel(<Topbar onMenu={() => {}} />)
+    const header = container.querySelector('header') as HTMLElement
+    await waitFor(() => expect(controls(header)).toHaveLength(4))
+    const order: string[] = []
+    await user.tab()
+    while (header.contains(document.activeElement)) {
+      const el = document.activeElement as HTMLElement
+      order.push(el.getAttribute('aria-label') ?? el.textContent ?? '')
+      await user.tab()
+    }
+    expect(order[0]).toBe('Open navigation')
+    expect(order[1]).toBe('Search and commands')
+    expect(order[2]).toBe('Notifications')
+    expect(order[3]).toMatch(/, Account$/)
+  })
+})
+
+// The scope moved from the bar to the left navigation (sidebar.tsx) with the same control.
+describe('the scope control', () => {
   it('names the scope once: the workspace in force, or the organization when none is', async () => {
     useWorkspaceStore.setState({
       activeWorkspace: 'w2',
       activeWorkspaceName: 'Research',
     })
     const user = userEvent.setup()
-    const { container } = renderIntel(<Topbar />)
-    const header = container.querySelector('header') as HTMLElement
-    const scope = header.querySelector(
+    const { container } = renderIntel(<ScopeSwitcher />)
+    const scope = container.querySelector(
       '[data-slot="scope-switcher"]',
     ) as HTMLElement
     await within(scope).findByText('Research')
+    // The text it shows is inside the name a speech user says (WCAG 2.5.3): the
+    // initial is drawn, not text.
+    expect(scope.textContent).toBe('Research')
     // The organization is named in the menu and the tooltip, not a second time here.
     expect(scope.textContent).not.toContain('01a0776d')
     expect(scope).toHaveAttribute('title', expect.stringContaining('01a0776d'))
@@ -254,56 +295,12 @@ describe('the top bar holds the places and four controls, nothing else (#3161)',
       activeWorkspace: 'gone',
       activeWorkspaceName: 'Archived',
     })
-    const { container } = renderIntel(<Topbar />)
+    const { container } = renderIntel(<ScopeSwitcher />)
     const scope = container.querySelector(
       '[data-slot="scope-switcher"]',
     ) as HTMLElement
     await within(scope).findByText('Workspace not in list')
     expect(scope).toHaveAccessibleName(/^Workspace not in list, /)
-  })
-
-  it('gives the scope to All areas below 1024 px, where All areas shows it', () => {
-    const { container } = renderIntel(<Topbar />)
-    expect(
-      container.querySelector('[data-slot="topbar-scope"]')!.className,
-    ).toContain('max-[1023px]:hidden')
-  })
-
-  it('names search by its visible word, and folds it to its icon below 1101 px', () => {
-    const { container } = renderIntel(<Topbar />)
-    const search = within(container).getByRole('button', {
-      name: 'Search and commands',
-    })
-    expect(search).toHaveTextContent(/^Search/)
-    expect(search).toHaveAttribute('aria-keyshortcuts', 'Control+K Meta+K')
-    expect(search.className).toContain('max-[1100px]:w-9')
-  })
-
-  it('Tab order is the reading order: the scope, the places, then the actions', async () => {
-    const user = userEvent.setup()
-    const { container } = renderIntel(<Topbar />)
-    const header = container.querySelector('header') as HTMLElement
-    await waitFor(() => expect(controlsOutsidePlaces(header)).toHaveLength(4))
-    const order: string[] = []
-    await user.tab()
-    while (header.contains(document.activeElement)) {
-      const el = document.activeElement as HTMLElement
-      order.push(
-        el.getAttribute('data-slot') === 'scope-switcher'
-          ? 'scope'
-          : (el.getAttribute('aria-label') ?? el.textContent ?? ''),
-      )
-      await user.tab()
-    }
-    const at = (name: string) => order.findIndex((n) => n.startsWith(name))
-    expect(at('scope')).toBe(0)
-    expect(at('scope')).toBeLessThan(at('Now'))
-    expect(at('Now')).toBeLessThan(at('Ledger'))
-    expect(at('Ledger')).toBeLessThan(at('Search and commands'))
-    expect(at('Search and commands')).toBeLessThan(at('Notifications'))
-    expect(at('Notifications')).toBeLessThan(
-      order.findIndex((n) => n.endsWith(', Account')),
-    )
   })
 })
 
@@ -324,16 +321,18 @@ describe('the bar speaks the platform and names its icons (#3121)', () => {
     ['MacIntel', '⌘K'],
   ])('on %s the search hint reads %s', (platform, hint) => {
     onPlatform(platform)
-    const { container } = renderIntel(<Topbar />)
+    const { container } = renderIntel(<Topbar onMenu={() => {}} />)
     const search = within(container).getByRole('button', {
       name: 'Search and commands',
     })
-    expect(search).toHaveTextContent(hint)
-    if (hint !== '⌘K') expect(search.textContent).not.toContain('⌘')
+    // The hint is drawn, not text: what the button says is its label, inside its
+    // name (WCAG 2.5.3); the chord itself is aria-keyshortcuts.
+    expect(search.querySelector('kbd')).toHaveAttribute('data-keys', hint)
+    expect(search.textContent).toBe('Search')
   })
 
   it('gives every control that shows only an icon a tooltip with its name', () => {
-    const { container } = renderIntel(<Topbar />)
+    const { container } = renderIntel(<Topbar onMenu={() => {}} />)
     const header = container.querySelector('header') as HTMLElement
     /** The text a sighted person reads on the control: screen-reader-only text aside. */
     const visibleText = (el: Element) => {

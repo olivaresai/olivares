@@ -6,6 +6,7 @@ package gitpublish
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -34,9 +35,10 @@ const (
 
 // Effects.
 const (
-	effectPush        = "push"
-	effectPullRequest = "pull_request"
-	effectMerge       = "merge"
+	effectPush         = "push"
+	effectPullRequest  = "pull_request"
+	effectMerge        = "merge"
+	effectIssueComment = "issue_comment"
 )
 
 // Target is an approved publication target.
@@ -68,6 +70,9 @@ type Requested struct {
 	HeadRef, Base, Title           string
 	Number                         int
 	ExpectedHead, Method           string
+	CommentState                   string
+	PullRequestURL                 string
+	CostMicroUSD                   *int64
 }
 
 // Observed is the latest host observation, with its source and time.
@@ -79,6 +84,8 @@ type Observed struct {
 	Merged         bool
 	MergeCommitSHA string
 	MergeTree      string
+	CommentID      string
+	CommentURL     string
 	Source         string
 	At             time.Time
 }
@@ -148,6 +155,21 @@ func nullable(s string) any {
 	return s
 }
 
+func nullableInt(v *int64) any {
+	if v == nil {
+		return nil
+	}
+	return *v
+}
+
+func recordIntPtr(r model.Record, name string) *int64 {
+	if r[name] == nil {
+		return nil
+	}
+	v := r.Int(name)
+	return &v
+}
+
 func (in Intent) record() model.Record {
 	r := model.Record{
 		"target_id": in.Target.String(), "workspace_id": in.Workspace.String(), "target_version": in.TargetVersion,
@@ -160,6 +182,8 @@ func (in Intent) record() model.Record {
 		"req_ref": in.Requested.Ref, "req_expected_old": in.Requested.ExpectedOld, "req_commit": in.Requested.Commit, "req_tree": in.Requested.Tree,
 		"req_head_ref": in.Requested.HeadRef, "req_base": in.Requested.Base, "req_number": int64(in.Requested.Number),
 		"req_expected_head": in.Requested.ExpectedHead, "req_method": in.Requested.Method, "req_title": in.Requested.Title,
+		"req_comment_state": in.Requested.CommentState, "req_pull_request_url": in.Requested.PullRequestURL, "req_cost_micro_usd": nullableInt(in.Requested.CostMicroUSD),
+		"obs_comment_id": in.Observed.CommentID, "obs_comment_url": in.Observed.CommentURL,
 		"obs_present": in.Observed.Present, "obs_sha": in.Observed.SHA, "obs_head_sha": in.Observed.HeadSHA, "obs_number": int64(in.Observed.Number),
 		"obs_merged": in.Observed.Merged, "obs_merge_commit_sha": in.Observed.MergeCommitSHA, "obs_merge_tree": in.Observed.MergeTree, "obs_source": in.Observed.Source, "obs_at": ts(in.Observed.At),
 		"content_match": in.ContentMatch,
@@ -192,10 +216,12 @@ func intentFrom(r model.Record) Intent {
 			Ref: r.String("req_ref"), ExpectedOld: r.String("req_expected_old"), Commit: r.String("req_commit"), Tree: r.String("req_tree"),
 			HeadRef: r.String("req_head_ref"), Base: r.String("req_base"), Number: int(r.Int("req_number")),
 			ExpectedHead: r.String("req_expected_head"), Method: r.String("req_method"), Title: r.String("req_title"),
+			CommentState: r.String("req_comment_state"), PullRequestURL: r.String("req_pull_request_url"), CostMicroUSD: recordIntPtr(r, "req_cost_micro_usd"),
 		},
 		Observed: Observed{
 			Present: r.Bool("obs_present"), SHA: r.String("obs_sha"), HeadSHA: r.String("obs_head_sha"), Number: int(r.Int("obs_number")),
-			Merged: r.Bool("obs_merged"), MergeCommitSHA: r.String("obs_merge_commit_sha"), MergeTree: r.String("obs_merge_tree"), Source: r.String("obs_source"), At: parseTS(r.String("obs_at")),
+			Merged: r.Bool("obs_merged"), MergeCommitSHA: r.String("obs_merge_commit_sha"), MergeTree: r.String("obs_merge_tree"),
+			CommentID: r.String("obs_comment_id"), CommentURL: r.String("obs_comment_url"), Source: r.String("obs_source"), At: parseTS(r.String("obs_at")),
 		},
 		ContentMatch:      r.Bool("content_match"),
 		Acknowledged:      Acknowledged{Acknowledged: r.Bool("ack"), Status: int(r.Int("ack_status")), RequestID: r.String("ack_request_id"), At: parseTS(r.String("ack_at"))},
@@ -239,14 +265,17 @@ func listAll(ctx context.Context, sc store.Scope, kind model.Kind, filters ...mo
 	}
 }
 
-// txNow is the database transaction time when the scope offers it.
-func txNow(ctx context.Context, sc store.Scope, fallback time.Time) time.Time {
-	if c, ok := sc.(store.TransactionClock); ok {
-		if t, err := c.TransactionNow(ctx); err == nil {
-			return t.Time().UTC()
-		}
+// txNow reads the authoritative database time inside the transaction.
+func txNow(ctx context.Context, sc store.Scope) (time.Time, error) {
+	c, ok := sc.(store.TransactionClock)
+	if !ok {
+		return time.Time{}, errors.New("gitpublish: transaction clock unavailable")
 	}
-	return fallback
+	t, err := c.TransactionNow(ctx)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return t.Time().UTC(), nil
 }
 
 func loadTarget(ctx context.Context, sc store.Scope, id model.ID) (Target, error) {

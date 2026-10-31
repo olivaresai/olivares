@@ -92,6 +92,8 @@ describe('collectSecretUsage', () => {
         name: 'nightly',
         secret_env: [{ env: 'API', secret: 'env/api' }],
       },
+      // A run's managed credentials are names in the credential/ namespace.
+      { run_ref: 'run_4', name: 'ops', credentials: ['prod-db'] },
     ] as RunDTO[]
 
     const usage = collectSecretUsage({ sources, mcpServers, runs })
@@ -103,6 +105,9 @@ describe('collectSecretUsage', () => {
     // One server referencing one secret twice is one use.
     expect(usage.store.get('mcp/github')).toEqual([
       { kind: 'mcp', label: 'github', id: 'srv_1' },
+    ])
+    expect(usage.store.get('credential/prod-db')).toEqual([
+      { kind: 'session', label: 'ops', id: 'run_4' },
     ])
     expect(usage.store.get('env/api')).toEqual([
       { kind: 'session', label: 'nightly', id: 'run_1' },

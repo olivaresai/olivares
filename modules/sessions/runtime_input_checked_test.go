@@ -656,6 +656,10 @@ func TestRuntimeInputCheckedWorkGeneration(t *testing.T) {
 func TestRuntimeInputCheckedOwnedDriverAndProfile(t *testing.T) {
 	for _, be := range managedStopBackends(t) {
 		t.Run(be.name, func(t *testing.T) {
+			// The commit is a synchronous write inside the checked section, and a loaded
+			// runner can stall it past the production 250ms ceiling. Widen the ceiling for
+			// this test only; the seam never narrows it and never reaches a production binary.
+			t.Cleanup(SetTestCheckedRuntimeInputCeiling(2 * time.Second))
 			f := newManagedStopFixture(t, be.config(t))
 			observed := &runtimeInputObservedData{ModuleData: f.m.Data}
 			f.m.Data = observed
@@ -670,7 +674,7 @@ func TestRuntimeInputCheckedOwnedDriverAndProfile(t *testing.T) {
 				t.Fatalf("raw driver request: %#v %v", result, err)
 			}
 			request.Mode, request.Raw, request.Text = RuntimeInputText, nil, preservedOperatorText
-			ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), CheckedRuntimeInputCeiling())
 			defer cancel()
 			observed.watch(ctx)
 			result, err = f.m.DeliverRuntimeInputChecked(ctx, request, runtimeInputChecksAllowForTest())
@@ -679,6 +683,10 @@ func TestRuntimeInputCheckedOwnedDriverAndProfile(t *testing.T) {
 			}
 			if observed.mutations != 1 || observed.barriers != 1 {
 				t.Fatalf("driver opened a second admission: mutations=%d barriers=%d", observed.mutations, observed.barriers)
+			}
+			fact, err := f.m.loadRun(context.Background(), f.tenant, target.RunRef)
+			if err != nil || !fact.Bool(colRunCodexInputAttempted) {
+				t.Fatalf("checked input fact was not committed with admission: %v", err)
 			}
 			after := readFixtureRecord(t, path)
 			if !slices.Equal(after.Methods, append(before.Methods, codexMethodTurnStart)) || !slices.Equal(after.Inputs, []string{preservedOperatorText}) {

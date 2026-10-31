@@ -22,7 +22,8 @@
     "kind": "Вид",
     "key": "Ключ",
     "state": "Состояние",
-    "connection": "Соединение"
+    "connection": "Соединение",
+    "actions": "Действия"
   },
   "kinds": {
     "anthropic": "Anthropic",

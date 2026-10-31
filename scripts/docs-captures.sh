@@ -219,7 +219,7 @@ fi
 
 # First-boot setup creates the demo administrator and the Northwind organization. The engine's
 # --seed-demo is deliberately NOT used: it also writes ten synthetic observed sessions into the same
-# tenant, and the home then counts them beside the canonical sixteen (dev#2562). The banner prints
+# tenant, and the home then counts them beside the canonical sixteen. The banner prints
 # the one-time token once; it is read here and never echoed. The setup reply is the user and its
 # organization, with no secret in it.
 SETUP_TOKEN="$(awk '/^=== FIRST-BOOT SETUP ===$/ { inside = 1; next }
@@ -503,7 +503,7 @@ fi
 
 # The home counts every observed row, including the adoption rows no run launched. The dataset's
 # own check ran before adoption; read the plane back now so a row that landed on today (or still
-# reads as live) refuses the capture instead of publishing a figure nobody seeded (dev#2562).
+# reads as live) refuses the capture instead of publishing a figure nobody seeded.
 echo "==> Reading back the live plane after adoption"
 if ! OLIVARES_TOKEN="$TOKEN" python3 -I "$ROOT/scripts/seed-demo-dataset.py" \
     "http://127.0.0.1:$PORT" - "$TENANT" "$DATASET_ROOT" --verify-live-plane; then

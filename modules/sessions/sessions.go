@@ -50,12 +50,17 @@ type Module struct {
 	// workOutboxNudge is this module's outbox pump wake-up (communication_tx.go): each engine's
 	// pump registers on its own module, so two engines in one process never wake each other.
 	workOutboxNudge atomic.Value // func()
+	// workOutboxInserts counts the work-outbox rows communication transactions insert. A mutation that
+	// saw it move wakes the pump after it commits, never at the insert (communication_tx.go).
+	workOutboxInserts atomic.Uint64
 
 	// rt is the OPERATE runtime (governed Claude Code session lifecycle):
 	// the deny-closed launch seams and the in-memory registry of live processes.
 	rt *runtimeState
 	// previews are the open browser previews of session ports (preview.go).
-	previews        previewGrants
+	previews previewGrants
+	// terminals are the open shells of the console's terminal (terminal.go).
+	terminals       terminalHub
 	profileCatalogs profileCatalogCache
 	// protocolBindingSpecValidators are server-owned K5 capability witnesses,
 	// keyed by protocol. Browser/CLI input is never trusted as validation.
@@ -166,6 +171,7 @@ func (m *Module) Start(ctx context.Context) error {
 	m.rt.mu.Lock()
 	m.rt.approvalWorkersStopped = false
 	m.rt.mu.Unlock()
+	m.terminals.reopen()
 	if m.Data == nil && m.log != nil {
 		m.log.Warn("sessions: started without a data handle; live operation will not persist")
 	}
@@ -198,6 +204,7 @@ func (m *Module) RecoverWaitingLaunchesForAllTenants(ctx context.Context) {
 		}
 	}
 	m.resumeEngineStoppedRuns(tenants)
+	m.startLimitResumeWorker(tenants)
 }
 
 // Stop unsubscribes, terminates every supervised Claude Code process (their
@@ -212,8 +219,11 @@ func (m *Module) Stop(ctx context.Context) error {
 		cancel()
 	}
 	if m.rt != nil {
+		m.stopLimitResumeWorker()
 		m.stopApprovalWorkers(ctx)
+		m.stopPush(ctx)
 		m.stopStopSweep() // end the active kill-switch sweep before tearing down runs
+		m.terminals.closeAll("shutdown")
 		stopErr := m.stopAllRuns(ctx)
 		m.broker.close()
 		return stopErr

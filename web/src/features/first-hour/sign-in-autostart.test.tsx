@@ -74,7 +74,7 @@ describe('SignIn that starts on its own', () => {
     await user.click(screen.getByRole('button', { name: 'Copy' }))
     expect(writeText).toHaveBeenCalledWith('ABCD-1234')
     // Said aloud too: a status region, not only a changed label.
-    expect(await screen.findByRole('status')).toHaveTextContent('Copied')
+    expect(await screen.findByText('Copied')).toHaveAttribute('role', 'status')
   })
 
   it('asks for the pasted code of any tool whose flow says it waits for one', async () => {

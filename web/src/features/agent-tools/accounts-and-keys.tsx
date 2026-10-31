@@ -11,11 +11,22 @@ import { useTranslation } from 'react-i18next'
 import { BindingsTable } from '@/features/agentops/bindings-table'
 import { ProfilesPanel } from '@/features/agentops/profiles-panel'
 import { ProviderAccountsPanel } from '@/features/agentops/provider-accounts-panel'
+import { ProviderKeyReferences } from '@/features/models/key-references'
 import { ApiKeys } from '@/features/providers/providers-view'
 import { useAuth } from '@/lib/auth/context'
+import { useModuleOn } from '@/stores/modules'
 import './i18n'
 
-export function AccountsAndKeys({ folded = false }: { folded?: boolean }) {
+export function AccountsAndKeys({
+  folded = false,
+  adding,
+  onAddingChange,
+}: {
+  folded?: boolean
+  /** The page's "Add provider key" asks the key list for its add form. */
+  adding?: boolean
+  onAddingChange?: (open: boolean) => void
+}) {
   const { t } = useTranslation(['agentTools', 'agentops'])
   const { can } = useAuth()
   const id = useId()
@@ -32,10 +43,14 @@ export function AccountsAndKeys({ folded = false }: { folded?: boolean }) {
   // list on its own, as the /provider-profiles and /provider-bindings doors gave it.
   const profiles = profileRead && !accounts
   const bindings = can('sessions:profile-binding:read') && !profileRead
+  // The governed references to keys held at the provider (#3388): a provider key has one
+  // destination, here, beside the API keys. Their tier is the models module's own.
+  // They are the models module's: off, they are not offered, as the Models page was not.
+  const keyReferences = useModuleOn('models') && can('models:keys:read')
   // The tier left: the folded list is closed again, not read behind a closed fold.
   if (!accounts && opened) setOpened(false)
   // Deny closed, and said.
-  if (!accounts && !keys && !profiles && !bindings)
+  if (!accounts && !keys && !profiles && !bindings && !keyReferences)
     return (
       <p role="status" className="text-caption text-text-2">
         {t('place.noAccess')}
@@ -89,7 +104,10 @@ export function AccountsAndKeys({ folded = false }: { folded?: boolean }) {
           <BindingsTable describe={false} />
         </Part>
       ) : null}
-      {keys ? <ApiKeys /> : null}
+      {keys ? (
+        <ApiKeys adding={adding} onAddingChange={onAddingChange} />
+      ) : null}
+      {keyReferences ? <ProviderKeyReferences /> : null}
     </section>
   )
 }

@@ -506,10 +506,10 @@ func TestChildEnvLimits(t *testing.T) {
 // today; a new tool adds its own in core/driverfacts, and this list with it.
 func TestChildEnvProviderFamilies(t *testing.T) {
 	prefixes, homes := slices.Sorted(slices.Values(providerEnvPrefixes)), slices.Sorted(slices.Values(providerConfigHomeEnvs))
-	if want := []string{"ANTHROPIC_", "CLAUDE_CODE_", "CODEX_", "GEMINI_CLI_", "GROK_", "OPENAI_", "OPENCODE_", "XAI_"}; !slices.Equal(prefixes, want) {
+	if want := []string{"ANTHROPIC_", "CLAUDE_CODE_", "CODEX_", "CURSOR_", "GEMINI_CLI_", "GROK_", "OPENAI_", "OPENCODE_", "XAI_"}; !slices.Equal(prefixes, want) {
 		t.Errorf("provider families = %v, want %v", prefixes, want)
 	}
-	if want := []string{"CLAUDE_CONFIG_DIR", "CODEX_HOME", "GEMINI_CLI_HOME", "GROK_HOME", "OPENCODE_CONFIG_DIR"}; !slices.Equal(homes, want) {
+	if want := []string{"CLAUDE_CONFIG_DIR", "CODEX_HOME", "CURSOR_CONFIG_DIR", "GEMINI_CLI_HOME", "GROK_HOME", "OPENCODE_CONFIG_DIR"}; !slices.Equal(homes, want) {
 		t.Errorf("configuration homes = %v, want %v", homes, want)
 	}
 }

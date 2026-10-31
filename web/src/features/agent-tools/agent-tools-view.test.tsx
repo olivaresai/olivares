@@ -57,6 +57,8 @@ import { readinessOf } from '@/features/first-hour/readiness.fixture'
 import { ApiError } from '@/lib/api/errors'
 import { useTenantStore } from '@/stores/tenant'
 import { AgentToolsView } from './agent-tools-view'
+import { setEngineTools } from '@/features/agentops/engine-tools'
+import engineTools from '@/features/agentops/engine-tools.fixture.json'
 import type { ProviderSnapshot } from './api'
 
 const snap = (driver: string): ProviderSnapshot => ({
@@ -332,7 +334,7 @@ it('never offers installation after planning fails', async () => {
     screen.queryByRole('button', { name: /install approved version/i }),
   ).not.toBeInTheDocument()
 })
-// HU2-28: the release lookup failed for an hour (GitHub's limit for this network) and the page
+// acceptance: the release lookup failed for an hour (GitHub's limit for this network) and the page
 // offered no way to try again but to start over.
 it('offers Retry after planning fails, and plans the same version again', async () => {
   api.plan.mockRejectedValueOnce(new Error('GitHub answered HTTP 403'))
@@ -396,6 +398,47 @@ it('states the verification strength of an installed tool before planning', asyn
     ),
   ).toBeInTheDocument()
   expect(api.plan).not.toHaveBeenCalled()
+})
+
+// Cursor publishes no checksum or signature, so the installer reports `origin-tarball`. The
+// details sheet and the approval that runs the unsigned package must say so in words, not
+// print the key.
+it('states that the Cursor CLI package has no publisher signature, in the details and at approval', async () => {
+  api.inventory.mockResolvedValue({
+    drivers: ['claude', 'cursor'],
+    verification_levels: { claude: 'openpgp', cursor: 'origin-tarball' },
+    inventory: { installed: [], leftovers: [] },
+    read_only: false,
+    jobs: [],
+  })
+  api.providers.mockResolvedValue({
+    providers: [snap('claude'), snap('cursor')],
+  })
+  api.plan.mockResolvedValue({
+    driver: 'cursor',
+    version: '2026.10.22-27dcf5f',
+    digest: 'c1',
+    verification: 'origin-tarball',
+    executable: '/tools/cursor/lib/agent/agent',
+  })
+  const label =
+    'Official HTTPS origin; digest recorded at install; no publisher signature.'
+  mount()
+  const user = userEvent.setup()
+  const sheet = await openDetails(user, 'Cursor CLI')
+  expect(within(sheet).getByText(label)).toBeInTheDocument()
+  expect(sheet).not.toHaveTextContent('verification.origin-tarball')
+  await user.click(
+    within(sheet).getByRole('button', { name: /review cursor cli/i }),
+  )
+  // The review replaces the sheet: the approval is on the page, and it is where the
+  // administrator decides to run the unsigned package.
+  const approval = await screen.findByRole('heading', {
+    name: 'Review installation',
+  })
+  const section = approval.closest('section') as HTMLElement
+  expect(within(section).getByText(label)).toBeInTheDocument()
+  expect(section).not.toHaveTextContent(/\borigin-tarball\b/)
 })
 
 it('requires an explicit path action to probe an unregistered CLI version', async () => {
@@ -585,6 +628,33 @@ it.each([
   },
 )
 
+// The tools and their names are the engine's (GET /v1/m/sessions/tools): a row the engine
+// adds to its driver table is listed and named here with no console change.
+it('names a tool the engine adds to its table, with no console change', async () => {
+  setEngineTools([
+    ...engineTools.tools,
+    {
+      key: 'hermes',
+      name: 'Hermes Agent',
+      name_stem: 'hermes',
+      session: true,
+      bindings: [{ kind: 'openai', egress: 'configured-endpoint' }],
+    },
+  ])
+  api.inventory.mockResolvedValue({
+    drivers: ['hermes'],
+    inventory: { installed: [], leftovers: [] },
+    read_only: false,
+    jobs: [],
+  })
+  api.providers.mockResolvedValue({ providers: [snap('hermes')] })
+  mount()
+  expect(await screen.findByTestId('tool-hermes')).toBeInTheDocument()
+  expect(
+    await screen.findByRole('button', { name: 'Options for Hermes Agent' }),
+  ).toBeInTheDocument()
+})
+
 // A status that cannot be read is said in the row, not shown as signed out; Refresh asks
 // the tool again.
 it('says when the login of a tool cannot be read, and Refresh asks again', async () => {
@@ -637,7 +707,7 @@ it('shows why an installed tool probe could not be read', async () => {
   ).toBeVisible()
 })
 
-// HU2-30 (RC10): after Review -> Install, the sign-in row kept "Not installed" next to
+// acceptance (RC10): after Review -> Install, the sign-in row kept "Not installed" next to
 // "Installed" until a reload. A finished install reads the tools' own status again.
 it('reads the tool status again when an install finishes', async () => {
   const user = userEvent.setup()

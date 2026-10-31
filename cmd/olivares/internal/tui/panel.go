@@ -47,6 +47,10 @@ type Panel struct {
 // SetFields replaces the fields and focuses the first one.
 func (p *Panel) SetFields(fields []Field) { p.form.SetFields(fields) }
 
+// Focus puts the cursor on field i, so a refusal can send the person to the field
+// that needs another answer.
+func (p *Panel) Focus(i int) { p.form.SetFocus(i) }
+
 // Values are the fields' texts in order.
 func (p *Panel) Values() []string { return p.form.Values() }
 
@@ -138,14 +142,26 @@ func (p *Panel) render() []string {
 		formRows += entryRows(entry, width)
 	}
 	used := 0
+	var shown []string
 	for _, entry := range body {
 		rows := entryRows(entry, width)
 		if used+rows+formRows > room {
+			// A page that is cut says so, and the marker takes the room of the
+			// rows it hides.
+			for used+1+formRows > room && len(shown) > 0 {
+				used -= entryRows(shown[len(shown)-1], width)
+				shown = shown[:len(shown)-1]
+			}
+			if used+1+formRows <= room {
+				shown = append(shown, fmt.Sprintf("  … %d more lines", len(body)-len(shown)))
+				used++
+			}
 			break
 		}
-		entries = append(entries, entry)
+		shown = append(shown, entry)
 		used += rows
 	}
+	entries = append(entries, shown...)
 	entries = append(entries, form...)
 	used += formRows
 	for ; used < room; used++ {

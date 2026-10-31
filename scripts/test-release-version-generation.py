@@ -228,7 +228,7 @@ class ReleaseGeneration(unittest.TestCase):
                 os.chdir(before)
 
     def test_readme_download_urls_follow_the_canon(self):
-        """A marked README package block is swept by the stamp; an unmarked URL is refused (dev#2175)."""
+        """A marked README package block is swept by the stamp; an unmarked URL is refused."""
         url = ('https://github.com/olivaresai/olivares/releases/download/0.1/'
                'olivares_0.1_linux_amd64.deb')
         files = {'README.md': '<!-- release -->\ncurl -fsSLO ' + url + '\n<!-- /release -->\n',
@@ -431,6 +431,9 @@ class ReleaseGeneration(unittest.TestCase):
     PLANTS_IN_A_ROWS_DOCUMENT = (
         ('CHANGELOG.md', '- DOMPurify fixed in Olivares 2.0.'),
         ('CHANGELOG.md', '- undici is in Olivares 1.0.1.'),
+        ('CHANGELOG.md', '- nginx 1.31.7 is fixed in release 1.5.'),
+        ('CHANGELOG.md', '- OpenResty is fixed in release 1.5.'),
+        ('CHANGELOG.md', '- Nginx Proxy Manager moves in release 1.5.'),
         ('docs/trust/dod-zero-trust-mapping.md', 'Enforced in release 1.0.'),
         ('docs/trust/dod-zero-trust-mapping.md', '| 3.0 | Olivares |'),
         ('docs-site/src/content/docs/how-to/connectors/tak.md', 'The connector (arrives in release 2.0) adds TAK mTLS.'),
@@ -522,9 +525,11 @@ class ReleaseGeneration(unittest.TestCase):
             curated, kept = CHECKER['curated_out'](), CHECKER['curation_kept']()
             files = sorted(set(CHECKER['surface_files']()) | set(CHECKER['artifact_files']()))
             for path in files:
-                if CHECKER['removed_by_export'](path, curated, kept):
-                    skipped += 1
-                    continue
+                # A file the export removes still counts for a word: the dev-only words exist only where their
+                # file does (the appliance floor's `olivares-selinux`). It never counts for a row: a row for a
+                # removed document belongs in PRIVATE_ROWS, and a shipped row there would be judged on the export.
+                removed = CHECKER['removed_by_export'](path, curated, kept)
+                skipped += removed
                 applicable = CHECKER['rows_at'](path, False)
                 here = [name for name, _ in applicable if name in rows]
                 text = CHECKER['read_surface'](path)
@@ -539,7 +544,7 @@ class ReleaseGeneration(unittest.TestCase):
                             continue
                         by_row = [name for name, found in applicable if name in rows and found.search(window)]
                         by_word = [w for w, found in alone.items() if any(found[row].search(window) for row in here)]
-                        needed_rows.update(by_row if len(by_row) == 1 else ())
+                        needed_rows.update(by_row if len(by_row) == 1 and not removed else ())
                         needed_words.update(by_word if len(by_word) == 1 else ())
         finally:
             os.chdir(before)
@@ -895,7 +900,7 @@ class ReleaseGeneration(unittest.TestCase):
                         if name in scoped and in_export and CHECKER['product_line'](match.group()):
                             published.setdefault(name, set()).add(match.group())
             # The public tree is this tree minus the documents the export removes: a public row whose
-            # every example is in one of them is dead data there (dev#2627), so it belongs in PRIVATE_ROWS.
+            # every example is in one of them is dead data there, so it belongs in PRIVATE_ROWS.
             for name, _, _ in CHECKER['_NOT_RELEASES']:
                 with self.subTest(row=name):
                     self.assertIn(name, exported, 'a public row that names no literal in a document the export '

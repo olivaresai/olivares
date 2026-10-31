@@ -17,9 +17,20 @@ import { useWorkspaceStore } from '@/stores/workspace'
 // El panel pinta `<Link>` y en jsdom no hay router: sin esto, `useLinkProps` revienta con
 // «Cannot read properties of null (reading 'isServer')», que no dice nada del componente.
 // Degradado a un ancla, como ya hace tenant-gate.test.tsx.
+// The anchor carries `search` in its href, as the router renders it.
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ to, children }: { to: string; children: ReactNode }) => (
-    <a href={to}>{children}</a>
+  Link: ({
+    to,
+    search,
+    children,
+  }: {
+    to: string
+    search?: Record<string, string>
+    children: ReactNode
+  }) => (
+    <a href={search ? `${to}?${new URLSearchParams(search)}` : to}>
+      {children}
+    </a>
   ),
   useNavigate: () => () => {},
   useRouterState: () => '/',
@@ -273,7 +284,7 @@ describe('WorkspaceDashboardView', () => {
       expect(screen.queryByTitle(/View all|inventory/i)).not.toBeInTheDocument()
       expect(
         screen.getAllByRole('link').map((a) => a.getAttribute('href')),
-      ).toEqual(['/console', '/console'])
+      ).toEqual(['/console?tab=scopes', '/console?tab=scopes'])
       page.unmount()
 
       agentsMock.mockResolvedValue({ items: [], has_more: false })
@@ -283,7 +294,7 @@ describe('WorkspaceDashboardView', () => {
       ).toBeVisible()
       expect(
         screen.getAllByRole('link').map((a) => a.getAttribute('href')),
-      ).toEqual(['/console', '/console'])
+      ).toEqual(['/console?tab=scopes', '/console?tab=scopes'])
     })
   })
 
@@ -295,6 +306,11 @@ describe('WorkspaceDashboardView', () => {
     ).toHaveAttribute('href', '/inventory')
     expect(
       screen.getAllByRole('link').map((a) => a.getAttribute('href')),
-    ).toEqual(['/inventory', '/inventory', '/console', '/console'])
+    ).toEqual([
+      '/inventory',
+      '/inventory',
+      '/console?tab=scopes',
+      '/console?tab=scopes',
+    ])
   })
 })

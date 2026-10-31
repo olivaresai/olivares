@@ -16,7 +16,7 @@ import (
 func boolPtr(b bool) *bool { return &b }
 
 // TestValidateFallbacks pins the published chain constraints enforced client-side
-//: max 3 entries, named, distinct from each other and from the requested
+// : max 3 entries, named, distinct from each other and from the requested
 // model, and mutual exclusion with a credit retry.
 func TestValidateFallbacks(t *testing.T) {
 	base := MessageRequest{Model: "claude-fable-5"}

@@ -680,6 +680,13 @@ DEPENDENCY_WORDS = (
     "pgx", "cosign", "nFPM", "cloudflare/circl", "PCI DSS", "Google-ADK", "Keep a Changelog",
     "DoD Zero Trust Strategy",
 )
+# A package we build whose Version and Release are its own, set in its spec and not by ${VERSION}: a floor on it
+# (`olivares-selinux >= 1.0.0-13`) names that package's line, never a release of the product. The nFPM packages
+# carry ${VERSION}, so a floor on them stays a release coordinate. Its only floor is in the appliance portal's nFPM
+# file, which the export removes: the word exists only where that file does, so the export names nothing with it.
+# export-closure: absent-by-design packaging/nfpm/olivares-appliance-portal.yaml — presence selects a dependency word; this data file is never executed.
+if os.path.exists("packaging/nfpm/olivares-appliance-portal.yaml"):
+    DEPENDENCY_WORDS += ("olivares-selinux",)
 DEPENDENCY = "(?:" + "|".join(DEPENDENCY_WORDS) + ")"
 
 
@@ -825,6 +832,8 @@ NOT_RELEASES = (
     ("the container images' Node, npm and npm's bundled packages in a changelog entry", ("CHANGELOG.md",),
      r"\brun Node \x00|\bshipped Node \x00|\bship npm \x00|\bbundled undici \x00|\bbrace-expansion \x00|\bip-address \x00"
      r"|\bhttp-cache-semantics \x00"),
+    ("the Nginx Proxy Manager, OpenResty and nginx versions of a changelog security entry", ("CHANGELOG.md",),
+     r"\bNginx Proxy Manager \x00|\bOpenResty \x00|\bnginx (?:from )?\x00|\bnginx from [0-9.]+ to \x00"),
     ("the pinned gitleaks release", ("docs/SECURITY-HARDENING.md",), r"gitleaks \(pinned \x00"),
     ("the PostgreSQL minor releases a measurement names",
      (*localized("how-to/backup-and-restore.md"), "docs/DR-RUNBOOK.md", "docs/DIRECTORY-USER-AUTHORITY.md",
@@ -1799,7 +1808,7 @@ README_IMAGE = re.compile(
     r"(?:@sha256:[a-fA-F0-9]+)?(?![\w/+-]|\.\w)"
 )
 
-# A release URL of ours in a root README, judged as one unit like an image coordinate (dev#2175):
+# A release URL of ours in a root README, judged as one unit like an image coordinate:
 # the package blocks are what a reader copies, and their version is a bare 0.N that
 # product_line() leaves to prose as a decimal, so an unmarked stale URL is invisible to the
 # token judge (measured 2026-10-14: README x7 shipped releases/download/0.1/... under canon
@@ -1821,10 +1830,10 @@ README_RELEASE_URL = re.compile(
     re.IGNORECASE)
 
 
-# A BARE DECIMAL IS A RELEASE CLAIM ONLY BESIDE A RELEASE WORD (2026-10-16, dev#2299). An unmarked
+# A BARE DECIMAL IS A RELEASE CLAIM ONLY BESIDE A RELEASE WORD (2026-10-16, the regression). An unmarked
 # `N.N` with no `v`, no patch and no suffix is a release of ours only when the text says so: measured
 # on main, a sizing table (`1.0 / 4.0` threads per session, `28.8` starts per second) and a build
-# name were refused as releases, one NOT_RELEASES row per page at a time (dev#2293, then this).
+# name were refused as releases, one NOT_RELEASES row per page at a time (the regression, then this).
 # Said so = the release vocabulary of RELEASE_WORD within CONTEXT_BEFORE characters before the literal
 # or CONTEXT_AFTER after it, on its line: the product, `release`, `version`, `tag` (a download or
 # tag URL path has one, `appVersion` and `imageTag` spell one), `stable` and the same words in every
@@ -2354,7 +2363,7 @@ def selftest():
     tree = {"deploy/README.md": "Registry: `docker.io/olivaresai/olivares`"}
     expect("registry names in detailed deployment docs keep their existing scope",
            judge("26.1001", scan(tree, rd(tree)))[0] == [])
-    # ── README release URLs name the release (added 2026-10-14, dev#2175) ──
+    # ── README release URLs name the release (added 2026-10-14, the regression) ──
     # The public README ×7 installed 0.1 under canon 0.2: a download URL's version is a bare
     # 0.N, which product_line() leaves to prose as a decimal, and no arm refused it. A release
     # URL of ours in a root README is a unit like an image coordinate now: unmarked it is
@@ -2484,6 +2493,16 @@ def selftest():
     expect("a dependency version is named (Go) or red: no row names chi",
            judge("1.0", scan(tree, rd(tree)))[0] == [("d.md", 1, "v5.3.1")]
            and [h.token for h in scan(tree, rd(tree))] == ["v5.3.1"])
+    portal = "packaging/nfpm/example-portal.yaml"
+    if "olivares-selinux" in DEPENDENCY_WORDS:
+        # Dev only: the word is declared where the appliance portal's nFPM file is (see DEPENDENCY_WORDS).
+        for floor in ("1.0.0-13", "1.0.0-15", "2.3.1-7"):
+            tree = {portal: '"depends": ["pam", "olivares-selinux >= %s"]' % floor}
+            expect("a floor on a package of ours with its own version line is no release coordinate: " + floor,
+                   judge_artifacts("26.800", scan(tree, rd(tree))) == [])
+    tree = {portal: '"depends": ["olivares-appliance-base >= 26.700"]'}
+    expect("a floor on a package that carries the release is still a stale coordinate",
+           judge_artifacts("26.800", scan(tree, rd(tree))) == [(portal, 1, "26.700")])
     references = {"d.md": "target 99.900% uptime; see SPEC §47.100 and ORD-47.100"}
     expect("percentage and specification section are not monthly releases", scan(references, rd(references)) == [])
     tree = {"e.md": "since 26.9 things"}
@@ -3610,7 +3629,11 @@ def selftest():
                        ("docs-site/src/content/docs/how-to/connectors.md",
                         "https://github.com/example/dep/releases/tag/1.0.1\n"),
                        ("docs/x.md", "listen on 127.0.0.1:8443 or 10.0.0.0/8; 1.5 GB; 99.9%; §1.2; AGPL-3.0-only\n"),
-                       ("docs/x.md", "Releases before 1.0 used CalVer; pre-1.0 builds, from `1.0` on.\n")):
+                       ("docs/x.md", "Releases before 1.0 used CalVer; pre-1.0 builds, from `1.0` on.\n"),
+                       ("CHANGELOG.md",
+                        "- The Server image's optional Nginx Proxy Manager 2.16.0 ships OpenResty 1.31.1.1 (nginx 1.31.1),\n"
+                        "  without the five medium fixes of nginx 1.31.7. The Server image moves to the first one that\n"
+                        "  ships OpenResty 1.31.7 or later, or an nginx from 1.31.2 to 1.31.6 (CVE-2026-93479).\n")):
         tree = {path: text}
         expect(f"named, not a release of ours: {path}: {text.strip()}",
                judge("1.0", scan(tree, rd(tree)), curated=set(), kept=set())[0] == [])
@@ -3618,7 +3641,7 @@ def selftest():
                  "olivares agent tool install --driver codex --version 2.0.14 --yes"):
         tree = {"docs/x.md": text + "\n"}
         expect(f"no row hides a release: {text}", judge("1.0", scan(tree, rd(tree)), curated=set(), kept=set())[0] != [])
-    # ── A bare decimal is a claim only beside a release word (2026-10-16, dev#2299) ──
+    # ── A bare decimal is a claim only beside a release word (2026-10-16, the regression) ──
     # The sizing page that turned main red: a table of measured decimals and a build name.
     sizing = ("| Measure | 16-core container | 6 vCPU lab VM |\n|---|---|---|\n"
               "| Engine threads / file descriptors per session | 1.0 / 4.0 | 1.0 / 4.0 |\n"

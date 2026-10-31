@@ -71,11 +71,14 @@ const threatIntelPublishBuffer = 1024
 //
 // and publishes the resulting findings back on the bus (additive). A subscribe
 // error leaves the add-on inactive — never a boot failure.
-func subscribeThreatIntel(ctx context.Context, getenv func(string) string, bus eventbus.Bus, log *slog.Logger) {
-	src := thisEdition.threatIntelSource.get(getenv, log)
-	if src == nil {
+func subscribeThreatIntel(ctx context.Context, getenv func(string) string, bus eventbus.Bus, gates *editionLiveGates, log *slog.Logger) {
+	// Community has no add-on. An edition that has it subscribes whether or not a feed is
+	// configured now, because an administrator's settings can turn one on while the engine
+	// runs; with no source configured the handler below answers nothing (edition_live.go).
+	if thisEdition.threatIntelSource == nil {
 		return
 	}
+	source := gates.threatIntel.bootFrom(func() threatIntelSource { return thisEdition.threatIntelSource.get(getenv, log) })
 
 	// DECOUPLE publishing from the bus drainer goroutine. The handler subscribes to
 	// finding.reported AND emits finding.reported, so a SYNCHRONOUS in-handler
@@ -111,8 +114,7 @@ func subscribeThreatIntel(ctx context.Context, getenv func(string) string, bus e
 	}
 
 	handler := func(_ context.Context, e event.Event) error {
-		// The subscription is made once at boot; the source may be turned on or off
-		// later by an activation.
+		src := source()
 		if !sdk.CapabilityEnabled(src) {
 			return nil
 		}
@@ -140,8 +142,10 @@ func subscribeThreatIntel(ctx context.Context, getenv func(string) string, bus e
 		}
 		return
 	}
-	src.StartRefresh(ctx) // optional in-process periodic pull (no-op unless configured)
-	if log != nil {
-		log.Info("threatintel: curated feed engine active (additive findings only)")
+	if src := source(); src != nil {
+		src.StartRefresh(ctx) // optional in-process periodic pull (no-op unless configured)
+		if log != nil {
+			log.Info("threatintel: curated feed engine active (additive findings only)")
+		}
 	}
 }

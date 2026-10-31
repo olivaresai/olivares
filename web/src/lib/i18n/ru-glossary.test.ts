@@ -103,7 +103,6 @@ function offenders(test: (e: Entry) => boolean): string[] {
 const SEARCH_ALIASES = new Set(['nav:aliases.sessions'])
 /** Code samples and product names that carry a Latin word the Russian rule would catch. */
 const LATIN_OK = new Set([
-  'audit:filters.actionPlaceholder',
   'recordings:policy.namespaces.placeholder',
   'sandbox:scenarios.create.subjectKindPlaceholder',
   'rate-limits:caveats.managedAgents',
@@ -123,10 +122,13 @@ const KEPT_ENGLISH = new Set<string>([
   'agentops:readiness.protocol.grok_acp',
   'agentops:readiness.protocol.opencode_acp',
   'agentops:transport.remote-control',
+  // A GitHub page, shown as a person types it in every locale.
+  'agentops:create.sourceUrlPlaceholder',
   'agentops:readiness.protocol.claude_stream_json',
   'agentops:readiness.protocol.claude_remote_control',
   'agentops:readiness.protocol.codex_app_server',
   'agentops:readiness.protocol.gemini_acp',
+  'agentops:readiness.protocol.cursor_acp',
   'identity:references.labels.prm',
   'identity:references.labels.asMetadata',
   'identity:references.labels.resourceIndicators',

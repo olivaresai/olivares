@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// HU 016 (refresh 02): on a fresh install the console's first call is the browser
+// acceptance (refresh 02): on a fresh install the console's first call is the browser
 // session recovery. Before setup it must say so in the standard envelope, so the
 // console can tell "set this engine up" from "sign in", never an empty answer.
 func TestBrowserSessionDuringSetupSaysSetupRequired(t *testing.T) {

@@ -39,10 +39,12 @@ type fakeToolEngine struct {
 	ready map[string]bool
 	// refused: OpenCode's only key was refused at its last test. As in the engine, the
 	// preview still names that key (200) while the readiness says OpenCode cannot start.
-	refused       bool
-	ollamaStarted bool
-	ollamaTenant  any
-	planRequest   map[string]any
+	refused         bool
+	ollamaStarted   bool
+	ollamaTenant    any
+	ollamaContainer any    // the container field of the last start
+	ollamaRuntime   string // the runtime the status reports; empty is process
+	planRequest     map[string]any
 	// providers is what GET providers answers (nil: an engine without the route).
 	providers []map[string]any
 	// presence is the inventory's session-tool presence answer (nil: an engine
@@ -93,11 +95,15 @@ func (f *fakeToolEngine) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		reply(409, map[string]any{"error": map[string]any{"code": "nothing_to_run_on", "message": "not ready"}})
 	case p == "/ollama/start" && r.Method == "POST":
-		f.ollamaStarted, f.ollamaTenant = true, body["tenant_id"]
+		f.ollamaStarted, f.ollamaTenant, f.ollamaContainer = true, body["tenant_id"], body["container"]
 		reply(202, map[string]any{"installed": true, "state": "starting"})
 	case p == "/ollama" && r.Method == "GET":
 		if f.ollamaStarted {
-			reply(200, map[string]any{"installed": true, "state": "running", "endpoint": "http://127.0.0.1:11434", "models": []string{}})
+			runtime := f.ollamaRuntime
+			if runtime == "" {
+				runtime = "process"
+			}
+			reply(200, map[string]any{"installed": true, "state": "running", "endpoint": "http://127.0.0.1:11434", "models": []string{}, "runtime": runtime})
 			return
 		}
 		reply(200, map[string]any{"installed": true, "state": "stopped", "models": []string{}})
@@ -138,7 +144,7 @@ func (f *fakeToolEngine) serve(w http.ResponseWriter, r *http.Request) {
 	case !f.signInRts && strings.HasPrefix(p, "/sign-in"):
 		reply(404, map[string]any{"error": map[string]any{"code": "not_found", "message": "no route"}})
 	case p == "/sign-in" && r.Method == "GET":
-		// FH 036: the own login is the organization's; the CLI names its tenant.
+		// first-hour check: the own login is the organization's; the CLI names its tenant.
 		if r.URL.Query().Get("tenant_id") != "tenant-a" {
 			reply(400, map[string]any{"error": map[string]any{"code": "bad_request", "message": "Name the organization the login is for (tenant_id)."}})
 			return

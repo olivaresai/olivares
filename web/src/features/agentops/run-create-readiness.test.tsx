@@ -29,6 +29,24 @@ vi.mock('./api', async (orig) => {
     },
   }
 })
+const extensionState = vi.hoisted(() => ({
+  accessRequestAction: undefined as
+    | undefined
+    | ((props: {
+        sourceType: string
+        sourceRef: string
+        workspaceRef: string
+      }) => unknown),
+}))
+vi.mock('@/features/extensions', async (orig) => ({
+  ...(await orig<typeof import('@/features/extensions')>()),
+  PANEL_EXTENSIONS: {
+    get accessRequestAction() {
+      return extensionState.accessRequestAction
+    },
+  },
+}))
+
 vi.mock('@/features/workspace-templates/api', () => ({
   templatesApi: { list: vi.fn(), apply: vi.fn() },
   templatesKeys: {
@@ -87,6 +105,7 @@ function wrap() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  extensionState.accessRequestAction = () => <button>Request access</button>
   auth.can = (p: string) => p !== 'deny'
   vi.mocked(agentOpsApi.listWorkspaces).mockResolvedValue({
     items: [],
@@ -410,6 +429,51 @@ describe('RunCreateDialog — selected-profile launch readiness', () => {
     ).toBeInTheDocument()
     await new Promise((r) => setTimeout(r, 80))
     expect(agentOpsApi.createRun).toHaveBeenCalledOnce()
+  })
+
+  it('offers access request on a refused launch', async () => {
+    vi.mocked(agentOpsApi.createRun).mockRejectedValue(
+      new ApiError(
+        403,
+        'module_error',
+        'this provider profile or tool is not assigned to you; request access from a department admin or owner',
+      ),
+    )
+    vi.mocked(agentOpsApi.listWorkspaces).mockResolvedValue({
+      items: [
+        {
+          workspace_ref: 'dept',
+          name: 'Engineering',
+          mount_mode: 'rw',
+          state: 'active',
+        },
+      ],
+      has_more: false,
+    } as never)
+    const seen: {
+      sourceType: string
+      sourceRef: string
+      workspaceRef: string
+    }[] = []
+    extensionState.accessRequestAction = (props) => {
+      seen.push(props)
+      return <button>Request access</button>
+    }
+    wrap()
+    const user = await choose(/Home A/)
+    await user.click(await screen.findByLabelText('Folder'))
+    await user.click(await screen.findByRole('option', { name: /Engineering/ }))
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    expect(
+      await screen.findByRole('button', { name: 'Request access' }),
+    ).toBeInTheDocument()
+    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByRole('option', { name: /Home B/ }))
+    expect(seen.at(-1)).toEqual({
+      sourceType: 'profile',
+      sourceRef: 'ppf_a',
+      workspaceRef: 'dept',
+    })
   })
 
   it('lets an ordinary reader see requirements but not request a launch', async () => {

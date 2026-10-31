@@ -26,7 +26,7 @@ export function restoreBrowserSession(): Promise<void> {
 
 /** Page load. A clean install has no administrator yet, so no browser session can
  * exist, and the setup gate answers every gated route — this restore included — 409
- * setup_required: the one red request of every first hour (Root on FH 034). Server-info
+ * setup_required: the one red request of every first hour (Root on first-hour check). Server-info
  * (read on load anyway, and cached for the shell) says so first; the restore runs only
  * once setup is done, or when server-info cannot tell. */
 export async function restoreOnPageLoad(

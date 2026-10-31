@@ -30,6 +30,8 @@ vi.mock('./api', async (importOriginal) => {
 })
 
 import { AccessReviewSection } from './roles-access-review-section'
+// Shared with the CLI fixture tests.
+import answer from './testdata/effective-rights.json'
 
 function renderSection() {
   const client = new QueryClient({
@@ -40,25 +42,6 @@ function renderSection() {
       <AccessReviewSection />
     </QueryClientProvider>,
   )
-}
-
-// The answer of GET /v1/auth/effective-rights for an agent in a foreign agent group.
-const answer = {
-  subject: { kind: 'user', id: 'u-1' },
-  node: { kind: 'agent', id: 'a-1' },
-  assurance: 3,
-  path: [
-    { kind: 'workspace', ref: 'payments' },
-    { kind: 'agent_group', ref: 'ops', workspace: 'default' },
-    { kind: 'agent', ref: 'a-1' },
-  ],
-  rights: [
-    { name: 'Supervisor', state: 'not_held' },
-    { name: 'Browse', state: 'held' },
-    { name: 'Read', state: 'held' },
-    { name: 'Write', state: 'unknown' },
-    { name: 'Access Control', state: 'not_applicable' },
-  ],
 }
 
 async function ask(user: ReturnType<typeof userEvent.setup>) {
@@ -96,13 +79,36 @@ describe('EffectiveRightsPanel', () => {
     ])
     const rows = within(screen.getByRole('table')).getAllByRole('row').slice(1)
     expect(rows.map((r) => r.textContent)).toEqual([
-      'SupervisorNot held',
-      'BrowseHeld',
-      'ReadHeld',
+      'SupervisorNot heldRemoved by IRF irf-1 at workspace payments',
+      'BrowseHeldGrant g-1 at workspace payments via user u-1 > group g-1 > group g-2',
+      'ReadNot heldRemoved by forbid forbid-1 at workspace payments',
       'WriteUnknown',
       'Access ControlNot applicable',
     ])
+    expect(
+      screen.getByText('Directory membership as of 2026-10-27T06:30:00Z'),
+    ).toBeInTheDocument()
     expect(screen.getByText(/It is not a deny/)).toBeInTheDocument()
+  })
+
+  it('accepts an answer from the previous version without explanation fields', async () => {
+    api.effectiveRights.mockResolvedValue({
+      subject: answer.subject,
+      node: answer.node,
+      assurance: answer.assurance,
+      path: answer.path,
+      rights: [{ name: 'Read', state: 'held' }],
+    })
+    const user = userEvent.setup()
+    renderSection()
+
+    await ask(user)
+
+    expect(await screen.findByRole('table')).toHaveTextContent('ReadHeld')
+    expect(
+      screen.queryByText(/Directory membership as of/),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/Grant /)).not.toBeInTheDocument()
   })
 
   it('renders the form and the answer without accessibility violations', async () => {

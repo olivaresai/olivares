@@ -981,7 +981,7 @@ else
 	malo "could not build the decoded-form mutant: no artifact means no verdict"
 fi
 
-# ── EDITION · a Community does not seed what only Business serves (dev#2485) ───────────────────
+# ── EDITION · a Community does not seed what only Business serves ───────────────────
 # The double announces `community`: the `deploy` and `redteam` surfaces are not seeded (not one request
 # to their routes) and no approval asks for `deploy.promote`. The same run as Business seeds them.
 r="$(DOBLE_EDICION=community corre "$GUION" "$OBJETIVOS")"

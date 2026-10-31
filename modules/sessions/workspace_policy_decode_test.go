@@ -21,7 +21,10 @@ import (
 )
 
 func TestWorkspace_ExactLookupBeforeLimit(t *testing.T) {
-	m, st, tenant, _ := newRuntimeHarness(t)
+	h := newHarness(t, New())
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "workspace-exact-lookup")
+	m, st := h.m, h.st
 	ctx := context.Background()
 	saved := mkWorkspace(t, m, tenant, CreateWorkspaceParams{MountMode: mountRO})
 	disabled := mkWorkspace(t, m, tenant, CreateWorkspaceParams{RootPath: saved.RootPath})
@@ -62,13 +65,12 @@ func TestWorkspace_ExactLookupBeforeLimit(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.query.Set("limit", "1")
-			rec := httptest.NewRecorder()
-			m.handleListWorkspaces(rec, httptest.NewRequest(http.MethodGet, "/workspaces?"+tc.query.Encode(), nil), api.ModuleContext{Tenant: tenant})
-			if rec.Code != http.StatusOK {
-				t.Fatalf("status=%d", rec.Code)
+			rec := h.do(http.MethodGet, "/v1/m/sessions/workspaces?"+tc.query.Encode(), admin, tenantHdr(tenant))
+			if rec.code != http.StatusOK {
+				t.Fatalf("status=%d %s", rec.code, rec.raw)
 			}
 			var got listResponse[workspaceDTO]
-			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			if err := json.Unmarshal([]byte(rec.raw), &got); err != nil {
 				t.Fatal(err)
 			}
 			if tc.want == "" {

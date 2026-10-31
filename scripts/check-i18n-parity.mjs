@@ -238,7 +238,7 @@ const NO_I18N_ALLOWLIST = new Map([
   // and remove it when the bundle lands.)
   //
   // navigation/ (N1, 2026-09-06) renders the SHELL's structure — the nine area
-  // directory pages and the model the top bar, All areas and palette share — and
+  // former directory pages and the model the left navigation and palette share — and
   // every string it paints is a key of the foundation `nav` namespace
   // (web/src/lib/i18n/locales/*/nav.json: nav.areas, nav.directory, nav.items,
   // nav.descriptions, nav.aliases), which this scan already compares across the

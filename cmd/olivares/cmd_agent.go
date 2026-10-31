@@ -21,6 +21,7 @@ import (
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
+	"github.com/olivaresai/olivares/modules/sessions"
 )
 
 // cmd_agent.go is the operator CLI for the governed session runtime:
@@ -247,6 +248,7 @@ func newAgentSessionCreateCmd() *cobra.Command {
 		isolation                                           string
 		providerProfile                                     string
 		envAllow                                            []string
+		credentials                                         []string
 	)
 	cmd := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "write"},
@@ -265,6 +267,12 @@ func newAgentSessionCreateCmd() *cobra.Command {
   olivares agent session create --name "ci-run" --permission-mode bypassPermissions --effort max --provider-profile prof-123`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			// The same bound `session start` states, for the same reason: a start it
+			// would refuse makes no call at all.
+			if len(credentials) > sessions.CredentialMaxNames {
+				return sentence(exitcode.Usage, "A session may use at most %d managed credentials. Name fewer: --credential <name>.",
+					sessions.CredentialMaxNames)
+			}
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
@@ -272,6 +280,10 @@ func newAgentSessionCreateCmd() *cobra.Command {
 				"name": name, "transport": transport, "permission_mode": permMode,
 				"effort": effort, "model": model, "workspace_ref": workspace, "isolation": isolation,
 				"env_allow": envAllow,
+			}
+			// Sent only when named, as the session CLI sends it.
+			if len(credentials) > 0 {
+				body["credentials"] = credentials
 			}
 			// Only an explicit flag becomes provider_profile_ref. Without it the engine
 			// resolves the profile, or refuses a caller who may not write profiles.
@@ -313,6 +325,7 @@ func newAgentSessionCreateCmd() *cobra.Command {
 		"native (a governed host process) | container (podman or Docker on this server) | sandbox — "+
 			"a value the node cannot run is refused before launch with HTTP 422")
 	cmd.Flags().StringSliceVar(&envAllow, "env-allow", nil, "host env var NAMES to forward to the session (allowlist; nothing else is inherited)")
+	cmd.Flags().StringArrayVar(&credentials, "credential", nil, fmt.Sprintf("managed credential the session may use, by name, sealed for the tenant (Business; repeatable, at most %d)", sessions.CredentialMaxNames))
 	addDeprecatedJSONFlag(cmd)
 	_ = cmd.RegisterFlagCompletionFunc("transport", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return []string{"stream-json", "remote-control"}, cobra.ShellCompDirectiveNoFileComp

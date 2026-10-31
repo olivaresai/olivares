@@ -1432,7 +1432,7 @@ class SeederLogic(unittest.TestCase):
 
     def test_a_live_row_the_plane_did_not_launch_is_an_error(self):
         # The home merges every observed row with the runs, so a row another source wrote (serve
-        # --seed-demo) is counted beside the canonical sixteen and moves $6.84 (dev#2562).
+        # --seed-demo) is counted beside the canonical sixteen and moves $6.84.
         def api_with(live):
             runs = []
             for s in seeded():

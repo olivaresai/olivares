@@ -525,3 +525,99 @@ func TestPanelKeepsItsFieldsWhenTheBodyIsLong(t *testing.T) {
 		t.Fatalf("the screen takes %d rows, want exactly 24", used)
 	}
 }
+
+// A newline inside a paste is text, never an Enter: a reason pasted over several
+// lines must not move to the next field or send what the panel asks for.
+func TestEnterInsideAPasteIsNotAnEnter(t *testing.T) {
+	h := testHost(80, 24)
+	var got []string
+	p := &Panel{Heading: "Stop all", Submit: func(values []string) { got = values }}
+	p.SetFields([]Field{{Label: "Reason"}, {Label: "Word"}})
+	h.PushMenu(testFrame())
+	h.PushPanel(p)
+	h.handle(key{kind: keyPasteStart})
+	typeIntoHost(h, "drill")
+	h.handle(key{kind: keyEnter})
+	typeIntoHost(h, "stop")
+	h.handle(key{kind: keyEnter})
+	h.handle(key{kind: keyPasteEnd})
+	if got != nil {
+		t.Fatalf("a paste submitted the panel with %v", got)
+	}
+	if v := p.Values(); v[0] != "drillstop" || v[1] != "" {
+		t.Fatalf("fields after the paste = %v, want the first field to hold the pasted text", v)
+	}
+	// Pasted Tab and arrows are text too: they move nothing.
+	h.handle(key{kind: keyPasteStart})
+	h.handle(key{kind: keyTab})
+	h.handle(key{kind: keyRight})
+	typeIntoHost(h, "!")
+	h.handle(key{kind: keyPasteEnd})
+	if v := p.Values(); v[0] != "drillstop!" || v[1] != "" {
+		t.Fatalf("fields after a paste with Tab and an arrow = %v, want the focus to stay on the first field", v)
+	}
+	// The paste is over: a typed Enter acts again.
+	h.handle(key{kind: keyEnter})
+	typeIntoHost(h, "stop")
+	h.handle(key{kind: keyEnter})
+	if got == nil {
+		t.Fatal("Enter after the paste did not submit")
+	}
+}
+
+// A paste whose end marker never came must not keep Enter from working.
+func TestCtrlCEndsAPasteThatNeverEnded(t *testing.T) {
+	h := testHost(80, 24)
+	h.PushMenu(testFrame())
+	h.PushPanel(&Panel{Heading: "Stop all"})
+	h.handle(key{kind: keyPasteStart})
+	h.handle(key{kind: keyCtrlC})
+	if h.pasting {
+		t.Fatal("Ctrl-C left the screen in a paste")
+	}
+}
+
+// A page that is cut says so: a person must not decide on text they cannot see.
+func TestPanelSaysWhenItsBodyIsCut(t *testing.T) {
+	h := testHost(80, 24)
+	h.PushMenu(testFrame())
+	var lines []string
+	for i := range 40 {
+		lines = append(lines, "  line "+strings.Repeat("x", i%3))
+	}
+	p := &Panel{Heading: "Review", Lines: lines, Footer: "Choose.", Command: "olivares governance approvals get apr-1"}
+	p.SetFields([]Field{{Label: "Reason"}})
+	h.PushPanel(p)
+	text := screenText(h)
+	if !strings.Contains(text, "more lines") {
+		t.Fatalf("a cut body does not say it was cut:\n%s", text)
+	}
+	if !strings.Contains(text, "Reason") {
+		t.Fatalf("the field was pushed off:\n%s", text)
+	}
+	if used := visualRows(h.render(), 80); used != 24 {
+		t.Fatalf("the screen takes %d rows, want exactly 24", used)
+	}
+	short := &Panel{Heading: "Review", Lines: []string{"  one", "  two"}}
+	h.PushPanel(short)
+	if strings.Contains(screenText(h), "more lines") {
+		t.Fatal("a body that fits says it was cut")
+	}
+}
+
+// A refusal sends the person to the field that needs another answer.
+func TestPanelFocusMovesToTheFieldAndIgnoresAnIndexOutsideThem(t *testing.T) {
+	h := testHost(80, 24)
+	h.PushMenu(testFrame())
+	p := &Panel{Heading: "Stop all"}
+	p.SetFields([]Field{{Label: "Reason"}, {Label: "Word"}})
+	h.PushPanel(p)
+	p.Focus(1)
+	typeIntoHost(h, "stop")
+	p.Focus(5)
+	p.Focus(-1)
+	typeIntoHost(h, "!")
+	if v := p.Values(); v[0] != "" || v[1] != "stop!" {
+		t.Fatalf("fields = %v, want the typing in the second field", v)
+	}
+}

@@ -38,18 +38,16 @@ test('fresh install opens its only workspace overview without a selection step',
   await page.waitForURL('**/onboarding', { timeout: 15_000 })
   await expect(
     page
-      .getByRole('navigation', { name: 'Journeys', exact: true })
+      .getByRole('navigation', { name: 'Main navigation', exact: true })
       .getByRole('link', { name: 'Now', exact: true }),
   ).toBeVisible()
 
-  // A fresh install lists every area from the first sign-in: the Workspace page is in
-  // All areas (the account menu) beside Sessions, and its address opens it.
+  // A fresh install lists every place from the first sign-in: Files & workspaces opens the
+  // Workspace page beside Sessions in the left navigation, and its address opens it.
   await page.reload()
-  await page.getByRole('button', { name: /, Account$/ }).click()
-  await page.getByRole('menuitem', { name: 'All areas', exact: true }).click()
-  const areas = page.getByRole('dialog', { name: 'All areas', exact: true })
-  await expect(areas.locator('a[href="/sessions"]')).toHaveCount(1)
-  await expect(areas.locator('a[href="/workspace"]')).toHaveCount(1)
+  const nav = page.locator('[data-slot="sidebar"]')
+  await expect(nav.locator('a[href="/sessions"]')).toHaveCount(1)
+  await expect(nav.locator('a[href="/workspace"]')).toHaveCount(1)
   const workspacesResponse = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === '/v1/workspaces' &&

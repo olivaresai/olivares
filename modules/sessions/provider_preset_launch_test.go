@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// HU 043/044: the chosen preset must reach the child's own native controls,
+// acceptance/044: the chosen preset must reach the child's own native controls,
 // rather than relying on approval requests the child may never send.
 func TestProviderSessionPresetsReachNativeControls(t *testing.T) {
 	for _, driver := range []string{providerDriverCodex, providerDriverGrok, providerDriverOpenCode} {

@@ -85,7 +85,7 @@ func (r TrusteeRight) Question(principal Principal, tenant model.TenantID, node 
 		return Request{Principal: principal, Permission: r.Permission, Tenant: tenant, Resource: ResourceFor(r.Permission)}, true
 	}
 	known := r.Verb == VerbRead || r.Verb == VerbWrite || r.Verb == VerbAdmin
-	known = known && IsScopeableKind(node.Kind)
+	known = known && IsGrantablePermission(Permission(node.Kind+":"+r.Verb))
 	if r.TreeOnly {
 		known = known && IsTreeScopeableKind(node.Kind)
 	}

@@ -4,6 +4,8 @@
 import { Fragment, useEffect, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Kbd } from '@/components/ui/kbd'
 import { PageHeader } from '@/components/ui/page-header'
 import {
   Select,
@@ -16,6 +18,7 @@ import { Segmented } from '@/components/ui/segmented'
 import { EditionBadgeSetting } from '@/features/console/edition-badge-setting'
 import { Switch } from '@/components/ui/switch'
 import { useAuth } from '@/lib/auth/context'
+import { EDITOR_IDS, EDITORS, type EditorId } from '@/lib/editor-links'
 import { useServerInfo } from '@/lib/hooks/use-server-info'
 import {
   setLanguage,
@@ -26,9 +29,9 @@ import {
 import { isTypingTarget } from '@/lib/keybindings/model'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { SignInSettings } from '@/features/settings/sign-in-settings'
+import { LimitResumePreference } from '@/features/sessions/limit-resume-preference'
 import { SessionNotificationSetting } from '@/features/settings/session-notification-setting'
 import { ModulesSettings } from '@/features/settings/modules-settings'
-import { UpdatesSettings } from '@/features/settings/updates-settings'
 import { LicenseTab } from '@/features/console/license-tab'
 // The license panel's strings: this page registers the namespace itself, the
 // way the console view does for its own tab.
@@ -39,6 +42,7 @@ import {
 } from '@/features/settings/sections'
 import { useUrlState } from '@/lib/hooks/use-url-state'
 import { ReportSigningSettings } from '@/features/settings/report-signing-settings'
+import { PermissionModesSettings } from '@/features/settings/permission-modes-settings'
 import { SessionIdleSettings } from '@/features/settings/session-idle-settings'
 import { TracingSettings } from '@/features/settings/tracing-settings'
 import { useViewAccess } from '@/features/navigation/authorization'
@@ -54,6 +58,13 @@ import {
 } from '@/features/settings/preferences'
 import { usePreferencesStore, type Density } from '@/stores/preferences'
 import { DEFAULT_THEME, useThemeStore, type Theme } from '@/stores/theme'
+
+import {
+  ChangedReset,
+  SettingsRow as Row,
+} from '@/features/settings/settings-row'
+import { SessionDefaultsSettings } from '@/features/settings/session-defaults-settings'
+import { NotificationEventSettings } from '@/features/settings/notification-event-settings'
 
 const THEMES = ['system', 'light', 'dark', 'black'] as const
 
@@ -136,53 +147,6 @@ function PreviewPane({ tone }: { tone: keyof typeof PREVIEW }) {
   )
 }
 
-function ChangedReset({
-  show,
-  onReset,
-}: {
-  show: boolean
-  onReset: () => void
-}) {
-  const { t } = useTranslation('settings')
-  if (!show) return null
-  return (
-    <button
-      type="button"
-      onClick={onReset}
-      className="inline-flex items-center gap-1 text-caption font-medium text-accent-text"
-    >
-      {t('changedReset')}
-    </button>
-  )
-}
-
-function Row({
-  name,
-  description,
-  changed,
-  onReset,
-  control,
-}: {
-  name: string
-  description: string
-  changed: boolean
-  onReset: () => void
-  control: ReactNode
-}) {
-  return (
-    <div className="grid grid-cols-1 items-center gap-3 border-t border-line py-3.5 sm:grid-cols-[minmax(0,1fr)_auto]">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2 text-body font-medium text-text">
-          <span>{name}</span>
-          <ChangedReset show={changed} onReset={onReset} />
-        </div>
-        <p className="text-caption text-text-2">{description}</p>
-      </div>
-      <div className="justify-self-start sm:justify-self-end">{control}</div>
-    </div>
-  )
-}
-
 function RestoreAll() {
   const { t } = useTranslation('settings')
   const setTheme = useThemeStore((s) => s.setTheme)
@@ -205,7 +169,7 @@ function RestoreAll() {
 
 export function SettingsPage() {
   const { t } = useTranslation(['settings', 'common', 'auth', 'nav', 'console'])
-  const { principal, activeTenant, isSuperadmin, activeRole, grants } =
+  const { principal, activeTenant, isSuperadmin, activeRole, grants, can } =
     useAuth()
   const serverInfo = useServerInfo()
   const theme = useThemeStore((s) => s.theme)
@@ -220,6 +184,10 @@ export function SettingsPage() {
   const setStartPage = useClientSettings((s) => s.setStartPage)
   const confirmStop = useClientSettings((s) => s.confirmStop)
   const setConfirmStop = useClientSettings((s) => s.setConfirmStop)
+  const editor = useClientSettings((s) => s.editor)
+  const setEditor = useClientSettings((s) => s.setEditor)
+  const editorSsh = useClientSettings((s) => s.editorSsh)
+  const setEditorSsh = useClientSettings((s) => s.setEditorSsh)
   // `add` and `returnTo` belong to the AI tools room (the setup wizard's "Add an API key"):
   // owned here only so that leaving a section can clear them.
   const [url, patchUrl] = useUrlState(['section', 'q', 'add', 'returnTo'])
@@ -256,8 +224,6 @@ export function SettingsPage() {
     const view = viewById(id)
     return view && navigable(view) ? view : undefined
   }
-  const aiTools = sectionButton('aiTools')
-  const workspaces = sectionButton('workspaces')
   const lang = currentLanguage()
 
   useEffect(() => {
@@ -265,9 +231,12 @@ export function SettingsPage() {
       if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey)
         return
       if (isTypingTarget(event.target)) return
+      // The License page mounts no list, so no search: leave / to the rest of the console.
+      const search = document.getElementById('settings-search')
+      if (!search) return
       event.preventDefault()
       event.stopPropagation()
-      document.getElementById('settings-search')?.focus()
+      search.focus()
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
@@ -297,6 +266,10 @@ export function SettingsPage() {
   const startHint = t('general.startPageHint')
   const confirmName = t('general.confirmStop')
   const confirmHint = t('general.confirmStopHint')
+  const editorName = t('general.editor')
+  const editorHint = t('general.editorHint')
+  const editorSshName = t('general.editorSsh')
+  const editorSshHint = t('general.editorSshHint')
   const motionName = t('general.reduceMotion')
   const motionHint = t('general.reduceMotionHint')
 
@@ -478,6 +451,53 @@ export function SettingsPage() {
         }
       />
     ) : null,
+    rowMatches(editorName, editorHint) ? (
+      <Row
+        key="editor"
+        name={editorName}
+        description={editorHint}
+        changed={editor !== CLIENT_SETTING_DEFAULTS.editor}
+        onReset={() => setEditor(CLIENT_SETTING_DEFAULTS.editor)}
+        control={
+          <Select
+            value={editor}
+            onValueChange={(value) => setEditor(value as EditorId)}
+          >
+            <SelectTrigger aria-label={editorName} className="w-56">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {EDITOR_IDS.map((id) => (
+                <SelectItem key={id} value={id}>
+                  {EDITORS[id].label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        }
+      />
+    ) : null,
+    rowMatches(editorSshName, editorSshHint) ? (
+      <Row
+        key="editorSsh"
+        name={editorSshName}
+        description={editorSshHint}
+        changed={editorSsh !== CLIENT_SETTING_DEFAULTS.editorSsh}
+        onReset={() => setEditorSsh(CLIENT_SETTING_DEFAULTS.editorSsh)}
+        control={
+          <Input
+            aria-label={editorSshName}
+            value={editorSsh}
+            onChange={(event) => setEditorSsh(event.target.value)}
+            placeholder="user@host"
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            className="w-56"
+          />
+        }
+      />
+    ) : null,
     rowMatches(motionName, motionHint) ? (
       <Row
         key="motion"
@@ -494,6 +514,7 @@ export function SettingsPage() {
         }
       />
     ) : null,
+    q.length > 0 &&
     rowMatches(
       t('sessionNotifications.title'),
       t('sessionNotifications.hint'),
@@ -505,6 +526,44 @@ export function SettingsPage() {
         owner={notificationOwner(principal?.user_id, activeTenant)}
       />
     ) : null,
+    q.length > 0 &&
+    rowMatches(
+      t('nav.newSessions'),
+      (['tool', 'account', 'model', 'folder'] as const)
+        .map((field) => t(`newSessions.${field}`))
+        .join(' '),
+    ) ? (
+      <section key="newSessions">
+        <h2 className="text-body-l font-semibold text-text">
+          {t('nav.newSessions')}
+        </h2>
+        <SessionDefaultsSettings />
+      </section>
+    ) : null,
+    q.length > 0 &&
+    rowMatches(
+      t('nav.notifications'),
+      (['needsYou', 'finished', 'failed'] as const)
+        .map((event) => t(`notificationEvents.${event}`))
+        .join(' '),
+    ) ? (
+      <section key="events">
+        <h2 className="text-body-l font-semibold text-text">
+          {t('nav.notifications')}
+        </h2>
+        <NotificationEventSettings />
+      </section>
+    ) : null,
+    can('sessions:run:write') &&
+    linked('sessions') &&
+    rowMatches(
+      t('sessions:limit.automatic'),
+      t('sessions:limit.automatic', { lng: 'en' }),
+    ) ? (
+      <div key="usage-reset" className="border-t border-line py-3.5">
+        <LimitResumePreference />
+      </div>
+    ) : null,
   ].filter(Boolean)
 
   const showGeneral = q.length > 0 || section === 'general'
@@ -512,48 +571,54 @@ export function SettingsPage() {
   const showLicenseResult =
     q.length > 0 &&
     rowMatches(licenseLabel, t('console:license.title', { lng: 'en' }))
+  // Edition is the License place of the sidebar: its page, without the list of Settings.
+  const licensePage = q.length === 0 && section === 'edition'
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)]">
-        <nav
-          aria-label={t('nav.sections')}
-          className="flex flex-col gap-0.5 border-b border-line p-2.5 md:border-r md:border-b-0"
-        >
-          <label className="mb-2 flex h-8 items-center gap-2 rounded-ctl border border-ctl-border bg-canvas px-2 has-focus-visible:outline-3 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus">
-            <span className="sr-only">{t('search')}</span>
-            <input
-              id="settings-search"
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t('search')}
-              className="w-full bg-transparent text-caption text-text outline-none placeholder:text-text-3"
-            />
-            <kbd className="text-caption text-text-3">/</kbd>
-          </label>
-          <NavGroup label={t('groups.you')}>
-            {sectionButton('general')}
-            {sectionButton('keyboard')}
-          </NavGroup>
-          {aiTools || workspaces ? (
-            <NavGroup label={t('groups.work')}>
-              {aiTools}
-              {workspaces}
+      <div
+        className={
+          licensePage
+            ? 'grid min-h-0 flex-1 grid-cols-1'
+            : 'grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)]'
+        }
+      >
+        {licensePage ? null : (
+          <nav
+            aria-label={t('nav.sections')}
+            className="flex flex-col gap-0.5 border-b border-line p-2.5 md:border-r md:border-b-0"
+          >
+            <label className="mb-2 flex h-8 items-center gap-2 rounded-ctl border border-ctl-border bg-canvas px-2 has-focus-visible:outline-3 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus">
+              <span className="sr-only">{t('search')}</span>
+              <input
+                id="settings-search"
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={t('search')}
+                className="w-full bg-transparent text-caption text-text outline-none placeholder:text-text-3"
+              />
+              <Kbd>/</Kbd>
+            </label>
+            <NavGroup label={t('groups.you')}>
+              {sectionButton('general')}
+              {sectionButton('newSessions')}
+              {sectionButton('notifications')}
+              {sectionButton('keyboard')}
             </NavGroup>
-          ) : null}
-          <NavGroup label={t('groups.installation')}>
-            {sectionButton('deploy')}
-            {sectionButton('signIn')}
-            {sectionButton('setup')}
-            {sectionButton('edition')}
-            {sectionButton('updates')}
-            {sectionButton('sessionIdle')}
-            {sectionButton('tracing')}
-            {sectionButton('signing')}
-            {sectionButton('about')}
-          </NavGroup>
-        </nav>
+            <NavGroup label={t('groups.work')}>
+              {sectionButton('permissions')}
+            </NavGroup>
+            <NavGroup label={t('groups.installation')}>
+              {sectionButton('signIn')}
+              {sectionButton('setup')}
+              {sectionButton('sessionIdle')}
+              {sectionButton('tracing')}
+              {sectionButton('signing')}
+              {sectionButton('about')}
+            </NavGroup>
+          </nav>
+        )}
         <div className="min-w-0 overflow-auto">
           <div className="mx-auto flex w-full max-w-[880px] flex-col gap-2 px-7 py-6">
             {showGeneral ? (
@@ -589,8 +654,30 @@ export function SettingsPage() {
               </>
             ) : null}
             {q.length === 0 && section === 'keyboard' ? <KeyboardList /> : null}
+            {q.length === 0 && section === 'newSessions' ? (
+              <>
+                <PageHeader
+                  title={t('nav.newSessions')}
+                  description={t('newSessions.scope')}
+                />
+                <SessionDefaultsSettings />
+              </>
+            ) : null}
+            {q.length === 0 && section === 'notifications' ? (
+              <>
+                <PageHeader title={t('nav.notifications')} />
+                <SessionNotificationSetting
+                  key={
+                    notificationOwner(principal?.user_id, activeTenant) ??
+                    'notifications'
+                  }
+                  owner={notificationOwner(principal?.user_id, activeTenant)}
+                />
+                <NotificationEventSettings />
+              </>
+            ) : null}
             {hostedRoom}
-            {q.length === 0 && section === 'edition' ? (
+            {licensePage ? (
               <>
                 {/* The section's h1 precedes the license panel's h2: heading
                     order must read h1 → h2, as it does under the console's h1. */}
@@ -605,13 +692,13 @@ export function SettingsPage() {
                 />
               </>
             ) : null}
-            {q.length === 0 && section === 'updates' ? (
+            {q.length === 0 && section === 'permissions' ? (
               <>
                 <PageHeader
-                  title={t('nav.updates')}
-                  description={t('updates.description')}
+                  title={t('nav.permissions')}
+                  description={t('permissions.description')}
                 />
-                <UpdatesSettings key={principal?.user_id} />
+                <PermissionModesSettings />
               </>
             ) : null}
             {q.length === 0 && section === 'sessionIdle' ? (
@@ -730,9 +817,7 @@ function KeyboardList() {
               {rule.keys.map((keys, index) => (
                 <Fragment key={keys}>
                   {index > 0 ? <span className="text-text-3">/</span> : null}
-                  <kbd className="font-mono text-caption text-text-2">
-                    {keys}
-                  </kbd>
+                  <Kbd>{keys}</Kbd>
                 </Fragment>
               ))}
             </span>
@@ -832,7 +917,7 @@ function About({
     [t('about.version'), version ?? '—'],
     [t('about.engine'), engine ?? '—'],
     // Without a license this is Community: say so, instead of "License status none ·
-    // Licensed to None" (HU-27).
+    // Licensed to None".
     ...(!license || license === 'none'
       ? [[t('about.edition'), t('about.community')]]
       : [

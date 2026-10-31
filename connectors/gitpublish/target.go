@@ -114,6 +114,16 @@ func (r TargetRow) Repository(path string) (TargetRepository, error) {
 	return r.binding.repository(path)
 }
 
+// WebBase returns the approved external web origin for API-backed rows. It is
+// a method, rather than another TargetRepository field, so existing positional
+// literals keep compiling.
+func (r TargetRow) WebBase() string {
+	if b, ok := r.binding.(interface{ webBaseURL() string }); ok {
+		return b.webBaseURL()
+	}
+	return ""
+}
+
 // HostDependencies are the existing transports the composition root owns.
 type HostDependencies struct {
 	HTTP Doer
@@ -140,6 +150,7 @@ func targetRepository(host, path string) TargetRepository {
 
 type apiTargetBinding struct {
 	base         string
+	webBase      string
 	repositories []string
 }
 
@@ -150,6 +161,8 @@ func apiTarget(cfg map[string]string, defaultBase string) apiTargetBinding {
 	}
 	return apiTargetBinding{base: base, repositories: targetList(cfg[PublicationRepositoriesKey])}
 }
+
+func (b apiTargetBinding) webBaseURL() string { return b.webBase }
 
 func (b apiTargetBinding) repository(path string) (TargetRepository, error) {
 	if !ValidRepoPath(path) || !slices.Contains(b.repositories, path) {

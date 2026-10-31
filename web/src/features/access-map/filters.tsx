@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import type { AccessFilterState } from './graph-model'
+import { MAX_VALUE_LENGTH } from './url-state'
 
 const ALL = '__all__'
 
@@ -69,6 +70,7 @@ export function AccessFilters({
           onChange={(e) => onChange({ ...filter, search: e.target.value })}
           placeholder={t('filters.search')}
           className="pl-8"
+          maxLength={MAX_VALUE_LENGTH}
           aria-label={t('filters.search')}
         />
       </div>
@@ -174,6 +176,7 @@ export function AccessFilters({
           {overlay && unexpectedCount > 0 && (
             <Badge
               variant="neutral"
+              // eslint-disable-next-line olivares/no-raw-palette -- a 20% shade of the danger button it sits on, in every theme
               className="ml-1 border-0 bg-black/20 text-current tabular-nums"
             >
               {unexpectedCount}

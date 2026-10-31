@@ -718,21 +718,27 @@ func isRegisteredPrefixStem(key string) bool {
 // generated from, and the row that reference publishes — so this pins all three.
 const agentLinkListenKey = "OLIVARES_SESSIONS_AGENT_LINK_LISTEN"
 
+// agentBootstrapListenKey is its sibling: the server-only TLS endpoint where a node agent
+// enrolls with a one-use token before it has a certificate. Same three places, same rule.
+const agentBootstrapListenKey = "OLIVARES_SESSIONS_AGENT_BOOTSTRAP_LISTEN"
+
 func TestConfigContractCarriesAgentLinkListenKey(t *testing.T) {
-	if mode := configEnvKeyMode(agentLinkListenKey); mode != configKeyExact {
-		t.Errorf("%s mode = %v, want exact — boot would log it as ignored and `config validate` would reject it",
-			agentLinkListenKey, mode)
-	}
-	for _, place := range []struct{ path, row string }{
-		{"../../scripts/config-env-catalog.tsv", "\n" + agentLinkListenKey + "\t"},
-		{"../../docs-site/src/content/docs/reference/configuration.md", "\n| `" + agentLinkListenKey + "` |"},
-	} {
-		body, err := os.ReadFile(place.path)
-		if err != nil {
-			t.Fatalf("read %s: %v", place.path, err)
+	for _, key := range []string{agentLinkListenKey, agentBootstrapListenKey} {
+		if mode := configEnvKeyMode(key); mode != configKeyExact {
+			t.Errorf("%s mode = %v, want exact — boot would log it as ignored and `config validate` would reject it",
+				key, mode)
 		}
-		if !strings.Contains(string(body), place.row) {
-			t.Errorf("%s has no row for %s", place.path, agentLinkListenKey)
+		for _, place := range []struct{ path, row string }{
+			{"../../scripts/config-env-catalog.tsv", "\n" + key + "\t"},
+			{"../../docs-site/src/content/docs/reference/configuration.md", "\n| `" + key + "` |"},
+		} {
+			body, err := os.ReadFile(place.path)
+			if err != nil {
+				t.Fatalf("read %s: %v", place.path, err)
+			}
+			if !strings.Contains(string(body), place.row) {
+				t.Errorf("%s has no row for %s", place.path, key)
+			}
 		}
 	}
 }

@@ -27,7 +27,7 @@ func asInstalledPackage(t *testing.T, pkgPath string) {
 	t.Cleanup(func() { runningBinary, installedPackageBinary, inContainer = oldBin, oldPkg, oldIn })
 }
 
-// TestUpgradeRefusesToReplaceThePackageOwnedBinary is the dev#2426 reproducer:
+// TestUpgradeRefusesToReplaceThePackageOwnedBinary is the regression reproducer:
 // on a deb/rpm install, run as root, `/usr/bin/olivares` is writable, so
 // `olivares upgrade` (without --target) swapped the package-owned binary in
 // place — the file no longer matched the package manager's database (`rpm -V`
@@ -52,7 +52,7 @@ func TestUpgradeRefusesToReplaceThePackageOwnedBinary(t *testing.T) {
 		// The premise first, so a red run shows the defect itself: on unfixed main this
 		// prints the NEW version and reproduces the in-place swap the issue names.
 		if got := runsVersion(t, pkg); !strings.Contains(got, "26.700") {
-			t.Fatalf("the package-owned binary was replaced in place (now %q): dev#2426", got)
+			t.Fatalf("the package-owned binary was replaced in place (now %q): the regression", got)
 		}
 		if err == nil {
 			t.Fatal("upgrading the package-owned binary in place must be refused")

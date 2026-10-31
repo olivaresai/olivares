@@ -3,7 +3,7 @@
 
 // Package oasf is the Olivares AI connector for AGNTCY/OASF agent descriptors —
 // import, export and optional Agent Badge verification. It is EXPERIMENTAL
-//: the descriptor schema itself is stable (OASF 1.0.0), but the AGNTCY
+// : the descriptor schema itself is stable (OASF 1.0.0), but the AGNTCY
 // identity layer that signs badges is not (see "Why EXPERIMENTAL" below), so
 // the connector verifies what is honestly verifiable and labels everything else
 // exactly as what it is.

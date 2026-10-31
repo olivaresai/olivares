@@ -9,7 +9,7 @@
 # exposes it on PATH for the following steps.
 #
 # MEASURED, not preventive: in run 34854565361 (2026-09-14) `go install …/task@v3.51.1` compiled
-# go-task from source in 15 jobs, 4m00s–6m20s each on ci-runner-1..9, and gitleaks took 45–56 s
+# go-task from source in 15 jobs, 4m00s–6m20s each on build-host, and gitleaks took 45–56 s
 # more. A verified release tarball takes seconds and, because these runners keep their disk
 # between jobs, the second job on a runner re-verifies the cached archive and skips the download.
 #
@@ -64,7 +64,7 @@ runs:
     - name: the tools are reachable from a later step, not only from the installer
       shell: bash
       run: |
-        # Installing is not reaching (measured 2026-08-18 on ci-runner-2). This runs as a
+        # Installing is not reaching (measured 2026-08-18 on build-host). This runs as a
         # SEPARATE step so it sees the PATH the following job steps will see.
         command -v task || { echo "::error::task is not on PATH after olivares-tool-cache (PATH=$PATH)"; exit 1; }
         task --version

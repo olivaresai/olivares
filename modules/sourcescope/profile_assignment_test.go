@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/license"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sourcescope"
@@ -46,6 +47,9 @@ func (h *harness) mustAssign(admin string, tenant model.TenantID, sourceType, so
 		h.t.Fatalf("assign %s/%s to %s/%s = %d %s", sourceType, sourceRef, tree, ref, r.code, r.raw)
 	}
 }
+
+// licensed is a Business build's assignment gate under a licence that covers it.
+func licensed() error { return nil }
 
 func errorCode(r resp) string {
 	e, _ := r.body["error"].(map[string]any)
@@ -136,6 +140,84 @@ func TestUpdatingAStoredAssignmentNeedsBusinessButRevokingDoesNot(t *testing.T) 
 	}
 }
 
+// queueAssignment stores a pending request, by another person, to assign ppf_acme to eng (op
+// "create") or to change the stored assignment (op "update").
+func queueAssignment(t *testing.T, h *harness, tenant model.TenantID, op string, stored model.ID) model.ID {
+	t.Helper()
+	request := model.Record{
+		"op": op, "source_type": "profile", "source_ref": "ppf_acme", "status": "pending", "reason": "x",
+		"proposed": `{"source_type":"profile","source_ref":"ppf_acme","scope_tree":"workspace","scope_ref":"eng","enabled":true}`,
+		"proposer": "user:" + model.NewID().String(), "proposer_user": model.NewID().String(),
+	}
+	if op == "update" {
+		request["target_id"] = stored.String()
+	}
+	var id model.ID
+	if err := h.st.Mutate(t.Context(), tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext("sourcescope.posture_request")
+		if err != nil {
+			return err
+		}
+		rec, err := repo.Create(t.Context(), request)
+		id = model.ID(rec.String(model.ColID))
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+// The Business build passes its licence gate as the assignment option and it is asked at
+// every write: without a licence that covers assigning, a create, an update and the
+// approval of a queued assignment answer 403 addon_requires_license and change nothing,
+// while the assignment already stored keeps applying and revoking stays open. With the
+// licence back, the same create is written.
+func TestAssigningProfilesAndToolsNeedsALiveLicence(t *testing.T) {
+	covered := false
+	gate := func() error {
+		if covered {
+			return nil
+		}
+		return license.AddonRequired("federation", "assign-profiles")
+	}
+	h := newHarness(t, sourcescope.WithProfileAssignment(gate))
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	eng := h.createWorkspace(tenant, "eng")
+	sales := h.createWorkspace(tenant, "sales")
+	viewer := h.principalFor(admin, tenant, "viewer@acme.io", auth.RoleViewer)
+	salesBot := h.createAgent(tenant, "sales-bot", sales)
+	approver := h.tokenFor(admin, tenant, "approver@acme.io", auth.RoleAdmin)
+	stored := seedStoredAssignment(t, h, tenant, eng)
+	refused := func(what string, r resp) {
+		t.Helper()
+		if r.code != http.StatusForbidden || errorCode(r) != "addon_requires_license" {
+			t.Fatalf("%s with no licence = %d %s, want 403 addon_requires_license", what, r.code, r.raw)
+		}
+	}
+
+	assign := map[string]any{"source_type": "tool", "source_ref": "codex", "scope_tree": "workspace", "scope_ref": "eng", "enabled": true}
+	refused("assign", h.createBinding(admin, tenant, assign))
+	refused("update", h.do("PUT", "/v1/m/sourcescope/bindings/"+stored.String(), admin, map[string]any{"scope_tree": "workspace", "scope_ref": "eng", "enabled": false}, tenantHdr(tenant)))
+	for _, op := range []string{"create", "update"} {
+		refused("approving a queued "+op, h.do("POST", "/v1/m/sourcescope/posture-requests/"+queueAssignment(t, h, tenant, op, stored).String()+"/approve", approver, nil, tenantHdr(tenant)))
+	}
+	if d := h.resolveHuman(tenant, viewer, "tool", "codex"); !d.Allowed || d.Bound {
+		t.Fatalf("a refused assignment must leave the tool unbound and open, got %+v", d)
+	}
+	if d := h.resolveAgent(tenant, viewer, salesBot.ExternalID, "profile", "ppf_acme"); d.Allowed || !d.Bound {
+		t.Fatalf("the stored assignment keeps applying with no licence, got %+v", d)
+	}
+	if r := h.do("DELETE", "/v1/m/sourcescope/bindings/"+stored.String(), admin, nil, tenantHdr(tenant)); r.code != http.StatusAccepted {
+		t.Fatalf("revoke with no licence = %d %s, want 202 pending delete", r.code, r.raw)
+	}
+
+	covered = true
+	if r := h.createBinding(admin, tenant, assign); r.code != http.StatusCreated {
+		t.Fatalf("assign under a licence = %d %s, want 201", r.code, r.raw)
+	}
+}
+
 // A request a Business install queued, to assign a profile or to change an assignment, is not
 // applied by a Community one.
 func TestACommunityEngineDoesNotApplyAQueuedAssignment(t *testing.T) {
@@ -146,27 +228,7 @@ func TestACommunityEngineDoesNotApplyAQueuedAssignment(t *testing.T) {
 			tenant := h.createOrg(admin, "acme")
 			eng := h.createWorkspace(tenant, "eng")
 			approver := h.tokenFor(admin, tenant, "approver@acme.io", auth.RoleAdmin)
-			stored := seedStoredAssignment(t, h, tenant, eng)
-			request := model.Record{
-				"op": op, "source_type": "profile", "source_ref": "ppf_acme", "status": "pending", "reason": "x",
-				"proposed": `{"source_type":"profile","source_ref":"ppf_acme","scope_tree":"workspace","scope_ref":"eng","enabled":true}`,
-				"proposer": "user:" + model.NewID().String(), "proposer_user": model.NewID().String(),
-			}
-			if op == "update" {
-				request["target_id"] = stored.String()
-			}
-			var id model.ID
-			if err := h.st.Mutate(t.Context(), tenant, func(sc store.Scope) error {
-				repo, err := sc.Ext("sourcescope.posture_request")
-				if err != nil {
-					return err
-				}
-				rec, err := repo.Create(t.Context(), request)
-				id = model.ID(rec.String(model.ColID))
-				return err
-			}); err != nil {
-				t.Fatal(err)
-			}
+			id := queueAssignment(t, h, tenant, op, seedStoredAssignment(t, h, tenant, eng))
 			r := h.do("POST", "/v1/m/sourcescope/posture-requests/"+id.String()+"/approve", approver, nil, tenantHdr(tenant))
 			if r.code != http.StatusNotImplemented || errorCode(r) != "business_required" {
 				t.Fatalf("approving a queued %s in Community = %d %s, want 501 business_required", op, r.code, r.raw)
@@ -220,7 +282,7 @@ func newDepartments(t *testing.T, h *harness, tenant model.TenantID) departments
 }
 
 func TestProfileAndToolAssignedToDepartments(t *testing.T) {
-	h := newHarness(t, sourcescope.WithProfileAssignment())
+	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 	d := newDepartments(t, h, tenant)
@@ -263,7 +325,7 @@ func TestProfileAndToolAssignedToDepartments(t *testing.T) {
 
 // An assignment binds its own tenant: the same reference in another organization stays open.
 func TestAProfileAssignmentBindsItsOwnTenantOnly(t *testing.T) {
-	h := newHarness(t, sourcescope.WithProfileAssignment())
+	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
 	admin := h.adminLogin()
 	acme, globex := h.createOrg(admin, "acme"), h.createOrg(admin, "globex")
 	h.createWorkspace(acme, "eng")
@@ -280,7 +342,7 @@ func TestAProfileAssignmentBindsItsOwnTenantOnly(t *testing.T) {
 }
 
 func TestProfileAssignedToADirectoryGroupAndForbiddenToAUser(t *testing.T) {
-	h := newHarness(t, sourcescope.WithProfileAssignment())
+	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 	member, groups := h.principalWithGroups(admin, tenant, "dev@acme.io", auth.RoleEditor, "devs")
@@ -307,7 +369,7 @@ func TestProfileAssignedToADirectoryGroupAndForbiddenToAUser(t *testing.T) {
 // A profile given to several departments is usable by the agents of each, and a forbid on
 // one department binds that department and nobody else.
 func TestProfileAssignedToSeveralDepartmentsServesEachOfThem(t *testing.T) {
-	h := newHarness(t, sourcescope.WithProfileAssignment())
+	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 	approver := h.tokenFor(admin, tenant, "approver@acme.io", auth.RoleAdmin)
@@ -346,7 +408,7 @@ func TestProfileAssignedToSeveralDepartmentsServesEachOfThem(t *testing.T) {
 // administrator no longer opens the profile there, while the department's own agents keep
 // it. Another class on the same node is untouched.
 func TestInheritanceFilterCutsTheTenantRoleFromAnAssignedProfile(t *testing.T) {
-	h := newHarness(t, sourcescope.WithProfileAssignment())
+	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 	engID := h.createWorkspace(tenant, "eng")
@@ -386,7 +448,7 @@ func TestInheritanceFilterCutsTheTenantRoleFromAnAssignedProfile(t *testing.T) {
 // above, and the department's own assignment stays. This is the delegated-administrator path
 // of the same decision.
 func TestAScopedGrantOnADepartmentReachesItsSubDepartmentsUntilAFilterCutsIt(t *testing.T) {
-	h := newHarness(t, sourcescope.WithProfileAssignment())
+	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 	eng := h.createWorkspace(tenant, "eng")
@@ -425,7 +487,7 @@ func TestAScopedGrantOnADepartmentReachesItsSubDepartmentsUntilAFilterCutsIt(t *
 // A reference that would match nothing is refused when it is written, not stored: the
 // gate matches it byte for byte and an assignment that never matches leaves the profile open.
 func TestProfileAndToolAssignmentsNameWhatTheGateAsksAbout(t *testing.T) {
-	h := newHarness(t, sourcescope.WithProfileAssignment())
+	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 	h.createWorkspace(tenant, "eng")

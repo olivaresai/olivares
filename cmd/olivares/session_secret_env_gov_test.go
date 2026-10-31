@@ -13,7 +13,7 @@ import (
 	"github.com/olivaresai/olivares/modules/sessions"
 )
 
-// Vault secrets given to a session (design FH 016) are part of what a launch
+// Vault secrets given to a session (design first-hour check) are part of what a launch
 // approval approves: an approval opened for one set of secret NAMES cannot be spent
 // on a launch given more, and the receipt names them. Values never reach either.
 func TestSessionLaunchPlanBindsVaultSecretNames(t *testing.T) {

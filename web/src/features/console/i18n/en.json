@@ -1,6 +1,6 @@
 {
   "title": "Administration",
-  "subtitle": "Configure who gets in and what they can administer: onboard users, connect SSO, and shape workspaces and agent-groups.",
+  "subtitle": "The agents, workspaces, source bindings, secrets and connectors of this organization. People, sign-in and roles are in People & groups.",
   "tabs": {
     "people": "Users & groups",
     "agents": "Agents",
@@ -12,8 +12,7 @@
     "apiKeys": "API keys",
     "license": "Edition & license",
     "bindings": "Source bindings",
-    "wsConnectors": "Workspace connectors",
-    "mcpGateway": "MCP gateway"
+    "wsConnectors": "Workspace connectors"
   },
   "stepUpAction": "configure",
   "apiKeys": {
@@ -167,10 +166,14 @@
       "owner": "Owner"
     },
     "totpReset": "Reset TOTP",
-    "totpResetLabel": "Reset the TOTP factor of {{email}}",
+    "totpResetLabel": "Reset TOTP for {{email}}",
     "totpResetTitle": "Reset this member's TOTP factor?",
     "totpResetBody": "The factor and every recovery code of {{email}} are deleted. The account enroles a new factor at next login — the require-for-administrators policy sends it there, never to a lockout.",
-    "totpResetDone": "TOTP factor reset."
+    "totpResetDone": "TOTP factor reset.",
+    "endSessions": "End sign-ins",
+    "endSessionsFor": "End sign-ins for {{email}}?",
+    "endSessionsBody": "Every active sign-in for {{email}} will stop working in this organization. Their sign-ins to other organizations, API tokens and account are not changed.",
+    "sessionsEnded": "Access to this organization ended"
   },
   "superadmins": {
     "title": "Installation administrators",
@@ -313,6 +316,7 @@
       "sessions": "The secret is removed from the store. A session that receives it keeps running, but it cannot be resumed, and a template that names it cannot launch, until you recreate it."
     },
     "sessionCaption": "Secrets a session can receive as environment variables. Names begin with env/. A value is never shown again.",
+    "credentialCaption": "Managed credentials a session can use through the engine's helpers (Business). Names begin with credential/. A value is never shown again.",
     "colValue": "Value",
     "colChanged": "Last changed",
     "colReference": "Reference",
@@ -644,6 +648,7 @@
       "scopeRefPlaceholder": "Select…",
       "scopeClass": "Kind of resource",
       "scopeClassAny": "Any resource",
+      "expiresAt": "Expires at (optional)",
       "scopeClassHint": "Optional. Narrows the grant to one resource kind (e.g. only models).",
       "note": "Note",
       "noteHint": "Optional context recorded with the grant.",
@@ -904,7 +909,16 @@
           "unknown": "Unknown",
           "not_applicable": "Not applicable"
         },
-        "unknownHint": "Unknown means the engine could not decide that right; the cause is in the engine log. It is not a deny."
+        "unknownHint": "Unknown means the engine could not decide that right; the cause is in the engine log. It is not a deny.",
+        "reason": "Why",
+        "membershipAsOf": "Directory membership as of {{at}}",
+        "grantAt": "Grant {{id}} at {{node}} via {{chain}}",
+        "removedByAt": "Removed by {{kind}} {{id}} at {{node}}",
+        "removedBy": "Removed by {{kind}} {{id}}",
+        "removalKinds": {
+          "irf": "IRF",
+          "forbid": "forbid"
+        }
       }
     }
   },
@@ -983,6 +997,7 @@
     },
     "defaultWorkspace": "default workspace",
     "enabledYes": "Enabled",
+    "expiresAt": "Expires at (optional)",
     "enabledNo": "Disabled",
     "noCredential": "None",
     "edit": "Edit",

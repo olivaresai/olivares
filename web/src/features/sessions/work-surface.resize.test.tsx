@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
 import { usePaneWidthsStore } from '@/stores/pane-widths'
+import { stubViewportWidth } from '@/test/viewport'
 import { mergeSessions } from './provenance'
 import type { RunDTO } from '@/features/agentops/types'
 import type { LiveDTO } from './types'
@@ -108,7 +109,15 @@ beforeEach(() => {
     () => ({ width: paneWidth }) as DOMRect,
   )
 })
-afterEach(() => vi.restoreAllMocks())
+const realMatchMedia = window.matchMedia
+afterEach(() => {
+  vi.restoreAllMocks()
+  Object.defineProperty(window, 'matchMedia', {
+    value: realMatchMedia,
+    configurable: true,
+    writable: true,
+  })
+})
 
 function renderSurface(over: Partial<Parameters<typeof WorkSurface>[0]> = {}) {
   return renderIntel(
@@ -170,17 +179,31 @@ describe('WorkSurface resizing', () => {
   })
 
   it('never lets a stored width take more than 35% of the surface from the thread', async () => {
+    stubViewportWidth(1440)
     renderSurface({
       address: { address: sessionA.key, pane: 'context', evidence: 'checks' },
     })
     await screen.findByTestId('session-context')
-    const cls = surfaceGrid().className
-    expect(cls).toContain(
-      'min-[761px]:grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)]',
-    )
-    expect(cls).toContain(
-      'min-[1441px]:grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)_min(var(--ctx-w),35%)]',
-    )
+    const templates = () =>
+      surfaceGrid()
+        .className.split(/\s+/)
+        .filter((c) => c.includes('grid-cols-'))
+    // ONE column template at a time: a second, media-prefixed one outranks the first in the
+    // stylesheet and wraps Details under the list (measured at 1440 px).
+    expect(templates()).toEqual([
+      'grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)_min(var(--ctx-w),35%)]',
+    ])
+  })
+
+  it('keeps the list and the thread side by side from 761 px while Details is a sheet', async () => {
+    stubViewportWidth(1024)
+    renderSurface()
+    await screen.findByTestId('work-rail')
+    expect(
+      surfaceGrid()
+        .className.split(/\s+/)
+        .filter((c) => c.includes('grid-cols-')),
+    ).toEqual(['min-[761px]:grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)]'])
   })
 
   it('resizes the list from the keyboard and remembers the width', async () => {
@@ -212,13 +235,14 @@ describe('WorkSurface resizing', () => {
     expect(stored()['sessions-list']).toBeUndefined()
   })
 
-  it('widens the context pane with the arrow that moves its left edge outward', async () => {
+  it('widens the details pane with the arrow that moves its left edge outward', async () => {
     const user = userEvent.setup()
+    stubViewportWidth(1440)
     renderSurface({
       address: { address: sessionA.key, pane: 'context', evidence: 'checks' },
     })
     const handle = await screen.findByRole('separator', {
-      name: 'Resize the context pane',
+      name: 'Resize the details pane',
     })
     handle.focus()
     await user.keyboard('{ArrowLeft}')
@@ -226,29 +250,29 @@ describe('WorkSurface resizing', () => {
     expect(surfaceGrid().style.getPropertyValue('--ctx-w')).toBe('376px')
   })
 
-  it('offers the context handle only while the pane is open, and only beside the thread', async () => {
+  it('offers the details handle only while the pane is open beside the thread', async () => {
+    stubViewportWidth(1440)
+    renderSurface()
+    expect(
+      await screen.findByRole('separator', { name: 'Resize the details pane' }),
+    ).toBeInTheDocument()
+    await userEvent.click(screen.getByTestId('context-toggle'))
+    expect(
+      screen.queryByRole('separator', { name: 'Resize the details pane' }),
+    ).toBeNull()
+  })
+
+  it('has no details handle below 1120 px, where Details is a sheet', async () => {
+    stubViewportWidth(1119)
     renderSurface()
     await screen.findByTestId('work-rail')
     expect(
-      screen.queryByRole('separator', { name: 'Resize the context pane' }),
+      screen.queryByRole('separator', { name: 'Resize the details pane' }),
     ).toBeNull()
-    await userEvent.click(screen.getByTestId('context-toggle'))
-    const handle = await screen.findByRole('separator', {
-      name: 'Resize the context pane',
-    })
-    // Where the pane would squeeze the thread it replaces it: nothing to drag.
-    expect(handle.className).toContain('max-[1440px]:hidden')
-  })
-
-  it('keeps the list handle while the side pane is in front, as the list stays', async () => {
-    renderSurface({
-      address: { address: sessionA.key, pane: 'context', evidence: 'checks' },
-    })
-    const handle = await screen.findByRole('separator', {
-      name: 'Resize the session list',
-    })
-    expect(handle.className).toContain('max-[760px]:hidden')
-    expect(handle.className).not.toContain('max-[1440px]:hidden')
+    expect(
+      screen.getByRole('separator', { name: 'Resize the session list' })
+        .className,
+    ).toContain('max-[760px]:hidden')
   })
 
   it('keeps the handles off a phone, where each pane is a screen of its own', async () => {

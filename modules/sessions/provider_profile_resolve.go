@@ -19,7 +19,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// ONE RULE FOR A NEW SESSION'S PROFILE (Root, 2026-10-01; HU 030, FH 026/028).
+// ONE RULE FOR A NEW SESSION'S PROFILE (Root, 2026-10-01; acceptance, first-hour check/028).
 //
 // "Which profile does a new session use" was web code in the console (first-hour
 // api.ts) and a different rule in the CLI, so the CLI said "Not logged in" where the
@@ -98,6 +98,9 @@ func (e *codedRunErr) Unwrap() error { return e.runErr }
 
 func (tool resolveTool) nothingToRunOn() error {
 	if !tool.bindable {
+		if tool.signsIn {
+			return &codedRunErr{conflictErr(tool.name + " is not signed in. Sign it in under AI tools; no provider from Providers can be bound to it."), resolveCodeNothingToRunOn}
+		}
 		// No key or model from Providers can reach this tool: it runs on the key or
 		// login its own profile holds, and the profile is named.
 		return &codedRunErr{conflictErr(tool.name + " has nothing to run on from here: no provider from Providers can be bound to it. " +
@@ -143,7 +146,7 @@ func pickRecord(driver string, tool resolveTool, records []ProviderRecord) *Prov
 		}
 	}
 	// A key whose last provider test was refused comes after every other option
-	// (Root on FH 099): it is the answer only when nothing else can run the tool,
+	// (Root on first-hour check): it is the answer only when nothing else can run the tool,
 	// and the launch then says the key was refused.
 	refused := func(rec ProviderRecord) bool { return rec.ProbeState == ProbeRefused }
 	sort.SliceStable(usable, func(a, b int) bool {
@@ -285,7 +288,7 @@ type ToolReadiness struct {
 }
 
 // ToolsReadiness answers, for every tool a session can run, whether a new session can
-// start on it now and, when not, why in one sentence (HU 043, HU2-17): the preview's
+// start on it now and, when not, why in one sentence (acceptance, acceptance): the preview's
 // rule plus the verdict of the key it picked. The console and the CLI render this one
 // answer; a refusal is part of the answer, not an error. The tools are asked at once:
 // each asks its own program for its sign-in.
@@ -358,15 +361,16 @@ func (m *Module) toolReadiness(ctx context.Context, tenant model.TenantID, drive
 	return out, nil
 }
 
-// DefaultToolLoginHome keeps OpenCode's native XDG login with the profile that
-// automatic resolution reuses. Earlier profiles may have a separate immutable
-// user home; signing in does not move that identity or copy its credentials.
+// DefaultToolLoginHome keeps OpenCode's and Cursor's native login with the profile
+// that automatic resolution reuses. Both store authentication below HOME. Earlier
+// profiles may have a separate immutable user home; signing in does not move that
+// identity or copy its credentials.
 func (m *Module) DefaultToolLoginHome(ctx context.Context, tenant model.TenantID, driver string) (home, configDir string, err error) {
 	home, configDir, ok := ToolLoginHome(m.toolLoginsRoot, tenant, driver)
 	if !ok {
 		return "", "", badRequest("this tool has no login home on this node")
 	}
-	if driver != providerDriverOpenCode {
+	if driver != providerDriverOpenCode && driver != providerDriverCursor {
 		return home, configDir, nil
 	}
 	if m.Data == nil {
@@ -439,7 +443,7 @@ func (m *Module) ResolveProfile(ctx context.Context, tenant model.TenantID, driv
 		return ResolvedProfile{}, err
 	}
 	// The own login is the product's (ToolLoginHome): an own-login profile with any
-	// other configuration home is never the answer (FH 036 — profiles made before
+	// other configuration home is never the answer (first-hour check — profiles made before
 	// that pointed at the engine user's own ~/.claude).
 	loginHome := ""
 	if source == AuthSourceAccountHome {

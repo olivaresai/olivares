@@ -80,7 +80,7 @@ docker compose exec olivares olivares session follow first-hour
 
 ## Approve, interrupt, stop and resume
 
-Under **More options**, **Ask before each action** makes the tool ask before
+Under **More options**, **Supervised** makes the tool ask before
 acting. In **Rules**, the request waiting for you is open beside the queue with
 its command, what it reaches and the rule that asked. Choose **Approve once**
 (`A`), or **Deny** (`D`) and add a note. A launch that requires an organization
@@ -102,6 +102,31 @@ A changed or unavailable account is a launch refusal, not permission to switch
 to another login. An interrupted Grok turn uses ACP cancellation without an
 acknowledgment; wait for the correlated turn result before treating it as ended.
 
+## Be told when a session needs you, with the tab closed
+
+Under **Settings**, **Session notifications**, choose **Notify me**. While a tab of
+the console is open in the background the browser tells you, as before. On a browser that
+supports Web Push, the same switch also registers that browser with your engine, so a session
+you started that asks for an approval, or ends, reaches it with the tab closed. Tap the
+notification to open that session; its approval is waiting there. Turning the switch off
+removes the registration. A person can register up to 10 browsers; the oldest leaves for an
+eleventh.
+
+To install the console, use the browser's own **Install** or **Add to Home Screen** action.
+On Android, Chrome offers **Install app**. On an iPhone or iPad, notifications only work from
+the installed app: tap **Share**, then **Add to Home Screen**, open Olivares from the Home
+Screen and turn the switch on there. The engine must be reached over HTTPS, which browsers
+require for installed apps and for push. With the engine’s built-in local certificate,
+the console keeps notifications in the open tab and skips Web Push. Use a trusted TLS
+certificate or a TLS-terminating reverse proxy for closed-tab notifications.
+
+The engine sends each notification encrypted to your browser's own key. Google, Mozilla or
+Apple run the push service that relays it, and that service sees an encrypted body and the
+time it was sent, never the text. A notification carries the name you gave the session, or
+none, and a fixed sentence in your language; it never carries what the session wrote. Your
+engine needs to reach the push service on port 443; where it cannot, the switch still works
+for open tabs and Settings says this device could not be registered.
+
 ## Optional profile and git settings
 
 For an existing configured tool home, the **Provider profiles** tab of **Sessions**
@@ -121,7 +146,10 @@ refuses unsupported or unsafe repository settings before creating the worktree.
 
 A folder can store one setup command for new worktrees. A person must approve
 its exact text, by SHA-256, before a worktree start is accepted; changing one
-character requires approval again. Nothing runs the command yet. See
+character requires approval again. The approved command runs once, in the new
+worktree, before the session's first turn; a failure stops the start and shows
+its output. If setup fails, resume runs the command again; after successful setup or a
+recorded `--no-setup`, resume does not. See
 [Approving a folder's setup command](/reference/session-runtime-api/#approving-a-folders-setup-command).
 
 Cleanup refuses to discard uncommitted or unmerged work. **Also discard the

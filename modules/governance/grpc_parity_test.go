@@ -179,6 +179,9 @@ func TestGRPCRESTAuthorizationParity(t *testing.T) {
 	}
 	check := func(tc scenario) {
 		t.Helper()
+		if tc.want[auditResult] == http.StatusOK {
+			tc.want[auditResult] = auditVerificationStatus
+		}
 		t.Run(tc.name, func(t *testing.T) {
 			for _, row := range rows {
 				i := row.wantIndex
@@ -242,7 +245,7 @@ func TestGRPCRESTAuthorizationParity(t *testing.T) {
 					wantGRPC, known := map[int]codes.Code{
 						200: codes.OK, 201: codes.OK, 400: codes.InvalidArgument,
 						401: codes.Unauthenticated, 403: codes.PermissionDenied,
-						404: codes.NotFound, 409: codes.FailedPrecondition,
+						404: codes.NotFound, 409: codes.FailedPrecondition, 501: codes.Unimplemented,
 					}[tc.want[i]]
 					if !known {
 						t.Fatalf("unmapped expected HTTP status: %d", tc.want[i])

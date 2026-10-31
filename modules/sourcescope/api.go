@@ -91,6 +91,9 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("PUT", "/bindings/{id}", permBindingWrite, m.handleUpdateBinding)
 	reg.Handle("DELETE", "/bindings/{id}", permBindingWrite, m.handleDeleteBinding)
 
+	reg.Handle("POST", "/access-requests", permBindingRead, m.handleCreateAccessRequest)
+	reg.Handle("POST", "/access-requests/{id}/approve", permBindingRead, m.handleApproveAccessRequest)
+
 	// the authoritative, navigable Resource tree the console's folder/subtree
 	// binding picker reads to anchor an folder binding to a REAL Resource id. A
 	// read-only projection of the tenant's Resource tree (Children/Subtree) — the read
@@ -108,20 +111,15 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("GET", "/guard-postures", permBindingRead, m.handleListGuardPostures)
 	reg.Handle("PUT", "/guard-postures", permBindingWrite, m.handlePutGuardPosture)
 	reg.Handle("GET", "/posture-requests", permBindingRead, m.handleListPostureRequests)
-	// these three stay COLLECTION-level deliberately, and the reason is not that
-	// nobody got to them. TWO independent reasons, either of which is sufficient:
-	//   1. postureRequest carries no workspace column at all (schema.go), so there is no
-	//      lineage to resolve: an entity route would seed an id and change nothing.
-	//   2. Even given one, it would be the WRONG OBJECT. A decision applies to the
-	//      BINDING the request targets (colPRTargetID, applyPosture), not to the request
-	//      row, so authorizing on the request's own scope would authorize a mutation of a
-	//      binding that may live in a different workspace.
-	// Making them entity routes is a schema question (whose workspace does a posture
-	// request belong to?), not a registration one. TestPostureRequestRoutesStayCollectionLevel
-	// pins this so a later sweep cannot "finish the migration" without answering it.
+	// A decision changes a binding whose scope may differ from the request's
+	// approver workspace. That workspace alone cannot authorize the mutation:
+	// the handlers check the requester and every source owner's delegation ceiling.
+	// Ordinary posture requests still have no approver workspace.
 	reg.Handle("GET", "/posture-requests/{id}", permBindingRead, m.handleGetPostureRequest)
 	reg.Handle("POST", "/posture-requests/{id}/approve", permPostureApprove, m.handleApprovePostureRequest)
 	reg.Handle("POST", "/posture-requests/{id}/reject", permPostureApprove, m.handleRejectPostureRequest)
+
+	reg.Handle("POST", "/expiry/sweep", permPostureApprove, m.handleSweepBindings)
 
 	// read-only console seam — the baseline resolver preview ("what would this
 	// actor resolve"). Tree navigation for the folder-binding picker is GET /resources.

@@ -49,6 +49,8 @@ import { useAuth } from '@/lib/auth/context'
 import { formatDateTime } from '@/lib/format'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { HIDDEN_ON_PHONE } from '@/lib/hooks/use-is-phone'
+import { USAGE_REFRESH_MS } from '@/features/agent-tools/use-profiles'
+import { AccountUsage } from './account-usage'
 import { agentOpsApi, agentOpsKeys, PROFILE_PAGE } from './api'
 import { AuthorityLostError, useAuthBoundary } from './auth-boundary'
 import { ProviderAccountCreate } from './provider-account-create'
@@ -183,6 +185,8 @@ function AccountsPanelInner() {
       agentOpsApi.listAccounts({ cursor: pageParam }, { signal }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => (last.has_more ? last.cursor : undefined),
+    // The usage each row carries follows its tool.
+    refetchInterval: USAGE_REFRESH_MS,
     ...ACCOUNT_READ_LIFETIME,
   })
 
@@ -598,6 +602,13 @@ function AccountsTable({
                 <span className="block truncate font-mono text-caption text-muted-foreground">
                   {account.name}
                 </span>
+              )}
+              {account.state === 'active' && (
+                <AccountUsage
+                  usage={account.usage}
+                  showUnknown
+                  className="block"
+                />
               )}
             </td>
             <td

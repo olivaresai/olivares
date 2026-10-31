@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 # Security hardening & threat-model verification
 
-Audit SIEM export, directory archives and external archive verification require Business. Community retains the signed ledger and `olivares audit verify`; `olivares dr backup` remains available. See [edition placement](editions.md).
+Audit SIEM export, ledger verification (`olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`), directory archives and external archive verification require Business. Community retains the signed ledger and its reads; `olivares dr backup` remains available. See [edition placement](editions.md).
 
 **Date:** 2026-06-04 · **Status:** pentest-ready (beta)
 
@@ -258,7 +258,7 @@ Boot the product with no flags and you get: **no credentials** (setup token prin
 | **Signed releases** | cosign — keyless/Sigstore by default (GitHub OIDC → Fulcio/Rekor); key-based verification of operator-signed files (public releases publish no cosign public key) | `.goreleaser.yaml` `signs`/`docker_signs`; user verifies with `scripts/verify-release.sh` |
 | **Minimal non-root images** | Engine: `node:24-trixie-slim` pinned by digest (Debian 13 slim with Node.js 24, git, python3 and CA certificates), non-root 65532. eBPF backstop: `gcr.io/distroless/static-debian12:nonroot` | `Dockerfile`, `Dockerfile.release`, `Dockerfile.fips`; `Dockerfile.ebpf-source` |
 | **Dependency CVE gate** | `govulncheck` per module, blocking | CI `govulncheck` job |
-| **Secret scanning gate** | gitleaks (pinned v8.30.1) over full HEAD history, blocking; whole-repository audit is explicit `OLIVARES_SECRETS_SCOPE=all` | CI `secrets` job; `task lint:secrets`; config `.gitleaks.toml` |
+| **Secret scanning gate** | gitleaks (pinned v8.30.1) over the selected history (full HEAD by default; CI pushes scan since the last successful main push, with full history weekly and when scanner rules change), blocking; whole-repository audit is explicit `OLIVARES_SECRETS_SCOPE=all` | CI `secrets` job; `task lint:secrets`; config `.gitleaks.toml` |
 | **No `curl\|bash` without checksum** | dev tools installed via `go install @version` (go.sum-checksummed) | `Taskfile.yml` `tools`; CI lint/secrets jobs |
 | **Minimal pinned deps** | go.work `toolchain go1.26.4`; small direct dep set (chi, pgx, cobra, grpc, modernc/sqlite, go-plugin) | `core/go.mod` |
 

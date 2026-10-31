@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// HU 025 (refresh 05, real Claude Code 2.1.287): `olivares session interrupt` ended a
+// acceptance (refresh 05, real Claude Code 2.1.287): `olivares session interrupt` ended a
 // running 60 s command at once and the session stayed open, but the console offered
 // only Stop, which ends the session. The interrupt lived in the drawer's Live tab. The
 // session header now offers it beside Stop, from the same capability answer.

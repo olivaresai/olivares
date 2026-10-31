@@ -8,12 +8,8 @@
 // pair is pinned here rather than trusted.
 import { describe, expect, it } from 'vitest'
 import {
-  AREA_EXPANSION_VERSION,
-  DEFAULT_AREA_EXPANSION,
   DENSITY_ROW,
   densityHeightToken,
-  isAreaExpansion,
-  isAreaOpen,
   usePreferencesStore,
   type Density,
 } from './preferences'
@@ -55,76 +51,17 @@ describe('DENSITY_ROW', () => {
   })
 })
 
-describe('area expansion (N1)', () => {
-  const reset = () =>
-    usePreferencesStore.setState({ navAreas: DEFAULT_AREA_EXPANSION })
-
-  it('starts closed except for the active area, which opens on arrival', () => {
-    reset()
-    const s = usePreferencesStore.getState()
-    expect(s.navAreas).toEqual({
-      v: AREA_EXPANSION_VERSION,
-      open: [],
-      closed: [],
-    })
-    expect(isAreaOpen(s.navAreas, 'ai', null)).toBe(false)
-    expect(isAreaOpen(s.navAreas, 'ai', 'ai')).toBe(true)
-    expect(isAreaOpen(s.navAreas, 'system', 'ai')).toBe(false)
+describe('the navigation fold and the persisted blob (0.5)', () => {
+  it('folds and opens the left navigation without touching density', () => {
+    usePreferencesStore.setState({ density: 'compact', navCollapsed: false })
+    usePreferencesStore.getState().setNavCollapsed(true)
+    expect(usePreferencesStore.getState().navCollapsed).toBe(true)
+    expect(usePreferencesStore.getState().density).toBe('compact')
+    usePreferencesStore.getState().setNavCollapsed(false)
+    usePreferencesStore.setState({ density: 'comfortable' })
   })
 
-  it('lets the operator hold several areas open, and fold the active one without leaving it', () => {
-    reset()
-    const s = usePreferencesStore.getState()
-    s.setAreaOpen('system', true)
-    s.setAreaOpen('automation', true)
-    expect(usePreferencesStore.getState().navAreas.open).toEqual([
-      'system',
-      'automation',
-    ])
-    // Folding the ACTIVE area is a conscious act: it stays folded while the route stays.
-    s.setAreaOpen('ai', false)
-    expect(
-      isAreaOpen(usePreferencesStore.getState().navAreas, 'ai', 'ai'),
-    ).toBe(false)
-    // Arriving again (a route change into the area) reveals it once more.
-    s.revealArea('ai')
-    expect(
-      isAreaOpen(usePreferencesStore.getState().navAreas, 'ai', 'ai'),
-    ).toBe(true)
-    // The other two are still open: nothing was reset by the reveal.
-    expect(usePreferencesStore.getState().navAreas.open).toEqual([
-      'system',
-      'automation',
-    ])
-  })
-
-  it('touches neither density nor the retired hub list', () => {
-    reset()
-    usePreferencesStore.setState({
-      density: 'compact',
-      collapsedNavGroups: ['operate'],
-    })
-    usePreferencesStore.getState().setAreaOpen('ai', true)
-    usePreferencesStore.getState().setAreaOpen('system', false)
-    usePreferencesStore.getState().revealArea('ai')
-    const s = usePreferencesStore.getState()
-    expect(s.density).toBe('compact')
-    expect(s.collapsedNavGroups).toEqual(['operate'])
-    usePreferencesStore.setState({
-      density: 'comfortable',
-      collapsedNavGroups: [],
-    })
-  })
-
-  it('accepts only its own versioned shape when rehydrating, and falls back to the default otherwise', () => {
-    expect(isAreaExpansion({ v: 1, open: ['ai'], closed: [] })).toBe(true)
-    expect(isAreaExpansion({ v: 2, open: [], closed: [] })).toBe(false)
-    expect(isAreaExpansion({ v: 1, open: 'ai', closed: [] })).toBe(false)
-    expect(isAreaExpansion({ v: 1, open: [1], closed: [] })).toBe(false)
-    expect(isAreaExpansion(null)).toBe(false)
-    expect(isAreaExpansion('ai')).toBe(false)
-    // The persist merge: the rest of the blob survives, a bad navAreas does not,
-    // and the retired pre-Estate sidebar fields are dropped, not rehydrated.
+  it('rehydrates the rest of the blob and drops the retired navigation fields', () => {
     const merge = usePreferencesStore.persist.getOptions().merge as unknown as (
       persisted: unknown,
       current: unknown,
@@ -141,21 +78,44 @@ describe('area expansion (N1)', () => {
           'user:fixture-a': { collapsed: true, pending: true },
         },
         sidebarUnsent: true,
-        navAreas: { v: 99, open: 'x' },
+        navAreas: { v: 1, open: ['system'], closed: ['ai'] },
+        navCollapsed: 'yes',
       },
       current,
     )
     expect(merged.density).toBe('compact')
     expect(merged.reduceMotion).toBe(true)
     expect(merged.collapsedNavGroups).toEqual(['operate'])
-    expect(merged.navAreas).toEqual(DEFAULT_AREA_EXPANSION)
-    expect('sidebarCollapsed' in merged).toBe(false)
-    expect('sidebarChoices' in merged).toBe(false)
-    expect('sidebarUnsent' in merged).toBe(false)
-    const kept = merge(
-      { navAreas: { v: 1, open: ['system'], closed: ['ai'] } },
-      current,
-    )
-    expect(kept.navAreas).toEqual({ v: 1, open: ['system'], closed: ['ai'] })
+    // Anything but `true` keeps the navigation open.
+    expect(merged.navCollapsed).toBe(false)
+    for (const retired of [
+      'sidebarCollapsed',
+      'sidebarChoices',
+      'sidebarUnsent',
+      'navAreas',
+    ])
+      expect(retired in merged, retired).toBe(false)
+    expect(merge({ navCollapsed: true }, current).navCollapsed).toBe(true)
+  })
+})
+
+describe('the title style (0.5)', () => {
+  it('defaults to the engine’s own default and keeps the one chosen', () => {
+    usePreferencesStore.setState({ titleStyle: 'sentence' })
+    expect(usePreferencesStore.getState().titleStyle).toBe('sentence')
+    usePreferencesStore.getState().setTitleStyle('short')
+    expect(usePreferencesStore.getState().titleStyle).toBe('short')
+  })
+
+  it('takes the default for anything a stored blob holds that the engine does not know', () => {
+    const merge = usePreferencesStore.persist.getOptions().merge as unknown as (
+      persisted: unknown,
+      current: unknown,
+    ) => Record<string, unknown>
+    const current = usePreferencesStore.getState()
+    expect(merge({ titleStyle: 'poetic' }, current).titleStyle).toBe('sentence')
+    expect(merge({ titleStyle: 7 }, current).titleStyle).toBe('sentence')
+    expect(merge({}, current).titleStyle).toBe('sentence')
+    expect(merge({ titleStyle: 'long' }, current).titleStyle).toBe('long')
   })
 })

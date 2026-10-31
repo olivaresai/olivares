@@ -4,7 +4,12 @@
 
 package sessions
 
-import "testing"
+import (
+	"context"
+	"errors"
+	"net/http"
+	"testing"
+)
 
 // A tool installed after boot is run at once: the program is resolved at launch.
 // An explicit pin wins over the resolver; no answer keeps the official name.
@@ -37,5 +42,25 @@ func TestProgramResolverIsAskedAtLaunchAndLosesToAPin(t *testing.T) {
 	}
 	if got := pinned.claudeProgram(); got != "/opt/claude" {
 		t.Fatalf("pinned claude = %q, want /opt/claude", got)
+	}
+}
+
+func TestCursorRunProgramRefusesAnUnresolvedBinary(t *testing.T) {
+	m := New(WithProviderDriver(NewCursorDriver()), WithProgramResolver(func(string) string { return "" }))
+	params := CreateRunParams{ProviderHome: &ProviderHomeSnapshot{Driver: providerDriverCursor}}
+	program, err := m.resolveRunProgram(context.Background(), "", params)
+	if err == nil || program != "" {
+		t.Fatalf("unresolved Cursor program = %q, %v, want a launch refusal instead of PATH agent", program, err)
+	}
+	var refusal *runErr
+	if !errors.As(err, &refusal) || refusal.status != http.StatusServiceUnavailable ||
+		refusal.msg != "Cursor CLI is not installed on this node; install it from AI tools or pin its official agent executable" {
+		t.Fatalf("unresolved Cursor refusal = %v, want 503 naming the tool and its official program", err)
+	}
+	pinned := New(WithProviderDriver(NewCursorDriver()), WithProgramResolver(func(string) string { return "" }),
+		WithDriverProgram(providerDriverCursor, "/opt/cursor/agent"))
+	program, err = pinned.resolveRunProgram(context.Background(), "", params)
+	if err != nil || program != "/opt/cursor/agent" {
+		t.Fatalf("explicit Cursor pin = %q, %v, want /opt/cursor/agent", program, err)
 	}
 }

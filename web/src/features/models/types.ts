@@ -90,6 +90,26 @@ export interface GovernedModel {
   enriched: boolean
 }
 
+/** One configured source in GET /v1/m/models/availability. Provider rows use only
+ * entries with provider_ref; account and own-login entries stay in the tool join. */
+export interface ModelAvailability {
+  source_ref: string
+  provider_ref?: string
+  provider_kind: string
+  account_ref?: string
+  driver?: string
+  state: string
+  models: { id: string; seen_at: string }[]
+  seen_at?: string
+  checked_at?: string
+  message?: string
+}
+
+export interface ModelAvailabilityResponse {
+  items: ModelAvailability[]
+  refresh_interval_seconds: number
+}
+
 export type RoutingStrategy = 'cost' | 'latency' | 'capability' | 'pinned'
 
 /** A routing policy as the engine sends it (modules/models/api.go routingPolicyDTO). The

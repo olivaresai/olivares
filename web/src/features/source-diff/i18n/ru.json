@@ -43,6 +43,7 @@
   "retryIn": "Повторите через {{seconds}} с.",
   "signIn": "Войдите, чтобы сравнить.",
   "diffLabel": "Единый diff {{path}}",
+  "diffLabelRich": "Единый diff <path />",
   "colOld": "Старая",
   "colNew": "Новая",
   "colChange": "Изменение",

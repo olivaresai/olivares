@@ -4,8 +4,8 @@
 # OpenSSF Scorecard (SCP-07). Runs on the public GitHub repository — Scorecard
 # evaluates GitHub repo posture. It scores the four
 # checks that matter most for a self-hosted security product's supply chain:
-# Pinned-Dependencies (every Action pinned by 40-char SHA — see all workflows +
-# .github/dependabot.yml), Signed-Releases (cosign + SLSA provenance, release.yml),
+# Pinned-Dependencies (every Action pinned by 40-char SHA — see the workflows),
+# Signed-Releases (cosign + SLSA provenance, release.yml),
 # Token-Permissions (top-level read-all + per-job least privilege), and
 # Branch-Protection (repo settings). The badge is published to api.scorecard.dev.
 #

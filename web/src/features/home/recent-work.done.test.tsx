@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// dev#3120: Recent work called every finished run "Stopped". A row reads its run's ledger
+// the regression: Recent work called every finished run "Stopped". A row reads its run's ledger
 // and says Done for a tool that ended on its own, Stopped for a stop someone asked for.
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -57,7 +57,7 @@ function show(ledger: RunEventDTO[]) {
   )
 }
 
-describe('Recent work says Done or Stopped from the run ledger (dev#3120)', () => {
+describe('Recent work says Done or Stopped from the run ledger', () => {
   it('says Done for a tool that ended on its own', async () => {
     show([ev(1, 'launched', 'running'), ev(2, 'stopped', 'stopped')])
     expect(await screen.findByText('Done')).toBeInTheDocument()

@@ -456,6 +456,10 @@
   --text-mono--line-height: 1.25rem;
   --text-mono-s: 0.75rem;
   --text-mono-s--line-height: 1.125rem;
+  --text-metadata: 0.6875rem;
+  --text-metadata--line-height: 1rem;
+  --text-metadata-s: 0.625rem;
+  --text-metadata-s--line-height: 0.875rem;
 
   /* Layout — the shell geometry, named rather than bracketed */
   --container-page: 90rem;

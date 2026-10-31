@@ -70,7 +70,20 @@ func Read(folder string) (Layout, bool) {
 	if commonDir == "" || backlink != dotgit || filepath.Dir(gitDir) != filepath.Join(commonDir, "worktrees") {
 		return Layout{}, false
 	}
+	// Git keeps a linked worktree's entry in the repository: never inside the
+	// worktree, and the worktree is never inside the entry. Where the two
+	// overlap, the session wrote the entry itself, and with it names an
+	// ancestor of the folder as the common directory.
+	if within(gitDir, root) || within(root, gitDir) {
+		return Layout{}, false
+	}
 	return Layout{GitDir: gitDir, CommonDir: commonDir}, true
+}
+
+// within reports whether path is dir or lies beneath it. Both are resolved.
+func within(path, dir string) bool {
+	rel, err := filepath.Rel(dir, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // NamesItself reports whether gitDir/commondir is a plain file that says "." and

@@ -19,7 +19,7 @@ const demoTenant = process.env.DEMO_TENANT ?? ''
 const EMAIL = 'demo@olivares.local'
 const PASSWORD = 'olivares-demo-estate'
 const LIST = 'Resize the session list'
-const CONTEXT = 'Resize the context pane'
+const CONTEXT = 'Resize the details pane'
 
 async function signIn(page: Page) {
   await page.goto('/login')
@@ -74,8 +74,7 @@ for (const theme of ['light', 'dark'] as const) {
     }) => {
       await prefer(page, theme)
       await signIn(page)
-      // The context pane sits beside the thread, with a handle, only where the thread
-      // keeps its 760 px: from 1441 px.
+      // Details sits beside the thread, with a handle, from 1120 px.
       await page.setViewportSize({ width: 1600, height: 900 })
       await page.goto('/sessions')
       const row = page.getByTestId('rail-row').first()

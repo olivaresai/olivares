@@ -36,7 +36,7 @@ vi.mock('@/lib/auth/context', () => ({
 
 const mockSetup = vi.fn()
 // What the engine's server info says; a completed setup flips it.
-const engine = { setupRequired: true }
+const engine = { setupRequired: true, backupKeyRequired: false }
 vi.mock('@/lib/api/endpoints', () => ({
   authApi: {
     setup: (...args: unknown[]) => mockSetup(...args),
@@ -45,6 +45,10 @@ vi.mock('@/lib/api/endpoints', () => ({
         version: 'test',
         engine: 'test',
         setup_required: engine.setupRequired,
+        backup_key_required: engine.backupKeyRequired,
+        backup_key_path: engine.backupKeyRequired
+          ? '/var/lib/olivares/dr-recovery.key'
+          : undefined,
         license: { status: 'community', licensee: '' },
       }),
   },
@@ -74,15 +78,56 @@ function Wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage('en')
   vi.clearAllMocks()
   engine.setupRequired = true
+  engine.backupKeyRequired = false
   mockLogin.mockRejectedValue(new Error('sign-in refused'))
   localStorage.clear()
   useTenantStore.setState({ activeTenant: null })
 })
 
 describe('SetupPage', () => {
+  it.each(LANGUAGE_CODES)(
+    'renders the recovery key path in %s',
+    async (lng) => {
+      await i18n.changeLanguage(lng)
+      engine.backupKeyRequired = true
+      render(<SetupPage />, { wrapper: Wrapper })
+      expect(
+        await screen.findByTitle('/var/lib/olivares/dr-recovery.key'),
+      ).toHaveTextContent('/var/lib/olivares/dr-recovery.key')
+    },
+  )
+  it('requires the appliance recovery key to be saved before setup finishes', async () => {
+    engine.backupKeyRequired = true
+    const user = userEvent.setup()
+    render(<SetupPage />, { wrapper: Wrapper })
+    await user.type(await screen.findByLabelText(/setup token/i), 'olv_tok')
+    await user.type(
+      screen.getByLabelText(/administrator email/i),
+      'admin@example.com',
+    )
+    await user.type(screen.getByLabelText(/password/i), 'correct-horse-battery')
+    expect(
+      screen.getByTitle('/var/lib/olivares/dr-recovery.key'),
+    ).toHaveTextContent('/var/lib/olivares/dr-recovery.key')
+    const submit = screen.getByRole('button', { name: /create administrator/i })
+    expect(submit).toBeDisabled()
+    await user.click(
+      screen.getByRole('checkbox', { name: /saved.*recovery key/i }),
+    )
+    await user.click(submit)
+    await waitFor(() =>
+      expect(mockSetup).toHaveBeenCalledWith(
+        expect.objectContaining({ backup_key_saved: true }),
+      ),
+    )
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith({ to: '/login' }),
+    )
+  })
   it('selects the organization setup returned, so the console lands usable', async () => {
     const user = userEvent.setup()
     mockSetup.mockResolvedValue({

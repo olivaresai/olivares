@@ -148,6 +148,14 @@ func modelSourceRevision(values ...string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// providerSourceRevision changes only with what decides the models a provider
+// serves: its endpoint and its key (a rotation always seals a new locator). The
+// record version also moves on a connection test, a rename or a new default
+// model, none of which change that list.
+func providerSourceRevision(rec sessions.ProviderRecord) string {
+	return modelSourceRevision(rec.Kind, rec.Service, rec.BaseURL, rec.SecretRef)
+}
+
 // Only metadata from the configured product/account home is inspected. No
 // credential contents are read and no host or lane credential is borrowed.
 func modelHomeRevision(userHome, configHome string) string {
@@ -171,7 +179,7 @@ func (d configuredModelDiscovery) Sources(ctx context.Context, tenant model.Tena
 			return nil, err
 		}
 		for _, rec := range records {
-			out = append(out, models.AvailabilitySource{Ref: rec.Ref, ProviderRef: rec.Ref, ProviderKind: rec.Kind, Revision: modelSourceRevision(rec.Kind, rec.Service, rec.BaseURL, rec.SecretRef, strconv.FormatInt(rec.Version, 10))})
+			out = append(out, models.AvailabilitySource{Ref: rec.Ref, ProviderRef: rec.Ref, ProviderKind: rec.Kind, Revision: providerSourceRevision(rec)})
 		}
 		if !page.HasMore {
 			break
@@ -240,7 +248,7 @@ func (d configuredModelDiscovery) Discover(ctx context.Context, tenant model.Ten
 		if getErr != nil {
 			return nil, getErr
 		}
-		if modelSourceRevision(rec.Kind, rec.Service, rec.BaseURL, rec.SecretRef, strconv.FormatInt(rec.Version, 10)) != source.Revision {
+		if providerSourceRevision(rec) != source.Revision {
 			return nil, sessions.ErrProviderRecordChanged
 		}
 		ids, err = d.sessions.ReadProviderModels(ctx, tenant, rec)

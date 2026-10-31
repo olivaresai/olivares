@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
-"""The full mainline-ci run must not starve itself (dev#2367).
+"""The full mainline-ci run must not starve itself.
 
 Measured on run 38901745263: `web` hit its 75-minute ceiling while the race partitions held
 the eight runners, so functional-shard, race-rest and race-hot-manifest were SKIPPED and the
@@ -18,7 +18,7 @@ functional suite never started. Run 38860445399 lost it the other way: the permi
   3. Starting together is still too many. Once functional-shard and `web` finish, the three
      matrix families with the hours-long legs (race-modules, race-sessions, race-core) would
      become runnable with race-rest and race-hot-manifest: 17 jobs on eight runners, the same
-     oversubscription moved later (Root's recipe on the issue, runners/OPTIMIZATION-PLAN-20261016
+     oversubscription moved later (the maintainer's recipe on the issue, runners/OPTIMIZATION-PLAN-20261016
      section 2.1). Each of the three therefore runs two legs at a time, and they run one family
      after the other, so at most 2 + race-hot-manifest's 4 + race-rest's 1 = 7 race jobs run at once.
 
@@ -70,10 +70,10 @@ RACE_LEGS = {'race-modules', 'race-rest', 'race-core', 'race-sessions', 'race-ho
 # What `web` runs and the bundle producer must not: any of these in a `run:` puts the console
 # build behind a web check.
 WEB_CHECKS = ('vitest', 'lint:console-perms', 'test:web', 'run test')
-# Root's recipe for dev#2367: `max-parallel: 2` on the three big families, chained in this order.
+# the maintainer's recipe for the regression: `max-parallel: 2` on the three big families, chained in this order.
 CHAIN = ['race-modules', 'race-sessions', 'race-core']
 MAX_PARALLEL = 2
-# The dev runners (ci-runner-1 hosts eight of them); the race jobs that run together must fit.
+# The dev runners (build-host hosts eight of them); the race jobs that run together must fit.
 RUNNERS = 8
 LEG_IF = "${{ !cancelled() && needs.classify.outputs.code == 'true' }}"
 # The caches a host would point GOCACHE and GOMODCACHE at, to prove the steps keep them (and ignore a GOPATH).
@@ -320,6 +320,11 @@ class MainlineSchedule(unittest.TestCase):
 
     def assertCaught(self, got, text):
         self.assertTrue(any(text in f for f in got), got)
+
+    def test_mainline_runs_only_on_manual_dispatch(self):
+        # BaseLoader keeps Actions' `on` key a string rather than a YAML 1.1 boolean.
+        workflow = yaml.load(WORKFLOW.read_text(), Loader=yaml.BaseLoader)
+        self.assertEqual(set(workflow['on']), {'workflow_dispatch'})
 
     def test_real_workflow_does_not_starve_itself(self):
         self.assertEqual(findings(self.workflow), [])

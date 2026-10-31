@@ -11,7 +11,7 @@ import "testing"
 func TestNameStem(t *testing.T) {
 	want := map[string]string{
 		"claude": "claude", "codex": "codex", "grok": "grok", "opencode": "opencode",
-		"gemini-cli": "gemini", "ollama": "ollama",
+		"gemini-cli": "gemini", "cursor": "cursor", "ollama": "ollama",
 	}
 	for _, f := range All() {
 		if got := f.NameStem(); got != want[f.Key] {

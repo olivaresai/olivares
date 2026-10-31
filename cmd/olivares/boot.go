@@ -39,6 +39,8 @@ import (
 	"github.com/olivaresai/olivares/core/updatecheck"
 	"github.com/olivaresai/olivares/core/webaddr"
 	"github.com/olivaresai/olivares/modules/catalog"
+	"github.com/olivaresai/olivares/modules/compliance"
+	"github.com/olivaresai/olivares/modules/consoleviews"
 	"github.com/olivaresai/olivares/modules/gitpublish"
 	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/modules/knowledge"
@@ -528,16 +530,20 @@ type engine struct {
 	agentTools       *agenttoolsapi.Module
 	gatewayConfig    *mcpgateway.Config
 	editionResources []io.Closer
-	store            store.Store
-	rt               *runtime.Runtime
-	signer           *audit.Signer
-	authr            *auth.Authenticator
-	authz            *auth.Authorizer
-	setupTok         *secure.SetupToken
-	api              *api.Server
-	tracer           *obstrace.Provider
-	dataDir          string
-	log              *slog.Logger
+	// editionModules and editionConfig are the boot's own, kept for the edition's agent
+	// listeners, which serve builds after the TLS certificate exists (editionAgentDepsFrom).
+	editionModules []api.Module
+	editionConfig  EditionConfig
+	store          store.Store
+	rt             *runtime.Runtime
+	signer         *audit.Signer
+	authr          *auth.Authenticator
+	authz          *auth.Authorizer
+	setupTok       *secure.SetupToken
+	api            *api.Server
+	tracer         *obstrace.Provider
+	dataDir        string
+	log            *slog.Logger
 	// webAuthn is the relying party this boot RESOLVED, kept so the startup panel
 	// can describe what will actually happen at a passkey prompt instead of
 	// guessing from the address. The panel used to promise a localhost ceremony
@@ -596,6 +602,8 @@ type engine struct {
 	// Codex session id to the canonical sid through this module's identity plane — the one
 	// step that cannot live in the Apache connector, because modules/sessions imports /core.
 	sessionsMod *sessions.Module
+	// complianceMod applies the erasure tombstones again after a restore (cmd_dr.go).
+	complianceMod *compliance.Module
 	// communicationPump is the registered local outbox pump (K1/K2 lanes plus the
 	// gated K3 lane). Close stops its readiness witness before the runtime stops.
 	communicationPump *workOutboxPump
@@ -662,6 +670,9 @@ type engine struct {
 	// as before. It is held here because the launch plants, and the hook PEP and the proxy
 	// recognize, through the SAME instance: two would not know each other's decoys.
 	sessionDecoys sessionDecoyEngine
+	// editionGates are this engine's edition gates that an administrator's settings can
+	// change while it runs (edition_live.go); gates() answers them for every consumer.
+	editionGates *editionLiveGates
 	// pinVerifier is the tool-pin verifier (nil in the community build),
 	// constructed once in buildModules and shared: the MCP gateway PEP consults it
 	// at tools/call and the enterprise reporting tool-pin source reads its drift
@@ -1808,6 +1819,9 @@ func (b *bootState) bindIdentityAndLeadership(ctx context.Context) (err error) {
 		b.set.inventory.UseSweepScopeSource(inventorySweepScopeSource{st: b.st, reg: b.residencyReg})
 	}
 	b.authr = auth.NewAuthenticator(b.st, nil)
+	if b.set.sourceScope != nil {
+		b.set.sourceScope.UseRequesterWorkspace(b.authr.RequesterWorkspace)
+	}
 	b.authr.SetTrustedLoginProxies(*b.loginProxies)
 	// the TOTP seed sealer. A key failure leaves the factor unwired:
 	// enrolment refuses (503 totp_unavailable) and a stored factor's challenges
@@ -2209,6 +2223,13 @@ func (b *bootState) bindServices(ctx context.Context) (err error) {
 	if b.set.accountEraser != nil {
 		b.set.accountEraser.use(b.st, b.authr)
 	}
+	// A restore left the marker: the erasures its backup predates run again
+	// before anything serves the restored estate (cmd_dr.go replayErasures).
+	if !b.cfg.NoIngest && !b.cfg.ReadOnly {
+		if err := replayErasures(ctx, b.set.compliance, b.cfg.DataDir, func(line string) { b.log.Info(line) }); err != nil {
+			return err
+		}
+	}
 	// late-bind the same data handle into the Business policy truth-loop seams,
 	// both constructed in buildModules before the store existed. Until bound, the
 	// distributor is deny-closed (publish reports enqueue-failed, never
@@ -2469,7 +2490,7 @@ func (b *bootState) bindSources(ctx context.Context) (err error) {
 	}
 	// Each confined child (a session, a tool's sign-in, a probe) gets its private TMPDIR under one root inside the
 	// data directory, never the host's /tmp: the Server image labels that root for the tools and keeps the engine's
-	// own scratch in /tmp (the egress proxy, gpg, DR) apart from them. Set whether or not the sessions module is on,
+	// own scratch in /tmp (the egress proxy, DR) apart from them. Set whether or not the sessions module is on,
 	// since a tool's sign-in and install probe run without it. runEngine sweeps it at start.
 	confine.UseChildTempRoot(filepath.Join(absOrSame(b.cfg.DataDir), "tool-tmp"))
 	if b.set.sessions != nil {
@@ -2486,7 +2507,7 @@ func (b *bootState) bindSources(ctx context.Context) (err error) {
 		}
 		// A profile that signs in with the tool's own login gets a HOME the product
 		// creates under the data directory, never the engine user's own home, and the
-		// login itself lives in the tenant's own home there too (FH 036).
+		// login itself lives in the tenant's own home there too (first-hour check).
 		if b.cfg.DataDir != "" {
 			if dataDir, absErr := filepath.Abs(b.cfg.DataDir); absErr == nil {
 				b.set.sessions.UseProfileHomesRoot(filepath.Join(dataDir, "profile-homes"))
@@ -2509,6 +2530,12 @@ func (b *bootState) bindSources(ctx context.Context) (err error) {
 				"unchanged", "launching with the host credential variables")
 		}
 		b.set.sessionDependencies.ProviderProbe = newProviderProbe()
+		// The credential of a governed connection (Business) is a connection/<name> entry of
+		// the deployment's secret store, read through one closed door. With no sealer the door
+		// stays unwired, and Business refuses to save a connection credential, naming the wiring.
+		if b.secretStoreSealerPresent {
+			b.set.sessionDependencies.ConnectionSecrets = connectionSecretReader(b.secretStore)
+		}
 	}
 	// J10-S3: the publication module's custody and closed git executor. Its
 	// approved bindings come from the operator's source roster, and each
@@ -2776,7 +2803,7 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 	// The tools' logins, status reads, probes, install probes and Ollama run confined like a session child (#1114, #1430).
 	b.agentTools.SetChildCommand(confinedToolCommand(b.cfg.DataDir))
 	if state := confine.Probe(); state.Mode != confine.ModeLandlock {
-		b.log.Warn("agent tools: the tools' logins, status reads and probes, including the version probe of a tool install, run UNCONFINED on this node with the engine user's rights; enable Landlock and run olivares doctor", "reason", state.Reason)
+		b.log.Warn("agent tools: the tools' logins, status reads, model catalogs and probes run UNCONFINED on this node with the engine user's rights, except an unsigned install (none-origin-only, origin-tarball), whose runs are refused; enable Landlock and run olivares doctor", "reason", state.Reason)
 	}
 	// Sign-in runs the same executable a session launch runs (sessionruntime.go).
 	toolObserver := newHostToolObserverForDataDir(b.cfg.DataDir, osGetenv)
@@ -2787,7 +2814,7 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 		}
 		return installedSessionProgram(toolObserver, driver, exec.LookPath)
 	})
-	// FH 036: the tools' own logins live in a home the product creates per tenant
+	// first-hour check: the tools' own logins live in a home the product creates per tenant
 	// under the data directory (<data>/tool-logins/<tenant>/<driver>), never in the
 	// engine user's own home; a tenant this node does not serve has none.
 	if dataDir, absErr := filepath.Abs(b.cfg.DataDir); b.cfg.DataDir != "" && absErr == nil {
@@ -2807,7 +2834,7 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 				home, configDir, err := b.set.sessions.ProviderLoginHome(ctx, tenant, driver, accountRef)
 				return home, configDir, err
 			}
-			if driver == "opencode" && b.set.sessions != nil {
+			if (driver == "opencode" || driver == "cursor") && b.set.sessions != nil {
 				return b.set.sessions.DefaultToolLoginHome(ctx, tenant, driver)
 			}
 			home, configDir, ok := sessions.ToolLoginHome(loginsRoot, tenant, driver)
@@ -2852,10 +2879,17 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 		Register:  registerLocalOllama(b.set.sessions, b.st),
 		StateFile: filepath.Join(ollamaDir, "started.json"),
 		Audit:     auditSystem,
+		// the regression: the person may ask for Ollama's image instead of the installed
+		// program; the runtime and image are discovered when they do, and the host GPU
+		// is given to the container when it has one. Getenv is the effective reader so
+		// an activation manifest that switches containers off, or pins an image, is
+		// honored here as it is for every other setting.
+		Getenv:    osGetenv,
+		Container: &agenttoolsapi.OllamaContainer{GPU: agenttoolsapi.DetectOllamaGPU()},
 	})
 	// The Ollama a person started comes back with the engine.
 	b.agentTools.RestartOllama()
-	// dev#2422: the llama.cpp or vLLM the operator installed, run by the engine on request,
+	// the regression: the llama.cpp or vLLM the operator installed, run by the engine on request,
 	// registered in Providers with a key of its own, and back with the engine.
 	b.agentTools.UseModelServers(agenttoolsapi.ModelServerConfig{
 		Dir:      filepath.Join(absOrSame(b.cfg.DataDir), "model-servers"),
@@ -2990,6 +3024,9 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 		// leadership and answer the retryable 503 not_leader on a standby. Off
 		// unless the deployment opts in — a legacy HA layout is unchanged.
 		LeaderRouteGate: b.haCfg.Gate,
+		// The edition's route gate (the Business licence check of its write routes) runs
+		// inside the router, so every caller of the engine handler meets it.
+		EditionRouteGate: thisEdition.routeGate,
 		// enable console DR; dr_handler resolves an empty BackupDir to
 		// <DataDir>/backups. The passphrase file — the CLI DR commands' own
 		// $OLIVARES_DR_PASSPHRASE_FILE — is what lets the backup schedule run
@@ -3053,6 +3090,13 @@ func (b *bootState) bindJobs(ctx context.Context) (err error) {
 	if b.set.approvalBridge != nil {
 		b.set.approvalBridge.UseLocalProposer(b.set.gov.EngineApprovals())
 		b.set.approvalBridge.UseHandler(b.apiSrv.Handler())
+		// A ship (commit, push and pull request of a worktree session in one action)
+		// commits through the sessions module and asks the tenant's approval policy
+		// before its push. Without either, the ship answers authority_unavailable.
+		if b.set.gitpublish != nil && b.set.sessions != nil {
+			b.set.gitpublish.UseSessionWork(b.set.sessions)
+			b.set.gitpublish.UseShipGate(shipGate{policy: b.set.gov.EngineApprovals(), bridge: b.set.approvalBridge})
+		}
 		if b.set.sessions != nil && b.cfg.ServeMode {
 			// The tenants every install can enumerate, this node's region and
 			// service guards applied (servedWorkTenants): the default PostgreSQL
@@ -3067,6 +3111,12 @@ func (b *bootState) bindJobs(ctx context.Context) (err error) {
 			b.set.gov.UseApprovalCapacity(b.authr.ApprovalCapacity)
 			b.set.gov.UseApprovalAuthority(b.authr, b.authz)
 		}
+	}
+
+	// Approval policies bound to a change record read the record through the tenant's
+	// notification destination, which holds the read-only credential by reference.
+	if nd := notifyDispatcherOf(b.set); nd != nil && b.set.gov != nil && thisEdition.changeRecordReader != nil {
+		b.set.gov.UseChangeRecordReader(thisEdition.changeRecordReader(nd.connector))
 	}
 
 	// subscribe the FinOps→upstream-cap backstop to the bus, AFTER the approval
@@ -3121,7 +3171,7 @@ func (b *bootState) bindJobs(ctx context.Context) (err error) {
 	// content into ADDITIVE findings (agentic signatures over guardrail.observed,
 	// MCP reputation over finding.reported, model-lifecycle over cost.sampled). Opt-in
 	// + fail-inert; it never alters the open engine's decisions.
-	subscribeThreatIntel(ctx, osGetenv, b.bus, b.log)
+	subscribeThreatIntel(ctx, osGetenv, b.bus, b.set.editionGates, b.log)
 
 	// late-bind the engine handler into the deploy IdentityBinder (the firm
 	// per-agent NHI binding via in-process) and the drift loop, and register the
@@ -3219,6 +3269,12 @@ func (b *bootState) bindJobs(ctx context.Context) (err error) {
 				}
 			}
 		}},
+		{"", "access-expiry", func() {
+			pump := newAccessPump(b.st, b.set.gov, b.set.sourceScope, b.log)
+			if err := pump.register(b.rt); err != nil {
+				b.log.Warn("access-expiry: could not register the pump on the scheduler; bindings still expire on every resolution, but scoped grants leave the Cedar projection only when the sweep is run", "err", err)
+			}
+		}},
 		{"eventing", "eventing-dispatch", func() {
 			// the eventing dispatch pump (retry cadence, crash recovery,
 			// retention pruning), leader-gated per tick. nil = disabled (warned loudly).
@@ -3300,7 +3356,7 @@ func (b *bootState) bindJobs(ctx context.Context) (err error) {
 		}},
 	})
 
-	// SR2C P2 (round 2): the work-outbox pump's nudge goroutine and the global
+	// review P2 (round 2): the work-outbox pump's nudge goroutine and the global
 	// sessions callback went live inside register() above. On any boot failure
 	// after this point (the hook-config refusal below is the reachable one) the
 	// bootOK unwind must stop the pump — cancel + join the goroutine and
@@ -3364,14 +3420,20 @@ func (b *bootState) bindSessionGovernance(ctx context.Context) (err error) {
 	}
 	// Steering a session another person started (input, resume, peers) is Business; a
 	// Community build answers 501 business_required (docs/editions.md).
-	b.set.sessionDependencies.SteerOthers = thisEdition.name != "community"
+	b.set.sessionDependencies.SteerOthers = thisEdition.steerOthers
 	// Who may use which provider profile and AI tool: the source-scoping bindings, asked at
 	// every launch and read of a profile. With none stored, every profile stays open.
 	b.set.sessionDependencies.ProfileAccess = profileAccess{scopes: b.set.sourceScopeResolver}
+	// What a department carries, assigned by the same bindings: the instructions its Claude launches
+	// are given and the template a launch that names none starts from. With none stored, a launch
+	// is what it always was.
+	b.set.sessionDependencies.Standards = departmentStandards{scopes: b.set.sourceScopeResolver, st: b.st}
 	// A turn its tool metered and did not price (Codex) is priced at list price.
 	b.set.sessionDependencies.ListPricer = sessionListPrice
 	// A usage limit whose tool named no reset time takes it from the login's windows.
 	b.set.sessionDependencies.LimitResets = b.agentTools.LimitResetsAt
+	// An account shows the 5-hour and weekly usage its own tool reports.
+	b.set.sessionDependencies.AccountUsage = b.agentTools.AccountUsage
 	b.set.sessionDependencies.ProviderApprovalPrincipal = func(c context.Context, tenant model.TenantID, runRef string) (auth.Principal, string, error) {
 		p, scope, err := b.sessionHooks.ResolveRun(c, tenant, runRef)
 		return p, scope.SessionRef, err
@@ -3379,6 +3441,22 @@ func (b *bootState) bindSessionGovernance(ctx context.Context) (err error) {
 	providerPolicy := sessionProviderPolicy{credentials: b.sessionHooks.SessionCredentials, eval: b.policyEval, scoped: b.set.gov.ScopedGrants(), authz: b.authz, approvals: b.set.gov.EngineApprovals(), store: b.st, redactSecrets: b.set.sessions.RedactSessionSecretsWithSpans}
 	b.set.sessionDependencies.ProviderApprovalPolicy = providerPolicy.Decide
 	b.set.sessionDependencies.ApprovalGate = providerApprovalAdapter{bridge: b.set.approvalBridge, approvalWait: b.set.sessions.BeginApprovalWait, reviewFacts: providerPolicy.reviewFacts, reviewReason: providerPolicy.reviewReason}
+	// Web Push to a person's closed browser (#2840). Without a usable key the routes answer
+	// 503 and the console keeps its in-page notices; nothing else changes.
+	if sender, perr := newPushSender(b.cfg.DataDir, osGetenv); perr != nil {
+		b.log.Error("web push: application server key unavailable; Web Push is disabled until fixed", "err", perr)
+	} else {
+		b.set.sessionDependencies.PushSender = sender
+	}
+	b.set.sessionDependencies.NotificationAllowed = func(ctx context.Context, tenant model.TenantID, owner, kind string) (bool, error) {
+		allowed := false
+		err := b.st.View(ctx, tenant, func(sc store.Scope) error {
+			var err error
+			allowed, err = consoleviews.SessionNotificationAllowed(ctx, sc, owner, kind)
+			return err
+		})
+		return allowed, err
+	}
 	_, hookErr := loadHookPEPConfig(b.log)
 	if hookErr != nil {
 		return hookErr
@@ -3736,7 +3814,7 @@ func postgresMaxConns(getenv func(string) string, log *slog.Logger) int {
 }
 
 // toolLoginsDir is where the tools' own logins live under the data directory, one
-// home per tenant and tool (sessions.ToolLoginHome, FH 036).
+// home per tenant and tool (sessions.ToolLoginHome, first-hour check).
 const toolLoginsDir = "tool-logins"
 
 // composeEngine resolves the engine/session cycle before runtime startup. A
@@ -3746,10 +3824,11 @@ func (b *bootState) composeEngine() {
 	b.runtimeEngine = &engine{
 		store: b.st, rt: b.rt, signer: b.signer, authr: b.authr, authz: b.authz,
 		editionResources: b.editionResources,
-		agentTools:       b.agentTools, setupTok: b.setupTok, api: b.apiSrv, tracer: b.tracer, dataDir: b.cfg.DataDir, log: b.log,
+		editionModules:   b.set.all, editionConfig: editionConfigFrom(b.cfg, b.eng, b.dsn),
+		agentTools: b.agentTools, setupTok: b.setupTok, api: b.apiSrv, tracer: b.tracer, dataDir: b.cfg.DataDir, log: b.log,
 		webAuthn:   b.webAuthn,
 		logBroker:  b.logBroker,
-		demoTenant: b.demoTenant, connectorDir: b.connectorDir, vectorIndex: b.set.vectorIndex, knowledgeMod: b.set.knowledge, sessionsMod: b.set.sessions, communicationPump: b.communicationPump,
+		demoTenant: b.demoTenant, connectorDir: b.connectorDir, vectorIndex: b.set.vectorIndex, knowledgeMod: b.set.knowledge, sessionsMod: b.set.sessions, complianceMod: b.set.compliance, communicationPump: b.communicationPump,
 		communicationComposition:  b.communicationComposition,
 		workSink:                  workEventSink{eventing: b.running.eventing, notRunning: b.running.eventing == nil},
 		moduleProfile:             b.profile,
@@ -3762,6 +3841,7 @@ func (b *bootState) composeEngine() {
 		killSwitch: b.set.gov, stopDeny: b.stopDeny, pinVerifier: b.set.pinVerifier,
 		circuitBreaker: b.circuitBreaker,
 		sessionDecoys:  b.sessionDecoys,
+		editionGates:   b.set.editionGates,
 		models:         b.set.models, finops: b.set.finops, inferenceProxy: b.set.inferenceProxy, residencyReg: b.residencyReg, contentFirewall: b.set.contentFirewall,
 		auditPriors: b.auditKey.priors, pivConfig: b.pivCfg, fedSvc: b.fedSvc, secretStore: b.secretStore,
 		sourceStore: b.sourceStore, sourceReconciler: b.sourceReconcilerSvc, licenseService: b.licSvc,

@@ -425,7 +425,7 @@ ln -sf /usr/bin/wc "$WORK/trusted/wc"
 ln -sf "$WORK/bin/gh" "$WORK/trusted/gh"
 
 # ⛔ Y SE COMPRUEBA QUE EL SEÑUELO ARRANCA, AQUI, ANTES DE MEDIR NADA CON EL. Medido el
-# 2026-08-19 en ci-runner-2: el bloque real respondio
+# 2026-08-19 en build-host: el bloque real respondio
 #
 #   ERROR: could not read a version from …/trusted/gh: ''
 #
@@ -445,7 +445,7 @@ if [ ! -x "$WORK/bin/gh" ]; then
 	exit 2
 fi
 # Se ejercita la invocacion POR DEFECTO **y la del override**, porque no son el mismo camino:
-# el stub imprime `${STUB_GH_VERSION:-2.97.0}`, y el 2026-08-19 en ci-runner-4 la que fallo fue
+# The stub prints `${STUB_GH_VERSION:-2.97.0}`; on 2026-08-19 on build-host, the failure was
 # EXACTAMENTE la del override —la casilla del suelo de version, con STUB_GH_VERSION=2.39.0—
 # mientras la de por defecto pasaba en la casilla siguiente. Comprobar solo una deja el rojo
 # diciendo «could not read a version», que se lee como que la logica del suelo esta rota.

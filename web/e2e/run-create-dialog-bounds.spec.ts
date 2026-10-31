@@ -11,7 +11,7 @@ import {
 } from '@playwright/test'
 
 /** This oracle owns one uniquely named run through a test-scoped teardown.
- * Root's launcher separately owns the engine/browser processes. No failed read
+ * the maintainer's launcher separately owns the engine/browser processes. No failed read
  * establishes absence, ownership or cleanup. No runtime qualification is implied
  * by compiling this file.
  */
@@ -20,7 +20,7 @@ const PASSWORD = process.env.E2E_PASSWORD ?? ''
 const PROFILE_REF = process.env.E2E_PROFILE_REF ?? ''
 /** Painted as `<display_name or profile_ref> · <driver>`; the fixture supplies it whole. */
 const PROFILE_LABEL = process.env.E2E_PROFILE_LABEL ?? ''
-/** Root's fixture guarantees uniqueness; it is how an UNKNOWN effect is resolved. */
+/** the maintainer's fixture guarantees uniqueness; it is how an UNKNOWN effect is resolved. */
 const RUN_NAME = process.env.E2E_RUN_NAME ?? ''
 
 const RUNS_PATH = '/v1/m/sessions/runs'
@@ -427,7 +427,7 @@ class OwnedLaunch {
   }
 }
 
-// Teardown time is independent of test-body exhaustion. Root's process owner
+// Teardown time is independent of test-body exhaustion. the maintainer's process owner
 // must allow both phases; a killed worker is never successful run cleanup.
 const test = base.extend<{ launch: OwnedLaunch }>({
   launch: [

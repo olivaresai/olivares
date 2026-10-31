@@ -42,25 +42,29 @@ export default defineConfig([
       ],
     },
   },
-  // Feature views must color through the DTCG semantic tokens (ADM-CORE-04): raw
-  // Tailwind palette classes bypass theming AND the AT contrast gate.
+  // The console colors through the DTCG semantic tokens (ADM-CORE-04): a raw palette
+  // class, an arbitrary color value or a bare color string paints the same in Light,
+  // Dark and Black and escapes the contrast tests. Every source file; not the
+  // tests, the test setup or the dev-only components page. The rule reads .ts and .tsx
+  // only: the one literal color in the CSS outside the token files is the print sheet's
+  // white paper (src/index.css, @media print), which stays white in every theme by design.
   {
-    files: ['src/features/**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/**/*.test.{ts,tsx}', 'src/test/**', 'src/dev/**'],
     plugins: { olivares: { rules: { 'no-raw-palette': noRawPalette } } },
     rules: { 'olivares/no-raw-palette': 'error' },
   },
-  // TODO: temporary allowlist — these six files already used the raw
-  // palette when the rule landed, and all of them live in dirs a parallel Codex
-  // session is rewriting for i18n (api-playground/, backups/). Migrate them to
-  // semantic token classes after that session merges, then DELETE this block.
+  // The colors that must stay literal, each for its reason.
   {
     files: [
-      'src/features/api-playground/endpoint-tree.tsx',
-      'src/features/api-playground/request-history.tsx',
-      'src/features/api-playground/request-panel.tsx',
-      'src/features/api-playground/response-panel.tsx',
-      'src/features/backups/pending-restores.tsx',
-      'src/features/backups/restore-dialog.tsx',
+      // The theme previews paint each theme's own colors, whichever theme is active.
+      'src/app/pages/settings.tsx',
+      // The chart fallback before CSS resolves, pinned to the dark tokens by tokens.test.ts.
+      'src/components/charts/chart-theme.ts',
+      // WebGL cannot read CSS variables; this fallback mirrors chart-theme's.
+      'src/features/shared/graph/sigma-graph-build.ts',
+      // The five account hues, the same in every theme by design.
+      'src/components/ui/mono-mark.tsx',
     ],
     rules: { 'olivares/no-raw-palette': 'off' },
   },

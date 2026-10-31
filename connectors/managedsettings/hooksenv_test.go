@@ -66,11 +66,31 @@ func TestPEPHook_BuildsPreToolUseAndErrors(t *testing.T) {
 	if len(pre) != 1 || pre[0].Matcher != "Bash" || len(pre[0].Hooks) != 1 {
 		t.Fatalf("PreToolUse PEP entry malformed: %+v", pre)
 	}
-	if h := pre[0].Hooks[0]; h.Type != hookTypeCommand || h.Command != "/opt/olivares/bin/pep" || h.Timeout != 20 {
+	if h := pre[0].Hooks[0]; h.Type != hookTypeCommand || h.Command != "/opt/olivares/bin/pep || exit 2" || h.Timeout != 20 {
 		t.Fatalf("PEP command entry wrong: %+v", h)
 	}
 	if _, ok := hooks[hookEventPostToolUse]; !ok {
 		t.Fatal("Redact=true must also install a PostToolUse hook")
+	}
+}
+
+// TestPEPHook_EveryCommandBlocksWhenItCannotRun: Claude Code lets a tool call proceed
+// when a hook fails with any exit code but 2, so a managed PEP hook whose program cannot
+// run (126, 127, killed) must exit 2 and block the call (deny closed, the regression). The
+// given command is kept as it is, with the suffix after it.
+func TestPEPHook_EveryCommandBlocksWhenItCannotRun(t *testing.T) {
+	hooks, err := PEPHook(PEPHookConfig{Command: "olivares claude-hook", Redact: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range []string{hookEventPreToolUse, hookEventPostToolUse} {
+		for _, m := range hooks[event] {
+			for _, h := range m.Hooks {
+				if h.Command != "olivares claude-hook || exit 2" {
+					t.Fatalf("%s hook command %q: a hook that cannot run must exit 2", event, h.Command)
+				}
+			}
+		}
 	}
 }
 
@@ -93,7 +113,7 @@ func TestManagedHooksEnvRoundTrip(t *testing.T) {
 	}
 	s := string(wire)
 	for _, want := range []string{
-		`"hooks"`, `"PreToolUse"`, `"PostToolUse"`, `"command": "/opt/olivares/bin/olivares-pep"`,
+		`"hooks"`, `"PreToolUse"`, `"PostToolUse"`, `"command": "/opt/olivares/bin/olivares-pep || exit 2"`,
 		`"env"`, `"CLAUDE_CODE_ENABLE_TELEMETRY": "1"`, `"OTEL_EXPORTER_OTLP_ENDPOINT"`,
 		`"allowManagedHooksOnly": true`,
 	} {

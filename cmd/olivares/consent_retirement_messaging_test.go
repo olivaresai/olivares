@@ -106,7 +106,7 @@ func TestMessagingEstateWaitsForSetupOutboxSettlement(t *testing.T) {
 	case <-entered:
 	case <-ready:
 		t.Fatal("messaging estate returned before setup handoff publication settled")
-	case <-time.After(2 * time.Minute): // Restarted estate setup also runs under -race.
+	case <-time.After(5 * time.Minute): // Restarted setup runs under -race: 113 s on build-host, 210 s on the red CI run.
 		t.Fatal("setup handoff did not reach the real sink")
 	}
 	select {

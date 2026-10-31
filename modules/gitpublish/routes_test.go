@@ -12,9 +12,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	gp "github.com/olivaresai/olivares/connectors/gitpublish"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 )
@@ -67,14 +69,16 @@ func TestMutationRoutesMountOnlyThroughTheSealedDoor(t *testing.T) {
 		action auth.CedarAction
 		aal    int
 	}{
-		"POST /targets":                    {permTargetAdmin, actionTarget, auth.AAL3},
-		"PUT /targets/{id}":                {permTargetAdmin, actionTarget, auth.AAL3},
-		"DELETE /targets/{id}":             {permTargetAdmin, actionTarget, auth.AAL3},
-		"POST /targets/{id}/pushes":        {permPush, actionPush, 0},
-		"POST /targets/{id}/pull-requests": {permPullRequest, actionPullRequest, 0},
-		"POST /targets/{id}/merges":        {permMerge, actionMerge, auth.AAL3},
-		"POST /intents/{id}/reconcile":     {permTargetRead, actionReconcile, 0},
-		"POST /intents/{id}/abandon":       {permTargetAdmin, actionAbandon, auth.AAL3},
+		"POST /targets":                     {permTargetAdmin, actionTarget, auth.AAL3},
+		"PUT /targets/{id}":                 {permTargetAdmin, actionTarget, auth.AAL3},
+		"DELETE /targets/{id}":              {permTargetAdmin, actionTarget, auth.AAL3},
+		"POST /targets/{id}/pushes":         {permPush, actionPush, 0},
+		"POST /targets/{id}/ships":          {permPush, actionPush, 0},
+		"POST /targets/{id}/pull-requests":  {permPullRequest, actionPullRequest, 0},
+		"POST /targets/{id}/merges":         {permMerge, actionMerge, auth.AAL3},
+		"POST /targets/{id}/issue-comments": {permIssueComment, actionIssueComment, 0},
+		"POST /intents/{id}/reconcile":      {permPush, actionReconcile, 0},
+		"POST /intents/{id}/abandon":        {permTargetAdmin, actionAbandon, auth.AAL3},
 	}
 	declared := map[auth.Permission]bool{}
 	for _, p := range m.Permissions() {
@@ -279,5 +283,34 @@ func TestDecodeErrorsKeepCodesAndNameFields(t *testing.T) {
 		if strings.Contains(rec.Body.String(), "private-value") {
 			t.Fatal("request value leaked")
 		}
+	}
+}
+
+func TestPublicationBudgetIncludesRecoveryPersistence(t *testing.T) {
+	m := New(Options{AdmissionTimeout: time.Second, DispatchTimeout: 2 * time.Second})
+	want := 3*time.Second + 3*settleTimeout + releaseTimeout + replyTimeout
+	if got := m.PublicationBudget(); got != want {
+		t.Fatalf("publication budget = %s, want %s", got, want)
+	}
+}
+
+func TestFastForwardMergeSettlesWithSourceSHA(t *testing.T) {
+	h := newHarness(t)
+	openPR(h, 7, shaCommit)
+	h.host.mergeOutcome = &gp.MergeOutcome{Merged: true, MergeCommitSHA: shaCommit}
+	h.host.commitTreeErr = gp.ErrNotSupported
+	in := MergeInput{Target: h.target.ID, OperationID: "fast-forward", Number: 7, ExpectedHead: shaCommit, Method: "merge"}
+	r, err := h.m.Merge(context.Background(), h.admin(), in)
+	if err != nil || r.Intent.State != StateApplied {
+		t.Fatalf("fast-forward merge = %+v, %v", r.Intent, err)
+	}
+	if r.Intent.Observed.MergeCommitSHA != shaCommit || r.Intent.Observed.MergeTree != "" || h.host.commitTrees != 1 {
+		t.Fatalf("merge evidence = %+v, tree reads=%d", r.Intent.Observed, h.host.commitTrees)
+	}
+	if dto := toIntentDTO(r.Intent, r.Answer); dto.Observed.MergeCommitSHA != shaCommit || dto.Observed.MergeTree != "" {
+		t.Fatalf("merge DTO = %+v", dto.Observed)
+	}
+	if _, err := h.m.Merge(context.Background(), h.admin(), in); err != nil || h.host.merges != 1 {
+		t.Fatalf("merge replay: err=%v writes=%d", err, h.host.merges)
 	}
 }

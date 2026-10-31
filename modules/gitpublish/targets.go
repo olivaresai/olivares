@@ -128,7 +128,11 @@ func (m *Module) CreateTarget(ctx context.Context, c Caller, in TargetInput) (Ta
 	}
 	var out Target
 	err := m.data.Mutate(actx, c.Tenant, func(sc store.Scope) error {
-		if err := adm.Lock(actx, sc, txNow(actx, sc, m.now())); err != nil {
+		now, err := txNow(actx, sc)
+		if err != nil {
+			return err
+		}
+		if err := adm.Lock(actx, sc, now); err != nil {
 			return err
 		}
 		repo, err := sc.Ext(kindTarget)
@@ -189,7 +193,11 @@ func (m *Module) UpdateTarget(ctx context.Context, c Caller, id model.ID, up Tar
 	}
 	var out Target
 	err := m.data.Mutate(actx, c.Tenant, func(sc store.Scope) error {
-		if err := adm.Lock(actx, sc, txNow(actx, sc, m.now())); err != nil {
+		now, err := txNow(actx, sc)
+		if err != nil {
+			return err
+		}
+		if err := adm.Lock(actx, sc, now); err != nil {
 			return err
 		}
 		repo, err := sc.Ext(kindTarget)

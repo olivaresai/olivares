@@ -26,6 +26,9 @@ class ReleaseGate(unittest.TestCase):
         ci = '\n'.join(step.get('run', '') for job in self.ci['jobs'].values() for step in job.get('steps', []))
         self.assertNotIn('task openapi:check', release)
         self.assertIn('task openapi:check', ci)
+        self.assertIn('task lint:public', ci)
+        common = yaml.safe_load((ROOT / 'Taskfile.yml').read_text())['tasks']['lint:public']['cmds']
+        ci += '\n' + '\n'.join(c for c in common if isinstance(c, str))
         for battery in BATTERIES:
             self.assertNotIn(battery, release)
             self.assertIn(battery, ci)
@@ -39,7 +42,7 @@ class ReleaseGate(unittest.TestCase):
         self.assertTrue(all(not step.get('continue-on-error', False) for step in gates))
         self.assertIn('release-first-hour.yml "$GITHUB_SHA" --tree-equal-ok', gates[0]['run'])
         self.assertIn('race-full.yml "$GITHUB_SHA"', gates[1]['run'])
-        self.assertNotIn('--tree-equal-ok', gates[1]['run'])
+        self.assertIn('--tree-equal-ok', gates[1]['run'])
         self.assertEqual(steps[0]['with']['fetch-depth'], 0)
         self.assertTrue(any('git rev-parse --is-shallow-repository' in step.get('run', '') for step in steps))
 
@@ -74,6 +77,11 @@ class ReleaseGate(unittest.TestCase):
                 gate = next(s for s in changed['jobs']['goreleaser']['steps'] if workflow in s.get('run', ''))
                 gate[field] = value
                 self.assertTrue(guard.check(changed, ci))
+        for workflow in ('race-full.yml', 'release-first-hour.yml'):
+            changed = yaml.safe_load(yaml.safe_dump(self.release))
+            gate = next(s for s in changed['jobs']['goreleaser']['steps'] if workflow in s.get('run', ''))
+            gate['run'] = gate['run'].removesuffix(' --tree-equal-ok')
+            self.assertTrue(guard.check(changed, ci))
         for command in ('# task openapi:check', 'echo "task openapi:check"'):
             changed = yaml.safe_load(yaml.safe_dump(self.release))
             changed['jobs']['goreleaser']['steps'].append({'run': command})

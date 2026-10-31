@@ -80,7 +80,7 @@ fail=0
 failed_names=()
 # The FAIL line starts at COLUMN 0, like test-release-ota-channel.sh and unlike the
 # wiring battery: the mutation round attributes a kill by matching `^FAIL  *<witness>` in
-# this output (an internal design note (not shipped)). Indent the word and every
+# this output (an internal audit). Indent the word and every
 # mutant here is reported MISATRIBUIDO — a battery that reddens correctly while the harness
 # reads it as never reddening the case it named.
 check() {

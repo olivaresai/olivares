@@ -616,7 +616,7 @@ describe('CatalogView — la lista de instancias declara su recorte', () => {
 })
 
 /**
- * ONE ORANGE PER FIRST SCREEN (dev#2673's console rule 2026-10-17). The
+ * ONE ORANGE PER FIRST SCREEN (the regression's console rule 2026-10-17). The
  * merged mechanism (main e601803a8, dfff8c3ad): while a read list is empty the
  * page header's verb steps aside, so the empty state's action is the one orange.
  */

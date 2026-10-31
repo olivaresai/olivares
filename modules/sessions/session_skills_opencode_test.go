@@ -300,7 +300,7 @@ func TestRuntimeOpenCodeRefusesSkillsWhoseCommandFormRunsOutsideApprovals(t *tes
 		// inherited key is an agent too (review of #3050, round 3).
 		{"See @constructor.", true, ""},
 		{"See @__proto__ here.", true, ""},
-		// Root's review of the catalog census: a mention is not a path. A typed "!"
+		// the maintainer's review of the catalog census: a mention is not a path. A typed "!"
 		// before "| " would run only punctuation, and a bare word that names a folder
 		// above (media/, dev/ beside the folders, and /media, /dev) lists only names.
 		{"| `$1, $2, $3` | `$+{name}` (named captures) |", false, ""},

@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// HU2-25: Now shows the compliance score only after the person opened Compliance, per
+// acceptance: Now shows the compliance score only after the person opened Compliance, per
 // organization and user.
+import { preferenceStorage } from '@/lib/preference-storage'
 import { renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -18,7 +19,7 @@ const auth = vi.hoisted(() => ({
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => auth }))
 
 afterEach(() => {
-  window.localStorage.clear()
+  preferenceStorage.clear()
   auth.principal = { kind: 'user', user_id: 'u-1' }
   auth.activeTenant = 't-1'
 })
@@ -42,7 +43,7 @@ describe('whether Compliance was opened', () => {
   it('records nothing for a token principal', () => {
     auth.principal = { kind: 'token', token_id: 'tk' }
     renderHook(() => useMarkComplianceOpened())
-    expect(window.localStorage.length).toBe(0)
+    expect(preferenceStorage.length).toBe(0)
     expect(renderHook(() => useComplianceOpened()).result.current).toBe(false)
   })
 })

@@ -143,17 +143,85 @@ func (l LocalRepository) Stage(ctx context.Context, paths []string, unstage bool
 	return err
 }
 
-// Commit uses the authenticated user's profile for BOTH identities, via the
-// child environment. The message travels on stdin, never on the command line.
-func (l LocalRepository) Commit(ctx context.Context, message, name, email string) error {
+// CommitInput refuses a message or identity Commit would refuse.
+func CommitInput(message, name, email string) error {
 	if strings.TrimSpace(message) == "" || len(message) > 8192 || strings.ContainsRune(message, 0) || !utf8.ValidString(message) {
 		return fmt.Errorf("%w: a commit message of at most 8192 bytes is required", ErrLocalInput)
 	}
 	if strings.TrimSpace(name) == "" || strings.TrimSpace(email) == "" || strings.ContainsAny(name+email, "\r\n\x00<>") {
 		return fmt.Errorf("%w: your profile needs a name and email to commit", ErrLocalInput)
 	}
+	return nil
+}
+
+// Commit uses the authenticated user's profile for BOTH identities, via the
+// child environment. The message travels on stdin, never on the command line.
+func (l LocalRepository) Commit(ctx context.Context, message, name, email string) error {
+	if err := CommitInput(message, name, email); err != nil {
+		return err
+	}
 	_, err := l.run(ctx, []string{"commit", "--no-gpg-sign", "--no-verify", "--file=-"}, message, []string{"GIT_AUTHOR_NAME=" + name, "GIT_AUTHOR_EMAIL=" + email, "GIT_COMMITTER_NAME=" + name, "GIT_COMMITTER_EMAIL=" + email})
 	return err
+}
+
+// ErrNoBranch: HEAD is detached, so there is no branch to publish.
+var ErrNoBranch = errors.New("the session folder is on no branch")
+
+// ErrNoCommit: the branch has no commit yet, so there is nothing to publish.
+var ErrNoCommit = errors.New("the session branch has no commit")
+
+// LocalHead is the branch a folder is on and the commit and tree it holds, and
+// whether CommitAll just made that commit.
+type LocalHead struct {
+	Branch, Commit, Tree string
+	Committed            bool
+}
+
+// CommitAll commits every change of the folder (the ignore rules still apply)
+// when there is one, and names the branch, HEAD and its tree. A clean folder
+// needs no message and no identity: its HEAD is what is published. Nothing is
+// staged when the message is refused.
+func (l LocalRepository) CommitAll(ctx context.Context, message, name, email string) (LocalHead, error) {
+	status, err := l.Status(ctx)
+	if err != nil {
+		return LocalHead{}, err
+	}
+	if status.Branch == "" {
+		return LocalHead{}, ErrNoBranch
+	}
+	head := LocalHead{Branch: status.Branch}
+	if len(status.Files) > 0 {
+		// Refused before anything is staged.
+		if err := CommitInput(message, name, email); err != nil {
+			return LocalHead{}, err
+		}
+		if _, err := l.run(ctx, []string{"add", "--all", "--"}, "", nil); err != nil {
+			return LocalHead{}, err
+		}
+		if err := l.Commit(ctx, message, name, email); err != nil {
+			return LocalHead{}, err
+		}
+		head.Committed = true
+	}
+	// --verify --quiet exits 1, with no output, for a branch that has no commit.
+	_, err = l.run(ctx, []string{"rev-parse", "--verify", "--quiet", "HEAD"}, "", nil)
+	var exit *LocalCommandExit
+	if errors.As(err, &exit) && exit.Code == 1 {
+		return LocalHead{}, ErrNoCommit
+	}
+	if err != nil {
+		return LocalHead{}, err
+	}
+	out, err := l.run(ctx, []string{"rev-parse", "HEAD", "HEAD^{tree}"}, "", nil)
+	if err != nil {
+		return LocalHead{}, err
+	}
+	ids := strings.Fields(out)
+	if len(ids) != 2 {
+		return LocalHead{}, errors.New("Git returned an unreadable HEAD")
+	}
+	head.Commit, head.Tree = ids[0], ids[1]
+	return head, nil
 }
 
 // Branch validates with Git and switches without force, remote guessing or

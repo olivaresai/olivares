@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/sessions/cliruntime"
 )
@@ -71,7 +72,7 @@ func (m *Module) OwnToolModelHome(tenant model.TenantID, driver string) (Provide
 	if err := revalidateHome("config_home", configHome); err != nil {
 		return ProviderHomeSnapshot{}, err
 	}
-	if usesServerUserLogin(driver, AuthSourceAccountHome, configHome) {
+	if usesServerUserLogin(driver, AuthSourceAccountHome, configHome, userHome) {
 		return ProviderHomeSnapshot{}, errors.New("the server user login cannot be used")
 	}
 	return ProviderHomeSnapshot{Driver: driver, UserHome: userHome, ConfigHome: configHome, AuthSource: AuthSourceAccountHome}, nil
@@ -132,12 +133,19 @@ func (m *Module) readToolModelCatalog(ctx context.Context, home ProviderHomeSnap
 		env = append(env, EnvVar{Name: m.configHomeEnvForDriver(home.Driver), Value: home.ConfigHome},
 			EnvVar{Name: envOpenCodeDisableAutoUpdate, Value: "1"})
 	}
+	facts, _ := driverfacts.Lookup(home.Driver)
 	spec := LaunchSpec{Program: program, Args: args, Dir: home.UserHome,
 		Env:       env,
 		Isolation: IsolationNative, WaitDelay: time.Second,
-		Confinement: m.sessionConfinement("", &home, PresetNone)}
+		Confinement:         m.sessionConfinement("", &home, PresetNone),
+		ConfinementRequired: facts.Installer == driverfacts.InstallPackage || facts.Installer == driverfacts.InstallOriginTarball,
+	}
 	proc, err := m.rt.Runner.Launch(ctx, spec)
 	if err != nil {
+		var launchErr *runErr
+		if errors.As(err, &launchErr) {
+			return nil, err
+		}
 		return nil, errors.New("the tool model catalog could not be started")
 	}
 	defer func() {

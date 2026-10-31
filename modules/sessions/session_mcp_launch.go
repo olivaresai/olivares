@@ -112,6 +112,9 @@ func ConfigureSessionMCP(spec *LaunchSpec, driver, dataDir, runRef, endpoint, to
 		cleanup()
 		return noop, errors.New("session MCP configuration could not be written")
 	}
+	if spec.RunOn != "" && driver == providerDriverClaude {
+		spec.LaunchFiles = append(spec.LaunchFiles, LaunchFile{Path: path, Data: raw, Mode: 0o600})
+	}
 	spec.AllowRead(path)
 	if driver == "claude" {
 		spec.Args = append(spec.Args, "--mcp-config", path, "--strict-mcp-config")

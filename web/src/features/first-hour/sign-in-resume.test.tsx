@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// HU2-06: a reload lost the sign-in in progress: the link and code were gone and only a new
+// acceptance: a reload lost the sign-in in progress: the link and code were gone and only a new
 // start was offered, which replaces the login the person was completing. The server still
 // holds it; the row takes it up again.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -162,7 +162,7 @@ describe('a sign-in in progress, after a reload', () => {
     expect(screen.queryByText('ABCD-1234')).toBeNull()
   })
 
-  // SR4C on 1fb3bb20: a login started here, then seen as pending by a status refresh, came
+  // review on 1fb3bb20: a login started here, then seen as pending by a status refresh, came
   // back after Cancel from the cached status.
   it('does not bring back a login started here and then cancelled', async () => {
     const user = userEvent.setup()
@@ -190,7 +190,7 @@ describe('a sign-in in progress, after a reload', () => {
     expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument()
   })
 
-  // SR4C on 58658d1e: resume A, cancel it, start B while the status still holds A, cancel B:
+  // review on 58658d1e: resume A, cancel it, start B while the status still holds A, cancel B:
   // A came back with its old link and code.
   it('takes up a pending login once per row, not again after another start and cancel', async () => {
     const user = userEvent.setup()

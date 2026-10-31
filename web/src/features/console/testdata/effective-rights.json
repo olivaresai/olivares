@@ -1,0 +1,96 @@
+{
+  "subject": {
+    "kind": "user",
+    "id": "u-1"
+  },
+  "node": {
+    "kind": "agent",
+    "id": "a-1"
+  },
+  "assurance": 3,
+  "membership_as_of": "2026-10-27T06:30:00Z",
+  "path": [
+    {
+      "kind": "workspace",
+      "ref": "payments"
+    },
+    {
+      "kind": "agent_group",
+      "ref": "ops",
+      "workspace": "default"
+    },
+    {
+      "kind": "agent",
+      "ref": "a-1"
+    }
+  ],
+  "rights": [
+    {
+      "name": "Supervisor",
+      "state": "not_held",
+      "removed_by": [
+        {
+          "kind": "irf",
+          "id": "irf-1",
+          "node": {
+            "kind": "workspace",
+            "ref": "payments"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Browse",
+      "state": "held",
+      "because": [
+        {
+          "grant_id": "g-1",
+          "node": {
+            "kind": "workspace",
+            "ref": "payments"
+          },
+          "subject": {
+            "kind": "group",
+            "ref": "g-2",
+            "chain": [
+              {
+                "kind": "user",
+                "ref": "u-1"
+              },
+              {
+                "kind": "group",
+                "ref": "g-1"
+              },
+              {
+                "kind": "group",
+                "ref": "g-2"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Read",
+      "state": "not_held",
+      "removed_by": [
+        {
+          "kind": "forbid",
+          "id": "forbid-1",
+          "node": {
+            "kind": "workspace",
+            "ref": "payments"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Write",
+      "state": "unknown"
+    },
+    {
+      "name": "Access Control",
+      "state": "not_applicable"
+    }
+  ]
+}

@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { ComponentType, ReactNode } from 'react'
-import type { RBACCatalogDTO, CustomRoleDTO, PermGroupDTO } from './console/api'
+import type {
+  RBACCatalogDTO,
+  CustomRoleDTO,
+  PermGroupDTO,
+  SourceScopeSourceType,
+} from './console/api'
 import type { PdpPublishResult, PdpRollbackResult } from './claude-policy/types'
 import type { StepUpAttempt } from '@/stores/step-up'
 import { useAuth } from '@/lib/auth/context'
@@ -106,6 +111,7 @@ export const RESERVED_SESSION_PANEL_IDS = [
   'changes',
   'files',
   'preview',
+  'terminal',
 ] as const
 
 /**
@@ -143,6 +149,8 @@ export interface AuthorizationForms {
     existing?: PermGroupDTO
     onClose: () => void
   }>
+  /** The edition's ready-made roles, drawn on the roles page after the custom roles. */
+  readonly RolePresets?: ComponentType<{ canAdmin: boolean }>
 }
 export interface CedarPolicyAuthoring {
   readonly publish: (source: string, note?: string) => Promise<PdpPublishResult>
@@ -182,6 +190,12 @@ export interface DashboardRedteamPanels {
   readonly panel: ReactNode
 }
 
+export interface AccessRequestActionProps {
+  readonly sourceType: SourceScopeSourceType
+  readonly sourceRef: string
+  readonly workspaceRef: string
+}
+
 export interface PanelExtensions {
   readonly consoleAccess?: ConsoleAccessExtension
   readonly identityTabs: readonly IdentityTabExtension[]
@@ -200,6 +214,7 @@ export interface PanelExtensions {
   /** Optional action beside the local trace detail. */
   readonly traceExportAction?: ComponentType<{ traceId: string }>
   readonly authorizationForms?: AuthorizationForms
+  readonly accessRequestAction?: ComponentType<AccessRequestActionProps>
   readonly cedarPolicyAuthoring?: CedarPolicyAuthoring
   readonly identityLoginCards?: readonly PanelExtension[]
   readonly identityStepUpMethods?: readonly StepUpMethodExtension[]

@@ -47,7 +47,7 @@ func SeedStoredAuthorizationForTest(ctx context.Context, st store.Store, tenant 
 		if err != nil {
 			return err
 		}
-		_, _, err = appendRevision(ctx, sc, surfaceCedarManaged, projectManagedCedar(state.grants, state.roles, state.groups), "upgrade-fixture", true, true, "stored before upgrade")
+		_, _, err = appendRevision(ctx, sc, surfaceCedarManaged, withoutGrantIDAnnotations(projectManagedCedar(state.grants, state.roles, state.groups)), "upgrade-fixture", true, true, "stored before upgrade")
 		return err
 	})
 }

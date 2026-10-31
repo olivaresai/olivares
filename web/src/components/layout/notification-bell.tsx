@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { preferenceStorage } from '@/lib/preference-storage'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Bell } from 'lucide-react'
@@ -40,14 +41,7 @@ const LAST_SEEN_KEY = 'olivares.notifications.lastSeen'
 function readLastSeen(key: string | null): string {
   if (!key) return ''
   try {
-    const current = localStorage.getItem(key)
-    const legacy = localStorage.getItem(LAST_SEEN_KEY)
-    if (legacy !== null) {
-      // Claim the old browser-wide marker once; never import it into another account.
-      if (current === null) localStorage.setItem(key, legacy)
-      localStorage.removeItem(LAST_SEEN_KEY)
-    }
-    return current ?? legacy ?? ''
+    return preferenceStorage.getItem(key) ?? ''
   } catch {
     return ''
   }
@@ -136,7 +130,7 @@ export function NotificationBell() {
     if (next && hasUnseen) {
       setSeen({ boundary, at: newest })
       try {
-        if (key) localStorage.setItem(key, newest)
+        if (key) preferenceStorage.setItem(key, newest)
       } catch {
         // localStorage unavailable — the in-memory state still clears the dot.
       }

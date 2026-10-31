@@ -138,8 +138,11 @@ Worktree anlegt.
 
 Ein Ordner kann einen Setup-Befehl für neue Worktrees speichern. Eine Person muss
 dessen exakten Text per SHA-256 genehmigen, bevor ein Worktree-Start akzeptiert
-wird; die Änderung eines einzigen Zeichens erfordert erneut eine Genehmigung. Noch
-führt nichts den Befehl aus. Siehe
+wird; die Änderung eines einzigen Zeichens erfordert erneut eine Genehmigung. Der
+genehmigte Befehl läuft einmal im neuen Worktree vor der ersten Sitzungsrunde; ein
+Fehlschlag verhindert den Start und zeigt seine Ausgabe. Schlägt das Setup fehl, führt ein
+Resume den Befehl erneut aus; nach einem erfolgreichen Setup oder einem Start mit
+aufgezeichnetem `--no-setup` nicht. Siehe
 [Den Setup-Befehl eines Ordners genehmigen](/de/reference/session-runtime-api/#den-setup-befehl-eines-ordners-genehmigen).
 
 **Aufräumen** verweigert das Verwerfen nicht committeter oder nicht zusammengeführter

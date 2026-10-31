@@ -168,7 +168,7 @@ func (s *sqlStore) mutateSelective(
 		if canceled := selectiveRequestCanceled(ctx, "during transaction acquisition"); canceled != nil {
 			return canceled
 		}
-		return wrapUnavailableErr(err)
+		return wrapBeginErr(err)
 	}
 	committed := false
 	defer func() {
@@ -187,7 +187,7 @@ func (s *sqlStore) mutateSelective(
 		}
 	}()
 	if err := bindDirectoryTenant(ctx, tx, s.dia, tenant); err != nil {
-		return wrapUnavailableErr(err)
+		return wrapBeginErr(err)
 	}
 	if err := lockLineageWriterClass(ctx, tx, s.dia, false); err != nil {
 		return wrapUnavailableErr(err)

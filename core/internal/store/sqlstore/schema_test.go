@@ -7,6 +7,7 @@ package sqlstore
 import (
 	"context"
 	"database/sql"
+	"reflect"
 	"testing"
 )
 
@@ -33,6 +34,28 @@ func TestCoreTablesMatchDescriptors(t *testing.T) {
 	got := tableColumns(t, ss.db, auditTable)
 	if !equalStrings(got, auditColumns) {
 		t.Errorf("audit_events columns = %v, want %v", got, auditColumns)
+	}
+}
+
+func TestRegistriesUseCurrentAuthSessionSchema(t *testing.T) {
+	open := openSQLiteTest(t, registerWidget).(*sqlStore)
+	for _, tc := range []struct {
+		name string
+		reg  *registry
+	}{
+		{"open", open.reg},
+		{"fresh", freshBootstrapRegistry(t, nil)},
+		{"test", newRegistryForTest(t)},
+		{"coreOnly", coreOnlyRegistry(t)},
+	} {
+		d, ok := tc.reg.lookup(authSessionDescriptor.Kind)
+		if !ok {
+			t.Errorf("%s registry has no auth-session descriptor", tc.name)
+			continue
+		}
+		if !reflect.DeepEqual(d, authSessionDescriptorV28) {
+			t.Errorf("%s registry uses historical auth-session schema", tc.name)
+		}
 	}
 }
 

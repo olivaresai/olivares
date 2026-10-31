@@ -982,7 +982,13 @@ func exerciseCommunicationHTTPScheduledVisibility(
 ) string {
 	t.Helper()
 	const secret = "scheduled-http-boundary-secret"
-	availableAt := time.Now().UTC().Add(2 * time.Second)
+	// The window must cover the whole premature phase below (three authenticated
+	// HTTP round trips plus two effect censuses) on a LOADED runner, not just a
+	// healthy one: on the 2026-10-27 scheduled main-suite that phase consumed
+	// 2.28 s of a 2.15 s budget and the wait guard below failed at -280 ms with
+	// the product behaving correctly. Six seconds is ~20x the healthy
+	// phase and ~2.7x the loaded measurement.
+	availableAt := time.Now().UTC().Add(6 * time.Second)
 	availableStamp := model.NewTimestamp(availableAt).String()
 	send := communicationHTTPTestRequest(t, eng, http.MethodPost,
 		"/v1/m/sessions/messages/send", owner.token, tenant, map[string]any{
@@ -1026,7 +1032,9 @@ func exerciseCommunicationHTTPScheduledVisibility(
 		"scheduled visibility before availability boundary")
 
 	wait := time.Until(availableAt) + 150*time.Millisecond
-	if wait <= 0 || wait > 5*time.Second {
+	// The cap only bounds this test's own sleep; it must sit above the window
+	// above plus the grace, or a healthy runner trips it.
+	if wait <= 0 || wait > 8*time.Second {
 		t.Fatalf("scheduled HTTP boundary wait = %s", wait)
 	}
 	timer := time.NewTimer(wait)

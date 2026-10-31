@@ -392,22 +392,9 @@ func (b *Bridge) gateOnce(ctx context.Context, tenant model.TenantID, mode reuse
 		return NoGateRefPrefix + planHash, NoGate, planHash, nil
 	}
 	ref, status, boundHash, err = b.ensureApproval(ctx, cred, action, subjectKind, subjectRef, planHash, reason, requestedBy, mode, sessionRef)
-	if err != nil || status != Pending {
-		return ref, status, boundHash, err
-	}
-	// Break-glass: an approval still awaiting its human quorum may proceed
-	// under an ACTIVE emergency grant. The engine records the use (append-only
-	// trail + ledger + finding) in the same transaction that grants it — never a
-	// silent path — and the underlying approval stays pending in the queue for the
-	// humans to see. A consume miss/error changes nothing (the normal deny-closed
-	// pending stands).
-	if grant, ok := b.breakGlassConsumeUnlessRejected(ctx, cred, action, subjectKind, EncodeSubjectRef(subjectRef, planHash)); ok {
-		b.Log.Warn("approval-bridge: action authorized under BREAK-GLASS emergency access",
-			"tenant", cred.TenantStr, "action", action, "subject_kind", subjectKind,
-			"grant", grant, "approval_ref", ref, "plan_bound", planHash != "")
-		return breakGlassRef(grant, planHash), BreakGlass, planHash, nil
-	}
-	return ref, status, boundHash, nil
+	return b.withBreakGlass(ctx, cred, ApprovalView{
+		Action: action, SubjectKind: subjectKind, SubjectRef: EncodeSubjectRef(subjectRef, planHash),
+	}, ref, status, boundHash, err)
 }
 
 // errNotificationUnavailable reports that an approval notification could not be opened or
@@ -537,15 +524,9 @@ func (b *Bridge) Status(ctx context.Context, tenant model.TenantID, ref, planHas
 	// on the STORED action/subject (which carries the plan binding), so a prior
 	// rejection of THIS exact identity still blocks break-glass even though it
 	// lives on a different (terminal) approval row than the one being polled here.
-	if (v.Status == Pending || v.Status == Expired) && v.Action != "" {
-		if grant, ok := b.breakGlassConsumeUnlessRejected(ctx, cred, v.Action, v.SubjectKind, v.SubjectRef); ok {
-			b.Log.Warn("approval-bridge: actuation authorized under BREAK-GLASS emergency access",
-				"tenant", cred.TenantStr, "action", v.Action, "subject_kind", v.SubjectKind,
-				"grant", grant, "approval_ref", ref)
-			return BreakGlass, v.BoundHash, nil
-		}
-	}
-	return v.Status, v.BoundHash, nil
+	status, err = b.stillHolds(ctx, cred.Tenant, ref, v.Status)
+	_, status, boundHash, err = b.withBreakGlass(ctx, cred, v, ref, status, v.BoundHash, err)
+	return status, boundHash, err
 }
 
 // StatusScoped is status() PLUS the authorization-substitution guard:
@@ -589,14 +570,9 @@ func (b *Bridge) StatusScoped(ctx context.Context, tenant model.TenantID, ref, p
 			"want_subject_kind", wantSubjectKind, "stored_subject_kind", v.SubjectKind)
 		return Expired, "", nil
 	}
-	if (v.Status == Pending || v.Status == Expired) && v.Action != "" {
-		if grant, granted := b.breakGlassConsumeUnlessRejected(ctx, cred, v.Action, v.SubjectKind, v.SubjectRef); granted {
-			b.Log.Warn("approval-bridge: actuation authorized under BREAK-GLASS emergency access",
-				"tenant", cred.TenantStr, "action", v.Action, "subject_kind", v.SubjectKind, "grant", grant, "approval_ref", ref)
-			return BreakGlass, v.BoundHash, nil
-		}
-	}
-	return v.Status, v.BoundHash, nil
+	status, err = b.stillHolds(ctx, cred.Tenant, ref, v.Status)
+	_, status, boundHash, err = b.withBreakGlass(ctx, cred, v, ref, status, v.BoundHash, err)
+	return status, boundHash, err
 }
 
 // breakGlassRef encodes a break-glass authorization reference, binding the plan hash
@@ -679,6 +655,38 @@ const (
 	reuseUnspent               // also an approved grant inside its time box that no one has spent
 )
 
+// withBreakGlass gives an active emergency grant a say only while an approval is
+// pending/expired or its change system cannot answer (503). Explicit rejection,
+// cancellation, and every other refusal stand. A canceled approval of the exact
+// identity also blocks a fresh pending request from laundering that human cancel
+// into emergency access.
+func (b *Bridge) withBreakGlass(ctx context.Context, cred ServiceCred, v ApprovalView, ref, status, boundHash string, err error) (string, string, string, error) {
+	if err != nil && !isChangeSystemOutage(err) {
+		return ref, status, boundHash, err
+	}
+	if err == nil && status != Pending && status != Expired {
+		return ref, status, boundHash, nil
+	}
+	if v.Action != "" {
+		if _, canceled, _, scanErr := b.scanForApproval(ctx, cred, v.Action, v.SubjectKind, v.SubjectRef, Canceled, 0, false); scanErr != nil || canceled {
+			return ref, status, boundHash, err
+		}
+		bound := decodePlanHash(v.SubjectRef)
+		if grant, ok := b.breakGlassConsumeUnlessRejected(ctx, cred, v.Action, v.SubjectKind, v.SubjectRef); ok {
+			b.Log.Warn("approval-bridge: action authorized under BREAK-GLASS emergency access",
+				"tenant", cred.TenantStr, "action", v.Action, "subject_kind", v.SubjectKind,
+				"grant", grant, "approval_ref", ref, "plan_bound", bound != "")
+			return breakGlassRef(grant, bound), BreakGlass, bound, nil
+		}
+	}
+	return ref, status, boundHash, err
+}
+
+func isChangeSystemOutage(err error) bool {
+	var refusal interface{ HTTPStatusCode() int }
+	return errors.As(err, &refusal) && refusal.HTTPStatusCode() == http.StatusServiceUnavailable
+}
+
 // ensureApproval is the idempotent open: reuse an open (and, for the one-shot security
 // gate, an already-approved) approval for this identity, else open a fresh one bound to
 // the exact plan hash. The returned boundHash is the plan hash this approval is bound
@@ -692,7 +700,11 @@ func (b *Bridge) ensureApproval(ctx context.Context, cred ServiceCred, action, s
 	// 1. In-process memo (fast idempotency within this process lifetime).
 	if memoRef := b.memoGet(key); memoRef != "" {
 		if v, rerr := b.ReadApproval(ctx, cred, memoRef); rerr == nil && b.reusable(cred, v, mode) {
-			return memoRef, v.Status, v.BoundHash, nil
+			status, herr := b.stillHolds(ctx, cred.Tenant, memoRef, v.Status)
+			if herr != nil {
+				return "", "", "", herr
+			}
+			return memoRef, status, v.BoundHash, nil
 		}
 		// Terminal/expired/stale/gone: drop the stale memo and open a fresh request.
 		b.memoDel(key)
@@ -704,8 +716,12 @@ func (b *Bridge) ensureApproval(ctx context.Context, cred ServiceCred, action, s
 	if foundRef, v, ferr := b.findReusable(ctx, cred, action, subjectKind, encoded, mode); ferr != nil {
 		b.Log.Warn("approval-bridge: idempotency lookup failed; opening a fresh approval", "tenant", cred.TenantStr, "action", action, "err", ferr)
 	} else if foundRef != "" {
+		status, herr := b.stillHolds(ctx, cred.Tenant, foundRef, v.Status)
+		if herr != nil {
+			return "", "", "", herr
+		}
 		b.memoSet(key, foundRef)
-		return foundRef, v.Status, planHash, nil
+		return foundRef, status, planHash, nil
 	}
 
 	// 3. PROPOSE: open a new governed approval, bound to the exact plan hash.
@@ -776,6 +792,27 @@ func (b *Bridge) ReadApproval(ctx context.Context, cred ServiceCred, ref string)
 		Status: dto.Status, Action: dto.Action, SubjectKind: dto.SubjectKind,
 		SubjectRef: dto.SubjectRef, BoundHash: decodePlanHash(dto.SubjectRef), DecidedAt: dto.DecidedAt, Consumed: dto.Consumed,
 	}, nil
+}
+
+// stillHolds is asked wherever the bridge is about to tell a gate "approved" that the gate
+// authorizes on, without spending: Status and StatusScoped (deploy, orchestration, voice, an
+// MCP call without a round trip) and the reuse of an approved grant, spent or not (the
+// one-shot gates). ObserveScoped and the FinOps backstop's ReadApproval only observe and do
+// not ask. A grant decided under a change record stands only while that record allows the
+// change, and only a spend reads the record by itself, so the engine reads it here and
+// revokes an unspent grant when it no longer does. It returns the grant's status after the
+// check ("canceled" for a revoked grant, which the next request for the same identity
+// replaces); an error authorizes nothing: the change system cannot be asked, or it no
+// longer allows a grant somebody already spent, which cannot be revoked. Any other status,
+// and a bridge boot has not bound to the engine yet, is answered as it came.
+func (b *Bridge) stillHolds(ctx context.Context, tenant model.TenantID, ref, status string) (string, error) {
+	b.credMu.Lock()
+	proposer := b.LocalProposer
+	b.credMu.Unlock()
+	if status != Approved || proposer == nil {
+		return status, nil
+	}
+	return proposer.StillHolds(ctx, tenant, ref)
 }
 
 // reusable reports whether an existing approval may satisfy a repeated actuation

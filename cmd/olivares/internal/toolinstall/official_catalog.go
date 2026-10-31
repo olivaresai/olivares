@@ -25,6 +25,8 @@ func NewOfficialCatalog(client *http.Client, verifier SignatureVerifier) *Capabi
 			v1 = append(v1, NewClaude(ClaudeOptions{Client: client, Verifier: verifier}))
 		case driverfacts.InstallPackage:
 			v2 = append(v2, NewGrok(GrokOptions{Client: client}))
+		case driverfacts.InstallOriginTarball:
+			v2 = append(v2, NewCursor(CursorOptions{Client: client}))
 		case driverfacts.InstallRelease:
 			v2 = append(v2, newReleaseArchive(facts.Key, ReleaseArchiveOptions{Client: client}))
 		default:

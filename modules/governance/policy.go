@@ -22,8 +22,9 @@ import (
 
 // Policy kinds this module authors over the core Policy entity.
 const (
-	policyKindABAC     = "abac"
-	policyKindApproval = "approval"
+	policyKindABAC        = "abac"
+	policyKindApproval    = "approval"
+	policyKindGrantExpiry = auth.PolicyKindGrantExpiry
 )
 
 // Bounds on a policy spec — a typed, bounded, re-marshaled spec is the guarantee
@@ -66,6 +67,11 @@ type abacSpec struct {
 	Rules []abacRule `json:"rules"`
 }
 
+type grantExpirySpec struct {
+	DefaultSeconds int64 `json:"default_seconds,omitempty"`
+	MaximumSeconds int64 `json:"maximum_seconds,omitempty"`
+}
+
 // approvalMatch selects which requested actions a human-in-the-loop policy governs.
 type approvalMatch struct {
 	Action      string `json:"action,omitempty"`
@@ -95,6 +101,10 @@ type approvalSpec struct {
 	// RequireOtherThanLauncher refuses the decision of the person who launched
 	// the session that proposed the change. Business.
 	RequireOtherThanLauncher bool `json:"require_other_than_launcher,omitempty"`
+	// ChangeRecord binds the policy to one named record in the change system of
+	// record: an approval under it holds only while that record is in an approved
+	// state (approval_changerecord.go). Business.
+	ChangeRecord *changeRecordSpec `json:"change_record,omitempty"`
 }
 
 // usesChangeClass reports whether the spec uses what only Business offers:
@@ -102,6 +112,10 @@ type approvalSpec struct {
 func (s approvalSpec) usesChangeClass() bool {
 	return s.Match.ChangeClass != "" || len(s.SensitivePaths) > 0 || s.RequireOtherThanLauncher
 }
+
+// usesChangeRecord reports whether the spec binds approvals to a change record,
+// which only Business offers.
+func (s approvalSpec) usesChangeRecord() bool { return s.ChangeRecord != nil }
 
 // policyRequest is the create/update body. Spec is a raw message parsed against
 // the typed spec for Kind (DisallowUnknownFields), so an unknown/free field is
@@ -120,6 +134,10 @@ type policyDTO struct {
 	Kind    string         `json:"kind"`
 	Enabled bool           `json:"enabled"`
 	Spec    map[string]any `json:"spec"`
+}
+
+func governancePolicyKind(kind string) bool {
+	return kind == policyKindABAC || kind == policyKindApproval || kind == policyKindGrantExpiry
 }
 
 func toPolicyDTO(p model.Policy) policyDTO {
@@ -145,9 +163,29 @@ func (in *policyRequest) validateAndCanonicalize() (map[string]any, string) {
 		return canonicalizeABAC(in.Spec)
 	case policyKindApproval:
 		return canonicalizeApproval(in.Spec)
+	case policyKindGrantExpiry:
+		return canonicalizeGrantExpiry(in.Spec)
 	default:
-		return nil, "kind must be one of abac, approval"
+		return nil, "kind must be one of abac, approval, grant_expiry"
 	}
+}
+
+func canonicalizeGrantExpiry(raw json.RawMessage) (map[string]any, string) {
+	var spec grantExpirySpec
+	if len(raw) != 0 && string(raw) != "null" {
+		dec := json.NewDecoder(strings.NewReader(string(raw)))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&spec); err != nil {
+			return nil, "invalid grant_expiry spec: " + err.Error()
+		}
+	}
+	if spec.DefaultSeconds < 0 || spec.DefaultSeconds > maxSeconds || spec.MaximumSeconds < 0 || spec.MaximumSeconds > maxSeconds {
+		return nil, "default_seconds and maximum_seconds must be whole numbers from 0 to 31536000 (one year)."
+	}
+	if spec.MaximumSeconds > 0 && spec.DefaultSeconds > spec.MaximumSeconds {
+		return nil, "default_seconds cannot exceed maximum_seconds"
+	}
+	return toMap(spec)
 }
 
 func canonicalizeABAC(raw json.RawMessage) (map[string]any, string) {
@@ -232,6 +270,11 @@ func canonicalizeApproval(raw json.RawMessage) (map[string]any, string) {
 		spec.SensitivePaths[i] = strings.TrimSuffix(strings.TrimSpace(g), "/")
 		if !validGlob(spec.SensitivePaths[i]) {
 			return nil, "sensitive_paths holds an invalid glob: a repository-relative path with * ? [..], no . or .. segment and at most two ** segments"
+		}
+	}
+	if spec.ChangeRecord != nil {
+		if msg := spec.ChangeRecord.canonicalize(); msg != "" {
+			return nil, msg
 		}
 	}
 	// Authoring-time coherence: a policy cannot declare an action CRITICAL and
@@ -343,7 +386,7 @@ func (m *Module) handleListPolicies(w http.ResponseWriter, r *http.Request, mc a
 			return err
 		}
 		for _, p := range list {
-			if p.Kind == policyKindABAC || p.Kind == policyKindApproval {
+			if governancePolicyKind(p.Kind) {
 				out.Items = append(out.Items, toPolicyDTO(p))
 			}
 		}
@@ -373,7 +416,7 @@ func (m *Module) handleGetPolicy(w http.ResponseWriter, r *http.Request, mc api.
 		if err != nil {
 			return err
 		}
-		if p.Kind != policyKindABAC && p.Kind != policyKindApproval {
+		if !governancePolicyKind(p.Kind) {
 			return nil // not a governance policy — treat as not found below
 		}
 		found, out = true, toPolicyDTO(p)
@@ -390,6 +433,25 @@ func (m *Module) handleGetPolicy(w http.ResponseWriter, r *http.Request, mc api.
 	writeJSON(w, http.StatusOK, out)
 }
 
+func ensureGrantExpiryPolicySingleton(ctx context.Context, sc store.Scope, candidate model.Policy) error {
+	if candidate.Kind != policyKindGrantExpiry || !candidate.Enabled {
+		return nil
+	}
+	policies, _, err := sc.Policies().List(ctx, model.Query{Filters: []model.Filter{
+		{Column: "kind", Op: model.OpEq, Value: policyKindGrantExpiry},
+		{Column: "enabled", Op: model.OpEq, Value: true},
+	}, Limit: 2})
+	if err != nil {
+		return err
+	}
+	for _, policy := range policies {
+		if policy.ID != candidate.ID {
+			return store.ErrConflict
+		}
+	}
+	return nil
+}
+
 // handleCreatePolicy authors a governance policy. Admin-tier and self-audited; the
 // ABAC cache is invalidated AFTER the write commits.
 func (m *Module) handleCreatePolicy(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
@@ -402,7 +464,7 @@ func (m *Module) handleCreatePolicy(w http.ResponseWriter, r *http.Request, mc a
 		writeJSON(w, http.StatusBadRequest, errorBody(msg))
 		return
 	}
-	if !in.availableInEdition(w, canon) {
+	if !in.availableInEdition(w, canon, m.businessApprovals) {
 		return
 	}
 	var (
@@ -411,6 +473,9 @@ func (m *Module) handleCreatePolicy(w http.ResponseWriter, r *http.Request, mc a
 	)
 	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		candidate := model.Policy{Name: in.Name, Kind: in.Kind, Spec: canon, Enabled: in.Enabled}
+		if err := ensureGrantExpiryPolicySingleton(r.Context(), sc, candidate); err != nil {
+			return err
+		}
 		advance, err := policyChangeAdvancesAuthorizationEpoch(nil, &candidate)
 		if err != nil {
 			return err
@@ -457,7 +522,7 @@ func (m *Module) handleUpdatePolicy(w http.ResponseWriter, r *http.Request, mc a
 		writeJSON(w, http.StatusBadRequest, errorBody(msg))
 		return
 	}
-	if !in.availableInEdition(w, canon) {
+	if !in.availableInEdition(w, canon, m.businessApprovals) {
 		return
 	}
 	var (
@@ -470,7 +535,7 @@ func (m *Module) handleUpdatePolicy(w http.ResponseWriter, r *http.Request, mc a
 		if err != nil {
 			return err
 		}
-		if p.Kind != policyKindABAC && p.Kind != policyKindApproval {
+		if !governancePolicyKind(p.Kind) {
 			return store.ErrNotFound // not a governance policy
 		}
 		if p.Kind != in.Kind {
@@ -485,6 +550,9 @@ func (m *Module) handleUpdatePolicy(w http.ResponseWriter, r *http.Request, mc a
 		if equal {
 			out = toPolicyDTO(p)
 			return nil
+		}
+		if err := ensureGrantExpiryPolicySingleton(r.Context(), sc, candidate); err != nil {
+			return err
 		}
 		advance, err := policyChangeAdvancesAuthorizationEpoch(&p, &candidate)
 		if err != nil {
@@ -540,7 +608,7 @@ func (m *Module) handleDeletePolicy(w http.ResponseWriter, r *http.Request, mc a
 		if err != nil {
 			return err
 		}
-		if p.Kind != policyKindABAC && p.Kind != policyKindApproval {
+		if !governancePolicyKind(p.Kind) {
 			return store.ErrNotFound
 		}
 		deletedKind = p.Kind
@@ -582,8 +650,12 @@ func (m *Module) reloadGrantsAfterEpochAdvance(ctx context.Context, tenant model
 }
 
 // Validate before selecting an edition, so malformed specs keep their 400 contract.
-// A disabled policy is never applied, so switching one off needs no edition.
-func (in *policyRequest) availableInEdition(w http.ResponseWriter, canon map[string]any) bool {
+// A disabled policy is never applied, so switching one off needs no edition, and no licence.
+func (in *policyRequest) availableInEdition(w http.ResponseWriter, canon map[string]any, businessApprovals func() error) bool {
+	if in.Kind == policyKindGrantExpiry && in.Enabled && !grantExpiryPolicyAvailable() {
+		writeJSON(w, http.StatusNotImplemented, errorBodyCode("business_required", "Time-boxed grant policies require Olivares Business."))
+		return false
+	}
 	if in.Kind != policyKindApproval || !in.Enabled {
 		return true
 	}
@@ -597,8 +669,36 @@ func (in *policyRequest) availableInEdition(w http.ResponseWriter, canon map[str
 		if spec.usesChangeClass() {
 			msg = "Approval policies that depend on what a change touches require Olivares Business."
 		}
+		if spec.usesChangeRecord() {
+			msg = "Approval policies bound to a change record require Olivares Business."
+		}
 		writeJSON(w, http.StatusNotImplemented, errorBodyCode("business_required", msg))
 		return false
 	}
+	if businessApprovals != nil && !withinCommunityApprovalLine(spec) {
+		if err := businessApprovals(); err != nil {
+			status, body, _ := api.StoreErrorBody(err)
+			writeJSON(w, status, body)
+			return false
+		}
+	}
 	return true
+}
+
+// withinCommunityApprovalLine is the Community line: a policy that asks for one review
+// of the matched action. Changing the risk tier or the approval count from the
+// action's default, in either direction, or deciding by what a change touches,
+// is Business, and so is binding approvals to a change record. An explicit tier or
+// quorum equal to the default changes nothing. Every edition reads it: Community refuses
+// what is beyond it, and the Business build asks its licence gate for that.
+func withinCommunityApprovalLine(spec approvalSpec) bool {
+	if spec.usesChangeClass() || spec.usesChangeRecord() {
+		return false
+	}
+	def := defaultActionRiskTier(spec.Match.Action)
+	// The empty action matches every action, so no one default describes it.
+	if spec.RiskTier != "" && (spec.Match.Action == "" || tierRank(spec.RiskTier) != tierRank(string(def))) {
+		return false
+	}
+	return int64(spec.RequiredApprovals) <= floorRequiredApprovals(1, def)
 }

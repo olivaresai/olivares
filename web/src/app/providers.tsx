@@ -16,6 +16,7 @@ import { AuthBoundaryCustody } from '@/features/agentops/auth-boundary'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { ReloadNotice } from './reload-notice'
 
 // Wire the thin HTTP client to the stores ONCE at module load (outside React) so its
 // getters always read the latest token/tenant, and an authenticated 401 clears the
@@ -86,7 +87,7 @@ export function Providers({ children }: { children: ReactNode }) {
   useEffect(() => isolateCacheOnTenantChange(queryClient), [queryClient])
   useEffect(() => {
     // The same server-info read the shell makes (one request): a clean install with no
-    // administrator has no session to restore, so the restore is not sent (FH 034).
+    // administrator has no session to restore, so the restore is not sent (first-hour check).
     void restoreOnPageLoad(() => queryClient.fetchQuery(serverInfoQuery)).catch(
       () => {
         useSessionStore.setState({ ready: true })
@@ -101,6 +102,7 @@ export function Providers({ children }: { children: ReactNode }) {
           {children}
           <Toaster />
           <StepUpHost />
+          <ReloadNotice />
         </TooltipProvider>
       </AuthProvider>
     </QueryClientProvider>

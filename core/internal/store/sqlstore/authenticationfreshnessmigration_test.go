@@ -152,8 +152,16 @@ func TestAuthenticationFreshnessMigrationPreservesPermanentGapAndHistoricalRende
 	for _, engine := range store.SupportedEngines() {
 		dia, _ := dialect.New(engine)
 		versions, err := CompiledCoreMigrationVersions(engine)
-		if err != nil || !slices.Equal(versions, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27}) {
+		if err != nil || !slices.Equal(versions, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29}) {
 			t.Fatalf("plan: %v, %v", versions, err)
+		}
+		// The descriptor used by historical migrations stays frozen at v27;
+		// authSessionInventoryV28 owns the observed-use columns separately.
+		for _, f := range authSessionDescriptor.Fields {
+			switch f.Name {
+			case "last_used_at", "client_kind", "device_name", "pairing_source_id":
+				t.Fatalf("%s: historical descriptor includes v28 column %s", engine, f.Name)
+			}
 		}
 		// The old descriptor is independent of the historical-render helper:
 		// remove only the newly appended field, then compare every old DDL byte.
@@ -163,6 +171,16 @@ func TestAuthenticationFreshnessMigrationPreservesPermanentGapAndHistoricalRende
 		got := dia.CreateTableStmts(beforeConsentCustody(beforeAuthenticationFreshness(authSessionDescriptor)))
 		if !slices.Equal(got, want) {
 			t.Fatalf("%s changed historical session DDL", engine)
+		}
+		// v21 is frozen too: the migration, not the old descriptor, owns v28.
+		for _, d := range coreDescriptorsV21() {
+			if d.Kind == authSessionDescriptor.Kind {
+				for _, f := range d.Fields {
+					if f.Name == "last_used_at" || f.Name == "client_kind" {
+						t.Fatalf("%s: v21 renders new session column %s", engine, f.Name)
+					}
+				}
+			}
 		}
 	}
 }
@@ -250,5 +268,139 @@ func TestAuthenticationFreshnessCodecRefusesMalformedWitness(t *testing.T) {
 		if _, err := authSessionCodec.Decode(model.BaseFields{}, r); err == nil {
 			t.Fatalf("malformed witness %q silently decoded", raw)
 		}
+	}
+}
+
+func TestAuthSessionInventoryMigrationUpgradesCurrentStore(t *testing.T) {
+	for _, engine := range store.SupportedEngines() {
+		t.Run(string(engine), func(t *testing.T) {
+			ctx := context.Background()
+			s, cfg, users, _ := f2aFreshTarget(t, engine)
+			var legacy model.AuthSession
+			if err := s.AuthMutate(ctx, func(as store.AuthScope) error {
+				var err error
+				legacy, err = as.Sessions().Create(ctx, model.AuthSession{
+					UserID: users[0].ID, Selector: "inventory-legacy", SecretHash: []byte("test hash"),
+					ExpiresAt: model.NewTimestamp(time.Now().Add(time.Hour)),
+				})
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.Close(); err != nil {
+				t.Fatal(err)
+			}
+			driver, dsn := "sqlite", cfg.DSN
+			if engine == store.EnginePostgres {
+				driver, dsn = "pgx", cfg.OwnerDSN
+			}
+			db, err := sql.Open(driver, dsn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			for _, stmt := range []string{
+				"ALTER TABLE auth_sessions DROP COLUMN last_used_at",
+				"ALTER TABLE auth_sessions DROP COLUMN client_kind",
+				"ALTER TABLE auth_sessions DROP COLUMN device_name",
+				"ALTER TABLE auth_sessions DROP COLUMN pairing_source_id",
+				"DELETE FROM schema_migrations_core WHERE version>=28",
+			} {
+				if _, err := db.ExecContext(ctx, stmt); err != nil {
+					t.Fatalf("%s: %v", stmt, err)
+				}
+			}
+			reopened, err := Open(ctx, cfg, nil)
+			if err != nil {
+				t.Fatalf("reopen a v27 store: %v", err)
+			}
+			t.Cleanup(func() { _ = reopened.Close() })
+			columns, err := reopened.(*sqlStore).dia.TableColumns(ctx, reopened.(*sqlStore).db, "auth_sessions")
+			if err != nil || !columns["last_used_at"] || !columns["client_kind"] || !columns["device_name"] || !columns["pairing_source_id"] {
+				t.Fatalf("v28 did not restore inventory columns: %v", err)
+			}
+			var recorded int
+			if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations_core WHERE version=28 AND name='auth_session_inventory'").Scan(&recorded); err != nil || recorded != 1 {
+				t.Fatalf("v28 recorded %d times (err %v), want once", recorded, err)
+			}
+			usedAt := model.NewTimestamp(time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC))
+			var got model.AuthSession
+			if err := reopened.AuthView(ctx, func(as store.AuthScope) error {
+				var err error
+				got, err = as.Sessions().Get(ctx, legacy.ID)
+				if err == nil && (got.LastUsedAt != nil || got.ClientKind != "" || got.DeviceName != "" || !got.PairingSourceID.IsZero()) {
+					t.Fatal("migration invented historical session use")
+				}
+				if err := as.RecordAuthSessionUse(ctx, legacy.ID, usedAt, model.SessionClientBrowser); !errors.Is(err, store.ErrReadOnly) {
+					t.Errorf("read-only use write = %v, want ErrReadOnly", err)
+				}
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := reopened.AuthMutate(ctx, func(as store.AuthScope) error {
+				return as.RecordAuthSessionUse(ctx, legacy.ID, usedAt, model.SessionClientBrowser)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := reopened.AuthView(ctx, func(as store.AuthScope) error {
+				var err error
+				got, err = as.Sessions().Get(ctx, legacy.ID)
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if got.LastUsedAt == nil || !got.LastUsedAt.Time().Equal(usedAt.Time()) || got.ClientKind != model.SessionClientBrowser {
+				t.Errorf("observed use = %v/%q, want %v/browser", got.LastUsedAt, got.ClientKind, usedAt)
+			}
+			older := model.NewTimestamp(usedAt.Time().Add(-time.Minute))
+			if err := reopened.AuthMutate(ctx, func(as store.AuthScope) error {
+				return as.RecordAuthSessionUse(ctx, legacy.ID, older, model.SessionClientToken)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := reopened.AuthView(ctx, func(as store.AuthScope) error {
+				row, err := as.Sessions().Get(ctx, legacy.ID)
+				if err == nil && (row.LastUsedAt == nil || row.LastUsedAt.String() != usedAt.String() || row.ClientKind != model.SessionClientBrowser) {
+					t.Errorf("older request overwrote newer metadata: %v/%s", row.LastUsedAt, row.ClientKind)
+				}
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if got.Version != legacy.Version || !got.UpdatedAt.Time().Equal(legacy.UpdatedAt.Time()) {
+				t.Errorf("version/updated_at changed: %d/%v, want %d/%v", got.Version, got.UpdatedAt, legacy.Version, legacy.UpdatedAt)
+			}
+			if err := reopened.AuthMutate(ctx, func(as store.AuthScope) error {
+				return as.RecordAuthSessionUse(ctx, model.NewID(), usedAt, model.SessionClientBrowser)
+			}); !errors.Is(err, store.ErrNotFound) {
+				t.Errorf("absent session = %v, want ErrNotFound", err)
+			}
+			if err := reopened.AuthMutate(ctx, func(as store.AuthScope) error {
+				return as.RecordAuthSessionUse(ctx, legacy.ID, usedAt, "forged")
+			}); err == nil {
+				t.Error("invalid client kind was accepted")
+			}
+			if err := reopened.AuthMutate(ctx, func(as store.AuthScope) error {
+				row, err := as.Sessions().Get(ctx, legacy.ID)
+				if err != nil {
+					return err
+				}
+				row.DeviceName, row.PairingSourceID = "Work phone", legacy.ID
+				_, err = as.Sessions().Update(ctx, row)
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := reopened.AuthView(ctx, func(as store.AuthScope) error {
+				row, err := as.Sessions().Get(ctx, legacy.ID)
+				if err == nil && (row.DeviceName != "Work phone" || row.PairingSourceID != legacy.ID) {
+					t.Fatal("pairing columns did not round-trip on upgraded store")
+				}
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

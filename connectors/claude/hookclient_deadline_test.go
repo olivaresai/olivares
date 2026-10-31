@@ -260,3 +260,40 @@ func assertDeadlineDenial(t *testing.T, event string, body []byte) {
 		t.Fatalf("unexpected test event %s", event)
 	}
 }
+
+func TestHookClientRefusesWhenAPathCannotBeResolved(t *testing.T) {
+	for _, phase := range []string{"lstat", "evalSymlinks"} {
+		t.Run(phase, func(t *testing.T) {
+			var requests atomic.Int32
+			cfg := HookClientConfig{Endpoint: "http://127.0.0.1/", Client: &http.Client{Transport: deadlineRoundTripper(func(r *http.Request) (*http.Response, error) {
+				requests.Add(1)
+				return nil, context.Canceled
+			})}}
+			cfg.pathCalls = &hookPathCalls{
+				lstat: func(string) (os.FileInfo, error) {
+					if phase == "lstat" {
+						return nil, os.ErrPermission
+					}
+					return nil, nil
+				},
+				evalSymlinks: func(path string) (string, error) {
+					if phase == "evalSymlinks" {
+						return "", os.ErrPermission
+					}
+					return path, nil
+				},
+			}
+			body, _ := json.Marshal(map[string]any{"hook_event_name": "PreToolUse", "tool_name": "Write", "tool_input": map[string]any{"file_path": "/workspace/link-to-tool-home"}})
+			var out bytes.Buffer
+			if err := RunHookClient(t.Context(), bytes.NewReader(body), &out, cfg); err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Contains(out.Bytes(), []byte(`"permissionDecision":"deny"`)) || !bytes.Contains(out.Bytes(), []byte("path could not be resolved")) {
+				t.Fatalf("unresolved path did not deny closed: %s", out.Bytes())
+			}
+			if requests.Load() != 0 {
+				t.Fatal("an unresolved path was forwarded to the PEP")
+			}
+		})
+	}
+}

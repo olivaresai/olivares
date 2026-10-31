@@ -6,7 +6,7 @@ description: >-
 ---
 
 :::note[Business]
-監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、`olivares audit verify`、`olivares dr backup` を引き続き利用できます。エクスポートは HTTP 501 または終了コード 9 を返します。監査転送およびエアギャップ間の DDIL 転送にも Business が必要です。
+監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、台帳の検証（`GET /v1/audit/verify`、`olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、その読み取り、`olivares dr backup` を引き続き利用できます。証拠の操作は HTTP 501 または終了コード 9 を返します。監査転送および監査セグメントを含む DDIL 転送にも Business が必要です。
 :::
 
 AI のための control plane（コントロールプレーン）はセキュリティ製品です。カバー範囲を
@@ -44,7 +44,7 @@ AI のための control plane（コントロールプレーン）はセキュリ
   複数の SIEM 形式でエクスポートできます。
 - **リリースは署名され、検証可能。** 署名、SLSA 来歴、SBOM、OpenVEX はすべて[検証](/ja/how-to/verify-a-release/)できます。
   検証はまだ完全にはネットワーク不要ではありません。キーレス検証には Sigstore のトラストルート素材が必要で、SLSA の手順には
-  オフラインモードがありません。製品は[エアギャップバンドル](/ja/how-to/air-gap-install/)を同梱します。次のリリースは **<!-- release -->0.4<!-- /release -->** で、まだ公開されていません。公開まではソースからビルドしてください。
+  オフラインモードがありません。製品は[エアギャップバンドル](/ja/how-to/air-gap-install/)を同梱します。次のリリースは **<!-- release -->0.5<!-- /release -->** で、まだ公開されていません。公開まではソースからビルドしてください。
 
 ## オープンコア — オープンと商用の境界
 

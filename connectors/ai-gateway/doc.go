@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package aigateway is the Olivares AI connector for the Envoy AI Gateway
-//. It OBSERVES the usage telemetry the gateway already exports —
+// . It OBSERVES the usage telemetry the gateway already exports —
 // it never calls the gateway's API, never opens a listener, never proxies a request,
 // and never reads a prompt or a completion. It is gateway-side FinOps: it turns the
 // gateway's per-request token meter into module XXI cost telemetry, Anthropic-first.

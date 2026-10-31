@@ -197,6 +197,7 @@ func (m *Module) ProfileModelCatalog(ctx context.Context, tenant model.TenantID,
 			out.DefaultModel = ""
 			out.State = "failed"
 			out.Message = "Models could not be refreshed. Check the provider connection or sign in again."
+			var launchErr *runErr
 			switch {
 			case errors.Is(err, ErrToolModelListUnsupported), errors.Is(err, ErrNoProviderProbe):
 				out.State = "unsupported"
@@ -204,6 +205,8 @@ func (m *Module) ProfileModelCatalog(ctx context.Context, tenant model.TenantID,
 			case errors.Is(err, errEmptyToolCatalog):
 				out.State = "unsupported"
 				out.Message = "The tool reported no models. Use its default model or enter a model name."
+			case errors.As(err, &launchErr):
+				out.Message = launchErr.Error()
 			case m.log != nil:
 				m.log.Warn("sessions: model catalog read failed", "profile_ref", ref, "driver", prof.Driver, "error", redactErr(err))
 			}

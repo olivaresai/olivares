@@ -34,7 +34,7 @@
 # — "does git operate here?" — and therefore catches any mechanism, including ones nobody has
 # thought of yet.
 #
-# (That table also corrects `an internal design note (not shipped)`, which
+# (That table also corrects `an internal audit`, which
 # reports `GIT_CONFIG_PARAMETERS='core.worktree=…'` "still overriding core.worktree" after the
 # git-env source. On this git it does not override anything; `--get` merely echoes it back. The
 # audit's wider point stands — that list is not derived from `git rev-parse --local-env-vars` —

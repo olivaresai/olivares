@@ -18,10 +18,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/olivaresai/olivares/modules/sessions/cliruntime"
+	"github.com/olivaresai/olivares/modules/sessions/confine"
+	"github.com/olivaresai/olivares/modules/sessions/egress"
 )
 
 // THE CONTAINER RUNNER: isolation=container, wired.
@@ -37,13 +40,10 @@ import (
 // own path (version selection and signature checks stay where they are); everything
 // else the child sees is what the module decided in LaunchSpec.Workspace and
 // LaunchSpec.Binds. The root filesystem is read-only, no capability is kept and no
-// privilege can be gained. The session's network is the container runtime's default,
-// so a launch that needs the provider network boundary (a NetworkPolicy, which only
-// the native runner holds) is refused here instead of running with a wider network. The
-// one exception is a launch whose environment names the engine on a loopback address
-// (its tool-call hooks, MCP server or inference gateway): the container then shares the
-// host's network, which is the network a native session has, because that is the only
-// way to reach those endpoints.
+// privilege can be gained. A bound session has no external network: an engine-side
+// proxy and an in-container loopback relay enforce the same provider and credential
+// policy as the native runner. Unbound sessions use the runtime's default network,
+// or host networking when they need an engine loopback endpoint.
 //
 // ⛔ A SECRET NEVER TRAVELS IN ARGV. Argv is readable by every user on the host; a
 // process's environment is readable only by its own user, which is where a native
@@ -72,6 +72,11 @@ var containerClientEnv = []string{
 	"CONTAINER_HOST", "CONTAINER_CONNECTION", "CONTAINERS_CONF",
 	"DOCKER_HOST", "DOCKER_CONFIG", "DOCKER_CONTEXT",
 }
+
+// ContainerClientEnvNames returns the host variables a container CLI needs. It is for a
+// service that drives its own image through the same runtime, so it reads the same
+// allowlist as a session and cannot drift from it.
+func ContainerClientEnvNames() []string { return append([]string(nil), containerClientEnv...) }
 
 // containerSessionMayName are the CLI-owned names a session may carry a value for: where
 // its own home and temporary files are. The rest steer the CLI (its daemon, its
@@ -106,6 +111,138 @@ func (rt ContainerRuntime) ready() bool {
 	return err == nil && rt.Image != ""
 }
 
+// imageCheckTimeout bounds the image query: a runtime that has not answered in time has
+// not said the image is absent. A variable so a test can shorten it.
+var imageCheckTimeout = 5 * time.Second
+
+// imageCacheTTL is how long the last answer is reused. A variable so a test can shorten it.
+var imageCacheTTL = 2 * time.Second
+
+var prepareContainer = egress.PrepareContainer
+
+// localImagePrefix marks an image only this host can hold. Any other name a registry may
+// serve, and the runtime pulls it on first use, so its absence from the host says nothing.
+const localImagePrefix = "localhost/"
+
+// lastImageAnswer is the host-wide answer to the last image query. The readiness read is
+// open to every viewer and each container launch asks too, so a runtime that is slow or
+// wedged is asked once, not once per request. Its mutex guards the fields only; imageQuery
+// admits one query at a time and a reader waiting for it leaves when its request ends.
+var lastImageAnswer struct {
+	sync.Mutex
+	key   string
+	at    time.Time
+	state RunnerImageState
+	err   error
+}
+
+var imageQuery = make(chan struct{}, 1)
+
+// cachedImageAnswer returns the last answer when it is for key and still fresh.
+func cachedImageAnswer(key string) (RunnerImageState, bool, error) {
+	lastImageAnswer.Lock()
+	defer lastImageAnswer.Unlock()
+	if lastImageAnswer.key != key || time.Since(lastImageAnswer.at) >= imageCacheTTL {
+		return RunnerImageUnknown, false, nil
+	}
+	return lastImageAnswer.state, true, lastImageAnswer.err
+}
+
+// CheckImage asks the runtime itself whether the session image is on this host. It starts
+// no container and pulls nothing. Missing is the runtime's own "absent" for an image no
+// registry could provide. Anything else is Unknown, never Missing: an image the runtime
+// would pull, a runtime that cannot be asked, a request that was cancelled. The error is
+// set only when the runtime was asked and gave no usable answer, and says why in one line,
+// so a broken runtime is not mistaken for a ready one.
+func (rt ContainerRuntime) CheckImage(ctx context.Context) (RunnerImageState, error) {
+	if rt.Path == "" || !strings.HasPrefix(rt.Image, localImagePrefix) {
+		return RunnerImageUnknown, nil
+	}
+	key := rt.Path + "\x00" + rt.Image
+	if state, ok, err := cachedImageAnswer(key); ok {
+		return state, err
+	}
+	select {
+	case imageQuery <- struct{}{}:
+		defer func() { <-imageQuery }()
+	case <-ctx.Done():
+		return RunnerImageUnknown, nil
+	}
+	// A query that ran while this reader waited has answered for it too.
+	if state, ok, err := cachedImageAnswer(key); ok {
+		return state, err
+	}
+	state, err := rt.queryImage(ctx)
+	if ctx.Err() == nil { // a cancelled request says nothing about the host: keep no answer
+		lastImageAnswer.Lock()
+		lastImageAnswer.key, lastImageAnswer.at, lastImageAnswer.state, lastImageAnswer.err = key, time.Now(), state, err
+		lastImageAnswer.Unlock()
+	}
+	return state, err
+}
+
+func (rt ContainerRuntime) queryImage(ctx context.Context) (RunnerImageState, error) {
+	runCtx, cancel := context.WithTimeout(ctx, imageCheckTimeout)
+	defer cancel()
+	// podman answers in its exit code (0 present, 1 absent, 125 could not ask) and prints
+	// nothing; Docker has no such command and says "No such image" when `image inspect`
+	// finds nothing.
+	args := []string{"image", "inspect", "--format", "{{.Id}}", rt.Image}
+	if rt.isPodman() {
+		args = []string{"image", "exists", rt.Image}
+	}
+	cmd := exec.CommandContext(runCtx, rt.Path, args...) // #nosec G204 -- the runtime path is operator-detected and the arguments are built here without a shell
+	cmd.Dir = "/"
+	cmd.Env = containerClientEnviron()
+	// The timeout kills the CLI; WaitDelay stops a helper that inherited its pipes from
+	// holding this call past it.
+	cmd.WaitDelay = time.Second
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return RunnerImagePresent, nil
+	}
+	base := filepath.Base(rt.Path)
+	said := strings.TrimSpace(string(out))
+	var exit *exec.ExitError
+	switch {
+	case ctx.Err() != nil:
+		return RunnerImageUnknown, nil
+	case errors.Is(runCtx.Err(), context.DeadlineExceeded):
+		return RunnerImageUnknown, fmt.Errorf("%s did not answer within %s", base, imageCheckTimeout)
+	case !errors.As(err, &exit):
+		return RunnerImageUnknown, fmt.Errorf("%s could not be asked: %w", base, err)
+	case rt.isPodman() && exit.ExitCode() == 1 && podmanSaidAbsent(said):
+		return RunnerImageMissing, nil
+	case !rt.isPodman() && imageAbsentMessage(said):
+		return RunnerImageMissing, nil
+	}
+	line, _, _ := strings.Cut(said, "\n")
+	if len(line) > 200 {
+		line = line[:200]
+	}
+	return RunnerImageUnknown, fmt.Errorf("%s answered %q (exit %d), which is not an image verdict", base, line, exit.ExitCode())
+}
+
+// imageAbsentMessage reads what `docker image inspect` says for an image that is not there:
+// Docker's own "No such image", and the wording of podman behind a docker-named command.
+func imageAbsentMessage(said string) bool {
+	said = strings.ToLower(said)
+	return strings.Contains(said, "no such image") || strings.Contains(said, "image not known")
+}
+
+// podmanSaidAbsent reports whether podman's output is only its own environment warnings.
+// It prints WARN[0000] lines while still answering "absent" in the exit code; those lines
+// are not a verdict, while an Error line is one.
+func podmanSaidAbsent(said string) bool {
+	for _, line := range strings.Split(said, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" && !strings.HasPrefix(line, "WARN[") {
+			return false
+		}
+	}
+	return true
+}
+
 type containerRunner struct {
 	rt     ContainerRuntime
 	native *procRunner // the same pipes, pumps and teardown as a native child
@@ -126,14 +263,41 @@ func (cr *containerRunner) Launch(ctx context.Context, spec LaunchSpec) (Process
 	if strings.TrimSpace(spec.Program) == "" {
 		return nil, errors.New("sessions: launch spec has no program")
 	}
-	if spec.NetworkPolicy != nil {
-		// The proxy and network namespace that hold a session to its provider belong
-		// to the native runner. Dropping them would give the session the whole network.
-		return nil, networkBoundaryErr(errors.New("a container session cannot be held to its provider's endpoint yet; run this provider with native isolation"))
-	}
 	if err := validateExplicitEnv(spec.Env); err != nil {
 		return nil, err
 	}
+	releaseNetwork := func() {}
+	originalProgram := spec.Program
+	var waitReady func() error
+	if spec.NetworkPolicy != nil {
+		originalBinds, err := containerBinds(spec)
+		if err != nil {
+			return nil, err
+		}
+		engine, err := os.Executable()
+		if err != nil {
+			return nil, err
+		}
+		engine, err = filepath.EvalSymlinks(engine)
+		if err != nil {
+			return nil, err
+		}
+		args, dir, ready, release, err := prepareContainer(ctx, *spec.NetworkPolicy, append([]string{spec.Program}, spec.Args...))
+		if err != nil {
+			return nil, networkBoundaryErr(err)
+		}
+		releaseNetwork, waitReady = release, ready
+		spec.Program, spec.Args = engine, args
+		spec.Binds = append(originalBinds,
+			ContainerBind{HostPath: engine, Target: engine, ReadOnly: true, NoRelabel: true},
+			ContainerBind{HostPath: dir, Target: dir, ReadOnly: true})
+	}
+	launched := false
+	defer func() {
+		if !launched {
+			releaseNetwork()
+		}
+	}()
 	envArgs, cliEnv, err := containerEnv(spec)
 	if err != nil {
 		return nil, err
@@ -146,14 +310,14 @@ func (cr *containerRunner) Launch(ctx context.Context, spec LaunchSpec) (Process
 	if err != nil {
 		return nil, err
 	}
-	args, err := cr.runArgs(spec, name, envArgs, passwdBinds)
+	args, err := cr.runArgs(spec, name, envArgs, passwdBinds, originalProgram)
 	if err != nil {
 		forgetPasswd()
 		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, cr.rt.Path, args...) // #nosec G204 -- the runtime path is operator-detected and the arguments are built here without a shell
 	cmd.Dir = "/"
-	cmd.Env = append(cr.clientEnv(), cliEnv...)
+	cmd.Env = append(containerClientEnviron(), cliEnv...)
 	// The CLI forwards a TERM to the container; the default KILL would leave a
 	// container the daemon owns running after the engine stopped.
 	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
@@ -163,11 +327,24 @@ func (cr *containerRunner) Launch(ctx context.Context, spec LaunchSpec) (Process
 	p, err := cr.native.launchPipes(cmd, spec.WaitDelay, spec.StripImageData, func() {
 		cr.remove(name)
 		forgetPasswd()
-	})
+		releaseNetwork()
+	}, false)
 	if err != nil {
 		forgetPasswd()
+		return nil, err
 	}
-	return p, err
+	launched = true
+	if spec.OnStart != nil {
+		spec.OnStart(p.PID())
+	}
+	if waitReady != nil {
+		if err := waitReady(); err != nil {
+			stopCtx, cancel := context.WithTimeout(context.Background(), containerRemoveTimeout)
+			defer cancel()
+			return p, errors.Join(networkBoundaryErr(err), p.Stop(stopCtx))
+		}
+	}
+	return p, nil
 }
 
 // engineUserBinds gives a Docker session an /etc/passwd entry for the engine's id. Docker
@@ -180,7 +357,7 @@ func (cr *containerRunner) engineUserBinds() ([]ContainerBind, func(), error) {
 	if cr.rt.isPodman() || uid == 0 {
 		return nil, func() {}, nil
 	}
-	dir, err := os.MkdirTemp("", "olivares-container-")
+	dir, err := confine.ChildTempDir()
 	if err != nil {
 		return nil, func() {}, fmt.Errorf("sessions: the session's passwd directory: %w", err)
 	}
@@ -205,7 +382,11 @@ func passwdEntries(uid, gid int) []byte {
 
 // runArgs is everything after the CLI's name. Order matters in one place only: the
 // image ends the options and the program and its arguments follow it untouched.
-func (cr *containerRunner) runArgs(spec LaunchSpec, name string, envArgs []string, passwdBinds []ContainerBind) ([]string, error) {
+func (cr *containerRunner) runArgs(spec LaunchSpec, name string, envArgs []string, passwdBinds []ContainerBind, originalProgram ...string) ([]string, error) {
+	program := spec.Program
+	if len(originalProgram) > 0 {
+		program = originalProgram[0]
+	}
 	args := []string{
 		"run", "--rm", "-i", "--name", name, "--label", SessionContainerLabel + "=1",
 		"--read-only", "--tmpfs", "/tmp:rw,exec,nosuid,nodev",
@@ -213,6 +394,7 @@ func (cr *containerRunner) runArgs(spec LaunchSpec, name string, envArgs []strin
 		// The program is what runs, not whatever the image's entrypoint wraps it in.
 		"--entrypoint", "",
 	}
+	useInit := !cr.rt.isPodman()
 	if cr.rt.Image == "" || strings.HasPrefix(cr.rt.Image, "-") || strings.ContainsAny(cr.rt.Image, " \t\r\n\x00") {
 		return nil, fmt.Errorf("sessions: %q is not a container image name", cr.rt.Image)
 	}
@@ -226,11 +408,10 @@ func (cr *containerRunner) runArgs(spec LaunchSpec, name string, envArgs []strin
 		// root's unless the container runs as the engine user.
 		args = append(args, "--user", fmt.Sprintf("%d:%d", uid, gid))
 	}
-	if !cr.rt.isPodman() {
-		args = append(args, "--init") // podman's needs catatonit, which the host may lack
-	}
 	args = append(args, envArgs...)
-	if reachesEngineLoopback(spec) {
+	if spec.NetworkPolicy != nil {
+		args = append(args, "--network=none")
+	} else if reachesEngineLoopback(spec) {
 		// The tool-call hooks, the session's MCP server and the inference gateway are
 		// endpoints on the engine's loopback. A container with a network of its own
 		// cannot reach them, so it shares the host's: the network a native session has.
@@ -251,6 +432,18 @@ func (cr *containerRunner) runArgs(spec LaunchSpec, name string, envArgs []strin
 		if err := b.valid(); err != nil {
 			return nil, err
 		}
+		// A path the Olivares policy labels (the tool's folder, the workspace, a run's files) keeps its label: a :z
+		// would make it container_file_t and take it from native sessions. A probe error refuses the launch,
+		// never silently turns into a generic :z mount or a plain container_t process.
+		if cr.rt.SELinux {
+			label, err := hostSELinuxType(b.HostPath)
+			if err != nil {
+				return nil, fmt.Errorf("sessions: cannot read the SELinux label of %s: %w", b.HostPath, err)
+			}
+			if strings.HasPrefix(label, "olivares_") {
+				b.NoRelabel = true
+			}
+		}
 		args = append(args, "-v", b.volume(cr.rt.SELinux))
 	}
 	if home := containerHome(spec); home != "" && !bindCovers(binds, home) {
@@ -258,6 +451,29 @@ func (cr *containerRunner) runArgs(spec LaunchSpec, name string, envArgs []strin
 			return nil, fmt.Errorf("sessions: HOME %q cannot be a tmpfs in a container: it has a ':' or ','", home)
 		}
 		args = append(args, "--tmpfs", fmt.Sprintf("%s:rw,nosuid,nodev,mode=0700,uid=%d,gid=%d", home, uid, gid))
+	}
+	// On the Olivares Server an ordinary session's container runs in the tool's own SELinux domain, which holds exactly a
+	// native session's rights; a network-policy container starts in the dedicated relay domain. Ordinary labels follow the
+	// program's own label, set by the policy, never the request. A probe error refuses either launch.
+	if cr.rt.SELinux {
+		label, err := hostSELinuxType(program)
+		if err != nil {
+			return nil, fmt.Errorf("sessions: cannot read the SELinux label of %s: %w", spec.Program, err)
+		}
+		toolExecutable := label == "olivares_tool_exec_t" || label == "olivares_tool_claude_exec_t"
+		if spec.NetworkPolicy != nil {
+			if !toolExecutable {
+				return nil, fmt.Errorf("sessions: a network policy requires an Olivares tool executable, not %s", label)
+			}
+			useInit = false // runc starts the network relay directly in its dedicated domain.
+			args = append(args, "--security-opt", "label=type:olivares_container_relay_t")
+		} else if toolExecutable {
+			useInit = false // runc, not docker-init, performs this domain transition.
+			args = append(args, "--security-opt", "label=type:olivares_tool_t")
+		}
+	}
+	if useInit {
+		args = append(args, "--init")
 	}
 	args = append(args, cr.rt.Image, spec.Program)
 	return append(args, spec.Args...), nil
@@ -322,6 +538,7 @@ func containerBinds(spec LaunchSpec) ([]ContainerBind, error) {
 			return nil, fmt.Errorf("sessions: %q is the mount point of both %q and %q", b.Target, binds[i].HostPath, b.HostPath)
 		default:
 			binds[i].ReadOnly = binds[i].ReadOnly || b.ReadOnly
+			binds[i].NoRelabel = binds[i].NoRelabel || b.NoRelabel
 		}
 	}
 	return binds, nil
@@ -339,6 +556,9 @@ func (b ContainerBind) valid() error {
 	}
 	return nil
 }
+
+// hostSELinuxType is the SELinux type of a host path. Tests replace it; probe errors refuse an SELinux launch.
+var hostSELinuxType = selinuxFileType
 
 // volume is the -v form of the mount. The SELinux label is not applied to a bind marked
 // NoRelabel (the engine's own program, the host's policy) or to the host's own program
@@ -452,8 +672,8 @@ func containerName() (string, error) {
 	return containerNamePrefix + hex.EncodeToString(raw[:]), nil
 }
 
-// clientEnv is the CLI's own environment: the allowlisted names, from the engine's.
-func (cr *containerRunner) clientEnv() []string {
+// containerClientEnviron is the CLI's own environment: the allowlisted names, from the engine's.
+func containerClientEnviron() []string {
 	var out []string
 	for _, name := range containerClientEnv {
 		if value, ok := os.LookupEnv(name); ok {
@@ -473,7 +693,7 @@ func (cr *containerRunner) remove(name string) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, cr.rt.Path, "rm", "-f", name) // #nosec G204 -- the name is generated here
 	cmd.Dir = "/"
-	cmd.Env = cr.clientEnv()
+	cmd.Env = containerClientEnviron()
 	out, err := cmd.CombinedOutput()
 	if err == nil || cr.rt.Warn == nil || strings.Contains(strings.ToLower(string(out)), "no such") {
 		return
@@ -487,11 +707,24 @@ func (cr *containerRunner) remove(name string) {
 }
 
 // InspectLaunch answers the readiness read without starting anything: the CLI is
-// present and the host's program is an executable.
-func (cr *containerRunner) InspectLaunch(_ context.Context, in RunnerInspection) (RunnerObservation, error) {
+// present, the session image is on the host, and the host's program is an executable.
+func (cr *containerRunner) InspectLaunch(ctx context.Context, in RunnerInspection) (RunnerObservation, error) {
 	out := RunnerObservation{Isolation: RunnerIsolationUnsupported}
 	if in.Isolation == IsolationContainer && cr.rt.ready() {
 		out.Isolation = RunnerIsolationSupported
+		var err error
+		out.Image, err = cr.rt.CheckImage(ctx)
+		if err != nil {
+			// Asked, no usable answer. The read says unavailable — not ready, and not
+			// missing, which would send the operator to build an image that may already
+			// be there — while the operator finds why in the log. The launch is not
+			// refused here: the runtime itself decides when it runs.
+			out.Image = RunnerImageUnavailable
+			if cr.rt.Warn != nil {
+				cr.rt.Warn("sessions: the container runtime could not say whether the session image is on this host",
+					"image", cr.rt.Image, "error", err.Error())
+			}
+		}
 	}
 	out.Program = inspectProgramMetadata(in.Program)
 	return out, nil

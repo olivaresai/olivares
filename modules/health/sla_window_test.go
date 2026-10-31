@@ -231,7 +231,7 @@ func BenchmarkSLAReadWindow(b *testing.B) {
 	}
 }
 
-// SR5C (2026-10-03): the anchor is THE latest event before the window, and an
+// review (2026-10-03): the anchor is THE latest event before the window, and an
 // occurred_at tie breaks by id DESC — the winner the lifetime fold reaches
 // (id-ascending, last write wins). Two same-timestamp pre-window events with
 // different states: the window read must follow the higher id, not whichever

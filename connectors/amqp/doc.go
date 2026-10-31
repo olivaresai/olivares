@@ -25,6 +25,7 @@
 //     from the message's authenticated user-id or a CloudEvents binary binding. It is
 //     a streaming source: Gather blocks receiving until the engine cancels it.
 //   - Output ("olivares.amqp-egress") — sends evidence/findings as CloudEvents 1.0.2
+//
 // to an address, structured or binary content mode.
 //
 // NON-DESTRUCTIVE OBSERVATION (docs/SECURITY-HARDENING.md). Consuming an AMQP message SETTLES it,

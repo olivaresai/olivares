@@ -409,7 +409,7 @@ const (
 // none of the sources define whether the count includes the syslog header, so
 // measure the complete serialized record in UTF-8 octets (the conservative
 // reading). Verified against primary sources 2026-07-24; see
-// an internal design note (not shipped) §5.
+// an internal audit §5.
 const (
 	// RFC5424MinReceiverBytes is the message size every RFC 5424 receiver MUST
 	// support (§6.1); RFC5424RecommendedReceiverBytes is the size the RFC says

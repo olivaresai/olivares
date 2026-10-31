@@ -366,6 +366,15 @@ func resumableRunNaming(e *consentEstate, subject retirementSubject) model.Recor
 	}
 }
 
+// limitResumeRunNaming names the account only through its reset-scheduling credential.
+func limitResumeRunNaming(e *consentEstate, subject retirementSubject) model.Record {
+	rec := resumableRunNaming(e, subject)
+	rec["limit_resume_credential_id"] = rec["resume_credential_id"]
+	delete(rec, "resume_credential_id")
+	rec["resume_at"] = model.NewTimestamp(time.Now().Add(time.Hour)).String()
+	return rec
+}
+
 // seedLaunchToken stores a token of subject bound to T, the credential a launch carries, and
 // returns its id.
 func (e *consentEstate) seedLaunchToken(subject retirementSubject) string {
@@ -393,6 +402,9 @@ func (e *consentEstate) seedLaunchToken(subject retirementSubject) string {
 // message graph; messagingSeeders holds the rest, which need an activated
 // communication kernel.
 var sessionsSeeders = map[string]retirementSeeder{
+	"sessions.limit_resume_settings.owner_id": {"sessions.limit_resume_settings", retireDeletes, func(e *consentEstate, s retirementSubject) model.ID {
+		return e.seedFenced(e.tT, "sessions.limit_resume_settings", model.Record{"owner_id": s.id.String(), "automatic": true}, s.id)
+	}},
 	"sessions.run.queued_user_id": {"sessions.run", retireBlocks, func(e *consentEstate, s retirementSubject) model.ID {
 		return e.seedFenced(e.tT, "sessions.run", queuedRunNaming(e, "queued_user_id", s), s.id)
 	}},
@@ -404,6 +416,17 @@ var sessionsSeeders = map[string]retirementSeeder{
 	}},
 	"sessions.run.resume_credential_id": {"sessions.run", retireBlocks, func(e *consentEstate, s retirementSubject) model.ID {
 		return e.seedFenced(e.tT, "sessions.run", resumableRunNaming(e, s), s.id)
+	}},
+	"sessions.run.limit_resume_credential_id": {"sessions.run", retireBlocks, func(e *consentEstate, s retirementSubject) model.ID {
+		return e.seedFenced(e.tT, "sessions.run", limitResumeRunNaming(e, s), s.id)
+	}},
+	// A collaboration share names its owner and its guest. The step revokes the share
+	// of either side and keeps the row (collaboration_retirement.go).
+	"sessions.share.owner_id": {"sessions.share", retireRevokes, func(e *consentEstate, s retirementSubject) model.ID {
+		return e.seedFenced(e.tT, "sessions.share", shareRecord(e, s.id, model.NewID()), s.id)
+	}},
+	"sessions.share.guest_id": {"sessions.share", retireRevokes, func(e *consentEstate, s retirementSubject) model.ID {
+		return e.seedFenced(e.tT, "sessions.share", shareRecord(e, model.NewID(), s.id), s.id)
 	}},
 	"sessions.channel_grant.subject_ref": {"sessions.channel_grant", retireRevokes, func(e *consentEstate, s retirementSubject) model.ID {
 		workspace, channel := e.seedChannel(e.tT, "grant-"+s.id.String())
@@ -655,6 +678,27 @@ func TestARunNoEngineResumeAwaitsDoesNotBlockRetirement(t *testing.T) {
 	})
 }
 
+func TestACancelledLimitResumeDoesNotBlockRetirement(t *testing.T) {
+	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
+		subject := e.retirementSubjectIn(e.tT, "cancelled-limit-resume")
+		seeder := retirementSeeder{"sessions.run", retireKeeps, func(e *consentEstate, s retirementSubject) model.ID {
+			rec := limitResumeRunNaming(e, s)
+			delete(rec, "resume_at")
+			return e.seedFenced(e.tT, "sessions.run", rec, s.id)
+		}}
+		row := seeder.seed(e, subject)
+		e.wantNamesOnlyThrough(t, seeder.kind, "limit_resume_credential_id", row, subject.id)
+		e.deprovision(e.tT, subject.id)
+		e.runPump()
+		if !e.seededRowExists(seeder.kind, row) {
+			t.Fatal("the retirement deleted the run")
+		}
+		if !e.wantEditionRetirementRefusal(t, subject.id, e.tT, seeder, row) {
+			e.wantRetired(t, subject.id, e.tT)
+		}
+	})
+}
+
 // retireSeeded seeds the case key for subject, checks that the row names the
 // subject through the case's column and no other counted column, removes the
 // subject from T and checks what the declared module's step did with the row. On
@@ -700,7 +744,8 @@ func (e *consentEstate) retireSeeded(t *testing.T, key string, subject retiremen
 			t.Errorf("the retirement deleted the %s row", s.kind)
 		}
 	case retireRevokes:
-		if state := e.rowState(e.tT, s.kind, row); state != "revoked" {
+		state := e.rowState(e.tT, s.kind, row)
+		if state != "revoked" && !e.rowRevokedFlag(e.tT, s.kind, row) {
 			t.Errorf("the %s row naming the account is %q after the retirement, want revoked", s.kind, state)
 		}
 	}
@@ -718,6 +763,39 @@ func (e *consentEstate) retireSeeded(t *testing.T, key string, subject retiremen
 	if e.comm != nil {
 		e.wantControlUntouched(t, key, subject.id)
 	}
+}
+
+// shareRecord is a collaboration share from owner to guest in the tenant's default
+// workspace. It has no state column: its revocation is the revoked flag.
+func shareRecord(e *consentEstate, owner, guest model.ID) model.Record {
+	return model.Record{
+		"workspace_id": e.defaultWorkspace(e.tT).String(), "run_ref": "share-" + model.NewID().String(),
+		"run_id": model.NewID().String(), "owner_id": owner.String(), "guest_id": guest.String(),
+		"expires_at": model.NewTimestamp(time.Now().Add(time.Hour)).String(), "revoked": false,
+	}
+}
+
+// rowRevokedFlag reports whether a stored row carries its revocation as a revoked flag
+// rather than as a state.
+func (e *consentEstate) rowRevokedFlag(tenant model.TenantID, kind model.Kind, id model.ID) bool {
+	e.t.Helper()
+	ctx := context.Background()
+	revoked := false
+	if err := e.eng.store.View(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(kind)
+		if err != nil {
+			return err
+		}
+		rec, err := repo.Get(ctx, id)
+		if errors.Is(err, store.ErrNotFound) {
+			return nil
+		}
+		revoked = rec.Bool("revoked")
+		return err
+	}); err != nil {
+		e.t.Fatalf("read %s: %v", kind, err)
+	}
+	return revoked
 }
 
 // TestOwnedObligationsBlockReadmissionUntilResolved: what the account owns in

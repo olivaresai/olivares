@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Design FH 016: New session > More options lets a tenant administrator give the
+// Design first-hour check: New session > More options lets a tenant administrator give the
 // session vault secrets (env/…) as environment variables, by name. Nobody else
 // sees the choice, and no value is ever read back.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -33,8 +33,8 @@ import './i18n'
 // Every value the picker hands back, in order; the last one is what a launch would send.
 const changes: SecretEnvChoice[][] = []
 const chosen = () => changes[changes.length - 1] ?? []
-function Harness() {
-  const [value, setValue] = useState<SecretEnvChoice[]>([])
+function Harness({ initial = [] }: { initial?: SecretEnvChoice[] }) {
+  const [value, setValue] = useState<SecretEnvChoice[]>(initial)
   return (
     <SessionSecrets
       value={value}
@@ -45,11 +45,11 @@ function Harness() {
     />
   )
 }
-function wrap() {
+function wrap(initial?: SecretEnvChoice[]) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <Harness />
+      <Harness initial={initial} />
     </QueryClientProvider>,
   )
 }
@@ -80,6 +80,29 @@ describe('New session: vault secrets as environment variables', () => {
     expect(chosen()).toEqual([{ env: 'GITHUB_TOKEN', secret: 'env/github' }])
     await userEvent.click(use)
     expect(chosen()).toEqual([])
+  })
+
+  it('says the list failed instead of showing an empty choice', async () => {
+    consoleApi.listSecrets.mockRejectedValue(new Error('refused'))
+    wrap()
+    expect(
+      await screen.findByText(/did not answer the secrets list/i),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/No session secrets yet/i)).toBeNull()
+    expect(screen.queryByRole('checkbox')).toBeNull()
+  })
+
+  it('keeps a chosen secret the list no longer shows, visible and removable', async () => {
+    // A secret chosen from an earlier list (deleted since, or another tenant's):
+    // it stays chosen and shown, never silently dropped from the launch.
+    wrap([
+      { env: 'GITHUB', secret: 'env/github' },
+      { env: 'OLD', secret: 'env/retired' },
+    ])
+    const gone = await screen.findByRole('checkbox', { name: /env\/retired/ })
+    expect(gone).toBeChecked()
+    await userEvent.click(gone)
+    expect(chosen()).toEqual([{ env: 'GITHUB', secret: 'env/github' }])
   })
 
   it('is not offered to someone who may not manage the tenant secrets', () => {

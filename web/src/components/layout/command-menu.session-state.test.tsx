@@ -9,6 +9,7 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
+import type { SessionStatus } from '@/features/sessions/session-display-state'
 import type { RailRow, RailState } from './session-rail-model'
 
 const routing = vi.hoisted(() => ({
@@ -34,17 +35,28 @@ vi.mock('@/lib/auth/context', () => ({
   }),
 }))
 
-const row = (state: RailState): RailRow => ({
-  key: `session:${state}`,
+const STATUS_OF: Record<RailState, SessionStatus> = {
+  need: 'needs-you',
+  live: 'working',
+  idle: 'idle',
+  ended: 'done',
+}
+const row = (
+  state: RailState,
+  status: SessionStatus = STATUS_OF[state],
+  name: string = state,
+): RailRow => ({
+  key: `session:${name}`,
   kind: 'session',
   state,
-  title: `${state} session`,
-  reference: `ref-${state}`,
+  status,
+  title: `${name} session`,
+  reference: `ref-${name}`,
   meta: null,
   minutes: 1,
   to: '/sessions',
-  search: { session: `run:${state}` },
-  href: `/sessions?s=${state}`,
+  search: { session: `run:${name}` },
+  href: `/sessions?s=${name}`,
 })
 vi.mock('./use-session-rail', () => ({
   useSessionRail: () => ({
@@ -52,9 +64,12 @@ vi.mock('./use-session-rail', () => ({
     groups: [
       {
         id: 'working',
-        rows: (['need', 'live', 'idle', 'ended'] as const).map(row),
-        total: 4,
-        sessionTotal: 4,
+        rows: [
+          ...(['need', 'live', 'idle', 'ended'] as const).map((s) => row(s)),
+          row('ended', 'failed', 'failed'),
+        ],
+        total: 5,
+        sessionTotal: 5,
       },
       // What the person snoozed (#2480): out of the lists, never out of the menu.
       {
@@ -155,8 +170,9 @@ describe('command palette session rows', () => {
     ['need', 'Needs you'],
     ['live', 'Working'],
     ['idle', 'Idle'],
-    ['ended', 'Ended'],
-  ] as const)('says %s as the rail does: %s', (state, word) => {
+    ['ended', 'Done'],
+    ['failed', 'Failed'],
+  ] as const)('says %s in the status word the list uses: %s', (state, word) => {
     useCommandStore.getState().setOpen(true)
     renderIntel(<CommandMenu />)
     const name = screen.getByText(`${state} session`)

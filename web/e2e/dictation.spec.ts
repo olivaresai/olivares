@@ -15,10 +15,13 @@
 // DICTATION_WIDTH (default 1280) and DICTATION_CAPTURES, a directory for one screenshot per
 // state plus report.json.
 //
+// It dictates twice: once with the engine reachable, then, after a reload, with the browser
+// offline, so the second take runs on what the first left in the browser's caches.
+//
 // ⛔ THE ONE STAND-IN: the demo estate holds discovered sessions, not a running tool, and
-// the composer only exists on a session with a live run. The spec answers the run reads
-// (/v1/m/sessions/runs) with one labelled running run. Nothing is sent to it: the spec
-// never presses Send, and it fails if the field's text is submitted.
+// the composer only exists on a session with a live run. A script in the page answers the
+// run reads (/v1/m/sessions/runs) with one labelled running run. Nothing is sent to it: the
+// spec never presses Send, and it fails if the field's text is submitted.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import AxeBuilder from '@axe-core/playwright'
@@ -109,26 +112,53 @@ test('dictation fills the composer from the microphone and never leaves the engi
   // Every request of the visit, the dictation worker's included.
   const requests: string[] = []
   const errors: string[] = []
-  context.on('request', (request) => requests.push(request.url()))
+  // A write to the sessions API by any route (fetch, XHR, beacon) that reached the network.
+  const submits: string[] = []
+  context.on('request', (request) => {
+    requests.push(request.url())
+    if (
+      request.method() !== 'GET' &&
+      new URL(request.url()).pathname.startsWith('/v1/m/sessions/')
+    )
+      submits.push(`${request.method()} ${request.url()}`)
+  })
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text())
   })
   page.on('pageerror', (error) => errors.push(error.message))
 
-  let sent = false
-  await context.route('**/v1/m/sessions/runs**', async (route) => {
-    const request = route.request()
-    const path = new URL(request.url()).pathname
-    if (request.method() !== 'GET') {
-      sent = true
-      return route.fulfill({ status: 409, json: { error: 'stand-in run' } })
-    }
-    if (path.endsWith('/runs')) {
-      return route.fulfill({ json: { items: [RUN], has_more: false } })
-    }
-    if (path.endsWith(`/runs/${RUN_REF}`)) return route.fulfill({ json: RUN })
-    return route.fulfill({ json: { items: [], has_more: false, cursor: '' } })
-  })
+  // The stand-in answers inside the page, not through Playwright routing: routing turns the
+  // HTTP cache off, and the offline take below proves that cache.
+  await context.addInitScript(
+    ([run, ref]) => {
+      const real = window.fetch.bind(window)
+      const json = (body: unknown, status = 200) =>
+        new Response(JSON.stringify(body), {
+          status,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      window.fetch = async (input, init) => {
+        // Read, never construct: a Request built from a Request with a body consumes it.
+        const url = input instanceof Request ? input.url : String(input)
+        const method = (
+          init?.method ?? (input instanceof Request ? input.method : 'GET')
+        ).toUpperCase()
+        const path = new URL(url, window.location.href).pathname
+        if (!path.startsWith('/v1/m/sessions/runs')) return real(input, init)
+        if (method !== 'GET') {
+          window.localStorage.setItem('dictation.sent', url)
+          return json({ error: 'stand-in run' }, 409)
+        }
+        if (path.endsWith('/runs'))
+          return json({ items: [run], has_more: false })
+        if (path.endsWith(`/runs/${ref}`)) return json(run)
+        return json({ items: [], has_more: false, cursor: '' })
+      }
+    },
+    [RUN, RUN_REF] as const,
+  )
+  const sent = () =>
+    page.evaluate(() => window.localStorage.getItem('dictation.sent'))
   await context.addInitScript(
     ([theme, lang]) => {
       window.localStorage.setItem('olivares.theme', theme)
@@ -150,7 +180,10 @@ test('dictation fills the composer from the microphone and never leaves the engi
   await page.goto(`/sessions?session=${encodeURIComponent(`run:${RUN_REF}`)}`)
   const field = page.getByTestId('launcher-input')
   const dictate = page.getByTestId('composer-dictate')
-  const status = page.getByTestId('work-composer').getByRole('status')
+  // The composer also has live regions for slash commands; watch the microphone's own.
+  const status = page.locator(
+    '[data-testid="composer-dictate"] + [role="status"]',
+  )
   await expect(field).toBeVisible({ timeout: 30_000 })
   await expect(dictate).toBeVisible()
   await field.scrollIntoViewIfNeeded()
@@ -227,5 +260,74 @@ test('dictation fills the composer from the microphone and never leaves the engi
     errors.filter((error) => /Content Security Policy/i.test(error)),
   ).toEqual([])
   for (const word of EXPECT) expect(transcript.toLowerCase()).toContain(word)
-  expect(sent, 'the dictated text was submitted').toBe(false)
+  expect(await sent(), 'the dictated text was submitted').toBeNull()
+  expect(submits, 'writes to the sessions API').toEqual([])
+
+  // OFFLINE, WARM: a fresh page, then no network at all, not even the engine. The worker,
+  // the runtime and the model must come from what the first take left in the browser's
+  // caches, and the words still land in the field unsent.
+  await page.reload()
+  await expect(field).toBeVisible({ timeout: 30_000 })
+  // Drafts survive reloads. Empty it explicitly so cached text cannot pass the second take.
+  await field.fill('')
+  await expect(field).toHaveValue('')
+  await context.setOffline(true)
+  const offlineFrom = { requests: requests.length, errors: errors.length }
+  const diagnose = async (transcript: string) => {
+    if (!CAPTURES) return
+    writeFileSync(
+      join(CAPTURES, `${LANG}-${WIDTH}-${THEME}-offline.json`),
+      JSON.stringify(
+        {
+          transcript,
+          toasts: await page.locator('[data-sonner-toast]').allTextContents(),
+          errors: errors.slice(offlineFrom.errors),
+          requests: requests.slice(offlineFrom.requests),
+        },
+        null,
+        2,
+      ),
+    )
+  }
+  try {
+    await dictate.click()
+    await expect(dictate).toHaveAttribute('aria-pressed', 'true', {
+      timeout: 120_000,
+    })
+    await page.waitForTimeout(seconds * 1000 + 1500)
+    await dictate.click()
+    await expect(field).not.toHaveValue('', { timeout: 120_000 })
+    await capture('offline-result')
+    const offline = await field.inputValue()
+    for (const word of EXPECT) expect(offline.toLowerCase()).toContain(word)
+    expect(await sent(), 'the offline text was submitted').toBeNull()
+    expect(submits, 'writes to the sessions API').toEqual([])
+    await diagnose(offline)
+    // The proof is that nothing heavy was even asked of the network: the model and the
+    // runtime's WebAssembly came from the Cache API, and nothing was refused by policy.
+    const asked = requests.slice(offlineFrom.requests)
+    expect(
+      asked.filter((url) => /\/assets\/voice\/|\.wasm$/.test(url)),
+      'model or runtime fetched while offline',
+    ).toEqual([])
+    expect(
+      asked.filter(
+        (url) => !/^(data|blob):/.test(url) && new URL(url).origin !== origin,
+      ),
+      'requests that left the engine origin while offline',
+    ).toEqual([])
+    expect(
+      errors
+        .slice(offlineFrom.errors)
+        .filter((error) =>
+          /Content Security Policy|Failed to fetch|NetworkError/i.test(error),
+        ),
+      'errors while offline',
+    ).toEqual([])
+  } catch (error) {
+    await diagnose(await field.inputValue())
+    throw error
+  } finally {
+    await context.setOffline(false)
+  }
 })

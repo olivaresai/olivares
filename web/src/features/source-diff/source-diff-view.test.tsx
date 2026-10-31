@@ -72,6 +72,7 @@ const resources = {
   removedLine: 'Removed, old line {{line}}.',
   contextLine: 'Context, line {{line}}.',
   diffLabel: 'Unified diff of {{path}}',
+  diffLabelRich: 'Unified diff of <path />',
   status: {
     added: 'Added',
     modified: 'Modified',
@@ -141,6 +142,7 @@ function renderView(
 }
 
 beforeEach(() => {
+  vi.restoreAllMocks()
   useTenantStore.setState({ activeTenant: null })
   i18n.addResourceBundle('en', 'source-diff', resources, true, true)
 })
@@ -271,7 +273,55 @@ describe('source diff view', () => {
     expect(screen.getByText('Binary')).toBeInTheDocument()
   })
 
-  it('shows previous_path then path for a rename', async () => {
+  it('renders the rich diff caption through PathText', async () => {
+    renderView(async () => diff())
+    const region = await screen.findByRole('region', {
+      name: 'Unified diff of ingest/queue.py',
+    })
+    const caption = region.querySelector('caption')!
+    expect(caption).toHaveTextContent('Unified diff of ingest/queue.py')
+    expect(caption.querySelector('[data-slot="path-text"]')).not.toBeNull()
+  })
+
+  it('says when copying a binary path fails', async () => {
+    const user = userEvent.setup()
+    const write = vi
+      .spyOn(navigator.clipboard, 'writeText')
+      .mockRejectedValue(new Error('denied'))
+    renderView(async () =>
+      diff({
+        files: [file({ path: 'assets/logo.png', binary: true, hunks: [] })],
+      }),
+    )
+    await screen.findByRole('option', { name: /logo.png/ })
+    await user.click(screen.getByRole('button', { name: 'Copy path' }))
+    expect(write).toHaveBeenCalledWith('assets/logo.png')
+    expect(
+      await screen.findByText('Could not copy. Select the text and copy it.'),
+    ).toBeInTheDocument()
+  })
+
+  it('says when a binary path was copied', async () => {
+    const user = userEvent.setup()
+    const write = vi
+      .spyOn(navigator.clipboard, 'writeText')
+      .mockResolvedValue(undefined)
+    renderView(async () =>
+      diff({
+        files: [file({ path: 'assets/logo.png', binary: true, hunks: [] })],
+      }),
+    )
+    await screen.findByRole('option', { name: /logo.png/ })
+    await user.click(screen.getByRole('button', { name: 'Copy path' }))
+    expect(write).toHaveBeenCalledWith('assets/logo.png')
+    expect(await screen.findByText('Copied')).toBeInTheDocument()
+  })
+
+  it('shows previous_path then path for a rename and copies the new path', async () => {
+    const user = userEvent.setup()
+    const write = vi
+      .spyOn(navigator.clipboard, 'writeText')
+      .mockResolvedValue(undefined)
     renderView(async () =>
       diff({
         files: [
@@ -288,6 +338,8 @@ describe('source diff view', () => {
         name: /old\/notes.txt → notes\/now.txt/,
       }),
     ).toHaveTextContent('Renamed')
+    await user.click(screen.getByRole('button', { name: 'Copy notes/now.txt' }))
+    expect(write).toHaveBeenCalledWith('notes/now.txt')
   })
 
   it('marks a truncated file partial and does not call the count a total', async () => {

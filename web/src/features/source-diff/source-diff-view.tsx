@@ -3,10 +3,13 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState, type Ref } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { CopyStatus } from '@/components/ui/copy-button'
 import { PageHeader } from '@/components/ui/page-header'
+import { PathText } from '@/components/ui/path-text'
 import { useUrlState } from '@/lib/hooks/use-url-state'
+import { useCopy } from '@/components/ui/use-copy'
 import { isTypingTarget, resolveBinding } from '@/lib/keybindings/model'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { useTenantStore } from '@/stores/tenant'
@@ -398,7 +401,7 @@ function FileOption({
       <span aria-hidden="true" className="font-mono text-muted-foreground">
         {GLYPH[file.status] ?? '•'}
       </span>
-      <span className="truncate font-mono text-sm">{fileTitle(file)}</span>
+      <PathText value={fileTitle(file)} copy={false} />
       <span className="col-start-2 text-sm">{statusLabel(file.status, t)}</span>
       <span className="col-start-2 flex flex-wrap gap-2 text-sm">
         {count && (
@@ -426,6 +429,7 @@ function FileDiff({
   onWindowStart: (start: number) => void
 }) {
   const { t } = useTranslation('source-diff')
+  const { state: copyState, copy } = useCopy()
   const title = fileTitle(file)
   const rows = parseHunks(file.hunks)
   const bounds = windowBounds(rows.length, windowStart)
@@ -450,9 +454,16 @@ function FileDiff({
       }}
     >
       <div className="sticky top-0 z-10 flex items-center gap-2 bg-surface py-2">
-        <span className="font-mono text-sm">{title}</span>
+        <PathText value={fileTitle(file)} copyValue={file.path} />
         <span className="text-sm">{statusLabel(file.status, t)}</span>
       </div>
+      <CopyStatus
+        state={copyState}
+        copied={t('common:ui.copy.copied')}
+        failed={t('common:ui.copy.failed')}
+        showFailure
+        live
+      />
       {file.binary && <p>{t('binary')}</p>}
       {removedWithoutPatch && (
         <div className="flex flex-col items-start gap-2">
@@ -461,7 +472,7 @@ function FileDiff({
           <Button
             type="button"
             variant="outline"
-            onClick={() => void navigator.clipboard?.writeText(file.path)}
+            onClick={() => void copy(file.path)}
           >
             {t('copyPath')}
           </Button>
@@ -471,7 +482,7 @@ function FileDiff({
         <Button
           type="button"
           variant="outline"
-          onClick={() => void navigator.clipboard?.writeText(file.path)}
+          onClick={() => void copy(file.path)}
         >
           {t('copyPath')}
         </Button>
@@ -479,7 +490,13 @@ function FileDiff({
       {!file.binary && !removedWithoutPatch && rows.length > 0 && (
         <table className="w-max min-w-full border-collapse font-mono text-xs">
           <caption className="sr-only">
-            {t('diffLabel', { path: title })}
+            <Trans
+              i18nKey="diffLabelRich"
+              ns="source-diff"
+              components={{
+                path: <PathText value={fileTitle(file)} copy={false} />,
+              }}
+            />
           </caption>
           <thead>
             <tr>

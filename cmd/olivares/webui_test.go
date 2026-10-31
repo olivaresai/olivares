@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -370,5 +371,21 @@ func TestBuildCSP_L3Shape(t *testing.T) {
 	}
 	if strings.Contains(csp, "'self'") && !strings.Contains(csp, "style-src 'self'") {
 		t.Errorf("unexpected 'self' in a script context: %q", csp)
+	}
+}
+
+func TestSPA_LocalTLSDisablesWorkerBeforeBrowserFetch(t *testing.T) {
+	for _, direct := range []bool{false, true} {
+		s := &spaServer{fsys: testWebFS(), localTLS: func() bool { return true }}
+		req := httptest.NewRequest(http.MethodGet, "http://localhost/", nil)
+		if direct {
+			req.TLS = &tls.ConnectionState{}
+		}
+		w := httptest.NewRecorder()
+		s.serve(w, req)
+		got := strings.Contains(w.Body.String(), `name="olivares-local-tls"`)
+		if got != direct {
+			t.Fatalf("local TLS marker = %v, direct TLS = %v", got, direct)
+		}
 	}
 }

@@ -6,9 +6,7 @@ package sessions
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/olivaresai/olivares/core/driverfacts"
@@ -44,8 +42,8 @@ const envGeminiNoRelaunch = "GEMINI_CLI_NO_RELAUNCH"
 
 // The ACP methods only Gemini's settings use, as the pinned 0.62.0 names them.
 const (
-	geminiMethodSetModel = "session/set_model"
-	geminiMethodSetMode  = "session/set_mode"
+	geminiMethodSetModel = acpMethodSetModel
+	geminiMethodSetMode  = acpMethodSetMode
 )
 
 // Gemini's approval modes. Only these two are ever selected: autoEdit and yolo
@@ -111,32 +109,6 @@ type geminiSession struct {
 	caps acpAgentCapabilities
 }
 
-// geminiSessionResult is what session/new and session/load answer: the
-// conversation (new only) and the modes and models this CLI offers.
-type geminiSessionResult struct {
-	SessionID string `json:"sessionId"`
-	Modes     struct {
-		AvailableModes []struct {
-			ID string `json:"id"`
-		} `json:"availableModes"`
-	} `json:"modes"`
-	Models struct {
-		AvailableModels []struct {
-			ModelID string `json:"modelId"`
-		} `json:"availableModels"`
-	} `json:"models"`
-}
-
-type geminiSetModelParams struct {
-	SessionID string `json:"sessionId"`
-	ModelID   string `json:"modelId"`
-}
-
-type geminiSetModeParams struct {
-	SessionID string `json:"sessionId"`
-	ModeID    string `json:"modeId"`
-}
-
 func (s *geminiSession) Handshake(ctx context.Context) (DriverHandshake, error) {
 	init, err := s.initialize(ctx)
 	if err != nil {
@@ -175,118 +147,18 @@ func (s *geminiSession) Handshake(ctx context.Context) (DriverHandshake, error) 
 	s.setAuthState(AuthStateUnknown)
 
 	if resume := strings.TrimSpace(s.cfg.ResumeConversationID); resume != "" {
-		return s.resumeConversation(ctx, resume)
+		s.mu.Lock()
+		loadable := s.caps.LoadSession
+		s.mu.Unlock()
+		return s.resumeConversation(ctx, resume, loadable, s.honorSettings)
 	}
-	return s.newConversation(ctx)
+	return s.newConversation(ctx, s.honorSettings)
 }
 
-func (s *geminiSession) newConversation(ctx context.Context) (DriverHandshake, error) {
-	raw, err := s.conn.call(ctx, acpMethodSessionNew, acpNewSessionParams{
-		Cwd: s.workDir(), MCPServers: s.cfg.sessionMCP,
-	}, s.cfg.CallTimeout)
-	if err != nil {
-		return DriverHandshake{}, s.conversationErr(err)
-	}
-	if err := acpRequireResultObject(raw); err != nil {
-		return DriverHandshake{}, err
-	}
-	var resp geminiSessionResult
-	if err := json.Unmarshal(raw, &resp); err != nil {
-		return DriverHandshake{}, &runErr{http.StatusBadGateway, "the provider's conversation response could not be read"}
-	}
-	id := strings.TrimSpace(resp.SessionID)
-	if id == "" {
-		return DriverHandshake{}, &runErr{http.StatusBadGateway, "the provider's conversation response carried no session id"}
-	}
-	s.mu.Lock()
-	s.sessionID = id
-	s.mu.Unlock()
-	if err := s.honorSettings(ctx, resp); err != nil {
-		return DriverHandshake{}, err
-	}
-	return DriverHandshake{ConversationID: id, AuthState: s.AuthState()}, nil
-}
-
-// resumeConversation continues the stored conversation with session/load. A
-// conversation the CLI cannot load is a refusal, never a different conversation.
-func (s *geminiSession) resumeConversation(ctx context.Context, resume string) (DriverHandshake, error) {
-	s.mu.Lock()
-	loadable := s.caps.LoadSession
-	s.beginReplay(resume)
-	s.mu.Unlock()
-	if !loadable {
-		s.answerReplay() // nothing was asked, so nothing can replay
-		return DriverHandshake{}, &runErr{
-			http.StatusConflict,
-			"the provider does not advertise session load; refusing to start a different conversation",
-		}
-	}
-	raw, err := s.resumeCall(ctx, acpMethodSessionLoad, resume)
-	if err != nil {
-		return DriverHandshake{}, err
-	}
-	var resp geminiSessionResult
-	if err := json.Unmarshal(raw, &resp); err != nil {
-		return DriverHandshake{}, &runErr{http.StatusBadGateway, "the provider's conversation response could not be read"}
-	}
-	if id := strings.TrimSpace(resp.SessionID); id != "" && id != resume {
-		return DriverHandshake{}, &runErr{
-			http.StatusConflict,
-			"the provider resumed a different conversation than the one stored for this session; refusing it",
-		}
-	}
-	s.mu.Lock()
-	s.sessionID = resume
-	s.mu.Unlock()
-	if err := s.honorSettings(ctx, resp); err != nil {
-		return DriverHandshake{}, err
-	}
-	return DriverHandshake{ConversationID: resume, AuthState: s.AuthState()}, nil
-}
-
-// honorSettings applies the approval mode, then the model when the launch names
-// one. Each is accepted only as a value the CLI offered, and one it did not
-// offer fails the handshake rather than falling back to a default.
-func (s *geminiSession) honorSettings(ctx context.Context, offered geminiSessionResult) error {
-	mode := geminiModeFor(s.cfg.Preset)
-	var modes []string
-	for _, m := range offered.Modes.AvailableModes {
-		modes = append(modes, m.ID)
-	}
-	if err := geminiRequireOffered("approval mode", mode, modes); err != nil {
-		return err
-	}
-	if err := s.setting(ctx, geminiMethodSetMode, geminiSetModeParams{SessionID: s.ConversationID(), ModeID: mode}, "approval mode"); err != nil {
-		return err
-	}
-	model := strings.TrimSpace(s.cfg.Model)
-	if model == "" {
-		return nil
-	}
-	var models []string
-	for _, m := range offered.Models.AvailableModels {
-		models = append(models, m.ModelID)
-	}
-	if err := geminiRequireOffered("model", model, models); err != nil {
-		return err
-	}
-	return s.setting(ctx, geminiMethodSetModel, geminiSetModelParams{SessionID: s.ConversationID(), ModelID: model}, "model")
-}
-
-func (s *geminiSession) setting(ctx context.Context, method string, params any, what string) error {
-	raw, err := s.conn.call(ctx, method, params, s.cfg.CallTimeout)
-	if err != nil {
-		if auth := s.recognizeAuthRequired(err); auth != nil {
-			return auth
-		}
-		s.warn("sessions: the provider rejected a setting", "run_ref", s.cfg.RunRef, "method", method,
-			"cause", errorCause(err, "unavailable"))
-		return &runErr{
-			http.StatusUnprocessableEntity,
-			"the provider rejected the requested " + what + "; refusing the handshake rather than keeping a default",
-		}
-	}
-	return acpRequireResultObject(raw)
+// honorSettings applies the approval mode, then the model when the launch names one
+// (acp_settings.go).
+func (s *geminiSession) honorSettings(ctx context.Context, offered acpSessionResult) error {
+	return s.applyModeAndModel(ctx, "Gemini CLI", geminiModeFor(s.cfg.Preset), offered)
 }
 
 // geminiModeFor is the approval mode a launch preset runs. Only read-only
@@ -296,25 +168,6 @@ func geminiModeFor(preset string) string {
 		return geminiModePlan
 	}
 	return geminiModeDefault
-}
-
-func geminiRequireOffered(what, want string, offered []string) error {
-	for _, v := range offered {
-		if v == want {
-			return nil
-		}
-	}
-	if len(offered) == 0 {
-		return &runErr{
-			http.StatusUnprocessableEntity,
-			"Gemini CLI offered no " + what + " to choose from; refusing the handshake rather than substituting a default",
-		}
-	}
-	return &requestNotOffered{&runErr{
-		http.StatusUnprocessableEntity,
-		"Gemini CLI does not offer the " + what + " " + strconv.Quote(clipCause(want)) + "; it offers: " +
-			acpOfferedList(offered) + " (the session did not start rather than use a default)",
-	}}
 }
 
 func (s *geminiSession) Shutdown(ctx context.Context) {

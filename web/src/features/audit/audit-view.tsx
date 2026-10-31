@@ -2,37 +2,27 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// AuditView — the Audit / Evidence Explorer. The tamper-evident ledger an
-// auditor expects to see, made visible: the keyset-paginated evidence chain, a
-// one-click server-side chain+checkpoint verification, a WORM/SIEM export of the
-// engine's verbatim bytes, and the Ed25519 key for offline verification. A superadmin
-// can also read the system-tenant auth-partition chain (list-only).
+// THE LEDGER PLACE (console Estate + Ledger, issue #2554): the tamper-evident ledger
+// an auditor expects to see. The query lives in the top bar as tokens over the audit API's
+// own filters (query.ts); under it a 48 px strip of entries per hour; then the entries as
+// sentences, grouped by session, the request that needs a person first; and the picked
+// entry beside them with its place in the chain. The header keeps the scope (superadmin),
+// saved views and distribution-supplied evidence operations.
 //
 // HONESTY (ARCHITECTURE.md, docs/SECURITY-HARDENING.md): the web RENDERS the engine's events and verdicts.
 // It never recomputes, repairs, or fabricates the chain; reading the ledger is itself
 // audited (the engine appends audit.read / audit.export) and shows up in the list.
-import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query'
-import {
-  FileCheck2,
-  FileDown,
-  Filter,
-  KeyRound,
-  ShieldCheck,
-  X,
-} from 'lucide-react'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { FileCheck2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { DataTable, type TableColumn } from '@/components/data/data-table'
-import { Badge } from '@/components/ui/badge'
+import { internalRecord } from '@/components/layout/bell-events'
+import { QueryErrorState } from '@/components/layout/query-error-state'
+import { SidePanelContent } from '@/components/layout/side-panel'
+import { TopbarSearch } from '@/components/layout/topbar-search'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/ui/page-header'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
+import { Segmented } from '@/components/ui/segmented'
 import {
   Select,
   SelectContent,
@@ -41,50 +31,35 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { toast } from '@/components/ui/toaster'
-import { HashChip, IntegrityBadge } from '@/features/_intel'
+import { usePendingApprovals } from '@/features/governance/use-pending-approvals'
 import { SavedViewsMenu } from '@/features/saved-views'
-import { isoMinuteBound } from '@/features/shared'
-import {
-  RelTimeLabel,
-  useMemberNames,
-  useWorkspaceNames,
-} from '@/features/shared'
 import { auditApi } from '@/lib/api/endpoints'
-import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'
-import { ApiError } from '@/lib/api/errors'
 import { queryKeys } from '@/lib/api/query'
+import { useMinWidth } from '@/lib/hooks/use-min-width'
 import type { AuditEventDTO } from '@/lib/api/types'
 import { useAuth } from '@/lib/auth/context'
 import { formatInt } from '@/lib/format'
 import { useUrlState } from '@/lib/hooks/use-url-state'
 import { useNewRowIds } from '@/lib/use-new-row-ids'
-import { AuditEventSheet } from './audit-detail'
-import { eventLabel } from './event-label'
-import { governanceApi, governanceKeys } from '@/features/governance/api'
-import { internalRecord, readableAction } from '@/components/layout/bell-events'
-import { downloadBlob, exportFilename, fetchAuditExport } from './export'
+import { AuditEntryDetail } from './audit-detail'
+import { EvidenceControls } from './evidence'
+import { DAY, SESSION_KIND, useEntryNames } from './ledger'
+import { LedgerEntries } from './ledger-entries'
+import { LedgerHistogram } from './ledger-histogram'
+import { LedgerQuery } from './ledger-query'
 import {
-  EXPORT_FORMATS,
-  type AuditExportOptions,
-  type AuditFilters,
-  type ExportFormat,
-  type LedgerScope,
-} from './types'
+  apiFilters,
+  EMPTY_DRAFT,
+  FILTER_KEYS,
+  validBound,
+  type LedgerDraft,
+  type QueryParams,
+} from './query'
+import { type LedgerScope } from './types'
 import './i18n'
 
 const PAGE = 100
-const FILTER_KEYS = [
-  'q',
-  'actor',
-  'action',
-  'target_kind',
-  'target_id',
-  'since',
-  'until',
-] as const
 const URL_KEYS = [...FILTER_KEYS, 'scope'] as const
-type FilterKey = (typeof FILTER_KEYS)[number]
 
 /** Keyset next-page cursor of the forward order: one past the last event's seq. */
 function forwardNextFrom(last: { items: AuditEventDTO[]; has_more: boolean }) {
@@ -104,7 +79,9 @@ type AuditPage = Awaited<ReturnType<typeof auditApi.list>> & {
 }
 
 /** Validate URL/saved-view values before they can select an endpoint or enter a
- * request. Unknown keys and non-string values are ignored. */
+ * request. Unknown keys and non-string values are ignored. A bound is a relative one
+ * (`7d`) or the minute of an ISO instant, read by the SHARED bound parser, so an
+ * impossible day (2026-02-30) is refused rather than rolled into March. */
 function sanitizeParams(
   input: Record<string, unknown>,
 ): Record<string, string> {
@@ -112,22 +89,8 @@ function sanitizeParams(
   for (const key of FILTER_KEYS) {
     const value = input[key]
     if (typeof value !== 'string' || value === '') continue
-    if (key === 'since' || key === 'until') {
-      // The SHARED bound parser, not a local NaN check. `new Date` accepts
-      // 2026-02-30 and answers with the 2nd of March, so an impossible day was
-      // reaching the ledger query silently — the same defect observability had,
-      // in a third copy, in the very view the rest of this wave copies from.
-      //
-      // Minute precision, because that is what this view's control shows
-      // (localDateTimeValue). Preserving nanosecond precision read from a URL
-      // while rendering minutes is the same divergence one unit down: two links
-      // identical on screen, two different windows behind them.
-      const bound = isoMinuteBound(value)
-      if (bound === undefined) continue
-      clean[key] = bound
-    } else {
-      clean[key] = value
-    }
+    const valid = key === 'since' || key === 'until' ? validBound(value) : value
+    if (valid !== undefined) clean[key] = valid
   }
   if (input.scope === 'tenant' || input.scope === 'system') {
     clean.scope = input.scope
@@ -135,57 +98,43 @@ function sanitizeParams(
   return clean
 }
 
-function filtersFromParams(params: Record<string, string>): AuditFilters {
-  const filters: AuditFilters = {}
-  for (const key of FILTER_KEYS) {
-    if (params[key]) filters[key] = params[key]
-  }
-  return filters
-}
-
-function localDateTimeValue(value?: string): string {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  const pad = (part: number) => String(part).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
-    date.getDate(),
-  )}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
-
-function rfc3339FromLocal(value: string): string | undefined {
-  if (!value) return undefined
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return undefined
-  // Core /v1/audit accepts RFC3339/RFC3339Nano. Unlike modules/* timestamp
-  // inputs, using Date.toISOString() here is explicitly valid and preserves UTC.
-  return parsed.toISOString()
+function queryOf(params: Record<string, string>): QueryParams {
+  const out: QueryParams = {}
+  for (const key of FILTER_KEYS) if (params[key]) out[key] = params[key]
+  return out
 }
 
 export function AuditView() {
-  const { t, i18n } = useTranslation(['audit', 'intel'])
+  const { t, i18n } = useTranslation(['audit', 'common'])
   const lang = i18n.language
-  const { activeTenant, isSuperadmin, can } = useAuth()
-  const mayReadMembers = can('user:read')
-  const mayReadPolicies = can('governance:policy:read')
-  // HU2-19 / HU-15: the ledger's bookkeeping (authorization evidence, reads, views) is
+  const { activeTenant, isSuperadmin } = useAuth()
+  // acceptance / acceptance: the ledger's bookkeeping (authorization evidence, reads, views) is
   // folded away unless asked for, or unless a filter names the action.
   const [showInternal, setShowInternal] = useState(false)
+  const [bySession, setBySession] = useState(true)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [draft, setDraft] = useState<LedgerDraft>(EMPTY_DRAFT)
+  // Every pick opens the panel, the same row again included (SidePanelContent `reveal`).
+  const [picks, setPicks] = useState(0)
 
   const [urlState, patchUrlState] = useUrlState(URL_KEYS)
   const validatedParams = useMemo(() => sanitizeParams(urlState), [urlState])
   const scope: LedgerScope =
     isSuperadmin && validatedParams.scope === 'system' ? 'system' : 'tenant'
-  const filters = useMemo(
-    () => filtersFromParams(validatedParams),
-    [validatedParams],
-  )
+  const query = useMemo(() => queryOf(validatedParams), [validatedParams])
+  // A relative bound is counted back from the moment the query changed, to the minute:
+  // the same filters keep the same instant, so loaded pages stay one window.
+  const querySig = JSON.stringify(query)
+  const [clock, setClock] = useState(() => ({ sig: querySig, now: new Date() }))
+  if (clock.sig !== querySig) setClock({ sig: querySig, now: new Date() })
+  const now = clock.now
+  const filters = useMemo(() => apiFilters(query, now), [query, now])
+  const queryInBar = useMinWidth(1100)
   const filtersActive = Object.keys(filters).length > 0
-  const [selected, setSelected] = useState<AuditEventDTO | null>(null)
   const isSystem = scope === 'system'
   const listParams = useMemo(() => ({ limit: PAGE, ...filters }), [filters])
 
-  // NEWEST FIRST (HU-15). The ledger pages forward from ?from and has no sort
+  // NEWEST FIRST. The ledger pages forward from ?from and has no sort
   // parameter; its documented way to the tail is head_seq. So the unfiltered view reads
   // the head (GET /v1/audit/recent, which is not itself recorded; the system ledger's own
   // list for the system scope), then the last window of PAGE positions, shown reversed,
@@ -242,9 +191,9 @@ export function AuditView() {
     [allRows, foldInternal],
   )
   const internalCount = allRows.length - rows.length
-  // C2-DESIGN §3: a row that just arrived at the head of the feed slides in 6 px
+  // C2-DESIGN §3: an entry that just arrived at the head of the feed slides in 6 px
   // (.feed-enter), once, then rests. The view (ledger, tenant, filters, fold) is the
-  // feed's scope: a row a filter or the fold reveals did not arrive.
+  // feed's scope: an entry a filter or the fold reveals did not arrive.
   const feedIds = useNewRowIds(
     rows.map((r) => r.id),
     JSON.stringify([scope, activeTenant, listParams, foldInternal]),
@@ -257,12 +206,28 @@ export function AuditView() {
       ? lastPage.next_from - 1
       : undefined
   const savedViewParams = useMemo(
-    () => ({
-      ...filters,
-      scope: scope === 'system' ? 'system' : undefined,
-    }),
-    [filters, scope],
+    () => ({ ...query, scope: scope === 'system' ? 'system' : undefined }),
+    [query, scope],
   )
+
+  // The approvals still waiting: their request entry is the flagged row.
+  const pendingQuery = usePendingApprovals().query
+  const pending = useMemo(
+    () => new Set((pendingQuery.data?.items ?? []).map((a) => a.id)),
+    [pendingQuery.data],
+  )
+  const names = useEntryNames(rows)
+  const selected = rows.find((e) => e.id === selectedId) ?? null
+  // A pick reveals the panel once. When the entry leaves the list for a moment (a new
+  // filter loading), its return must not reveal again a panel the person closed.
+  if (!selected && picks > 0) setPicks(0)
+
+  /** Filters change the URL only: the list, the strip and the tokens all read it. */
+  function setQuery(next: QueryParams) {
+    const patch: Record<string, string | undefined> = {}
+    for (const key of FILTER_KEYS) patch[key] = next[key] || undefined
+    patchUrlState(patch)
+  }
 
   function applySavedView(params: Record<string, string>) {
     const clean = sanitizeParams(params)
@@ -273,181 +238,59 @@ export function AuditView() {
     patchUrlState(patch)
   }
 
-  // The two directories this ledger can name a reference from — the people roster and
-  // the workspace list, each the read the console already makes for its own screen.
-  const memberNames = useMemberNames()
-  const workspaceNames = useWorkspaceNames()
-  const policies = useQuery({
-    queryKey: governanceKeys.policies(activeTenant),
-    queryFn: () => governanceApi.listPolicies(),
-    enabled:
-      !isSystem &&
-      mayReadPolicies &&
-      rows.some((e) => e.target_kind === 'core.policy'),
-    staleTime: 60_000,
-  })
+  // The strip's window: the query's own bounds; without `since`, the last day before `to`,
+  // reaching back to the oldest entry loaded so that every loaded entry is counted.
+  // Nothing is recorded after now: an until: ahead ends the strip now.
+  const to = filters.until
+    ? new Date(Math.min(new Date(filters.until).getTime(), now.getTime()))
+    : now
+  const from = filters.since
+    ? new Date(filters.since)
+    : new Date(
+        Math.min(
+          to.getTime() - DAY,
+          ...allRows.map((e) => new Date(e.occurred_at).getTime()),
+        ),
+      )
+  const caption = [
+    t('ledger.histogram.loaded', { count: rows.length }),
+    t('ledger.histogram.sessions', {
+      count: new Set(
+        rows
+          .filter((e) => e.target_kind === SESSION_KIND)
+          .map((e) => e.target_id),
+      ).size,
+    }),
+    t('ledger.histogram.people', {
+      count: new Set(
+        rows.filter((e) => e.actor_kind === 'user').map((e) => e.actor),
+      ).size,
+    }),
+    ...(listQuery.hasNextPage ? [t('ledger.histogram.more')] : []),
+  ].join(' · ')
+  const loading = headQuery.isLoading || listQuery.isLoading
+  // A filtered list does not read the head: an error the head kept from before says nothing.
+  const headError = filtersActive ? null : headQuery.error
+  const error = headError ?? listQuery.error
 
-  const columns = useMemo<TableColumn<AuditEventDTO>[]>(
-    () => [
-      {
-        accessorKey: 'action',
-        header: t('cols.action'),
-        cell: ({ getValue }) => (
-          <span className="text-body font-medium text-foreground">
-            {eventLabel(getValue<string>(), t)}
-          </span>
-        ),
-      },
-      {
-        accessorKey: 'seq',
-        header: t('cols.seq'),
-        cell: ({ getValue }) => (
-          <span className="font-mono text-caption tabular-nums text-muted-foreground">
-            {formatInt(getValue<number>(), lang)}
-          </span>
-        ),
-      },
-      {
-        accessorKey: 'occurred_at',
-        header: t('cols.occurred'),
-        // MEDIDO con datos reales: esta columna se quedaba en 78 px y «6 minutes
-        // ago» salía en TRES líneas. 120 px es lo que ese texto ocupa entero; el
-        // `nowrap` de abajo impide que vuelva a repartirse si el reparto cambia.
-        size: 120,
-        // ⛔ «6 / minutes / ago» en TRES lineas: sin politica, una hora relativa se
-        // reparte por sus espacios en cuanto la columna se estrecha. Una marca de
-        // tiempo es atomica y no rompe nunca.
-        cell: ({ getValue }) => (
-          <span className="whitespace-nowrap">
-            <RelTimeLabel ts={getValue<string>()} />
-          </span>
-        ),
-      },
-      {
-        id: 'actor',
-        accessorFn: (e) => `${e.actor} ${e.actor_kind}`,
-        header: t('cols.actor'),
-        // ⛔ WHO ACTED, NOT `user:01a0b580-…`. The ledger writes a principal as
-        //    `user:<uuid>`, and a column of those is a column an operator cannot read:
-        //    the census counted four raw identifiers on this route and this was one of
-        //    them. The name comes from the roster the people tab reads, under the same
-        //    right; without it, or for an actor that is not a person (`system`, a
-        //    token), the ledger's own value stands and the whole of it is on `title`.
-        cell: ({ row }) => {
-          const e = row.original
-          const person = e.actor_kind === 'user'
-          const name =
-            person && mayReadMembers ? memberNames.nameOf(e.actor) : null
-          return (
-            <div className="flex min-w-0 items-center gap-1.5">
-              <span className="text-caption text-foreground" title={e.actor}>
-                {name ??
-                  (person
-                    ? t('detail.actorMember')
-                    : t(`actorKind.${e.actor_kind}`, {
-                        defaultValue: readableAction(e.actor_kind || 'system'),
-                      }))}
-              </span>
-              <Badge variant="neutral">
-                {t(`actorKind.${e.actor_kind}`, {
-                  defaultValue: e.actor_kind || '—',
-                })}
-              </Badge>
-            </div>
-          )
-        },
-      },
-      {
-        id: 'target',
-        accessorFn: (e) =>
-          e.target_id ? `${e.target_kind ?? ''} ${e.target_id}` : '',
-        header: t('cols.target'),
-        enableSorting: false,
-        // ⛔ WHAT WAS ACTED ON, LED BY ITS KIND. The cell read `core.audit_event:` and
-        //    then a whole uuid, which is an identifier where the reader needs a
-        //    subject. The kind leads now, the id follows as the short form that
-        //    matches a log line, and the pair stays whole on `title` and in the detail
-        //    sheet — where an identifier IS the thing being operated on. Where the
-        //    console holds a directory for the kind (a workspace, a person), the name
-        //    is painted instead.
-        cell: ({ row }) => {
-          const e = row.original
-          if (!e.target_id && !e.target_kind)
-            return <span className="text-muted-foreground">—</span>
-          const named =
-            e.target_kind === 'core.workspace'
-              ? workspaceNames.nameOf(e.target_id)
-              : e.target_kind === 'core.user'
-                ? mayReadMembers
-                  ? memberNames.nameOf(e.target_id)
-                  : null
-                : e.target_kind === 'core.policy'
-                  ? mayReadPolicies
-                    ? policies.data?.items.find((p) => p.id === e.target_id)
-                        ?.name
-                    : null
-                  : null
-          return (
-            <span
-              className="text-caption text-muted-foreground"
-              title={
-                e.target_kind && e.target_id
-                  ? `${e.target_kind}: ${e.target_id}`
-                  : e.target_kind || e.target_id
-              }
-            >
-              {named ??
-                t(`targets.${e.target_kind?.replaceAll('.', '_')}`, {
-                  defaultValue: readableAction(
-                    e.target_kind || t('detail.target'),
-                  ),
-                })}
-            </span>
-          )
-        },
-      },
-      {
-        id: 'hash',
-        accessorKey: 'hash',
-        header: t('cols.hash'),
-        enableSorting: false,
-        cell: ({ row }) => (
-          <div className="flex items-center gap-1.5">
-            <HashChip hash={row.original.hash} />
-            {row.original.sig ? (
-              <Badge variant="success" title={t('detail.signed')}>
-                <FileCheck2 className="size-3" aria-hidden />
-                <span className="sr-only">{t('detail.signed')}</span>
-              </Badge>
-            ) : null}
-          </div>
-        ),
-      },
-    ],
-    [
-      t,
-      lang,
-      memberNames,
-      workspaceNames,
-      policies.data,
-      mayReadMembers,
-      mayReadPolicies,
-    ],
+  const queryField = (
+    <LedgerQuery
+      params={query}
+      onChange={setQuery}
+      draft={draft}
+      onDraft={setDraft}
+      resolvePerson={names.resolvePerson}
+      personName={names.person}
+      className={queryInBar ? undefined : 'w-full max-w-none min-w-0'}
+    />
   )
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      {/* Title + the one filter line share 36 px so the first ledger row can
-          sit at y ≤ 136. The filter card, evidence card and self-audit strip
-          stacked above the table are what measured 569.
-          `min-h-9`, not `h-9`: the budget is a floor, not a ceiling. Measured
-          2026-09-19 at 1024 px on the built console: the header's seven controls
-          wrap to a second row (64 px), and a fixed 36 px row centred that header
-          so the second row was painted UNDER the table's sticky header — four
-          controls (Verify chain, Verification key, Export options, Export) took
-          no pointer, though they still took keyboard focus. With a floor the row
-          stays 36 px wherever the controls fit on one line (1280 px and up) and
-          grows only where they wrap, pushing the table down instead of over. */}
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      {/* Where the bar has the room of the shell's search (1100 px and up) the query is
+          that search; narrower, the shell's search is an icon and the query heads the page. */}
+      {queryInBar ? <TopbarSearch>{queryField}</TopbarSearch> : null}
+
       <div
         data-slot="work-chrome"
         className="flex min-h-9 min-w-0 items-center"
@@ -480,17 +323,6 @@ export function AuditView() {
                   </SelectContent>
                 </Select>
               ) : null}
-              <AuditFilterBar
-                filters={filters}
-                onChange={(key, value) => patchUrlState({ [key]: value })}
-                onClearAll={() =>
-                  patchUrlState(
-                    Object.fromEntries(
-                      FILTER_KEYS.map((key) => [key, undefined]),
-                    ),
-                  )
-                }
-              />
               <SavedViewsMenu
                 featureId="audit"
                 params={savedViewParams}
@@ -503,448 +335,126 @@ export function AuditView() {
       </div>
 
       {scannedThrough !== undefined && (
-        <div role="status" className="px-0 py-1 text-caption text-info">
-          {t('scan.incomplete', {
-            seq: formatInt(scannedThrough, lang),
-          })}
+        <div role="status" className="text-caption text-info">
+          {t('scan.incomplete', { seq: formatInt(scannedThrough, lang) })}
         </div>
       )}
 
-      {internalCount > 0 || (showInternal && !filters.action) ? (
-        <div className="flex items-center gap-2 py-1 text-caption text-muted-foreground">
-          {showInternal ? null : (
-            <span role="status">
-              {t('internal.hidden', { count: internalCount })}
-            </span>
-          )}
-          <Button
-            variant="link"
-            size="sm"
-            onClick={() => setShowInternal((v) => !v)}
-          >
-            {t(showInternal ? 'internal.hide' : 'internal.show')}
-          </Button>
-        </div>
-      ) : null}
+      {queryInBar ? null : queryField}
 
-      <DataTable
-        columns={columns}
-        data={rows}
-        isLoading={headQuery.isLoading || listQuery.isLoading}
-        error={headQuery.error ?? listQuery.error}
-        onRetry={() => void listQuery.refetch()}
-        getRowId={(r) => r.id}
-        rowClassName={(r) => (feedIds.has(r.id) ? 'feed-enter' : undefined)}
-        onRowClick={(r) => setSelected(r)}
-        stickyHeader
-        hasMore={listQuery.hasNextPage}
-        onLoadMore={() => void listQuery.fetchNextPage()}
-        isFetchingMore={listQuery.isFetchingNextPage}
-        label={t('title')}
-        // Events were loaded but all are folded: say so, not that the ledger is empty.
-        empty={internalCount > 0 ? <FoldedHint /> : <EmptyHint />}
+      <LedgerHistogram
+        entries={rows}
+        from={from}
+        to={to}
+        now={now}
+        caption={caption}
+        onPick={(b) =>
+          setQuery({
+            ...query,
+            since: validBound(b.start.toISOString()),
+            until: validBound(b.end.toISOString()),
+          })
+        }
       />
 
-      <AuditEventSheet
-        event={selected}
-        open={selected !== null}
-        onOpenChange={(o) => {
-          if (!o) setSelected(null)
-        }}
-      />
-    </div>
-  )
-}
-
-function AuditFilterBar({
-  filters,
-  onChange,
-  onClearAll,
-}: {
-  filters: AuditFilters
-  onChange: (key: FilterKey, value: string | undefined) => void
-  onClearAll: () => void
-}) {
-  const { t } = useTranslation('audit')
-  const active = FILTER_KEYS.flatMap((key) =>
-    filters[key] ? [[key, filters[key]] as const] : [],
-  )
-
-  const textFields: Array<{
-    key: Exclude<FilterKey, 'since' | 'until'>
-    label: string
-    placeholder: string
-  }> = [
-    {
-      key: 'q',
-      label: t('filters.q'),
-      placeholder: t('filters.qPlaceholder'),
-    },
-    {
-      key: 'actor',
-      label: t('filters.actor'),
-      placeholder: t('filters.actorPlaceholder'),
-    },
-    {
-      key: 'action',
-      label: t('filters.action'),
-      placeholder: t('filters.actionPlaceholder'),
-    },
-    {
-      key: 'target_kind',
-      label: t('filters.targetKind'),
-      placeholder: t('filters.targetKindPlaceholder'),
-    },
-    {
-      key: 'target_id',
-      label: t('filters.targetId'),
-      placeholder: t('filters.targetIdPlaceholder'),
-    },
-  ]
-
-  const labelFor = (key: FilterKey) =>
-    t(
-      key === 'target_kind'
-        ? 'filters.targetKind'
-        : key === 'target_id'
-          ? 'filters.targetId'
-          : `filters.${key}`,
-    )
-
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="secondary" size="sm">
-          <Filter className="size-3.5" />
-          {t('filters.open')}
-          {active.length > 0 ? (
-            <Badge variant="neutral">{active.length}</Badge>
-          ) : null}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-[min(32rem,calc(100vw-2rem))]">
-        <div className="grid gap-3 sm:grid-cols-2">
-          {textFields.map((field) => (
-            <label key={field.key} className="flex min-w-0 flex-col gap-1">
-              <span className="text-caption font-medium text-muted-foreground">
-                {field.label}
+      <div className="flex flex-wrap items-center gap-3">
+        <Segmented
+          size="sm"
+          aria-label={t('ledger.group.label')}
+          value={bySession ? 'session' : 'events'}
+          onValueChange={(v) => setBySession(v === 'session')}
+          options={[
+            { value: 'session', label: t('ledger.group.session') },
+            { value: 'events', label: t('ledger.group.events') },
+          ]}
+        />
+        {internalCount > 0 || (showInternal && !filters.action) ? (
+          <div className="ml-auto flex items-center gap-2 text-caption text-muted-foreground">
+            {showInternal ? null : (
+              <span role="status">
+                {t('internal.hidden', { count: internalCount })}
               </span>
-              <Input
-                value={filters[field.key] ?? ''}
-                onChange={(event) =>
-                  onChange(field.key, event.currentTarget.value || undefined)
-                }
-                placeholder={field.placeholder}
-                mono={field.key !== 'q'}
-              />
-            </label>
-          ))}
-          {(['since', 'until'] as const).map((key) => (
-            <label key={key} className="flex min-w-0 flex-col gap-1">
-              <span className="text-caption font-medium text-muted-foreground">
-                {t(`filters.${key}`)}
-              </span>
-              <Input
-                type="datetime-local"
-                value={localDateTimeValue(filters[key])}
-                onChange={(event) =>
-                  onChange(key, rfc3339FromLocal(event.currentTarget.value))
-                }
-              />
-            </label>
-          ))}
-        </div>
-
-        {active.length > 0 && (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {active.map(([key, value]) => (
-              <Badge key={key} variant="accent" className="gap-1.5">
-                <span className="max-w-64 truncate">
-                  {labelFor(key)}: {value}
-                </span>
-                <button
-                  type="button"
-                  className="-my-1.5 -mr-1.5 rounded-sm p-1.5 text-accent-soft-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={t('filters.clearOne', {
-                    filter: labelFor(key),
-                  })}
-                  onClick={() => onChange(key, undefined)}
-                >
-                  <X className="size-3" aria-hidden />
-                </button>
-              </Badge>
-            ))}
-            <Button variant="ghost" size="sm" onClick={onClearAll}>
-              {t('filters.clearAll')}
+            )}
+            <Button
+              variant="link"
+              size="sm"
+              onClick={() => setShowInternal((v) => !v)}
+            >
+              {t(showInternal ? 'internal.hide' : 'internal.show')}
             </Button>
           </div>
-        )}
-      </PopoverContent>
-    </Popover>
-  )
-}
+        ) : null}
+      </div>
 
-/** The auditor's control card: verify the chain, export to WORM/SIEM, and grab the
- * Ed25519 key for offline verification. All three operate on the TENANT ledger (the
- * engine exposes no verify/export route for the system chain). */
-function EvidenceControls({ filters }: { filters: AuditFilters }) {
-  const report = useFailedActionReporter()
-  const { t, i18n } = useTranslation('audit')
-  const lang = i18n.language
-  const { activeTenant } = useAuth()
-
-  const [verifyOn, setVerifyOn] = useState(false)
-  const [keyOn, setKeyOn] = useState(false)
-  const [format, setFormat] = useState<ExportFormat>('cef')
-  const [fromSeq, setFromSeq] = useState('')
-  const [toSeq, setToSeq] = useState('')
-  const [useCurrentOverride, setUseCurrentOverride] = useState<boolean | null>(
-    null,
-  )
-  const hasCurrentContext =
-    Object.keys(filters).length > 0 || fromSeq !== '' || toSeq !== ''
-  const useCurrent = useCurrentOverride ?? hasCurrentContext
-
-  const verifyQuery = useQuery({
-    queryKey: queryKeys.audit.verify(activeTenant),
-    queryFn: () => auditApi.verify(),
-    enabled: verifyOn,
-  })
-
-  const pubkeyQuery = useQuery({
-    queryKey: queryKeys.audit.pubkey(activeTenant),
-    queryFn: () => auditApi.pubkey(),
-    enabled: keyOn,
-  })
-
-  const exportM = useMutation({
-    mutationFn: () => {
-      if (!useCurrent) return fetchAuditExport(format)
-      const options: AuditExportOptions = { ...filters }
-      const from = Number(fromSeq)
-      const to = Number(toSeq)
-      if (fromSeq !== '' && Number.isSafeInteger(from) && from >= 1) {
-        options.from = from
-      }
-      if (toSeq !== '' && Number.isSafeInteger(to) && to >= 1) {
-        options.to = to
-      }
-      return fetchAuditExport(format, options)
-    },
-    onSuccess: (blob) => {
-      downloadBlob(blob, exportFilename(format))
-      toast.success(t('export.done'))
-    },
-    onError: (e: unknown) => {
-      // ⛔ ASEGURAMIENTO ANTES QUE ROL. Aquí NO se sustituye la rama de rol por `report`:
-      // esta pantalla tiene copy propia (`export.forbidden`) y perderla sería cambiar un
-      // mensaje exacto por uno genérico. Lo que faltaba es la rama de ceremonia delante,
-      // porque `isForbidden` es sólo el status y un step_up_required lo satisface también.
-      if (e instanceof ApiError && e.isStepUpRequired) {
-        report(e)
-        return
-      }
-      if (e instanceof ApiError && e.isForbidden) {
-        toast.warning(t('export.forbidden'))
-        return
-      }
-      toast.error(
-        t('export.failed'),
-        e instanceof Error && e.message
-          ? { description: e.message }
-          : undefined,
-      )
-    },
-  })
-
-  const v = verifyQuery.data
-
-  return (
-    <div className="flex items-center gap-1">
-      <Popover
-        open={verifyOn}
-        onOpenChange={(open) => {
-          setVerifyOn(open)
-        }}
+      <div
+        className="min-h-0 flex-1 overflow-y-auto"
+        aria-busy={loading || undefined}
       >
-        <PopoverTrigger asChild>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              if (verifyOn) void verifyQuery.refetch()
-              else setVerifyOn(true)
-            }}
-            disabled={verifyQuery.isFetching}
-          >
-            <ShieldCheck className="size-3.5" />
-            {t('verify.action')}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-[min(28rem,calc(100vw-2rem))]">
-          {verifyQuery.isFetching && !v ? (
-            <Skeleton className="h-9 w-full" />
-          ) : verifyQuery.error ? (
-            <p className="text-caption text-muted-foreground">
-              {t('verify.failed')}
-            </p>
-          ) : v ? (
-            <div className="flex flex-col gap-2">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <IntegrityBadge ok={v.ok} />
-                <Badge variant={v.chain.ok ? 'success' : 'danger'}>
-                  {t('verify.chain', {
-                    checked: formatInt(v.chain.checked, lang),
-                  })}
-                </Badge>
-                {v.checkpoints.status === 'pending' ? (
-                  <Badge variant="neutral">{t('verify.noCheckpoints')}</Badge>
-                ) : (
-                  <Badge variant={v.checkpoints.ok ? 'success' : 'danger'}>
-                    {t('verify.checkpoints', {
-                      count: formatInt(v.checkpoints.count, lang),
-                    })}
-                  </Badge>
-                )}
-                {v.checkpoints.latest_attested_seq > 0 && (
-                  <Badge variant="neutral">
-                    {t('verify.attested', {
-                      seq: formatInt(v.checkpoints.latest_attested_seq, lang),
-                    })}
-                  </Badge>
-                )}
-              </div>
-              {!v.chain.ok && (
-                <p className="text-caption font-medium text-danger">
-                  {t('verify.chainBreak', {
-                    seq: formatInt(v.chain.break_at, lang),
-                  })}
-                  {v.chain.reason ? ` — ${v.chain.reason}` : ''}
-                </p>
-              )}
-              {v.checkpoints.status === 'failed' && (
-                <p className="text-caption font-medium text-danger">
-                  {t('verify.checkpointBreak', {
-                    seq: formatInt(v.checkpoints.first_bad_seq, lang),
-                  })}
-                  {v.checkpoints.reason ? ` — ${v.checkpoints.reason}` : ''}
-                </p>
-              )}
-            </div>
-          ) : null}
-        </PopoverContent>
-      </Popover>
-      <Popover open={keyOn} onOpenChange={setKeyOn}>
-        <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm">
-            <KeyRound className="size-3.5" />
-            {t('pubkey.action')}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-[min(28rem,calc(100vw-2rem))]">
-          {pubkeyQuery.isFetching && !pubkeyQuery.data ? (
-            <Skeleton className="h-9 w-full" />
-          ) : pubkeyQuery.error ? (
-            <p className="text-caption font-medium text-danger">
-              {t('pubkey.failed')}
-            </p>
-          ) : pubkeyQuery.data ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-caption text-muted-foreground">
-                {t('pubkey.label')}
-              </span>
-              <Badge variant="outline" className="font-mono uppercase">
-                {pubkeyQuery.data.algorithm}
-              </Badge>
-              <HashChip
-                hash={pubkeyQuery.data.public_key}
-                label={t('pubkey.key')}
-                head={12}
-                tail={8}
-              />
-            </div>
-          ) : null}
-          <p className="mt-1.5 text-caption text-muted-foreground">
-            {t('pubkey.hint')}
-          </p>
-        </PopoverContent>
-      </Popover>
-
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm">
-            {t('export.options')}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-[min(24rem,calc(100vw-2rem))]">
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="flex flex-col gap-1">
-              <span className="text-caption text-muted-foreground">
-                {t('export.fromSeq')}
-              </span>
-              <Input
-                type="number"
-                min={1}
-                step={1}
-                value={fromSeq}
-                onChange={(event) => setFromSeq(event.currentTarget.value)}
-                className="w-24"
-                placeholder={t('export.optional')}
-              />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-caption text-muted-foreground">
-                {t('export.toSeq')}
-              </span>
-              <Input
-                type="number"
-                min={1}
-                step={1}
-                value={toSeq}
-                onChange={(event) => setToSeq(event.currentTarget.value)}
-                className="w-24"
-                placeholder={t('export.optional')}
-              />
-            </label>
-            <Select
-              value={format}
-              onValueChange={(f) => setFormat(f as ExportFormat)}
-            >
-              <SelectTrigger
-                className="h-8 w-auto min-w-[7rem] text-caption"
-                aria-label={t('export.formatLabel')}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {EXPORT_FORMATS.map((f) => (
-                  <SelectItem key={f} value={f}>
-                    {t(`export.format.${f}`)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        {loading ? (
+          <div className="flex flex-col gap-2">
+            {Array.from({ length: 6 }, (_, i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
           </div>
-          <label className="mt-3 flex items-center gap-2 text-caption text-muted-foreground">
-            <Checkbox
-              checked={useCurrent}
-              onCheckedChange={(checked) =>
-                setUseCurrentOverride(checked === true)
-              }
-            />
-            {t('export.useCurrent')}
-          </label>
-        </PopoverContent>
-      </Popover>
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={() => exportM.mutate()}
-        disabled={exportM.isPending}
-      >
-        <FileDown className="size-3.5" />
-        {t('export.action')}
-      </Button>
+        ) : error ? (
+          <QueryErrorState
+            error={error}
+            retry={() =>
+              void (headError ? headQuery.refetch() : listQuery.refetch())
+            }
+          />
+        ) : rows.length === 0 ? (
+          internalCount > 0 ? (
+            <FoldedHint />
+          ) : (
+            <EmptyHint />
+          )
+        ) : (
+          <LedgerEntries
+            entries={rows}
+            pending={pending}
+            fresh={feedIds}
+            bySession={bySession}
+            names={names}
+            selectedId={selectedId}
+            onSelect={(e) => {
+              setSelectedId(e.id)
+              setPicks((n) => n + 1)
+            }}
+            onAdd={(f) => setQuery({ ...query, ...f })}
+          />
+        )}
+        {listQuery.hasNextPage ? (
+          <div className="flex justify-center p-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void listQuery.fetchNextPage()}
+              disabled={listQuery.isFetchingNextPage}
+            >
+              {listQuery.isFetchingNextPage
+                ? t('common:states.loading')
+                : t('common:table.loadMore')}
+            </Button>
+          </div>
+        ) : null}
+      </div>
+
+      {selected ? (
+        <SidePanelContent
+          title={t('ledger.entry.title', {
+            seq: formatInt(selected.seq, lang),
+          })}
+          reveal={picks > 0 ? String(picks) : undefined}
+        >
+          <AuditEntryDetail
+            event={selected}
+            loaded={allRows}
+            scope={scope}
+            names={names}
+          />
+        </SidePanelContent>
+      ) : null}
     </div>
   )
 }

@@ -161,12 +161,20 @@ func (m *Module) createRunForWork(
 	if _, err := validateWorkLaunch(tenant, spec, &spec.Runtime); err != nil {
 		return runDTO{}, workLaunchReservation{}, false, err
 	}
+	if err := m.refuseRemoteInputs(spec.Runtime); err != nil {
+		return runDTO{}, workLaunchReservation{}, false, err
+	}
 	_, lease, agentRef, now, err := m.readWorkLaunchOwner(ctx, tenant, spec.WorkItemID)
 	if err != nil {
 		return runDTO{}, workLaunchReservation{}, false, classifyWorkStoreError(err)
 	}
 	agent := api.ModuleContext{Tenant: tenant, Principal: auth.Principal{AgentIdentity: agentRef}}
+	if _, err := m.checkRunPlacement(ctx, tenant, spec.Runtime.RunOn, agent.Principal); err != nil {
+		return runDTO{}, workLaunchReservation{}, false, err
+	}
 	spec.Runtime.asks.profileAccess = m.askProfileAccess(ctx, tenant, agent.Principal)
+	// The owner agent's department standards, as a person's are asked for POST /runs.
+	spec.Runtime.asks.standing = m.askStanding(ctx, tenant, agent.Principal)
 	spec.askedAgent = agentRef
 	if strings.TrimSpace(spec.Runtime.ProviderProfileRef) == "" {
 		ref, err := m.workLaunchDefaultProfile(ctx, agent, spec, lease, now)

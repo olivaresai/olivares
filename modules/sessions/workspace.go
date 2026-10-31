@@ -57,6 +57,7 @@ type resolvedWorkspace struct {
 
 // CreateWorkspaceParams is the validated input to register a workspace.
 type CreateWorkspaceParams struct {
+	Backup          *bool
 	Name            string
 	RootPath        string
 	MountMode       string
@@ -64,6 +65,7 @@ type CreateWorkspaceParams struct {
 	AllowSubpaths   []string
 	ReadOnlyFolders []string
 	MaxReadBytes    int64
+	DataClass       string
 	DLPMode         string
 	Actor           string
 	ActorKind       string
@@ -72,6 +74,9 @@ type CreateWorkspaceParams struct {
 // createWorkspace validates the registration, canonicalizes the host root (which MUST
 // exist and be a directory), persists the row, and seals a register audit.
 func (m *Module) createWorkspace(ctx context.Context, tenant model.TenantID, p CreateWorkspaceParams) (workspaceDTO, error) {
+	if err := validateDataClass(p.DataClass); err != nil {
+		return workspaceDTO{}, err
+	}
 	if err := validateWorkspace(&p); err != nil {
 		return workspaceDTO{}, err
 	}
@@ -127,9 +132,13 @@ func (m *Module) createWorkspace(ctx context.Context, tenant model.TenantID, p C
 			colWsRootPath:        rootReal,
 			colWsMountMode:       p.MountMode,
 			colWsContainerTgt:    p.ContainerTarget,
+			colWsDataClass:       p.DataClass,
 			colWsDLPMode:         p.DLPMode,
 			colWsState:           wsActive,
 			colWsReadOnlyFolders: string(foldersJSON),
+		}
+		if p.Backup != nil {
+			row[colWsBackup] = *p.Backup
 		}
 		setIf(row, colWsName, p.Name)
 		if subpathsJSON != "" {
@@ -138,7 +147,19 @@ func (m *Module) createWorkspace(ctx context.Context, tenant model.TenantID, p C
 		if p.MaxReadBytes > 0 {
 			row[colWsMaxReadBytes] = p.MaxReadBytes
 		}
-		created, err := repo.Create(ctx, row)
+		// Use one ID for the registered folder and its Resource anchor. The
+		// resource tree, grants, filters and forbids then govern the real folder.
+		name := p.Name
+		if name == "" {
+			name = ref
+		}
+		resource, err := sc.Resources().Create(ctx, model.Resource{
+			Name: name, Kind: "folder", URI: "workspace:" + ref,
+		})
+		if err != nil {
+			return err
+		}
+		created, err := repo.CreateWithID(ctx, resource.ID, row)
 		if err != nil {
 			return err
 		}
@@ -205,10 +226,11 @@ func (m *Module) getWorkspace(ctx context.Context, tenant model.TenantID, ref st
 }
 
 // deleteWorkspace removes a workspace registration. It NEVER touches host files (only
-// the registration); the deregister audit and the row delete are ATOMIC (deny-closed:
+// the registration). The Resource anchor remains: other registered folders may
+// inherit grants through it. The deregister audit and row delete are ATOMIC (deny-closed:
 // no deregistration without recorded evidence).
 func (m *Module) deleteWorkspace(ctx context.Context, tenant model.TenantID, ref, actor, actorKind string) error {
-	return m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(workspaceKind)
 		if err != nil {
 			return err
@@ -229,6 +251,10 @@ func (m *Module) deleteWorkspace(ctx context.Context, tenant model.TenantID, ref
 		}
 		return repo.Delete(ctx, id)
 	})
+	if err == nil {
+		m.terminals.closeFolder(tenant, ref, "folder_removed")
+	}
+	return err
 }
 
 // resolveWorkspace loads a workspace by ref, rejects a disabled one, and canonicalizes

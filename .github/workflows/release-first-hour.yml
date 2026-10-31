@@ -11,6 +11,8 @@ name: release-first-hour
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '37 2 * * *'
 
 permissions:
   contents: read
@@ -26,7 +28,7 @@ defaults:
 jobs:
   release-first-hour:
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 55
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -44,6 +46,7 @@ jobs:
           {
             echo "GOCACHE=$RUNNER_TEMP/gocache"
             echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOFLAGS=${GOFLAGS:+$GOFLAGS }-modcacherw"
           } >> "$GITHUB_ENV"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -73,7 +76,8 @@ jobs:
       - name: Check the release gate and its browser guards
         run: task test:release-first-hour
       - name: README Compose first hour, empty store and fresh browser
-        timeout-minutes: 45
+        # One queued daemon owner (60m) plus the existing 45m journey budget.
+        timeout-minutes: 105
         env:
           OLIVARES_LICENSE_PUBKEY: ${{ vars.OLIVARES_LICENSE_PUBKEY }}
           OLIVARES_OTA_PUBKEY: ${{ vars.OLIVARES_OTA_PUBKEY }}

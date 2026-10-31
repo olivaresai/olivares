@@ -331,7 +331,7 @@ func TestProviderAccountCommands_AddExitCodes(t *testing.T) {
 	})
 }
 
-// dev#2154: `provider account get` lists the hosts an administrator declared for
+// the regression: `provider account get` lists the hosts an administrator declared for
 // the account's sessions, and an account that declares none shows no line.
 func TestProviderAccountGetListsTheDeclaredEgressHosts(t *testing.T) {
 	with := strings.TrimSuffix(providerAccountJSON, "}") + `,"session_egress_hosts":["api.github.com","github.com"]}`

@@ -61,6 +61,7 @@ export function RolesTab() {
   const tenantAdmin = useConsoleOperation('', 'tenant:admin').current
   const canAdmin = useConsoleOperation('', 'governance:rbac:admin').current
   const departmentOnly = !!delegation.workspace && !tenantAdmin
+  const RolePresets = PANEL_EXTENSIONS.authorizationForms?.RolePresets
 
   const catalog = useQuery({
     queryKey: consoleKeys.rbacCatalog(),
@@ -203,6 +204,8 @@ export function RolesTab() {
             refetch={() => void roles.refetch()}
             canAdmin={canAdmin}
           />
+
+          {RolePresets && <RolePresets canAdmin={canAdmin} />}
 
           <GroupsSection
             catalog={cat}

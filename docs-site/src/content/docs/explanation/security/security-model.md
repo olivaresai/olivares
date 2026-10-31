@@ -4,7 +4,7 @@ description: "The secure-by-design posture behind Olivares AI — why read-first
 ---
 
 :::note[Business]
-Audit export (`GET /v1/audit/export`, `olivares audit export`), directory archives and external archive verification require Business. Community keeps the signed ledger, `olivares audit verify` and `olivares dr backup`; export routes and commands return HTTP 501 or exit 9. Audit forwarding and DDIL air-gap transfer also require Business.
+Audit export (`GET /v1/audit/export`, `olivares audit export`), ledger verification (`GET /v1/audit/verify`, `olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`), directory archives and external archive verification require Business. Community keeps the signed ledger, its reads and `olivares dr backup`; evidence routes and commands return HTTP 501 or exit 9. Audit forwarding and DDIL transfers carrying audit segments also require Business.
 :::
 
 Olivares AI is a security product that runs **inside the customer's own

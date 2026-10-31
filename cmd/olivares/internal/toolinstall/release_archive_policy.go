@@ -202,6 +202,9 @@ func releaseArchivePath(raw string) (string, error) {
 	return raw, nil
 }
 func releaseArchiveMember(driver, name string) bool {
+	if driver == DriverCursor {
+		return cursorMember(name)
+	}
 	if strings.HasPrefix(driver, "declared-") {
 		program := declaredProgram(driver)
 		return name == "bin" || name == "bin/"+program || name == "lib" || name == "lib/"+program || strings.HasPrefix(name, "lib/"+program+"/")
@@ -214,7 +217,7 @@ func releaseArchiveMember(driver, name string) bool {
 		return name == "bin" || name == "bin/opencode"
 	}
 	if driver == DriverCodex {
-		return name == "bin" || name == "bin/codex" || name == "bin/codex-code-mode-host"
+		return name == "bin" || name == "bin/codex" || name == "bin/codex-code-mode-host" || name == "bin/codex-exec-server"
 	}
 	return name == "bin" || name == "bin/ollama" || name == "lib" || name == "lib/ollama" || strings.HasPrefix(name, "lib/ollama/")
 }

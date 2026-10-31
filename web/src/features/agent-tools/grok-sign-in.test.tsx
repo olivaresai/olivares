@@ -111,7 +111,7 @@ it('offers Grok Build its own sign-in and relays the link and the code', async (
     await within(card).findByText('Account · not signed in'),
   ).toBeInTheDocument()
   await userEvent.click(within(card).getByRole('button', { name: /^Sign in/ }))
-  // The login is the organization's own (FH 036): the start names it.
+  // The login is the organization's own (first-hour check): the start names it.
   const dialog = await screen.findByRole('dialog', {
     name: /Sign in Grok Build/,
   })
@@ -124,7 +124,7 @@ it('offers Grok Build its own sign-in and relays the link and the code', async (
   expect(
     within(dialog).getByRole('link', { name: /open the sign-in page/i }),
   ).toHaveAttribute('href', 'https://accounts.x.ai/device')
-  // HU2-18, #2551: the key form opens in this same dialog, on Grok's own provider — a
+  // acceptance, #2551: the key form opens in this same dialog, on Grok's own provider — a
   // button in the sheet, not a page link that reloads and loses the dialog. The dialog
   // says the terminal way too.
   expect(

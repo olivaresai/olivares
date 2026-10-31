@@ -21,7 +21,10 @@ func TestCommunityAuditExportRouteUnavailable(t *testing.T) {
 			t.Errorf("export%s = %d %s, want 501 audit_export_unavailable", query, r.code, r.raw)
 		}
 	}
-	for _, path := range []string{"/v1/audit", "/v1/audit/verify", "/v1/audit/pubkey"} {
+	if r := h.do("GET", "/v1/audit/verify", admin, nil, tenantHdr(tenant)); r.code != http.StatusNotImplemented {
+		t.Errorf("Community verify = %d %s, want 501", r.code, r.raw)
+	}
+	for _, path := range []string{"/v1/audit", "/v1/audit/pubkey"} {
 		if r := h.do("GET", path, admin, nil, tenantHdr(tenant)); r.code != http.StatusOK {
 			t.Errorf("Community ledger %s = %d %s", path, r.code, r.raw)
 		}

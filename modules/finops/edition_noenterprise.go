@@ -20,6 +20,15 @@ func (*Module) handleAllocation(w http.ResponseWriter, _ *http.Request, _ api.Mo
 	writeJSON(w, http.StatusNotImplemented, errorBody("FinOps is a Business feature: https://olivares.ai/pricing"))
 }
 
+func (*Module) handleChangeCost(w http.ResponseWriter, _ *http.Request, _ api.ModuleContext) {
+	writeJSON(w, http.StatusNotImplemented, errorBody("FinOps is a Business feature: https://olivares.ai/pricing"))
+}
+
+// focusExtension is the Business columns of the FOCUS export; Community adds none.
+func (*Module) focusExtension(context.Context, store.Scope, time.Time, bool, time.Time, bool) focusExtra {
+	return focusExtra{}
+}
+
 func (*Module) handleComparison(w http.ResponseWriter, _ *http.Request, _ api.ModuleContext) {
 	writeJSON(w, http.StatusNotImplemented, errorBody("FinOps is a Business feature: https://olivares.ai/pricing"))
 }

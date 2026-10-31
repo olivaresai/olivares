@@ -161,6 +161,8 @@ func buildCoreMigrationPlan(
 		coreWorkspaceTreeMigration(dia),
 		coreAuditTreeGuardMigration(dia),
 		coreUserGroupWorkspaceMigration(dia),
+		coreAuthSessionInventoryMigration(dia),
+		coreGroupDerivedTokenRoleMigration(dia),
 	)
 }
 

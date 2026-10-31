@@ -19,7 +19,7 @@ import (
 // `guardMetadataSplit(appRole, ownerRole) bool` answered false to two different
 // questions — "the operator configured one role" and "the operator configured two and
 // this boot could not read one of them" — and three defenses downstream read that one
-// false as the first. The measurement that found it (an internal design note (not shipped)
+// false as the first. The measurement that found it (an internal audit
 // 2026-08-04-c4-limites-medicion-independiente.md, C4-07 and C4-12) put the consumer in
 // one line: `ownerRole != "" && appRole != "" && ownerRole != appRole`.
 //

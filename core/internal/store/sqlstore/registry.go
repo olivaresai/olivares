@@ -575,7 +575,7 @@ var _ store.CompositionReaderRegistry = (*registry)(nil)
 // declarations. It runs before the composition registers anything.
 func (r *registry) declareAuthPartitionReaders() error {
 	var cols []string
-	for _, d := range authDescriptors() {
+	for _, d := range currentAuthDescriptors() {
 		for _, c := range d.CountedColumns() {
 			cols = append(cols, string(d.Kind)+"."+c)
 		}

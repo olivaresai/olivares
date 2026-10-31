@@ -86,6 +86,15 @@ export const authApi = {
       anonymous: true,
       headers: { 'X-Olivares-Session': 'cookie' },
     }),
+  acceptPairing: (token: string) =>
+    http.post<LoginResponse>(
+      '/v1/auth/sessions/pairing/accept',
+      { token },
+      {
+        anonymous: true,
+        headers: { 'X-Olivares-Session': 'cookie' },
+      },
+    ),
   /** Revoke the calling session (204). */
   /**
    * Renew the calling session's token. The engine ROTATES the credential and invalidates the
@@ -204,7 +213,8 @@ export const systemApi = {
   // `sys.ListOrgs(ctx)`, que NO acepta consulta: drena la tabla entera y no fija `has_more`.
   // No hay recorte que declarar, y un techo aqui seria decorativo — mentiria diciendo que
   // manda sobre una consulta que el handler ni lee.
-  listOrgs: () => http.get<ListResponse<OrgDTO>>('/v1/system/orgs'),
+  listOrgs: (opts?: RequestOptions) =>
+    http.get<ListResponse<OrgDTO>>('/v1/system/orgs', opts),
   createOrg: (req: CreateOrgRequest) =>
     http.post<OrgDTO>('/v1/system/orgs', req),
 }

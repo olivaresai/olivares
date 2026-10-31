@@ -367,3 +367,68 @@ func TestPushKilledByDeadlineIsTransport(t *testing.T) {
 		t.Fatalf("killed push = %+v %v, want ambiguous transport", res, err)
 	}
 }
+
+// A failed ls-remote says why (git's exit code and the first line it printed),
+// still as ErrHostUnavailable, so the refusal the caller answers stays the same.
+func TestLsRemoteFailureNamesItsCause(t *testing.T) {
+	f := newGitFixture(t)
+	missing := filepath.Join(t.TempDir(), "missing.git")
+	_, err := f.x.LsRemote(context.Background(), RemoteRef{URL: "file://" + missing, Scheme: "file"}, true, "HEAD")
+	if !errors.Is(err, ErrHostUnavailable) {
+		t.Fatalf("err = %v, want ErrHostUnavailable", err)
+	}
+	if msg := err.Error(); !strings.Contains(msg, "exit 128") || !strings.Contains(msg, "does not appear to be a git repository") {
+		t.Fatalf("err = %q: it must name git's exit code and its first line", msg)
+	}
+}
+
+func TestLsRemoteFailureDoesNotLogTheCredential(t *testing.T) {
+	f := newGitFixture(t)
+	const credential = "fixture-lookup-credential"
+	// Git includes the remote's path in this real failure. A remote may echo a
+	// credential in its diagnostics; the operator's cause must redact it.
+	missing := filepath.Join(t.TempDir(), credential+".git")
+	_, err := f.x.LsRemote(context.Background(), RemoteRef{
+		URL: "file://" + missing, Scheme: "file",
+		Header: NewSecret("Authorization: Bearer " + credential),
+	}, true, "HEAD")
+	if !errors.Is(err, ErrHostUnavailable) {
+		t.Fatalf("err = %v, want ErrHostUnavailable", err)
+	}
+	if strings.Contains(err.Error(), credential) {
+		t.Fatal("lookup failure exposed the credential")
+	}
+	if !strings.Contains(err.Error(), "git exit 128") || !strings.Contains(err.Error(), redacted) {
+		t.Fatalf("lookup failure lost its diagnostic: %v", err)
+	}
+}
+
+func TestLsRemoteUsesTheConfiguredStart(t *testing.T) {
+	f := newGitFixture(t)
+	f.x.StartWith(func(*exec.Cmd) error { return errors.New("domain transition refused") })
+	_, err := f.x.LsRemote(context.Background(), RemoteRef{URL: "file://" + f.target, Scheme: "file"}, true, "HEAD")
+	if !errors.Is(err, ErrHostUnavailable) || !strings.Contains(err.Error(), "domain transition refused") {
+		t.Fatalf("lookup ignored its configured start or dropped the cause: %v", err)
+	}
+}
+
+// the regression review: a remote that accepts the connection and then stalls must not hold a push
+// forever. The ssh line bounds the connection and the silence (the engine's deadline is the
+// last resort, and on the Server it needs a kill the policy grants).
+func TestSSHCommandBoundsAStalledRemote(t *testing.T) {
+	if _, err := exec.LookPath("ssh"); err != nil {
+		t.Skip("no ssh client on this host")
+	}
+	f := newGitFixture(t)
+	env, cleanup, err := f.x.sshEnv(NewSecret("fixture-key\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	line := strings.Join(env, "\n")
+	for _, option := range []string{"-o ConnectTimeout=", "-o ServerAliveInterval=", "-o ServerAliveCountMax="} {
+		if !strings.Contains(line, option) {
+			t.Errorf("GIT_SSH_COMMAND lacks %s: %s", option, line)
+		}
+	}
+}

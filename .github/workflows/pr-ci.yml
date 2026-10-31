@@ -49,24 +49,15 @@ jobs:
           python3 -m pip install --disable-pip-version-check --require-hashes -r .github/requirements-pyyaml.txt
           python3 scripts/check-release-gate.py
           python3 scripts/test-release-gate.py
-          python3 scripts/test-require-green-run.py
-      - name: the release version has its dated CHANGELOG section
-        run: python3 scripts/render-release-notes.py "$(sed -e '/^#/d' -e '/^$/d' RELEASE-VERSION)" >/dev/null
       - name: DCO required and attribution trailers refused
         env:
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
-        run: |
-          bash scripts/check-commit-trailers.sh --range "$PR_BASE..$PR_HEAD"
-          bash scripts/test-commit-trailers.sh
-      - name: source text uses US English
+        run: bash scripts/check-commit-trailers.sh --range "$PR_BASE..$PR_HEAD"
+      - name: source text changes use US English
         env:
           SOURCE_LANGUAGE_BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          python3 scripts/test-source-language.py
-          python3 scripts/check-source-language.py --base "$SOURCE_LANGUAGE_BASE"
-          python3 scripts/check-source-language.py --public-tooling .
+        run: python3 scripts/check-source-language.py --base "$SOURCE_LANGUAGE_BASE"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
@@ -76,72 +67,23 @@ jobs:
         uses: ./.github/actions/olivares-tool-cache
         with:
           gitleaks: "true"
-      - name: release scanner canaries and environment policy controls (offline)
+      - name: The shared public lint checks
+        env:
+          OLIVARES_MIGRATION_BASE: ${{ github.event.pull_request.base.sha }}
+        run: task lint:public
+      - name: release scanner canaries (pinned nfpm)
         run: |
           set -euo pipefail
           nfpm_bin=$(bash scripts/ensure-nfpm.sh --dest "$RUNNER_TEMP/scanner-nfpm")
           PATH="$(dirname "$nfpm_bin"):$PATH"
           export PATH
           python3 scripts/test-artifact-secrets.py
-          python3 scripts/test-native-package-publication.py
-          bash scripts/test-release-environment-tag-policy.sh
-      - name: Third-party license gate
+      - name: Third-party license gate and integration tests
         run: |
-          go install github.com/google/go-licenses/v2@v2.0.1
-          python3 scripts/test-license-gates.py
+          task lint:public:tools
           python3 scripts/test-license-gate-integration.py
-          python3 scripts/license-gate.py --tags release
-      - name: licence headers, the AGPL boundary and PR job guards
-        run: task lint:spdx lint:boundary lint:pr-ci-regime lint:pr-ci-regime:selftest
-      - name: one release version, stated everywhere or nowhere
-        run: task lint:release-version
-      - name: migration history is immutable on the PR head
-        env:
-          OLIVARES_MIGRATION_BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          bash scripts/check-migrations.sh
-          python3 scripts/test-migration-immutability.py
-          bash scripts/test-migrations-coverage.sh
-      - name: mainline failure reporter regression tests
-        run: python3 scripts/test-mainline-ci-report.py
-      - name: the pre-push hook checks what a push changes
-        run: bash scripts/test-pre-push.sh
-      - name: the end-of-work ratchet tells its verdicts apart
-        run: bash scripts/test-kept-checks.sh
-      - name: Cosign installers do not share a writable bootstrap
-        run: python3 scripts/test-cosign-install-isolation.py
-      - name: native packaging uses the candidate checkout
-        run: python3 -m unittest discover -s scripts/userspace -p test_package_setup.py -v
-      - name: browser setup works without sudo on self-hosted runners
-        run: python3 -m unittest discover -s scripts/userspace -p test_browser_setup.py -v
-      - name: published worktree setup survives runner reuse
-        run: python3 -m unittest discover -s scripts/userspace -p test_worktree_setup.py -v
-
-      # ⛔ THE SHARD GATE RUNS HERE, AND UNTIL NOW IT RAN NOWHERE A PULL REQUEST COULD MEET
-      # IT. It was a leg of the local pre-push hook only, so a fork, a web edit or any push
-      # that did not go through that hook landed with the partition unchecked: a package in
-      # no shard, a test in no group or a matrix out of step with the file would have arrived
-      # with every required check green. That is the exact failure the gate was written for,
-      # and it was not armed on the side that decides.
-      #
-      # THIS JOB, AND NOT A NEW ONE. Both legs need the Go toolchain for `go list` — and only
-      # for `go list`, which reads package metadata and compiles nothing. This job already
-      # sets up Go above, for `lint:boundary`, whose own check refuses to run without it, and
-      # it already builds Go code in the SDK step below. So the two legs cost this job their
-      # own seconds and no new setup. Measured locally, with the module metadata already
-      # cached: 3.8 s for the gate over the 12 workspace modules and 13.4 s for its 40-case
-      # battery, of which the battery's one real-tree case is most of the walk. The hosted
-      # figure is to be read off the first two runs of this job, not assumed from these.
-      - name: the shard partition is the whole suite, and every test is in exactly one group
-        run: task lint:pr-suite-shards lint:pr-suite-shards:selftest
-
-      # race-full builds its matrix from scripts/race-groups.json and ran this check only after
-      # a merge, so a test added by one pull request landed in no race shard and the next public
-      # race-full failed. Here it fails the pull request that adds the test. Like the gate above
-      # it only lists packages and tests (`go list`, no compile). The export runs the same check
-      # on its own file set, which is the tree race-full reads.
-      - name: every tested package and every top-level test belongs to exactly one race shard
-        run: task lint:race-groups
+      - name: public PR job guards
+        run: bash scripts/hub-leg.sh lint:pr-ci-regime scripts/check-pr-ci-regime.sh && bash scripts/hub-leg.sh lint:pr-ci-regime:selftest scripts/test-pr-ci-regime.sh
 
       # Capture the existing generator's outputs on the hosted runner.
       - name: record the generation inputs
@@ -213,7 +155,7 @@ jobs:
           if-no-files-found: error
 
   pr-build:
-    needs: pr-web
+    needs: [pr-web, pr-lint]
     outputs:
       # The attempt that produced and uploaded cli-development-verification. userspace-compat
       # compares the manifest against THIS attempt (#2749), not its own.
@@ -222,8 +164,8 @@ jobs:
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 45
     steps:
-      - name: require the console producer to succeed
-        run: test '${{ needs.pr-web.result }}' = success
+      - name: require console and lint to succeed
+        run: test '${{ needs.pr-web.result }}' = success && test '${{ needs.pr-lint.result }}' = success
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
@@ -269,7 +211,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$PR_HEAD"
-          generation_attempt="$GENERATION_ATTEMPT"
+          generation_attempt="${GENERATION_ATTEMPT:-}"
           if [[ "$CONSOLE_REBUILT_IN_THIS_JOB" == 'true' ]]; then
             generation_attempt="$GITHUB_RUN_ATTEMPT"
           fi
@@ -570,17 +512,18 @@ jobs:
   # the same shards passing on the changes either side. Raising the ceiling makes the
   # suite PASS; it does not make the answer ARRIVE, and every contribution waits for it.
   #
-  # So those two packages are now split by TEST NAME: a `group` record in the same file
-  # sends the tests whose name begins with a declared letter to one shard, and a closing
-  # REMAINDER group takes every name no other group claims, so that a test added tomorrow
-  # is in the partition the day it is written. `go test -run` over an expression that
-  # selects nothing EXITS 0, which is why the remainder is computed from the source rather
-  # than written by hand, and why the gate below counts tests and not only packages.
+  # So those two packages are now split by TEST NAME: `group` records in the same file name
+  # the shards that share one package, and every Test/Fuzz/Example of it is assigned to exactly
+  # one of them by a hash of its name (scripts/lib/test_name_shard.py), computed from the
+  # source. A test added tomorrow is in the partition the day it is written, and no list is
+  # edited. `go test -run` over an expression that selects nothing EXITS 0, which is why the
+  # assignment is computed from the source and why the gate below counts tests and not only
+  # packages.
   #
-  # The partition lives in ci/pr-suite-shards.txt, in one file, readable by a person:
-  # which shard owns which packages and which test names, and why each one is where it is.
-  # It is NOT a hash — a hash balances nothing when one package is 27 % of the clock, and
-  # it cannot be read either: whoever adds a test cannot tell where it landed.
+  # The partition lives in ci/pr-suite-shards.txt, in one file, readable by a person: which
+  # shard owns which packages and which shards share a split package. A hash balances by
+  # test count, not by clock; if a shard outgrows its clock, change the shard count from
+  # measured durations rather than restoring a hand-written list.
   #
   # scripts/check-pr-suite-shards.sh proves the union of the shards is exactly the set
   # of test-bearing packages, that no package is in two, that every test of a partitioned
@@ -588,7 +531,7 @@ jobs:
   # A package or a test that belongs to no shard would otherwise be SILENT: every shard
   # green, the required check green, and nothing testing it.
   pr-test-shard:
-    needs: pr-web
+    needs: [pr-web, pr-lint]
     if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod' || vars.OLIVARES_DEV_CI == 'true'
     strategy:
       # `fail-fast: false`: a red shard must not cancel its siblings. A cancelled
@@ -682,7 +625,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$PR_HEAD"
-          generation_attempt="$GENERATION_ATTEMPT"
+          generation_attempt="${GENERATION_ATTEMPT:-}"
           if [[ "$CONSOLE_REBUILT_IN_THIS_JOB" == 'true' ]]; then
             generation_attempt="$GITHUB_RUN_ATTEMPT"
           fi
@@ -861,9 +804,16 @@ jobs:
         run: task lint:format-ratchet
       - name: the console checks (the bundle was already built and verified)
         run: task check:web
+      # The raw color gate: the real eslint.config.js over web/src, failing only on
+      # olivares/no-raw-palette or on a file it could not parse. A raw palette class,
+      # arbitrary color value, color string or named color paints the same in Light, Dark
+      # and Black and escapes the contrast tests. check:web installed the web deps it needs.
+      - name: console colors come from the design tokens (raw color gate)
+        timeout-minutes: 10
+        run: task lint:raw-palette
       # The generated CLI reference (seven locale pages) and the console/gRPC/upgrade guides are
-      # otherwise checked only after merge, in mainline-ci control-plane; public-generation writes
-      # them but is dispatched. Each gate runs its own red battery first, then the check.
+      # otherwise checked only after merge, in mainline-ci control-plane. Each gate runs
+      # its own red battery first, then the check.
       - name: the generated CLI reference matches the olivares command tree
         timeout-minutes: 15
         run: |

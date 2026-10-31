@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// WHAT A SESSION IS DOING, IN A WORD WITH ITS TIME (dev#3162: "Working 4s", "Done").
+// WHAT A SESSION IS DOING, IN A WORD WITH ITS TIME (the regression: "Working 4s", "Done").
 // The list's state renderer: it reads the one classifier (sessionDisplayState) and
 // never the engine's raw state, as StateDot does for the dot.
 import { useEffect } from 'react'
@@ -13,6 +13,7 @@ import { formatDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { primaryRun, type UnifiedSession } from './provenance'
 import { sessionDisplayState } from './session-display-state'
+import { SessionStatusMark, useStatusWord } from './session-status'
 import { useNow } from './use-now'
 import './i18n'
 
@@ -37,14 +38,39 @@ function useTurnStart(
   started: number,
   now: number,
 ): number | null {
-  useEffect(() => {
-    if (!working) turnStarts.set(key, null)
-    else if (turnStarts.get(key) === null) turnStarts.set(key, Date.now())
-  }, [key, working])
   if (!working) return null
   if (Number.isFinite(started) && now - started < JUST_STARTED_MS)
     return started
   return turnStarts.get(key) ?? null
+}
+
+/** What the person sees of a session, from the one classifier. */
+function displayOf(session: UnifiedSession) {
+  return sessionDisplayState(session)
+}
+
+/** Whether a turn is running now: Pending and Failed are not, nor is a session at rest. */
+function isWorking(display: ReturnType<typeof displayOf>): boolean {
+  return (
+    display.runState !== 'pending' &&
+    display.tone !== 'failed' &&
+    display.group === 'active'
+  )
+}
+
+/**
+ * Notes, for every session of the list, when this page saw it start working, whether its
+ * row is drawn or not: the Working section is folded, and a row that is not drawn would
+ * miss the moment its session began a turn. The list calls it once, with its sessions.
+ */
+export function useSeenTurns(sessions: readonly UnifiedSession[]) {
+  useEffect(() => {
+    for (const session of sessions) {
+      if (!isWorking(displayOf(session))) turnStarts.set(session.key, null)
+      else if (turnStarts.get(session.key) === null)
+        turnStarts.set(session.key, Date.now())
+    }
+  }, [sessions])
 }
 
 /** Forgets every turn start when the list that saw them goes away: seen again later, a
@@ -63,19 +89,19 @@ function ago(ms: number, now: number): string {
 }
 
 /**
- * Failed; Needs you; Pending; Working, with how long this turn has worked when the page
- * knows when it began; Done once a turn or a seen
- * session has ended; for a run that ended, the run's own word (Stopped, Ended). Any
+ * The status's mark and word (Failed; Needs you; Working, with how long this turn has
+ * worked when the page knows when it began; Done; Idle), Pending before a run starts; for
+ * a run that ended, the run's own word (Stopped, Ended). Any
  * session that is not working also says how long ago it last did something, the date on
  * the hover. The word is the state for a screen reader too, and its colour only repeats it.
  */
 export function StateWord({ session }: { session: UnifiedSession }) {
   const { t, i18n } = useTranslation(['sessions', 'agentops'])
-  const display = sessionDisplayState(session)
+  const statusWord = useStatusWord()
+  const display = displayOf(session)
   const run = primaryRun(session.runs)
   const pending = display.runState === 'pending'
-  const working =
-    !pending && display.tone !== 'failed' && display.group === 'active'
+  const working = isWorking(display)
   // A second for a working clock; an age in minutes needs no more than half a minute.
   const now = useNow(true, working ? 1000 : 30_000)
   const since = useTurnStart(
@@ -84,26 +110,15 @@ export function StateWord({ session }: { session: UnifiedSession }) {
     Date.parse(run?.started_at ?? session.live?.first_event_at ?? ''),
     now,
   )
-  const word =
-    display.tone === 'failed'
-      ? t('agentops:state.failed')
-      : display.group === 'attention'
-        ? t('sessions:list.group.attention')
-        : pending
-          ? t('agentops:state.pending')
-          : working
-            ? t('agentops:state.running')
-            : run
-              ? display.runState === 'idle'
-                ? t('agentops:state.done')
-                : t(`agentops:state.${runStateWord(run)}`, {
-                    defaultValue: display.runState,
-                  })
-              : display.observedState === 'ended'
-                ? t('agentops:state.done')
-                : t(`agentops:state.${display.observedState ?? 'idle'}`, {
-                    defaultValue: display.observedState,
-                  })
+  // The status says the word; a run that is not simply Done keeps its own (Pending, Stopped,
+  // Ended: the regression), since those say more than the status does.
+  const word = pending
+    ? t('agentops:state.pending')
+    : display.status === 'done' && run && display.runState !== 'idle'
+      ? t(`agentops:state.${runStateWord(run)}`, {
+          defaultValue: display.runState,
+        })
+      : statusWord(display.status)
   const worked =
     since === null
       ? null
@@ -112,8 +127,9 @@ export function StateWord({ session }: { session: UnifiedSession }) {
     <>
       <span
         data-testid="rail-row-state"
+        data-status={display.status}
         className={cn(
-          'shrink-0 whitespace-nowrap text-overline font-normal tabular-nums',
+          'inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-overline font-normal tabular-nums',
           display.tone === 'failed'
             ? 'text-danger'
             : display.group === 'attention'
@@ -123,6 +139,7 @@ export function StateWord({ session }: { session: UnifiedSession }) {
                 : 'text-text-3',
         )}
       >
+        <SessionStatusMark status={display.status} decorative />
         {worked ? `${word} ${worked}` : word}
       </span>
       {!working && session.lastActivityMs > 0 ? (

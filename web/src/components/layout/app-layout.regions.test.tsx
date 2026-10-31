@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // THE SHELL'S REGIONS: one header row · the work · one status row, and NOTHING ELSE BELOW
-// THE WORK. There is no sidebar (issue #2544): the top bar holds the places. The work sits
+// THE WORK. The left navigation sits beside the sheet (0.5); the top bar holds no places. The work sits
 // in the sheet's body, a ROW that may also hold the side panel a page declares — beside the
 // work, never below it. The status bar (#3161) is the sheet's last row: 24 px that say how
 // things stand, under the work and the panel alike, and the only row allowed there.
@@ -20,7 +20,7 @@
 // are about WHAT IS UNDER `main` and HOW MANY HEADER ROWS there are, which is what an
 // action bar changes, and not about the classes the shell happens to carry today.
 //
-// The children are stood in for on purpose. The bar, All areas, the palette and the
+// The children are stood in for on purpose. The bar, the navigation, the palette and the
 // tenant gate each own a suite that pins THEIR structure (topbar.layout.test.tsx,
 // sidebar.test.tsx, command-menu.test.tsx, tenant-gate.test.tsx); mounting the
 // real ones here would make this file fail for their reasons and say nothing new about
@@ -30,7 +30,11 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const auth = vi.hoisted(() => ({ status: 'authenticated' }))
+const auth = vi.hoisted(() => ({
+  status: 'authenticated',
+  activeTenant: null as string | null,
+  grants: [] as { tenant: string }[],
+}))
 // The router's LIVE location and its last COMMITTED one. A pending redirect moves
 // the first; the second decides where sign-in returns to, and the first only before the
 // router has committed any location.
@@ -60,6 +64,8 @@ const renderLayout = () => render(<AppLayout />, { wrapper: Providers })
 beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   auth.status = 'authenticated'
+  auth.activeTenant = null
+  auth.grants = []
   router.live = router.committed = '/audit?from=2026-09-30#entry-7'
   router.navigate.mockReset()
   server.setupRequired = false
@@ -103,19 +109,19 @@ vi.mock('@/lib/hooks/use-server-info', () => ({
 }))
 
 vi.mock('./sidebar', () => ({
-  AreasSheet: () => <div data-testid="areas-sheet" />,
-}))
-vi.mock('./phone-bar', () => ({
-  PhoneBar: ({ onMore }: { onMore: () => void }) => (
-    <nav data-testid="phone-bar">
-      <button type="button" onClick={onMore}>
-        More
-      </button>
-    </nav>
+  Sidebar: () => <nav data-slot="sidebar" />,
+  NavigationDrawer: ({ open }: { open: boolean }) => (
+    <div data-testid="drawer" data-open={String(open)} />
   ),
 }))
 vi.mock('./topbar', () => ({
-  Topbar: () => <header data-slot="topbar">bar</header>,
+  Topbar: ({ onMenu }: { onMenu: () => void }) => (
+    <header data-slot="topbar">
+      <button type="button" onClick={onMenu}>
+        Open navigation
+      </button>
+    </header>
+  ),
 }))
 vi.mock('./status-bar', () => ({
   StatusBar: () => <footer data-slot="status-bar" />,
@@ -126,7 +132,7 @@ vi.mock('./command-menu', () => ({
 vi.mock('./shortcuts', () => ({ GlobalShortcuts: () => null }))
 // Session notifications are their own unit (session-notifications.test.tsx).
 vi.mock('./session-notifications', () => ({ SessionNotifications: () => null }))
-// The destination's section row is its own unit (registry.shell-destinations.test.tsx).
+// The row of a place's pages is its own unit (shell-current.router.test.tsx).
 vi.mock('./destination-sections', () => ({ DestinationSections: () => null }))
 vi.mock('./tenant-gate', () => ({
   TenantGate: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -141,8 +147,11 @@ vi.mock('@/features/navigation/personal-navigation', () => ({
   ),
 }))
 
+import engineTools from '@/features/agentops/engine-tools.fixture.json'
+import { toolName } from '@/features/agentops/engine-tools'
+import { http } from '@/lib/api'
+import { ApiError } from '@/lib/api/errors'
 import { AppLayout } from './app-layout'
-import { useAreasSheet } from './areas-sheet-store'
 
 const work = () => document.querySelector('main#main-content') as HTMLElement
 
@@ -228,7 +237,7 @@ it('carries the requested page to sign-in before mounting private content', () =
   expect(screen.queryByTestId('routed-content')).not.toBeInTheDocument()
 })
 
-// Refresh 02 froze every signed-out browser on its first page (HU 016): the guard read
+// Refresh 02 froze every signed-out browser on its first page: the guard read
 // the LIVE location, its own pending redirect moved it, and each re-render redirected
 // again with a longer returnTo. It now navigates once per signed-out state.
 it('redirects once, whatever the pending navigation does to the live location', () => {
@@ -302,29 +311,107 @@ it('never sends sign-in back to a sign-in page', () => {
   })
 })
 
-describe('there is no sidebar', () => {
-  it('paints no sidebar and no navigation over the page, on a document page or a work page', () => {
+describe('one left navigation', () => {
+  it('draws the sidebar beside the sheet and nothing else that navigates, on a document page or a work page', () => {
     for (const path of ['/audit', '/sessions']) {
       router.live = router.committed = path
       const { unmount } = renderLayout()
-      expect(document.querySelector('[data-slot="sidebar"]'), path).toBeNull()
-      expect(document.querySelector('aside'), path).toBeNull()
-      expect(
-        document.querySelector('[data-slot="nav-overlay"]'),
-        path,
-      ).toBeNull()
+      const sidebar = document.querySelector('[data-slot="sidebar"]')
+      expect(sidebar, path).not.toBeNull()
+      expect(sidebar?.nextElementSibling?.getAttribute('data-slot'), path).toBe(
+        'sheet',
+      )
+      expect(screen.queryByTestId('phone-bar'), path).toBeNull()
+      expect(screen.queryByTestId('areas-sheet'), path).toBeNull()
       unmount()
     }
   })
 
-  it("opens All areas from the phone bar's More", () => {
-    useAreasSheet.setState({ open: false, opener: null })
+  it("opens the drawer from the top bar's menu button", () => {
+    // Below 761 px: the column is hidden and the drawer is the navigation.
+    vi.stubGlobal(
+      'matchMedia',
+      (query: string) =>
+        ({
+          matches: false,
+          media: query,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        }) as unknown as MediaQueryList,
+    )
+    try {
+      renderLayout()
+      expect(screen.getByTestId('drawer')).toHaveAttribute('data-open', 'false')
+      fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }))
+      expect(screen.getByTestId('drawer')).toHaveAttribute('data-open', 'true')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
+
+// The engine's tool table (GET /v1/m/sessions/tools) is read before the shell paints:
+// every tool name and list under it answers from that read (engine-tools.ts).
+describe("the shell waits for the engine's tool table", () => {
+  const NEW_TOOL = {
+    key: 'hermes',
+    name: 'Hermes Agent',
+    name_stem: 'hermes',
+    session: true,
+    bindings: [],
+  }
+  const asksForTools = (get: { mock: { calls: unknown[][] } }) =>
+    get.mock.calls.some((call) => call[0] === '/v1/m/sessions/tools')
+
+  it('paints once the engine has answered, and names tools from that answer', async () => {
+    auth.activeTenant = 'tnt-a'
+    auth.grants = [{ tenant: 'tnt-a' }]
+    let answer!: (value: unknown) => void
+    const get = vi
+      .spyOn(http, 'get')
+      .mockImplementation(
+        (path: string) =>
+          new Promise((resolve) =>
+            path === '/v1/m/sessions/tools' ? (answer = resolve) : undefined,
+          ) as never,
+      )
     renderLayout()
-    const more = screen.getByRole('button', { name: 'More' })
-    more.focus()
-    fireEvent.click(more)
-    expect(useAreasSheet.getState().open).toBe(true)
-    // By identity: a DOM node in a deep comparison walks React's own fields.
-    expect(useAreasSheet.getState().opener).toBe(more)
+    expect(work()).toBeNull()
+    expect(asksForTools(get)).toBe(true)
+    answer({ tools: [...engineTools.tools, NEW_TOOL] })
+    expect(await screen.findByTestId('routed-content')).toBeInTheDocument()
+    expect(toolName('hermes')).toBe('Hermes Agent')
+    get.mockRestore()
+  })
+
+  it('paints when the read is refused, for the status bar to say so', async () => {
+    auth.activeTenant = 'tnt-a'
+    auth.grants = [{ tenant: 'tnt-a' }]
+    const get = vi
+      .spyOn(http, 'get')
+      .mockRejectedValue(
+        new ApiError(403, 'forbidden', 'Not allowed.', undefined),
+      )
+    renderLayout()
+    expect(await screen.findByTestId('routed-content')).toBeInTheDocument()
+    get.mockRestore()
+  })
+
+  it('waits while its one organization is being chosen', () => {
+    auth.grants = [{ tenant: 'tnt-a' }]
+    const get = vi.spyOn(http, 'get')
+    renderLayout()
+    expect(work()).toBeNull()
+    expect(asksForTools(get)).toBe(false)
+    get.mockRestore()
+  })
+
+  it('asks nothing before an organization is picked among several', () => {
+    auth.grants = [{ tenant: 'tnt-a' }, { tenant: 'tnt-b' }]
+    const get = vi.spyOn(http, 'get')
+    renderLayout()
+    expect(work()).not.toBeNull()
+    expect(asksForTools(get)).toBe(false)
+    get.mockRestore()
   })
 })

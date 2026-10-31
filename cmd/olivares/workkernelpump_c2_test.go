@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// --- C2 item 5: the work-outbox nudge lifecycle (SR2C P2) ---------------------
+// --- C2 item 5: the work-outbox nudge lifecycle (review P2) ---------------------
 
 // The nudge goroutine has immutable channel custody, an owned cancellable
 // context, and stop JOINS it: a nudge drains promptly, stop cancels the drain's

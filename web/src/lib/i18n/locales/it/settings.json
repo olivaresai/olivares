@@ -23,7 +23,10 @@
     "signing": "Firma dei report",
     "tracing": "Tracing",
     "sessionIdle": "Memoria delle sessioni",
-    "updates": "Aggiornamenti"
+    "updates": "Aggiornamenti",
+    "permissions": "Permessi",
+    "newSessions": "Nuove sessioni",
+    "notifications": "Notifiche"
   },
   "general": {
     "title": "Generali",
@@ -42,17 +45,26 @@
     "startPageHint": "Quello che si apre quando accedi. Predefinita: Adesso.",
     "confirmStop": "Chiedi conferma prima di fermare una sessione",
     "confirmStopHint": "Chiede una volta prima che Ferma interrompa una sessione ancora in corso.",
+    "editor": "Editor per i link ai file",
+    "editorHint": "Quale editor avviano i link «Apri in» su questo computer. Predefinito: VS Code.",
+    "editorSsh": "Host SSH dell’editor",
+    "editorSshHint": "Come l’editor raggiunge le cartelle di sessione su un’altra macchina, come utente@host o utente@host:porta. Vuoto: l’indirizzo da cui è servita questa console; senza SSH se è questo computer.",
     "reduceMotion": "Riduci il movimento",
     "reduceMotionHint": "Sostituisce il movimento con dissolvenze. Attivo quando lo chiede il tuo sistema."
   },
   "sessionNotifications": {
     "title": "Notifiche delle sessioni",
-    "hint": "Avvisami quando una sessione ha bisogno di me o finisce mentre questa scheda è in secondo piano. Vale per questo browser.",
+    "hint": "Avvisami degli eventi selezionati in background. Le scelte ti seguono; ogni browser richiede un’autorizzazione.",
     "notifyMe": "Avvisami",
     "denied": "Le notifiche sono bloccate in questo browser.",
     "unavailable": "Le notifiche del browser non sono disponibili qui.",
     "needsYou": "Questa sessione ti aspetta.",
-    "finished": "Il turno è terminato."
+    "finished": "Il turno è terminato.",
+    "ended": "La sessione è terminata.",
+    "failed": "La sessione si è interrotta con un errore.",
+    "pushOn": "Raggiunge anche questo dispositivo con la scheda chiusa.",
+    "pushUnavailable": "Solo finché una scheda è aperta: questo dispositivo non è stato registrato per il push.",
+    "installHint": "Le notifiche richiedono l’app nella schermata Home: tocca Condividi, poi «Aggiungi alla schermata Home»."
   },
   "keyboard": {
     "title": "Tastiera",
@@ -350,5 +362,31 @@
     "switched": "Passaggio installato.",
     "terminal": "La stessa cosa in un terminale sul server",
     "orTerminal": "Oppure in un terminale sul server"
+  },
+  "permissions": {
+    "description": "Cosa può fare un agente in una sessione e cosa riceve ogni strumento per questo. Gli stessi nomi valgono nel modulo di nuova sessione e in olivares session start --permission.",
+    "caption": "Cosa consegna ogni permesso a ogni strumento",
+    "permission": "Permesso",
+    "what": "Cosa fa",
+    "default": "Predefinito",
+    "asksInstead": "Nessuna modalità automatica: chiede, come in {{name}}",
+    "note": "Per gli strumenti diversi da Claude Code, Olivares risponde a ogni approvazione richiesta dallo strumento in base al permesso. Un «ask» dello strumento in una cella non significa che venga chiesto a te."
+  },
+  "newSessions": {
+    "tool": "Strumento predefinito",
+    "account": "Account predefinito",
+    "model": "Modello predefinito",
+    "folder": "Cartella predefinita",
+    "automatic": "Automatico",
+    "unavailable": "Non più disponibile",
+    "reset": "Ripristina {{name}}",
+    "readFailed": "Impossibile leggere le scelte. Riapri questa pagina per riprovare.",
+    "fallback": "Un valore predefinito salvato non è più disponibile. Viene usata la prima scelta disponibile.",
+    "scope": "I tuoi valori per Nuova sessione. Salvati per il tuo account su questo server."
+  },
+  "notificationEvents": {
+    "needsYou": "Richiede attenzione",
+    "finished": "Completata",
+    "failed": "Non riuscita"
   }
 }

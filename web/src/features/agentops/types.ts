@@ -69,10 +69,34 @@ export interface RunMarkDTO {
   done: boolean
 }
 
+/** One message waiting in a session's queue for the tool's turn to end. */
+export interface QueuedMessageDTO {
+  id: string
+  text: string
+  /** The actor who queued it. */
+  queued_by: string
+  queued_at: string
+}
+
+/** Why the first queued message has not gone. Absent: it goes at once. */
+export type QueueHold = 'turn' | 'approval' | 'limit' | 'stopped'
+
+/** A session's queue in sending order (GET /runs/{ref}/queue). `can_steer` says whether
+ * the session's tool takes a message into a running turn. */
+export interface RunQueueDTO {
+  run_ref: string
+  items: QueuedMessageDTO[]
+  hold?: QueueHold
+  can_steer: boolean
+}
+
 /** One operated Claude Code session (GET /runs, /runs/{ref}). */
 export interface RunDTO {
   run_ref: string
   name?: string
+  /** A phrase the engine cut from the first message, shown where the run has no name.
+   * It is never the name: `session <name>` addresses a session, and a title may repeat. */
+  title?: string
   /**
    * THE CALLER'S OWN pin on this session, as the engine reads it for the signed-in
    * person: true when they pinned it, with `pinned_at` the moment. Another person's
@@ -90,6 +114,9 @@ export interface RunDTO {
    */
   snoozed_until?: string
   done?: boolean
+  /** On the answer of a release only: the messages still waiting in the session's queue,
+   * which the release threw away, so the person can copy them. */
+  discarded_queue?: QueuedMessageDTO[]
   transport: Transport
   permission_mode: PermissionMode | string
   effort?: Effort | string
@@ -97,6 +124,8 @@ export interface RunDTO {
   fast_mode?: boolean
   service_tier?: string
   workspace_ref?: string
+  /** The enrolled remote node running this session; absent means the local engine. */
+  run_on?: string
   /** The workspace the run is authorized in (MC 850beb3d), separate from its folder;
    * omitted when the engine recorded none. */
   authz_workspace_id?: string
@@ -112,10 +141,15 @@ export interface RunDTO {
   worktree_branch?: string
   /** The session this one was handed off from, when a handoff started it. */
   handoff_of?: string
+  /** The page of the GitHub issue or pull request the session was started from;
+   * absent for a session started any other way. */
+  source_url?: string
   /** The workspace template this run was last launched under, if any.*/
   template_id?: string
   /** The vault secrets this session receives as environment variables, by name. */
   secret_env?: SecretEnvRef[]
+  /** The managed credentials (credential/…) this session may use, by name. */
+  credentials?: string[]
   isolation: Isolation
   state: RunState
   /** Stored process lifecycle, separate from output-derived activity. Absent on older servers. */
@@ -217,6 +251,8 @@ export interface RunDTO {
    * result. `resets_at` (RFC 3339) is when the tool says it lifts; absent when it
    * names none. Absent altogether until a turn ends on a limit, and again after a
    * later turn succeeds. */
+  resume_cancelled?: boolean
+  resume_at?: string
   limit?: RunLimit
   /** What this session's turns metered, summed over its launches. ABSENT means the
    * tool reported nothing, which is unknown, never zero; a cost is the tool's own
@@ -277,6 +313,7 @@ export interface ProviderAccountMetadataPatch {
 }
 
 export interface ProviderProfileDTO {
+  max_data_class?: string
   profile_ref: string
   driver: string
   environment_ref: string
@@ -292,7 +329,7 @@ export interface ProviderProfileDTO {
    * the source of the requirements panel; that is GET …/launch-readiness. */
   operable: boolean
   /** An own-login profile that points at this server's user login (the engine
-   * user's own ~/.claude and the like, how profiles were made before FH 036). It is
+   * user's own ~/.claude and the like, how profiles were made before first-hour check). It is
    * not launched; sign in again to use a product login. */
   server_user_login?: boolean
   /** The AUTHORIZED authentication source: `provider_account_home` uses the saved
@@ -571,8 +608,22 @@ export interface ProviderAccountDTO {
   identity: string
   identity_source: 'none' | (string & {})
   last_login_at?: string
+  /** The windows the account's tool last reported (Claude Code and Codex): `five_hour`,
+   * `seven_day`, `seven_day:<model>` or a name of the tool's own. Absent is unknown. */
+  usage?: ProviderAccountUsage[]
   created_at: string
   updated_at: string
+}
+
+export interface ProviderAccountUsage {
+  window: string
+  label: string
+  /** Percent of the window used. */
+  utilization?: number
+  /** Credit figures are independent of percentage windows; absent is unknown. */
+  credit?: { balance?: string; unlimited: boolean; has_credits?: boolean }
+  resets_at?: string
+  observed_at: string
 }
 
 /** One stable creation request. Retries keep the same body and key. */
@@ -793,6 +844,8 @@ export interface CreateRunRequest {
   fast_mode?: boolean
   service_tier?: string
   workspace_ref: string
+  /** The enrolled remote node selected by Run on; absent means the local engine. */
+  run_on?: string
   isolation: Isolation
   env_allow: string[]
   /** Opt in to a git worktree and branch of the session's own, made from the
@@ -803,6 +856,10 @@ export interface CreateRunRequest {
    * workspace's repository instead of its current commit (the work a handoff names).
    * Sent only when a handoff's start was chosen. */
   worktree_from?: string
+  /** The page of a GitHub issue or pull request to start from. It implies `worktree` and
+   * names the branch after the item; the launch reads the item first (see
+   * `agentOpsApi.sourceItem`) and sends its title and body as the first message. */
+  source_url?: string
   /** The workspace template whose terms GOVERN this launch. The server resolves
    * it, merges its terms over the fields above BEFORE the governance gates, and writes
    * the result into the child's argv — so the restriction holds for a caller that never
@@ -817,6 +874,21 @@ export interface CreateRunRequest {
   /** Vault secrets (env/…) the child receives as environment variables, by NAME. The
    * server opens the values and needs tenant administration from the caller. */
   secret_env?: SecretEnvRef[]
+  /** Managed credentials (credential/…) the session may use, by NAME. The engine's
+   * broker gives the child a helper that uses each one; the sealed value never
+   * reaches the browser or the child. Business; the server asks tenant
+   * administration from the caller. */
+  credentials?: string[]
+}
+
+/** GET source-items: the issue or pull request a start names, as the page shows it
+ * (modules/sessions session_source_item.go sourceItemDTO). */
+export interface SourceItemDTO {
+  url: string
+  kind: 'issue' | 'pull_request'
+  number: number
+  title: string
+  body: string
 }
 
 /** One vault secret a session receives as an environment variable: names only. */
@@ -825,8 +897,21 @@ export interface SecretEnvRef {
   secret: string
 }
 
+/** A shell the person opened in a folder: its id and what the server holds it to. */
+export interface TerminalDTO {
+  terminal: string
+  /** How the shell is confined; the server refuses to start one it cannot confine. */
+  confinement: string
+  /** Seconds without input or output before the shell ends. */
+  idle_seconds: number
+  /** Seconds a closed browser tab may take to come back to the same shell. */
+  reconnect_seconds: number
+}
+
 /** A registered workspace (host root a session works in). No file bytes or secrets. */
 export interface WorkspaceDTO {
+  data_class?: string
+  backup?: boolean
   workspace_ref: string
   name?: string
   root_path: string
@@ -837,8 +922,11 @@ export interface WorkspaceDTO {
   dlp_mode: 'label' | 'deny' | 'off' | string
   state: 'active' | 'disabled' | string
   /** Host folders a session in this workspace may read and never change. The engine canonicalizes
-   * and checks them; an engine from before HU2-21 omits the field. */
+   * and checks them; an engine from before acceptance omits the field. */
   read_only_folders?: string[]
+  /** The permission a session started in this folder is offered first, by its name
+   * (session-launch.ts PERMISSION_NAME). Absent when the folder has none. */
+  default_permission?: string
   created_at?: string
   updated_at?: string
 }

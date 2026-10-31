@@ -15,6 +15,7 @@ import (
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/eventbus/natsbus"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/aiterms"
 	"github.com/olivaresai/olivares/modules/sessioncockpit"
 	"github.com/olivaresai/olivares/sdk/event"
 )
@@ -73,7 +74,7 @@ func communitySessionDecoys(getenv func(string) string, _ sessionDecoyDeps, log 
 // one read permission and no routes: /v1/m/session-cockpit/availability answers 404
 // by absence. Exactly one module owns the namespace.
 func communityModuleRegistrars(EditionConfig) []api.Module {
-	return []api.Module{sessioncockpit.NewPlaceholder()}
+	return []api.Module{sessioncockpit.NewPlaceholder(), aiterms.New()}
 }
 
 // communityCircuitBreakerDeclarations declares the breaker rule table's text columns.

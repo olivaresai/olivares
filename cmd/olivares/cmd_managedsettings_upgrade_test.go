@@ -38,7 +38,12 @@ func TestManagedSettingsPublishedExplicitTimeoutKeepsDenyClosedHook(t *testing.T
 		t.Fatal("published render lost its PreToolUse gate")
 	}
 	hook := entries[0].Hooks[0]
-	parts := strings.Fields(hook.Command)
+	// The shell runs the client, then the deny-closed suffix; the client sees what precedes it.
+	command, denyClosed := strings.CutSuffix(hook.Command, " || exit 2")
+	if !denyClosed {
+		t.Fatalf("rendered hook %q does not end deny closed", hook.Command)
+	}
+	parts := strings.Fields(command)
 	if hook.Type != "command" || hook.Timeout != 5 || len(parts) < 2 || parts[0] != "olivares" || parts[1] != "claude-hook" {
 		t.Fatal("rendered hook is not the published Olivares command/outer timeout")
 	}

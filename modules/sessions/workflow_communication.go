@@ -57,6 +57,9 @@ type WorkflowCommunicationActor struct {
 	SessionRunRef     string
 	SessionFence      int64
 	PurposeRestricted bool
+	// SystemPrincipal is the sealed, tenant-confined engine authority for a
+	// system-initiated workflow. User and credential-bound actors leave it zero.
+	SystemPrincipal   auth.Principal
 	CredentialBinding auth.CredentialBinding
 	CredentialSubject model.ID
 }
@@ -212,6 +215,27 @@ func workflowCommunicationUserPrincipal(
 		)
 	}
 	principal := CommunicationPrincipal{UserID: userID}
+	if err := ValidateCommunicationPrincipalForScope(principal, scope); err != nil {
+		return CommunicationPrincipal{}, err
+	}
+	return principal, nil
+}
+
+func workflowCommunicationSystemPrincipal(
+	actor WorkflowCommunicationActor,
+	scope DirectoryScopeRef,
+	work model.Record,
+) (CommunicationPrincipal, error) {
+	if actor.AuditKind != model.ActorSystem || !actor.SystemPrincipal.IsSystemOperator() ||
+		work.String(colWorkOwnerKind) != string(RecipientAgent) {
+		return CommunicationPrincipal{}, communicationError(
+			ErrCommunicationEvidenceUnknown, "workflow system authority or agent owner is unavailable",
+		)
+	}
+	ref := strings.TrimPrefix(strings.TrimSpace(actor.AuditRef), "system:")
+	principal := CommunicationPrincipal{
+		System: true, SystemActorRef: ref, SystemGrantAgentID: model.ID(work.String(colWorkOwnerRef)),
+	}
 	if err := ValidateCommunicationPrincipalForScope(principal, scope); err != nil {
 		return CommunicationPrincipal{}, err
 	}
@@ -398,16 +422,23 @@ func (m *Module) prepareWorkflowCommunicationPublishTarget(
 	sourceKind ChannelRouteSourceKind,
 	sourceEvent string,
 ) (workflowCommunicationPreflight, error) {
-	principal, err := workflowCommunicationUserPrincipal(actor, target.ref)
+	var principal CommunicationPrincipal
+	var err error
+	if actor.AuditKind == model.ActorSystem {
+		principal, err = workflowCommunicationSystemPrincipal(actor, target.ref, target.work)
+	} else {
+		principal, err = workflowCommunicationUserPrincipal(actor, target.ref)
+	}
 	if err != nil {
 		return workflowCommunicationPreflight{}, err
 	}
+	systemResult := kind == MessageSystem && sourceKind == RouteSourceSystemEvent && sourceEvent != ""
+	userSource := (kind == MessageWorkTask || kind == MessageHandoffOffer || kind == MessageNotice) &&
+		((kind == MessageNotice && sourceKind == RouteSourceProtocol &&
+			(sourceEvent == protocolReplySourceEvent || sourceEvent == protocolInboundSourceEvent)) ||
+			(kind != MessageNotice && sourceKind == RouteSourceUserMessage && sourceEvent == ""))
 	if recipient.Kind != RecipientUser || recipient.Validate() != nil ||
-		(kind != MessageWorkTask && kind != MessageHandoffOffer && kind != MessageNotice) ||
-		!validateOpaqueRef(commandScope) || !sourceKind.Valid() ||
-		(kind == MessageNotice && (sourceKind != RouteSourceProtocol ||
-			(sourceEvent != protocolReplySourceEvent && sourceEvent != protocolInboundSourceEvent))) ||
-		(kind != MessageNotice && (sourceKind != RouteSourceUserMessage || sourceEvent != "")) {
+		(!systemResult && !userSource) || !validateOpaqueRef(commandScope) || !sourceKind.Valid() {
 		return workflowCommunicationPreflight{}, communicationError(
 			ErrInvalidCommunicationModel,
 			"workflow communication requires a valid user recipient, Message kind and source",
@@ -483,7 +514,12 @@ func (m *Module) prepareWorkflowCommunicationPublishTarget(
 	if err != nil {
 		return workflowCommunicationPreflight{}, err
 	}
-	bound, err := m.bindWorkflowCredentialAuthority(ctx, actor, principal, question)
+	var bound communicationRequestAuthority
+	if principal.System {
+		bound, err = m.bindSystemCommunicationRequestAuthority(ctx, actor.SystemPrincipal, principal, question)
+	} else {
+		bound, err = m.bindWorkflowCredentialAuthority(ctx, actor, principal, question)
+	}
 	if err != nil {
 		return workflowCommunicationPreflight{}, err
 	}

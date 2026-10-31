@@ -67,7 +67,8 @@
   "effects": {
     "push": "푸시",
     "pull_request": "풀 리퀘스트",
-    "merge": "병합"
+    "merge": "병합",
+    "issue_comment": "이슈 댓글"
   },
   "authority": {
     "requires": "{{permission}} 필요",
@@ -174,6 +175,7 @@
     "field_not_accepted": "요청에 이 라우트가 허용하지 않는 필드가 포함되어 있습니다.",
     "forbidden": "현재 권한으로는 이 대상에서 이 작업을 허용하지 않습니다.",
     "head_mismatch": "풀 리퀘스트의 헤드가 더 이상 검토된 커밋이 아닙니다.",
+    "link_not_allowed": "링크는 승인된 저장소의 풀 리퀘스트를 가리켜야 합니다.",
     "host_credential_refused": "Git 호스트가 바인딩의 자격 증명 또는 그 범위를 거부했습니다. 아무것도 디스패치되지 않았습니다.",
     "host_unavailable": "Git 호스트에 연결할 수 없습니다. 아무것도 디스패치되지 않았습니다.",
     "intent_settled": "인텐트가 이미 확정되어 포기할 수 없습니다.",
@@ -201,7 +203,13 @@
     "unsupported_requirement": "호스트가 이 요구 사항을 이행할 수 없습니다. 예: GitLab의 리베이스 병합.",
     "version_conflict": "대상을 연 이후 대상이 변경되었습니다. 다시 열어 현재 버전을 확인하십시오.",
     "workflow_change_refused": "커밋이 CI 워크플로 파일을 변경하며 이 대상은 게시를 거부합니다.",
-    "unknown": "엔진이 이 콘솔이 설명하지 않는 코드로 요청을 거부했습니다."
+    "unknown": "엔진이 이 콘솔이 설명하지 않는 코드로 요청을 거부했습니다.",
+    "no_branch": "세션 폴더가 어떤 브랜치에도 있지 않습니다. 브랜치로 전환한 뒤 다시 제출하세요.",
+    "no_commit": "세션 브랜치에 아직 커밋이 없습니다.",
+    "nothing_to_ship": "세션의 커밋은 병합될 브랜치에 아무것도 추가하지 않습니다.",
+    "commit_refused": "세션 폴더가 커밋을 거부했습니다. 읽기 전용이거나, 아직 작업 중이거나, 프로필에 이름과 이메일이 없습니다.",
+    "approval_denied": "누군가 이 푸시를 승인하지 않았거나 승인이 종료되었습니다. 다시 제출하여 새 검토를 요청하세요.",
+    "approval_unavailable": "승인 서비스가 응답하지 못했습니다. 잠시 후 다시 제출하세요."
   },
   "intents": {
     "title": "인텐트",
@@ -254,5 +262,24 @@
     "abandonTitle": "인텐트 {{id}}을(를) 포기하시겠습니까?",
     "abandonDescription": "포기하면 이 미해결 인텐트에 대한 책임을 맡았다고 기록합니다. 호스트를 변경하거나 읽지 않으며, 새 요청이 이 인텐트를 확인할 때까지 범위는 계속 보유됩니다.",
     "abandonReason": "사유(최대 256자)"
+  },
+  "ship": {
+    "button": "제출",
+    "shipTo": "{{prefix}}에 제출",
+    "title": "이 세션 제출",
+    "description": "세션의 변경 사항을 내 이름으로 커밋하고, {{prefix}} 아래 브랜치로 푸시한 뒤, 풀 리퀘스트를 한 번에 엽니다.",
+    "submit": "제출",
+    "message": "커밋 메시지",
+    "messageHint": "세션 폴더에 변경 사항이 있을 때만 사용됩니다. 기본값은 제목입니다.",
+    "shipped": "제출됨: {{branch}}을(를) 푸시했습니다.",
+    "pullRequest": "풀 리퀘스트 #{{number}}",
+    "pullRequestOpen": "풀 리퀘스트 열기",
+    "awaitingTitle": "다른 사람의 승인을 기다리는 중",
+    "awaitingBody": "변경 사항이 커밋되었습니다. 푸시가 나가기 전에 다른 사람이 승인해야 합니다(승인 {{id}}). 승인되면 다시 제출하세요.",
+    "again": "다시 제출",
+    "incompleteTitle": "제출이 끝나지 않았습니다",
+    "incompletePush": "{{branch}}의 푸시가 적용되지 않았습니다({{state}}). 이 대상의 인텐트를 확인한 뒤 다시 제출하세요.",
+    "incompletePullRequest": "{{branch}}은(는) 푸시되었지만 풀 리퀘스트가 열리지 않았습니다({{code}}). 다시 제출하여 재시도하세요.",
+    "pullRequests": "풀 리퀘스트"
   }
 }

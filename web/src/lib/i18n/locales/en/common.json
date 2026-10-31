@@ -41,6 +41,7 @@
     "noResultsHint": "No row matches the current filter. Clear it, or widen the search, to see the rows again.",
     "comingSoon": "Coming soon",
     "loaded": "Loaded",
+    "updatedReloaded": "Updated, reloaded",
     "yes": "Yes",
     "no": "No"
   },
@@ -291,8 +292,7 @@
     "group": {
       "general": "General",
       "launcher": "Starting a session",
-      "surface": "The work surface",
-      "navRail": "Navigation rail"
+      "surface": "The work surface"
     },
     "command": {
       "palette": {
@@ -317,7 +317,8 @@
         "closeBeside": "Close session beside",
         "focusBeside": "Move focus between sessions",
         "nextPane": "Next pane",
-        "previousPane": "Previous pane"
+        "previousPane": "Previous pane",
+        "approve": "Approve the request in the conversation once"
       },
       "rail": {
         "next": "Next session",
@@ -327,15 +328,6 @@
         "open": "Open the session",
         "pin": "Pin or unpin it",
         "menu": "Open the session's actions menu"
-      },
-      "navRail": {
-        "next": "Next module",
-        "previous": "Previous module",
-        "expand": "Open the area, or enter it",
-        "fold": "Fold the area, or go back to it",
-        "first": "First module",
-        "last": "Last module",
-        "pin": "Pin or unpin this module"
       },
       "session": {
         "new": "New session",
@@ -362,8 +354,7 @@
     },
     "precedence": "When two rows share keys, the last one that applies wins.",
     "problems_one": "{{count}} binding could not be read and does not fire: {{commands}}",
-    "problems_other": "{{count}} bindings could not be read and do not fire: {{commands}}",
-    "navRailNote": "The rail is one tab stop. These keys work while it has focus."
+    "problems_other": "{{count}} bindings could not be read and do not fire: {{commands}}"
   },
   "ui": {
     "status": {
@@ -411,11 +402,14 @@
       "copied": "Copied",
       "copyFailed": "Could not copy. Select the command and copy it."
     },
+    "quoteReply": "Quote reply",
     "copy": {
+      "markdown": "Copy Markdown block",
       "message": "Copy message",
       "code": "Copy code",
       "copied": "Copied",
-      "failed": "Could not copy. Select the text and copy it."
+      "failed": "Could not copy. Select the text and copy it.",
+      "value": "Copy {{value}}"
     }
   },
   "resize": {

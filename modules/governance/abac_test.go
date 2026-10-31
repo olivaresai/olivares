@@ -346,3 +346,28 @@ func TestABACRejectsInertAndInvalidSyntax(t *testing.T) {
 		t.Fatalf("a non-deny rule must be rejected, got %d", code)
 	}
 }
+
+func TestStoredABACRulesCoverSplitSessionPermissions(t *testing.T) {
+	for _, tc := range []struct {
+		permission string
+		rule       map[string]any
+	}{
+		{"sessions:output:read", map[string]any{"deny": true, "permission": "sessions:run:read"}},
+		{"sessions:output:read", map[string]any{"deny": true, "resource": "run", "principal_kind": "token"}},
+		{"sessions:stop:write", map[string]any{"deny": true, "permission": "sessions:run:write"}},
+		{"sessions:stop:write", map[string]any{"deny": true, "permission": "sessions:run:write", "min_aal": 3}},
+	} {
+		t.Run(tc.permission, func(t *testing.T) {
+			h := newHarness(t)
+			root := h.adminLogin()
+			tenant := h.createOrg(root, "abac-upgrade")
+			h.authorPolicy(root, tenant, "stored-deny", map[string]any{"rules": []any{tc.rule}})
+			req := req(tenant, tc.permission)
+			req.Principal.Kind = auth.KindToken
+			req.Principal.AAL = 1
+			if d, err := h.gov.Evaluator().Evaluate(t.Context(), req); err != nil || d.Allow {
+				t.Fatalf("decision=%+v err=%v", d, err)
+			}
+		})
+	}
+}

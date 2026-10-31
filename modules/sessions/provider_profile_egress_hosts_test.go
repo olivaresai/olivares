@@ -17,7 +17,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// dev#2154: an API-key session's network admits only its provider's endpoint; a
+// the regression: an API-key session's network admits only its provider's endpoint; a
 // tenant administrator can declare the hosts it may also reach. The hosts take
 // the registries' route into the launch's egress policy, none is added by
 // default, and each is admitted only at public addresses.
@@ -59,7 +59,7 @@ func TestProfileEgressHosts_TheLaunchGrantsTheDeclaredHostsOnly(t *testing.T) {
 	if err := m.configureProfilePackages(ctx, ctx, tenant, "run_1", &p, &spec); err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"https://api.github.com/", "https://github.com/"}; !slices.Equal(spec.NetworkPolicy.PublicProviders, want) {
+	if want := []string{"https://api.github.com/", "ssh://api.github.com/", "https://github.com/", "ssh://github.com/"}; !slices.Equal(spec.NetworkPolicy.PublicProviders, want) {
 		t.Fatalf("public providers = %v, want %v", spec.NetworkPolicy.PublicProviders, want)
 	}
 	if want := []string{bound.Endpoint}; !slices.Equal(spec.NetworkPolicy.Providers, want) {

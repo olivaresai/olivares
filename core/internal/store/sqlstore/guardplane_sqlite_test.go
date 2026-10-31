@@ -270,7 +270,7 @@ func TestSQLiteGuardStatementsCarryNoPostgresTokens(t *testing.T) {
 func newRegistryForTest(t *testing.T) *registry {
 	t.Helper()
 	reg := newRegistry()
-	for _, d := range coreDescriptors() {
+	for _, d := range currentCoreDescriptors() {
 		if err := reg.registerCore(d); err != nil {
 			t.Fatalf("register core descriptor: %v", err)
 		}

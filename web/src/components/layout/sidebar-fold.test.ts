@@ -14,7 +14,7 @@
 // The property that matters is stated directly below: every published label must match
 // itself. A folding function can only break that by changing letters.
 import { describe, expect, it } from 'vitest'
-import { fold } from './sidebar'
+import { fold } from '@/features/navigation/model'
 
 describe('filter folding', () => {
   it('folds case', () => {

@@ -49,7 +49,7 @@ const sunPathMax = 108
 
 // shortSocketPath devuelve una ruta de socket que CABE, y falla ruidosamente si no puede.
 //
-// ⛔ POR QUE NO VALE t.TempDir(), medido el 2026-08-19 en ci-runner-8:
+// ⛔ POR QUE NO VALE t.TempDir(), medido el 2026-08-19 en build-host:
 //
 //	listen unix /home/runner/actions-runner-8/_work/_temp/o.0F2wyQ/
 //	  TestGatherDocker_APIError_HealthFinding1400357983/001/d.sock: bind: invalid argument

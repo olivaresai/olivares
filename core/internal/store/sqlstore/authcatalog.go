@@ -6,6 +6,7 @@ package sqlstore
 
 import (
 	"encoding/json"
+	"slices"
 
 	"github.com/olivaresai/olivares/core/model"
 )
@@ -40,6 +41,21 @@ func authDescriptors() []model.EntityDescriptor {
 		totpCredentialDescriptor, totpRecoveryCodeDescriptor, authPolicyDescriptor,
 		deploymentSettingsDescriptor,
 	}
+}
+
+// currentAuthDescriptors returns the live auth-partition schema used by reader
+// declarations while authDescriptors stays frozen for historical migrations.
+func currentAuthDescriptors() []model.EntityDescriptor {
+	ds := authDescriptors()
+	for i, d := range ds {
+		if d.Kind == authSessionDescriptor.Kind {
+			ds[i] = authSessionDescriptorV28
+		}
+		if d.Kind == apiTokenDescriptor.Kind {
+			ds[i] = apiTokenDescriptorV29
+		}
+	}
+	return ds
 }
 
 // encTenant encodes a required tenant id to its canonical text.
@@ -341,6 +357,21 @@ var authSessionDescriptor = model.EntityDescriptor{
 	},
 }
 
+// authSessionDescriptorV28 is the current auth-session schema. Historical
+// migrations keep authSessionDescriptor frozen; v28 and runtime repositories
+// use this descriptor for the observed-use columns.
+var authSessionDescriptorV28 = func() model.EntityDescriptor {
+	d := authSessionDescriptor
+	d.Fields = append(slices.Clone(d.Fields),
+		field("last_used_at", model.KindTimestamp, true),
+		pdecl(field("client_kind", model.KindText, true),
+			model.None("the last observed client transport, rendered only: core/api/handlers_auth.go:478-484")),
+		pdecl(field("device_name", model.KindText, true), model.None("owner-chosen device display label, rendered only: core/api/handlers_auth.go:483")),
+		pdecl(field("pairing_source_id", model.KindUUID, true), model.None("a source auth-session row id, not an account, for one-time pairing: core/auth/session_pairing.go:116-119, core/auth/session_pairing.go:154-157")),
+	)
+	return d
+}()
+
 var authSessionCodec = model.Codec[model.AuthSession]{
 	Base: func(s *model.AuthSession) *model.BaseFields { return &s.BaseFields },
 	Encode: func(s model.AuthSession) (model.Record, error) {
@@ -353,6 +384,8 @@ var authSessionCodec = model.Codec[model.AuthSession]{
 			"expires_at": encTS(s.ExpiresAt), "revoked": s.Revoked, "created_ip": s.CreatedIP,
 			"aal": encOptInt(int64(s.AAL)), "amr": amr, "aal_expires_at": encOptTS(s.AALExpiresAt),
 			"tenant_scope": encOptTenant(s.TenantScope), "aal_authenticated_at": encOptTS(s.AALAuthenticatedAt),
+			"last_used_at": encOptTS(s.LastUsedAt), "client_kind": s.ClientKind,
+			"device_name": s.DeviceName, "pairing_source_id": encOptID(s.PairingSourceID),
 		}, nil
 	},
 	Decode: func(b model.BaseFields, r model.Record) (model.AuthSession, error) {
@@ -372,17 +405,23 @@ var authSessionCodec = model.Codec[model.AuthSession]{
 		if err != nil {
 			return model.AuthSession{}, err
 		}
+		lastUsedAt, err := decOptTS(r, "last_used_at")
+		if err != nil {
+			return model.AuthSession{}, err
+		}
 		return model.AuthSession{BaseFields: b, UserID: decID(r, "user_id"), Selector: r.String("selector"),
 			SecretHash: r.Bytes("secret_hash"), ExpiresAt: exp, Revoked: r.Bool("revoked"),
 			CreatedIP: r.String("created_ip"), AAL: int(r.Int("aal")), AMR: amr, AALExpiresAt: aalExp,
-			TenantScope: decTenant(r, "tenant_scope"), AALAuthenticatedAt: authenticatedAt}, nil
+			TenantScope: decTenant(r, "tenant_scope"), AALAuthenticatedAt: authenticatedAt,
+			LastUsedAt: lastUsedAt, ClientKind: r.String("client_kind"),
+			DeviceName: r.String("device_name"), PairingSourceID: decID(r, "pairing_source_id")}, nil
 	},
 }
 
 // --- WebAuthnCredential --------------------------------------------------------
 
 // webauthnCredentialDescriptor stores a user's registered FIDO2 authenticators
-//. Public verifier material only — the credential id and the
+// . Public verifier material only — the credential id and the
 // library's full credential record (public key, flags, sign count, attestation);
 // never a private key or a challenge. The credential id is unique per tenant
 // (WebAuthn requires per-RP uniqueness; every row lives in the system tenant).
@@ -626,13 +665,22 @@ var apiTokenDescriptor = model.EntityDescriptor{
 	},
 }
 
+// apiTokenDescriptorV29 is the current API-token schema. Historical migrations
+// keep apiTokenDescriptor frozen; v29 and runtime repositories use this descriptor
+// for issue-time role provenance.
+var apiTokenDescriptorV29 = func() model.EntityDescriptor {
+	d := apiTokenDescriptor
+	d.Fields = append(slices.Clone(d.Fields), field("group_derived_role", model.KindBool, false))
+	return d
+}()
+
 var apiTokenCodec = model.Codec[model.APIToken]{
 	Base: func(t *model.APIToken) *model.BaseFields { return &t.BaseFields },
 	Encode: func(t model.APIToken) (model.Record, error) {
 		return model.Record{
 			"name": t.Name, "user_id": encOptID(t.UserID), "selector": t.Selector,
 			"secret_hash": encBytes(t.SecretHash), "bound_tenant_id": encOptTenant(t.BoundTenantID),
-			"role": t.Role, "is_superadmin": t.IsSuperadmin, "expires_at": encOptTS(t.ExpiresAt),
+			"role": t.Role, "group_derived_role": t.GroupDerivedRole, "is_superadmin": t.IsSuperadmin, "expires_at": encOptTS(t.ExpiresAt),
 			"revoked": t.Revoked, "last_used_at": encOptTS(t.LastUsedAt),
 			"audience": t.Audience, "act_as_user_id": encOptID(t.ActAsUserID),
 			"parent_token_id": encOptID(t.ParentTokenID), "scope": t.Scope,
@@ -652,7 +700,7 @@ var apiTokenCodec = model.Codec[model.APIToken]{
 		}
 		return model.APIToken{BaseFields: b, Name: r.String("name"), UserID: decID(r, "user_id"),
 			Selector: r.String("selector"), SecretHash: r.Bytes("secret_hash"),
-			BoundTenantID: decTenant(r, "bound_tenant_id"), Role: r.String("role"),
+			BoundTenantID: decTenant(r, "bound_tenant_id"), Role: r.String("role"), GroupDerivedRole: r.Bool("group_derived_role"),
 			IsSuperadmin: r.Bool("is_superadmin"), ExpiresAt: exp, Revoked: r.Bool("revoked"),
 			LastUsedAt: used, Audience: r.String("audience"), ActAsUserID: decID(r, "act_as_user_id"),
 			ParentTokenID: decID(r, "parent_token_id"), Scope: r.String("scope"),

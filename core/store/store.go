@@ -191,7 +191,7 @@ type Scope interface {
 	// equals its tenant id, it can only ever write the caller's own tenant, so it
 	// is the safe write path for tenant-level configuration such as the SCIM SET
 	// receiver's publisher verification key (a PUBLIC key, not a secret).
-	SetOrgSettings(ctx context.Context, settings map[string]any) (model.Org, error)
+	SetOrgSettings(ctx context.Context, settings map[string]any, expectedVersion ...int64) (model.Org, error)
 
 	// Agents returns the agent repository.
 	Agents() Repository[model.Agent]

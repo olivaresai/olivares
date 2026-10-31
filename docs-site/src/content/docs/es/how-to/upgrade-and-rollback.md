@@ -53,7 +53,7 @@ protecciones seguirán activas:
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.4
+olivares upgrade --check --current-version 0.5
 ```
 <!-- /release -->
 
@@ -174,8 +174,7 @@ del host y, en el appliance de Olivares, `systemctl start olivares-appliance-upd
 nombra además `olivares license connect refresh`. La comprobación es por ruta, así que también
 se niega un binario que `install.sh --bindir /usr/bin` haya dejado ahí.
 
-La consola ofrece la mitad de solo lectura de la misma información: **Settings → update
-status** llama a `POST /v1/console/update-check`, que ejecuta bajo demanda una comprobación del
+La consola ofrece la mitad de solo lectura de la misma información: **Operaciones → Actualizaciones** (`/updates`) llama a `POST /v1/console/update-check`, que ejecuta bajo demanda una comprobación del
 canal configurado. Un despliegue air-gap o sin canal configurado responde `501` y explica el
 motivo, en lugar de afirmar que no hay actualización.
 

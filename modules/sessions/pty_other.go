@@ -12,6 +12,6 @@ import (
 	"time"
 )
 
-func (pr *procRunner) launchPTY(*exec.Cmd, time.Duration, bool, func()) (*procProcess, error) {
+func (pr *procRunner) launchPTY(*exec.Cmd, time.Duration, bool, func(), bool) (*procProcess, error) {
 	return nil, errors.New("sessions: local PTY runner requires Linux")
 }

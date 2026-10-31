@@ -83,7 +83,7 @@ func observeManaged(t *testing.T, o *hostToolObserver, program string) string {
 	return managed[0].Match
 }
 
-// dev#2609: GET provider-profiles/{ref}/host-tools asks the observer about Claude Code. The
+// the regression: GET provider-profiles/{ref}/host-tools asks the observer about Claude Code. The
 // observer's verifier is unavailable on purpose, so its answer is "unverified" and the cache
 // keeps only installed releases: every call read the whole executable (251 MB in the release
 // container) and kept nothing. An executable that has not changed is read once.
@@ -105,7 +105,7 @@ func TestHostToolObservationDoesNotReadAnUnchangedClaudeExecutableAgain(t *testi
 		}
 	}
 	if n := hostToolsBytesRead(t) - before; n >= padding {
-		t.Fatalf("three observations of an unchanged Claude read %d bytes; a hash of its %d-byte executable per call is dev#2609", n, padding)
+		t.Fatalf("three observations of an unchanged Claude read %d bytes; a hash of its %d-byte executable per call is the regression", n, padding)
 	}
 }
 
@@ -149,7 +149,7 @@ func rewriteInPlace(t *testing.T, path string, body []byte) {
 	}
 }
 
-// dev#2614: Detect hashed every vendor-default file and every PATH entry it found, and the
+// the regression: Detect hashed every vendor-default file and every PATH entry it found, and the
 // host observer reads only their origin, match, executable bit and identity, never the digest.
 // A native install (a version file, the symlink to it on the PATH) cost two hashes of a
 // 263 MB executable per observation, because the symlink and its target were hashed

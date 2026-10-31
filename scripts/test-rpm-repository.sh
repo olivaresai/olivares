@@ -262,7 +262,7 @@ PY
 STUB_FINGERPRINT=0123456789ABCDEF0123456789ABCDEF01234567
 # The olivares package the fixture repositories hold, named for the release this tree builds.
 # release
-FIXTURE_RPM=olivares-0.4-1.x86_64.rpm
+FIXTURE_RPM=olivares-0.5-1.x86_64.rpm
 # /release
 
 # Stub gpg, rpm, rpmkeys, rpmsign and createrepo_c for the path tests. Every call
@@ -342,7 +342,7 @@ elif tool == "rpm" and any("%{NAME}" in arg for arg in args):
 elif tool == "rpm" and "--qf" in args:
     # One answer per query line, keyed on the --qf flag so an EMPTY query prints nothing,
     # the way a real rpm does. Debian 13's rpm 4.20.1 does not know the OPENPGP tag: it
-    # rejects the whole query as unknown and yields nothing (measured, dev#2711), which
+    # rejects the whole query as unknown and yields nothing (measured, the regression), which
     # read a signed header as unsigned. The signature lands on the tag STUB_RPM_SIGNATURE
     # names (default RSAHEADER, the pgpsig tags' carrier).
     query = value("--qf") or ""
@@ -842,7 +842,7 @@ PY
 	# RPM-02b: the signature query asks only the tags this rpm answers. The pinned tools
 	# image (rpm 6.0.1) knows the OPENPGP tag; Debian 13's rpm 4.20.1, where the
 	# qualification delivery is made, rejects it as unknown, the whole query yields
-	# nothing, and a signed header read as unsigned (dev#2711). Each generation must sign
+	# nothing, and a signed header read as unsigned. Each generation must sign
 	# and verify with its own tag set.
 	local generation
 	for generation in without-openpgp openpgp-only-signature; do
@@ -1090,7 +1090,7 @@ import sys
 document = json.load(open(sys.argv[1], encoding="utf-8"))
 want_packages = [
     # release
-    ["olivares", "olivares-0.4-1.x86_64", "x86_64", "olivares-0.4-1.x86_64.rpm"],
+    ["olivares", "olivares-0.5-1.x86_64", "x86_64", "olivares-0.5-1.x86_64.rpm"],
     # /release
     ["olivares-appliance-base", "olivares-appliance-base-26.900-1.noarch", "noarch",
      "olivares-appliance-base-26.900-1.noarch.rpm"],

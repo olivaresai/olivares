@@ -68,6 +68,20 @@ func LocalLANAddresses() []netip.Addr {
 // Names are supplied at this OS seam so address changes can be tested without
 // changing the test host's network configuration.
 func ensureTLSCert(certPath, keyPath string, dns []string, ips []net.IP) (bool, string, error) {
+	return issueTLSCert(certPath, keyPath, certPath+".ca", keyPath+".ca", dns, ips)
+}
+
+// ensureTLSCertSignedBy is ensureTLSCert for a pair signed by a CA that already exists at caPath
+// and caKeyPath, the engine's. It never makes a CA: a second one would split the operator's trust,
+// so a missing CA is refused before anything is written.
+func ensureTLSCertSignedBy(certPath, keyPath, caPath, caKeyPath string, dns []string, ips []net.IP) (bool, string, error) {
+	if !fileExists(caPath) || !fileExists(caKeyPath) {
+		return false, "", fmt.Errorf("secure: the local TLS CA does not exist yet: %s and %s", caPath, caKeyPath)
+	}
+	return issueTLSCert(certPath, keyPath, caPath, caKeyPath, dns, ips)
+}
+
+func issueTLSCert(certPath, keyPath, caPath, caKeyPath string, dns []string, ips []net.IP) (bool, string, error) {
 	var existing *x509.Certificate
 	var bundledCA *x509.Certificate
 	if fileExists(certPath) && fileExists(keyPath) {
@@ -86,7 +100,6 @@ func ensureTLSCert(certPath, keyPath string, dns []string, ips []net.IP) (bool, 
 			bundledCA, _ = x509.ParseCertificate(pair.Certificate[1])
 		}
 	}
-	caPath, caKeyPath := certPath+".ca", keyPath+".ca"
 	// Only local-CA-signed leaves can be renewed without changing client trust.
 	if existing != nil {
 		managed := bundledCA != nil && bundledCA.IsCA &&
@@ -183,18 +196,33 @@ func localTLSKey(path string) (crypto.Signer, error) {
 		}
 		return signer, nil
 	}
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	key, keyPEM, err := newTLSKey()
 	if err != nil {
 		return nil, err
 	}
-	der, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil {
-		return nil, err
-	}
-	if err := writeSecret(path, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})); err != nil {
+	if err := writeSecret(path, keyPEM); err != nil {
 		return nil, err
 	}
 	return key, nil
+}
+
+func newTLSKey() (crypto.Signer, []byte, error) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, nil, err
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return nil, nil, err
+	}
+	return key, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), nil
+}
+
+// NewTLSKeyPEM returns a new key in the form the local TLS pair keeps its keys in, for a caller that
+// must place the file itself.
+func NewTLSKeyPEM() ([]byte, error) {
+	_, keyPEM, err := newTLSKey()
+	return keyPEM, err
 }
 
 func localTLSTemplate(subject pkix.Name) (*x509.Certificate, error) {

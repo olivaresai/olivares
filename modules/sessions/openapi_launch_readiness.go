@@ -124,6 +124,7 @@ func sessionsLaunchReadinessCodes() []string {
 		"environment_local", "other_environment", "environment_unavailable",
 		"driver_operable", "driver_not_registered", "transport_unsupported",
 		"runner_ready", "runner_not_configured", "isolation_unsupported", "runner_inspection_unavailable",
+		"container_image_missing",
 		"program_present", "program_missing", "program_not_executable",
 		"homes_resolved", "home_unavailable", "home_changed",
 		"auth_source_account_home", "auth_source_managed_injection", "auth_source_legacy_claude",
@@ -144,7 +145,7 @@ func sessionsLaunchReadinessRemediations() []string {
 		"configure_provider_driver", "configure_session_runner", "configure_provider_program",
 		"review_profile_homes", "authorize_auth_source", "configure_claude_credential_source",
 		"configure_provider_credential_adapter", "review_runtime_credential_composition",
-		"select_supported_selection", "retry_inspection",
+		"select_supported_selection", "retry_inspection", "provide_session_image",
 	}
 }
 
@@ -152,7 +153,7 @@ func sessionsLaunchTransportCapabilitiesSchema() map[string]any {
 	return sessionsClosureClosedObject(oas.Obj(
 		"protocol", oas.Obj("type", "string",
 			"description", "The wire contract of the child this selection would own. unknown is a real answer: a registered driver that publishes no transport metadata is never assumed to speak another provider's protocol.",
-			"enum", oas.Enum("claude_stream_json", "claude_remote_control", "codex_app_server", "grok_acp", "opencode_acp", "gemini_acp", "unknown")),
+			"enum", oas.Enum("claude_stream_json", "claude_remote_control", "codex_app_server", "grok_acp", "opencode_acp", "gemini_acp", "cursor_acp", "unknown")),
 		"io", oas.Obj("type", "string",
 			"description", "Whether Olivares bridges the child's I/O in both directions or manages its lifecycle only. lifecycle_only means the provider relays the conversation: there is no bridged turn console to render.",
 			"enum", oas.Enum("bidirectional", "lifecycle_only", "unknown")),

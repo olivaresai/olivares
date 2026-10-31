@@ -129,7 +129,7 @@ func TestAgentProfileGetNamesAnUndeclaredToolPolicy(t *testing.T) {
 	}
 }
 
-// dev#1517: the CLI declares a profile's programs and npm registries, shows them,
+// the regression: the CLI declares a profile's programs and npm registries, shows them,
 // and withdraws them with an empty value; a malformed registry never leaves.
 func TestAgentProfileUpdateDeclaresProgramsAndRegistries(t *testing.T) {
 	withPackages := strings.TrimSuffix(profileJSON, "}") + `,"session_programs":["rea"],` +
@@ -179,7 +179,7 @@ func TestAgentProfileUpdateDeclaresProgramsAndRegistries(t *testing.T) {
 	}
 }
 
-// dev#2154: the CLI declares the hosts an API-key session may reach, shows them,
+// the regression: the CLI declares the hosts an API-key session may reach, shows them,
 // and withdraws them with an empty value; nothing else travels with them.
 func TestAgentProfileUpdateDeclaresEgressHosts(t *testing.T) {
 	withHosts := strings.TrimSuffix(profileJSON, "}") + `,"session_egress_hosts":["api.github.com","github.com"]}`

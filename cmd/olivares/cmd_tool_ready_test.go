@@ -150,10 +150,13 @@ func TestToolStartOllamaStartsTheService(t *testing.T) {
 		t.Fatalf("tool start ollama: %v\n%s", err, errb)
 	}
 	f.mu.Lock()
-	tenant := f.ollamaTenant
+	tenant, sent := f.ollamaTenant, f.ollamaContainer
 	f.mu.Unlock()
 	if tenant != "tenant-a" {
 		t.Fatalf("started for %v, want the person's organization", tenant)
+	}
+	if sent != nil {
+		t.Fatalf("the CLI asked for a container by default: %v", sent)
 	}
 	for _, want := range []string{"Ollama is running at http://127.0.0.1:11434.", "download one in AI tools", "next: olivares session start <folder>"} {
 		if !strings.Contains(out, want) {
@@ -162,5 +165,53 @@ func TestToolStartOllamaStartsTheService(t *testing.T) {
 	}
 	if _, _, err := execSessionCLI(t, nil, append([]string{"tool", "start", "codex"}, sessionCreds(f.URL)...)...); exitcode.From(err) != exitcode.Usage {
 		t.Fatalf("tool start codex = %v, want a usage error", err)
+	}
+}
+
+// `tool start ollama --container` asks the engine for the image and reports the
+// container; llama.cpp and vLLM run from their installed programs only.
+func TestToolStartOllamaContainerFlag(t *testing.T) {
+	f := newFakeToolEngine(t)
+	f.mu.Lock()
+	f.ollamaRuntime = "container"
+	f.mu.Unlock()
+	out, errb, err := execSessionCLI(t, nil, append([]string{"tool", "start", "ollama", "--container"}, sessionCreds(f.URL)...)...)
+	if err != nil {
+		t.Fatalf("tool start ollama --container: %v\n%s", err, errb)
+	}
+	f.mu.Lock()
+	sent := f.ollamaContainer
+	f.mu.Unlock()
+	if sent != true {
+		t.Fatalf("the CLI sent container = %v, want true", sent)
+	}
+	for _, want := range []string{"Ollama is running in a container at http://127.0.0.1:11434.", "download one in AI tools"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("tool start ollama --container lacks %q:\n%s", want, out)
+		}
+	}
+	for _, driver := range []string{"llama-cpp", "vllm"} {
+		if _, _, err := execSessionCLI(t, nil, append([]string{"tool", "start", driver, "--container"}, sessionCreds(f.URL)...)...); exitcode.From(err) != exitcode.Usage {
+			t.Fatalf("tool start %s --container = %v, want a usage error", driver, err)
+		}
+	}
+}
+
+// The shipped default spelled out: `--container=false` starts the installed program and
+// sends no container field, so a person can pin today's behaviour while the flag exists.
+func TestToolStartOllamaContainerFalseKeepsTheProgram(t *testing.T) {
+	f := newFakeToolEngine(t)
+	out, errb, err := execSessionCLI(t, nil, append([]string{"tool", "start", "ollama", "--container=false"}, sessionCreds(f.URL)...)...)
+	if err != nil {
+		t.Fatalf("tool start ollama --container=false: %v\n%s", err, errb)
+	}
+	f.mu.Lock()
+	sent := f.ollamaContainer
+	f.mu.Unlock()
+	if sent != nil {
+		t.Fatalf("the CLI sent container = %v, want no container field", sent)
+	}
+	if !strings.Contains(out, "Ollama is running at http://127.0.0.1:11434.") {
+		t.Fatalf("tool start ollama --container=false =\n%s", out)
 	}
 }

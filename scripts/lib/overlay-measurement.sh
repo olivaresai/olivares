@@ -60,7 +60,7 @@
 #     So the generation is (epoch, seal content digest) and the scope is one invocation.
 #  3. THE EIGHTH SEAL CONSUMER IS NOT ONE OF THE SEVEN. `scripts/check-int-12-no-land.sh`
 #     reads the same seal and is a member of the hook's current-measurement group; seven
-#     independent successes are NOT a proof of cross-leg snapshot isolation. Root's coarse
+#     independent successes are NOT a proof of cross-leg snapshot isolation. the maintainer's coarse
 #     publication lock stays until a proof covers all EIGHT under one capture.
 #  4. `$OLIVARES_ENT_DIR` STAYS RESOLVED IN EACH READER, ON A CODE LINE. The acta
 #     classifier (`scripts/check-overlay-actas-class.sh:56,113-115`) calls an acta VIVA only

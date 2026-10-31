@@ -13,8 +13,10 @@ import { lazy, Suspense } from 'react'
 import { useDocumentTitle } from '@/components/layout/document-title'
 import { RequirePermission } from '@/components/layout/require-permission'
 import { Spinner } from '@/components/ui/spinner'
-import { FEATURE_VIEWS, NAV_AREAS, ROUTE_ALIASES } from '@/features/registry'
+import { FEATURE_VIEWS, ROUTE_ALIASES, TAB_ALIASES } from '@/features/registry'
 import { ANONYMOUS_VIEWS } from '@/features/anonymous-registry'
+import { MOVED_SECTIONS } from '@/features/settings/sections'
+import { AcceptPairingPage } from './pages/accept-pairing'
 import { AcceptInvitePage } from './pages/accept-invite'
 import { LoginPage } from './pages/login'
 import { NotFoundPage } from './pages/not-found'
@@ -30,14 +32,6 @@ const SettingsPage = lazy(() =>
 const AppLayout = lazyRouteComponent(
   () => import('@/components/layout/app-layout'),
   'AppLayout',
-)
-
-// N1 — the nine area directories (features/navigation/area-directory.tsx). One code-split
-// chunk for all nine: they are one component with a different `areaId`.
-const AreaDirectoryView = lazy(() =>
-  import('@/features/navigation/area-directory').then((m) => ({
-    default: m.AreaDirectoryView,
-  })),
 )
 
 const StatusPage = lazy(() =>
@@ -100,6 +94,12 @@ const acceptInviteRoute = createRoute({
   component: AcceptInvitePage,
 })
 
+const acceptPairingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/pair',
+  component: AcceptPairingPage,
+})
+
 //public status page — no authentication required.
 const statusPageRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -129,6 +129,16 @@ const appRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/settings',
+  // A section another place now holds (MOVED_SECTIONS) lands there, with the rest of the
+  // query and the hash, replacing the old entry as an alias does.
+  beforeLoad: ({ search }) => {
+    const { section, ...rest } = search as Record<string, unknown>
+    const to =
+      typeof section === 'string' && Object.hasOwn(MOVED_SECTIONS, section)
+        ? MOVED_SECTIONS[section]
+        : undefined
+    if (to) throw redirect({ to, search: rest, hash: true, replace: true })
+  },
   component: () => (
     <Suspense fallback={<ViewLoading />}>
       <SettingsPage />
@@ -137,27 +147,40 @@ const settingsRoute = createRoute({
 })
 
 /**
- * N1 — the nine area directory routes, one per NAV_AREAS entry. They sit under the
- * authenticated shell like every feature route, so AppLayout's auth guard and TenantGate
- * apply unchanged. No RequirePermission: an area is the union of its leaves, and the
- * directory itself shows only what `can()` allows.
+ * Where an address lands when it moved: the new path, the query it carried with the alias's
+ * own added (a retired `tab` dropped), and the alias's anchor or the old one. `replace`, so
+ * Back returns where the person came from.
  */
-const areaRoutes = NAV_AREAS.map((area) =>
-  createRoute({
-    getParentRoute: () => appRoute,
-    path: area.path,
-    component: () => (
-      <Suspense fallback={<ViewLoading />}>
-        <AreaDirectoryView areaId={area.id} />
-      </Suspense>
-    ),
-  }),
-)
+function landing(
+  to: string,
+  extra: Readonly<Record<string, string>> | undefined,
+  hash: string | undefined,
+  drop?: string,
+) {
+  return redirect({
+    to: to as never,
+    search: ((prev: Record<string, unknown>) => {
+      const kept = { ...prev }
+      if (drop) delete kept[drop]
+      return { ...kept, ...extra }
+    }) as never,
+    hash: hash ?? true,
+    replace: true,
+  })
+}
 
 const featureRoutes = FEATURE_VIEWS.map((view) =>
   createRoute({
     getParentRoute: () => appRoute,
     path: view.path,
+    // A retired tab of this page lands on the place that holds it now (TAB_ALIASES).
+    beforeLoad: ({ search }) => {
+      const asked = (search as Record<string, unknown>).tab
+      const moved = TAB_ALIASES.find(
+        (a) => a.path === view.path && a.tab === asked,
+      )
+      if (moved) throw landing(moved.to, moved.search, moved.hash, 'tab')
+    },
     // The WHOLE view, not just its permission string: a view whose authority is a
     // registered capability question needs its declaration, and one whose url names a
     // single entity needs the location. Both are read inside the gate, so this map stays
@@ -182,8 +205,9 @@ const anonymousFeatureRoutes = ANONYMOUS_VIEWS.map((view) =>
  * runbook's deep link survive a view moving. `replace` keeps the dead url out of history:
  * Back should return where the operator came from, not bounce through the redirect again.
  *
- * Empty today — Moved no path — and registry.route-conservation.test.ts pins that
- * every alias target resolves, so this can never mount a redirect into a 404.
+ * The retired area directories (`/areas/<id>`) are the aliases today, and
+ * registry.route-conservation.test.ts pins that every alias target resolves, so this can
+ * never mount a redirect into a 404.
  */
 const aliasRoutes = ROUTE_ALIASES.map((a) =>
   createRoute({
@@ -195,7 +219,9 @@ const aliasRoutes = ROUTE_ALIASES.map((a) =>
       // as canonical shareable state (lib/hooks/use-url-state.ts) — so a bookmarked
       // /audit?from=…&to=… would land on a bare /audit and quietly show a different
       // result set. Preserving the path while losing the query is not conservation.
-      throw redirect({ to: a.to, search: true, hash: true, replace: true })
+      throw a.search || a.hash
+        ? landing(a.to, a.search, a.hash)
+        : redirect({ to: a.to, search: true, hash: true, replace: true })
     },
   }),
 )
@@ -204,12 +230,8 @@ export const routeTree = rootRoute.addChildren([
   loginRoute,
   setupRoute,
   acceptInviteRoute,
+  acceptPairingRoute,
   statusPageRoute,
   ...anonymousFeatureRoutes,
-  appRoute.addChildren([
-    settingsRoute,
-    ...areaRoutes,
-    ...featureRoutes,
-    ...aliasRoutes,
-  ]),
+  appRoute.addChildren([settingsRoute, ...featureRoutes, ...aliasRoutes]),
 ])

@@ -29,6 +29,7 @@ import {
   type RunDTO,
 } from '@/features/agentops/types'
 import { ApiError } from '@/lib/api/errors'
+import { governanceKeys } from '@/features/governance/api'
 import { useAuth } from '@/lib/auth/context'
 import { sessionsKeys } from './api'
 import { canMoveSession, isLiveRun } from './provenance'
@@ -121,6 +122,9 @@ export function MoveSessionDialog({
     mutationFn: async () => {
       if (isLiveRun(run)) {
         await agentOpsApi.stop(run.run_ref, await currentControlFence(run))
+        void qc.invalidateQueries({
+          queryKey: governanceKeys.approvals(activeTenant),
+        })
         stopped.current = true
       }
       return agentOpsApi.move(run.run_ref, chosen)
@@ -148,6 +152,9 @@ export function MoveSessionDialog({
         summary,
       }),
     onSuccess: (started) => {
+      void qc.invalidateQueries({
+        queryKey: governanceKeys.approvals(activeTenant),
+      })
       if (started.summary_state === 'delivered') {
         toast.success(t('move.started'))
         done()

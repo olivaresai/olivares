@@ -107,6 +107,10 @@ func TestEveryColumnIsDeclaredAndEveryLeafClassified(t *testing.T) {
 			}
 		}
 
+		if unread := unreadCounted(t, e.eng.census); len(unread) != 0 {
+			t.Errorf("counted columns without retirement readers: %v", unread)
+		}
+
 		// The policy kinds the writers accept are declared, each with a class.
 		policies := censusFixtureDescriptor("fixture.policies", model.KindJSON, model.Union("kind", model.PolicyKinds))
 		for _, defect := range policies.PrincipalDefects() {
@@ -308,7 +312,7 @@ func readerCensusDescriptors(t *testing.T, census store.CompositionCensus) []mod
 
 // unreadCounted returns the counted columns of st's composition that no declared
 // module reads.
-func unreadCounted(t *testing.T, st store.Store) []string {
+func unreadCounted(t *testing.T, st any) []string {
 	t.Helper()
 	census, ok := st.(store.CompositionCensus)
 	readers, ok2 := st.(store.CompositionReaders)

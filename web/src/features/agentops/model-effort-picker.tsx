@@ -46,7 +46,7 @@ import {
 } from './model-choices'
 import { groupModels } from './model-catalog'
 import { useModelFavorites } from './model-favorites'
-import { toolName } from './tool-names'
+import { toolName } from './engine-tools'
 import type { ProfileModelDTO } from './types'
 import './i18n'
 

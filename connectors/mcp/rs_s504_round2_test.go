@@ -12,13 +12,13 @@ import (
 )
 
 // rs_s504_round2_test.go — Stage-5 review round 2 (Codex,
-// an internal design note (not shipped)): the four
+// an internal audit): the four
 // blocking findings, each pinned by the reviewer's OWN concrete failing input.
 //
 // PROVENANCE, corrected by round-3 finding 5: the B1/B2/B3 tests and the first
 // TWO B4 subtests (mediated sampling, destructive tools/call) were written and
 // RUN against commit 515ff1e6 BEFORE the fixes existed — their literal failing
-// output lives in an internal design note (not shipped)
+// output lives in an internal audit
 // The THIRD B4 subtest (destructive tasks/update) was added AFTER that RED run
 // and is MUTATION-PROVED, not RED-first (MUT-4c in the same artifact; corrected
 // reproducible record in its CORRECTION section). Blocker 3's RED is the

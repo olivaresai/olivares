@@ -52,6 +52,8 @@ type ApprovalRequest struct {
 	SubjectRef  string // the schedule id
 	PlanHash    string
 	RequestedBy string // audit-actor string of the asking principal (provenance)
+	// RequestedByUser is the stable owner identity used for separation of duty.
+	RequestedByUser model.ID
 }
 
 // GateDecision is the gate's answer for one approval reference.

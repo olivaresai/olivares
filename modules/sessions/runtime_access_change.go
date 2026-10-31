@@ -94,7 +94,7 @@ func (m *Module) stopForAccessLoss(ctx context.Context, scope auth.SessionScope,
 	go func() {
 		defer stopRelease()
 		defer cancel()
-		outcome, stopErr, revokeErr := m.stopLiveEffect(stopCtx, lr, reason, legacyRevocationPhase(stopCtx))
+		outcome, stopErr, revokeErr := m.stopLiveEffect(stopCtx, lr, reason, "", legacyRevocationPhase(stopCtx))
 		if stopErr != nil {
 			lr.cancel()
 		}

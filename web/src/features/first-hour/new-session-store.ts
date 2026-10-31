@@ -18,6 +18,7 @@ export interface AdvancedLaunch {
   effort?: string
   fastMode?: boolean
   serviceTier?: string
+  runOn?: string
 }
 
 const focused = () =>

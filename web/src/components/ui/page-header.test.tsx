@@ -202,7 +202,7 @@ describe('PageHeader', () => {
    */
   // The controls share the title's row while there is room, and wrap under it before the
   // title gets narrower than 10rem. The old rule (never wrap) squeezed "Provider profiles"
-  // to 0 px at 1280 px, one letter per line (HU-18).
+  // to 0 px at 1280 px, one letter per line.
   it('keeps the title readable: the controls wrap under it before it narrows past 10rem', () => {
     const { container } = render(
       <PageHeader

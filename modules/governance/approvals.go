@@ -5,6 +5,7 @@
 package governance
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -55,15 +56,21 @@ const maxDecisionRetries = 6
 // lower their own approval bar; only when no policy matches do the request's own
 // values (or the default of one approval) apply.
 type createApprovalRequest struct {
-	SessionRef  string          `json:"session_ref,omitempty"`
-	SubjectKind string          `json:"subject_kind"`
-	SubjectRef  string          `json:"subject_ref"`
-	Action      string          `json:"action"`
-	Reason      string          `json:"reason,omitempty"`
-	Review      *ApprovalReview `json:"review,omitempty"`
+	// Set only by the engine for a provider method that can grant session scope.
+	SessionScopeAllowed bool            `json:"-"`
+	SessionRef          string          `json:"session_ref,omitempty"`
+	SubjectKind         string          `json:"subject_kind"`
+	SubjectRef          string          `json:"subject_ref"`
+	Action              string          `json:"action"`
+	Reason              string          `json:"reason,omitempty"`
+	Review              *ApprovalReview `json:"review,omitempty"`
 	// ReasonMasks is internal masker provenance over the pre-pattern-clean
 	// reason. Wire input never supplies exemptions for marker-looking text.
 	ReasonMasks []redact.GeneratedMaskSpan `json:"-"`
+	// RequestedBy is the person accountable for the approval, distinct from the
+	// system actor when an engine proposes a scheduled fire.
+	RequestedBy     string   `json:"-"`
+	RequestedByUser model.ID `json:"-"`
 	// ReviewMasks is generated provenance relative to the pre-clean Review.Text.
 	// Like ReasonMasks, it is internal only and is never stored or emitted.
 	ReviewMasks       []redact.GeneratedMaskSpan `json:"-"`
@@ -87,25 +94,26 @@ type createApprovalRequest struct {
 // the live classification (policy ∨ built-in default, risktier.go) — never a
 // stored snapshot a later policy change could invalidate.
 type approvalDTO struct {
-	SessionRef        string          `json:"session_ref,omitempty"`
-	ID                string          `json:"id"`
-	SubjectKind       string          `json:"subject_kind,omitempty"`
-	SubjectRef        string          `json:"subject_ref,omitempty"`
-	Action            string          `json:"action,omitempty"`
-	RequestedBy       string          `json:"requested_by,omitempty"`
-	LaunchedBy        string          `json:"launched_by,omitempty"`
-	Status            string          `json:"status"`
-	RiskTier          string          `json:"risk_tier"`
-	RequiredApprovals int64           `json:"required_approvals"`
-	ApproveCount      int64           `json:"approve_count"`
-	RejectCount       int64           `json:"reject_count"`
-	Reason            string          `json:"reason,omitempty"`
-	Review            *ApprovalReview `json:"review,omitempty"`
-	PolicyRef         string          `json:"policy_ref,omitempty"`
-	ExpiresAt         string          `json:"expires_at,omitempty"`
-	EscalateAt        string          `json:"escalate_at,omitempty"`
-	Escalated         bool            `json:"escalated"`
-	DecidedAt         string          `json:"decided_at,omitempty"`
+	SessionScopeAllowed bool            `json:"session_scope_allowed,omitempty"`
+	SessionRef          string          `json:"session_ref,omitempty"`
+	ID                  string          `json:"id"`
+	SubjectKind         string          `json:"subject_kind,omitempty"`
+	SubjectRef          string          `json:"subject_ref,omitempty"`
+	Action              string          `json:"action,omitempty"`
+	RequestedBy         string          `json:"requested_by,omitempty"`
+	LaunchedBy          string          `json:"launched_by,omitempty"`
+	Status              string          `json:"status"`
+	RiskTier            string          `json:"risk_tier"`
+	RequiredApprovals   int64           `json:"required_approvals"`
+	ApproveCount        int64           `json:"approve_count"`
+	RejectCount         int64           `json:"reject_count"`
+	Reason              string          `json:"reason,omitempty"`
+	Review              *ApprovalReview `json:"review,omitempty"`
+	PolicyRef           string          `json:"policy_ref,omitempty"`
+	ExpiresAt           string          `json:"expires_at,omitempty"`
+	EscalateAt          string          `json:"escalate_at,omitempty"`
+	Escalated           bool            `json:"escalated"`
+	DecidedAt           string          `json:"decided_at,omitempty"`
 	// CreatedAt is when the request was made: a console draws its wait from then.
 	CreatedAt string `json:"created_at,omitempty"`
 	// Consumed is set once a caller has spent this approval's single use. A caller
@@ -122,7 +130,8 @@ func toApprovalDTO(rec model.Record, now model.Timestamp, tier ActionRiskTier) a
 	required := actionApprovalFloor(rec.String(colAction), rec.Int(colRequiredApproval), tier)
 	status := approvalGrantStatus(rec, now, tier)
 	return approvalDTO{
-		ID: rec.String(model.ColID), SessionRef: rec.String(colApprovalSessionRef), SubjectKind: rec.String(colSubjectKind), SubjectRef: rec.String(colSubjectRef),
+		SessionScopeAllowed: rec.Bool(colSessionScopeAllowed),
+		ID:                  rec.String(model.ColID), SessionRef: rec.String(colApprovalSessionRef), SubjectKind: rec.String(colSubjectKind), SubjectRef: rec.String(colSubjectRef),
 		Action: rec.String(colAction), RequestedBy: rec.String(colRequestedBy), LaunchedBy: rec.String(colLaunchedBy), Status: status,
 		RiskTier:          string(tier),
 		RequiredApprovals: required, ApproveCount: rec.Int(colApproveCount), RejectCount: rec.Int(colRejectCount),
@@ -243,6 +252,9 @@ func (m *Module) handleCreateApproval(w http.ResponseWriter, r *http.Request, mc
 // IS operator-tunable per the two-human quorum of a re-enable is not).
 // The caller emits approval.requested AFTER its transaction commits.
 func (m *Module) openApprovalRecord(ctx context.Context, sc store.Scope, actor, actorKind, userID string, in createApprovalRequest, minRequired int64, now model.Timestamp, capacity ...int64) (approvalDTO, error) {
+	if in.SessionScopeAllowed && (in.Action != "sessions.provider.approval" || in.SubjectKind != "session_run" || in.SessionRef == "") {
+		return approvalDTO{}, errors.New("session scope requires a provider permission request bound to a session")
+	}
 	// A matching approval policy selects threshold + windows; session launches
 	// cap that threshold at the deployment's available administrators. It also selects
 	// for the action's explicit risk tier.
@@ -274,9 +286,12 @@ func (m *Module) openApprovalRecord(ctx context.Context, sc store.Scope, actor, 
 	}
 	rec := model.Record{
 		colApprovalSessionRef: in.SessionRef, colSubjectKind: in.SubjectKind, colSubjectRef: in.SubjectRef, colAction: in.Action,
-		colRequestedBy: actor, colRequestedByUser: userID,
+		colRequestedBy: cmp.Or(in.RequestedBy, actor), colRequestedByUser: userID,
 		colStatus: statusPending, colRequiredApproval: required, colApproveCount: int64(0), colRejectCount: int64(0),
 		colReason: in.Reason, colPolicyRef: policyRef,
+	}
+	if !in.RequestedByUser.IsZero() {
+		rec[colRequestedByUser] = in.RequestedByUser.String()
 	}
 	if in.LaunchedBy != "" {
 		rec[colLaunchedBy] = in.LaunchedBy
@@ -294,6 +309,9 @@ func (m *Module) openApprovalRecord(ctx context.Context, sc store.Scope, actor, 
 			return approvalDTO{}, err
 		}
 		rec[colApprovalReview] = string(encoded)
+	}
+	if in.SessionScopeAllowed {
+		rec[colSessionScopeAllowed] = true
 	}
 	if expiresIn > 0 {
 		rec[colExpiresAt] = model.NewTimestamp(now.Time().Add(time.Duration(expiresIn) * time.Second)).String()
@@ -524,6 +542,7 @@ func (m *Module) handleGetApproval(w http.ResponseWriter, r *http.Request, mc ap
 // and must never fall back to Decider, which would re-admit the defect.
 type decisionDTO struct {
 	Decision    string `json:"decision"`
+	Scope       string `json:"scope,omitempty"`
 	Decider     string `json:"decider"`
 	DeciderUser string `json:"decider_user,omitempty"`
 	DecidedAt   string `json:"decided_at,omitempty"`
@@ -533,6 +552,7 @@ type decisionDTO struct {
 func toDecisionDTO(rec model.Record) decisionDTO {
 	return decisionDTO{
 		Decision: rec.String(colDecision), Decider: rec.String(colDecider),
+		Scope:       rec.String(colDecisionScope),
 		DeciderUser: rec.String(colDeciderUser),
 		DecidedAt:   rec.String(colDecidedAt), Note: rec.String(colNote),
 	}
@@ -583,6 +603,7 @@ func listApprovalDecisions(ctx context.Context, data approvalData, id model.ID) 
 // string a single human could vary across credentials), backed by the unique index.
 type ApprovalDecisionRequest struct {
 	Decision string `json:"decision"`
+	Scope    string `json:"scope,omitempty"`
 	Note     string `json:"note,omitempty"`
 }
 
@@ -593,6 +614,8 @@ type approvalDecisionError struct {
 }
 
 func (e approvalDecisionError) Error() string { return e.Message }
+
+func (e approvalDecisionError) HTTPStatusCode() int { return e.Status }
 
 // handleDecide lets authorized reviewers approve or reject a pending request.
 func (m *Module) handleDecide(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
@@ -627,6 +650,9 @@ func (m *Module) decideApproval(ctx context.Context, data approvalData, mc api.M
 	if decision != decisionApprove && decision != decisionReject {
 		return Approval{}, approvalDecisionError{Status: http.StatusBadRequest, Message: "decision must be one of approve, reject"}
 	}
+	if in.Scope != "" && (in.Scope != "session" || decision != decisionApprove) {
+		return Approval{}, approvalDecisionError{Status: http.StatusBadRequest, Message: "scope must be session on an approval decision, or omitted for a single use"}
+	}
 	if len(in.Note) > maxNoteLen {
 		return Approval{}, approvalDecisionError{Status: http.StatusBadRequest, Message: "note too long"}
 	}
@@ -640,19 +666,24 @@ func (m *Module) decideApproval(ctx context.Context, data approvalData, mc api.M
 	if err != nil {
 		return Approval{}, err
 	}
+	// seen is the change record this approval was last checked against, when a policy
+	// binds one: the transaction asks for the read once every cheap refusal has passed.
+	var seen *changeRecordObservation
 	for attempt := 0; attempt < maxDecisionRetries; attempt++ {
 		var (
 			out           approvalDTO
 			clientErr     string
 			clientErrCode string
 			clientCode    int
+			needRead      *changeRecordSpec
+			now           model.Timestamp
 		)
-		now := m.clock.Now()
 		err := data.Mutate(ctx, func(sc store.Scope) error {
 			appRepo, err := sc.Ext(approvalKind)
 			if err != nil {
 				return err
 			}
+			now = m.clock.Now()
 			decRepo, err := sc.Ext(decisionKind)
 			if err != nil {
 				return err
@@ -660,6 +691,10 @@ func (m *Module) decideApproval(ctx context.Context, data approvalData, mc api.M
 			rec, err := appRepo.Get(ctx, id)
 			if err != nil {
 				return err // ErrNotFound -> 404
+			}
+			if in.Scope == "session" && !rec.Bool(colSessionScopeAllowed) {
+				clientErr, clientCode = "session scope is not supported for this approval", http.StatusBadRequest
+				return nil
 			}
 			if eff := effectiveStatus(rec, now); eff != statusPending {
 				clientErr, clientCode = "approval is "+eff+"; no decision can be recorded", http.StatusConflict
@@ -730,10 +765,25 @@ func (m *Module) decideApproval(ctx context.Context, data approvalData, mc api.M
 				clientErrCode, clientCode = "step_up_required", http.StatusForbidden
 				return nil
 			}
+			// A policy bound to a change record: approving needs the record in an approved
+			// state now. The transaction cannot read it, so it rolls back to ask, and runs
+			// again with what was seen; a policy that changed meanwhile asks again. Only now,
+			// after every refusal above, so a request that would be refused anyway never
+			// reaches the change system. A rejection is the safe direction and never reads.
+			if decision == decisionApprove {
+				switch live := liveChangeRecord(pols, rec); {
+				case live == nil:
+					seen = nil
+				case !changeRecordCovers(live, seen, now):
+					needRead = live
+					return errChangeRecordRead
+				}
+			}
 			// Insert the decision (append-only; the unique index backstops a same-user race).
 			if _, err := decRepo.Create(ctx, model.Record{
 				colApprovalID: id.String(), colDecision: decision, colDecider: mc.Principal.Actor(),
 				colDeciderUser: deciderUser, colNote: in.Note, colDecidedAt: now.String(),
+				colDecisionScope: in.Scope,
 			}); err != nil {
 				return err // unique-race -> ErrConflict -> retry, where the pre-check returns 409
 			}
@@ -786,6 +836,15 @@ func (m *Module) decideApproval(ctx context.Context, data approvalData, mc api.M
 				newStatus = statusApproved
 			}
 			rec[colApproveCount], rec[colRejectCount], rec[colStatus] = int64(approve), int64(reject), newStatus
+			if seen != nil {
+				// Pin the record the approvers saw: a spend checks this one, whatever the
+				// policy says by then.
+				pin, merr := json.Marshal(seen.spec)
+				if merr != nil {
+					return merr
+				}
+				rec[colChangeRecord] = string(pin)
+			}
 			// Materialize the floored threshold so the stored row (and every DTO
 			// derived from it) agrees with the bar actually being enforced.
 			rec[colRequiredApproval] = required
@@ -798,6 +857,12 @@ func (m *Module) decideApproval(ctx context.Context, data approvalData, mc api.M
 			}
 			out = toApprovalDTO(rec, now, tier)
 			meta := map[string]any{"decision": decision, "status": newStatus, "risk_tier": string(tier), "distinct_approvers": approve}
+			if in.Scope != "" {
+				meta["scope"] = in.Scope
+			}
+			if seen != nil {
+				meta["change_record"] = seen.meta()
+			}
 			if unattributable > 0 {
 				// Recorded, not dropped: an approval carrying decisions no person stands
 				// behind is a fact an auditor must be able to see, even though those
@@ -806,12 +871,22 @@ func (m *Module) decideApproval(ctx context.Context, data approvalData, mc api.M
 			}
 			return auditEvent(ctx, sc, mc, "governance.approval.decision", approvalKind, id, meta)
 		})
+		if errors.Is(err, errChangeRecordRead) {
+			read, _, verr := m.verifyChangeRecord(ctx, mc.Tenant, *needRead)
+			if verr != nil {
+				m.recordChangeRecordRefusal(ctx, data, mc, id, "decision", *needRead, read, verr)
+				return Approval{}, verr
+			}
+			seen = read
+			continue
+		}
 		if clientErr != "" {
 			return Approval{}, approvalDecisionError{Status: clientCode, Code: clientErrCode, Message: clientErr}
 		}
 		if err != nil {
 			if isConflict(err) {
-				continue // version/unique race: reload and re-evaluate
+				seen = nil // a conflict can follow a state change: never reuse it
+				continue   // version/unique race: reload and re-evaluate
 			}
 			return Approval{}, err
 		}
@@ -964,6 +1039,11 @@ func (m *Module) handleConsumeApproval(w http.ResponseWriter, r *http.Request, m
 
 	resp, err := m.consumeApproval(r.Context(), mc.Data, mc, id, in)
 	if err != nil {
+		var refusal approvalDecisionError
+		if errors.As(err, &refusal) {
+			writeJSON(w, refusal.Status, errorBodyCode(refusal.Code, refusal.Message))
+			return
+		}
 		writeStoreError(w, err)
 		return
 	}
@@ -978,14 +1058,36 @@ type ApprovalConsumption struct {
 }
 
 func (m *Module) consumeApproval(ctx context.Context, data approvalData, mc api.ModuleContext, id model.ID, in consumeApprovalRequest) (ApprovalConsumption, error) {
+	return m.consumeApprovalAndAct(ctx, data, mc, id, in, nil, nil)
+}
+
+// approvalSpendPrepare acquires a consumer's transaction fence before the spend
+// reads any protected repository. approvalAct runs after the spend and its ledger
+// entry, in that same transaction. An error rolls back both the spend and the act.
+type approvalSpendPrepare func(context.Context, store.Scope) error
+type approvalAct func(context.Context, store.Scope, model.Record) error
+
+// consumeApprovalAndAct is the one approval-spend path. Consumers that act on an
+// approved grant pass their act here rather than reading its status themselves.
+func (m *Module) consumeApprovalAndAct(ctx context.Context, data approvalData, mc api.ModuleContext, id model.ID, in consumeApprovalRequest, prepare approvalSpendPrepare, act approvalAct) (ApprovalConsumption, error) {
+	// seen is the change record the first spend was last checked against: the transaction
+	// asks for the read only when it is about to spend an approved, unspent grant.
+	var seen *changeRecordObservation
 	for attempt := 0; attempt < maxDecisionRetries; attempt++ {
-		now := m.clock.Now()
+		var now model.Timestamp
 		var (
 			resp        ApprovalConsumption
 			emitReplay  bool
 			replayScope string
+			needRead    *changeRecordSpec
 		)
 		err := data.Mutate(ctx, func(sc store.Scope) error {
+			if prepare != nil {
+				if err := prepare(ctx, sc); err != nil {
+					return err
+				}
+			}
+			now = m.clock.Now()
 			repo, err := sc.Ext(approvalKind)
 			if err != nil {
 				return err
@@ -1022,20 +1124,47 @@ func (m *Module) consumeApproval(ctx context.Context, data approvalData, mc api.
 				resp = ApprovalConsumption{Granted: false, Status: statusExpired}
 				return nil
 			}
+			// These grants authorize an act in this transaction, never a standalone spend.
+			if act == nil && (rec.String(colAction) == ksReenableAction || strings.HasPrefix(rec.String(colAction), guardianApprovalPrefix)) {
+				return approvalDecisionError{Status: http.StatusConflict, Code: "approval_act_required",
+					Message: "This approval can only be spent by its protected action."}
+			}
 			prior := rec.String(colConsumedBy)
 			switch {
 			case prior == "":
+				// A grant decided under a change record is spent only while that record, the
+				// one the approvers saw, still allows the change. An outage refuses this spend
+				// and revokes nothing; a record that no longer allows it revokes the grant.
+				switch want, werr := spendChangeRecord(pols, rec); {
+				case werr != nil:
+					return approvalDecisionError{Status: http.StatusServiceUnavailable, Code: codeChangeRecordUnavailable,
+						Message: "The change record this approval was decided under cannot be read, so it cannot be spent."}
+				case want == nil:
+					seen = nil
+				case !changeRecordCovers(want, seen, now):
+					needRead = want
+					return errChangeRecordRead
+				}
 				// FIRST consume: bind the grant to this caller under a version-checked
 				// update that serializes concurrent first-consumers to exactly one winner.
 				rec[colConsumedBy] = in.ConsumerID
 				rec[colConsumedAt] = now.String()
-				if _, uerr := repo.Update(ctx, rec); uerr != nil {
-					return uerr // ErrConflict -> retry (a concurrent consumer won)
+				rec, err = repo.Update(ctx, rec)
+				if err != nil {
+					return err // ErrConflict -> retry (a concurrent consumer won)
 				}
 				resp = ApprovalConsumption{Granted: true, Status: eff, ConsumedBy: in.ConsumerID}
-				return auditEvent(ctx, sc, mc, "governance.approval.consume", approvalKind, id, map[string]any{
-					"consumer_id": in.ConsumerID, "policy_version": in.PolicyVersion,
-				})
+				meta := map[string]any{"consumer_id": in.ConsumerID, "policy_version": in.PolicyVersion}
+				if seen != nil {
+					meta["change_record"] = seen.meta()
+				}
+				if err := auditEvent(ctx, sc, mc, "governance.approval.consume", approvalKind, id, meta); err != nil {
+					return err
+				}
+				if act != nil {
+					return act(ctx, sc, rec)
+				}
+				return nil
 			case prior == in.ConsumerID:
 				// Result-idempotency, bounded to a SHORT transport-retry window (F-02):
 				// the SAME caller re-obtains its grant only while the retry horizon is open — a
@@ -1044,6 +1173,12 @@ func (m *Module) consumeApproval(ctx context.Context, data approvalData, mc api.
 				// a re-consume (even by the same caller) is a would-replay DENY, so one human
 				// approval can never re-authorize a DEFERRED re-execution hours later.
 				if consumedFresh(rec, now) {
+					if act != nil {
+						// An act-bound consumer must not mistake an idempotent spend for an
+						// act that committed. Its caller retires or reconciles this outcome.
+						resp = ApprovalConsumption{Granted: false, Replay: true, Status: eff, ConsumedBy: prior}
+						return nil
+					}
 					resp = ApprovalConsumption{Granted: true, Status: eff, ConsumedBy: prior}
 					return nil
 				}
@@ -1062,9 +1197,29 @@ func (m *Module) consumeApproval(ctx context.Context, data approvalData, mc api.
 				})
 			}
 		})
+		if errors.Is(err, errChangeRecordRead) {
+			read, final, verr := m.verifyChangeRecord(ctx, mc.Tenant, *needRead)
+			switch {
+			case verr == nil:
+				seen = read
+				continue
+			case final:
+				revoked, rerr := m.revokeForChangeRecord(ctx, data, mc, id, read, verr)
+				if isConflict(rerr) {
+					continue // a concurrent writer moved the row: look at it again
+				}
+				if act != nil && rerr == nil {
+					return revoked, verr
+				}
+				return revoked, rerr
+			}
+			m.recordChangeRecordRefusal(ctx, data, mc, id, "spend", *needRead, read, verr)
+			return ApprovalConsumption{}, verr
+		}
 		if err != nil {
 			if isConflict(err) {
-				continue // version race on the first-consume: reload and re-evaluate
+				seen = nil // a conflict can follow a state change: never reuse it
+				continue   // version race on the first-consume: reload and re-evaluate
 			}
 			return ApprovalConsumption{}, err
 		}

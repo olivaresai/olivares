@@ -97,8 +97,7 @@ export interface FavoritesCall {
 }
 
 /** The user's favorites on the engine (GET/PUT /v1/m/consoleviews/favorites). The account
- * copy is the truth; the browser copy is a cache that shows at once and stands in when the
- * engine cannot be read. */
+ * copy is the truth; the browser is read only to migrate legacy favorites. */
 export interface FavoritesRemote {
   load: (
     call: FavoritesCall,
@@ -126,7 +125,7 @@ export function createPersonalNavigationSession({
   current: () => boolean
   storage?: () => Storage
   remote?: FavoritesRemote
-  /** Called when the account copy could not be saved; the browser copy is kept. */
+  /** Called when the account copy could not be saved. */
   onSaveError?: () => void
 }) {
   let revoked = false
@@ -159,24 +158,9 @@ export function createPersonalNavigationSession({
     }
   }
   read()
-  // `pending` marks a browser copy the account does not have yet: the next sign-in sends it
-  // instead of replacing it with the older account copy.
-  const keep = (favorites: readonly PersonalLink[], pending = false) => {
-    let temporary = key === null
-    if (key) {
-      try {
-        storage().setItem(
-          key,
-          JSON.stringify(
-            pending
-              ? { version: 1, favorites, pending: true }
-              : { version: 1, favorites },
-          ),
-        )
-      } catch {
-        temporary = true
-      }
-    }
+  // New changes stay in memory until the engine accepts them.
+  const keep = (favorites: readonly PersonalLink[]) => {
+    const temporary = key === null || !remote
     snapshot = { favorites, temporary }
     emit()
   }
@@ -196,10 +180,17 @@ export function createPersonalNavigationSession({
       .then(
         () => {
           // Saved: the browser copy is no longer ahead of the account.
-          if (live() && snapshot.favorites === favorites) keep(favorites)
+          if (live()) {
+            try {
+              if (key) storage().removeItem(key)
+            } catch {
+              /* Legacy migration retries next load. */
+            }
+            if (snapshot.favorites === favorites) keep(favorites)
+          }
         },
         () => {
-          // Not saved: the browser copy stays pending and the person is told.
+          // Not saved: tell the person; the change lasts only for this visit.
           if (live()) onSaveError?.()
         },
       )
@@ -229,8 +220,14 @@ export function createPersonalNavigationSession({
         if (!live() || changed) return
         // A change this browser could not save yet is newer than the account copy.
         if (pendingHere) send(snapshot.favorites)
-        else if (answer.stored === true)
+        else if (answer.stored === true) {
           keep(decodeFavoriteList(answer.favorites))
+          try {
+            storage().removeItem(key)
+          } catch {
+            /* Legacy migration retries next load. */
+          }
+        }
         // First use of the account copy: move this browser's favorites to it.
         else if (snapshot.favorites.length) send(snapshot.favorites)
       },
@@ -242,7 +239,7 @@ export function createPersonalNavigationSession({
   const save = (favorites: readonly PersonalLink[]) => {
     if (!live()) return
     changed = true
-    keep(favorites, !!remote)
+    keep(favorites)
     send(favorites)
   }
   return {

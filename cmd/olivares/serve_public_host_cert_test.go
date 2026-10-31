@@ -32,7 +32,7 @@ func serveLeaf(t *testing.T, dataDir string) *x509.Certificate {
 }
 
 // TestServeFirstBootCertificateNamesTheDeclaredPublicURLHost is the Docker case of
-// dev#2763: the engine inside a container sees only its own interfaces, so the
+// the regression: the engine inside a container sees only its own interfaces, so the
 // address operators type is a name only OLIVARES_PUBLIC_URL can supply. It drives the
 // real runEngine, the one place the declared address meets the certificate.
 func TestServeFirstBootCertificateNamesTheDeclaredPublicURLHost(t *testing.T) {

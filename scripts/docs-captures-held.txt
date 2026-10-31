@@ -38,3 +38,19 @@ agentops #2265 retake after #2268: the seed names ten sessions of three engines 
 workspace #2668 the canonical estate has one core workspace, and creating the second one the view selects needs owner step-up with a passkey the capture session cannot satisfy
 evals #2668 the canonical estate runs the sessions, governance and skills modules only, so no eval suite or run exists to score on the default tab
 backups #2668 the canonical estate triggers no backup: the DR route needs a passphrase and a completed job before the list has a row
+communications #2668 the canonical estate has one core workspace, so the All workspaces switcher the view selects is absent
+communications-inbox #2668 the canonical estate has one core workspace, so the All workspaces switcher the view selects is absent
+communications-administration #2668 the canonical estate has one core workspace, so the All workspaces switcher the view selects is absent
+communications-handoffs #2668 the canonical estate has one core workspace, so the All workspaces switcher the handoff capture selects is absent
+capabilities #1897 the MCP servers tab cannot be seeded through the API (POST 405), so the page shows its empty state
+vault #1897 no seeder writes vault entries, so the page shows its empty state
+retention #1897 no seeder writes a retention schedule, so the page shows No schedule
+model-operations #1897 no seeder writes model operations data, so the first tab shows its empty state
+claude-policy #2672 fleet managed settings are a Business capability: the Community build skips the policy seed
+adoption #1897 no seeder writes the adoption data the view needs, so the page shows its empty state
+adoption-overview #1897 the live telemetry card has no tool table: the dataset writes no per-tool telemetry
+killswitch #1897 the six seeded stops show the role=alert banner, which the shutter reads as an error
+models #1897 the seeded estate has no provider team key, so Anthropic and OpenAI read as unreadable
+access-map #2915 on a fresh estate the access map is empty: no session produces the access it draws
+access-map-drift #2915 the drift overlay has no drift to draw on the demo estate, so its element is not found
+video-05-edge-honesty #2915 the access map graph is not drawn on the demo estate, so the element the shot frames is not found

@@ -4,6 +4,8 @@
 
 package api
 
+import "github.com/olivaresai/olivares/core/auth"
+
 // The stable core doc's x-required-permission annotations. The module
 // doc has carried the extension since (openapi_modules.go stamps it from
 // each RouteRegistrar mount); the core doc's builder never did, which made the
@@ -46,7 +48,7 @@ var corePermissions = map[string]string{
 	"getStepUpPolicy":   "system:admin",
 	"setStepUpPolicy":   "system:admin",
 	"getUserTOTPStatus": "membership:read",
-	"resetUserTOTP":     "membership:write",
+	"resetUserTOTP":     string(auth.PermAuthenticatorWrite),
 	// Deployment tracing choices (server.go: systemRoute("system:admin"); the PUT
 	// additionally requires the configured step-up inside the handler).
 	"getSessionIdleSettings":  "system:admin",
@@ -70,14 +72,15 @@ var corePermissions = map[string]string{
 	"listSystemAuditEvents": "system:admin",
 
 	// Users + memberships (handlers_core.go, handlers_members.go).
-	"listUsers":         "user:read",
-	"listSuperadmins":   "user:read",
-	"listMembers":       "user:read",
-	"removeMember":      "user:write",
-	"createUser":        "user:write",
-	"disableSuperadmin": "user:write",
-	"enableSuperadmin":  "user:write",
-	"grantMembership":   "membership:write",
+	"listUsers":          "user:read",
+	"listSuperadmins":    "user:read",
+	"listMembers":        "user:read",
+	"removeMember":       "user:write",
+	"createUser":         "user:write",
+	"disableSuperadmin":  "user:write",
+	"enableSuperadmin":   "user:write",
+	"deleteUserSessions": "user:write",
+	"grantMembership":    "membership:write",
 
 	// Tokens (handlers_core.go; tenant path, see the doc comment above).
 	"listTokens":  "token:read",
@@ -177,6 +180,7 @@ var corePermissions = map[string]string{
 	"approveRestore":         "system:admin",
 	"getDRSchedule":          "system:admin",
 	"putDRSchedule":          "system:admin",
+	"authorizeStorageIntent": "system:admin",
 	"getLogBuffer":           "system:admin",
 	"streamLogs":             "system:admin",
 	"getModuleSelection":     "system:admin",
@@ -208,11 +212,14 @@ var corePermissions = map[string]string{
 // TOTP self-service authenticates a session or a primary-verified pending token.
 var corePermissionExempt = map[string]bool{
 	"enrolTOTP": true, "activateTOTP": true, "getTOTPStatus": true, "removeTOTP": true,
-	"logout":           true,
-	"refreshToken":     true,
-	"whoami":           true,
-	"searchConsole":    true,
-	"authCapabilities": true,
+	"logout":               true,
+	"listAuthSessions":     true,
+	"createSessionPairing": true,
+	"deleteAuthSession":    true,
+	"refreshToken":         true,
+	"whoami":               true,
+	"searchConsole":        true,
+	"authCapabilities":     true,
 	// The subject completes its own native proof; administration was authorized separately.
 	"completeOSAccountBinding": true,
 	// The signed-in user's own browser session (browser_session.go).

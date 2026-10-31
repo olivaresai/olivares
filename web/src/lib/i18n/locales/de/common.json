@@ -41,6 +41,7 @@
     "noResultsHint": "Keine Zeile entspricht dem aktuellen Filter. Entfernen Sie ihn oder erweitern Sie die Suche, um die Zeilen wieder zu sehen.",
     "comingSoon": "Demnächst verfügbar",
     "loaded": "Geladen",
+    "updatedReloaded": "Aktualisiert und neu geladen",
     "yes": "Ja",
     "no": "Nein"
   },
@@ -291,8 +292,7 @@
     "group": {
       "general": "Allgemein",
       "launcher": "Sitzung starten",
-      "surface": "Die Arbeitsfläche",
-      "navRail": "Navigationsleiste"
+      "surface": "Die Arbeitsfläche"
     },
     "command": {
       "palette": {
@@ -317,7 +317,8 @@
         "closeBeside": "Sitzung daneben schließen",
         "focusBeside": "Fokus zwischen Sitzungen wechseln",
         "nextPane": "Nächster Bereich",
-        "previousPane": "Vorheriger Bereich"
+        "previousPane": "Vorheriger Bereich",
+        "approve": "Die Anfrage im Gespräch einmal genehmigen"
       },
       "rail": {
         "next": "Nächste Sitzung",
@@ -327,15 +328,6 @@
         "open": "Sitzung öffnen",
         "pin": "Anheften oder lösen",
         "menu": "Aktionsmenü der Sitzung öffnen"
-      },
-      "navRail": {
-        "next": "Nächstes Modul",
-        "previous": "Vorheriges Modul",
-        "expand": "Bereich öffnen oder hineingehen",
-        "fold": "Bereich einklappen oder zu ihm zurück",
-        "first": "Erstes Modul",
-        "last": "Letztes Modul",
-        "pin": "Dieses Modul anheften oder lösen"
       },
       "session": {
         "new": "Neue Sitzung",
@@ -362,8 +354,7 @@
     },
     "precedence": "Teilen sich zwei Zeilen dieselben Tasten, gewinnt die letzte zutreffende.",
     "problems_one": "{{count}} Tastenkürzel konnte nicht gelesen werden und löst nicht aus: {{commands}}",
-    "problems_other": "{{count}} Tastenkürzel konnten nicht gelesen werden und lösen nicht aus: {{commands}}",
-    "navRailNote": "Die Leiste ist ein einziger Tabstopp. Diese Tasten wirken, solange sie den Fokus hat."
+    "problems_other": "{{count}} Tastenkürzel konnten nicht gelesen werden und lösen nicht aus: {{commands}}"
   },
   "ui": {
     "status": {
@@ -411,11 +402,14 @@
       "copied": "Kopiert",
       "copyFailed": "Kopieren fehlgeschlagen. Markieren Sie den Befehl und kopieren Sie ihn."
     },
+    "quoteReply": "Antwort zitieren",
     "copy": {
+      "markdown": "Markdown-Block kopieren",
       "message": "Nachricht kopieren",
       "code": "Code kopieren",
       "copied": "Kopiert",
-      "failed": "Kopieren nicht möglich. Markieren Sie den Text und kopieren Sie ihn."
+      "failed": "Kopieren nicht möglich. Markieren Sie den Text und kopieren Sie ihn.",
+      "value": "{{value}} kopieren"
     }
   },
   "resize": {

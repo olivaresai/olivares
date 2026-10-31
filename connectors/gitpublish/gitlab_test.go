@@ -91,6 +91,45 @@ func TestGitLabMergeCarriesSHAAndNeverAutoMerges(t *testing.T) {
 	}
 }
 
+func TestGitLabFastForwardMergeSuccess(t *testing.T) {
+	d := newFake(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `{"iid":4,"state":"merged","sha":"c1","merge_commit_sha":null}`)
+	})
+	g := gitlabFor(t, d)
+	outcome, res := g.MergeChange(context.Background(), Token{secret: NewSecret("glpat-bot")}, 4, "c1", "merge")
+	if res.Class != Applied || !outcome.Merged || outcome.MergeCommitSHA != "c1" {
+		t.Fatalf("fast-forward merge = %+v %+v, want applied with the source SHA", outcome, res)
+	}
+}
+
+func TestGitLabSquashMergeSuccessUsesSquashSHA(t *testing.T) {
+	d := newFake(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `{"iid":4,"state":"merged","sha":"c1","squash_commit_sha":"s9"}`)
+	})
+	g := gitlabFor(t, d)
+	outcome, res := g.MergeChange(context.Background(), Token{secret: NewSecret("glpat-bot")}, 4, "c1", "squash")
+	if res.Class != Applied || !outcome.Merged || outcome.MergeCommitSHA != "s9" {
+		t.Fatalf("squash merge = %+v %+v, want applied with the squash SHA", outcome, res)
+	}
+}
+
+func TestGitLabMergeSuccessRequiresConfirmation(t *testing.T) {
+	for name, body := range map[string]string{
+		"malformed":  `{`,
+		"not merged": `{"iid":4,"state":"opened","merge_commit_sha":"m1"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			d := newFake(t, func(w http.ResponseWriter, r *http.Request) {
+				_, _ = io.WriteString(w, body)
+			})
+			g := gitlabFor(t, d)
+			if _, res := g.MergeChange(context.Background(), Token{secret: NewSecret("glpat-bot")}, 4, "c1", "merge"); res.Class != Ambiguous {
+				t.Fatalf("unconfirmed merge = %+v", res)
+			}
+		})
+	}
+}
+
 func TestGitLabOpenChangesAndPushTarget(t *testing.T) {
 	d := newFake(t, func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()

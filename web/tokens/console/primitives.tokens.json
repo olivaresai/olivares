@@ -97,7 +97,7 @@
   },
   "type": {
     "$type": "dimension",
-    "$description": "The type ladder. Tailwind reads `--text-<step>` with its `--line-height`, `--letter-spacing` and `--font-weight` sub-keys, so one utility carries all four decisions. Six sizes in all, the design's: figure 36 (hero, display-lg), title 26 (display, title), head 17 (heading), body 14 (body-l with a looser line, body), meta 13 (caption, mono) and micro 12 (overline, mono-s).",
+    "$description": "The type ladder. Tailwind reads `--text-<step>` with its `--line-height`, `--letter-spacing` and `--font-weight` sub-keys, so one utility carries all four decisions. Six sizes in all, the design's: figure 36 (hero, display-lg), title 26 (display, title), head 17 (heading), body 14 (body-l with a looser line, body), meta 13 (caption, mono) and micro 12 (overline, mono-s). Below them sit two metadata sizes, 11 (metadata) and 10 (metadata-s): they are for metadata, counters and key hints only, never for a sentence a person has to read, and src/styles/metadata-step.test.ts lists the files that may use them.",
     "text-hero": {
       "$value": "2.25rem"
     },
@@ -196,6 +196,18 @@
     },
     "text-mono-s--line-height": {
       "$value": "1.125rem"
+    },
+    "text-metadata": {
+      "$value": "0.6875rem"
+    },
+    "text-metadata--line-height": {
+      "$value": "1rem"
+    },
+    "text-metadata-s": {
+      "$value": "0.625rem"
+    },
+    "text-metadata-s--line-height": {
+      "$value": "0.875rem"
     }
   },
   "layout": {

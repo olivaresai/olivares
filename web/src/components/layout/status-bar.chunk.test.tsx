@@ -43,7 +43,7 @@ vi.mock('@/lib/auth/context', () => ({
 }))
 vi.mock('./use-session-rail', () => ({
   useSessionRail: () => ({
-    sessionCounts: { needsYou: 0, live: 2, running: 2 },
+    sessionCounts: { needsYou: 0, live: 2, running: 2, open: 2 },
   }),
 }))
 vi.mock('./use-killswitch-state', () => ({

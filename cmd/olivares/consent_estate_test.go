@@ -500,15 +500,44 @@ func (e *consentEstate) rowExists(tenant model.TenantID, kind model.Kind, id mod
 	return found
 }
 
-// eventually polls cond until it holds or the deadline passes.
-func eventually(t *testing.T, what string, cond func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		if cond() {
-			return
+// eventuallyDeadlineReserve is kept back from the test binary's deadline so a wait that
+// never holds fails by name, with t.Fatalf, before the binary's own timeout panics.
+const eventuallyDeadlineReserve = 30 * time.Second
+
+// eventuallyNoDeadlineWait bounds a wait when the binary runs with -timeout 0. It is go
+// test's default timeout.
+const eventuallyNoDeadlineWait = 10 * time.Minute
+
+// eventuallyDeadline is when eventually gives up: the test deadline less the reserve.
+func eventuallyDeadline(now, testDeadline time.Time, hasDeadline bool) time.Time {
+	if !hasDeadline {
+		return now.Add(eventuallyNoDeadlineWait)
+	}
+	return testDeadline.Add(-eventuallyDeadlineReserve)
+}
+
+// waitUntil polls cond until it holds or deadline passes, and reports whether it held.
+// cond is checked at least once, even when deadline has already passed.
+func waitUntil(deadline time.Time, cond func() bool) bool {
+	for !cond() {
+		if !time.Now().Before(deadline) {
+			return false
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	t.Fatalf("timed out waiting for %s", what)
+	return true
+}
+
+// eventually polls cond until it holds or the test's own deadline, less a reserve,
+// passes; a miss names the bound it waited. It does not give up after a fixed 10 s: host
+// load, not the product, decides how long a setup takes, and a real hang still ends at
+// the binary's -timeout.
+func eventually(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	start := time.Now()
+	testDeadline, hasDeadline := t.Deadline()
+	deadline := eventuallyDeadline(start, testDeadline, hasDeadline)
+	if !waitUntil(deadline, cond) {
+		t.Fatalf("timed out after %s waiting for %s", deadline.Sub(start).Round(time.Second), what)
+	}
 }

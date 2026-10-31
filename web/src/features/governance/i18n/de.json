@@ -142,6 +142,7 @@
     "actorHint": "Audit-Akteurkennung — niemals eine E-Mail-Adresse. Die Identität wird aus dem Verzeichnis aufgelöst und hier nicht angezeigt.",
     "expiredAt": "Abgelaufen {{time}}",
     "approveOnce": "Einmal genehmigen",
+    "approveForSession": "Für diese Sitzung genehmigen",
     "approving": "Wird genehmigt…",
     "deny": "Ablehnen",
     "noMatch": "Keine Anfrage passt zur Suche",
@@ -219,6 +220,7 @@
     "trailEmpty": "Noch keine Entscheidungen festgehalten",
     "trailEmptyHint": "Jede Entscheidung zu dieser Genehmigung — wer, wann und warum — wird hier festgehalten. Es hat noch niemand entschieden.",
     "decisionApprove": "Genehmigt",
+    "decisionApproveForSession": "Für diese Sitzung genehmigt",
     "decisionReject": "Abgelehnt",
     "reenableNeedsAdmins": "Zwei andere Administratorkonten müssen dies genehmigen. Legen Sie sie unter Identität & Zugriff an oder mit `olivares users create`.",
     "openIdentity": "Identität & Zugriff öffnen",
@@ -684,14 +686,19 @@
     "matched": "Zutreffende Regel: {{rule}}",
     "matchedDefault": "Zutreffende Regel: keine, daher gilt der Standard",
     "matchedUnreadable": "Zutreffende Regel: eine Regel, die Sie nicht lesen dürfen",
-    "reaches": "Erreicht: {{list}}",
+    "reaches": "Erreicht:",
     "reachFolder": {
-      "write": "{{path}} (Schreiben)",
-      "read": "{{path}} (nur Lesen)",
-      "unknown": "{{path}} (Zugriff unbekannt)"
+      "write": "<path /> (Schreiben)",
+      "read": "<path /> (nur Lesen)",
+      "unknown": "<path /> (Zugriff unbekannt)"
     },
     "matchedUnknown": "Zutreffende Regel: eine Regel, die nicht gelesen werden konnte",
-    "reachIncomplete": "weiteres, das nicht gelesen werden konnte"
+    "reachIncomplete": "weiteres, das nicht gelesen werden konnte",
+    "rule": {
+      "default": "Keine Regel, daher gilt die Vorgabe",
+      "unreadable": "Eine Regel, die Sie nicht lesen dürfen",
+      "unknown": "Eine Regel, die nicht gelesen werden konnte"
+    }
   },
   "list": {
     "loadedOnly": "Die Suche umfasst nur die bisher geladenen Zeilen; weitere Zeilen lassen sich nachladen."

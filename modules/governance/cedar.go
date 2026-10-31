@@ -110,8 +110,12 @@ func (c *CedarEvaluator) Evaluate(ctx context.Context, req auth.Request) (auth.D
 		}),
 	}
 
-	auth.CaptureAuthorizationInputs(ctx, false, "cedar-overlay-v1", retainedCedar{Policies: c.policies, Entities: entities, Request: creq})
-	decision, diag := cedar.Authorize(c.policies, entities, creq)
+	engine := "cedar-overlay-v1"
+	if _, split := legacySessionRequest(creq); split {
+		engine = "cedar-overlay-v2"
+	}
+	auth.CaptureAuthorizationInputs(ctx, false, engine, retainedCedar{Policies: c.policies, Entities: entities, Request: creq})
+	decision, diag := authorizeCedar(c.policies, entities, creq)
 	// A policy that ERRORS during evaluation is skipped by Cedar (not a Deny). For a
 	// security control that is dangerous to do silently — a forbid that errors would
 	// fail to restrict with no signal — so surface it, but CONTAINED (CD1): at most ONE

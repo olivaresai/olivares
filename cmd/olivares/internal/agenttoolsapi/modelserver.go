@@ -32,7 +32,7 @@ import (
 	"github.com/olivaresai/olivares/sdk/netbind"
 )
 
-// LOCAL OPENAI-COMPATIBLE MODEL SERVERS (dev#2422). llama.cpp's `llama-server` and `vllm serve`
+// LOCAL OPENAI-COMPATIBLE MODEL SERVERS. llama.cpp's `llama-server` and `vllm serve`
 // were started by hand, and nothing tied them to a session. They now run the way Ollama does
 // (ollama.go): the program the operator installed (found on the engine's PATH) is started as a
 // managed child of the engine, on loopback only, confined, at low priority, in its own process

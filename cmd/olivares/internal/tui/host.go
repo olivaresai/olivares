@@ -29,6 +29,9 @@ type Host struct {
 	// stopped is set and read on the loop only: a signal is ending the process,
 	// so nothing is drawn over the terminal the signal's own exit restores.
 	stopped bool
+	// pasting is set and read on the loop only: the terminal is between its
+	// bracketed-paste markers, so a newline is text and not an Enter.
+	pasting bool
 }
 
 // page is one screen of the stack. render returns entries whose terminal rows
@@ -126,9 +129,24 @@ func (h *Host) leaveTop() {
 	h.Pop()
 }
 
-// handle gives the key to the top screen. On quit it stops the work of every
+// handle gives the key to the top screen, except a key that is not text inside a
+// paste, which no screen has a use for. On quit it stops the work of every
 // open screen first, so a sign-in the engine started ends with the frame.
 func (h *Host) handle(k key) (quit bool, code int) {
+	switch {
+	case k.kind == keyPasteStart:
+		h.pasting = true
+		return false, 0
+	case k.kind == keyPasteEnd:
+		h.pasting = false
+		return false, 0
+	case k.kind == keyCtrlC:
+		// A paste whose end marker never came must not keep Enter from working.
+		h.pasting = false
+	case h.pasting && k.kind != keyRune:
+		// Pasted text is text: a paste cannot press Enter, Tab or an arrow.
+		return false, 0
+	}
 	quit, code = h.top().handle(k)
 	if quit {
 		h.leaveAll()

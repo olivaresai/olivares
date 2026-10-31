@@ -194,6 +194,7 @@ type Module struct {
 	doer     Doer
 	gate     DeliveryGate // Kill-switch park gate (nil = no stop ever parks)
 	renderer SinkRenderer // SIEM-sink renderer (nil = only generic webhooks deliver)
+	sinkGate func() error // the licence gate for authoring a SIEM sink (nil = none)
 	// egress is the operator's destination policy (nil = no policy in force, which
 	// permits everything — the tri-state's ABSENT state, not its EMPTY one).
 	egress EgressPolicySource
@@ -338,6 +339,14 @@ func (m *Module) UseSecretSealer(s SecretSealer) {
 	if s != nil {
 		m.sealer = s
 	}
+}
+
+// WithSinkGate wires the Business build's licence gate for SIEM sinks: a create or update
+// that carries a sink asks it, and its error (a licence that does not cover SIEM push)
+// answers 403 addon_requires_license. nil asks nothing, as in Community, which links no
+// renderer and refuses every sink with 501.
+func WithSinkGate(gate func() error) Option {
+	return func(m *Module) { m.sinkGate = gate }
 }
 
 // UseSinkRenderer late-binds the SIEM-sink renderer (the composition root

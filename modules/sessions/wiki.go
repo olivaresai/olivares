@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/modules/skills"
 )
 
@@ -33,6 +34,9 @@ func (m *Module) UseWikiSkills(assign func(context.Context, api.ModuleContext, s
 }
 
 func (m *Module) handleInitWiki(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if !m.workspaceAllowed(w, r, mc, permWsAdmin, auth.TrusteeModify) {
+		return
+	}
 	if !mc.Admits(r.Context(), permWsWrite, mc.Resource) {
 		writeRunErr(w, forbiddenErr("workspace file write permission is required"))
 		return

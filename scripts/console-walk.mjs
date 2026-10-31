@@ -404,7 +404,10 @@ if (TOKEN && (await page.locator('#token').count())) {
     await page.fill('#setup-email', EMAIL)
     await page.fill('#setup-password', PASS)
     await page.click('button:has-text("Create administrator")')
-    await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {})
+    // Setup posts with fetch and stays on this document, so `networkidle`, already reached,
+    // answered at once and the login step below clicked the setup form's disabled button
+    // (#3507). Done means the form is gone; if it never goes, the check below says so.
+    await page.locator('#token').waitFor({ state: 'detached', timeout: 60000 }).catch(() => {})
   })
 }
 if ((await page.locator('input[type=password]').count()) > 0) {

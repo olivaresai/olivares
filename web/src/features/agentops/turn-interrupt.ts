@@ -27,7 +27,7 @@ export interface TurnInterrupt {
 
 /**
  * INTERRUPT THE CURRENT TURN, keep the session. One control, used by the live console
- * and the session header (HU 025: the header offered only Stop, which ends the
+ * and the session header (acceptance: the header offered only Stop, which ends the
  * session). Every bridged (stream-json) run can interrupt its turn: protocol drivers
  * through their own method, Claude Code through its stream-json control request.
  */

@@ -4,7 +4,7 @@
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
 # test-quickstart-smoke-boot.sh — selftest for the engine-boot wait in scripts/quickstart-smoke.sh
-# (dev#2775). The nightly drill died with "demo engine never became healthy" on 2026-10-21 and
+#. The nightly drill died with "demo engine never became healthy" on 2026-10-21 and
 # 2026-10-22 because the wait gave the engine a fixed 20 s and the CI runner stalled for 8-10 s at
 # a random phase of the boot (key generation one day, store migrations the next), which the same
 # binary does in about 7 s on one pinned CPU. The numbers the drill asserts were never wrong.

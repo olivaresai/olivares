@@ -272,6 +272,41 @@
       "lastCredential": "无法删除您唯一的通行密钥。请先注册另一个。"
     }
   },
+  "sessions": {
+    "title": "你的登录",
+    "description": "你已登录的浏览器和客户端。结束不再使用或不认识的会话。",
+    "endAll": "结束所有其他会话",
+    "none": "没有活动登录",
+    "noneHint": "你当前和最近的登录会显示在这里。",
+    "client": "客户端",
+    "lastUsed": "最近使用",
+    "created": "创建时间",
+    "expires": "过期时间",
+    "actionsColumn": "操作",
+    "current": "当前会话",
+    "end": "结束",
+    "endLabel": "结束 {{created}} 的{{kind}}登录",
+    "endTitle": "结束此登录？",
+    "endBody": "此登录将在对应浏览器或客户端上失效。你以后可以在那里重新登录。",
+    "endAllTitle": "结束所有其他登录？",
+    "endAllBody": "将结束此处列出的其他会话。当前会话保持活动状态。",
+    "endAllFailed_other": "{{count}} 个登录未能结束。请检查列表后重试。",
+    "ended": "登录已结束。",
+    "kinds": {
+      "browser": "浏览器",
+      "token": "令牌",
+      "unknown": "未知",
+      "pairing": "等待配对"
+    },
+    "deviceName": "设备名称",
+    "pair": "配对设备",
+    "pairLink": "一次性链接",
+    "pairHint": "将此私密链接复制到设备。链接将在10分钟后过期，且只能使用一次。",
+    "pairTitle": "配对此设备",
+    "acceptHint": "仅在您从自己的账户请求此链接时继续。此设备将获得该账户的访问权限。",
+    "pairInvalid": "链接缺失、已过期或已使用。请在登录设置中创建新链接。",
+    "accept": "配对此设备"
+  },
   "totp": {
     "title": "TOTP 第二因子",
     "description": "基于时间的一次性密码（RFC 6238），作为本地账户的附加因子。它与通行密钥 并存，绝不取代它们。",

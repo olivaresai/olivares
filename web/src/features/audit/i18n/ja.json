@@ -1,26 +1,8 @@
 {
   "title": "監査台帳",
-  "subtitle": "改ざん検知可能な証拠チェーン。検証して、WORM/SIEM へエクスポートします。",
+  "subtitle": "AI の活動の署名付き記録を確認します。",
   "subtitleSystem": "テナント横断の管理操作を記録するシステムテナントのチェーン（読み取り専用）。",
   "searchLoaded": "読み込み済みの行のみをフィルター（クライアント側）…",
-  "filters": {
-    "open": "フィルター",
-    "title": "サーバー側の台帳フィルター",
-    "q": "台帳を検索",
-    "qPlaceholder": "操作、実行者、対象種別または ID",
-    "actor": "実行者",
-    "actorPlaceholder": "実行者（完全一致）",
-    "action": "操作プレフィックス",
-    "actionPlaceholder": "例: agent.",
-    "targetKind": "対象種別",
-    "targetKindPlaceholder": "対象種別（完全一致）",
-    "targetId": "対象 ID",
-    "targetIdPlaceholder": "対象 ID（完全一致）",
-    "since": "開始日時",
-    "until": "終了日時",
-    "clearOne": "{{filter}} フィルターをクリア",
-    "clearAll": "すべてのフィルターをクリア"
-  },
   "scan": {
     "incomplete": "seq {{seq}} までスキャン済み — 台帳全体ではありません。「さらに読み込む」でスキャンを続行します。"
   },
@@ -29,14 +11,6 @@
     "tenant": "テナント台帳",
     "system": "システム台帳",
     "systemHint": "システムテナントのチェーンはテナント横断の管理操作を記録し、ここでは読み取り専用です。検証とエクスポートはテナント台帳に対して行われます。"
-  },
-  "cols": {
-    "seq": "連番",
-    "occurred": "日時",
-    "action": "操作",
-    "actor": "実行者",
-    "target": "対象",
-    "hash": "ハッシュ"
   },
   "actorKind": {
     "user": "ユーザー",
@@ -55,7 +29,6 @@
     "checkpointBreak": "連番 {{seq}} でチェックポイント署名の検証に失敗"
   },
   "pubkey": {
-    "action": "検証鍵",
     "label": "台帳署名鍵",
     "key": "鍵",
     "hint": "このEd25519公開鍵を共有すると、第三者がエクスポートしたイベントとチェックポイントの両方をオフラインで検証できます（同じ鍵が両方に署名します）。",
@@ -63,7 +36,6 @@
   },
   "export": {
     "action": "エクスポート",
-    "options": "エクスポートの設定",
     "formatLabel": "エクスポート形式",
     "fromSeq": "開始 seq",
     "toSeq": "終了 seq",
@@ -80,7 +52,8 @@
     },
     "done": "エクスポートをダウンロードしました。",
     "failed": "エクスポートに失敗しました。",
-    "forbidden": "台帳をエクスポートする権限がありません。"
+    "forbidden": "台帳をエクスポートする権限がありません。",
+    "download": "ダウンロード"
   },
   "detail": {
     "title": "証拠イベント",
@@ -93,15 +66,12 @@
     "actorSystem": "システム",
     "target": "対象",
     "id": "イベント ID",
-    "chainTitle": "チェーンの整合性",
     "prevHash": "前のハッシュ",
     "prev": "前",
     "hash": "イベントハッシュ",
     "this": "本",
     "sig": "イベント署名",
     "checkpoint": "署名",
-    "chainHint": "各イベントのハッシュは前のイベントに連鎖します。フィンガープリントの背後にペイロードはありません。ハッシュそのものが証拠です（設計上の最小データ）。",
-    "details": "詳細",
     "actorMember": "メンバー"
   },
   "empty": {
@@ -144,5 +114,54 @@
     "show": "内部記録を表示",
     "hide": "内部記録を非表示",
     "allHidden": "これまでに読み込んだものはすべて内部記録です。"
+  },
+  "ledger": {
+    "query": "台帳クエリ",
+    "placeholder": "person:  action:  since:7d  または語句",
+    "addFilter": "フィルターを追加",
+    "remove": "{{token}} を削除",
+    "add": "{{token}} をクエリに追加",
+    "commands": "検索とコマンド",
+    "problem": {
+      "key": "{{token}} は台帳のフィルターではありません。person:、action:、kind:、target:、since:、until: または語句を使ってください。",
+      "time": "{{token}} は時間ではありません。90m、24h、7d、2w、または 2026-10-20 のような日付を使ってください。",
+      "person": "{{token}} に一致する人はいません。名前、メール、または user:<id> を使ってください。",
+      "several": "{{token}} に一致する人が複数います。フルネーム、メール、または user:<id> を使ってください。",
+      "names": "ここでは {{token}} を検索できません。user:<id> を使ってください。"
+    },
+    "entries": "台帳のエントリ",
+    "group": {
+      "label": "表示",
+      "session": "セッション別",
+      "events": "すべてのエントリ"
+    },
+    "needsYou": "対応が必要",
+    "outside": "セッション外",
+    "session": "セッション {{ref}}",
+    "count_other": "{{count}} 件",
+    "sentence": "{{what}}（{{who}}）",
+    "signed": "署名済み",
+    "histogram": {
+      "hour": "1 時間ごとのエントリ",
+      "day": "1 日ごとのエントリ",
+      "week": "1 週間ごとのエントリ",
+      "bar_other": "{{at}}、{{count}} 件",
+      "loaded_other": "{{count}} 件を読み込み済み",
+      "sessions_other": "{{count}} セッション",
+      "people_other": "{{count}} 人",
+      "more": "さらに読み込めます",
+      "now": "現在"
+    },
+    "entry": {
+      "title": "エントリ {{seq}}",
+      "chain": "チェーン内の位置",
+      "previous": "前 · {{seq}}",
+      "this": "このエントリ · {{seq}}",
+      "next": "次 · {{seq}}",
+      "newest": "最新のエントリ",
+      "nextUnread": "次は未読込",
+      "chainHint": "各エントリは直前のエントリのハッシュを持ちます。1 つを変えると、それ以降のハッシュがすべて壊れます。",
+      "signedEntry": "署名されたエントリ"
+    }
   }
 }

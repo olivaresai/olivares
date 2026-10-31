@@ -67,7 +67,8 @@
   "effects": {
     "push": "Push",
     "pull_request": "Pull request",
-    "merge": "Fusión"
+    "merge": "Fusión",
+    "issue_comment": "Comentario en la incidencia"
   },
   "authority": {
     "requires": "Requiere {{permission}}",
@@ -174,6 +175,7 @@
     "field_not_accepted": "La solicitud incluía un campo que esta ruta no acepta.",
     "forbidden": "Tu autoridad actual no permite esta acción en este destino.",
     "head_mismatch": "El head de la pull request ya no es el commit revisado.",
+    "link_not_allowed": "El enlace debe apuntar a una pull request del repositorio aprobado.",
     "host_credential_refused": "El host de Git rechazó la credencial de la vinculación o su ámbito. No se despachó nada.",
     "host_unavailable": "No se pudo contactar con el host de Git. No se despachó nada.",
     "intent_settled": "La intención ya tiene un resultado definitivo, así que no se puede abandonar.",
@@ -201,7 +203,13 @@
     "unsupported_requirement": "El host no puede cumplir este requisito, por ejemplo una fusión con rebase en GitLab.",
     "version_conflict": "El destino cambió desde que lo abriste. Vuelve a abrirlo para ver la versión actual.",
     "workflow_change_refused": "El commit modifica archivos de workflow de CI, que este destino se niega a publicar.",
-    "unknown": "El motor rechazó la solicitud con un código que esta consola no describe."
+    "unknown": "El motor rechazó la solicitud con un código que esta consola no describe.",
+    "no_branch": "La carpeta de la sesión no está en ninguna rama. Cámbiala a una rama y entrega de nuevo.",
+    "no_commit": "La rama de la sesión aún no tiene ningún commit.",
+    "nothing_to_ship": "El commit de la sesión no añade nada a la rama en la que se fusionaría.",
+    "commit_refused": "La carpeta de la sesión rechazó el commit: es de solo lectura, sigue trabajando o tu perfil no tiene nombre ni correo.",
+    "approval_denied": "Una persona no aprobó este push, o su aprobación terminó. Entrega de nuevo para pedir otra revisión.",
+    "approval_unavailable": "El servicio de aprobaciones no pudo responder. Entrega de nuevo en un momento."
   },
   "intents": {
     "title": "Intenciones",
@@ -254,5 +262,24 @@
     "abandonTitle": "¿Abandonar la intención {{id}}?",
     "abandonDescription": "Abandonar registra que asumes la responsabilidad de esta intención sin resolver. No modifica ni lee el host, y el ámbito sigue retenido hasta que una nueva solicitud reconozca esta intención.",
     "abandonReason": "Motivo (256 caracteres como máximo)"
+  },
+  "ship": {
+    "button": "Entregar",
+    "shipTo": "Entregar a {{prefix}}",
+    "title": "Entregar esta sesión",
+    "description": "Confirma los cambios de la sesión a tu nombre, los sube a una rama bajo {{prefix}} y abre una pull request, todo en una sola acción.",
+    "submit": "Entregar",
+    "message": "Mensaje del commit",
+    "messageHint": "Solo se usa si la carpeta de la sesión tiene cambios. Por defecto, el título.",
+    "shipped": "Entregado: {{branch}} está subida.",
+    "pullRequest": "Pull request n.º {{number}}",
+    "pullRequestOpen": "Abrir la pull request",
+    "awaitingTitle": "Esperando la aprobación de otra persona",
+    "awaitingBody": "Tus cambios están confirmados. Otra persona debe aprobar el push (aprobación {{id}}) antes de que salga. Cuando lo haya hecho, entrega de nuevo.",
+    "again": "Entregar de nuevo",
+    "incompleteTitle": "La entrega no terminó",
+    "incompletePush": "El push de {{branch}} no se aplicó ({{state}}). Revisa las intenciones de este destino y entrega de nuevo.",
+    "incompletePullRequest": "{{branch}} está subida, pero no se abrió la pull request ({{code}}). Entrega de nuevo para reintentarlo.",
+    "pullRequests": "Pull requests"
   }
 }

@@ -53,7 +53,7 @@ actives :
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.4
+olivares upgrade --check --current-version 0.5
 ```
 <!-- /release -->
 
@@ -175,8 +175,7 @@ gestionnaire de paquets de l'hôte et, sur l'appliance Olivares, `systemctl star
 `--enterprise --connect`, elle nomme aussi `olivares license connect refresh`. La vérification
 se fait sur le chemin : un binaire que `install.sh --bindir /usr/bin` y a placé est donc refusé aussi.
 
-La console présente la moitié en lecture seule des mêmes informations : **Settings → update
-status** appelle `POST /v1/console/update-check`, qui vérifie à la demande le canal configuré.
+La console présente la moitié en lecture seule des mêmes informations : **Exploitation → Mises à jour** (`/updates`) appelle `POST /v1/console/update-check`, qui vérifie à la demande le canal configuré.
 Un déploiement air-gap ou sans canal configuré répond `501` en indiquant pourquoi, au lieu
 d'annoncer qu'aucune mise à jour n'existe.
 

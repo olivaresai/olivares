@@ -116,7 +116,7 @@ it('relays the native Google sign-in URL and pasted code from the Gemini row', a
   expect(
     await within(dialog).findByRole('link', { name: 'Open the sign-in page' }),
   ).toHaveAttribute('href', flow.url)
-  // HU2-18, #2551: the key form opens in this same dialog, on Gemini's own provider —
+  // acceptance, #2551: the key form opens in this same dialog, on Gemini's own provider —
   // a button in the sheet, not a page link that reloads and loses the dialog.
   expect(
     within(dialog).queryByRole('link', {

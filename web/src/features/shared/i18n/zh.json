@@ -45,6 +45,7 @@
     "unknownUser": "未知用户",
     "unknownWorkspace": "未知工作区"
   },
+  "openInEditor": "在 {{editor}} 中打开",
   "headDiff": {
     "file": "文件",
     "changes": "相对 HEAD 的更改",

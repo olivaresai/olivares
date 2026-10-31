@@ -11,7 +11,7 @@
 # exit 0. Every number below comes from the verbose log of that one
 # measured run.
 #
-# The SAME selection exceeded 900s on ci-runner-8. So a number here is NOT a prediction of
+# The SAME selection exceeded 900s on build-host. So a number here is NOT a prediction of
 # remote wall time, NOT evidence about any runner, and NOT a performance claim. It is a
 # RELATIVE ORDERING used to divide the work deterministically. What a partition costs in CI
 # is a CI measurement, and `check-test-timeout-headroom.sh` is what reports it.

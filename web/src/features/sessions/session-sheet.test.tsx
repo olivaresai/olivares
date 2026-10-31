@@ -179,6 +179,26 @@ describe('SessionSheet', () => {
     )
   })
 
+  it('is named by the title the engine cut when the session has no name, and a name wins', () => {
+    resolved.current = resolutionOf({
+      ...run,
+      name: undefined,
+      title: 'Plan the migration',
+    } as RunDTO)
+    const first = renderIntel(
+      <SessionSheet address="run:run_1" onClose={vi.fn()} />,
+    )
+    expect(screen.getByRole('dialog', { name: 'Plan the migration' })).toBe(
+      sheet(),
+    )
+    first.unmount()
+    resolved.current = resolutionOf({ ...run, title: 'Plan the migration' })
+    renderIntel(<SessionSheet address="run:run_1" onClose={vi.fn()} />)
+    expect(screen.getByRole('dialog', { name: 'Refactor cart totals' })).toBe(
+      sheet(),
+    )
+  })
+
   it('puts the facts on a line of their own under the name', () => {
     renderIntel(<SessionSheet address="run:run_1" onClose={vi.fn()} />)
     const folder = within(sheet()).getByTestId('narrative-folder')

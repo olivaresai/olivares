@@ -28,7 +28,7 @@
 # esta y 2 donde no — el 2026-08-23 el integrador publico `CLEAN` mientras esta caja daba `rc=2`
 # sobre el mismo arbol.
 #
-# WHERE IT RUNS (dev#2633). On every development pull request, in the `ci-timeouts` job of
+# WHERE IT RUNS. On every development pull request, in the `ci-timeouts` job of
 # `.github/workflows/main-suite.yml`, which installs PyYAML first; and in `integration-check`
 # through `ci/kept-checks.txt`, on a manual dispatch only. The pre-push hook does not run it. That
 # hook and `pr-ci` are not a placement: the hook stopped calling the task in 8dfa44cb0, and

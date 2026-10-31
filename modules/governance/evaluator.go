@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 
+	cedar "github.com/cedar-policy/cedar-go"
+
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -76,7 +78,7 @@ func (e *evaluator) Evaluate(ctx context.Context, req auth.Request) (auth.Decisi
 	if set.err != nil {
 		return auth.Decision{}, set.err // -> Authorizer denies (fail closed)
 	}
-	auth.CaptureAuthorizationInputs(ctx, false, "abac-v1", retainedABAC{Rules: set.rules, Versions: set.versions})
+	auth.CaptureAuthorizationInputs(ctx, false, "abac-v2", retainedABAC{Rules: set.rules, Versions: set.versions})
 	for i := range set.rules {
 		if set.rules[i].matches(req) {
 			// An authored ABAC rule matched: business policy (shadowable). A store
@@ -181,6 +183,17 @@ func parseABACSpec(spec map[string]any) (abacSpec, error) {
 // resource derived from it); resource-attribute rules (sensitivity) need a core
 // resource-attrs seam and are intentionally NOT part of the v1 grammar (policy.go).
 func (r abacRule) matches(req auth.Request) bool {
+	if r.matchesExact(req) {
+		return true
+	}
+	if old, split := legacySessionPermissions[cedar.String(req.Permission)]; split {
+		req.Permission = auth.Permission(old)
+		return r.matchesExact(req)
+	}
+	return false
+}
+
+func (r abacRule) matchesExact(req auth.Request) bool {
 	if r.Permission != "" && r.Permission != string(req.Permission) {
 		return false
 	}

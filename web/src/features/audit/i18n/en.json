@@ -1,26 +1,8 @@
 {
   "title": "Audit ledger",
-  "subtitle": "The tamper-evident evidence chain. Verify it, and export it to your WORM/SIEM.",
+  "subtitle": "Read the signed record of AI activity.",
   "subtitleSystem": "The system-tenant chain of cross-tenant administrative operations (read-only).",
   "searchLoaded": "Filter loaded rows only (client-side)…",
-  "filters": {
-    "open": "Filters",
-    "title": "Server-side ledger filters",
-    "q": "Search ledger",
-    "qPlaceholder": "Action, actor, target kind or ID",
-    "actor": "Actor",
-    "actorPlaceholder": "Exact actor",
-    "action": "Action prefix",
-    "actionPlaceholder": "e.g. agent.",
-    "targetKind": "Target kind",
-    "targetKindPlaceholder": "Exact target kind",
-    "targetId": "Target ID",
-    "targetIdPlaceholder": "Exact target ID",
-    "since": "Since",
-    "until": "Until",
-    "clearOne": "Clear {{filter}} filter",
-    "clearAll": "Clear all filters"
-  },
   "scan": {
     "incomplete": "Scanned up to seq {{seq}} — not the full ledger; Load more continues the scan."
   },
@@ -29,14 +11,6 @@
     "tenant": "Tenant ledger",
     "system": "System ledger",
     "systemHint": "The system-tenant chain records cross-tenant administrative operations and is read-only here. Verification and export operate on tenant ledgers."
-  },
-  "cols": {
-    "seq": "Seq",
-    "occurred": "When",
-    "action": "Action",
-    "actor": "Actor",
-    "target": "Target",
-    "hash": "Hash"
   },
   "actorKind": {
     "user": "User",
@@ -55,7 +29,6 @@
     "checkpointBreak": "Checkpoint signature failed at seq {{seq}}"
   },
   "pubkey": {
-    "action": "Verification key",
     "label": "Ledger signing key",
     "key": "key",
     "hint": "Share this Ed25519 public key so an external party can verify exported events AND checkpoints offline — the same key signs both.",
@@ -63,7 +36,6 @@
   },
   "export": {
     "action": "Export",
-    "options": "Export options",
     "formatLabel": "Export format",
     "fromSeq": "From seq",
     "toSeq": "To seq",
@@ -80,7 +52,8 @@
     },
     "done": "Export downloaded.",
     "failed": "Export failed.",
-    "forbidden": "You are not authorized to export the ledger."
+    "forbidden": "You are not authorized to export the ledger.",
+    "download": "Download"
   },
   "detail": {
     "title": "Evidence event",
@@ -93,15 +66,12 @@
     "actorSystem": "system",
     "target": "Target",
     "id": "Event ID",
-    "chainTitle": "Chain integrity",
     "prevHash": "Previous hash",
     "prev": "prev",
     "hash": "Event hash",
     "this": "this",
     "sig": "Event signature",
     "checkpoint": "sig",
-    "chainHint": "Each event's hash chains to the previous one. There is no payload behind a fingerprint — the hash is the evidence (minimal-data by design).",
-    "details": "Details",
     "actorMember": "A member"
   },
   "empty": {
@@ -144,5 +114,59 @@
     "show": "Show internal records",
     "hide": "Hide internal records",
     "allHidden": "Everything loaded so far is an internal record."
+  },
+  "ledger": {
+    "query": "Ledger query",
+    "placeholder": "person:  action:  since:7d  or words",
+    "addFilter": "Add a filter",
+    "remove": "Remove {{token}}",
+    "add": "Add {{token}} to the query",
+    "commands": "Search and commands",
+    "problem": {
+      "key": "{{token}} is not a ledger filter. Use person:, action:, kind:, target:, since:, until: or plain words.",
+      "time": "{{token}} is not a time. Use 90m, 24h, 7d, 2w or a date such as 2026-10-20.",
+      "person": "No one matches {{token}}. Use a name, an email or user:<id>.",
+      "several": "{{token}} fits several people. Use the full name, an email or user:<id>.",
+      "names": "{{token}} cannot be looked up here. Use user:<id>."
+    },
+    "entries": "Ledger entries",
+    "group": {
+      "label": "Show",
+      "session": "By session",
+      "events": "Every entry"
+    },
+    "needsYou": "Needs you",
+    "outside": "Not in a session",
+    "session": "Session {{ref}}",
+    "count_one": "{{count}} entry",
+    "count_other": "{{count}} entries",
+    "sentence": "{{what}} by {{who}}",
+    "signed": "Signed",
+    "histogram": {
+      "hour": "Entries per hour",
+      "day": "Entries per day",
+      "week": "Entries per week",
+      "bar_one": "{{at}}, {{count}} entry",
+      "bar_other": "{{at}}, {{count}} entries",
+      "loaded_one": "{{count}} entry loaded",
+      "loaded_other": "{{count}} entries loaded",
+      "sessions_one": "{{count}} session",
+      "sessions_other": "{{count}} sessions",
+      "people_one": "{{count}} person",
+      "people_other": "{{count}} people",
+      "more": "more to load",
+      "now": "Now"
+    },
+    "entry": {
+      "title": "Entry {{seq}}",
+      "chain": "Position in the chain",
+      "previous": "Previous · {{seq}}",
+      "this": "This entry · {{seq}}",
+      "next": "Next · {{seq}}",
+      "newest": "Newest entry",
+      "nextUnread": "Next not read",
+      "chainHint": "Each entry carries the hash of the one before it. Change one and every later hash breaks.",
+      "signedEntry": "The signed entry"
+    }
   }
 }

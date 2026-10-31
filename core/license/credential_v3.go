@@ -21,7 +21,7 @@
 // the ordinary case and not an edge one.
 //
 // ============ THE FREEZE, AND WHAT IN IT IS DERIVED RATHER THAN QUOTED ===================
-// The v8 package (an internal design note (not shipped):646-681)
+// The v8 package (an internal audit:646-681)
 // prints the field list as a FLAT object and then says, in a note at :641-644, that E-1
 // supersedes its SHAPE: the per-line fields move into `grants[]`, `product_id`/`addon_ids`
 // leave the top level, and "los invariantes de validación de abajo se conservan aplicados por

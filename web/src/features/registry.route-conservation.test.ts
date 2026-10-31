@@ -104,9 +104,24 @@ describe('route conservation', () => {
         ;(route.options.beforeLoad as () => void)()
         throw new Error(`Alias ${alias.from} did not redirect`)
       } catch (redirect) {
-        expect(redirect).toMatchObject({
-          options: { to: alias.to, search: true, hash: true, replace: true },
+        const options = (redirect as { options: Record<string, unknown> })
+          .options
+        expect(options).toMatchObject({
+          to: alias.to,
+          hash: alias.hash ?? true,
+          replace: true,
         })
+        // The query the old address carried is kept; an alias may add its own (a tab of the
+        // page it lands on, #3388).
+        if (alias.search) {
+          const search = options.search as (
+            prev: Record<string, unknown>,
+          ) => Record<string, unknown>
+          expect(search({ q: 'kept' }), alias.from).toEqual({
+            q: 'kept',
+            ...alias.search,
+          })
+        } else expect(options.search, alias.from).toBe(true)
       }
     }
   })

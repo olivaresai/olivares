@@ -146,7 +146,7 @@ func (EdgeObservation) isObservation()                   {}
 // point in money (ARCHITECTURE.md, module XI).
 //
 // The fields below the original seven are an ADDITIVE, provider-neutral extension
-//: they are zero-valued for connectors that do not report them, so adding
+// : they are zero-valued for connectors that do not report them, so adding
 // them never breaks an existing emitter. They are aligned to the OpenTelemetry
 // gen_ai.* convention (token splits) and to FOCUS export columns (attribution +
 // provenance) so a single contract serves every provider and the FOCUS export

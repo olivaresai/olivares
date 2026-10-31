@@ -85,7 +85,13 @@
     "lastSeen": "Última vez",
     "yes": "Sí",
     "no": "No",
-    "minimalData": "Solo se muestran metadatos. Por diseño el motor nunca transporta aquí SQL, payloads ni secretos (mínimo dato)."
+    "minimalData": "Solo se muestran metadatos. Por diseño el motor nunca transporta aquí SQL, payloads ni secretos (mínimo dato).",
+    "open": {
+      "session": "Abrir sesión",
+      "agent": "Abrir agentes",
+      "nhiRoster": "Abrir identidades"
+    },
+    "expandLimit": "Este mapa ya muestra {{n}} nodos expandidos. Vuelve atrás o actualiza para empezar de nuevo."
   },
   "authority": {
     "title": "Autoridad y siguiente paso",
@@ -190,5 +196,12 @@
     },
     "analyse": "Analizar caminos de ataque (auditado)",
     "truncated": "El motor limitó este análisis, así que los caminos mostrados no son la respuesta completa."
+  },
+  "expand": {
+    "partial": "No se pudieron leer algunos nodos expandidos, así que el mapa está incompleto.",
+    "retry": "Reintentar"
+  },
+  "graph": {
+    "keyboardHint": "Enfoca un nodo, usa las flechas para pasar a un nodo conectado e Intro para abrirlo. La lista bajo el grafo hace lo mismo sin el lienzo."
   }
 }

@@ -14,7 +14,7 @@ import (
 
 // edition.go is how the CLI answers a Business capability that is not there: one
 // sentence that names the feature and where it is described, exit code 9, and no
-// HTTP status or build vocabulary (Root's decision on N1 RU-02, 2026-10-01: `mcp
+// HTTP status or build vocabulary (the maintainer's decision on N1 RU-02, 2026-10-01: `mcp
 // pins ls` answered "requires the enterprise add-on (HTTP 501)").
 
 // pricingURL is the public page that describes the Business capabilities.
@@ -31,9 +31,15 @@ func notInEdition() error { return exitcode.New(exitcode.Edition, errNotInEditio
 // with the name the sentence uses. A Community build keeps them out of the help;
 // they stay invocable, so a script gets the sentence instead of "unknown command".
 var paidCommands = map[string]string{
-	"orchestration":       "Orchestration",
-	"mcp pins":            "MCP tool pinning",
-	"reporting schedules": "Report scheduling",
+	"audit tree verify":    "Audit verification",
+	"audit tree prove":     "Audit evidence proofs",
+	"audit verify":         "Audit verification",
+	"audit export":         "Audit export",
+	"audit archive":        "Audit archives",
+	"audit observe-report": "Audit observation reports",
+	"orchestration":        "Orchestration",
+	"mcp pins":             "MCP tool pinning",
+	"reporting schedules":  "Report scheduling",
 	// Preserve the generic refusal wording for the previously visible report paths.
 	"reporting enterprise": "This capability",
 	"reporting branding":   "This capability",

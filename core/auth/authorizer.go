@@ -280,6 +280,12 @@ func (az *Authorizer) Authorize(ctx context.Context, req Request) (decision Deci
 }
 
 func (az *Authorizer) authorize(ctx context.Context, req Request) Decision {
+	return az.authorizeWithExplanation(ctx, req, nil)
+}
+
+// authorizeWithExplanation optionally retains provenance from the same scoped
+// evaluation. A nil explanation pointer is the historical Authorize path.
+func (az *Authorizer) authorizeWithExplanation(ctx context.Context, req Request, explanation *DecisionExplanation) Decision {
 	// An account removed from the tenant, or a session confined to another one,
 	// holds nothing there: no role, no scoped grant, no group subject. This is a
 	// platform invariant, refused before any grant is evaluated.
@@ -294,8 +300,17 @@ func (az *Authorizer) authorize(ctx context.Context, req Request) Decision {
 		return Decision{Allow: false, Reason: "credential ceiling: not permitted"}
 	}
 	scopedGrant, filtered := false, false
+	scopedExplanation := DecisionExplanation{}
 	if az.scoped != nil {
-		sd, err := az.scopedSafe(ctx, req)
+		var (
+			sd  ScopedDecision
+			err error
+		)
+		if explanation != nil {
+			sd, scopedExplanation, err = az.scopedExplanation(ctx, req)
+		} else {
+			sd, err = az.scopedSafe(ctx, req)
+		}
 		if err != nil {
 			return Decision{Allow: false, Reason: "scoped: evaluation error"} // fail closed
 		}
@@ -306,6 +321,9 @@ func (az *Authorizer) authorize(ctx context.Context, req Request) Decision {
 			// ClassInvariant for confinement / errored / fail-closed (grants.go). It
 			// MUST be propagated, never hardcoded — hardcoding ClassPolicy here would
 			// make workspace confinement shadowable in constrained-observe.
+			if explanation != nil {
+				*explanation = scopedExplanation
+			}
 			return Decision{Allow: false, Reason: "scoped: " + sd.Reason, Class: sd.Class}
 		case EffectGrant:
 			// A positive scoped grant must never widen a purpose-specific
@@ -332,11 +350,17 @@ func (az *Authorizer) authorize(ctx context.Context, req Request) Decision {
 	if !baseAllowed {
 		if filtered {
 			// The cause belongs in the audit trail: the role may well have allowed it.
+			if explanation != nil {
+				*explanation = scopedExplanation
+			}
 			return Decision{Allow: false, Reason: "rbac: not permitted (inheritance filter: no right at or below the filtered node)"}
 		}
 		return Decision{Allow: false, Reason: "rbac: not permitted"}
 	}
 	if az.eval == nil {
+		if explanation != nil {
+			*explanation = scopedExplanation
+		}
 		return Decision{Allow: true, Reason: baseReason(granted, ownerGrantUsed)}
 	}
 	dec, err := az.evalSafe(ctx, req)
@@ -350,6 +374,9 @@ func (az *Authorizer) authorize(ctx context.Context, req Request) Decision {
 		// fail-closed deny (the producers tag it; a chain member that errors surfaces as
 		// evalSafe error above, which already denies invariant). Propagate, never assume.
 		return Decision{Allow: false, Reason: "policy: " + dec.Reason, Class: dec.Class}
+	}
+	if explanation != nil {
+		*explanation = scopedExplanation
 	}
 	return Decision{Allow: true, Reason: baseReason(granted, ownerGrantUsed)}
 }

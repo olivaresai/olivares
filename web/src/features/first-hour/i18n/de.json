@@ -4,7 +4,8 @@
     "codex": "Codex",
     "grok": "Grok Build",
     "opencode": "OpenCode",
-    "gemini-cli": "Gemini CLI"
+    "gemini-cli": "Gemini CLI",
+    "cursor": "Cursor CLI"
   },
   "status": {
     "installed": "Installiert",
@@ -26,6 +27,7 @@
     "signInChatGPT": "Mit ChatGPT anmelden",
     "useApiKey": "Stattdessen einen API-Schlüssel verwenden",
     "signInGrok": "Mit Ihrem xAI-Konto anmelden",
+    "signInCursor": "Mit Ihrem Cursor-Konto anmelden",
     "signInGoogle": "Mit Google anmelden",
     "signIn": "Anmelden"
   },
@@ -102,6 +104,12 @@
     "secretUse": "{{name}} an diese Sitzung geben",
     "secretVariable": "Variable für {{name}}",
     "secretsManage": "Sitzungsgeheimnisse verwalten",
+    "credentials": "Verwaltete Zugangsdaten (Business)",
+    "credentialsHint": "Die Sitzung nutzt alle gewählten Zugangsdaten über einen Helfer, den die Engine betreibt; der versiegelte Wert erreicht sie nie. Erfordert Olivares Business.",
+    "credentialsNone": "Noch keine verwalteten Zugangsdaten. Legen Sie einen Eintrag mit einem Namen an, der mit credential/ beginnt.",
+    "credentialUse": "Dieser Sitzung {{name}} geben",
+    "credentialsManage": "Verwaltete Zugangsdaten verwalten",
+    "listUnavailable": "Die Engine hat die Secretliste nicht beantwortet. Vorerst kann nichts gewählt werden.",
     "openTools": "KI-Werkzeuge öffnen",
     "model": "Modell",
     "providerDefault": "Standard ({{model}})",
@@ -113,7 +121,9 @@
     "profile": "Profil",
     "profileNotSignedIn": "Nicht angemeldet",
     "profileNeedsKey": "Schlüssel fehlt",
-    "foldersUnreadable": "Die registrierten Ordner konnten nicht gelesen werden. Geben Sie den Pfad eines Ordners auf diesem Server ein."
+    "foldersUnreadable": "Die registrierten Ordner konnten nicht gelesen werden. Geben Sie den Pfad eines Ordners auf diesem Server ein.",
+    "folderPermission": "Startet als {{name}}, dem Standard dieses Ordners.",
+    "autoAsks": "{{tool}} hat keinen Automatikmodus: Es fragt vor jeder Aktion nach."
   },
   "lists": {
     "runsTruncated": "Letzte Sitzungen: {{count}} geladen; es gibt weitere.",
@@ -122,10 +132,12 @@
     "foldersHint": "Einige registrierte Ordner sind nicht in dieser Liste enthalten."
   },
   "permission": {
-    "editsOnly": "Nur Dateien bearbeiten",
+    "editsOnly": "Änderungen automatisch annehmen",
     "editsAndCommands": "Dateien bearbeiten und Befehle ausführen",
     "readOnly": "Nur lesen",
-    "ask": "Vor jeder Aktion fragen"
+    "ask": "Beaufsichtigt",
+    "auto": "Automatisch",
+    "full": "Vollzugriff"
   },
   "next": {
     "title": "Als Nächstes, wenn Sie es brauchen",
@@ -138,5 +150,13 @@
     "cliHint": "Auf diesem Server ist der Befehl olivares bereits installiert. Auf einem anderen Computer installieren Sie ihn mit:",
     "copy": "Kopieren",
     "copied": "Kopiert"
+  },
+  "permissionSummary": {
+    "readOnly": "Liest und plant. Jede Änderung wird abgelehnt.",
+    "ask": "Fragt vor jeder Aktion nach, die kein Lesen ist.",
+    "editsOnly": "Liest und bearbeitet Dateien ohne Rückfrage. Alles andere fragt nach.",
+    "editsAndCommands": "Liest, bearbeitet Dateien und führt Befehle ohne Rückfrage aus. Andere Werkzeuge werden abgelehnt.",
+    "auto": "Der eigene, geprüfte Automatikmodus des Werkzeugs entscheidet. Ein Werkzeug ohne Automatikmodus fragt nach, wie bei „Beaufsichtigt“. Erfordert Run-Administration.",
+    "full": "Nichts fragt nach. Olivares begrenzt die Sitzung weiterhin und protokolliert jede Aktion. Erfordert Run-Administration."
   }
 }

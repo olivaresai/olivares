@@ -720,7 +720,7 @@ func onlyRunRecord(t *testing.T, m *Module, tenant model.TenantID) model.Record 
 	return runs[0]
 }
 
-// SR2C on aa1cc91f: a resume whose stored model OpenCode no longer offers is the same
+// review on aa1cc91f: a resume whose stored model OpenCode no longer offers is the same
 // refusal as on create, so it ends stopped as well.
 func TestOpenCodeRuntimeResumeRefusedForAnUnofferedModelIsNotFailed(t *testing.T) {
 	ctx := context.Background()

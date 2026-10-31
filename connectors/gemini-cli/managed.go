@@ -44,16 +44,19 @@ func ValidateSettingsJSON(content []byte) []string {
 }
 
 // driftSpec: the tool lists are allowlists, so their order is not drift; every other array
-// (an MCP server's args) is a sequence and is compared in order.
+// (an MCP server's args) is a sequence and is compared in order. The MCP server set is an
+// allowlist too, so a server the host adds is drift.
 var driftSpec = filedrift.Spec{
-	Origin:    "gemini_cli_managed_config",
-	Tool:      "Gemini CLI",
-	SetArrays: []string{"tools.core", "tools.allowed", "tools.exclude", "mcp.allowed", "mcp.excluded"},
+	Origin:      "gemini_cli_managed_config",
+	Tool:        "Gemini CLI",
+	ExactTables: []string{"mcpServers"},
+	SetArrays:   []string{"tools.core", "tools.allowed", "tools.exclude", "mcp.allowed", "mcp.excluded"},
 }
 
 // VerifyDriftJSON compares the published managed settings.json with the one a host
-// reports. A key the host adds is its own; a published key that is absent or different is
-// drift. The admin{} block is fetched remotely by Gemini CLI and is not in either file.
+// reports. A key the host adds is its own, except a server under mcpServers; a published
+// key that is absent or different is drift. The admin{} block is fetched remotely by
+// Gemini CLI and is not in either file.
 func VerifyDriftJSON(scope string, authored, observed []byte, at time.Time) ([]model.FindingReport, error) {
 	if issues := ValidateSettingsJSON(authored); len(issues) > 0 {
 		return nil, fmt.Errorf("Gemini CLI: authored document is invalid: %s", issues[0])

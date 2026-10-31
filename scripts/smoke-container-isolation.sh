@@ -71,7 +71,7 @@ assert_nonempty() { if [ -z "$2" ]; then fail "$1: empty"; fi; echo "    ok: $1 
 jget() { python3 -c "import sys,json;print(json.load(sys.stdin).get('$1',''))"; }
 
 wait_health() {
-  for _ in $(seq 1 240); do # 120 s, as first-hour-smoke.sh: 20 s failed the nightly quickstart (dev#2775)
+  for _ in $(seq 1 240); do # 120 s, as first-hour-smoke.sh: 20 s failed the nightly quickstart
     curl -sf "$BASE/healthz" >/dev/null 2>&1 && return 0
     sleep 0.5
   done
@@ -211,7 +211,9 @@ for a in json.load(sys.stdin).get("items", []):
 fi
 
 SID=""; STATE=""; ISO=""
-for _ in $(seq 1 60); do
+# A cold rootless image can take over 30 s to prepare before the tool starts.
+# Keep the first-frame budget aligned with the engine startup check above.
+for _ in $(seq 1 240); do
   J="$(olv session get "$RUN_REF")"
   STATE="$(printf '%s' "$J" | jget state)"
   SID="$(printf '%s' "$J" | jget claude_session_id)"
@@ -228,7 +230,7 @@ if [ -n "$REAL_RT" ]; then
   note "the real $REAL_RT runs the session"
   SEEN=""
   for _ in $(seq 1 20); do
-    SEEN="$("$REAL_RT" ps --filter label=ai.olivares.session --format '{{.Names}}' | head -1)"
+    SEEN="$("$REAL_RT" ps --filter label=ai.olivares.session --filter "ancestor=$IMAGE" --format '{{.Names}}' | head -1)"
     [ -n "$SEEN" ] && break
     sleep 0.5
   done

@@ -124,7 +124,7 @@ func TestPublicationReplyBudgetIsFiniteAndRouteScoped(t *testing.T) {
 		var routes []mounted
 		m.APIRoutes(sealedRecorder{routes: &routes})
 		for _, route := range routes {
-			publication := route.pattern == "/targets/{id}/pushes" || route.pattern == "/targets/{id}/pull-requests" || route.pattern == "/targets/{id}/merges"
+			publication := route.pattern == "/targets/{id}/pushes" || route.pattern == "/targets/{id}/pull-requests" || route.pattern == "/targets/{id}/merges" || route.pattern == "/targets/{id}/ships"
 			if !publication && route.pattern != "/targets" {
 				continue
 			}
@@ -137,7 +137,11 @@ func TestPublicationReplyBudgetIsFiniteAndRouteScoped(t *testing.T) {
 					before := time.Now()
 					route.h(w, httptest.NewRequest("POST", "/", strings.NewReader("{")), api.ModuleContext{})
 					if publication {
-						budget := m.opts.AdmissionTimeout + m.opts.DispatchTimeout + 90*time.Second
+						budget := m.opts.AdmissionTimeout + m.opts.DispatchTimeout + 120*time.Second
+						if route.pattern == "/targets/{id}/ships" {
+							// The commit's read, the push and the pull request each hold a publication's budget.
+							budget = m.opts.AdmissionTimeout + 2*budget
+						}
 						if w.deadline.Before(before.Add(budget)) || w.deadline.After(time.Now().Add(budget)) {
 							t.Fatalf("deadline = %v, want finite operation budget %s", w.deadline, budget)
 						}

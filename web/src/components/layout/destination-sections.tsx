@@ -2,31 +2,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE PAGES BESIDE THIS ONE: one row above the page that moves between the pages of its
-// own section (Policies: Claude Code policy, routine policies, the inference proxy), the same
-// section All areas places it in. Under Settings the row is the whole System & settings
-// area, led by Settings. The members are registry views, named by their own nav labels and
-// gated by the same check as the top bar, so the row never offers a page the route guard
-// would refuse. It is drawn as links, not tabs: each member is its own page, with its own
-// tabs below its title.
+// THE PAGES OF THIS PLACE: one row above the page that moves between the pages of the place
+// the left navigation marks (AI tools: Providers, Provider profiles, Source bindings). Under
+// Settings the row is led by Settings. The members are registry views, named by their own nav
+// labels and gated by the same check as the navigation, so the row never offers a page the
+// route guard would refuse. It is drawn as links, not tabs: each member is its own page, with
+// its own tabs below its title.
 //
-// Not drawn on a section address (Rules opens the approval queue, not a page of Identity &
-// access) nor on a work-frame route (Sessions), whose surface owns the whole viewport.
-//
-// Drawn at every width: there is no sidebar (#2544), so this row is how a place reaches the
-// other pages of its section in one click (Tools: AI tools, MCP servers, Providers).
+// Not drawn on a work-frame route (Sessions), whose surface owns the whole viewport.
 import { Link, useRouterState } from '@tanstack/react-router'
 import { useLayoutEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useViewAccess } from '@/features/navigation/authorization'
-import {
-  SETTINGS_UTILITY,
-  areaLabel,
-  resolveLocation,
-  sectionLabel,
-} from '@/features/navigation/model'
+import { resolveLocation, viewById } from '@/features/navigation/model'
+import { currentPlace, placePages } from '@/features/navigation/places'
 import { frameFor } from './page-frames'
-import { inSettingsArea, pagesBeside, sectionAt } from './shell-destinations'
 
 export function DestinationSections() {
   const { t } = useTranslation('nav')
@@ -51,35 +41,25 @@ export function DestinationSections() {
   }, [pathname])
 
   if (frameFor(pathname) === 'work') return null
-  const location = resolveLocation(pathname)
-  if (location.kind === 'view' && sectionAt(location.view.id, search))
-    return null
-  const members = pagesBeside(location, listed)
+  const place = currentPlace(pathname, search)
+  if (!place) return null
+  const members = placePages(place, listed)
   // One permitted member is just the page: no row to move between.
   if (members.length < 2) return null
-  // A deep-link detail (a recording's viewer) is read as its parent's page; the row of
-  // the footer's Settings is named by its area, any other row by its section.
-  let currentId: string = SETTINGS_UTILITY.id
-  let label = areaLabel(t, SETTINGS_UTILITY.areaId)
-  if (location.kind === 'view' && !inSettingsArea(location)) {
-    const place = location.view.navigation
-    if (place.kind === 'root') return null
-    // A door folded into a member (#2240: /provider-profiles into AI tools) reads as it.
-    const door = location.view.doorTo
+  const location = resolveLocation(pathname)
+  // A deep-link detail (a recording's viewer) reads as its parent's page; a door folded
+  // into a member (/provider-profiles into AI tools) reads as its room.
+  let currentId = 'settings'
+  if (location.kind === 'view') {
+    const view = location.parent ?? location.view
+    const room = view.doorTo ? viewById(view.doorTo) : undefined
     currentId =
-      place.kind === 'detail'
-        ? place.parentViewId
-        : door && members.some((m) => m.id === door)
-          ? door
-          : location.view.id
-    label = sectionLabel(t, place.areaId, place.sectionId)
-  } else if (location.kind === 'view') {
-    currentId = location.view.id
+      room && members.some((m) => m.id === room.id) ? room.id : view.id
   }
   return (
     <nav
       ref={row}
-      aria-label={label}
+      aria-label={t(`places.${place}`)}
       data-slot="destination-sections"
       className="-mx-1 mb-3 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none]"
     >

@@ -205,6 +205,36 @@ export const FEATURE_VIEWS = Object.freeze([...BUILTIN, ...FEATURE_EXTENSIONS].m
   }
 })
 
+test('an area directory that ROUTE_ALIASES redirects is no screen of the guide', (t) => {
+  const f = fixture(t)
+  f.registry('', "{ id: 'ai', path: '/areas/ai', sections: [] }")
+  const registry = path.join(f.root, 'web/src/features/registry.tsx')
+  writeFileSync(
+    registry,
+    `${readFileSync(registry, 'utf8')}export const ROUTE_ALIASES = [{ from: '/areas/ai', to: '/view1', note: NOTE }]\n`,
+  )
+  f.write(
+    'web/src/features/route-census.json',
+    JSON.stringify({
+      paths: [
+        '/login',
+        '/areas/ai',
+        ...Array.from({ length: 26 }, (_, i) => `/view${i}`),
+      ],
+    }),
+  )
+  const dumped = f.dump()
+  assert.equal(dumped.status, 0, dumped.stderr)
+  const out = JSON.parse(dumped.stdout)
+  assert.equal(
+    out.standalone.some((m) => m.path === '/areas/ai'),
+    false,
+    'a redirect is not listed as a screen',
+  )
+  assert.equal(out.census.includes('/areas/ai'), false)
+  assert.ok(out.standalone.some((m) => m.path === '/login'))
+})
+
 test('area directories are read from NAV_AREAS as authenticated routes', (t) => {
   const f = fixture(t)
   f.registry('', "{ id: 'ai', path: '/areas/ai', sections: [] }")

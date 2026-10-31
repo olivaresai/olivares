@@ -41,6 +41,7 @@
     "noResultsHint": "Nessuna riga corrisponde al filtro attuale. Cancellalo o amplia la ricerca per rivedere le righe.",
     "comingSoon": "In arrivo",
     "loaded": "Caricato",
+    "updatedReloaded": "Aggiornata e ricaricata",
     "yes": "Sì",
     "no": "No"
   },
@@ -291,8 +292,7 @@
     "group": {
       "general": "Generali",
       "launcher": "Avvio di una sessione",
-      "surface": "L'area di lavoro",
-      "navRail": "Barra di navigazione"
+      "surface": "L'area di lavoro"
     },
     "command": {
       "palette": {
@@ -317,7 +317,8 @@
         "closeBeside": "Chiudi la sessione accanto",
         "focusBeside": "Sposta il focus tra le sessioni",
         "nextPane": "Riquadro successivo",
-        "previousPane": "Riquadro precedente"
+        "previousPane": "Riquadro precedente",
+        "approve": "Approva una volta la richiesta nella conversazione"
       },
       "rail": {
         "next": "Sessione successiva",
@@ -327,15 +328,6 @@
         "open": "Apri la sessione",
         "pin": "Fissa o sblocca",
         "menu": "Apri il menu azioni della sessione"
-      },
-      "navRail": {
-        "next": "Modulo successivo",
-        "previous": "Modulo precedente",
-        "expand": "Apri l'area o entra al suo interno",
-        "fold": "Comprimi l'area o torna ad essa",
-        "first": "Primo modulo",
-        "last": "Ultimo modulo",
-        "pin": "Fissa o sblocca questo modulo"
       },
       "session": {
         "new": "Nuova sessione",
@@ -363,8 +355,7 @@
     "precedence": "Quando due righe condividono gli stessi tasti, vale l'ultima che si applica.",
     "problems_one": "{{count}} scorciatoia non è leggibile e non si attiva: {{commands}}",
     "problems_many": "{{count}} scorciatoie non sono leggibili e non si attivano: {{commands}}",
-    "problems_other": "{{count}} scorciatoie non sono leggibili e non si attivano: {{commands}}",
-    "navRailNote": "La barra è un unico punto di tabulazione. Questi tasti funzionano quando ha il focus."
+    "problems_other": "{{count}} scorciatoie non sono leggibili e non si attivano: {{commands}}"
   },
   "ui": {
     "status": {
@@ -413,11 +404,14 @@
       "copied": "Copiato",
       "copyFailed": "Impossibile copiare. Seleziona il comando e copialo."
     },
+    "quoteReply": "Cita la risposta",
     "copy": {
+      "markdown": "Copia il blocco Markdown",
       "message": "Copia messaggio",
       "code": "Copia codice",
       "copied": "Copiato",
-      "failed": "Impossibile copiare. Seleziona il testo e copialo."
+      "failed": "Impossibile copiare. Seleziona il testo e copialo.",
+      "value": "Copia {{value}}"
     }
   },
   "resize": {

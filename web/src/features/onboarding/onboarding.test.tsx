@@ -55,6 +55,7 @@ const status = vi.hoisted(() => ({
   grok: { driver: 'grok', installed: false, signed_in: false },
   opencode: { driver: 'opencode', installed: false, signed_in: false },
   'gemini-cli': { driver: 'gemini-cli', installed: false, signed_in: false },
+  cursor: { driver: 'cursor', installed: false, signed_in: false },
 }))
 const launch = vi.hoisted(() => ({ launchSession: vi.fn() }))
 vi.mock('@/features/agentops/session-launch', async (orig) => ({
@@ -66,7 +67,7 @@ vi.mock('@/features/first-hour/api', async (orig) => {
   return {
     ...real,
     signInApi: {
-      status: (d: SessionTool) => Promise.resolve(status[d]),
+      status: (d: keyof typeof status) => Promise.resolve(status[d]),
       start: vi.fn(),
       get: vi.fn(),
       code: vi.fn(),
@@ -150,7 +151,7 @@ describe('the setup wizard', () => {
   })
 
   /**
-   * ONE ORANGE PER FIRST SCREEN (dev#2673's console rule 2026-10-17): the
+   * ONE ORANGE PER FIRST SCREEN (the regression's console rule 2026-10-17): the
    * tool rows install in the secondary style, and the wizard's one next step —
    * Start — is the control that keeps the orange.
    */
@@ -193,10 +194,10 @@ describe('the setup wizard', () => {
       /first workspace|invite an administrator|first source|policy enforcement|managed-settings|provider profile|privileged read|audit ledger|step-up|\bAAL\d|passkey|security key|\bpending\b|of \d+ verified/i,
     )
     for (const [name, href] of [
-      ['Invite people', '/console?tab=people'],
-      ['Connect an identity provider', '/console?tab=sso'],
+      ['Invite people', '/identity?tab=people'],
+      ['Connect an identity provider', '/identity?tab=sso'],
       ['Set policies', '/claude-policy?tab=managed-settings'],
-      ['Add MCP servers', '/console?tab=mcpGateway'],
+      ['Add MCP servers', '/capabilities?tab=servers'],
       [
         business ? 'Set budgets' : 'Budgets',
         business ? '/finops' : '/stored-budgets',
@@ -277,7 +278,7 @@ describe('the setup wizard', () => {
     expect(
       await screen.findByRole('button', { name: 'Sign in with Claude' }),
     ).toBeInTheDocument()
-    // HU2-18, #2551: the key form opens in the sheet, on the provider this tool runs
+    // acceptance, #2551: the key form opens in the sheet, on the provider this tool runs
     // on — no page link, no reload.
     await user.click(
       screen.getByRole('button', { name: 'Use an API key instead' }),
@@ -293,7 +294,7 @@ describe('the setup wizard', () => {
     )
   })
 
-  it('names the key the engine will use when the tool is not signed in (HU 030)', async () => {
+  it('names the key the engine will use when the tool is not signed in', async () => {
     status.claude = { driver: 'claude', installed: true, signed_in: false }
     runsOnKey('claude', {
       provider_ref: 'prv_a',
@@ -324,7 +325,7 @@ describe('the setup wizard', () => {
     expect(screen.queryByText(/Uses your API key/)).toBeNull()
   })
 
-  // HU2-17: after the key test said "Refused", the wizard counted step 2 as done and the
+  // acceptance: after the key test said "Refused", the wizard counted step 2 as done and the
   // row said "Uses your API key".
   it('says the key was refused, and does not count it as signed in', async () => {
     status.claude = { driver: 'claude', installed: true, signed_in: false }
@@ -348,7 +349,7 @@ describe('the setup wizard', () => {
     expect(screen.queryByRole('button', { name: 'Start' })).toBeNull()
   })
 
-  // Root 19:15Z (HU2 003): a session that failed counted as "Start a session" done.
+  // Root 19:15Z: a session that failed counted as "Start a session" done.
   it('waits while it reads what the tools run on, instead of saying none is ready', async () => {
     status.codex = { driver: 'codex', installed: true, signed_in: false }
     vi.spyOn(agentOpsApi, 'toolsReadiness').mockImplementation(
@@ -474,7 +475,7 @@ describe('the setup wizard', () => {
     wrap(<OnboardingView />)
     expect(screen.getByRole('link', { name: 'Invite people' })).toHaveAttribute(
       'href',
-      '/console?tab=people',
+      '/identity?tab=people',
     )
     expect(screen.queryByText(/pending/i)).not.toBeInTheDocument()
   })
@@ -522,7 +523,7 @@ describe('the New session dialog', () => {
   })
 })
 
-// HU 043: the simple dialog had the presets and no tool choice, so Grok Build or OpenCode
+// acceptance: the simple dialog had the presets and no tool choice, so Grok Build or OpenCode
 // could not be started from it. Every tool the engine drives is offered; one that cannot
 // start says why, in the engine's own sentence; the presets are the same for every tool.
 describe('the New session dialog: tool and preset', () => {
@@ -535,7 +536,14 @@ describe('the New session dialog: tool and preset', () => {
     const tools = await screen.findByRole('radiogroup', { name: 'Tool' })
     expect(
       [...tools.querySelectorAll('[role="radio"]')].map((r) => r.textContent),
-    ).toEqual(['Claude Code', 'Codex', 'Grok Build', 'OpenCode', 'Gemini CLI'])
+    ).toEqual([
+      'Claude Code',
+      'Codex',
+      'Grok Build',
+      'OpenCode',
+      'Gemini CLI',
+      'Cursor CLI',
+    ])
     expect(screen.getByRole('radio', { name: 'Claude Code' })).toHaveAttribute(
       'aria-checked',
       'true',

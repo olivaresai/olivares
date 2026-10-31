@@ -5,8 +5,8 @@
 // THE SCOPE, ONE CONTROL (#3161): the organization and the workspace the next action
 // applies to, in one menu, with one name on the bar: the workspace in force, or the
 // organization when the work spans every workspace. The other level is in the tooltip
-// and in the menu, where both are switched. All areas below 1024 px keeps the two
-// switchers of its own (sidebar.tsx); both read the same choices.
+// and in the menu, where both are switched. It sits under the brand in the left
+// navigation (sidebar.tsx), the column and the drawer alike.
 import { ChevronsUpDown } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Dialog } from '@/components/ui/dialog'
@@ -24,16 +24,18 @@ import {
 } from './tenant-switcher'
 import { useWorkspaceChoices, WorkspaceMenuItems } from './workspace-switcher'
 
-/** The face both the control and the plain label wear: an initial, then the name. */
+/**
+ * The face both the control and the plain label wear: an initial, then the name. The
+ * initial is drawn, not text, so the text on the control is its name (WCAG 2.5.3).
+ */
 function ScopeFace({ name }: { name: string }) {
   return (
     <>
       <span
         aria-hidden
-        className="grid size-5 shrink-0 place-items-center rounded-md bg-accent-soft text-[11px] leading-none font-bold text-accent-text"
-      >
-        {name.trim().charAt(0).toUpperCase() || '·'}
-      </span>
+        data-initial={name.trim().charAt(0).toUpperCase() || '·'}
+        className="grid size-5 shrink-0 place-items-center rounded-md bg-accent-soft text-[11px] leading-none font-bold text-accent-text before:content-[attr(data-initial)]"
+      />
       <span className="min-w-0 flex-1 truncate text-left">{name}</span>
     </>
   )

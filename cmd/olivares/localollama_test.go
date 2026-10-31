@@ -20,7 +20,7 @@ import (
 
 // HU-R17: once the Ollama this engine runs answers, its endpoint is a provider in the
 // tenant it was started from, with no key, and starting it again does not add a second
-// one. Root on FH 033: ONLY that tenant; another tenant adds it in Providers if it wants.
+// one. Root on first-hour check: ONLY that tenant; another tenant adds it in Providers if it wants.
 func TestLocalOllamaIsRegisteredOnceAsAProvider(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
@@ -43,7 +43,7 @@ func TestLocalOllamaIsRegisteredOnceAsAProvider(t *testing.T) {
 	}
 }
 
-// Root on FH 033: started from tenant A, the record is A's alone; tenant B has none.
+// Root on first-hour check: started from tenant A, the record is A's alone; tenant B has none.
 // A start outside a business tenant registers nothing and says what to do.
 func TestLocalOllamaIsRegisteredOnlyInTheStartingTenant(t *testing.T) {
 	h := newHarness(t)
@@ -68,7 +68,7 @@ func TestLocalOllamaIsRegisteredOnlyInTheStartingTenant(t *testing.T) {
 	}
 }
 
-// FH 087: an OpenCode launch on the local Ollama uses the record's model list, and
+// first-hour check: an OpenCode launch on the local Ollama uses the record's model list, and
 // nobody should have to test the provider by hand first. Registering (at start and
 // after each download) reads the endpoint's models into the record.
 func TestLocalOllamaRegistrationReadsTheEndpointsModels(t *testing.T) {

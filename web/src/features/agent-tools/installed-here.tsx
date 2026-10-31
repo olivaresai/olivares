@@ -26,7 +26,8 @@ import { useAuth } from '@/lib/auth/context'
 import { useModulesStore } from '@/stores/modules'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { ToolInventory } from './api'
-import { toolLabel, type toolFacts } from './inventory'
+import { toolName } from '@/features/agentops/engine-tools'
+import { type toolFacts } from './inventory'
 
 /** The workspace switcher's page: the store's ceiling (sqlstore maxLimit). */
 const WORKSPACE_PAGE = 1000
@@ -178,7 +179,7 @@ export function InstalledHere({
     )
     return {
       key: driver,
-      label: toolLabel(driver),
+      label: toolName(driver),
       detail: versionOnly(
         run ? run.version : fact?.installs.length ? undefined : fact?.version,
       ),
@@ -191,14 +192,14 @@ export function InstalledHere({
   const previewFailed = previews.find((q) => q.isError && !refused(q.error))
   const refusedTools = drivers
     .filter((driver, i) => answered(driver) || refused(previews[i]?.error))
-    .map(toolLabel)
+    .map(toolName)
   const profiles = drivers.flatMap((driver, i) => {
     const profile = previews[i]?.data?.profile
     return profile ? [{ driver, profile }] : []
   })
   // Programs and registries (URL and scope; the token's vault entry is never shown).
   const packages = profiles.flatMap(({ driver, profile }) => {
-    const tool = drivers.length > 1 ? toolLabel(driver) : undefined
+    const tool = drivers.length > 1 ? toolName(driver) : undefined
     return [
       ...(profile.session_programs ?? []).map((name) => ({
         key: `${driver}/program/${name}`,
@@ -219,7 +220,7 @@ export function InstalledHere({
     (profile.session_egress_hosts ?? []).map((host) => ({
       key: `${driver}/host/${host}`,
       label: host,
-      detail: drivers.length > 1 ? toolLabel(driver) : undefined,
+      detail: drivers.length > 1 ? toolName(driver) : undefined,
       href: boxOf(driver),
     })),
   )
@@ -246,7 +247,7 @@ export function InstalledHere({
     for (const member of selection?.members ?? []) {
       const key = `${member.pack_revision_id}/${member.name}`
       const item = skillItems.get(key)
-      const tool = drivers.length > 1 ? toolLabel(driver) : undefined
+      const tool = drivers.length > 1 ? toolName(driver) : undefined
       if (item) {
         if (tool && !item.detail?.includes(tool))
           item.detail = [item.detail, tool].filter(Boolean).join(', ')
@@ -254,7 +255,7 @@ export function InstalledHere({
         skillItems.set(key, {
           key,
           label: member.name,
-          href: `/skills?pack=${encodeURIComponent(member.pack_id)}`,
+          href: `/capabilities?tab=skills&pack=${encodeURIComponent(member.pack_id)}`,
           detail: tool,
         })
       }
@@ -273,7 +274,7 @@ export function InstalledHere({
           key: server.id,
           label: server.name,
         })),
-      ].map((item) => ({ ...item, href: '/mcp-servers' }))
+      ].map((item) => ({ ...item, href: '/capabilities?tab=servers' }))
     : []
 
   return (
@@ -318,7 +319,7 @@ export function InstalledHere({
                   profiles: profiles
                     .map(
                       ({ driver, profile }) =>
-                        `${toolLabel(driver)}: ${profileName(profile) ?? profile.profile_ref}`,
+                        `${toolName(driver)}: ${profileName(profile) ?? profile.profile_ref}`,
                     )
                     .join(', '),
                 })
@@ -375,7 +376,7 @@ export function InstalledHere({
           hint={
             servers.length > 0
               ? t('installed.mcpDrivers', {
-                  tools: MCP_DRIVERS.map(toolLabel).join(', '),
+                  tools: MCP_DRIVERS.map(toolName).join(', '),
                 })
               : undefined
           }

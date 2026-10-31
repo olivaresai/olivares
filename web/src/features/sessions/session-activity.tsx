@@ -26,6 +26,7 @@ import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { Button } from '@/components/ui/button'
+import { PathText } from '@/components/ui/path-text'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StatusGlyph, type Status } from '@/components/ui/status-glyph'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
@@ -341,9 +342,11 @@ function ActivityBody({
                   className="size-3.5 shrink-0 text-muted-foreground"
                 />
               )}
-              <span className="min-w-0 flex-1 truncate font-mono">
-                {displayPath(file.path, run.workspace_path)}
-              </span>
+              <PathText
+                value={displayPath(file.path, run.workspace_path)}
+                copy={false}
+                className="flex-1"
+              />
               {file.created ? (
                 <span className="text-muted-foreground">
                   {t('activity.fileNew')}

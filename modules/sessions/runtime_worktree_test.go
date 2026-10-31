@@ -826,14 +826,14 @@ func TestResumeRefusesAWorkspaceThatBecameReadOnlyForTheCopy(t *testing.T) {
 	h, ctx := newWorktreeHarness(t)
 	dto := h.launch(ctx, true)
 	h.stop(ctx, dto.RunRef)
-	if _, err := h.m.patchWorkspace(ctx, h.tenant, h.ws, &[]string{filepath.Join(h.repo, "sub")}, nil, "user:u1", "user"); err != nil {
+	if _, err := h.m.patchWorkspace(ctx, h.tenant, h.ws, &[]string{filepath.Join(h.repo, "sub")}, nil, nil, false, nil, nil, "user:u1", "user"); err != nil {
 		t.Fatal(err)
 	}
 
 	_, err := h.resume(ctx, dto.RunRef)
 
 	wantRunErr(t, err, http.StatusConflict, "read-only")
-	if _, err := h.m.patchWorkspace(ctx, h.tenant, h.ws, &[]string{}, nil, "user:u1", "user"); err != nil {
+	if _, err := h.m.patchWorkspace(ctx, h.tenant, h.ws, &[]string{}, nil, nil, false, nil, nil, "user:u1", "user"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := h.resume(ctx, dto.RunRef); err != nil {

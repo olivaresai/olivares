@@ -7,6 +7,7 @@ package federation
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -172,9 +173,13 @@ func (o *oidcProvider) validate(ctx context.Context, a auth.Assertion) (auth.Fed
 	// absent in the code flow) OR the configured groups claim. Many IdPs keep the ID
 	// token minimal and expose groups only at UserInfo (e.g. Azure AD's groups
 	// overage), so reading groups solely from the ID token would silently drop them
-	// and no-op the reconciliation. Best-effort: a UserInfo error never fails an
-	// otherwise-valid login.
+	// and no-op the reconciliation. A UserInfo error never fails an otherwise-valid
+	// login, but where it was the only place the groups could come from it leaves them
+	// unknown, and the login is flagged below rather than read as "no groups".
 	groupsMissing := o.groupsClaim != "" && len(claimStrings(raw[o.groupsClaim])) == 0
+	userInfoAnswered := false
+	userInfoGroupsNull := false
+	userInfoWhy := "userinfo_failed" // only read while UserInfo has not answered
 	if claims.Email == "" || groupsMissing {
 		if ui, uerr := o.provider.UserInfo(ctx, oauth2.StaticTokenSource(tok)); uerr == nil {
 			// OIDC Core §5.3.2: the UserInfo `sub` MUST be present and equal the ID
@@ -187,7 +192,9 @@ func (o *oidcProvider) validate(ctx context.Context, a auth.Assertion) (auth.Fed
 			// hard-fail: the id_token stays the authoritative identity, so a login whose
 			// email came from the id_token still succeeds, while one that DEPENDED on the
 			// discarded UserInfo email fails cleanly at the "no email claim" check below.
-			if ui.Subject == idToken.Subject {
+			if ui.Subject != idToken.Subject {
+				userInfoWhy = "userinfo_subject_mismatch"
+			} else {
 				// Verification of the token's email cannot verify a different
 				// address supplied by UserInfo without its own explicit claim.
 				var uiClaims idClaims
@@ -197,14 +204,26 @@ func (o *oidcProvider) validate(ctx context.Context, a auth.Assertion) (auth.Fed
 				_ = ui.Claims(&claims)
 				var uraw map[string]any
 				if ui.Claims(&uraw) == nil {
+					userInfoAnswered = true
 					userInfoNames = uraw["_claim_names"]
 					for k, v := range uraw {
-						if _, ok := raw[k]; !ok {
+						// The groups claim is what sent us here when the token's was empty or
+						// unreadable, so UserInfo's list replaces it. An explicit null is not
+						// a list and stays indeterminate; other claims only fill a gap.
+						if k == o.groupsClaim && groupsMissing && v == nil {
+							userInfoGroupsNull = true
+						}
+						if _, ok := raw[k]; !ok || k == o.groupsClaim && groupsMissing && v != nil {
 							raw[k] = v
 						}
 					}
 				}
 			}
+		} else if groupsMissing && o.provider.UserInfoEndpoint() != "" {
+			// The failed call was where the groups had to come from. Keep the stable
+			// reason, never the upstream error: go-oidc includes the raw response body,
+			// which can carry assertion data or credentials.
+			slog.Warn("federation: oidc userinfo call failed while the groups were missing", "reason", userInfoWhy)
 		}
 	}
 	if claims.Email == "" {
@@ -233,7 +252,22 @@ func (o *oidcProvider) validate(ctx context.Context, a auth.Assertion) (auth.Fed
 		// from either source counts.
 		// ponytail: Entra's `hasgroups` (implicit/hybrid flows only) is not read; this
 		// provider runs only the code flow. Upgrade when an implicit flow is added.
-		id.GroupsIndeterminate = claimListed(idTokenNames, o.groupsClaim) || claimListed(userInfoNames, o.groupsClaim)
+		// Besides the marker, two more ways the list is unknown rather than empty: the claim
+		// is present but unreadable, so Groups may be partial or blank; or the ID token's
+		// claim is absent or empty, which sent us to a UserInfo that failed or answered for
+		// another subject, so the list may be there. An IdP that advertises no UserInfo
+		// endpoint has nowhere else to look, so there absence is its answer.
+		switch {
+		case claimListed(idTokenNames, o.groupsClaim) || claimListed(userInfoNames, o.groupsClaim):
+			id.GroupsIndeterminateWhy = "groups_overage"
+		case userInfoGroupsNull:
+			id.GroupsIndeterminateWhy = "groups_claim_unreadable"
+		case !claimReadable(raw[o.groupsClaim]):
+			id.GroupsIndeterminateWhy = "groups_claim_unreadable"
+		case groupsMissing && !userInfoAnswered && o.provider.UserInfoEndpoint() != "":
+			id.GroupsIndeterminateWhy = userInfoWhy
+		}
+		id.GroupsIndeterminate = id.GroupsIndeterminateWhy != ""
 	}
 	return id, nil
 }
@@ -253,11 +287,30 @@ func claimListed(names any, claim string) bool {
 	return true
 }
 
+// claimReadable reports whether a groups claim value is one claimStrings reads in full:
+// absent or null, one string, or an array of strings. Anything else (an object, a number,
+// a boolean, an array with a non-string member) is present but unreadable, so the list
+// claimStrings returns for it is not the IdP's answer and must not stand for "no groups".
+func claimReadable(v any) bool {
+	switch t := v.(type) {
+	case nil, string:
+		return true
+	case []any:
+		for _, e := range t {
+			if _, ok := e.(string); !ok {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
 // claimStrings coerces a JSON claim value to a list of non-empty strings. It
 // accepts a JSON array (the usual groups shape — Okta/Auth0/Entra) or a single
 // string (some IdPs send one group unwrapped); anything else yields nil. It never
-// errors: a malformed groups claim simply asserts no groups (fail-inert — an
-// unreadable claim must not fail an otherwise-valid login).
+// errors, so it cannot tell an empty claim from an unreadable one: the caller asks
+// claimReadable and flags the login rather than trusting an empty list.
 func claimStrings(v any) []string {
 	switch t := v.(type) {
 	case []any:

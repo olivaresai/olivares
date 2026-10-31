@@ -23,6 +23,7 @@ import (
 	"github.com/olivaresai/olivares/core/secure"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/finops"
+	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/sdk"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
@@ -50,11 +51,21 @@ type harness struct {
 	setupTok string
 }
 
-func newHarness(t *testing.T, m *finops.Module) *harness {
+func newHarness(t *testing.T, m *finops.Module, scoped ...*governance.Module) *harness {
 	t.Helper()
 	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	ctx := context.Background()
-	st, err := engine.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: ":memory:", Debug: true}, m.RegisterSchema)
+	st, err := engine.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: ":memory:", Debug: true}, func(reg store.ExtensionRegistry) error {
+		if err := m.RegisterSchema(reg); err != nil {
+			return err
+		}
+		for _, gov := range scoped {
+			if err := gov.RegisterSchema(reg); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,8 +82,13 @@ func newHarness(t *testing.T, m *finops.Module) *harness {
 	if err != nil {
 		t.Fatal(err)
 	}
+	az := auth.NewAuthorizer(nil)
+	for _, gov := range scoped {
+		gov.UseData(api.NewModuleData(st))
+		az = auth.NewAuthorizer(gov.RequestEvaluator(), auth.WithScopedGrants(gov.ScopedGrants()))
+	}
 	srv, err := api.New(api.Options{
-		Store: st, Authenticator: auth.NewAuthenticator(st, nil), Authorizer: auth.NewAuthorizer(nil),
+		Store: st, Authenticator: auth.NewAuthenticator(st, nil), Authorizer: az,
 		Signer: signer, SetupToken: tok, Version: "test", Modules: []api.Module{m},
 	})
 	if err != nil {

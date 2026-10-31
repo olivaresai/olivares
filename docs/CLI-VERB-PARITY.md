@@ -56,10 +56,11 @@ be a defect, not a feature. Read-back of the *reference* is what operators need,
 
 ### `dr` has no offsite `rm` — LAST-COPY SAFETY
 
-`OffsiteClient.Delete` exists (`core/dr/offsite.go:185`) and has exactly **one** caller:
-`applyGFSOffsite`, the Grandfather-Father-Son retention pass
-(`cmd/olivares/cmd_dr_offsite.go:172-193`). Deletion of the offsite mirror is therefore
-**policy-driven only**. That is the whole point of an offsite copy in a 3-2-1 posture:
+`OffsiteClient.Delete` exists (`core/dr/offsite.go`) and has exactly **one** caller:
+`applyGFSOffsite`, the Grandfather-Father-Son retention pass that `dr backup` and
+`dr prune --offsite` run (`cmd/olivares/cmd_dr_offsite.go`). Deletion of the offsite
+mirror is therefore **policy-driven only**, and the `--offsite-immutable` writer refuses
+it outright. That is the whole point of an offsite copy in a 3-2-1 posture:
 the bundle is the last thing standing when the host it protects is gone, and an
 interactive delete verb is the one keystroke that turns an operator's bad afternoon into
 an unrecoverable one. Retention changes go through the GFS flags, where they are declared

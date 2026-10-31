@@ -71,7 +71,7 @@ func TestOpenCodePlatformPicksTheBuildTheHostCanExec(t *testing.T) {
 	}
 }
 
-// HU 042 (09b real use): Console › AI tools › OpenCode › Review install answered
+// acceptance (09b real use): Console › AI tools › OpenCode › Review install answered
 // 400 "codex platform libc must be musl, got "glibc"" on every glibc host:
 // PlatformV2For picks OpenCode's glibc build (HU-R13) but the selection's
 // platform check still grouped OpenCode with Codex. This plans the way POST

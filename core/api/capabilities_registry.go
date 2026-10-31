@@ -225,9 +225,6 @@ func collectionScopeSelector(r *http.Request, scope CollectionScopeRef) (string,
 		}
 		if scope.WorkspaceBySlug {
 			raw = strings.TrimSpace(raw)
-			if raw != "" && !slugPattern.MatchString(raw) {
-				return "", false
-			}
 		}
 		if values, query := valuesByName[scope.WorkspaceQueryParam]; query {
 			if raw == "" || len(values) != 1 {

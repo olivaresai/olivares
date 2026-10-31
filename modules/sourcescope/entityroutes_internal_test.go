@@ -81,10 +81,9 @@ func TestEveryEntityRouteDeclaresResolvableLineage(t *testing.T) {
 // TestPostureRequestRoutesStayCollectionLevel is the review's most important finding,
 // pinned so a later sweep cannot "finish the migration" by pattern-matching on {id}.
 //
-// A posture request carries no workspace, so there is nothing to resolve; and a decision
-// on it applies to the BINDING it targets, so authorizing on the request's own scope would
-// authorize a mutation of a row that may live in another workspace. Migrating these needs
-// a schema answer first, not a registration change.
+// The request's approver workspace alone cannot authorize changes to its target
+// binding. Access-request handlers also check requester membership and source ownership;
+// ordinary posture requests carry no approver workspace.
 func TestPostureRequestRoutesStayCollectionLevel(t *testing.T) {
 	seen := 0
 	for _, r := range mountedRoutes(t) {
@@ -93,7 +92,7 @@ func TestPostureRequestRoutesStayCollectionLevel(t *testing.T) {
 		}
 		seen++
 		if r.entity != nil {
-			t.Errorf("%s %s was migrated to an entity route, but a posture request has no workspace to resolve and a decision on it applies to the binding it targets — authorizing on the request would authorize the wrong object",
+			t.Errorf("%s %s was migrated to an entity route, but authorizing on the request workspace alone does not cover its target binding",
 				r.method, r.pattern)
 		}
 	}
@@ -123,8 +122,8 @@ func TestNoEntityRouteDeclaresAWorkspaceRefColumn(t *testing.T) {
 }
 
 // TestEntityRouteCoverageMatchesTheReview records what the review concluded, so the split
-// is a fact in the suite rather than a claim in a status file: of the twelve {id} routes,
-// five satisfy BOTH halves of the rule and seven deliberately do not: three because the row
+// is a fact in the suite rather than a claim in a status file: of the thirteen {id} routes,
+// five satisfy BOTH halves of the rule and eight deliberately do not: four because the row
 // has no workspace at all, three because the request can MOVE the row's workspace, and one
 // because its EFFECT reaches beyond that workspace.
 func TestEntityRouteCoverageMatchesTheReview(t *testing.T) {
@@ -145,8 +144,8 @@ func TestEntityRouteCoverageMatchesTheReview(t *testing.T) {
 	if len(entity) != 5 {
 		t.Errorf("expected 5 entity routes, got %d: %v", len(entity), entity)
 	}
-	if len(collection) != 7 {
-		t.Errorf("expected 7 {id} routes to stay collection-level (3 posture-request + 3 binding + the assignment DELETE), got %d: %v", len(collection), collection)
+	if len(collection) != 8 {
+		t.Errorf("expected 8 {id} routes to stay collection-level (4 posture-request + 3 binding + the assignment DELETE), got %d: %v", len(collection), collection)
 	}
 	t.Logf("entity routes (%d): %v", len(entity), entity)
 	t.Logf("collection-level {id} routes (%d): %v", len(collection), collection)

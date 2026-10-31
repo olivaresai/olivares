@@ -142,6 +142,7 @@
     "actorHint": "Audit actor handle — never an email address. Identity is resolved from the directory, not shown here.",
     "expiredAt": "Expired {{time}}",
     "approveOnce": "Approve once",
+    "approveForSession": "Approve for this session",
     "approving": "Approving…",
     "deny": "Deny",
     "noMatch": "No request matches the search",
@@ -219,6 +220,7 @@
     "trailEmpty": "No decisions recorded yet",
     "trailEmptyHint": "Every decision on this approval — who decided, when and why — is recorded here. Nobody has decided yet.",
     "decisionApprove": "Approved",
+    "decisionApproveForSession": "Approved for this session",
     "decisionReject": "Denied",
     "reenableNeedsAdmins": "Two other admin accounts must approve this. Create them in Identity & access, or with `olivares users create`.",
     "openIdentity": "Open Identity & access",
@@ -684,14 +686,19 @@
     "matched": "Matched: {{rule}}",
     "matchedDefault": "Matched: no rule, so the default applies",
     "matchedUnreadable": "Matched: a rule you cannot read",
-    "reaches": "Reaches: {{list}}",
+    "reaches": "Reaches:",
     "reachFolder": {
-      "write": "{{path}} (write)",
-      "read": "{{path}} (read only)",
-      "unknown": "{{path}} (access unknown)"
+      "write": "<path /> (write)",
+      "read": "<path /> (read only)",
+      "unknown": "<path /> (access unknown)"
     },
     "matchedUnknown": "Matched: a rule that could not be read",
-    "reachIncomplete": "more that could not be read"
+    "reachIncomplete": "more that could not be read",
+    "rule": {
+      "default": "No rule, so the default applies",
+      "unreadable": "A rule you cannot read",
+      "unknown": "A rule that could not be read"
+    }
   },
   "list": {
     "loadedOnly": "Search covers only the rows loaded so far; load more to read further."

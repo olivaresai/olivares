@@ -160,6 +160,10 @@ const NO_VERB: ReadonlyArray<{ dir: string; why: string }> = [
     why: 'a detail screen: verify and summarise are secondary, and it has no list',
   },
   {
+    dir: 'features/settings',
+    why: 'system updates: the one install action sits beside the release it installs, inside the panel',
+  },
+  {
     dir: 'features/skills',
     why: 'packs are installed through the CLI; assignment changes belong to the selected pack detail sheet',
   },
@@ -174,6 +178,10 @@ const NO_VERB: ReadonlyArray<{ dir: string; why: string }> = [
   {
     dir: 'features/tenants',
     why: 'tenants are created by the control plane, not by this screen',
+  },
+  {
+    dir: 'features/usage',
+    why: "a read of each account's limits and today's use; each account row links to its details",
   },
   {
     dir: 'features/work',

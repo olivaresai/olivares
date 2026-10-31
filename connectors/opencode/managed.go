@@ -85,9 +85,20 @@ func sortedKeys[V any](m map[string]V) []string {
 	return keys
 }
 
+// driftSpec: the permission block, each tool table in it and the MCP server set are
+// allowlists, so an entry the host adds there widens the published policy. A tool
+// table's keys are command, path or URL patterns, so titles name them by hash.
+var driftSpec = filedrift.Spec{
+	Origin:        "opencode_managed_config",
+	Tool:          "OpenCode",
+	ExactTables:   []string{"permission", "permission.*", "mcp"},
+	PatternTables: []string{"permission.*"},
+}
+
 // VerifyDriftJSON compares the published managed opencode.json with the one a host
 // reports. OpenCode merges the managed layer over user and project config key by key, so a
-// key the host adds is its own; a published key that is absent or different is drift.
+// key the host adds is its own, except inside the policy tables of driftSpec; a published
+// key that is absent or different is drift.
 func VerifyDriftJSON(scope string, authored, observed []byte, at time.Time) ([]model.FindingReport, error) {
-	return filedrift.JSON(filedrift.Spec{Origin: "opencode_managed_config", Tool: "OpenCode"}, scope, authored, observed, at)
+	return filedrift.JSON(driftSpec, scope, authored, observed, at)
 }

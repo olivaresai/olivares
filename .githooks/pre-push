@@ -95,7 +95,7 @@ main() {
 	# wrong repository. Any verdict but CLEAN refuses the push (BROKEN names the offender;
 	# UNVERIFIED is the fail-closed answer, never a vacuous pass).
 	OLIVARES_PUSH_REFS_FILE="$PRE_PUSH_REFS" OLIVARES_PUSH_REMOTE_NAME="$remote" \
-	OLIVARES_PUSH_REMOTE_URL="$url" task lint:commit-identity
+	OLIVARES_PUSH_REMOTE_URL="$url" bash scripts/hub-leg.sh lint:commit-identity scripts/check-commit-identity.sh
 }
 
 # The pushed commit is not this clean checkout (another ref, edits or untracked files on top),
@@ -139,7 +139,7 @@ check() {
 		fi
 	fi
 	if grep -Eq '^scripts/(release/|export-scrub/|export-public\.sh$|check-export-closure\.sh$)' <<<"$changed"; then
-		task lint:export-release
+		bash scripts/hub-leg.sh lint:export-release scripts/release/test-export-release.sh
 	fi
 	touched="$(bash "$TOP/scripts/changed-go-packages.sh" "$base" "$head")"
 	[ -n "$touched" ] || return 0

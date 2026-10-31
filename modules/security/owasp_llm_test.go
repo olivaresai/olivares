@@ -51,7 +51,7 @@ func TestLLMTop10CatalogComplete(t *testing.T) {
 // TestLLMTop10DetectorTags guards the DELIBERATE decisions in the crosswalk: which
 // risks a guardrail detector tags directly (LLM01/02/05/07) versus which are evidenced
 // by another module or — for LLM09 Misinformation — left intentionally untagged
-//. If a future edit accidentally flips LLM09 to detector-tagged, or breaks
+// . If a future edit accidentally flips LLM09 to detector-tagged, or breaks
 // the LLM06/08/10 crosswalk grading, this test fails loudly rather than silently.
 func TestLLMTop10DetectorTags(t *testing.T) {
 	wantTagged := map[string]bool{

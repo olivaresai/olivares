@@ -21,7 +21,7 @@ import (
 
 // root_status.go is what `olivares` alone prints: where the engine is, who is
 // signed in, the one next step, and the commands to start with. Measured
-// 2026-10-01 (HU-29): it printed the full help, 80 commands, and said nothing about
+// 2026-10-01: it printed the full help, 80 commands, and said nothing about
 // this installation.
 
 // rootProbeTimeout bounds each of the few reads the status makes.

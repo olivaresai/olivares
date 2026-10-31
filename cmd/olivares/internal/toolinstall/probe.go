@@ -136,7 +136,7 @@ func withChildCommand(ctx context.Context, build ChildCommand) context.Context {
 }
 
 // newProbeCmd builds the probe with the engine's ChildCommand, or unconfined,
-// as the engine user, when none is wired (the CLI). A builder error stops the
+// as the engine user, when none is wired. A builder error stops the
 // probe; it never falls back to an unconfined start.
 func newProbeCmd(ctx context.Context, spec probeSpec, out *cappedBuffer) (*exec.Cmd, error) {
 	build, _ := ctx.Value(childCommandKey{}).(ChildCommand)

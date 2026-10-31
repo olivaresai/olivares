@@ -23,7 +23,10 @@
     "signing": "보고서 서명",
     "tracing": "트레이싱",
     "sessionIdle": "세션 메모리",
-    "updates": "업데이트"
+    "updates": "업데이트",
+    "permissions": "권한",
+    "newSessions": "새 세션",
+    "notifications": "알림"
   },
   "general": {
     "title": "일반",
@@ -42,17 +45,26 @@
     "startPageHint": "로그인할 때 열리는 페이지입니다. 기본값: 현재.",
     "confirmStop": "세션 중지 전 확인",
     "confirmStopHint": "작업 중인 세션을 중지로 끝내기 전에 한 번 확인합니다.",
+    "editor": "파일 링크용 편집기",
+    "editorHint": "이 컴퓨터에서 ‘열기’ 링크가 실행하는 편집기입니다. 기본값: VS Code.",
+    "editorSsh": "편집기용 SSH 호스트",
+    "editorSshHint": "다른 컴퓨터에 있는 세션 폴더에 편집기가 접속하는 방법으로, user@host 또는 user@host:port 형식입니다. 비워 두면 이 콘솔이 제공되는 주소를 사용하며, 이 컴퓨터라면 SSH를 쓰지 않습니다.",
     "reduceMotion": "동작 줄이기",
     "reduceMotionHint": "움직임을 페이드로 대체합니다. 시스템이 요청하면 켜집니다."
   },
   "sessionNotifications": {
     "title": "세션 알림",
-    "hint": "이 탭이 백그라운드에 있는 동안 세션이 확인을 필요로 하거나 완료되면 알려 줍니다. 이 브라우저에 적용됩니다.",
+    "hint": "선택한 세션 이벤트를 백그라운드에서 알립니다. 선택 항목은 동기화되지만 브라우저마다 권한이 필요합니다.",
     "notifyMe": "알림 받기",
     "denied": "이 브라우저에서 알림이 차단되어 있습니다.",
     "unavailable": "여기서는 브라우저 알림을 사용할 수 없습니다.",
     "needsYou": "이 세션에서 확인이 필요합니다.",
-    "finished": "턴이 완료되었습니다."
+    "finished": "턴이 완료되었습니다.",
+    "ended": "세션이 종료되었습니다.",
+    "failed": "세션이 오류와 함께 중지되었습니다.",
+    "pushOn": "탭을 닫아도 이 기기로 알림이 도착합니다.",
+    "pushUnavailable": "탭이 열려 있는 동안만 알립니다. 이 기기를 푸시에 등록하지 못했습니다.",
+    "installHint": "알림을 받으려면 앱을 홈 화면에 추가해야 합니다. 공유를 누른 다음 ‘홈 화면에 추가’를 선택하세요."
   },
   "keyboard": {
     "title": "키보드",
@@ -340,5 +352,31 @@
     "switched": "전환이 설치되었습니다.",
     "terminal": "서버의 터미널에서도 같은 작업을 할 수 있습니다",
     "orTerminal": "또는 서버의 터미널에서"
+  },
+  "permissions": {
+    "description": "에이전트가 세션에서 할 수 있는 일과 이를 위해 각 도구에 전달되는 내용입니다. 같은 이름을 새 세션 양식과 olivares session start --permission에서 쓸 수 있습니다.",
+    "caption": "각 권한이 각 도구에 전달하는 내용",
+    "permission": "권한",
+    "what": "동작",
+    "default": "기본값",
+    "asksInstead": "자동 모드 없음: {{name}}처럼 묻습니다",
+    "note": "Claude Code 이외의 도구는 도구가 요청하는 승인마다 Olivares가 권한에 따라 응답합니다. 표 칸의 도구 고유 'ask'는 사용자에게 묻는다는 뜻이 아닙니다."
+  },
+  "newSessions": {
+    "tool": "기본 도구",
+    "account": "기본 계정",
+    "model": "기본 모델",
+    "folder": "기본 폴더",
+    "automatic": "자동",
+    "unavailable": "더 이상 사용할 수 없음",
+    "reset": "{{name}} 초기화",
+    "readFailed": "선택 항목을 읽을 수 없습니다. 이 페이지를 다시 열어 주세요.",
+    "fallback": "저장된 기본값을 더 이상 사용할 수 없습니다. 사용 가능한 첫 번째 항목을 사용합니다.",
+    "scope": "새 세션의 기본값입니다. 이 서버의 계정에 저장됩니다."
+  },
+  "notificationEvents": {
+    "needsYou": "확인 필요",
+    "finished": "완료",
+    "failed": "실패"
   }
 }

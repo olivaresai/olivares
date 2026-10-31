@@ -3,11 +3,11 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // WHETHER THIS PERSON HAS OPENED COMPLIANCE. Now shows the compliance score only after
-// that (HU2-25, Root 19:53Z): on an install that carries the module, the engine maps
+// that (acceptance, Root 19:53Z): on an install that carries the module, the engine maps
 // every framework from platform evidence by itself, and "Compliance 10% · 68 gaps" on
 // the front page of someone who never asked for it read as alarm, not information.
-// Kept in this browser, per organization and user: the cost of another browser is one
-// tile not shown until Compliance is opened there, never a figure shown too early.
+// Kept in the server preferences, per organization and user.
+import { preferenceStorage } from '@/lib/preference-storage'
 import { useEffect, useState } from 'react'
 import type { Whoami } from '@/lib/api/types'
 import { useAuth } from '@/lib/auth/context'
@@ -30,13 +30,13 @@ function openedKey(
 function readOpened(key: string | null): boolean {
   if (!key) return false
   try {
-    return window.localStorage.getItem(key) === '1'
+    return preferenceStorage.getItem(key) === '1'
   } catch {
     return false
   }
 }
 
-/** Whether this person has opened Compliance in this organization, in this browser. */
+/** Whether this person has opened Compliance in this organization. */
 export function useComplianceOpened(): boolean {
   const { principal, activeTenant } = useAuth()
   const key = openedKey(principal, activeTenant)
@@ -54,7 +54,7 @@ export function useMarkComplianceOpened() {
   useEffect(() => {
     if (!key) return
     try {
-      window.localStorage.setItem(key, '1')
+      preferenceStorage.setItem(key, '1')
     } catch {
       // A blocked store: the score stays off Now, which is the quiet side.
     }

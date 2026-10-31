@@ -70,7 +70,7 @@ func closeCoreSession(ctx context.Context, sc store.Scope, rec model.Record, to 
 // that Session in this same mutation Scope. It is the same validator, not a second
 // one; a running target with no core Session is refused like any other mismatch.
 func (m *Module) RuntimeCoreSessionInScope(ctx context.Context, sc store.Scope, target RuntimeInputTarget) (model.ID, error) {
-	rec, err := m.runtimeInputTargetInScope(ctx, sc, target, "")
+	rec, err := m.runtimeInputTargetInScope(ctx, sc, target, "", false)
 	if err != nil {
 		return "", err
 	}

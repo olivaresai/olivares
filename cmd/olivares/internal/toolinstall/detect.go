@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
@@ -240,7 +241,16 @@ func (e *Engine) inspectReleaseV2(ctx context.Context, root *os.Root, rel, abs, 
 			return in
 		}
 	}
+	if rec.VerificationKind == VerificationOriginTarball {
+		if err := verifyCursorReceipt(ctx, root, rel, rec); err != nil {
+			in.Reason = err.Error()
+			return in
+		}
+	}
 	entry := "bin/" + driver
+	if rec.VerificationKind == VerificationOriginTarball {
+		entry = cursorWrapper
+	}
 	if rec.Tool != nil {
 		entry = "bin/" + rec.Tool.Program
 	}
@@ -527,12 +537,13 @@ func (e *Engine) Detect(ctx context.Context, opts DetectOptions) ([]Candidate, e
 			add(c)
 		}
 	}
+	program := PathProgram(opts.Driver)
 	if opts.PathEnv != "" {
 		for _, dir := range filepath.SplitList(opts.PathEnv) {
 			if !filepath.IsAbs(dir) {
 				continue
 			}
-			if c, ok := observe(opts.Driver, filepath.Join(dir, opts.Driver), "path", !opts.NoDigest); ok {
+			if c, ok := observe(opts.Driver, filepath.Join(dir, program), "path", !opts.NoDigest); ok {
 				add(c)
 			}
 		}
@@ -608,6 +619,11 @@ func (e *Engine) Detect(ctx context.Context, opts DetectOptions) ([]Candidate, e
 			failures++
 			continue
 		}
+		if err := e.refuseUnconfinedUnsigned(c.Driver); err != nil {
+			c.ProbeSkipped = "refused: " + err.Error()
+			failures++
+			continue
+		}
 		scratch, err := confine.ChildTempDir()
 		if err != nil {
 			c.ProbeError = err.Error()
@@ -636,6 +652,15 @@ func (e *Engine) Detect(ctx context.Context, opts DetectOptions) ([]Candidate, e
 		return out, refuse(KindProbeFailed, "%d requested probe(s) were refused or failed; each candidate carries its probe_error or probe_skipped", failures)
 	}
 	return out, nil
+}
+
+// PathProgram is the file name Detect searches for in each PATH entry: the
+// driver's declared program, or the driver key when it declares none.
+func PathProgram(driver string) string {
+	if facts, ok := driverfacts.Lookup(driver); ok && facts.Program != "" {
+		return facts.Program
+	}
+	return driver
 }
 
 // observe records a path without executing it. Symlinks are followed only to

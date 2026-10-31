@@ -9,36 +9,10 @@ import (
 	"crypto/ed25519"
 	"log/slog"
 
-	"github.com/spf13/cobra"
-
 	"github.com/olivaresai/olivares/core/audit"
 	coreengine "github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/store"
 )
-
-type auditReadEngine struct {
-	ledger      store.AuditReader
-	signer      *audit.Signer
-	auditPriors []ed25519.PublicKey
-}
-
-func (e *auditReadEngine) Close() error { return e.ledger.Close() }
-
-func auditVerifyBoot(cmd *cobra.Command, dataDir, engineName, dsn, ownerDSN string) (*auditReadEngine, error) {
-	cfg, dir, err := offlineStoreConfig(cmd, dataDir, engineName, dsn, ownerDSN)
-	if err != nil {
-		return nil, err
-	}
-	signer, priors, err := loadOfflineAuditSigner(dir)
-	if err != nil {
-		return nil, err
-	}
-	reader, err := coreengine.OpenAuditReader(cmd.Context(), cfg)
-	if err != nil {
-		return nil, err
-	}
-	return &auditReadEngine{ledger: reader, signer: signer, auditPriors: priors}, nil
-}
 
 func loadOfflineAuditSigner(dir string) (*audit.Signer, []ed25519.PublicKey, error) {
 	key, err := loadAuditSigningKey(dir, slog.Default(), withoutMinting())

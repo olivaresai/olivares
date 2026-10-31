@@ -249,7 +249,7 @@ else
 fi
 
 # Custody: /var/lib/olivares belongs to the service account, so root never writes,
-# chowns or chmods by path inside it. Root's own state lives in the root-owned
+# chowns or chmods by path inside it. The root user's own state lives in the root-owned
 # /var/lib/olivares-package: it and its parent must be real directories, owned by
 # the running (root) user, with no group or other write. It is created 0755 when
 # absent; anything else refuses before any effect.
@@ -424,24 +424,44 @@ if [ -d "$olivares_manifest" ] && [ ! -L "$olivares_manifest" ]; then
   refuse manifest-destination-not-replaceable "$olivares_manifest is a directory; move it aside (sudo mv $olivares_manifest $olivares_manifest.blocked) and run the package operation again"
 fi
 if [ "$(stat -c %d "$package_state_dir")" != "$(stat -c %d "${olivares_manifest%/*}")" ]; then
+  # The appliance keeps the data directory on its own volume, where this rename cannot be atomic, and root writes in
+  # the service account's directory only by descriptor. The product's helper writes and renames inside that
+  # directory and prints the placed inode and mtime.
+  olv_placed=
+  if ! olv_placed=$(/usr/bin/olivares __place-install-manifest "$olivares_stage" "$olivares_manifest"); then
+    rm -f "$olivares_stage"
+    refuse manifest-placement-failed "the product could not place $olivares_manifest from $olivares_stage"
+  fi
   rm -f "$olivares_stage"
-  refuse manifest-staging-cross-filesystem "$package_state_dir and ${olivares_manifest%/*} are on different filesystems, so the rename would not be atomic"
-fi
-# "mv -T" (no target directory) is GNU coreutils on DEB and RPM; busybox on APK is
-# probed the same way. Without it the rename could move the file into a directory.
-rm -f "$package_state_dir/.mv-probe-a" "$package_state_dir/.mv-probe-b"
-: >"$package_state_dir/.mv-probe-a"
-if ! mv -T "$package_state_dir/.mv-probe-a" "$package_state_dir/.mv-probe-b" 2>/dev/null ||
-  [ ! -f "$package_state_dir/.mv-probe-b" ]; then
-  rm -f "$package_state_dir/.mv-probe-a" "$package_state_dir/.mv-probe-b" "$olivares_stage"
-  refuse manifest-rename-unsupported "mv here has no -T (no-target-directory)"
-fi
-rm -f "$package_state_dir/.mv-probe-b"
-olv_placed_ino=$(stat -c %i "$olivares_stage")
-olv_placed_mtime=$(stat -c %y "$olivares_stage" | tr ' ' '_')
-if ! mv -T "$olivares_stage" "$olivares_manifest"; then
-  rm -f "$olivares_stage"
-  refuse manifest-rename-failed "cannot rename $olivares_stage onto $olivares_manifest (a directory there?); move it aside and run the package operation again"
+  olv_placed_ino=${olv_placed%% *}
+  olv_placed_mtime=${olv_placed#* }
+  # One line, "INODE MTIME": the mtime is stat's %y with its blanks as "_", so any other character (a second line
+  # included) is output the marker must not record.
+  case "$olv_placed_ino" in
+    ''|*[!0-9]*) refuse manifest-placement-failed "the product's placement helper reported '$olv_placed'" ;;
+  esac
+  case "$olv_placed_mtime" in
+    *[!0-9_:.+-]*) refuse manifest-placement-failed "the product's placement helper reported '$olv_placed'" ;;
+  esac
+  [ -n "$olv_placed_mtime" ] && [ "$olv_placed_mtime" != "$olv_placed" ] ||
+    refuse manifest-placement-failed "the product's placement helper reported '$olv_placed'"
+else
+  # "mv -T" (no target directory) is GNU coreutils on DEB and RPM; busybox on APK is
+  # probed the same way. Without it the rename could move the file into a directory.
+  rm -f "$package_state_dir/.mv-probe-a" "$package_state_dir/.mv-probe-b"
+  : >"$package_state_dir/.mv-probe-a"
+  if ! mv -T "$package_state_dir/.mv-probe-a" "$package_state_dir/.mv-probe-b" 2>/dev/null ||
+    [ ! -f "$package_state_dir/.mv-probe-b" ]; then
+    rm -f "$package_state_dir/.mv-probe-a" "$package_state_dir/.mv-probe-b" "$olivares_stage"
+    refuse manifest-rename-unsupported "mv here has no -T (no-target-directory)"
+  fi
+  rm -f "$package_state_dir/.mv-probe-b"
+  olv_placed_ino=$(stat -c %i "$olivares_stage")
+  olv_placed_mtime=$(stat -c %y "$olivares_stage" | tr ' ' '_')
+  if ! mv -T "$olivares_stage" "$olivares_manifest"; then
+    rm -f "$olivares_stage"
+    refuse manifest-rename-failed "cannot rename $olivares_stage onto $olivares_manifest (a directory there?); move it aside and run the package operation again"
+  fi
 fi
 olv_record install-state "$install_state" "$format" \
   "group_created=$group_created" "user_created=$user_created" || true
@@ -474,6 +494,22 @@ upgrade_state=/run/olivares.pkg-upgrade-state
 deconfigured=/run/olivares.pkg-deconfigured
 pending=/run/olivares.pkg-pending
 package_phase=/usr/libexec/olivares/olivares-product-package-phase
+# Only the appliance grants the engine user the daemon socket's DAC access (rootful Docker, DOCK-04). The group exists
+# after Docker's own package install. GNU usermod and BusyBox addgroup are both supported; lookup and membership failures are fatal.
+if [ -x "$package_phase" ]; then
+  group_rc=0; getent group docker >/dev/null 2>&1 || group_rc=$?
+  if [ "$group_rc" -eq 0 ]; then
+    if command -v usermod >/dev/null 2>&1; then
+      usermod -aG docker olivares || { echo "error: could not add olivares to the docker group" >&2; exit 1; }
+    else
+      addgroup olivares docker || { echo "error: could not add olivares to the docker group with addgroup" >&2; exit 1; }
+    fi
+    id -nG olivares | grep -qw docker || { echo "error: olivares is not in the docker group after the membership update" >&2; exit 1; }
+  elif [ "$group_rc" -ne 2 ]; then
+    echo "error: could not look up the docker group (getent exit $group_rc)" >&2
+    exit "$group_rc"
+  fi
+fi
 # The first release whose prerm honors the upgrade contract; "~" sorts before
 # any of its pre-releases.
 first_contract_version='1.0~'
@@ -534,7 +570,7 @@ if [ "$OLIVARES_PKG_INIT" = systemd ] && [ "$action" = upgrade ]; then
     refuse snapshot-request-failed "cannot publish the pre-migration snapshot request"
   fi
   # SELinux creates the request with the package state directory's label, which the engine may not read; its file
-  # context gives it the one type the engine reads (dev#3048). A host without SELinux has nothing to relabel.
+  # context gives it the one type the engine reads. A host without SELinux has nothing to relabel.
   if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v restorecon >/dev/null 2>&1 &&
     ! restorecon "$package_state_dir/upgrade-snapshot"; then
     echo "olivares package: could not relabel $package_state_dir/upgrade-snapshot; under SELinux the engine refuses its first start after this upgrade (restorecon $package_state_dir/upgrade-snapshot, then start it)" >&2

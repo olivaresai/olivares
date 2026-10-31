@@ -12,7 +12,7 @@ import {
 import userEvent from '@testing-library/user-event'
 import type { ReactElement, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import './i18n'
+import * as consoleLocales from './i18n'
 
 const { api, authState, serverInfo } = vi.hoisted(() => ({
   api: {
@@ -23,6 +23,7 @@ const { api, authState, serverInfo } = vi.hoisted(() => ({
     removeMember: vi.fn(),
     listSuperadmins: vi.fn(),
     setSuperadminActive: vi.fn(),
+    endMemberSessions: vi.fn(),
   },
   authState: {
     activeTenant: 't1' as string | null,
@@ -227,7 +228,36 @@ describe('PeopleTab members roster', () => {
     await waitFor(() => expect(api.removeMember).toHaveBeenCalledWith('u1'))
   })
 
-  it('never offers to remove yourself or the only owner (HU-25)', async () => {
+  it('ends a member sign-in after confirmation', async () => {
+    api.listMembers.mockResolvedValue({ items: [member], has_more: false })
+    api.endMemberSessions.mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    wrap(<PeopleTab />)
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: /end sign-ins for ada@acme\.io/i,
+      }),
+    )
+    const dialog = await screen.findByRole('dialog', {
+      name: /end sign-ins for ada@acme\.io/i,
+    })
+    await user.click(
+      within(dialog).getByRole('button', { name: /^end sign-ins$/i }),
+    )
+
+    await waitFor(() =>
+      expect(api.endMemberSessions).toHaveBeenCalledWith(
+        'u1',
+        expect.objectContaining({
+          signal: expect.any(AbortSignal),
+          dispatchGuard: expect.any(Function),
+        }),
+      ),
+    )
+  })
+
+  it('never offers to remove yourself or the only owner', async () => {
     const owner = {
       ...member,
       user_id: 'u-owner',
@@ -254,6 +284,13 @@ describe('PeopleTab members roster', () => {
     ).toBeNull()
     expect(
       screen.getByRole('button', { name: /remove ada@acme\.io/i }),
+    ).toBeInTheDocument()
+    // Your own sign-ins are ended from Settings, never from your own People row.
+    expect(
+      screen.queryByRole('button', { name: /end sign-ins for me@acme\.io/i }),
+    ).toBeNull()
+    expect(
+      screen.getByRole('button', { name: /end sign-ins for ada@acme\.io/i }),
     ).toBeInTheDocument()
     expect(screen.queryByRole('switch')).toBeNull()
     authState.principal = { aal: 3 }
@@ -506,5 +543,16 @@ describe('PeopleTab — email invitations follow the engine', () => {
     wrap(<PeopleTab />)
     await screen.findByText(invite.email)
     expect(screen.getByRole('button', { name: 'Resend' })).toBeDisabled()
+  })
+})
+
+describe('PeopleTab — the TOTP reset names what it shows', () => {
+  // A speech user says the text on the button: its name must hold it, in one run
+  // (WCAG 2.5.3, axe label-content-name-mismatch), in every language.
+  it.each(Object.entries(consoleLocales))('%s', (_language, bundle) => {
+    const { totpReset, totpResetLabel } = bundle.members
+    expect(totpResetLabel.replace('{{email}}', 'ana@example.com')).toContain(
+      totpReset,
+    )
   })
 })

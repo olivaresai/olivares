@@ -92,6 +92,9 @@ describe("dayCost: what today's sessions cost, never a made-up zero", () => {
       sessions: 2,
       costMicroUsd: 500_000,
       unpriced: 0,
+      inputTokens: 20,
+      outputTokens: 20,
+      tokensUnreported: 0,
     })
   })
 
@@ -104,6 +107,9 @@ describe("dayCost: what today's sessions cost, never a made-up zero", () => {
       sessions: 1,
       costMicroUsd: null,
       unpriced: 1,
+      inputTokens: 10,
+      outputTokens: 10,
+      tokensUnreported: 0,
     })
   })
 
@@ -123,6 +129,29 @@ describe("dayCost: what today's sessions cost, never a made-up zero", () => {
     expect(today.sessions).toBe(2)
     expect(today.costMicroUsd).toBe(1_000_000)
     expect(today.unpriced).toBe(1)
+  })
+
+  it("sums the tokens the day's sessions reported, in and out", () => {
+    const sessions = mergeSessions(
+      [],
+      [
+        run({
+          run_ref: 'r1',
+          input_tokens: 1_200,
+          output_tokens: 300,
+          last_activity_at: at(13),
+        }),
+        run({
+          run_ref: 'r2',
+          input_tokens: 800,
+          output_tokens: 100,
+          last_activity_at: at(12),
+        }),
+      ],
+    )
+    const today = dayCost(sessions, NOW)
+    expect(today.inputTokens).toBe(2_000)
+    expect(today.outputTokens).toBe(400)
   })
 
   it('a session priced on one run of two counts its known part and is unpriced too', () => {
@@ -148,6 +177,45 @@ describe("dayCost: what today's sessions cost, never a made-up zero", () => {
       sessions: 1,
       costMicroUsd: 300_000,
       unpriced: 1,
+      inputTokens: null,
+      outputTokens: null,
+      tokensUnreported: 1,
+    })
+  })
+
+  it('a session that reported a cost and no tokens adds no tokens, and is counted apart', () => {
+    const sessions = mergeSessions(
+      [
+        live({
+          session_ref: 'l',
+          cost_micro_usd: 50_000,
+          input_tokens: 0,
+          output_tokens: 0,
+          last_event_at: at(11),
+        }),
+      ],
+      [
+        run({
+          run_ref: 'priced',
+          cost_micro_usd: 120_000,
+          last_activity_at: at(14),
+        }),
+        run({
+          run_ref: 'counted',
+          input_tokens: 500,
+          output_tokens: 40,
+          cost_micro_usd: 10_000,
+          last_activity_at: at(13),
+        }),
+      ],
+    )
+    expect(dayCost(sessions, NOW)).toEqual({
+      sessions: 3,
+      costMicroUsd: 180_000,
+      unpriced: 0,
+      inputTokens: 500,
+      outputTokens: 40,
+      tokensUnreported: 2,
     })
   })
 
@@ -165,6 +233,9 @@ describe("dayCost: what today's sessions cost, never a made-up zero", () => {
       sessions: 0,
       costMicroUsd: null,
       unpriced: 0,
+      inputTokens: null,
+      outputTokens: null,
+      tokensUnreported: 0,
     })
   })
 })
@@ -212,6 +283,9 @@ describe('dayCost of yesterday: the sessions whose last work was yesterday', () 
       sessions: 1,
       costMicroUsd: 310_000,
       unpriced: 0,
+      inputTokens: 10,
+      outputTokens: 10,
+      tokensUnreported: 0,
     })
   })
 

@@ -1,26 +1,8 @@
 {
   "title": "Registre d’audit",
-  "subtitle": "La chaîne de preuves inviolable. Vérifiez-la et exportez-la vers votre WORM/SIEM.",
+  "subtitle": "Consultez le registre signé de l’activité de l’IA.",
   "subtitleSystem": "La chaîne du locataire système contenant les opérations administratives inter-locataires (lecture seule).",
   "searchLoaded": "Filtrer uniquement les lignes chargées (côté client)…",
-  "filters": {
-    "open": "Filtres",
-    "title": "Filtres du registre côté serveur",
-    "q": "Rechercher dans le registre",
-    "qPlaceholder": "Action, acteur, type de cible ou ID",
-    "actor": "Acteur",
-    "actorPlaceholder": "Acteur exact",
-    "action": "Préfixe d’action",
-    "actionPlaceholder": "ex. agent.",
-    "targetKind": "Type de cible",
-    "targetKindPlaceholder": "Type de cible exact",
-    "targetId": "ID de cible",
-    "targetIdPlaceholder": "ID de cible exact",
-    "since": "Depuis",
-    "until": "Jusqu’à",
-    "clearOne": "Effacer le filtre {{filter}}",
-    "clearAll": "Effacer tous les filtres"
-  },
   "scan": {
     "incomplete": "Analysé jusqu’à la seq {{seq}} — pas l’intégralité du registre ; « Charger plus » poursuit l’analyse."
   },
@@ -29,14 +11,6 @@
     "tenant": "Registre du locataire",
     "system": "Registre système",
     "systemHint": "La chaîne du locataire système enregistre les opérations administratives inter-locataires et est en lecture seule ici. La vérification et l’export portent sur les registres de locataire."
-  },
-  "cols": {
-    "seq": "Séq.",
-    "occurred": "Quand",
-    "action": "Action",
-    "actor": "Acteur",
-    "target": "Cible",
-    "hash": "Hachage"
   },
   "actorKind": {
     "user": "Utilisateur",
@@ -55,7 +29,6 @@
     "checkpointBreak": "Échec de la signature du point de contrôle à la séq. {{seq}}"
   },
   "pubkey": {
-    "action": "Clé de vérification",
     "label": "Clé de signature du registre",
     "key": "clé",
     "hint": "Partagez cette clé publique Ed25519 pour qu'un tiers puisse vérifier hors ligne les événements exportés ET les points de contrôle : la même clé signe les deux.",
@@ -63,7 +36,6 @@
   },
   "export": {
     "action": "Exporter",
-    "options": "Options d’export",
     "formatLabel": "Format d’export",
     "fromSeq": "Seq de début",
     "toSeq": "Seq de fin",
@@ -80,7 +52,8 @@
     },
     "done": "Export téléchargé.",
     "failed": "Échec de l’export.",
-    "forbidden": "Vous n’êtes pas autorisé à exporter le registre."
+    "forbidden": "Vous n’êtes pas autorisé à exporter le registre.",
+    "download": "Télécharger"
   },
   "detail": {
     "title": "Événement de preuve",
@@ -93,15 +66,12 @@
     "actorSystem": "système",
     "target": "Cible",
     "id": "ID de l’événement",
-    "chainTitle": "Intégrité de la chaîne",
     "prevHash": "Hachage précédent",
     "prev": "préc.",
     "hash": "Hachage de l’événement",
     "this": "actuel",
     "sig": "Signature de l'événement",
     "checkpoint": "sig.",
-    "chainHint": "Le hachage de chaque événement est chaîné au précédent. Il n’y a aucune charge utile derrière une empreinte — le hachage est la preuve (données minimales par conception).",
-    "details": "Détails",
     "actorMember": "Un membre"
   },
   "empty": {
@@ -144,5 +114,64 @@
     "show": "Afficher les enregistrements internes",
     "hide": "Masquer les enregistrements internes",
     "allHidden": "Tout ce qui a été chargé jusqu’ici est un enregistrement interne."
+  },
+  "ledger": {
+    "query": "Requête du registre",
+    "placeholder": "person:  action:  since:7d  ou des mots",
+    "addFilter": "Ajouter un filtre",
+    "remove": "Retirer {{token}}",
+    "add": "Ajouter {{token}} à la requête",
+    "commands": "Recherche et commandes",
+    "problem": {
+      "key": "{{token}} n'est pas un filtre du registre. Utilisez person:, action:, kind:, target:, since:, until: ou des mots.",
+      "time": "{{token}} n'est pas une durée. Utilisez 90m, 24h, 7d, 2w ou une date comme 2026-10-20.",
+      "person": "Personne ne correspond à {{token}}. Utilisez un nom, un e-mail ou user:<id>.",
+      "several": "{{token}} correspond à plusieurs personnes. Utilisez le nom complet, un e-mail ou user:<id>.",
+      "names": "Impossible de rechercher {{token}} ici. Utilisez user:<id>."
+    },
+    "entries": "Entrées du registre",
+    "group": {
+      "label": "Afficher",
+      "session": "Par session",
+      "events": "Chaque entrée"
+    },
+    "needsYou": "Vous attend",
+    "outside": "Hors session",
+    "session": "Session {{ref}}",
+    "count_one": "{{count}} entrée",
+    "count_many": "{{count}} entrées",
+    "count_other": "{{count}} entrées",
+    "sentence": "{{what}} par {{who}}",
+    "signed": "Signée",
+    "histogram": {
+      "hour": "Entrées par heure",
+      "day": "Entrées par jour",
+      "week": "Entrées par semaine",
+      "bar_one": "{{at}}, {{count}} entrée",
+      "bar_many": "{{at}}, {{count}} entrées",
+      "bar_other": "{{at}}, {{count}} entrées",
+      "loaded_one": "{{count}} entrée chargée",
+      "loaded_many": "{{count}} entrées chargées",
+      "loaded_other": "{{count}} entrées chargées",
+      "sessions_one": "{{count}} session",
+      "sessions_many": "{{count}} sessions",
+      "sessions_other": "{{count}} sessions",
+      "people_one": "{{count}} personne",
+      "people_many": "{{count}} personnes",
+      "people_other": "{{count}} personnes",
+      "more": "il en reste à charger",
+      "now": "Maintenant"
+    },
+    "entry": {
+      "title": "Entrée {{seq}}",
+      "chain": "Position dans la chaîne",
+      "previous": "Précédente · {{seq}}",
+      "this": "Cette entrée · {{seq}}",
+      "next": "Suivante · {{seq}}",
+      "newest": "Entrée la plus récente",
+      "nextUnread": "Suivante non lue",
+      "chainHint": "Chaque entrée porte le hash de la précédente. En modifier une casse tous les hashes suivants.",
+      "signedEntry": "L'entrée signée"
+    }
   }
 }

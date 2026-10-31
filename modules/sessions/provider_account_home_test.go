@@ -490,7 +490,7 @@ func TestProviderAccount_CreateAuditsWithTheAbsolutePathAndTheDtoDoesNot(t *test
 
 // ARCH smoke on refresh 03b: an account made through /provider-accounts left its
 // profile with no auth source, so a session started from it was refused like
-// HU-01. Its profile now signs in with the tool's own login in the account's homes.
+// acceptance. Its profile now signs in with the tool's own login in the account's homes.
 func TestProviderAccount_CreateGivesAProfileThatSignsInWithTheToolsOwnLogin(t *testing.T) {
 	be := profileBackends(t)[0]
 	m, st := openProfileModule(t, be, nil)

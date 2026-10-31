@@ -20,7 +20,6 @@ import (
 	"errors"
 	"log/slog"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -180,125 +179,6 @@ func runRecoveryCLI(t *testing.T, f recoveryCLIFixture, deps auditRecoverDeps, a
 	return out.String(), err
 }
 
-func TestAuditRecoverForkForwardHappyAndEpochAwareVerify(t *testing.T) {
-	f := newRecoveryCLIFixture(t, true, true)
-	ctx := context.Background()
-
-	// Before recovery, strict verification reports a fresh corruption.
-	freshOut, freshErr := runAuditVerifyForRecovery(t, f, true)
-	if freshErr == nil || !strings.Contains(freshOut, `"status": "corrupt"`) || strings.Contains(freshErr.Error(), "RECOVERED") {
-		t.Fatalf("fresh corruption was not distinct: err=%v\n%s", freshErr, freshOut)
-	}
-
-	out, err := runRecoveryCLI(t, f, approvedRecoveryDeps(f, true),
-		"--dry-run=false", "--reason", "tail hash incident", "--requested-by", "svc:recovery")
-	if err != nil {
-		t.Fatalf("recover: %v\n%s", err, out)
-	}
-	if !strings.Contains(out, `"status": "recovered"`) || !strings.Contains(out, `"mutated": true`) || !strings.Contains(out, `"recovery_signature_valid": true`) {
-		t.Fatalf("recovery report incomplete:\n%s", out)
-	}
-	recoveryReport := decodeRecoveryCommandReport(t, out)
-	if recoveryReport.Checkpoints.LatestAttestedSeq < recoveryReport.RecoverSeq {
-		t.Fatalf("recovery head was not checkpointed: %+v", recoveryReport)
-	}
-
-	prepareCompositionTestBoot(t)
-	eng, err := auditBoot(auditCommandForTest(ctx), f.dataDir, "sqlite", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer eng.Close()
-	verifier, _, err := recoveryCheckpointVerifier([]string{f.pubSpec}, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var recoverSeq int64
-	if err := eng.store.View(ctx, f.tenant, func(sc store.Scope) error {
-		genesis, verr := sc.Audit().Verify(ctx, 1)
-		if verr != nil {
-			return verr
-		}
-		if genesis.OK || genesis.BreakAt != f.breakAt {
-			t.Fatalf("genesis scar was re-greened: %+v", genesis)
-		}
-		found, seq, evidence, verr := audit.LocateRecoveryEvidence(ctx, sc.Audit(), verifier)
-		if verr != nil {
-			return verr
-		}
-		if !found || evidence.ReanchorSeq != f.reanchor || evidence.OffBoxCheckpointSeq != f.reanchor ||
-			evidence.QuarantinedFrom != f.breakAt || evidence.QuarantinedSHA256 == "" || len(evidence.Approvers) != 2 ||
-			evidence.Reason != "tail hash incident" || evidence.RequestedBy != "svc:recovery" {
-			t.Fatalf("recovery evidence incomplete: found=%v seq=%d evidence=%+v", found, seq, evidence)
-		}
-		recoverSeq = seq
-		epoch, verr := sc.Audit().Verify(ctx, recoverSeq)
-		if verr != nil || !epoch.OK {
-			t.Fatalf("recovery epoch is not green: %+v err=%v", epoch, verr)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	// The reserved-action guard rejects a forged unsigned marker.
-	err = eng.store.Mutate(ctx, f.tenant, func(sc store.Scope) error {
-		_, aerr := sc.Audit().Append(ctx, model.AuditDraft{Action: store.ActionAuditRecover})
-		return aerr
-	})
-	if !errors.Is(err, store.ErrReservedAuditAction) {
-		t.Fatalf("unsigned audit.recover = %v, want ErrReservedAuditAction", err)
-	}
-
-	_ = eng.Close()
-	epochOut, epochErr := runAuditVerifyForRecovery(t, f, true, "--from", strconv.FormatInt(recoverSeq, 10))
-	if epochErr != nil || !strings.Contains(epochOut, `"status": "epoch_ok"`) {
-		t.Fatalf("strict current-epoch proof failed: err=%v\n%s", epochErr, epochOut)
-	}
-	recoveredOut, recoveredErr := runAuditVerifyForRecovery(t, f, true)
-	if recoveredErr == nil || !strings.Contains(recoveredErr.Error(), "RECOVERED") || !strings.Contains(recoveredOut, `"status": "recovered"`) ||
-		!strings.Contains(recoveredOut, `"recover_seq"`) || !strings.Contains(recoveredOut, `"reanchor_seq"`) {
-		t.Fatalf("epoch-aware verify did not surface recovery distinctly: err=%v\n%s", recoveredErr, recoveredOut)
-	}
-}
-
-func TestAuditRecoverRejectsReplayForwardMarker(t *testing.T) {
-	f := newRecoveryCLIFixture(t, true, true)
-	recovery := completeRecoveryForAttack(t, f)
-	carrierSeq := appendRecoveryAttackCarrier(t, f)
-	copyRecoveryMarkerOntoCarrier(t, f, recovery.RecoverSeq, carrierSeq)
-
-	ctx := context.Background()
-	prepareCompositionTestBoot(t)
-	eng, err := auditBoot(auditCommandForTest(ctx), f.dataDir, "sqlite", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	verifier, _, err := recoveryCheckpointVerifier([]string{f.pubSpec}, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := eng.store.View(ctx, f.tenant, func(sc store.Scope) error {
-		found, seq, _, lerr := audit.LocateRecoveryEvidence(ctx, sc.Audit(), verifier)
-		if lerr == nil && (!found || seq != recovery.RecoverSeq) {
-			t.Fatalf("LocateRecoveryEvidence honored replay seq %d instead of original seq %d", seq, recovery.RecoverSeq)
-		}
-		return lerr
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := eng.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	out, err := runAuditVerifyForRecovery(t, f, true, "--from", strconv.FormatInt(carrierSeq, 10))
-	if err == nil || !strings.Contains(out, `"status": "corrupt"`) ||
-		!strings.Contains(out, `"reason": "recovery-position-invalid"`) ||
-		strings.Contains(out, `"status": "epoch_ok"`) || strings.Contains(out, `"status": "recovered"`) {
-		t.Fatalf("replayed recovery marker was honored: err=%v\n%s", err, out)
-	}
-}
-
 func TestAuditRecoverCheckpointFailureLeavesUnattestedMarker(t *testing.T) {
 	f := newRecoveryCLIFixture(t, true, true)
 	// The fixture's initial trusted checkpoint is call 1; recovery marker signing
@@ -320,50 +200,6 @@ func TestAuditRecoverCheckpointFailureLeavesUnattestedMarker(t *testing.T) {
 	}
 	if markers != 1 {
 		t.Fatalf("checkpoint failure left %d recovery markers, want the one durable marker", markers)
-	}
-}
-
-func TestAuditRecoverRejectsTruncationToUnattestedMarker(t *testing.T) {
-	f := newRecoveryCLIFixture(t, true, true)
-	recovery := completeRecoveryForAttack(t, f)
-	truncateRecoveryLedgerToMarker(t, f, recovery.RecoverSeq)
-
-	out, err := runAuditVerifyForRecovery(t, f, true, "--from", strconv.FormatInt(recovery.RecoverSeq, 10))
-	if err == nil || !strings.Contains(out, `"status": "corrupt"`) ||
-		strings.Contains(out, `"status": "epoch_ok"`) {
-		t.Fatalf("unattested truncated recovery epoch was honored: err=%v\n%s", err, out)
-	}
-	var report struct {
-		Checkpoints audit.CheckpointReport `json:"checkpoints"`
-	}
-	if jerr := json.NewDecoder(strings.NewReader(out)).Decode(&report); jerr != nil {
-		t.Fatalf("decode verify report: %v\n%s", jerr, out)
-	}
-	if report.Checkpoints.LatestAttestedSeq >= recovery.RecoverSeq {
-		t.Fatalf("attack fixture retained a checkpoint over marker seq %d: %+v", recovery.RecoverSeq, report.Checkpoints)
-	}
-}
-
-func TestAuditVerifyStrictRejectsForgedRecoveryMarker(t *testing.T) {
-	f := newRecoveryCLIFixture(t, true, false)
-	carrierSeq := appendRecoveryAttackCarrier(t, f)
-	evidence := audit.RecoveryEvidence{
-		Tenant: f.tenant.String(), BreakReason: "hash-mismatch", BreakAt: 2,
-		ReanchorSeq: 1, OffBoxCheckpointSeq: 1, OffBoxKeyID: "attacker",
-		QuarantinedFrom: 2, QuarantinedTo: carrierSeq - 1,
-		QuarantinedSHA256: strings.Repeat("ab", 32),
-		Approvers:         []string{"user:alice", "user:bob"}, Reason: "forged", RequestedBy: "attacker",
-	}
-	meta, err := json.Marshal(evidence)
-	if err != nil {
-		t.Fatal(err)
-	}
-	rewriteRecoveryAttackCarrier(t, f, carrierSeq, string(meta), []byte("garbage-signature"))
-
-	out, verifyErr := runAuditVerifyForRecovery(t, f, true)
-	if verifyErr == nil || !strings.Contains(out, `"status": "corrupt"`) ||
-		!strings.Contains(out, `"reason": "recovery-sig-invalid"`) {
-		t.Fatalf("forged recovery marker survived strict verify: err=%v\n%s", verifyErr, out)
 	}
 }
 

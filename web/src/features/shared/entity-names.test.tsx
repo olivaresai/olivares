@@ -219,6 +219,85 @@ describe('useMemberNames', () => {
     await screen.findByText('ready:demo@olivares.local')
   })
 
+  it('answers a typed name with every person it fits', async () => {
+    api.listMembers.mockResolvedValue({
+      items: [
+        { user_id: 'u1', display_name: 'Marc Vidal', email: 'mv@x.test' },
+        { user_id: 'u2', display_name: 'Ana Ruiz', email: 'ana@x.test' },
+        { user_id: 'u3', display_name: 'Ana Ruiz', email: 'ruiz@x.test' },
+        { user_id: 'u4', display_name: 'Lea Soto', email: 'mv@y.test' },
+        { user_id: 'u5', display_name: 'Pau', email: 'p5@x.test' },
+        { user_id: 'u6', display_name: 'Pau Mas', email: 'p6@x.test' },
+      ],
+      has_more: false,
+    })
+    function Typed({ name }: { name: string }) {
+      const { idOf, ready } = useMemberNames()
+      return (
+        <output>{`${ready ? name : 'waiting'}=${idOf(name)?.join(',') || 'nobody'}`}</output>
+      )
+    }
+    render(
+      <>
+        {[
+          'marc vidal',
+          'Marc',
+          'mv@x.test',
+          'ana',
+          'ana ruiz',
+          'mv',
+          'pau',
+          'zoe',
+        ].map((name) => (
+          <Typed key={name} name={name} />
+        ))}
+      </>,
+      { wrapper },
+    )
+    await screen.findByText('marc vidal=user:u1')
+    expect(screen.getByText('Marc=user:u1')).toBeInTheDocument()
+    expect(screen.getByText('mv@x.test=user:u1')).toBeInTheDocument()
+    // `ana` is u2's address but u3's first name too: both, never a guess at one.
+    expect(screen.getByText('ana=user:u2,user:u3')).toBeInTheDocument()
+    // Two people answer to the whole name, two addresses start with `mv`.
+    expect(screen.getByText('ana ruiz=user:u2,user:u3')).toBeInTheDocument()
+    expect(screen.getByText('mv=user:u1,user:u4')).toBeInTheDocument()
+    // `pau` is u5's whole name and u6's first name.
+    expect(screen.getByText('pau=user:u5,user:u6')).toBeInTheDocument()
+    expect(screen.getByText('zoe=nobody')).toBeInTheDocument()
+  })
+
+  it('cannot answer a name before the roster is read, nor one a longer roster may hold', async () => {
+    api.listMembers.mockResolvedValue({
+      items: [
+        { user_id: 'u1', display_name: 'Marc Vidal', email: 'mv@x.test' },
+        { user_id: 'u2', display_name: 'Marc Soto', email: 'ms@x.test' },
+      ],
+      has_more: true,
+    })
+    function Typed({ name }: { name: string }) {
+      const ids = useMemberNames().idOf(name)
+      return (
+        <output>{`${name}=${ids === null ? 'unknown' : ids.join(',') || 'nobody'}`}</output>
+      )
+    }
+    render(
+      <>
+        <Typed name="marc" />
+        <Typed name="marc vidal" />
+        <Typed name="zoe" />
+      </>,
+      { wrapper },
+    )
+    // Before the read answers, nobody is known either way.
+    expect(screen.getByText('marc=unknown')).toBeInTheDocument()
+    // The roster has more pages: two matches are already several...
+    await screen.findByText('marc=user:u1,user:u2')
+    // ...but one match, or none, may not be the whole answer.
+    expect(screen.getByText('marc vidal=unknown')).toBeInTheDocument()
+    expect(screen.getByText('zoe=unknown')).toBeInTheDocument()
+  })
+
   it('makes no read at all without the right the people tab asks for', async () => {
     auth.denied = new Set(['user:read'])
     render(<Probe use={useMemberNames} reference="user:u1" />, { wrapper })

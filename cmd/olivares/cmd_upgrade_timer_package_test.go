@@ -112,7 +112,7 @@ func TestIsInstalledPackageBinary(t *testing.T) {
 	})
 }
 
-// applianceUpdateRoute is the route dev#2426 (PR #2819) names for the Olivares appliance.
+// applianceUpdateRoute is the route the regression (PR #2819) names for the Olivares appliance.
 const applianceUpdateRoute = "systemctl start olivares-appliance-update.service"
 
 // A connected Business timer is also the credential's upkeep. A host whose CLI is the package

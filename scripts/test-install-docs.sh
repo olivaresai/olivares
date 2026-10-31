@@ -227,6 +227,26 @@ cp "$W/install.good" "$TREE/INSTALL.md"
 printf '\ncurl -fsSL https://raw.githubusercontent.com/o/r/master/x.sh | zsh\n' >>"$TREE/README.fr.md"
 expect_honesty "honesty: a translated README pipes a branch head" 1 'pipes a branch head into a shell'
 cp "$W/readme-fr.good" "$TREE/README.fr.md"
+# ── check-docs-honesty.sh: a README installs only what it verified ──
+# Each mutant takes one verification step out of a real README block; a sed that changes nothing
+# is red here, so a reworded block cannot turn a case into a silent pass.
+readme_mutant() { # readme_mutant <label> <README file> <sed expression>
+	local label="$1" file="$TREE/$2"
+	cp "$file" "$W/readme.good"
+	sed -i "$3" "$file"
+	if cmp -s "$file" "$W/readme.good"; then
+		bad "$label" "the mutant changed nothing in $2"
+	else
+		expect_honesty "$label" 1 'installs a download it did not verify'
+	fi
+	cp "$W/readme.good" "$file"
+}
+readme_mutant "honesty: a README package block skips sha256sum" README.fr.md \
+	"/^grep ' olivares_[0-9.]*_linux_amd64\.deb\\\$' checksums.txt | sha256sum -c &&\$/d"
+readme_mutant "honesty: a README package block skips cosign" README.ja.md '/^cosign verify-blob /d'
+readme_mutant "honesty: the README Docker block runs a tag" README.de.md \
+	's|^  "\$img" \\$|  docker.io/olivaresai/olivares:latest \\|'
+readme_mutant "honesty: the README Docker block skips cosign" README.zh.md '/^cosign verify "\$img" \\$/d'
 # Controls: a download that is checked, then run, is not a pipe into a shell. The gate must get
 # past this rule (it prints OK, or stops at a later section such as C6b) without flagging it.
 printf '\ncurl -fsSLO https://example.org/install.sh\ncurl -fsSL https://example.org/sums | sha256sum --check\nsh install.sh\n' >>"$CC_GUIDE"

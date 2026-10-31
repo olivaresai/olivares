@@ -35,6 +35,27 @@ export interface RouteAlias {
   to: string
   /** Which session retired it and why — the diff should not need archaeology. */
   note: string
+  /** Query the landing adds to the one the old address carried (a tab of the new page). */
+  search?: Readonly<Record<string, string>>
+  /** The anchor it lands on, in place of the old one. */
+  hash?: string
+}
+
+/**
+ * A tab of a live page that moved to another place. The page still answers, so a path
+ * alias cannot catch it: its route redirects when the old `tab` is asked for, keeping the
+ * rest of the query (#3388).
+ */
+export interface TabAlias {
+  /** The live page that used to hold the tab. */
+  path: string
+  /** The retired value of its `tab` query. */
+  tab: string
+  /** Where it lands: a live path. */
+  to: string
+  search?: Readonly<Record<string, string>>
+  hash?: string
+  note: string
 }
 
 export interface CensusInput {

@@ -1,6 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { restoreTenant, tenantPreferenceHome } from './tenant-preference'
+import { savedViewsApi } from '@/features/saved-views/api'
+import {
+  START_PAGE_IDS,
+  useClientSettings,
+} from '@/features/settings/preferences'
 import {
   createContext,
   useCallback,
@@ -80,6 +86,17 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 const REFRESH_MARGIN_MS = 60_000
 const REFRESH_FLOOR_MS = 5_000
 
+function credentialGuard(
+  generation = useSessionStore.getState().credentialGeneration,
+) {
+  return () => {
+    if (useSessionStore.getState().credentialGeneration !== generation)
+      throw new DOMException('Session ended.', 'AbortError')
+  }
+}
+
+const principalKey = (p: Whoami) => `${p.kind}:${p.user_id}`
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation('errors')
   const queryClient = useQueryClient()
@@ -99,13 +116,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // GET /v1/auth/whoami net::ERR_ABORTED on the login step.
   const [loginInFlight, setLoginInFlight] = useState(false)
   const adoptionSequence = useRef(0)
+  // The principal whose saved organization this tab has applied. Renewals keep it,
+  // so every renewal path (timer, API client, 401) leaves the tab's choice alone.
+  const restoredFor = useRef<string | null>(null)
 
   // Load the principal whenever a token is present. A 401 here means the token was
   // revoked/expired — the client's onUnauthorized hook clears the session, so the
   // query simply disables and the app returns to the anonymous state.
   const whoami = useQuery({
     queryKey: queryKeys.whoami,
-    queryFn: () => authApi.whoami(),
+    queryFn: async () => {
+      const guard = credentialGuard(
+        useSessionStore.getState().credentialGeneration,
+      )
+      const result = await authApi.whoami()
+      guard()
+      if (restoredFor.current !== principalKey(result)) {
+        const current = useTenantStore.getState().activeTenant
+        const tenant = await restoreTenant(result, guard, current)
+        guard()
+        // A choice made while the preference was read wins over the saved one.
+        if (useTenantStore.getState().activeTenant === current)
+          setActiveTenantStore(tenant)
+        restoredFor.current = principalKey(result)
+      }
+      return result
+    },
     enabled: !!token && !loginInFlight,
     staleTime: 60_000,
   })
@@ -114,6 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signedOut = !token
   useLayoutEffect(() => {
     if (!signedOut) return
+    restoredFor.current = null
     queryClient.removeQueries({ queryKey: queryKeys.whoami, exact: true })
   }, [signedOut, queryClient])
 
@@ -258,6 +295,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           },
         })
         if (!isCurrent()) return
+        const guard = () => {
+          if (!isCurrent())
+            throw new DOMException('Session adoption ended.', 'AbortError')
+        }
+        const restored = await restoreTenant(principal, guard)
+        if (!isCurrent()) return
+        setActiveTenantStore(restored)
+        restoredFor.current = principalKey(principal)
+        // The login redirect reads this preference before the authenticated shell mounts.
+        // Read it under the adopted credential, never from the previous user's store.
+        useClientSettings.setState({ startPage: 'home' })
+        const selected = useTenantStore.getState().activeTenant
+        const tenant =
+          selected &&
+          (principal.superadmin ||
+            principal.grants.some((g) => g.tenant === selected))
+            ? selected
+            : principal.grants[0]?.tenant
+        if (principal.kind === 'user' && tenant) {
+          try {
+            const state = await savedViewsApi.uiState({
+              tenant,
+              signal: AbortSignal.timeout(5000),
+              sessionEffects: 'none',
+              dispatchGuard: () => {
+                if (!isCurrent())
+                  throw new DOMException(
+                    'Session adoption ended.',
+                    'AbortError',
+                  )
+              },
+            })
+            if (!isCurrent()) return
+            const raw = state.preferences?.['olivares.settings']
+            const choice: unknown = raw
+              ? JSON.parse(raw)?.state?.startPage
+              : undefined
+            const startPage =
+              START_PAGE_IDS.find((id) => id === choice) ?? 'home'
+            useClientSettings.setState({ startPage })
+          } catch {
+            // Unavailable personal settings do not prevent sign-in; Home is the default.
+          }
+        }
+        if (!isCurrent()) return
         queryClient.setQueryData(queryKeys.whoami, principal)
       } catch (error) {
         if (!isCurrent()) return
@@ -270,7 +352,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (adoptionSequence.current === sequence) setLoginInFlight(false)
       }
     },
-    [setSession, queryClient],
+    [setSession, queryClient, setActiveTenantStore],
   )
 
   const login = useCallback(
@@ -306,6 +388,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryClient.clear()
   }, [clearSession, clearTenant, queryClient, t])
 
+  const tenantSaves = useRef(Promise.resolve())
+  const setActiveTenant = useCallback(
+    (tenant: string | null) => {
+      if (
+        !principal ||
+        loginInFlight ||
+        useSessionStore.getState().csrfToken !== token ||
+        (tenant &&
+          !principal.superadmin &&
+          !grants.some((g) => g.tenant === tenant))
+      )
+        return
+      setActiveTenantStore(tenant)
+      if (principal.kind !== 'user') return
+      const generation = useSessionStore.getState().credentialGeneration
+      const guard = credentialGuard(generation)
+      tenantSaves.current = tenantSaves.current
+        .then(async () => {
+          const home = await tenantPreferenceHome(principal, guard)
+          if (!home) return
+          await savedViewsApi.saveUiState(
+            {
+              preferences: {
+                'olivares.tenant': JSON.stringify({
+                  state: { activeTenant: tenant },
+                  version: 0,
+                }),
+              },
+            },
+            {
+              tenant: home,
+              signal: AbortSignal.timeout(5000),
+              sessionEffects: 'none',
+              dispatchGuard: guard,
+            },
+          )
+        })
+        .catch(() => {
+          if (useSessionStore.getState().credentialGeneration === generation)
+            toast.error(t('nav:personal.saveFailed'))
+        })
+    },
+    [principal, grants, setActiveTenantStore, t, token, loginInFlight],
+  )
+
   const can = useCallback(
     (permission: string, opts?: { tenant?: string | null }) =>
       rbacCan(permission, {
@@ -337,7 +464,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       adoptSession,
       logout,
-      setActiveTenant: setActiveTenantStore,
+      setActiveTenant,
     }),
     [
       status,
@@ -348,7 +475,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       adoptSession,
       logout,
-      setActiveTenantStore,
+      setActiveTenant,
     ],
   )
 

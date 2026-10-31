@@ -210,6 +210,25 @@ func ExtractBundle(r io.Reader, destDir string) (*Manifest, KDFParams, error) {
 	if !hasKEK {
 		return nil, KDFParams{}, fmt.Errorf("dr: bundle has no keys/kek.json")
 	}
+	// Legacy manifests have no authenticated inventory. Check every path a caller
+	// will read or write before returning it, including when no digest was given.
+	if m.Authentication.Algorithm == "" {
+		// PITR normally names an external archive, not a local snapshot. A claimed
+		// digest still makes the legacy CLI hash this path, so check it too.
+		if m.Store.Method != MethodPITR || m.Store.SHA256 != "" {
+			if _, err := safeJoin(destDir, m.Store.File); err != nil {
+				return nil, KDFParams{}, err
+			}
+		}
+		for _, key := range m.Keys {
+			if _, err := safeJoin(destDir, key.File); err != nil {
+				return nil, KDFParams{}, err
+			}
+			if key.Name == "" || key.Name == "." || key.Name == ".." || filepath.Base(key.Name) != key.Name || strings.Contains(key.Name, `\`) {
+				return nil, KDFParams{}, fmt.Errorf("dr: unsafe legacy key name %q", key.Name)
+			}
+		}
+	}
 	return m, kek, nil
 }
 

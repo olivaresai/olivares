@@ -199,6 +199,8 @@ func TestUninstallMigrationRoundTrip(t *testing.T) {
 	}
 	version = "dev"
 	deps := defaultDoctorDeps()
+	// No exec seam on the test host: the image answer is not what this flow measures.
+	deps.containerImage = nil
 	accountUID := uint32(os.Getuid())
 	deps.stat = func(name string) (fs.FileInfo, error) {
 		info, err := os.Stat(mapPath(name))
@@ -757,6 +759,8 @@ func TestUpgradedCustomEstateSurvivesDoctorPlanPreservePurge(t *testing.T) {
 		return name
 	}
 	deps := defaultDoctorDeps()
+	// No exec seam on the test host: the image answer is not what this flow measures.
+	deps.containerImage = nil
 	accountUID := uint32(os.Getuid())
 	deps.stat = func(name string) (fs.FileInfo, error) {
 		info, err := os.Stat(mapPath(name))

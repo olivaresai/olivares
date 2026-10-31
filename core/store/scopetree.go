@@ -209,12 +209,48 @@ func WorkspaceLineage(ctx context.Context, sc Scope, wsID model.ID) (string, []s
 	return ws.Slug, above, nil
 }
 
-// workspaceAncestors walks ws's parents to the root. Each step must satisfy the invariant
-// the workspace repository keeps, path = parent.path + "/" + id, where a root with no path
-// (the default workspace, or a row written before core v25) stands for "/" + id. Each
-// accepted step shortens the path, so the walk ends.
+// WorkspaceLineageIDs returns the id of a workspace and of every workspace above it, root
+// first, after the checks WorkspaceLineage makes on each step. A grant that names workspace
+// ids reads it, so that it and the access engine's scope resolver agree on what is below a
+// department. A workspace with no row is ErrNotFound, not a synthetic node: an id nobody
+// holds, the zero id of the default workspace included, must match nothing. As for
+// WorkspaceLineage, callers pass the tenant scope: a workspace-confined scope hides tree
+// positions, and the ids come back short.
+func WorkspaceLineageIDs(ctx context.Context, sc Scope, wsID model.ID) ([]model.ID, error) {
+	ws, err := sc.Workspaces().Get(ctx, wsID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := workspaceAncestorRows(ctx, sc, ws)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]model.ID, 0, len(rows)+1)
+	for _, row := range rows {
+		ids = append(ids, row.ID)
+	}
+	return append(ids, ws.ID), nil
+}
+
+// workspaceAncestors is the slugs of the workspaces above ws, root first.
 func workspaceAncestors(ctx context.Context, sc Scope, ws model.Workspace) ([]string, error) {
+	rows, err := workspaceAncestorRows(ctx, sc, ws)
+	if err != nil {
+		return nil, err
+	}
 	var above []string
+	for _, row := range rows {
+		above = append(above, row.Slug)
+	}
+	return above, nil
+}
+
+// workspaceAncestorRows walks ws's parents to the root and returns them root first. Each
+// step must satisfy the invariant the workspace repository keeps, path = parent.path + "/" +
+// id, where a root with no path (the default workspace, or a row written before core v25)
+// stands for "/" + id. Each accepted step shortens the path, so the walk ends.
+func workspaceAncestorRows(ctx context.Context, sc Scope, ws model.Workspace) ([]model.Workspace, error) {
+	var above []model.Workspace
 	for cur := ws; ; {
 		if cur.ParentID.IsZero() {
 			if cur.Path != "" && cur.Path != "/"+cur.ID.String() {
@@ -232,7 +268,7 @@ func workspaceAncestors(ctx context.Context, sc Scope, ws model.Workspace) ([]st
 		if cur.Path != placedPath(parent)+"/"+cur.ID.String() {
 			return nil, workspaceTreeBroken(cur, "its path is not its parent's path and its id")
 		}
-		above = append(above, parent.Slug)
+		above = append(above, parent)
 		cur = parent
 	}
 	slices.Reverse(above)

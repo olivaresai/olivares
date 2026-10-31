@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// HU 049 (09b, fresh install): the first page asked the engine's rule which tool a
+// acceptance (09b, fresh install): the first page asked the engine's rule which tool a
 // session would run on for tools that were not installed; each answer was a 409 the
 // browser logs as a console error. Then it gated those asks on sign-in status and
 // provider pages (up to ~29 reads). Now it asks the engine once, for every tool, and a
@@ -82,7 +82,7 @@ describe('how the first page learns which tools can start', () => {
     expect(screen.queryByText('deciding')).toBeNull()
   })
 
-  // HU2-37: the New session model comes from the answer this page already reads.
+  // acceptance: the New session model comes from the answer this page already reads.
   it('offers a model from the same answer: no extra request per tool', async () => {
     const readiness = vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(
       readinessOf({

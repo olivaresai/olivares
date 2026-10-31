@@ -86,3 +86,34 @@ func TestLimitSentence(t *testing.T) {
 		}
 	}
 }
+
+func TestSessionResumeAtResetIsAnAdditiveServerRequest(t *testing.T) {
+	for _, scheduled := range []bool{false, true} {
+		t.Run(map[bool]string{false: "manual", true: "at reset"}[scheduled], func(t *testing.T) {
+			at := time.Now().Add(time.Hour).UTC().Truncate(time.Second).Format(time.RFC3339)
+			f := newFakeSessionEngine(t, func(f *fakeSessionEngine) {
+				f.runs = []map[string]any{{"run_ref": "r1", "name": "limited", "state": "stopped", "resume_at": at}}
+			})
+			args := []string{"session", "resume", "limited"}
+			if scheduled {
+				args = append(args, "--at-reset")
+			}
+			args = append(args, sessionCreds(f.URL)...)
+			out, errb, err := execSessionCLI(t, nil, args...)
+			if err != nil {
+				t.Fatalf("resume: %v %s", err, errb)
+			}
+			calls := f.postsTo(sessionRunsPath + "/r1/resume")
+			if len(calls) != 1 {
+				t.Fatalf("resume requests=%v", calls)
+			}
+			if scheduled {
+				if calls[0]["at_reset"] != true || !strings.Contains(out, at) {
+					t.Fatalf("schedule request/output=%v %s", calls, out)
+				}
+			} else if _, ok := calls[0]["at_reset"]; ok {
+				t.Fatal("ordinary resume gained scheduling")
+			}
+		})
+	}
+}

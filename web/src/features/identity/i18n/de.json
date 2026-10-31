@@ -272,6 +272,42 @@
       "lastCredential": "Der einzige Passkey kann nicht gelöscht werden. Registrieren Sie zuerst einen weiteren."
     }
   },
+  "sessions": {
+    "title": "Ihre Anmeldungen",
+    "description": "Browser und Clients, auf denen Sie angemeldet sind. Beenden Sie Sitzungen, die Sie nicht mehr verwenden oder erkennen.",
+    "endAll": "Alle anderen beenden",
+    "none": "Keine aktiven Anmeldungen",
+    "noneHint": "Ihre aktuellen und kürzlichen Anmeldungen erscheinen hier.",
+    "client": "Client",
+    "lastUsed": "Zuletzt verwendet",
+    "created": "Erstellt",
+    "expires": "Läuft ab",
+    "actionsColumn": "Aktionen",
+    "current": "Diese Sitzung",
+    "end": "Beenden",
+    "endLabel": "{{kind}}-Anmeldung vom {{created}} beenden",
+    "endTitle": "Anmeldung beenden?",
+    "endBody": "Diese Anmeldung funktioniert in diesem Browser oder Client nicht mehr. Sie können sich dort später wieder anmelden.",
+    "endAllTitle": "Alle anderen Anmeldungen beenden?",
+    "endAllBody": "Die anderen hier aufgeführten Sitzungen werden beendet. Diese Sitzung bleibt aktiv.",
+    "endAllFailed_one": "{{count}} Anmeldung konnte nicht beendet werden. Prüfen Sie die Liste und versuchen Sie es erneut.",
+    "endAllFailed_other": "{{count}} Anmeldungen konnten nicht beendet werden. Prüfen Sie die Liste und versuchen Sie es erneut.",
+    "ended": "Anmeldung beendet.",
+    "kinds": {
+      "browser": "Browser",
+      "token": "Token",
+      "unknown": "Unbekannt",
+      "pairing": "Kopplung ausstehend"
+    },
+    "deviceName": "Gerätename",
+    "pair": "Gerät koppeln",
+    "pairLink": "Einmaliger Link",
+    "pairHint": "Kopieren Sie diesen privaten Link auf das Gerät. Er läuft nach 10 Minuten ab und funktioniert nur einmal.",
+    "pairTitle": "Dieses Gerät koppeln",
+    "acceptHint": "Fahren Sie nur fort, wenn Sie diesen Link von Ihrem eigenen Konto angefordert haben. Dieses Gerät erhält Zugriff auf dieses Konto.",
+    "pairInvalid": "Dieser Link fehlt, ist abgelaufen oder wurde bereits verwendet. Erstellen Sie einen neuen in den Anmeldeeinstellungen.",
+    "accept": "Dieses Gerät koppeln"
+  },
   "totp": {
     "title": "TOTP-Zweitfaktor",
     "description": "Ein zeitbasierter Einmalcode (RFC 6238) als zusätzlicher Faktor Ihres lokalen Kontos. Er ergänzt Passkeys — er ersetzt sie nie.",

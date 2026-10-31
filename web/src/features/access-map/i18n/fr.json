@@ -85,7 +85,13 @@
     "lastSeen": "Dernière observation",
     "yes": "Oui",
     "no": "Non",
-    "minimalData": "Seules les métadonnées sont affichées. Par conception, le moteur ne transporte jamais ici le SQL, les charges utiles ni les secrets (données minimales)."
+    "minimalData": "Seules les métadonnées sont affichées. Par conception, le moteur ne transporte jamais ici le SQL, les charges utiles ni les secrets (données minimales).",
+    "open": {
+      "session": "Ouvrir la session",
+      "agent": "Ouvrir les agents",
+      "nhiRoster": "Ouvrir les identités"
+    },
+    "expandLimit": "Cette carte affiche déjà {{n}} nœuds développés. Revenez en arrière ou actualisez pour repartir de zéro."
   },
   "authority": {
     "title": "Autorité et étape suivante",
@@ -190,5 +196,12 @@
     },
     "analyse": "Analyser les chemins d'attaque (audité)",
     "truncated": "Le moteur a plafonné cette analyse : les chemins affichés ne sont pas la réponse complète."
+  },
+  "expand": {
+    "partial": "Certains nœuds développés n’ont pas pu être lus : la carte est incomplète.",
+    "retry": "Réessayer"
+  },
+  "graph": {
+    "keyboardHint": "Placez le focus sur un nœud, puis utilisez les flèches pour passer à un nœud connecté et Entrée pour l’ouvrir. La liste sous le graphe fait de même sans le canevas."
   }
 }

@@ -30,9 +30,8 @@ import (
 // module row is not an node, see TreeScopeableKinds). It is to give the catalog the
 // axis it lacked — a registry of the module permissions the running engine actually
 // exposes, seeded at mount from Module.Permissions() by the composition root
-// (core/api mountModules). An engine that registers nothing keeps exactly the old
-// behavior, so the widening is deny-closed by construction: a permission is grantable
-// only because a mounted module declared it.
+// (core/api mountModules). Without registered modules, only the code-defined core
+// catalog is grantable. A module capability is grantable only when mounted.
 //
 // Why a registry and not a shape rule ("anything with two colons"): a typo'd permission
 // in a custom role would then be accepted and silently grant nothing. The operator must
@@ -296,19 +295,29 @@ func IsVerb(v string) bool {
 	return v == VerbRead || v == VerbWrite || v == VerbAdmin
 }
 
-// IsGrantablePermission reports whether p may appear in a custom role, a permission-group
-// or the projection of a scoped grant.
-//
-// The two halves of the catalog are matched DIFFERENTLY, on purpose:
-//
-//   - a CORE kind is matched by kind × verb, because the core catalog is code-defined and
-//     every kind carries all three verbs by construction (buildCoreRolePerms);
-//   - a MODULE permission is matched WHOLE against the registry, because a module declares
-//     the exact permissions it enforces. "models:keys:read" and "models:keys:write" exist;
-//     "models:keys:admin" does not, and accepting it by kind would let an operator author a
-//     role carrying a permission no route will ever check — a rule that looks like a
-//     restriction and enforces nothing. The authoring surface returns 400 instead.
+// tenantGrantablePerms are exact core capabilities outside the scope tree. They
+// may be delegated at tenant scope, without making IAM writes grantable.
+var tenantGrantablePerms = map[Permission]struct{}{
+	PermAuthenticatorWrite: {}, "audit:read": {}, "authz:read": {}, "accessgraph:read": {},
+}
+
+// TenantGrantablePermissions returns the exact non-tree core catalog.
+func TenantGrantablePermissions() []Permission {
+	out := make([]Permission, 0, len(tenantGrantablePerms))
+	for p := range tenantGrantablePerms {
+		out = append(out, p)
+	}
+	sortPerms(out)
+	return out
+}
+
+// IsGrantablePermission reports whether a custom role or scoped grant may confer p.
+// Tree kinds carry every verb. Non-tree core capabilities and mounted module
+// permissions are matched exactly: registering a read never invents a write.
 func IsGrantablePermission(p Permission) bool {
+	if _, ok := tenantGrantablePerms[p]; ok {
+		return true
+	}
 	kind, verb, ok := SplitPermission(p)
 	if !ok || !IsVerb(verb) {
 		return false

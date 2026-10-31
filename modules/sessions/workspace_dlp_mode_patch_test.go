@@ -242,8 +242,8 @@ func TestPatchWorkspaceMatchesItsOpenAPISchema(t *testing.T) {
 	if _, required := patch["required"]; required {
 		t.Fatalf("PATCH body requires a setting: %v", patch["required"])
 	}
-	if got := oastest.Keys(oastest.Map(t, patch["properties"], "properties")); !reflect.DeepEqual(got, []string{"dlp_mode", "read_only_folders"}) {
-		t.Fatalf("PATCH properties = %v, want dlp_mode and read_only_folders", got)
+	if got := oastest.Keys(oastest.Map(t, patch["properties"], "properties")); !reflect.DeepEqual(got, []string{"backup", "data_class", "default_permission", "dlp_mode", "read_only_folders"}) {
+		t.Fatalf("PATCH properties = %v, want backup, data_class, default_permission, dlp_mode and read_only_folders", got)
 	}
 	if !reflect.DeepEqual(enumOf(patch), enumOf(post)) {
 		t.Fatalf("PATCH dlp_mode enum %v differs from registration's %v", enumOf(patch), enumOf(post))
@@ -260,6 +260,43 @@ func TestPatchWorkspaceMatchesItsOpenAPISchema(t *testing.T) {
 	for _, mode := range enumOf(patch) {
 		if r := h.doJSON("PATCH", "/v1/m/sessions/workspaces/"+created.body["workspace_ref"].(string), admin, map[string]any{"dlp_mode": mode}, tenantHdr(tenant)); r.code != http.StatusOK {
 			t.Fatalf("published dlp_mode %q -> %d %s", mode, r.code, r.raw)
+		}
+	}
+	// So is every published data_class, the empty undeclared value included.
+	classProps := oastest.Map(t, patch["properties"], "properties")
+	class := oastest.Map(t, classProps["data_class"], "data_class")
+	publishedClasses := oastest.Map(t, class["anyOf"].([]any)[0], "data_class string")["enum"].([]any)
+	if len(publishedClasses) != len(dataClassValues) {
+		t.Fatalf("published data_class values = %v, want %v", publishedClasses, dataClassValues)
+	}
+	for _, value := range publishedClasses {
+		if r := h.doJSON("PATCH", "/v1/m/sessions/workspaces/"+created.body["workspace_ref"].(string), admin, map[string]any{"data_class": value}, tenantHdr(tenant)); r.code != http.StatusOK {
+			t.Fatalf("published data_class %q -> %d %s", value, r.code, r.raw)
+		}
+	}
+	// So is every published default_permission: the contract lists exactly what
+	// ResolvePermission accepts, including labels, older phrases and the empty string.
+	props := oastest.Map(t, patch["properties"], "properties")
+	perm := oastest.Map(t, props["default_permission"], "default_permission")
+	published := oastest.Map(t, perm["anyOf"].([]any)[0], "default_permission string")["enum"].([]any)
+	wantPublished := map[string]bool{"": true}
+	for _, n := range PermissionNames() {
+		wantPublished[n.Name] = true
+		wantPublished[n.Label] = true
+		for _, alias := range n.Aliases {
+			wantPublished[alias] = true
+		}
+	}
+	gotPublished := map[string]bool{}
+	for _, v := range published {
+		gotPublished[v.(string)] = true
+	}
+	if !reflect.DeepEqual(gotPublished, wantPublished) || len(published) != len(wantPublished) {
+		t.Fatalf("published default_permission values = %v, want empty and every accepted name, label and alias: %v", published, wantPublished)
+	}
+	for _, name := range published {
+		if r := h.doJSON("PATCH", "/v1/m/sessions/workspaces/"+created.body["workspace_ref"].(string), admin, map[string]any{"default_permission": name}, tenantHdr(tenant)); r.code != http.StatusOK {
+			t.Fatalf("published default_permission %q -> %d %s", name, r.code, r.raw)
 		}
 	}
 }

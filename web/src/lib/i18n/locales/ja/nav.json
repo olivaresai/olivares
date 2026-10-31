@@ -15,13 +15,6 @@
     "protocols": "プロトコル",
     "infrastructure": "インフラストラクチャ"
   },
-  "filter": {
-    "placeholder": "ナビゲーションを絞り込む…",
-    "label": "ナビゲーションを絞り込む",
-    "clear": "フィルターをクリア",
-    "results": "一致: {{n}} 件",
-    "empty": "「{{query}}」に一致するビューはありません"
-  },
   "items": {
     "estate": "エステート",
     "home": "ホーム",
@@ -32,7 +25,6 @@
     "reach": "リーチ",
     "health": "正常性とSLA",
     "capabilities": "MCPとスキル",
-    "skills": "スキルカタログ",
     "protocolBindings": "プロトコルバインディング",
     "communications": "コミュニケーション",
     "communicationsInbox": "コミュニケーション受信箱",
@@ -77,6 +69,7 @@
     "eventing": "Webhookとイベント",
     "session-viewer": "セッションビューア",
     "backups": "バックアップ",
+    "updates": "アップデート",
     "logs": "ログ",
     "inferenceProxy": "推論プロキシ",
     "alerting": "アラート",
@@ -86,8 +79,8 @@
     "providerBindings": "ソースバインディング",
     "providerAccounts": "プロバイダーアカウント",
     "agent-tools": "AI ツール",
-    "mcpServers": "MCP サーバー",
-    "storedBudgets": "予算"
+    "storedBudgets": "予算",
+    "usage": "使用量"
   },
   "workspace": {
     "open": "{{workspace}}を開く",
@@ -109,7 +102,6 @@
     "reach": "各ツールが到達できる接続先と、承認待ちの接続先を確認できます。",
     "health": "エージェントとMCPの稼働状況とSLA",
     "capabilities": "MCPサーバー、スキル、ツールを統制",
-    "skills": "スキルパックを閲覧し、部門、エージェントグループ、エージェントに割り当てる",
     "protocolBindings": "管理された A2A/MCP バインディングを構成・調整",
     "communications": "選択中ワークスペースのチャネル、ダイレクト通知、個人受信箱",
     "communicationsInbox": "自分宛てのメッセージ：1 件ずつ開いて確認します",
@@ -129,7 +121,7 @@
     "work": "共有作業：項目、依存関係、受け入れ、決定",
     "agentops": "セッションを開始し、Olivares が見つけたものも含めて、それぞれの動きを追います",
     "agentArtifacts": "Skill、MCP拡張機能、指示ファイル — レジストリ、ポスチャ、サプライチェーンBOM",
-    "models": "モデル、ルーティング、プロバイダーキー",
+    "models": "モデル、ルーティング、ガバナンス",
     "modelOps": "自社モデル、承認とデプロイ",
     "finops": "トークンコスト、予算、支出",
     "adoption": "生産性、採用率、モデル構成",
@@ -164,11 +156,12 @@
     "eventing": "送信 Webhook サブスクリプション、取得したイベントログ、配信、デッドレターキュー",
     "team-costs": "チーム別のコスト帰属: セッション、トークン、支出を日次推移とプロジェクト別・モデル別の内訳で表示",
     "backups": "コントロールプレーンの暗号化された災害復旧スナップショット: 作成、スケジュール、ダウンロード、復元",
+    "updates": "このエンジンが実行しているバージョン、チャンネルの最新の署名付きリリース、そしてインストールする操作です",
     "logs": "エンジンのライブログストリーム。レベルとモジュールのフィルター、検索、一時停止",
     "sourceDiff": "接続された Git リポジトリのベースリビジョンとヘッドリビジョンをファイルごとに比較します",
     "agent-tools": "セッションが使うアカウントと APIキーを確認します。ツールのインストールとサインインはデプロイ管理者のみです",
-    "mcpServers": "リモートの MCP サーバーをこの組織に接続してテストし、セッションが使えるツールを選びます",
-    "storedBudgets": "保存済みの各上限に対する消費を表示します。予約済みキャパシティは上限にカウントされます。"
+    "storedBudgets": "保存済みの各上限に対する消費を表示します。予約済みキャパシティは上限にカウントされます。",
+    "usage": "各アカウントの公式の 5 時間と週の上限（上限に近い順）と、今日のトークンとコスト。"
   },
   "commandActions": {
     "eventing": {
@@ -198,14 +191,12 @@
   "areas": {
     "infrastructure": {
       "label": "インフラ",
-      "question": "どのようなリソースとワークスペースがありますか？",
       "sections": {
         "estate": "インベントリとワークスペース"
       }
     },
     "ai": {
       "label": "AI",
-      "question": "どのセッション、プロファイル、モデルを観測または管理しますか？",
       "sections": {
         "sessions": "セッション",
         "environments": "プロファイルと環境",
@@ -216,7 +207,6 @@
     },
     "data-context": {
       "label": "データとコンテキスト",
-      "question": "どのナレッジ、ケイパビリティ、アーティファクトを接続または再利用しますか？",
       "sections": {
         "capabilities": "ケイパビリティ",
         "knowledge": "ナレッジとアーティファクト"
@@ -224,14 +214,12 @@
     },
     "work-communications": {
       "label": "作業とコミュニケーション",
-      "question": "どの作業を調整し、それはどのように連絡しますか？",
       "sections": {
         "work": "作業とコミュニケーション"
       }
     },
     "automation": {
       "label": "自動化",
-      "question": "どのフロー、イベント、通知を自動化しますか？",
       "sections": {
         "workflows": "フローとオーケストレーション",
         "events": "イベントと通知"
@@ -239,7 +227,6 @@
     },
     "security-identity": {
       "label": "セキュリティとアイデンティティ",
-      "question": "誰が、どのルールでアクセスし、環境をどう保護しますか？",
       "sections": {
         "access": "アイデンティティとアクセス",
         "policy": "ポリシーとガバナンスの境界",
@@ -248,14 +235,12 @@
     },
     "deployment": {
       "label": "デリバリー",
-      "question": "デプロイをどのように準備し、管理しますか？",
       "sections": {
         "deployments": "デプロイ"
       }
     },
     "observation": {
       "label": "監督",
-      "question": "何が起きていて、いくらかかり、何を証明できますか？",
       "sections": {
         "operations": "状態とアクティビティ",
         "cost-adoption": "コストと導入",
@@ -264,7 +249,6 @@
     },
     "system": {
       "label": "システムと設定",
-      "question": "組織、インストール、自分の設定をどのように管理しますか？",
       "sections": {
         "administration": "管理",
         "maintenance": "インストールとメンテナンス",
@@ -273,36 +257,8 @@
       }
     }
   },
-  "directory": {
-    "areas": "エリア",
-    "expand": "{{area}}のモジュールを表示",
-    "collapse": "{{area}}のモジュールを隠す",
-    "modulesOf": "{{area}}のモジュール",
-    "empty": "このエリアで利用できる項目はありません",
-    "emptyHint": "現在の組織でのロールがこのエリアのモジュールへのアクセスを許可すると、ここに項目が表示されます。",
-    "backHome": "ホームへ",
-    "area": "エリア"
-  },
   "personal": {
-    "favorites": "お気に入り",
-    "add": "{{name}}をお気に入りに追加",
-    "remove": "{{name}}をお気に入りから削除",
-    "viewAll": "すべて表示（{{count}}）",
-    "manage": "お気に入りを管理",
-    "empty": "モジュールの星を押すと、ここに保存できます。",
-    "scope": "アカウントに保存され、どのブラウザーでも使えます。",
-    "saveFailed": "お気に入りをアカウントに保存できませんでした。このブラウザーに保持され、次の変更時またはサインイン時に再度保存されます。",
-    "temporary": "お気に入りは現在メモリー内にのみ保持されます。",
-    "clear": "お気に入りを消去",
-    "recents": "最近使ったモジュール",
-    "recentManage": "履歴を管理",
-    "recentViewAll": "履歴をすべて表示（{{count}}）",
-    "recentEmpty": "開いたモジュールがここに表示されます。",
-    "recentScope": "このタブで開いたモジュールです。再読み込み、ログアウト、アカウントや組織の変更で消去されます。",
-    "recentRemove": "履歴から{{name}}を削除",
-    "recentClear": "履歴を消去",
-    "pinRow": "{{name}} をお気に入りに固定 (p)",
-    "unpinRow": "{{name}} のお気に入り固定を解除 (p)"
+    "saveFailed": "変更をアカウントに保存できませんでした。変更は今回のアクセス中のみ適用されます。"
   },
   "scope": {
     "tenant": "組織",
@@ -334,7 +290,6 @@
     "starting": "セッションを開始しています…",
     "startAgain": "メッセージを送るにはセッションをもう一度開始してください。",
     "turnAria": "セッションのターン",
-    "attachedWaiting": "対応が必要",
     "rawLine": "生の行",
     "advancedHint": "NDJSON 行を stdin に送ります。既定は文の欄です。",
     "wirePlaceholder": "NDJSON 行を stdin に送信…",
@@ -364,27 +319,36 @@
     "modelPicker": "モデル: {{value}}",
     "effortPicker": "推論レベル: {{value}}",
     "accessPicker": "アクセス: {{value}}",
-    "accessKeeps": "このセッションはアクセスを変更しません。別のアクセスでは新しいセッションを開始します。"
+    "accessKeeps": "このセッションはアクセスを変更しません。別のアクセスでは新しいセッションを開始します。",
+    "queue": {
+      "title": "待機中のメッセージ",
+      "hold": {
+        "turn": "ツールが作業中です。最初のメッセージは、このターンが終わると送信されます。",
+        "approval": "承認を待っています。待機中のメッセージは保持されます。",
+        "limit": "アカウントの上限により直前のターンが終了しました。待機中のメッセージは保持されます。",
+        "stopped": "セッションは停止しています。待機中のメッセージは保持されます。",
+        "ready": "次のメッセージを送信しています…"
+      },
+      "steer": "割り込ませる",
+      "sendNow": "今すぐ送信",
+      "edit": "メッセージを編集",
+      "editAria": "待機中のメッセージを編集",
+      "save": "保存",
+      "cancel": "キャンセル",
+      "remove": "メッセージを削除",
+      "moveUp": "前へ",
+      "moveDown": "後ろへ",
+      "failed": "待機リストを更新できませんでした。",
+      "placeholder": "Enter でこのターンの後に送るメッセージとして待機させます",
+      "placeholderSteer": "Enter でこのターンの後に待機、Ctrl+Enter で今すぐ割り込ませます",
+      "discarded": "次のメッセージが待機中のまま、セッションが解放されました:",
+      "copy": "コピー"
+    }
   },
   "shell": {
-    "journeysLabel": "作業の流れ",
-    "journeys": {
-      "home": "ホーム",
-      "sessions": "セッション",
-      "agent-tools": "ツール",
-      "rules": "ルール",
-      "audit": "台帳",
-      "organization": "組織",
-      "storedBudgets": "予算"
-    },
-    "phoneBarLabel": "メイン",
-    "newSession": "新しいセッション",
     "searchCommands": "検索とコマンド",
     "search": "検索",
     "stopAll": "すべて停止",
-    "allAreas": "すべての領域",
-    "more": "その他",
-    "moreLabel": "その他: すべての領域",
     "workspaceCount": "ワークスペース: {{count}}",
     "rail": {
       "title": "セッション",
@@ -448,10 +412,40 @@
       "usage": "{{tool}} の使用量",
       "fiveHour": "5時間",
       "week": "週",
+      "toolsUnreadable": "AI ツールを読み込めません · 再試行",
       "version": "バージョン"
     },
     "account": {
       "version": "バージョン {{version}}"
-    }
+    },
+    "collapse": "ナビゲーションを折りたたむ",
+    "expand": "ナビゲーションを展開",
+    "openNavigation": "ナビゲーションを開く",
+    "closeNavigation": "ナビゲーションを閉じる"
+  },
+  "places": {
+    "now": "ホーム",
+    "sessions": "セッション",
+    "files": "ファイルとワークスペース",
+    "work": "作業とコミュニケーション",
+    "ai-tools": "AI ツール",
+    "models": "モデル",
+    "mcp-skills": "MCPとスキル",
+    "sources": "ソース",
+    "rules": "ルールと承認",
+    "usage": "使用量とコスト",
+    "activity": "アクティビティと監査",
+    "access": "アクセスマップ",
+    "people": "ユーザーとグループ",
+    "security": "セキュリティ",
+    "operations": "運用",
+    "license": "ライセンス",
+    "settings": "設定"
+  },
+  "groups": {
+    "work": "作業",
+    "tools": "ツール",
+    "control": "コントロール",
+    "admin": "管理"
   }
 }

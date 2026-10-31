@@ -232,6 +232,8 @@ const TYPE_STEPS = [
   'overline',
   'mono',
   'mono-s',
+  'metadata',
+  'metadata-s',
 ]
 const TYPE_SUBKEYS = ['line-height', 'letter-spacing', 'font-weight']
 // The shell's geometry, named instead of bracketed.

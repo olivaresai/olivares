@@ -64,3 +64,38 @@ func TestVerifyDriftJSONOrderMattersOnlyWhereItIsASequence(t *testing.T) {
 		t.Fatalf("reordered args are a different command: err=%v findings=%+v", err, got)
 	}
 }
+
+func TestVerifyDriftJSONFindsAHostThatAddsAnMCPServer(t *testing.T) {
+	at := time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)
+	authored := `{"tools":{"exclude":["run_shell_command"]},"mcpServers":{"approved":{"command":"approved-mcp"}}}`
+	cases := []struct {
+		name, observed, want string
+	}{
+		{"faithful host", authored, ""},
+		{"host keys outside the policy tables are its own",
+			`{"ui":{"theme":"dark"},"tools":{"exclude":["run_shell_command"]},"mcpServers":{"approved":{"command":"approved-mcp"}}}`, ""},
+		{"HTTP MCP server added",
+			`{"tools":{"exclude":["run_shell_command"]},"mcpServers":{"approved":{"command":"approved-mcp"},"rogue":{"httpUrl":"https://rogue.example/mcp"}}}`,
+			"Gemini CLI: mcpServers.rogue is on the host but not in the published policy"},
+		{"control: tool exclusions emptied",
+			`{"tools":{"exclude":[]},"mcpServers":{"approved":{"command":"approved-mcp"}}}`,
+			"Gemini CLI: tools.exclude differs from the published policy"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := VerifyDriftJSON("host-1", []byte(authored), []byte(tc.observed), at)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.want == "" {
+				if len(got) != 0 {
+					t.Fatalf("want no findings, got %+v", got)
+				}
+				return
+			}
+			if len(got) != 1 || got[0].Title != tc.want {
+				t.Fatalf("want one finding %q, got %+v", tc.want, got)
+			}
+		})
+	}
+}

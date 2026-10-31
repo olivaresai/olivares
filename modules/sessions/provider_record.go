@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/core/model"
@@ -78,6 +79,9 @@ const (
 	colPRProbeLatency = "probe_latency_ms"
 	colPRProbedAt     = "probed_at"
 	colPRRevokedAt    = "revoked_at"
+	// colPRCredentialVersion is the record version at which the current key and
+	// endpoint were set. Other writes bump the version and leave it alone.
+	colPRCredentialVersion = "credential_version"
 )
 
 // Record lifecycle states. There are two, and revoke is final for that id: a
@@ -190,6 +194,10 @@ type ProviderRecord struct {
 	CreatedAt    string
 	UpdatedAt    string
 	RevokedAt    string
+
+	// CredentialVersion is the record version at which the current key and endpoint
+	// were set; zero on a row written before it was recorded.
+	CredentialVersion int64
 }
 
 // CreateProviderRecordInput is the validated create request. APIKey is the ONLY
@@ -231,7 +239,7 @@ func (m *Module) registerProviderRecordSchema(reg store.ExtensionRegistry) error
 		Kind:  providerRecordKind,
 		Table: providerRecordTable,
 		Fields: []model.FieldSpec{
-			{Name: "service", Kind: model.KindText, Nullable: true, Principal: model.None("optional provider service identifier validated by providerServiceBaseURL: provider_service.go:23-35")},
+			{Name: "service", Kind: model.KindText, Nullable: true, Principal: model.None("optional vendor preset identifier, never an account, validated by providerServiceBaseURL: provider_service.go:28-45")},
 			{Name: colPRRef, Kind: model.KindText, Principal: pdeclNoneProviderRecordRef},
 			{Name: colPRKind, Kind: model.KindText, Indexed: true, Principal: model.None("a provider credential kind, a closed set: provider_record.go:247-260, provider_record.go:444")},
 			{Name: colPRDisplayName, Kind: model.KindText, Principal: model.None("an operator-chosen provider name, bounded and shown only: provider_record.go:266-279, provider_record.go:445")},
@@ -247,6 +255,7 @@ func (m *Module) registerProviderRecordSchema(reg store.ExtensionRegistry) error
 			{Name: colPRProbeLatency, Kind: model.KindInt, Nullable: true},
 			{Name: colPRProbedAt, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colPRRevokedAt, Kind: model.KindTimestamp, Nullable: true},
+			{Name: colPRCredentialVersion, Kind: model.KindInt, Nullable: true},
 		},
 		Indexes: []model.IndexSpec{
 			{Name: "sessions_provider_record_ref_uniq", Columns: []string{model.ColTenantID, colPRRef}, Unique: true},
@@ -494,11 +503,11 @@ func recordEndpoint(rec ProviderRecord) (string, bool) {
 	return endpoint, ok
 }
 
-// providerRecordEnv is the environment a record of this kind produces for a child.
-// It is the ONLY place that decides what gets injected, and the mapping is the one
+// providerRecordEnv is the credential environment a record produces for a child.
+// It is the ONLY place that maps keys and endpoints to variables. The mapping is the one
 // the tree already uses in connectors/openclaw/config.go:1018-1038 — cited so the
 // two cannot drift apart without somebody noticing.
-func providerRecordEnv(kind, baseURL, key string) []EnvVar {
+func providerRecordEnv(kind, baseURL, key string, auth ...modelprovider.AuthScheme) []EnvVar {
 	switch kind {
 	case ProviderKindGemini:
 		return []EnvVar{{Name: "GEMINI_API_KEY", Value: key}}
@@ -506,6 +515,9 @@ func providerRecordEnv(kind, baseURL, key string) []EnvVar {
 		return nil // Local transport uses typed endpoint authority, never credential env.
 	case ProviderKindAnthropic:
 		out := []EnvVar{{Name: "ANTHROPIC_API_KEY", Value: key}}
+		if len(auth) > 0 && auth[0] == modelprovider.AuthBearer {
+			out = []EnvVar{{Name: "ANTHROPIC_AUTH_TOKEN", Value: key}, {Name: "ANTHROPIC_API_KEY", Value: ""}}
+		}
 		if baseURL != "" {
 			out = append(out, EnvVar{Name: "ANTHROPIC_BASE_URL", Value: baseURL})
 		}
@@ -539,9 +551,9 @@ func providerRecordKeyEnv(kind string) string {
 // may name. It exists so the record-backed mint can be validated against its own
 // contract instead of against the third-party adapter rule, which bans exactly the
 // ANTHROPIC_* names a first-party anthropic record has to set.
-func providerRecordEnvNames(kind string) map[string]struct{} {
+func providerRecordEnvNames(kind string, auth ...modelprovider.AuthScheme) map[string]struct{} {
 	out := map[string]struct{}{}
-	for _, item := range providerRecordEnv(kind, "https://example.invalid", "x") {
+	for _, item := range providerRecordEnv(kind, "https://example.invalid", "x", auth...) {
 		out[item.Name] = struct{}{}
 	}
 	return out
@@ -568,6 +580,8 @@ func providerRecordFromRecord(rec model.Record) ProviderRecord {
 		CreatedAt:   rec.String(model.ColCreatedAt),
 		UpdatedAt:   rec.String(model.ColUpdatedAt),
 		RevokedAt:   rec.String(colPRRevokedAt),
+
+		CredentialVersion: rec.Int(colPRCredentialVersion),
 	}
 	if !rec.IsNull(colPRDefaultModel) {
 		value := rec.String(colPRDefaultModel)
@@ -671,6 +685,8 @@ func (m *Module) CreateProviderRecord(ctx context.Context, tenant model.TenantID
 			colPRNameSlot:     activeProviderNameSlot(kind, name),
 			colPRProbeState:   ProbeNever,
 			colPRDefaultModel: initialDefault,
+			// A new row is version 1.
+			colPRCredentialVersion: int64(1),
 		})
 		if rerr != nil {
 			return rerr
@@ -870,6 +886,7 @@ func (m *Module) PatchProviderRecord(ctx context.Context, tenant model.TenantID,
 			rec[colPRSecretRef] = nextLocator
 			rec[colPRKeyHint] = providerKeyHint(key)
 		}
+		keepCredentialVersion(rec, resetProbe)
 		if resetProbe {
 			// A changed credential or endpoint has not been tested.
 			rec[colPRProbeState] = ProbeNever
@@ -1044,6 +1061,18 @@ func boundProbeDetail(s string) string {
 	return s
 }
 
+// keepCredentialVersion stamps the version this update will write when the key or
+// endpoint changes. A row from before the column learns the version it holds now:
+// its credential is known to be in place at least since then, not earlier.
+func keepCredentialVersion(rec model.Record, changed bool) {
+	switch {
+	case changed:
+		rec[colPRCredentialVersion] = rec.Int(model.ColVersion) + 1
+	case rec.IsNull(colPRCredentialVersion):
+		rec[colPRCredentialVersion] = rec.Int(model.ColVersion)
+	}
+}
+
 // recordProbeOutcome persists one probe result. It writes the outcome even when the
 // outcome is a failure: a record whose last test failed must READ as a record whose
 // last test failed, and silently keeping the previous green is how a console comes
@@ -1079,13 +1108,14 @@ func (m *Module) recordProbeOutcome(
 			rec.String(colPRBaseURL) != expected.BaseURL {
 			return ErrProviderRecordChanged
 		}
+		keepCredentialVersion(rec, false)
 		rec[colPRProbeState] = state
 		rec[colPRProbeDetail] = detail
 		rec[colPRProbeLatency] = elapsed.Milliseconds()
 		rec[colPRProbedAt] = model.NewTimestamp(m.now()).String()
 		rec[colPRModels] = encoded
 		if state == ProbeOK && !rec.IsNull(colPRDefaultModel) && rec.String(colPRDefaultModel) == "" {
-			if selected := initialProviderModel(rec.String(colPRKind), models); selected != "" {
+			if selected := initialProviderModel(rec.String(colPRKind), rec.String("service"), models); selected != "" {
 				rec[colPRDefaultModel] = selected
 			}
 		}

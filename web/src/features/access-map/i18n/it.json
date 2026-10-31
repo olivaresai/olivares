@@ -85,7 +85,13 @@
     "lastSeen": "Ultima occorrenza",
     "yes": "Sì",
     "no": "No",
-    "minimalData": "Sono mostrati solo i metadati. Per progetto il motore non porta mai qui SQL, contenuti o segreti (dati minimi)."
+    "minimalData": "Sono mostrati solo i metadati. Per progetto il motore non porta mai qui SQL, contenuti o segreti (dati minimi).",
+    "open": {
+      "session": "Apri sessione",
+      "agent": "Apri agenti",
+      "nhiRoster": "Apri le identità"
+    },
+    "expandLimit": "Questa mappa mostra già {{n}} nodi espansi. Torna indietro o aggiorna per ricominciare."
   },
   "authority": {
     "title": "Autorità e passo successivo",
@@ -190,5 +196,12 @@
     },
     "analyse": "Analizza i percorsi di attacco (con audit)",
     "truncated": "Il motore ha limitato questa analisi, quindi i percorsi mostrati non sono la risposta completa."
+  },
+  "expand": {
+    "partial": "Alcuni nodi espansi non si sono potuti leggere, quindi la mappa è incompleta.",
+    "retry": "Riprova"
+  },
+  "graph": {
+    "keyboardHint": "Porta il focus su un nodo, poi usa le frecce per passare a un nodo collegato e Invio per aprirlo. L’elenco sotto il grafo fa lo stesso senza la tela."
   }
 }

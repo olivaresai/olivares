@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/olivaresai/olivares/core/api"
@@ -14,10 +15,26 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
+// The recipe declaration is independent of the optional service-account split.
+var readApplianceImage = isApplianceImage
+
+func isApplianceImage(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	switch string(data) {
+	case "almalinux10-server-amd64\n", "almalinux10-desktop-amd64\n", "debian13-server-amd64\n":
+		return true
+	}
+	return false
+}
+
 // registerSchema is the register func the live store opened with: the restore's scratch
 // verification opens the snapshot with it (api.DRConfig.RegisterSchema).
 func consoleDRConfig(cfg bootConfig, engine store.Engine, registerSchema func(store.ExtensionRegistry) error, quiesce func(context.Context) error) *api.DRConfig {
 	config := &api.DRConfig{DataDir: cfg.DataDir, EngineKind: string(engine), PassphraseFile: osGetenv("OLIVARES_DR_PASSPHRASE_FILE"), RegisterSchema: registerSchema, QuiesceStore: quiesce, Getenv: osGetenv}
+	config.Appliance = readApplianceImage("/etc/olivares-appliance/image")
 	config.SealKeys = func(cipher *dr.KeyCipher) (map[string][]byte, []dr.KeyRef, []dr.SealerProbe, error) {
 		return sealSigningKeys(cfg.DataDir, cipher)
 	}

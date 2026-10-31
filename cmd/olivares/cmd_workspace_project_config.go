@@ -92,6 +92,7 @@ func printProjectConfig(cmd *cobra.Command, raw []byte) error {
 			File       string         `json:"file"`
 			Flagged    map[string]any `json:"flagged"`
 			Unreadable string         `json:"unreadable"`
+			Refused    string         `json:"refused"`
 		} `json:"files"`
 		SHA256   string `json:"sha256"`
 		Approved bool   `json:"approved"`
@@ -112,6 +113,9 @@ func printProjectConfig(cmd *cobra.Command, raw []byte) error {
 			fmt.Fprintln(out, termSafe(f.File))
 			if f.Unreadable != "" {
 				fmt.Fprintf(out, "  cannot be read: %s\n", termSafe(f.Unreadable))
+			}
+			if f.Refused != "" {
+				fmt.Fprintf(out, "  cannot be approved: %s\n", termSafe(f.Refused))
 			}
 			keys := make([]string, 0, len(f.Flagged))
 			for key := range f.Flagged {

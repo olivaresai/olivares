@@ -83,6 +83,9 @@ describe('SessionChanges — against git HEAD', () => {
     const user = userEvent.setup()
     show()
     await user.click(await screen.findByText('README.md'))
+    expect(
+      screen.getByRole('button', { name: 'Copy README.md' }),
+    ).toBeInTheDocument()
     expect(await screen.findByTestId('changes-file')).toHaveTextContent(
       'changed by the agent',
     )

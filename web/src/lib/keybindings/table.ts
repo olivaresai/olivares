@@ -72,6 +72,7 @@ export const COMMAND_GROUP: Readonly<Record<string, KeyGroup>> = {
   'surface.openBeside': 'surface',
   'surface.closeBeside': 'surface',
   'surface.focusBeside': 'surface',
+  'surface.approve': 'surface',
   'rail.next': 'surface',
   'rail.previous': 'surface',
   'rail.first': 'surface',
@@ -126,6 +127,8 @@ export const KEYBINDINGS: readonly KeyRule[] = [
     keys: 'Alt+Shift+ArrowRight',
     when: 'workSurface',
   },
+  // The request in the open conversation, only while all of it is in view.
+  { command: 'surface.approve', keys: 'Alt+a', when: 'workSurface' },
 
   // ── the rail, only while it has focus ─────────────────────────────────────
   { command: 'rail.next', keys: 'ArrowDown', when: 'railFocused' },
@@ -161,6 +164,11 @@ export const KEYBINDINGS: readonly KeyRule[] = [
   { command: 'approvals.approve', keys: 'a', when: 'approvalQueue' },
   { command: 'approvals.deny', keys: 'd', when: 'approvalQueue' },
 ]
+
+/** The palette's chord, as the table declares it (Mod+k): no rule, no hint. */
+export const PALETTE_KEYS = KEYBINDINGS.find(
+  (rule) => rule.command === 'palette.open',
+)?.keys
 
 /** The key that arms a navigation sequence, and how long it stays armed. */
 export const NAV_LEADER = 'g'

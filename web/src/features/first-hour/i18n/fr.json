@@ -4,7 +4,8 @@
     "codex": "Codex",
     "grok": "Grok Build",
     "opencode": "OpenCode",
-    "gemini-cli": "Gemini CLI"
+    "gemini-cli": "Gemini CLI",
+    "cursor": "Cursor CLI"
   },
   "status": {
     "installed": "Installé",
@@ -26,6 +27,7 @@
     "signInChatGPT": "Se connecter avec ChatGPT",
     "useApiKey": "Utiliser plutôt une clé d’API",
     "signInGrok": "Se connecter avec votre compte xAI",
+    "signInCursor": "Se connecter avec votre compte Cursor",
     "signInGoogle": "Se connecter avec Google",
     "signIn": "Se connecter"
   },
@@ -102,6 +104,12 @@
     "secretUse": "Donner {{name}} à cette session",
     "secretVariable": "Variable pour {{name}}",
     "secretsManage": "Gérer les secrets de session",
+    "credentials": "Identifiants gérés (Business)",
+    "credentialsHint": "La session utilise chaque identifiant choisi via un assistant que le moteur exécute ; la valeur scellée ne l'atteint jamais. Nécessite Olivares Business.",
+    "credentialsNone": "Aucun identifiant géré pour l'instant. Ajoutez-en un avec un nom commençant par credential/.",
+    "credentialUse": "Donner {{name}} à cette session",
+    "credentialsManage": "Gérer les identifiants gérés",
+    "listUnavailable": "Le moteur n'a pas répondu à la liste des secrets. Rien ne peut être choisi pour l'instant.",
     "openTools": "Ouvrir Outils d’IA",
     "model": "Modèle",
     "providerDefault": "Par défaut ({{model}})",
@@ -113,7 +121,9 @@
     "profile": "Profil",
     "profileNotSignedIn": "Non connecté",
     "profileNeedsKey": "Clé requise",
-    "foldersUnreadable": "Les dossiers enregistrés n'ont pas pu être lus. Saisissez le chemin d'un dossier de ce serveur."
+    "foldersUnreadable": "Les dossiers enregistrés n'ont pas pu être lus. Saisissez le chemin d'un dossier de ce serveur.",
+    "folderPermission": "Démarre en {{name}}, la valeur par défaut de ce dossier.",
+    "autoAsks": "{{tool}} n’a pas de mode automatique : il demandera avant chaque action."
   },
   "lists": {
     "runsTruncated": "Sessions récentes : {{count}} chargées ; il y en a d’autres.",
@@ -122,10 +132,12 @@
     "foldersHint": "Certains dossiers enregistrés ne figurent pas dans cette liste."
   },
   "permission": {
-    "editsOnly": "Modifier les fichiers uniquement",
+    "editsOnly": "Accepter les modifications automatiquement",
     "editsAndCommands": "Modifier les fichiers et exécuter des commandes",
     "readOnly": "Lecture seule",
-    "ask": "Demander avant chaque action"
+    "ask": "Supervisé",
+    "auto": "Automatique",
+    "full": "Accès complet"
   },
   "next": {
     "title": "Ensuite, quand vous en aurez besoin",
@@ -138,5 +150,13 @@
     "cliHint": "Sur ce serveur, la commande olivares est déjà installée. Depuis un autre ordinateur, installez-la avec :",
     "copy": "Copier",
     "copied": "Copié"
+  },
+  "permissionSummary": {
+    "readOnly": "Lit et planifie. Toute modification est refusée.",
+    "ask": "Demande avant chaque action qui n’est pas une lecture.",
+    "editsOnly": "Lit et modifie les fichiers sans demander. Tout le reste demande.",
+    "editsAndCommands": "Lit, modifie les fichiers et exécute des commandes sans demander. Les autres outils sont refusés.",
+    "auto": "Le mode automatique vérifié de l’outil décide. Un outil qui n’en a pas demande, comme dans Supervisé. Nécessite l’administration des exécutions.",
+    "full": "Rien ne demande. Olivares continue d’encadrer la session et enregistre chaque action. Nécessite l’administration des exécutions."
   }
 }

@@ -17,16 +17,18 @@
 #            speaks stream-json (an init frame, then one reply per prompt) and
 #            reports whether it could read <data-dir>/secret-store.key.
 #
-# Usage:  scripts/session-journey-smoke.sh [--binary PATH] [--label NAME]
+# Usage:  scripts/session-journey-smoke.sh [--binary PATH] [--label NAME] [--pipeline]
 # Requires: bash, python3. Exit 0 = journey works; 1 = it does not (the step is
 # named); 2 = could not look (no binary, no free port).
 set -euo pipefail
 
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 bin="${OLIVARES_BIN:-$root/bin/olivares}"
-label="$(uname -s | tr 'A-Z' 'a-z')"
+pipeline=false
+label="$(uname -s | tr '[:upper:]' '[:lower:]')"
 while [[ "$#" -gt 0 ]]; do
 	case "$1" in
+  --pipeline) pipeline=true; shift ;;
 		--binary) bin="${2:-}"; shift 2 ;;
 		--label) label="${2:-}"; shift 2 ;;
 		*) printf 'session-journey: unknown argument: %s\n' "$1" >&2; exit 2 ;;
@@ -68,6 +70,24 @@ fi
 printf '{"type":"system","subtype":"init","session_id":"%s","cwd":"%s"}\n' "$sid" "$PWD"
 printf '{"type":"system","subtype":"journey_probe","probe":"%s"}\n' "$probe"
 while IFS= read -r line; do
+ case "$line" in
+  *pipeline-timeout*) sleep 3600; continue ;;
+  *pipeline-fail*)
+   printf '{"type":"result","subtype":"error_during_execution","is_error":true,"result":"pipeline failure","session_id":"%s"}\n' "$sid"
+   continue ;;
+  *pipeline-cap*)
+   spent=1
+   while :; do
+    printf '{"type":"result","subtype":"success","total_cost_usd":%d,"usage":{"input_tokens":%d,"output_tokens":%d},"session_id":"%s"}\n' "$spent" "$spent" "$spent" "$sid"
+    spent=$((spent + 1))
+    sleep 1
+   done ;;
+  *pipeline-repository*)
+   if [ ! -f README ]; then
+    printf '{"type":"result","subtype":"error_during_execution","is_error":true,"result":"repository README missing"}\n'
+    continue
+   fi ;;
+ esac
 	printf '{"type":"assistant","session_id":"%s","message":{"role":"assistant","content":[{"type":"text","text":"journey-reply"}]}}\n' "$sid"
 	printf '{"type":"result","subtype":"success","is_error":false,"result":"journey-reply","session_id":"%s"}\n' "$sid"
 done
@@ -92,9 +112,14 @@ case "$(uname -s)" in
 	*) confinement_mode=unconfined ;;
 esac
 
-python3 - "http://127.0.0.1:$port" "$work/engine.out" "$folder" "$data" "$confinement_mode" "$label" <<'PY'
-import json, re, sys, time, urllib.error, urllib.request
-base, out_path, folder, data, confinement_mode, label = sys.argv[1:7]
+# One first-boot wait for the installer and the journeys (#3342): a fresh engine runs its module
+# migrations before it answers, which took 45-58 s on loaded battery legs.
+first_boot="$(sed -n 's/^FIRST_BOOT_DEADLINE=\([0-9][0-9]*\)$/\1/p' "$root/scripts/install-service.sh")"
+[ -n "$first_boot" ] || { printf 'session-journey: COULD NOT LOOK — no FIRST_BOOT_DEADLINE in scripts/install-service.sh\n' >&2; exit 2; }
+
+python3 - "http://127.0.0.1:$port" "$work/engine.out" "$folder" "$data" "$confinement_mode" "$label" "$bin" "$pipeline" "$first_boot" <<'PY'
+import json, os, re, subprocess, sys, time, urllib.error, urllib.request
+base, out_path, folder, data, confinement_mode, label, binary, pipeline, first_boot = sys.argv[1:10]
 tenant, token = "", ""
 
 def fail(step, detail):
@@ -121,14 +146,16 @@ def ok(step, status, body, want=(200, 201)):
         fail(step, f"HTTP {status} {body}")
     return body
 
-for _ in range(60):
+first_boot, started = int(first_boot), time.monotonic()
+while True:
     try:
         urllib.request.urlopen(base + "/healthz", timeout=2)
         break
     except Exception:
+        if time.monotonic() - started >= first_boot:
+            fail("engine start", f"no /healthz answer within {first_boot} s")
         time.sleep(1)
-else:
-    fail("engine start", "no /healthz answer within 60 s")
+print(f"session-journey: engine healthy after {time.monotonic() - started:.0f}s (first-boot wait {first_boot}s)")
 m = None
 for _ in range(20):
     m = re.search(r"olst_[A-Za-z0-9]+", open(out_path).read())
@@ -216,6 +243,63 @@ ok("stop after resume", *call("POST", f"/v1/m/sessions/runs/{ref}/stop", {}))
 state = ok("find it later", *call("GET", f"/v1/m/sessions/runs/{ref}")).get("state")
 if state not in ("stopped", "completed"):
     fail("find it later", f"state {state!r}")
+if pipeline == "true":
+    env = dict(os.environ, OLIVARES_SERVER_URL=base, OLIVARES_TOKEN=token, OLIVARES_TENANT=tenant)
+    def pipeline_call(name, prompt, code, state, extra=(), repository=False):
+        args = [binary, "session", "start"]
+        args += [prompt] if repository else [folder, prompt]
+        args += ["--wait", "--json", "--tool", "claude", "--profile", profile_ref, *extra]
+        if "--template" not in extra:
+            args += ["--permission", "supervised"]
+        result = subprocess.run(args, env=env, capture_output=True, text=True, timeout=40)
+        try:
+            doc = json.loads(result.stdout)
+        except ValueError:
+            fail(name, f"not one JSON document; exit {result.returncode}: {result.stderr[:300]}")
+        required = {"run_ref", "state", "last_message", "input_tokens", "output_tokens", "cost_micro_usd"}
+        if not isinstance(doc, dict) or not required.issubset(doc) or not doc["run_ref"]:
+            fail(name, f"incomplete result document: {doc}")
+        if result.returncode != code or doc.get("state") != state:
+            fail(name, f"exit {result.returncode}, document {doc}")
+        return doc
+    pipeline_call("pipeline finished", "pipeline-finish", 0, "finished")
+    pipeline_call("pipeline failed", "pipeline-fail", 10, "failed")
+    pipeline_call("pipeline timeout", "pipeline-timeout", 12, "timed_out", ("--timeout", "2s"))
+    control = ok("uncapped control", *call("POST", "/v1/m/sessions/runs", {
+        "provider_profile_ref": profile_ref, "workspace_ref": ws_ref,
+        "transport": "stream-json", "permission_mode": "default", "name": "uncapped-control"}))
+    control_ref = control["run_ref"]
+    control_prompt = {"type": "user", "message": {"role": "user", "content": "pipeline-cap-control"}}
+    ok("uncapped prompt", *call("POST", f"/v1/m/sessions/runs/{control_ref}/input",
+                               {"line": json.dumps(control_prompt)}), want=(200, 202, 204))
+    until = time.monotonic() + 5
+    while True:
+        spending = ok("uncapped spending", *call("GET", f"/v1/m/sessions/runs/{control_ref}"))
+        if (spending.get("cost_micro_usd") or 0) >= 2_000_000:
+            break
+        if time.monotonic() >= until:
+            fail("uncapped spending", "the control did not keep reporting increasing cost")
+        time.sleep(0.1)
+    if spending.get("process_state") != "running":
+        fail("uncapped spending", f"control ended: {spending}")
+    ok("stop uncapped control", *call("POST", f"/v1/m/sessions/runs/{control_ref}/stop", {}))
+    capped = pipeline_call("pipeline cap", "pipeline-cap", 13, "cost_cap", ("--cost-cap-micro-usd", "100"))
+    stopped = ok("capped process stopped", *call("GET", "/v1/m/sessions/runs/" + capped["run_ref"]))
+    if stopped.get("process_state") != "stopped":
+        fail("capped process stopped", stopped)
+    pipeline_call("repository source", "pipeline-repository", 0, "finished",
+                  ("--repository", "https://github.com/octocat/Hello-World.git", "--repository-ref", "master"),
+                  repository=True)
+    # A custom dontAsk template requires the existing governed launch approval.
+    template = ok("approval template", *call("POST", "/v1/m/sessions/templates",
+                  {"name": "pipeline-approval", "body": {"settings": {"permission_mode": "dontAsk"}}}))
+    template_ref = template.get("id")
+    waiting = pipeline_call("pipeline approval", "pipeline-finish", 11, "waiting_approval",
+                            ("--template", template_ref))
+    if not waiting.get("approval_ref"):
+        fail("pipeline approval", "no approval reference")
+    print("session-pipeline: OK — finished, failed, timeout, cap stopped (uncapped control kept spending), repository/ref, approval")
+
 print(f"session-journey: OK — {label}: start, prompt, reply, stop, resume, stop; "
       f"probe={probe}; {confinement.group(0) if confinement else 'confinement: not reported'}")
 PY

@@ -96,6 +96,9 @@ type providerAccountDTO struct {
 	LastLoginAt    string `json:"last_login_at,omitempty"`
 	CreatedAt      string `json:"created_at"`
 	UpdatedAt      string `json:"updated_at"`
+	// Usage is the latest utilization and credits the account's tool reported
+	// (provider_account_usage.go). It is absent when the tool reported none.
+	Usage []accountUsageDTO `json:"usage,omitempty"`
 }
 
 // accountIdentityNone is the identity source of an account whose vendor was not
@@ -157,7 +160,7 @@ func (m *Module) handleListProviderAccounts(w http.ResponseWriter, r *http.Reque
 	}
 	out := listResponse[providerAccountDTO]{Items: make([]providerAccountDTO, 0, len(accounts))}
 	for _, a := range accounts {
-		out.Items = append(out.Items, toProviderAccountDTO(a))
+		out.Items = append(out.Items, m.withUsage(r.Context(), a, toProviderAccountDTO(a), false))
 	}
 	out.Cursor, out.HasMore = page.Cursor, page.HasMore
 	writeJSON(w, http.StatusOK, out)
@@ -174,7 +177,7 @@ func (m *Module) handleGetProviderAccount(w http.ResponseWriter, r *http.Request
 		writeRunErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, toProviderAccountDTO(account))
+	writeJSON(w, http.StatusOK, m.withUsage(r.Context(), account, toProviderAccountDTO(account), true))
 }
 
 // handlePatchProviderAccountMetadata edits the account's name, display label and/or color; a rename changes only the name, never the reference, home or launch configuration, and an empty display label or color clears that field.

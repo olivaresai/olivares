@@ -184,6 +184,7 @@ func buildClaudeMessagesProxyServer(eng *engine, log *slog.Logger, consoleURL st
 		Gateway: surface, Doer: doer,
 	})
 
+	gates := eng.gates()
 	dec := &inferencepep.Decider{
 		Surface: surface, SurfaceGeo: strings.TrimSpace(cfg.InferenceGeo), TenantHint: tenantHint,
 		Inference: inf, Auth: eng.authr, Models: eng.models, Budget: eng.finops, KillSwitch: eng.killSwitch,
@@ -191,13 +192,16 @@ func buildClaudeMessagesProxyServer(eng *engine, log *slog.Logger, consoleURL st
 		Policy:        eng.inferenceProxy, Residency: eng.residencyReg, Store: eng.store, Bus: eng.bus,
 		// Server-tool egress gate (P0 #1): the real gate under -tags enterprise WITH an egress
 		// config, else nil (observe-only, unchanged). approvals reuses the HITL bridge.
-		Egress: thisEdition.serverToolEgressGate.get(osGetenv, log), Approvals: proxyApprovalsFor(eng.approvalBridge),
+		// An administrator's settings change it while the engine runs (edition_live.go): the
+		// edition's constructor is only the boot value.
+		EgressLive: gates.serverToolEgress.bootFrom(func() serverToolEgressGate { return thisEdition.serverToolEgressGate.get(osGetenv, log) }),
+		Approvals:  proxyApprovalsFor(eng.approvalBridge),
 		// Content firewall (P1): the real inspector under -tags enterprise WITH a firewall
 		// config, else nil (no deep inspection, unchanged). Reuses the same approval bridge.
-		Inspector: chainInspectors(thisEdition.contentInspector.get(osGetenv, log), eng.sessionDecoys),
+		InspectorLive: liveInspectorChain(gates.contentFirewall.bootFrom(func() contentInspector { return thisEdition.contentInspector.get(osGetenv, log) }), eng.sessionDecoys),
 		// Computer-use governance: the real gate under -tags enterprise WITH a
 		// computer-use config, else nil (ungoverned, unchanged).
-		ComputerUse: thisEdition.computerUseGate.get(osGetenv, log),
+		ComputerUseLive: gates.computerUse.bootFrom(func() computerUseGate { return thisEdition.computerUseGate.get(osGetenv, log) }),
 		// Runtime circuit-breaker (wired in): the SAME instance the finding
 		// rail drives, taken from the engine rather than constructed again here — two
 		// instances would mean the breaker that trips is not the breaker consulted.

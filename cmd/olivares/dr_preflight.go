@@ -377,7 +377,7 @@ func drNoCreateProblem(f drFlags, p drPool, op string) string {
 // does not have — the engine refuses such a pool at Open, after a restore has
 // already written.
 //
-// Root's R3 decision keeps the engine guard and moves the pre-flight to it:
+// the maintainer's R3 decision keeps the engine guard and moves the pre-flight to it:
 // drSameLiveServerProblems runs the engine's own concurrent advisory-lock challenge
 // on EVERY pool, and a replica is refused there, before any effect. The
 // postmaster-start-time predicate that used to sit in this function is retired with

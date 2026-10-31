@@ -23,7 +23,10 @@
     "signing": "Firma de informes",
     "tracing": "Trazas",
     "sessionIdle": "Memoria de sesiones",
-    "updates": "Actualizaciones"
+    "updates": "Actualizaciones",
+    "permissions": "Permisos",
+    "newSessions": "Sesiones nuevas",
+    "notifications": "Notificaciones"
   },
   "general": {
     "title": "General",
@@ -42,17 +45,26 @@
     "startPageHint": "Qué se abre al iniciar sesión. Predeterminado: Inicio.",
     "confirmStop": "Confirmar antes de detener una sesión",
     "confirmStopHint": "Preguntar una vez antes de que Detener acabe una sesión que sigue trabajando.",
+    "editor": "Editor para enlaces de archivo",
+    "editorHint": "Qué editor abren los enlaces «Abrir en» en este equipo. Predeterminado: VS Code.",
+    "editorSsh": "Host SSH del editor",
+    "editorSshHint": "Cómo llega el editor a las carpetas de sesión de otra máquina, como usuario@host o usuario@host:puerto. Vacío: la dirección desde la que se sirve esta consola; sin SSH si es este equipo.",
     "reduceMotion": "Reducir movimiento",
     "reduceMotionHint": "Sustituye el movimiento por fundidos. Activo cuando el sistema lo pide."
   },
   "sessionNotifications": {
     "title": "Notificaciones de sesiones",
-    "hint": "Avisarme cuando una sesión me necesite o termine mientras esta pestaña esté en segundo plano. Se aplica a este navegador.",
+    "hint": "Avísame de los eventos seleccionados en segundo plano. Tus opciones te acompañan; cada navegador necesita permiso.",
     "notifyMe": "Avisarme",
     "denied": "Las notificaciones están bloqueadas en este navegador.",
     "unavailable": "Las notificaciones del navegador no están disponibles aquí.",
     "needsYou": "Esta sesión te necesita.",
-    "finished": "El turno ha terminado."
+    "finished": "El turno ha terminado.",
+    "ended": "La sesión ha terminado.",
+    "failed": "La sesión se detuvo con un error.",
+    "pushOn": "También llega a este dispositivo con la pestaña cerrada.",
+    "pushUnavailable": "Solo mientras haya una pestaña abierta: este dispositivo no pudo registrarse para push.",
+    "installHint": "Las notificaciones requieren la app en la pantalla de inicio: toque Compartir y después «Añadir a pantalla de inicio»."
   },
   "keyboard": {
     "title": "Teclado",
@@ -350,5 +362,31 @@
     "switched": "Cambio instalado.",
     "terminal": "Lo mismo en una terminal del servidor",
     "orTerminal": "O en una terminal del servidor"
+  },
+  "permissions": {
+    "description": "Lo que un agente puede hacer en una sesión y lo que recibe cada herramienta por ello. Los mismos nombres sirven en el formulario de sesión nueva y en olivares session start --permission.",
+    "caption": "Lo que cada permiso entrega a cada herramienta",
+    "permission": "Permiso",
+    "what": "Qué hace",
+    "default": "Predeterminado",
+    "asksInstead": "Sin modo automático: pregunta, como en {{name}}",
+    "note": "En las herramientas que no son Claude Code, Olivares responde cada aprobación que pide la herramienta según el permiso. Un «ask» propio de la herramienta en una celda no significa que se te pregunte a ti."
+  },
+  "newSessions": {
+    "tool": "Herramienta predeterminada",
+    "account": "Cuenta predeterminada",
+    "model": "Modelo predeterminado",
+    "folder": "Carpeta predeterminada",
+    "automatic": "Automático",
+    "unavailable": "Ya no está disponible",
+    "reset": "Restablecer {{name}}",
+    "readFailed": "No se pudieron leer tus opciones. Vuelve a abrir esta página para reintentarlo.",
+    "fallback": "Un valor predeterminado guardado ya no está disponible. Se usa la primera opción disponible.",
+    "scope": "Tus valores para Nueva sesión. Se guardan en tu cuenta en este servidor."
+  },
+  "notificationEvents": {
+    "needsYou": "Te necesita",
+    "finished": "Finalizada",
+    "failed": "Fallida"
   }
 }

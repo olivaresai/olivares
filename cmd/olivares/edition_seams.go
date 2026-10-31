@@ -6,6 +6,8 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
@@ -189,6 +191,21 @@ type EditionRuntimeLaunchObserverRegistration interface {
 	UseRuntimeLaunchObserver(sessions.RuntimeLaunchObserver) (func(), error)
 }
 
+// EditionAgentDeps is what serve hands the agentServers port: what only serve holds, so an
+// edition cannot derive it. Certificate is the one the HTTPS listener serves and reloads, nil
+// on an --insecure serve; an edition then serves no agent listener, it does not make up one.
+// Config, Modules and Store are the boot's own (the elector is Store.Leader()). Getenv reads
+// the deployment's listen addresses, OLIVARES_SESSIONS_AGENT_LINK_LISTEN and
+// OLIVARES_SESSIONS_AGENT_BOOTSTRAP_LISTEN, which Community refuses by name.
+type EditionAgentDeps struct {
+	Config      EditionConfig
+	Modules     []api.Module
+	Store       store.Store
+	Certificate func(*tls.ClientHelloInfo) (*tls.Certificate, error)
+	Getenv      func(string) string
+	Log         *slog.Logger
+}
+
 // EditionPromotionRecovery owns one boot's edition recovery state. Recover runs
 // inside the elector's bootstrap on every acquisition, before the incoming
 // fencing epoch exists. It must be idempotent and return failures to the elector;
@@ -290,6 +307,12 @@ type EditionProductSettings interface {
 	// writes this node's copy; owned (when non-nil) must cover every requested
 	// module. Call RequestRestart afterwards to build the modules from it.
 	SaveActivation(ctx context.Context, actor auth.Principal, m *ActivationManifest, owned []string) error
+	// EditionSettings, SaveEditionSetting and DeleteEditionSetting keep the edition's own
+	// add-on settings, one JSON document per add-on key, in the same record (edition_settings.go).
+	EditionSettings(ctx context.Context) (map[string]json.RawMessage, error)
+	SaveEditionSetting(ctx context.Context, actor auth.Principal, key string, value json.RawMessage, meta map[string]any) error
+	DeleteEditionSetting(ctx context.Context, actor auth.Principal, key string, meta map[string]any) error
+	CompareAndSwapEditionSetting(ctx context.Context, actor auth.Principal, key string, expected, value json.RawMessage, meta map[string]any) error
 }
 
 func closeEditionResources(resources []io.Closer, leader store.LeaderElector, log *slog.Logger) error {

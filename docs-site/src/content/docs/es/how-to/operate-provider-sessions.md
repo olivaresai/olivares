@@ -136,8 +136,11 @@ soportados o inseguros.
 
 Una carpeta puede guardar un comando de preparación para los nuevos worktrees. Una
 persona debe aprobar su texto exacto, por SHA-256, antes de que se acepte un inicio
-con worktree; cambiar un solo carácter exige aprobarlo de nuevo. Por ahora nada
-ejecuta el comando. Consulta
+con worktree; cambiar un solo carácter exige aprobarlo de nuevo. El comando aprobado
+se ejecuta una vez en el nuevo worktree antes del primer turno de la sesión; un fallo
+detiene el inicio y muestra su salida. Si la preparación falla, la reanudación ejecuta
+el comando de nuevo; después de una preparación correcta o de un inicio con `--no-setup` registrado,
+no lo hace. Consulta
 [Aprobar el comando de preparación de una carpeta](/reference/session-runtime-api/#approving-a-folders-setup-command).
 
 La limpieza se niega a descartar trabajo sin confirmar o sin fusionar.

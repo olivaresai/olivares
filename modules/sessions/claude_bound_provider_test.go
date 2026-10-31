@@ -143,7 +143,7 @@ func TestClaudeHookSettingsKeepTheLaunchsOwnFlagSettings(t *testing.T) {
 
 // A key-bound launch is refused, naming the file, when this host's managed settings leave a
 // quiet switch at anything but "1", judged on its effective value across the documents in
-// Claude Code's merge order (SR2C 071, Root); the administrator's files are left as they are,
+// Claude Code's merge order (review 071, Root); the administrator's files are left as they are,
 // and an own-login launch is unaffected.
 func TestClaudeKeyLaunchRefusesAManagedPolicyThatUndoesItsQuietSwitches(t *testing.T) {
 	dir := t.TempDir()
@@ -201,7 +201,7 @@ func TestClaudeKeyLaunchRefusesAManagedPolicyThatUndoesItsQuietSwitches(t *testi
 }
 
 // An unreadable or invalid managed document, or a fragments directory that cannot be listed,
-// refuses with a remedy (SR5C on fb69f711): fix it, remove it, or use the tool's own sign-in.
+// refuses with a remedy (review on fb69f711): fix it, remove it, or use the tool's own sign-in.
 func TestClaudeQuietPolicyRefusalsNameARemedy(t *testing.T) {
 	for name, setup := range map[string]func(dir string) error{
 		"invalid document": func(dir string) error {
@@ -220,6 +220,92 @@ func TestClaudeQuietPolicyRefusalsNameARemedy(t *testing.T) {
 			err := CheckClaudeQuietHostPolicy()
 			if err == nil || !strings.Contains(err.Error(), "fix its permissions or contents, or remove it, or use Claude Code's own sign-in") {
 				t.Fatalf("refusal = %v, want one that names the remedy", err)
+			}
+		})
+	}
+}
+
+// Preset models reach the actual launch, including every background role. A
+// plain Anthropic record still delegates model roles to Claude's own settings.
+func TestClaudePresetLaunchModelRoles(t *testing.T) {
+	for _, tc := range []struct{ name, service, saved, main, large, small, selected string }{
+		{"zai", "zai-anthropic", "", "glm-5.3", "glm-5.3[1m]", "glm-5.3-flash[1m]", ""},
+		{"deepseek", "deepseek-anthropic", "", "deepseek-flash", "deepseek-flash[1m]", "deepseek-flash", ""},
+		{"saved main", "zai-anthropic", "glm-custom", "glm-custom", "glm-5.3[1m]", "glm-5.3-flash[1m]", "explicit-model"},
+		{"native alias", "zai-anthropic", "", "glm-5.3", "glm-5.3[1m]", "glm-5.3-flash[1m]", "sonnet"},
+		{"explicit Claude ID", "zai-anthropic", "", "glm-5.3", "glm-5.3[1m]", "glm-5.3-flash[1m]", "claude-sonnet-5-5"},
+		{"plain anthropic", "", "", "", "", "", "explicit-model"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			runner := &fakeRunner{}
+			m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithProviderSecretVault(newFakeVault()))
+			m.UseExecutionEnvironmentRef(testEnvRef)
+			input := CreateProviderRecordInput{Kind: ProviderKindAnthropic, Service: tc.service, DisplayName: tc.name, APIKey: testProviderKey}
+			if tc.saved != "" {
+				input.DefaultModel = &tc.saved
+			}
+			rec := mustCreateRecord(t, m, tenant, input)
+			configHome, userHome, _, _ := twoHomes(t)
+			prof := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: providerDriverClaude, ConfigHome: configHome, UserHome: userHome,
+				DisplayName: "roles", AuthSource: AuthSourceManagedInjection, ProviderRecordRef: rec.Ref})
+			if _, err := m.createRun(context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:d19", ActorKind: model.ActorUser, ProviderProfileRef: prof.Ref, Model: tc.selected}); err != nil {
+				t.Fatal(err)
+			}
+			settingsArg, n := argAfter(runner.lastSpec().Args, claudeSettingsFlag)
+			var settings struct {
+				Env            map[string]string
+				ModelOverrides map[string]string `json:"modelOverrides"`
+			}
+			if n != 1 || json.Unmarshal([]byte(settingsArg), &settings) != nil {
+				t.Fatal("missing governed settings")
+			}
+			if tc.service == "" {
+				if len(settings.ModelOverrides) != 0 {
+					t.Fatal("plain record adds model overrides")
+				}
+			} else {
+				primary := tc.main
+				if tc.selected == "explicit-model" {
+					primary = tc.selected
+				}
+				expected := map[string]string{"claude-opus-5-5": tc.large, "claude-sonnet-5-5": tc.large, "claude-haiku-5-5": tc.small, "claude-fable-5-1": tc.small, "claude-sonnet-4-6": primary}
+				if tc.selected == "claude-sonnet-5-5" {
+					delete(expected, "claude-sonnet-5-5")
+					delete(expected, "claude-sonnet-4-6")
+					if _, ok := settings.ModelOverrides[tc.selected]; ok {
+						t.Error("an explicit Claude ID would be redirected")
+					}
+					if _, ok := settings.ModelOverrides["claude-sonnet-4-6"]; ok {
+						t.Error("a native Claude ID needs no reverse registration")
+					}
+				}
+				for canonical, want := range expected {
+					if got := settings.ModelOverrides[canonical]; got != want {
+						t.Errorf("modelOverrides[%s] = %q, want %q", canonical, got, want)
+					}
+				}
+			}
+			for name, want := range map[string]string{
+				"ANTHROPIC_MODEL":                tc.main,
+				"ANTHROPIC_DEFAULT_OPUS_MODEL":   tc.large,
+				"ANTHROPIC_DEFAULT_SONNET_MODEL": tc.large,
+				"ANTHROPIC_DEFAULT_HAIKU_MODEL":  tc.small,
+				"ANTHROPIC_DEFAULT_FABLE_MODEL":  tc.small,
+				"CLAUDE_CODE_SUBAGENT_MODEL":     tc.small,
+			} {
+				if settings.Env[name] != want {
+					t.Errorf("settings %s = %q, want %q", name, settings.Env[name], want)
+				}
+				got := envValues(runner.lastSpec().Env, name)
+				if want == "" {
+					if len(got) != 0 {
+						t.Errorf("plain record sets %s", name)
+					}
+					continue
+				}
+				if len(got) != 1 || got[0] != want {
+					t.Errorf("%s = %q, want %q", name, got, want)
+				}
 			}
 		})
 	}

@@ -113,6 +113,18 @@ func (openCodeDriver) LaunchTerms() DriverLaunchTerms {
 	}
 }
 
+// openCodePermissionFor is the native rule a permission preset sets for the build
+// agent's tools ("" for none).
+func openCodePermissionFor(preset string) string {
+	switch preset {
+	case PresetReadOnly:
+		return "deny"
+	case PresetAsk, PresetEditsOnly, PresetEditsAndCommands, PresetFull:
+		return "ask"
+	}
+	return ""
+}
+
 func (openCodeDriver) LaunchEnv(l DriverLaunch) []EnvVar {
 	env := []EnvVar{{Name: envOpenCodeDisableAutoUpdate, Value: "1"}, {Name: envOpenCodeDisableExternalSkills, Value: "1"}}
 	cfg := map[string]any{}
@@ -146,13 +158,7 @@ func (openCodeDriver) LaunchEnv(l DriverLaunch) []EnvVar {
 	// The external scans are off (envOpenCodeDisableExternalSkills); the session
 	// folder's own two skill folders are listed again, relative to that folder.
 	cfg["skills"] = map[string]any{"paths": []string{".claude/skills", ".agents/skills"}}
-	permission := ""
-	switch l.Preset {
-	case PresetReadOnly:
-		permission = "deny"
-	case PresetAsk, PresetEditsOnly, PresetEditsAndCommands, PresetFull:
-		permission = "ask"
-	}
+	permission := openCodePermissionFor(l.Preset)
 	if permission != "" {
 		// Keep edits and commands asking so live policy can still deny or ask.
 		// ACP approval is answered at once when that policy permits it.
@@ -414,7 +420,7 @@ func openCodeConfineTo(cfg map[string]any, providerID string) {
 // project files for the keys it sets); the block is the OpenAI-compatible
 // adapter pointed at <endpoint>/v1 with no key, the record's own contract.
 //
-// A session bound to the local endpoint never reaches a hosted model (FH 085,
+// A session bound to the local endpoint never reaches a hosted model (first-hour check,
 // measured on OpenCode 1.18.34): OpenCode offers only the models its config lists,
 // and its own default is a hosted OpenCode Zen model. So the endpoint's models are
 // listed, the first is the default, and enabled_providers allows no other

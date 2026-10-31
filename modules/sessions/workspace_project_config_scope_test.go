@@ -228,6 +228,9 @@ func TestProjectConfigEveryFlaggedKeyIsPinned(t *testing.T) {
 		".mcp.json":                   {"mcpServers"},
 		".codex/config.toml":          {"hooks", "notify", "mcp_servers", "model_providers", "otel", "openai_base_url", "chatgpt_base_url"},
 		".gemini/settings.json":       {"hooks", "mcpServers", "toolDiscoveryCommand", "toolCallCommand", "proxy"},
+		".cursor/cli.json":            {"permissions"},
+		".cursor/mcp.json":            {"mcpServers"},
+		".cursor/hooks.json":          {"hooks"},
 	} {
 		if got := flagged(path, doc(keys...)); len(got) != len(keys) {
 			t.Errorf("%s: flagged %v of %v (benign keys must stay out)", path, got, keys)

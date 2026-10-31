@@ -119,6 +119,10 @@ type AuthScope interface {
 	// credential, so it neither voids a credential pinned to the token's version
 	// nor conflicts with an optimistic Update. An absent token is ErrNotFound.
 	RecordAPITokenUse(ctx context.Context, id model.ID, usedAt model.Timestamp) error
+	// RecordAuthSessionUse sets ONLY a human session's last_used_at and
+	// client_kind. Version and updated_at stay unchanged for the same reason as
+	// RecordAPITokenUse: observed use is not a credential mutation.
+	RecordAuthSessionUse(ctx context.Context, id model.ID, usedAt model.Timestamp, clientKind string) error
 	// PEPServices is the registered Policy Enforcement Point repository. Rows
 	// live in the system auth partition and carry their governed business tenant
 	// in TargetTenantID.

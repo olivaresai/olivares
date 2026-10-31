@@ -57,6 +57,10 @@ type productSettingsDoc struct {
 	// NotifyDestinations are the Slack and Teams destinations added in the console
 	// (notifydestinations.go). They hold secret references only, never a webhook URL.
 	NotifyDestinations []storedNotifyDestination `json:"notify_destinations,omitempty"`
+	// Edition holds the edition's own add-on settings, one document per add-on key
+	// (edition_settings.go). It is declared here because every writer rewrites the whole
+	// document through this struct: a key not declared would be lost at the next save.
+	Edition map[string]json.RawMessage `json:"edition,omitempty"`
 }
 
 // productSettings reads and writes the record and keeps this node's file copy
@@ -225,6 +229,11 @@ func (p *productSettings) update(ctx context.Context, actor auth.Principal, acti
 }
 
 func (p *productSettings) updateWithAudit(ctx context.Context, actor auth.Principal, action string, meta map[string]any, change func(*productSettingsDoc), requireEvidence bool) error {
+	return p.updateChecked(ctx, actor, action, meta, func(doc *productSettingsDoc) error { change(doc); return nil }, requireEvidence)
+}
+
+// updateChecked evaluates a conditional change in the same transaction as its audit.
+func (p *productSettings) updateChecked(ctx context.Context, actor auth.Principal, action string, meta map[string]any, change func(*productSettingsDoc) error, requireEvidence bool) error {
 	err := p.updateOnce(ctx, actor, action, meta, change, requireEvidence)
 	if errors.Is(err, store.ErrConflict) {
 		err = p.updateOnce(ctx, actor, action, meta, change, requireEvidence)
@@ -232,7 +241,7 @@ func (p *productSettings) updateWithAudit(ctx context.Context, actor auth.Princi
 	return err
 }
 
-func (p *productSettings) updateOnce(ctx context.Context, actor auth.Principal, action string, meta map[string]any, change func(*productSettingsDoc), requireEvidence bool) error {
+func (p *productSettings) updateOnce(ctx context.Context, actor auth.Principal, action string, meta map[string]any, change func(*productSettingsDoc) error, requireEvidence bool) error {
 	return p.st.AuthMutate(ctx, func(as store.AuthScope) error {
 		rows, _, err := as.DeploymentSettings().List(ctx, model.Query{Filters: []model.Filter{}})
 		if err != nil {
@@ -245,7 +254,9 @@ func (p *productSettings) updateOnce(ctx context.Context, actor auth.Principal, 
 			}
 		}
 		doc.Version = productSettingsVersion
-		change(&doc)
+		if err := change(&doc); err != nil {
+			return err
+		}
 		raw, err := json.Marshal(doc)
 		if err != nil {
 			return err

@@ -41,25 +41,50 @@ func (c *sessionExpiryClock) advance(d time.Duration) {
 	c.mu.Unlock()
 }
 
+type sessionExpiryRunner struct {
+	sessions.Runner
+	started chan<- int
+}
+
+func (r sessionExpiryRunner) Launch(ctx context.Context, spec sessions.LaunchSpec) (sessions.Process, error) {
+	onStart := spec.OnStart
+	spec.OnStart = func(pid int) {
+		if onStart != nil {
+			onStart(pid)
+		}
+		r.started <- pid
+	}
+	return r.Runner.Launch(ctx, spec)
+}
+
 func TestExpiredManagedCredentialStopsNativeProcessAndExplainsSuccessor(t *testing.T) {
 	for _, path := range []string{"exact-scope", "fallback-scope"} {
 		t.Run(path, func(t *testing.T) {
 			h := newHarness(t)
 			m := h.set.sessions
 			dir := t.TempDir()
-			marker := filepath.Join(dir, "owned.pids")
 			script := filepath.Join(dir, "claude-stand-in")
-			if err := os.WriteFile(script, []byte("#!/bin/sh\nprintf '%s\\n' \"$$\" >> '"+marker+"'\nexec cat >/dev/null\n"), 0700); err != nil {
+			if err := os.WriteFile(script, []byte("#!/bin/sh\nsleep 4\nexec cat >/dev/null\n"), 0700); err != nil {
 				t.Fatal(err)
 			}
+			started := make(chan int, 2)
+			var pid int
 			t.Cleanup(func() {
-				for _, pid := range readLaunchedPIDs(t, marker) {
-					if processAlive(pid) {
-						_ = syscall.Kill(pid, syscall.SIGKILL)
+				if pid != 0 && processAlive(pid) {
+					_ = syscall.Kill(pid, syscall.SIGKILL)
+				}
+				for {
+					select {
+					case pid := <-started:
+						if processAlive(pid) {
+							_ = syscall.Kill(pid, syscall.SIGKILL)
+						}
+					default:
+						return
 					}
 				}
 			})
-			sessions.WithRunner(sessions.NewProcRunner())(m)
+			sessions.WithRunner(sessionExpiryRunner{Runner: sessions.NewProcRunner(), started: started})(m)
 			sessions.WithProgram(script)(m)
 			sessions.WithKillSwitchSweep(5 * time.Millisecond)(m)
 			executable, err := os.Executable()
@@ -109,8 +134,13 @@ func TestExpiredManagedCredentialStopsNativeProcessAndExplainsSuccessor(t *testi
 				return r.Ref
 			}
 			ref := launch(ownerBearer)
-			waitForWorkLaunchCondition(t, 3*time.Second, "owned native process", func() bool { return len(readLaunchedPIDs(t, marker)) == 1 })
-			pid := readLaunchedPIDs(t, marker)[0]
+			startCtx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			defer cancel()
+			select {
+			case pid = <-started:
+			case <-startCtx.Done():
+				t.Fatalf("owned native process did not start: %v", startCtx.Err())
+			}
 			if err = m.Start(t.Context()); err != nil {
 				t.Fatal(err)
 			}

@@ -137,7 +137,7 @@ test.describe('keyboard on the named routes', () => {
       // sent before the frame settles cannot pass on the very defect this case catches.
       await page.locator('a[href="#main-content"]').waitFor()
       await page
-        .getByRole('navigation', { name: 'Journeys', exact: true })
+        .getByRole('navigation', { name: 'Main navigation', exact: true })
         .waitFor()
       await page.keyboard.press('Tab')
       await expect(

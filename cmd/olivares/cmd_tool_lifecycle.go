@@ -17,7 +17,7 @@ import (
 
 func newToolUpdateCmd() *cobra.Command {
 	cmd := newToolInstallCmd()
-	cmd.Use = "update <claude|codex|grok|opencode|gemini|ollama>"
+	cmd.Use = "update <claude|codex|grok|opencode|gemini|cursor|ollama>"
 	cmd.Short = "Update an agent tool from its verified official release"
 	cmd.Long = "Update installs the requested official release through the verified installer.\nExisting versions and workspace pins are retained."
 	cmd.Example = "  olivares tool update codex\n  olivares tool update claude --version 2.1.261"

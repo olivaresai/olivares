@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"github.com/olivaresai/olivares/core/auth"
@@ -149,6 +150,11 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		clientKind := model.SessionClientToken
+		if wantsBrowserSession(r) || r.URL.Query().Get("browser_session") == "1" {
+			clientKind = model.SessionClientBrowser
+		}
+		r = r.WithContext(auth.WithSessionClientKind(r.Context(), clientKind))
 		token, cookieAuth, err := requestCredential(r)
 		if err != nil {
 			s.writeError(w, r, err)
@@ -164,7 +170,18 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if cookieAuth {
+			r = r.WithContext(auth.WithSessionClientKind(r.Context(), model.SessionClientBrowser))
+		}
 		p, err := s.authr.Authenticate(r.Context(), token)
+		if errors.Is(err, store.ErrStoreUnavailable) {
+			// The credential could not be checked, which says nothing about it.
+			// A 401 tells the client to sign in again (the console drops its
+			// session on it); the first request after a pool reset got one
+			//. Still refused, deny-closed: 503, retryable.
+			s.writeError(w, r, err)
+			return
+		}
 		if err != nil || (cookieAuth && p.Kind != auth.KindUser) {
 			// A late response for a rotated cookie must not delete its successor.
 			// Logout deletes the cookie; browser expiry mirrors the session deadline.
@@ -326,6 +343,28 @@ func (s *Server) prepareGovernedPrincipal(w http.ResponseWriter, r *http.Request
 		h.actor = resolved.Actor()
 	}
 	return r.WithContext(withPrincipal(r.Context(), resolved)), true
+}
+
+// editionRoutes asks Options.EditionRouteGate about the route an authenticated request will
+// reach. The route is resolved with chi's own matcher over the method and path chi will
+// dispatch on (effectiveChiRouteRequest), so an escaped or dot-segment spelling meets the
+// gate of the route it is served by, and a path that matches no route is left to the router.
+func (s *Server) editionRoutes(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := principalFrom(r.Context()); ok && s.mux != nil {
+			method, routePath := effectiveChiRouteRequest(r)
+			rctx := chi.NewRouteContext()
+			if s.mux.Match(rctx, method, routePath) {
+				if err := s.editionRouteGate(method, canonicalRoutePattern(rctx.RoutePattern())); err != nil {
+					// The same body a module route gives its add-on refusal.
+					status, body, _ := StoreErrorBody(err)
+					WriteJSON(w, status, body)
+					return
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) leaderGate(next http.Handler) http.Handler {
@@ -689,6 +728,12 @@ func (s *Server) authzScopedCollectionPolicy(
 			return p, tenant, resource, tenantWitness, true
 		}
 		if scope.WorkspaceBySlug {
+			// Slug form constrains scoped admission, not legacy tenant-authorized
+			// references (which may name an external provider workspace).
+			if !SlugPattern.MatchString(raw) {
+				s.writeError(w, r, errBadRequest)
+				return auth.Principal{}, "", resource, none, false
+			}
 			var matches []model.Workspace
 			err := s.st.View(r.Context(), tenant, func(sc store.Scope) error {
 				var err error

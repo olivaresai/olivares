@@ -8,6 +8,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
@@ -38,6 +39,13 @@ var focusColumns = []string{
 	"ConsumedQuantity", "ConsumedUnit", "PricingQuantity", "PricingUnit",
 	"x_Provenance", "x_Actor", "x_ServiceTier", "x_InferenceGeo", "x_ContextWindow", "x_Gateway",
 	"x_CostType", "x_CacheReadTokens", "x_CacheCreation1hTokens", "x_CacheCreation5mTokens",
+}
+
+// focusExtra is what an edition appends to every row of the export: more x_
+// columns, and the value of each for one cost sample. Community appends none.
+type focusExtra struct {
+	columns []string
+	row     func(model.Record) []string
 }
 
 // handleExport streams the cost read-model as a FOCUS-conformant CSV. The default is
@@ -73,13 +81,23 @@ func (m *Module) handleExport(w http.ResponseWriter, r *http.Request, mc api.Mod
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition", "attachment; filename=\"olivares-focus.csv\"")
 	cw := csv.NewWriter(w)
-	_ = cw.Write(focusColumns)
+	headed := false
 	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
+		extra := m.focusExtension(r.Context(), sc, since, hasSince, until, hasUntil)
+		_ = cw.Write(append(slices.Clone(focusColumns), extra.columns...))
+		headed = true
 		_, e := scanSamples(r.Context(), sc, filters, func(rec model.Record) {
-			_ = cw.Write(focusRow(rec, allMode))
+			row := focusRow(rec, allMode)
+			if extra.row != nil {
+				row = append(row, extra.row(rec)...)
+			}
+			_ = cw.Write(row)
 		})
 		return e
 	})
+	if !headed {
+		_ = cw.Write(focusColumns)
+	}
 	cw.Flush()
 	if err != nil {
 		// Headers/rows may already be partly written; a trailing comment is the only

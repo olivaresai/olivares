@@ -21,7 +21,7 @@ import (
 	"github.com/olivaresai/olivares/modules/sessions/egress"
 )
 
-// dev#1517: a provider profile gives its sessions programs and package
+// the regression: a provider profile gives its sessions programs and package
 // registries, through the launch's own files and the egress policy, never
 // through env_allow and never with a token in the environment or argv.
 

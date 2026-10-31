@@ -506,7 +506,7 @@ wf_mutant "a missing dedicated owner declaration is caught" \
 # for byte, so "removes race-sessions" and "removes race-sessions ONLY" are both measured.
 #
 # The anchor is race-hot's own job block, not the first `needs:` line that names race-sessions:
-# race-core is chained after race-sessions (dev#2367), so its `needs:` line names it too and comes
+# race-core is chained after race-sessions, so its `needs:` line names it too and comes
 # first in the file. The range ends at race-hot's `if:`, which follows its `needs:`.
 AGG_RANGE='/^  race-hot:/,/^    if:/'
 AGG_NEEDS="$(sed -n "${AGG_RANGE}"'{/^    needs: \[.*, race-sessions[],]/p}' "${WF}" | head -n1)"

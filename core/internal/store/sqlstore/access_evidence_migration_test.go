@@ -456,7 +456,7 @@ func TestAccessEvidenceV9SealGoldenBodies(t *testing.T) {
 func coreOnlyRegistry(t *testing.T) *registry {
 	t.Helper()
 	reg := newRegistry()
-	for _, d := range coreDescriptors() {
+	for _, d := range currentCoreDescriptors() {
 		if err := reg.registerCore(d); err != nil {
 			t.Fatal(err)
 		}

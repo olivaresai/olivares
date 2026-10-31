@@ -25,10 +25,12 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
+import { PathText } from '@/components/ui/path-text'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Segmented } from '@/components/ui/segmented'
 import { Compass } from 'lucide-react'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
+import { sourceItemLabel } from './source-item'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import { readsNativeRecord } from '@/features/agentops/provider-contract'
 import {
@@ -51,6 +53,7 @@ import type { ConversationItem } from './conversation-frames'
 import { primaryRun, type UnifiedSession } from './provenance'
 import type { EvidenceBlock } from './session-address'
 import { hasThread } from './has-thread'
+import { SessionFacts } from './session-facts'
 import { SessionOverview } from './session-overview'
 import { RefChip } from './ref-chip'
 import { SessionBranchChanges } from './session-branch-changes'
@@ -58,6 +61,7 @@ import { SessionChanges } from './session-changes'
 import { SessionGit } from './session-git'
 import { SessionActivity } from './session-activity'
 import { SessionPreview } from './session-preview'
+import { SessionTerminal } from './session-terminal'
 import { sessionDisplayState } from './session-display-state'
 import type { SessionResolution } from './use-session-resolution'
 import './i18n'
@@ -175,6 +179,10 @@ export function SessionContextPane({
     { value: 'files', label: t('context.tabFiles') },
     // The app the session serves on a local port. Only a launched session has one.
     ...(run ? [{ value: 'preview', label: t('preview.title') }] : []),
+    // A shell in the folder. It writes to the folder, so it needs the right to.
+    ...(run && can('sessions:workspace:write')
+      ? [{ value: 'terminal', label: t('terminal.title') }]
+      : []),
     ...registered.map((p) => ({
       value: p.id,
       label: t(p.labelKey),
@@ -206,6 +214,22 @@ export function SessionContextPane({
 
   const contextBody = (
     <>
+      {/* The session in words first (the regression design); the references stay below. */}
+      <SessionFacts
+        session={session}
+        run={run}
+        account={(profile && profileName(profile)) || null}
+        accountRef={
+          profile
+            ? profile.account_name
+              ? profile.profile_ref
+              : undefined
+            : !canReadProfiles || !profilesQuery.isPending
+              ? profileRef
+              : undefined
+        }
+        workspace={folderName}
+      />
       {/* What the thread's header no longer says: who manages the session, its mode, the
           folder, what it did and its evidence. A session with no conversation of its own
           paints this block as the thread's body instead (`session-narrative.tsx`). */}
@@ -263,9 +287,19 @@ export function SessionContextPane({
             </Row>
             {run?.worktree_branch && (
               <Row label={t('agentops:info.worktreeBranch')}>
-                <span className="text-caption text-foreground">
-                  {run.worktree_branch}
-                </span>
+                <PathText value={run.worktree_branch} wrap />
+              </Row>
+            )}
+            {run?.source_url && sourceItemLabel(run.source_url) && (
+              <Row label={t('agentops:info.sourceItem')}>
+                <a
+                  href={run.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="break-all text-caption text-foreground underline-offset-2 hover:underline"
+                >
+                  {sourceItemLabel(run.source_url)}
+                </a>
               </Row>
             )}
             <Row label={t('context.environment')}>
@@ -569,9 +603,126 @@ export function SessionContextPane({
       {!extension && tab === 'preview' && run ? (
         <SessionPreview key={run.run_ref} run={run} />
       ) : null}
+      {!extension && tab === 'terminal' && run ? (
+        <SessionTerminalTab
+          key={`${boundary.key}:${run.run_ref}`}
+          run={run}
+          workspace={workspace}
+          canRead={canReadWorkspaces}
+          loading={
+            workspacesQuery.isPending && workspacesQuery.fetchStatus !== 'idle'
+          }
+          failed={workspacesQuery.isError}
+          onRetry={() => void workspacesQuery.refetch()}
+        />
+      ) : null}
       {!extension && tab === 'context' ? contextBody : null}
     </div>
   )
+}
+
+/** The terminal of the folder the session works in: the same folder its Files tab browses. */
+function SessionTerminalTab({
+  run,
+  workspace,
+  canRead,
+  loading,
+  failed,
+  onRetry,
+}: {
+  run: RunDTO
+  workspace: WorkspaceDTO | undefined
+  canRead: boolean
+  loading: boolean
+  failed: boolean
+  onRetry: () => void
+}) {
+  const { t } = useTranslation('sessions')
+  const folder = useRunFolder({
+    run,
+    workspace,
+    canRead,
+    loading,
+    failed,
+    onRetry,
+  })
+  if (!run.workspace_ref)
+    return (
+      <p className="text-caption text-muted-foreground">
+        {t('terminal.noFolder')}
+      </p>
+    )
+  if (folder.loading)
+    return <Skeleton aria-busy="true" className="h-40 w-full" />
+  if (folder.failed || !folder.actual)
+    return (
+      <p className="text-caption text-muted-foreground">
+        {t('terminal.unavailable')}
+      </p>
+    )
+  return (
+    <SessionTerminal
+      key={folder.actual.workspace_ref}
+      workspaceRef={folder.actual.workspace_ref}
+    />
+  )
+}
+
+/**
+ * The registered folder a session really works in. A file or shell route is jailed by its
+ * registered reference, and a worktree's original reference still names the checkout, so
+ * the worktree's own registration is resolved here. The DTO's root_path is never changed:
+ * that would silently send writes to the old reference. Files and Terminal share this.
+ */
+function useRunFolder({
+  run,
+  workspace,
+  canRead,
+  loading,
+  failed,
+  onRetry,
+}: {
+  run: RunDTO | undefined
+  workspace: WorkspaceDTO | undefined
+  canRead: boolean
+  loading: boolean
+  failed: boolean
+  onRetry: () => void
+}) {
+  const { activeTenant } = useAuth()
+  const boundary = useAuthBoundary()
+  const path = run?.workspace_path
+  const differentRoot = !!path && !!workspace && path !== workspace.root_path
+  const actualQuery = useQuery({
+    queryKey: [
+      ...agentOpsKeys.boundaryScope(activeTenant, boundary.epoch),
+      'workspace-files-root',
+      path,
+    ],
+    queryFn: ({ signal }) =>
+      agentOpsApi.listWorkspaces(
+        { root_path: path!, state: 'active', limit: 1 },
+        { tenant: activeTenant!, signal },
+      ),
+    enabled: canRead && !!activeTenant && differentRoot,
+  })
+  const actual = differentRoot
+    ? actualQuery.data?.items.find(
+        (w) => w.root_path === path && w.state === 'active',
+      )
+    : run?.worktree_branch && !path
+      ? undefined
+      : workspace
+  const retry = () => {
+    onRetry()
+    if (differentRoot) void actualQuery.refetch()
+  }
+  return {
+    actual,
+    retry,
+    loading: loading || (differentRoot && actualQuery.isPending),
+    failed: failed || (differentRoot && actualQuery.isError),
+  }
 }
 
 /**
@@ -595,39 +746,17 @@ function SessionFiles({
   onRetry: () => void
 }) {
   const { t } = useTranslation(['sessions', 'common'])
-  const { activeTenant } = useAuth()
-  const boundary = useAuthBoundary()
-  const path = run?.workspace_path
-  const differentRoot = !!path && !!workspace && path !== workspace.root_path
-  // A file endpoint is jailed by its registered reference. A worktree's original
-  // reference still names the checkout, so resolve the worktree's own registration.
-  // Never change the DTO's root_path and silently send writes to the old reference.
-  const actualQuery = useQuery({
-    queryKey: [
-      ...agentOpsKeys.boundaryScope(activeTenant, boundary.epoch),
-      'workspace-files-root',
-      path,
-    ],
-    queryFn: ({ signal }) =>
-      agentOpsApi.listWorkspaces(
-        { root_path: path!, state: 'active', limit: 1 },
-        { tenant: activeTenant!, signal },
-      ),
-    enabled: canRead && !!activeTenant && differentRoot,
+  const folder = useRunFolder({
+    run,
+    workspace,
+    canRead,
+    loading,
+    failed,
+    onRetry,
   })
-  const actual = differentRoot
-    ? actualQuery.data?.items.find(
-        (w) => w.root_path === path && w.state === 'active',
-      )
-    : run?.worktree_branch && !path
-      ? undefined
-      : workspace
-  loading ||= differentRoot && actualQuery.isPending
-  failed ||= differentRoot && actualQuery.isError
-  const retry = () => {
-    onRetry()
-    if (differentRoot) void actualQuery.refetch()
-  }
+  const { actual, retry } = folder
+  loading = folder.loading
+  failed = folder.failed
   if (!run?.workspace_ref)
     return (
       <p

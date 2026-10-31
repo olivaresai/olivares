@@ -19,18 +19,18 @@ type hookPathCalls struct {
 
 var hostHookPathCalls = hookPathCalls{lstat: os.Lstat, evalSymlinks: filepath.EvalSymlinks}
 
-func canonicalizeHookPayloadPaths(body []byte) []byte {
+func canonicalizeHookPayloadPaths(body []byte) ([]byte, error) {
 	return canonicalizeHookPayloadPathsWith(context.Background(), body, hostHookPathCalls)
 }
 
-func canonicalizeHookPayloadPathsWith(ctx context.Context, body []byte, calls hookPathCalls) []byte {
+func canonicalizeHookPayloadPathsWith(ctx context.Context, body []byte, calls hookPathCalls) ([]byte, error) {
 	var m map[string]any
 	if err := json.Unmarshal(body, &m); err != nil {
-		return body
+		return body, nil
 	}
 	ti, ok := m["tool_input"].(map[string]any)
 	if !ok {
-		return body
+		return body, nil
 	}
 
 	changed := false
@@ -39,67 +39,70 @@ func canonicalizeHookPayloadPathsWith(ctx context.Context, body []byte, calls ho
 		if !ok || s == "" {
 			continue
 		}
-		canon, didChange := canonicalizeExistingAncestorPathWith(ctx, s, calls)
+		canon, didChange, err := canonicalizeExistingAncestorPathWith(ctx, s, calls)
+		if err != nil {
+			return nil, err
+		}
 		if didChange {
 			ti[key] = canon
 			changed = true
 		}
 	}
 	if !changed {
-		return body
+		return body, nil
 	}
 
 	out, err := json.Marshal(m)
 	if err != nil {
-		return body
+		return nil, err
 	}
-	return out
+	return out, nil
 }
 
-func canonicalizeExistingAncestorPath(p string) (string, bool) {
+func canonicalizeExistingAncestorPath(p string) (string, bool, error) {
 	return canonicalizeExistingAncestorPathWith(context.Background(), p, hostHookPathCalls)
 }
 
-func canonicalizeExistingAncestorPathWith(ctx context.Context, p string, calls hookPathCalls) (string, bool) {
+func canonicalizeExistingAncestorPathWith(ctx context.Context, p string, calls hookPathCalls) (string, bool, error) {
 	if !filepath.IsAbs(p) {
-		return p, false
+		return p, false, nil
 	}
 
 	clean := filepath.Clean(p)
 	ancestor := clean
 	for {
 		if ctx.Err() != nil {
-			return p, false
+			return p, false, ctx.Err()
 		}
 		if _, err := calls.lstat(ancestor); err == nil {
 			break
 		} else if !os.IsNotExist(err) {
-			return p, false
+			return p, false, err
 		}
 		parent := filepath.Dir(ancestor)
 		if parent == ancestor {
-			return p, false
+			return p, false, nil
 		}
 		ancestor = parent
 	}
 
 	if ctx.Err() != nil {
-		return p, false
+		return p, false, ctx.Err()
 	}
 	realAnc, err := calls.evalSymlinks(ancestor)
 	if ctx.Err() != nil {
-		return p, false
+		return p, false, ctx.Err()
 	}
 	if err != nil {
-		return p, false
+		return p, false, err
 	}
 	tail, err := filepath.Rel(ancestor, clean)
 	if err != nil {
-		return p, false
+		return p, false, err
 	}
 	canon := filepath.Join(realAnc, tail)
 	if canon == clean {
-		return clean, false
+		return clean, false, nil
 	}
-	return canon, true
+	return canon, true, nil
 }
