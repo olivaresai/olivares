@@ -58,3 +58,23 @@ func TestHandOverDoesNotBlockOnAFifo(t *testing.T) {
 		})
 	}
 }
+
+// The managed Claude Code hook runs this binary inside a session's container, where /.dockerenv
+// exists and $HOME is the provider account's home. The data-volume hand-over belongs to the
+// engine's own container: the hook must not look for the running binary or a data directory,
+// which SELinux refuses in the in-container hook domain (the tool home stays closed to it).
+func TestClaudeHookNeverHandsOver(t *testing.T) {
+	oldArgs, oldIn, oldBin := os.Args, inContainer, runningBinary
+	t.Cleanup(func() { os.Args, inContainer, runningBinary = oldArgs, oldIn, oldBin })
+	looked := []string{}
+	inContainer = func() bool { looked = append(looked, "container marker"); return true }
+	runningBinary = func() (string, error) {
+		looked = append(looked, "running binary")
+		return "", os.ErrNotExist
+	}
+	os.Args = []string{"/usr/libexec/olivares-container-hook", "claude-hook", "--server", "http://127.0.0.1:1/", "--hook-event", "PreToolUse"}
+	handOverIfApplied()
+	if len(looked) != 0 {
+		t.Fatalf("claude-hook looked for a release to hand over to: %v", looked)
+	}
+}

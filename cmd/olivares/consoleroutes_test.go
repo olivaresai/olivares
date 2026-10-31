@@ -151,7 +151,7 @@ var trailingInterpRe = regexp.MustCompile(`([^/])\$\{[^{}]*(?:\{[^{}]*\}[^{}]*)*
 // LLAMADA, que es donde la ruta sí es literal.
 //
 // Agnóstico del método, como el `fetch` crudo y por lo mismo: el verbo lo decide el helper.
-var consoleStreamRe = regexp.MustCompile(`(?s)\b(?:useLiveStream|subscribeStream)\s*(?:<[^(]*?>)?\s*\(\s*\{[^}]*?path:\s*(` + "`" + `[^` + "`" + `]*` + "`" + `|'[^']*')`)
+var consoleStreamRe = regexp.MustCompile(`(?s)\b(?:useLiveStream|subscribeStream)\s*(?:<[^(]*?>)?\s*\(\s*\{[^}]*?path:\s*(` + "`" + `[^` + "`" + `]*` + "`" + `|'[^']*'|[A-Za-z_$][\w$]*)\s*[,}]`)
 
 // A stream path helper may be imported from its sibling API module. Resolve that
 // named import in the caller's scope; unsupported helpers remain explicitly unresolved.
@@ -162,7 +162,7 @@ var consoleStreamOpaqueRe = regexp.MustCompile(`(?s)\b(?:useLiveStream|subscribe
 var consoleFetchRe = regexp.MustCompile(`\b(?:fetch|apiFetchRaw)\s*\(\s*(` + "`" + `[^` + "`" + `]*` + "`" + `|'[^']*')`)
 
 // constRe matches a module-level absolute-path constant the calls interpolate.
-var constRe = regexp.MustCompile(`(?m)^\s*const\s+([A-Za-z_$][\w$]*)\s*=\s*'(/[^']*)'`)
+var constRe = regexp.MustCompile(`(?m)^\s*(?:export\s+)?const\s+([A-Za-z_$][\w$]*)\s*=\s*'(/[^']*)'`)
 
 // pathMapRe casa un `const NOMBRE: Record<…> = { clave: <ruta>, … }` de nivel de fichero: el
 // idioma con el que la consola deletrea VARIAS rutas hermanas que el router registra por separado
@@ -269,7 +269,7 @@ func consolePathConsts(text string) map[string]string {
 	return consts
 }
 
-func consoleImportedPathFn(t *testing.T, file, text, name string) (string, bool) {
+func consoleImportedPath(t *testing.T, file, text, name string, function bool) (string, bool) {
 	t.Helper()
 	for _, imp := range consoleSiblingImportRe.FindAllStringSubmatchIndex(text, -1) {
 		if consoleBindingInComment(text, imp[0]) {
@@ -294,6 +294,23 @@ func consoleImportedPathFn(t *testing.T, file, text, name string) (string, bool)
 			src = []byte(singleQuoteConsolePaths(string(src)))
 			consts := consolePathConsts(string(src))
 			resolveConsts(consts)
+			if !function {
+				for _, loc := range constRe.FindAllStringSubmatchIndex(string(src), -1) {
+					if string(src[loc[2]:loc[3]]) != fields[0] ||
+						consoleBindingInComment(string(src), loc[0]) ||
+						!strings.HasPrefix(strings.TrimSpace(string(src[loc[0]:loc[1]])), "export ") {
+						continue
+					}
+					// A compound expression is not a literal path binding.
+					tail := strings.TrimLeft(string(src[loc[1]:]), " \t\r")
+					if tail != "" && tail[0] != '\n' && tail[0] != ';' {
+						return "", false
+					}
+					p := consts[fields[0]]
+					return p, strings.HasPrefix(p, "/v1/")
+				}
+				return "", false
+			}
 			for _, loc := range pathFnRe.FindAllStringSubmatchIndex(string(src), -1) {
 				// Support an exported function returning exactly one template. A
 				// concatenation or another expression must stay unresolved.
@@ -1039,13 +1056,6 @@ var consoleUnresolvedSites = map[string]map[string]int{
 	"web/src/features/catalog/api.ts": {
 		"/v1/m/catalog/{}-admissions (parameter glued to a literal within one segment)": 1,
 	},
-	"web/src/features/compliance/api.ts": {
-		// postDocument<T>(path: string, …) — el ayudante recibe la ruta como argumento.
-		// Eran 3 y son 1: las otras dos (`:198` y `:650`) eran JSDoc que EXPLICA la API,
-		// no código que la llama. La que queda es real — el interior de `postDocument`,
-		// cuyo `path` es un parámetro; sus llamantes SÍ se resuelven desde 2026-08-19.
-		"path (identifier is not a literal path constant)": 1,
-	},
 	"web/src/features/console/api.ts": {
 		// ⛔ AQUÍ HABÍA DOS ENTRADAS Y EL PARSER YA LAS RESUELVE. Eran ternarios cuyas DOS ramas
 		//    son literales, y eso son rutas concretas y no una incógnita: se enumeran en dos. Sus
@@ -1267,14 +1277,22 @@ func parseConsoleClientCalls(t *testing.T, root string) (calls []clientCall, unr
 			// ⛔ LA MARCA NO PUEDE CONTENER EL NOMBRE, y la primera versión sí lo llevaba: el
 			// regex de llamada casaba DENTRO de la marca y reescribía la definición igual,
 			// añadiendo un irresoluble nuevo en vez de quitarlo (compliance pasó de 3 a 4).
+			// The forwarding call is represented by its callers, not by its path parameter.
+			if verbo != "fetch" {
+				forward := regexp.MustCompile(`\bhttp\.` + verbo + `(?:WithMeta|Raw)?\s*(?:<[^(]*?>)?\s*\(\s*` + regexp.QuoteMeta(param) + `\s*[,)]`)
+				definition := forward.ReplaceAllStringFunc(m[0], func(call string) string {
+					return strings.Replace(call, "http.", "transport.", 1)
+				})
+				text = strings.Replace(text, m[0], definition, 1)
+			}
 			marca := "\x00TRANSPORTE\x00"
 			text = strings.ReplaceAll(text, "function "+nombre, marca)
-			llamada := regexp.MustCompile(`\b` + regexp.QuoteMeta(nombre) + `\s*(?:<[^(]*?>)?\s*\(`)
+			llamada := regexp.MustCompile(`(^|[^.\w$])` + regexp.QuoteMeta(nombre) + `\s*(?:<[^(]*?>)?\s*\(`)
 			destino := "http." + verbo + "("
 			if verbo == "fetch" {
 				destino = "fetch("
 			}
-			text = llamada.ReplaceAllString(text, destino)
+			text = llamada.ReplaceAllString(text, "${1}"+destino)
 			text = strings.ReplaceAll(text, marca, "function "+nombre)
 		}
 		// Helpers cuyo cuerpo da un CONJUNTO de rutas (consts + ternarios). Se registran aparte
@@ -1390,9 +1408,17 @@ func parseConsoleClientCalls(t *testing.T, root string) (calls []clientCall, unr
 				continue
 			}
 			raw := text[loc[2]:loc[3]]
-			p := raw[1 : len(raw)-1]
-			if strings.HasPrefix(raw, "`") {
-				p = expandFns(p)
+			var p string
+			if strings.HasPrefix(raw, "'") || strings.HasPrefix(raw, "`") {
+				p = expandFns(raw[1 : len(raw)-1])
+			} else if value, ok := consts[raw]; ok {
+				p = value
+			} else {
+				value, ok := consoleImportedPath(t, path, string(src), raw, false)
+				if !ok {
+					continue
+				}
+				p = value
 			}
 			// ⛔ LAS INTERPOLACIONES SE COLAPSAN ANTES DE CORTAR POR `?`, Y NO ES ORDEN ARBITRARIO.
 			// Cortando primero, un `?` que vive DENTRO de una interpolacion —un ternario, o el `??`
@@ -1430,7 +1456,7 @@ func parseConsoleClientCalls(t *testing.T, root string) (calls []clientCall, unr
 			name := strings.SplitN(expr, "(", 2)[0]
 			tail := strings.TrimSpace(text[loc[3]:])
 			complete := strings.HasPrefix(tail, ",") || strings.HasPrefix(tail, "}")
-			if p, ok := consoleImportedPathFn(t, path, string(src), name); ok && complete {
+			if p, ok := consoleImportedPath(t, path, string(src), name, true); ok && complete {
 				p = interpRe.ReplaceAllString(p, "{}")
 				p = strings.SplitN(p, "?", 2)[0]
 				p = normalisePath(p)

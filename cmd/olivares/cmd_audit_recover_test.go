@@ -77,7 +77,7 @@ func newRecoveryCLIFixture(t *testing.T, checkpoint, corrupt bool) recoveryCLIFi
 	ctx := context.Background()
 	dataDir := t.TempDir()
 	prepareCompositionTestBoot(t)
-	eng, err := boot(ctx, bootConfig{DataDir: dataDir, Engine: "sqlite", Logger: slog.Default(), DemoSeed: true})
+	eng, err := boot(ctx, bootConfig{DataDir: dataDir, Engine: "sqlite", Version: "test", Logger: slog.Default(), DemoSeed: true})
 	if err != nil {
 		t.Fatal(err)
 	}

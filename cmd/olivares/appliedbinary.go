@@ -280,8 +280,10 @@ func appliedNote(pub, embedded ed25519.PublicKey, imageVersion, appliedVersion, 
 // handOverIfApplied is main's first act in a container: start the release the data volume
 // carries when it is newer than this image's binary. Anything it cannot verify is ignored, with
 // a message, and the image binary runs.
+// The managed Claude Code hook never hands over: it runs inside a session's container, which
+// is not the engine's, and its $HOME is a provider account's.
 func handOverIfApplied() {
-	if !canReexec || filepath.Base(os.Args[0]) == probeArg0 || !inContainer() {
+	if !canReexec || filepath.Base(os.Args[0]) == probeArg0 || (len(os.Args) > 1 && os.Args[1] == "claude-hook") || !inContainer() {
 		return
 	}
 	self, err := runningBinary()

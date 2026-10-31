@@ -597,7 +597,8 @@ func ledgerDir(t *testing.T, signed bool) (dir, tenant string) {
 	t.Helper()
 	ctx := context.Background()
 	dir = t.TempDir()
-	eng, err := boot(ctx, bootConfig{DataDir: dir, Engine: "sqlite", Logger: slog.Default(), DemoSeed: true})
+	prepareCompositionTestBoot(t)
+	eng, err := boot(ctx, bootConfig{DataDir: dir, Engine: "sqlite", Version: "test", Logger: slog.Default(), DemoSeed: true})
 	if err != nil {
 		t.Fatalf("boot: %v", err)
 	}
