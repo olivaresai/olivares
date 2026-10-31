@@ -23,7 +23,10 @@
     "signing": "Report signing",
     "tracing": "Tracing",
     "sessionIdle": "Session memory",
-    "updates": "Updates"
+    "updates": "Updates",
+    "permissions": "Permissions",
+    "newSessions": "New sessions",
+    "notifications": "Notifications"
   },
   "general": {
     "title": "General",
@@ -42,17 +45,26 @@
     "startPageHint": "What opens when you sign in. Default: Now.",
     "confirmStop": "Confirm before stopping a session",
     "confirmStopHint": "Ask once before Stop ends a session that is still working.",
+    "editor": "Editor for file links",
+    "editorHint": "Which editor the “Open in” links start on this computer. Default: VS Code.",
+    "editorSsh": "SSH host for the editor",
+    "editorSshHint": "How the editor reaches session folders on another machine, as user@host or user@host:port. Empty uses the address this console is served from, and no SSH when that is this computer.",
     "reduceMotion": "Reduce motion",
     "reduceMotionHint": "Replace movement with fades. On when your system asks for it."
   },
   "sessionNotifications": {
     "title": "Session notifications",
-    "hint": "Tell me when a session needs me or finishes while this tab is in the background. Applies to this browser.",
+    "hint": "Tell me about selected session events in the background. Your choices follow you; each browser needs permission.",
     "notifyMe": "Notify me",
     "denied": "Notifications are blocked in this browser.",
     "unavailable": "Browser notifications are unavailable here.",
     "needsYou": "This session needs you.",
-    "finished": "The turn finished."
+    "finished": "The turn finished.",
+    "ended": "The session ended.",
+    "failed": "The session stopped with an error.",
+    "pushOn": "Also reaches this device with the tab closed.",
+    "pushUnavailable": "Only while a tab is open: this device could not be registered for push.",
+    "installHint": "Notifications need the app on the Home Screen: tap Share, then Add to Home Screen."
   },
   "keyboard": {
     "title": "Keyboard",
@@ -345,5 +357,31 @@
     "switched": "Switch installed.",
     "terminal": "Same thing in a terminal on the server",
     "orTerminal": "Or in a terminal on the server"
+  },
+  "permissions": {
+    "description": "What an agent may do in a session, and what each tool is handed for it. The same names work in the new session form and in olivares session start --permission.",
+    "caption": "What each permission hands each tool",
+    "permission": "Permission",
+    "what": "What it does",
+    "default": "Default",
+    "asksInstead": "No automatic mode: asks as in {{name}}",
+    "note": "For tools other than Claude Code, Olivares answers each approval the tool asks for, by the permission. A tool's own \"ask\" in a cell does not mean you are asked."
+  },
+  "newSessions": {
+    "tool": "Default tool",
+    "account": "Default account",
+    "model": "Default model",
+    "folder": "Default folder",
+    "automatic": "Automatic",
+    "unavailable": "No longer available",
+    "reset": "Reset {{name}}",
+    "readFailed": "Could not read your choices. Try again by reopening this page.",
+    "fallback": "A saved default is no longer available. Using the first usable choice.",
+    "scope": "Your defaults for New session. Saved for your account on this server."
+  },
+  "notificationEvents": {
+    "needsYou": "Needs you",
+    "finished": "Finished",
+    "failed": "Failed"
   }
 }

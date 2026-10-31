@@ -153,6 +153,42 @@ describe('LiveConsole attach continuity', () => {
     expect(screen.queryByText(/Protocol frames/)).toBeNull()
   })
 
+  it('shows a tool call path whole through PathText (#3135)', async () => {
+    const long =
+      '/home/ada/.claude/projects/-home-ada-work-shop/memory/MEMORY.md'
+    const frames = [
+      {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_long',
+              name: 'Read',
+              input: { file_path: long },
+            },
+          ],
+        },
+      },
+    ]
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        ok(openBody(...frames.map((f, i) => output(i + 1, JSON.stringify(f))))),
+      ),
+    )
+    wrap(baseRun)
+    await screen.findByText('Read')
+    const row = screen
+      .getAllByTestId('conversation-item')
+      .find((el) => el.getAttribute('data-kind') === 'tool')!
+    const shown = row.querySelector('[data-slot="path-text"]')
+    expect(shown).not.toBeNull()
+    expect(shown!.querySelector('code')).toHaveAttribute('title', long)
+    expect(row.textContent).not.toContain('/…/')
+  })
+
   it('paints an assistant reply as markdown and keeps the tool bookkeeping off the page (#1784)', async () => {
     const frames = [
       { type: 'user', message: { role: 'user', content: 'list the files' } },

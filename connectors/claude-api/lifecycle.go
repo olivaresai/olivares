@@ -9,7 +9,7 @@
 // The registry now carries the full published schedule (deprecated-on date, per-
 // surface retirement dates, recommended replacement) and a state evaluator
 // (LifecycleStateFor) the gather uses to flag deprecated/retired models still IN USE
-//. It also models the param DEPRECATION (temperature/top_p/top_k → 400 on
+// . It also models the param DEPRECATION (temperature/top_p/top_k → 400 on
 // Opus 4.7+ and on Fable 5 / Mythos 5): per this is Anthropic's
 // deprecation, NOT a product bug, so the connector PRE-ADVISES (an informational
 // finding + the inference client withholds the params), it does not "fix" anything.

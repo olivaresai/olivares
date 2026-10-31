@@ -24,5 +24,10 @@ func init() {
 		model.Leaf("match.subject_kind", model.None("a subject kind an approval matches: policy.go:193")),
 		model.Leaf("match.change_class", model.None("a closed change-class set an approval matches: policy.go:225, changeclass.go:57")),
 		model.Leaf("sensitive_paths[]", model.None("a repository path glob that makes a change sensitive, never an account: policy.go:233, changeclass.go:62")),
+		model.Leaf("change_record.system", model.None("a closed change-system name the reader is called with, never an account: approval_changerecord.go:69, approval_changerecord.go:214")),
+		model.Leaf("change_record.key", model.None("a record number the change system is asked for, never an account: approval_changerecord.go:73, approval_changerecord.go:214")),
+		model.Leaf("change_record.destination", model.None("the name of the destination holding the read-only credential by reference, never a principal: approval_changerecord.go:76, approval_changerecord.go:95, approval_changerecord.go:121-124, approval_changerecord.go:214")),
+		model.Leaf("change_record.states[]", model.None("a bounded set of states compared with the change system's record, never an account: approval_changerecord.go:80, approval_changerecord.go:226")),
 	))
+	model.MustRegisterPolicyKind(policyKindGrantExpiry, model.Nested(grantExpirySpec{}, model.ClassEvidence))
 }

@@ -119,7 +119,7 @@
     "detach": "Detach"
   },
   "discardWorktree": {
-    "label": "Also discard the worktree and branch {{branch}}",
+    "label": "Also discard the worktree and branch <branch />",
     "hint": "Removed when the branch is merged and the worktree is clean. Tick to discard unmerged or uncommitted work."
   },
   "create": {
@@ -148,8 +148,11 @@
     "worktree": "Work in a new git worktree",
     "worktreeHint": "Starts a new branch in a worktree of its own, so sessions on one repository don't share files. The folder must be the repository's top folder.",
     "worktreeFrom": "Starts at",
+    "sourceUrl": "GitHub issue or pull request",
+    "sourceUrlHint": "Starts in a worktree on a branch named after it and sends its title and body as the first message. Needs a repository credential registered for this folder.",
+    "sourceUrlPlaceholder": "https://github.com/owner/repo/issues/17",
     "isolation": "Isolation",
-    "isolationContainerHint": "Container runs the session in podman or Docker on this server. A session on a provider from Providers needs native.",
+    "isolationContainerHint": "Container runs the session in podman or Docker on this server.",
     "envAllow": "Forward host env (names)",
     "envAllowPlaceholder": "PATH, HOME, TERM",
     "envAllowHint": "Allowlist of host env var NAMES to pass through (values are never sent).",
@@ -232,6 +235,7 @@
     "workspaceDirectory": "Working directory",
     "workspaceDirectoryOwn": "its own directory for this session",
     "worktreeBranch": "Worktree branch",
+    "sourceItem": "Started from",
     "created": "Created",
     "started": "Started",
     "lastActivity": "Last activity",
@@ -389,6 +393,15 @@
       "discard": "Discard changes",
       "save": "Save folders",
       "saved": "Read-only folders saved."
+    },
+    "defaultPermission": {
+      "title": "Default permission",
+      "description": "Sessions started in this folder are offered this permission first. Whoever starts one can still choose another.",
+      "label": "Default permission",
+      "none": "No default",
+      "save": "Save default",
+      "saved": "Default permission saved.",
+      "discard": "Discard changes"
     }
   },
   "browser": {
@@ -399,6 +412,9 @@
     "newFile": "New file",
     "refresh": "Refresh",
     "download": "Download",
+    "source": "Source",
+    "rendered": "Rendered",
+    "htmlPreview": "HTML preview: {{name}}",
     "edit": "Edit",
     "save": "Save",
     "saving": "Saving…",
@@ -421,7 +437,7 @@
     "moveTitle": "Move / rename",
     "moveFromLabel": "From",
     "moveToLabel": "To (relative path)",
-    "deleteTitle": "Delete {{name}}",
+    "deleteTitle": "Delete <path />",
     "deleteBody": "This deletes the entry from the host workspace. It cannot be undone.",
     "deleteRecursive": "Delete folder and all its contents (recursive)",
     "created": "Created",
@@ -894,6 +910,7 @@
       "runner_ready": "The session runner can be inspected.",
       "runner_not_configured": "The session runner is not configured on this runtime.",
       "isolation_unsupported": "This server cannot provide this isolation. Keep native, or install podman or Docker on the server for container.",
+      "container_image_missing": "This server does not have the image container sessions run in yet. Build it once (olivares doctor shows how), or keep native.",
       "runner_inspection_unavailable": "The configured runner cannot be inspected without launching. That is not a missing installation.",
       "program_present": "The resolved program is present and executable for this identity.",
       "program_missing": "The resolved program is not present. Configure the official CLI through the existing procedure; for Claude that may name OLIVARES_SESSION_RUNTIME_CLAUDE_BIN. Nothing is installed from this read.",
@@ -932,6 +949,7 @@
       "configure_provider_credential_adapter": "Set up this tool’s credential adapter.",
       "review_runtime_credential_composition": "Review the work/K3 runtime credential composition.",
       "select_supported_selection": "Choose a transport and isolation this runtime demonstrates.",
+      "provide_session_image": "Build the session image: olivares doctor shows the command.",
       "retry_inspection": "Read the requirements again."
     },
     "remainingCheck": {
@@ -949,6 +967,7 @@
       "grok_acp": "Grok ACP",
       "opencode_acp": "OpenCode ACP",
       "gemini_acp": "Gemini CLI ACP",
+      "cursor_acp": "Cursor CLI ACP",
       "unknown": "Unknown protocol"
     }
   },
@@ -1018,5 +1037,19 @@
     "fullSize": "The attached image at full size",
     "unavailable": "Image not available",
     "movedOn": "you moved to another session before it was stored"
+  },
+  "usage": {
+    "fiveHour": "5-hour",
+    "week": "Weekly",
+    "percent": "{{window}} {{percent}}%",
+    "unknown": "Usage unknown",
+    "limit": {
+      "fiveHour": "5-hour limit reached",
+      "fiveHourResets": "5-hour limit reached, resets {{time}}",
+      "week": "Weekly limit reached",
+      "weekResets": "Weekly limit reached, resets {{time}}",
+      "other": "{{label}} limit reached",
+      "otherResets": "{{label}} limit reached, resets {{time}}"
+    }
   }
 }

@@ -303,7 +303,7 @@ function WorkspaceDashboard({
             {t('workspaceDashboard:recentGroups')}
           </h2>
           <Button variant="ghost" size="sm" asChild>
-            <Link to={'/console' as never}>
+            <Link to={'/console' as never} search={{ tab: 'scopes' } as never}>
               {t('workspaceDashboard:viewAll')}{' '}
               <ArrowRight className="ml-1 size-3.5" />
             </Link>
@@ -323,7 +323,10 @@ function WorkspaceDashboard({
             description={t('workspaceDashboard:noGroupsHint')}
             action={
               <Button asChild size="sm" variant="secondary">
-                <Link to={'/console' as never}>
+                <Link
+                  to={'/console' as never}
+                  search={{ tab: 'scopes' } as never}
+                >
                   {t('workspaceDashboard:viewAll')}
                 </Link>
               </Button>

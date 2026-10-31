@@ -190,7 +190,7 @@ export function ApiPlaygroundView() {
                 <History className="h-3 w-3" />
                 {t('history')}
                 {history.length > 0 && (
-                  <span className="ml-1 rounded-full bg-muted px-1.5 text-[10px] tabular-nums">
+                  <span className="ml-1 rounded-full bg-muted px-1.5 text-metadata-s tabular-nums">
                     {history.length}
                   </span>
                 )}

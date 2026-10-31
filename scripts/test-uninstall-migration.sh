@@ -107,8 +107,8 @@ mutations = {
         1,
     ),
     "altered-digest": (
-        'if int64(len(body)) != declared.SizeBytes || got != declared.SHA256 {',
-        'if got == declared.SHA256 && int64(len(body)) == declared.SizeBytes && false {',
+        'if size != declared.SizeBytes || got != declared.SHA256 {',
+        'if got == declared.SHA256 && size == declared.SizeBytes && false {',
         1,
     ),
     "preserve-deletes-data": (

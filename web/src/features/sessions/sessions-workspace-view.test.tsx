@@ -14,6 +14,7 @@ import {
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeRouter } from '@/test/fake-router'
+import { openWorkingFold } from '@/test/open-working-fold'
 import { stubViewportWidth } from '@/test/viewport'
 import type { RunDTO } from '@/features/agentops/types'
 import type { LiveDTO } from './types'
@@ -492,7 +493,7 @@ describe('SessionsWorkspaceView — the third answer', () => {
     ).toBeInTheDocument()
   })
 
-  // dev#3120: the 0.3 page opened with a yellow banner about "the whole estate" and
+  // the regression: the 0.3 page opened with a yellow banner about "the whole estate" and
   // "origin joined over what is loaded" on every busy install. The list says it in its
   // own footer, in user words, with the way to see more; the caveat stays in the table.
   it('puts no banner over the list: its footer says it shows the most recent, and loads more', async () => {
@@ -537,6 +538,7 @@ describe('SessionsWorkspaceView — the third answer', () => {
     const user = userEvent.setup()
     renderView('observe', { table: false })
     const footer = await screen.findByTestId('rail-footer')
+    openWorkingFold()
     const before = screen.getAllByRole('option').length
     expect(before).toBeGreaterThan(0)
     // The longer page does not answer yet.
@@ -572,7 +574,7 @@ describe('SessionsWorkspaceView — the third answer', () => {
   })
 })
 
-describe('SessionsWorkspaceView — the model column (dev#3120)', () => {
+describe('SessionsWorkspaceView — the model column', () => {
   it('names the model by its name, with its id on the hover', async () => {
     renderView()
     const named = await screen.findAllByText('Claude Opus 4.8')
@@ -1230,9 +1232,10 @@ describe('SessionsWorkspaceView — an empty estate', () => {
 
   it.each([
     [1024, 'narrative'],
-    [1024, 'context'],
     [1024, 'rail'],
     [1600, 'narrative'],
+    // Below 1120 px Details is a modal sheet over the page; from 1120 px it sits beside.
+    [1600, 'context'],
   ] as const)(
     'keeps one header New session for a cold selection with empty lists at %s px, pane %s',
     async (width, pane) => {

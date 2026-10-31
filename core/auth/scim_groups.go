@@ -474,7 +474,10 @@ func (a *Authenticator) ConfigureGroupParent(ctx context.Context, actor Principa
 // a user group is placed in — the OPERATOR path (PUT /v1/groups/{id}/workspace),
 // never reachable through SCIM. The place is organization only: the workspace's
 // contents list the group, and membership, the role mapping, the hierarchy and
-// every authorization decision ignore it. So, like the role mapping, it is
+// every authorization decision ignore it. (It is also how the organization says which
+// department a group of people is, so the standards a launch of theirs is given are those
+// assigned to that department: modules/sessions department_standards.go. Instructions are
+// not authority.) So, like the role mapping, it is
 // locally managed on every origin (a provisioner owns a group's identity,
 // roster and hierarchy, not where the organization files it) and needs admin
 // authority, not owner. It is a tenant-wide directory fact, so a

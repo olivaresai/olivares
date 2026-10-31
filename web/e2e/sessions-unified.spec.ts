@@ -49,9 +49,9 @@ test('Claude Code portal: setup → login → navigate → create form → works
   // page titled "Claude Code"). Only the directory and palette entry for the door read
   // "Operate sessions".
   // `exact` is load-bearing: neighbouring entries mention sessions, so the place is read
-  // in Journeys.
+  // in the left navigation.
   const navLink = page
-    .getByRole('navigation', { name: 'Journeys', exact: true })
+    .getByRole('navigation', { name: 'Main navigation', exact: true })
     .getByRole('link', { name: 'Sessions', exact: true })
   await expect(navLink).toBeVisible()
   await navLink.click()

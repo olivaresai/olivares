@@ -188,7 +188,7 @@ an einen Agenten bindet. Siehe [eBPF/Tetragon](/de/how-to/connectors/ebpf-tetrag
 
 ### live_ref
 
-Die vom Server vergebene Identität **einer** Live-Session-Zeile. Olivares <!-- release -->0.4<!-- /release -->
+Die vom Server vergebene Identität **einer** Live-Session-Zeile. Olivares <!-- release -->0.5<!-- /release -->
 schlüsselt Beobachtung nach `(Beobachtungsumfang, externe ID)`, damit zwei
 Anbieter-Homes, die dieselbe Session-ID bekanntgeben, zwei Zeilen bleiben.
 Konsolen- und API-Reads, die „diese Zeile“ meinen, nutzen `live_ref`, nicht

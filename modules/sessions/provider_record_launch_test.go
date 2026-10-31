@@ -203,8 +203,8 @@ func TestBoundRecord_TwoEndpointsAreRefusedRatherThanOrdered(t *testing.T) {
 
 // A profile whose auth source is the account HOME is not affected by a bound
 // record: nothing is injected, because the authorized home IS the credential.
-// HU030 (037483f8f7, from 779c3b8d1b) refuses new own-login + key bindings.
-// Existing pre-HU030 rows keep their own-login behavior, so the fixture writes
+// acceptance (037483f8f7, from 779c3b8d1b) refuses new own-login + key bindings.
+// Existing pre-acceptance rows keep their own-login behavior, so the fixture writes
 // that legacy binding directly instead of creating it through today's API.
 func TestBoundRecord_AccountHomeStillInjectsNothing(t *testing.T) {
 	t.Parallel()
@@ -227,7 +227,7 @@ func TestBoundRecord_AccountHomeStillInjectsNothing(t *testing.T) {
 		_, err = repo.Update(context.Background(), legacy)
 		return err
 	}); err != nil {
-		t.Fatalf("persist pre-HU030 profile: %v", err)
+		t.Fatalf("persist pre-acceptance profile: %v", err)
 	}
 	vault.openErr = errors.New("an own-login launch must not open a provider key")
 	if _, err := launchBound(m, tenant, prof); err != nil {

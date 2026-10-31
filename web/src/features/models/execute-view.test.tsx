@@ -50,6 +50,7 @@ const { ModelsView } = await import('./models-view')
 
 async function abrirEnrutado(user: ReturnType<typeof userEvent.setup>) {
   renderIntel(<ModelsView />)
+  await user.click(await screen.findByRole('tab', { name: /^Governance$/i }))
   await user.click(await screen.findByRole('tab', { name: /routing/i }))
 }
 

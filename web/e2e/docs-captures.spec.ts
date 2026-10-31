@@ -15,6 +15,7 @@ import {
 import { tomar } from './docs-capture-helpers'
 import { esperarExportacionDePostura } from './posture-export-terminal'
 import { EXTENSION_ROUTES } from '../src/features/extension-routes'
+import { rutasExtraDeCaptura } from '../src/features/capture-routes'
 import census from '../src/features/route-census.json' with { type: 'json' }
 import type { ProtocolBindingSpec } from '../src/features/protocol-bindings/types'
 import { newCanonicalId } from '../src/features/communications/intent'
@@ -28,7 +29,7 @@ const demoTenant = process.env.DEMO_TENANT ?? ''
 const DEMO_EMAIL = 'demo@olivares.local'
 const DEMO_PASSWORD = 'olivares-demo-estate'
 
-// The Journeys landmark is present after account adoption without opening an area.
+// The left navigation is present after account adoption.
 const navReady = journeyNowLink
 
 // One entry per view the docs reference. `settle` gives slow views (graph
@@ -168,7 +169,7 @@ async function seedMemberHandoff(
   recipient: string,
 ) {
   const login = await api.post('/v1/auth/login', {
-    data: { email: 'r.okafor@olivares.local', password: DEMO_PASSWORD },
+    data: { email: 'ana.ruiz@olivares.local', password: DEMO_PASSWORD },
   })
   expect(login.status(), 'handoff sender login').toBe(200)
   const headers = {
@@ -430,7 +431,7 @@ const tarjetaDeTelemetria = (page: import('@playwright/test').Page) =>
 // The deployment-wide AAL3 policy the step-up capture raises; see aal3-policy.ts.
 let aal3Policy: Aal3Policy | undefined
 
-const VIEWS: {
+const A_MANO: {
   id: string
   path: string
   settle?: number
@@ -460,11 +461,6 @@ const VIEWS: {
     page: import('@playwright/test').Page,
   ) => Promise<{ x: number; y: number; width: number; height: number }>
 }[] = [
-  ...EXTENSION_ROUTES.map(({ id, path, heading }) => ({
-    id,
-    path,
-    heading: new RegExp(`^${heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`),
-  })),
   // Expose the requested dialog, tab or menu state. Install response interceptions
   // before navigation.
   {
@@ -571,8 +567,8 @@ const VIEWS: {
   },
   {
     id: 'list-truncated',
-    path: '/console',
-    heading: /^Administration$/,
+    path: '/identity?tab=people',
+    heading: /^Identity & access$/,
     settle: 800,
     // Exercise the partial-list notice with has_more in the response.
     prepara: async (page) => {
@@ -826,7 +822,6 @@ const VIEWS: {
     },
   },
   { id: 'capabilities', path: '/capabilities', heading: /^MCP & skills$/ },
-  { id: 'skills', path: '/skills', heading: /^Skills catalog$/ },
   {
     id: 'identity',
     path: '/identity',
@@ -834,6 +829,7 @@ const VIEWS: {
     heading: /^Identity & access$/,
   },
   { id: 'vault', path: '/vault', heading: /^Vault$/ },
+  { id: 'usage', path: '/usage', heading: /^Usage and cost, by account$/ },
   { id: 'stored-budgets', path: '/stored-budgets', heading: /^Budgets$/ },
   { id: 'security', path: '/security', heading: /^Security & forensics$/ },
   {
@@ -848,7 +844,7 @@ const VIEWS: {
     path: '/claude-policy',
     heading: /^Claude Code governance$/,
   },
-  { id: 'models', path: '/models', heading: /^Models & providers$/ },
+  { id: 'models', path: '/models', heading: /^Models$/ },
   {
     id: 'observability',
     path: '/observability',
@@ -943,50 +939,9 @@ const VIEWS: {
     settle: 1000,
     heading: /^Backup & Restore$/,
   },
+  { id: 'updates', path: '/updates', settle: 1000, heading: /^Updates$/ },
   // Parameterized and first-boot routes use their own setup below.
   { id: 'home', path: '/', settle: 1000, heading: /^Now$/ },
-  // Area directory headings match their registry labels.
-  {
-    id: 'areas-infrastructure',
-    path: '/areas/infrastructure',
-    heading: /^Infrastructure$/,
-  },
-  { id: 'areas-ai', path: '/areas/ai', heading: /^AI$/ },
-  {
-    id: 'areas-data-context',
-    path: '/areas/data-context',
-    heading: /^Data & context$/,
-  },
-  {
-    id: 'areas-work-communications',
-    path: '/areas/work-communications',
-    heading: /^Work & communications$/,
-  },
-  {
-    id: 'areas-automation',
-    path: '/areas/automation',
-    heading: /^Automation$/,
-  },
-  {
-    id: 'areas-security-identity',
-    path: '/areas/security-identity',
-    heading: /^Security & identity$/,
-  },
-  {
-    id: 'areas-deployment',
-    path: '/areas/deployment',
-    heading: /^Delivery$/,
-  },
-  {
-    id: 'areas-observation',
-    path: '/areas/observation',
-    heading: /^Oversight$/,
-  },
-  {
-    id: 'areas-system',
-    path: '/areas/system',
-    heading: /^System & settings$/,
-  },
   {
     id: 'onboarding',
     path: '/onboarding',
@@ -1070,7 +1025,6 @@ const VIEWS: {
         .waitFor({ timeout: 20_000 })
     },
   },
-  { id: 'mcpServers', path: '/mcp-servers', heading: /^MCP servers$/ },
   // The API key, profile, binding and account pages are doors into Tools (#2552).
   {
     id: 'providers',
@@ -1408,6 +1362,19 @@ const VIEWS: {
   },
 ]
 
+const VIEWS: (typeof A_MANO)[number][] = [
+  ...rutasExtraDeCaptura(EXTENSION_ROUTES, A_MANO).map(
+    ({ id, path, heading }) => ({
+      id,
+      path,
+      heading: new RegExp(
+        `^${heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
+      ),
+    }),
+  ),
+  ...A_MANO,
+]
+
 // Use a 1440×900 viewport at scale factor two: the size every published capture has, so a page and its
 // neighbors line up. The pixel density preserves small text at the cost of larger PNGs.
 // The zone is pinned so a capture does not show where it was taken (Settings prints the viewer's zone).
@@ -1585,7 +1552,7 @@ test.describe('Docs captures over real seeded data', () => {
 
   // Capture the drift overlay while open in both themes.
   for (const theme of ['light', 'dark'] as const) {
-    test(`capture access-map drift overlay — ${theme}`, async ({ page }) => {
+    test(`capture access-map-drift — ${theme}`, async ({ page }) => {
       await page.addInitScript(
         ([tenant, th]) => {
           localStorage.setItem(

@@ -18,7 +18,7 @@ import {
   Shield,
   Telescope,
 } from 'lucide-react'
-import type { RouteAlias } from './route-census'
+import type { RouteAlias, TabAlias } from './route-census'
 import { BUSINESS_BUILD } from './business-build'
 import { FEATURE_EXTENSIONS } from './extensions'
 
@@ -133,9 +133,6 @@ const DECLARED_PRODUCT_NOUNS: readonly ProductNoun[] = [
     id: 'connections',
     views: [
       'capabilities',
-      // The skills catalog: packs a session receives and where each is assigned.
-      'skills',
-      'mcpServers',
       'console',
       'knowledge',
       'catalog',
@@ -197,7 +194,6 @@ const DECLARED_PRODUCT_NOUNS: readonly ProductNoun[] = [
     id: 'protocols',
     views: [
       'capabilities',
-      'mcpServers',
       'protocolBindings',
       'observability',
       'apiPlayground',
@@ -219,6 +215,8 @@ const DECLARED_PRODUCT_NOUNS: readonly ProductNoun[] = [
       // sustantivo ya abarca `operate`, así que esto no ensancha el span.
       'tenants',
       'estate',
+      // The engine's own version and its signed update: our plane's runtime, beside backups.
+      'updates',
     ],
   },
 ]
@@ -628,18 +626,65 @@ export const PRODUCT_NOUNS: readonly ProductNoun[] = DECLARED_PRODUCT_NOUNS.map(
 )
 
 /**
- * RETIRED PATHS THAT STILL RESOLVE. Empty on purpose: every regrouping of the navigation
- * (hubs, then areas, then the one model the sidebar derives from) moved NOT ONE url, because
- * a place is a nav fact and the route tree is generated from `path` (app/routes.tsx).
- * Conservation here is structural, not compensated.
- *
- * The mechanism exists anyway, for the session that DOES move a path: add the entry and
- * `/old` keeps landing on `/new` (app/routes.tsx mounts a redirect per alias) instead of
- * 404-ing an operator's bookmark. route-census.test.ts drives every branch of the
- * checker with synthetic fixtures, so this list being empty today does not leave the
- * alias path unverified.
+ * RETIRED PATHS THAT STILL RESOLVE. No page moved: a place is a nav fact and the route
+ * tree is generated from `path` (app/routes.tsx). The nine area directories (`/areas/<id>`)
+ * retired with All areas in 0.5: each lands on the first page of the left-navigation place
+ * that now holds its pages (features/navigation/places.ts), with its query and hash, so a
+ * bookmark or a runbook's deep link keeps working instead of 404-ing. A literal list: the
+ * console reference generator (scripts/guide-docs/console-dump.mjs) reads it from source.
  */
-export const ROUTE_ALIASES: readonly RouteAlias[] = []
+const TOOLS_FOLD =
+  '0.5 Tools fold: provider keys, MCP servers and skills each have one destination'
+const AREA_FOLD =
+  '0.5 one navigation: an area directory lands on the left-navigation place that holds its pages'
+export const ROUTE_ALIASES: readonly RouteAlias[] = [
+  { from: '/areas/infrastructure', to: '/workspace', note: AREA_FOLD },
+  { from: '/areas/ai', to: '/sessions', note: AREA_FOLD },
+  { from: '/areas/data-context', to: '/knowledge', note: AREA_FOLD },
+  { from: '/areas/work-communications', to: '/work', note: AREA_FOLD },
+  { from: '/areas/automation', to: '/work', note: AREA_FOLD },
+  { from: '/areas/security-identity', to: '/identity', note: AREA_FOLD },
+  { from: '/areas/deployment', to: '/estate', note: AREA_FOLD },
+  { from: '/areas/observation', to: '/audit', note: AREA_FOLD },
+  { from: '/areas/system', to: '/settings', note: AREA_FOLD },
+  // The MCP servers page joined MCP & skills' Servers tab (#3388).
+  {
+    from: '/mcp-servers',
+    to: '/capabilities',
+    search: { tab: 'servers' },
+    note: TOOLS_FOLD,
+  },
+  // The skills catalog page joined MCP & skills' Skills tab, ?pack= and all.
+  {
+    from: '/skills',
+    to: '/capabilities',
+    search: { tab: 'skills' },
+    note: TOOLS_FOLD,
+  },
+]
+
+/**
+ * RETIRED TABS THAT STILL LAND. The 0.5 Tools fold (#3388) gave every provider,
+ * MCP and skills surface one destination; a tab that left its page lands on its new place,
+ * with the rest of its query.
+ */
+export const TAB_ALIASES: readonly TabAlias[] = [
+  {
+    path: '/models',
+    tab: 'keys',
+    to: '/agent-tools',
+    hash: 'provider-key-references',
+    note: TOOLS_FOLD,
+  },
+  // Administration's MCP gateway tab was the MCP servers page again.
+  {
+    path: '/console',
+    tab: 'mcpGateway',
+    to: '/capabilities',
+    search: { tab: 'servers' },
+    note: TOOLS_FOLD,
+  },
+]
 
 /**
  * The visible (non-hidden) views of one area, grouped by section in the area's section order

@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { preferenceStorage } from '@/lib/preference-storage'
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import type { ParsedEndpoint } from './openapi-parser'
 
 export interface HistoryEntry {
@@ -122,6 +123,7 @@ export const usePlayground = create<PlaygroundState>()(
         }),
     }),
     {
+      storage: createJSONStorage(() => preferenceStorage),
       name: 'olivares:api-playground',
       partialize: (s) => ({ history: s.history }),
     },

@@ -21,7 +21,7 @@ import (
 // run's one bridge goroutine, and a frame appended from the request would race that
 // chain. So the prompt precedes the reply both in the stream and in the recording.
 //
-// SR2C on e418d66b: a prompt is published only once the driver ACCEPTED it (a refusal
+// review on e418d66b: a prompt is published only once the driver ACCEPTED it (a refusal
 // before the write publishes nothing); bookkeeping updates (commands, mode,
 // configuration, usage) never publish it, so an agent's own echo that follows them is
 // recognised; and an echo counts only in the run's own conversation. An agent that
@@ -49,7 +49,7 @@ const acpDecisionWait = 250 * time.Millisecond
 
 // acpEchoDriver reports whether a driver speaks ACP, whose agents do not echo a prompt.
 func acpEchoDriver(d ProviderDriver) bool {
-	return d != nil && (d.Key() == providerDriverOpenCode || d.Key() == providerDriverGrok || d.Key() == providerDriverGemini)
+	return d != nil && (d.Key() == providerDriverOpenCode || d.Key() == providerDriverGrok || d.Key() == providerDriverGemini || d.Key() == providerDriverCursor)
 }
 
 // queue holds a prompt the driver is about to write; nil when nothing is to be added.

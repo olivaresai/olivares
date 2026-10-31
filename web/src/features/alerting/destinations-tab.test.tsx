@@ -356,7 +356,7 @@ describe('DestinationsTab', () => {
 })
 
 /**
- * ONE ORANGE PER FIRST SCREEN (dev#2673's console rule 2026-10-17): with no
+ * ONE ORANGE PER FIRST SCREEN (the regression's console rule 2026-10-17): with no
  * destination the intro row already carries "Add destination" in orange, so the
  * empty state offers the same verb in the secondary style.
  */

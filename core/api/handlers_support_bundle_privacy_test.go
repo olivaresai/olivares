@@ -136,7 +136,7 @@ func TestConsoleSupportBundleSecretInventoryRequiresAdminAndAAL3(t *testing.T) {
 	tenant := h.createOrg(admin, "privacy-fixture")
 	member := h.mkMember(admin, "privacy@example.invalid", "SyntheticMemberPassword1", auth.RoleAdmin, tenant)
 	// Members are added before the passkey step-up is required: adding a person asks
-	// for the same step-up (HU-28).
+	// for the same step-up.
 	h.requirePasskeyStepUp()
 	refused := doWave2Binary(h, http.MethodPost, "/v1/console/support-bundle", admin)
 	if refused.Code != http.StatusForbidden || !strings.Contains(refused.Body.String(), "step_up_required") {

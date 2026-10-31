@@ -65,11 +65,18 @@ type Policy struct {
 	// means the report was not kept; the next refusal of that host and header
 	// reports again.
 	OnRefusal func(Refusal) error `json:"-"`
+	// ControlDial, when set, carries only the declared Controls addresses. A remote
+	// node uses it for central PEP/MCP relay connections; providers never use it.
+	ControlDial func(context.Context, string, string) (net.Conn, error) `json:"-"`
 }
+
+// maxEndpoints bounds a policy: the provider, up to three hook and session
+// relays, eight registries and four declared hosts on https and on ssh (1+3+8+8).
+const maxEndpoints = 20
 
 type destination struct {
 	host, port string
-	scheme     string
+	scheme     string // http, https, or ssh: a raw TCP tunnel, never decrypted
 	control    bool
 	public     bool
 	listed     bool // an administrator-listed host (Policy.PublicProviders)
@@ -86,7 +93,7 @@ func destinations(p Policy) ([]destination, error) {
 		}
 		return nil, nil
 	}
-	if len(p.Providers) == 0 || len(p.Providers)+len(p.PublicProviders)+len(p.Controls) > 16 {
+	if len(p.Providers) == 0 || len(p.Providers)+len(p.PublicProviders)+len(p.Controls) > maxEndpoints {
 		return nil, errors.New("session egress requires a bounded provider endpoint list")
 	}
 	var out []destination
@@ -97,8 +104,12 @@ func destinations(p Policy) ([]destination, error) {
 	}{{p.Providers, false, p.PublicOnly, true, false}, {p.PublicProviders, false, true, false, true}, {p.Controls, true, false, false, false}} {
 		for i, raw := range group.urls {
 			u, err := url.Parse(raw)
-			if err != nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "http" && u.Scheme != "https") {
+			if err != nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "http" && u.Scheme != "https" && u.Scheme != "ssh") {
 				return nil, errors.New("session egress endpoint is invalid")
+			}
+			// An opaque tunnel is only for a host an administrator listed.
+			if u.Scheme == "ssh" && !group.listed {
+				return nil, errors.New("session ssh endpoint must be a listed host")
 			}
 			host := strings.ToLower(u.Hostname())
 			if strings.ContainsAny(host, "*%\\\r\n\x00") {
@@ -106,10 +117,7 @@ func destinations(p Policy) ([]destination, error) {
 			}
 			port := u.Port()
 			if port == "" {
-				port = "443"
-				if u.Scheme == "http" {
-					port = "80"
-				}
+				port = map[string]string{"http": "80", "https": "443", "ssh": "22"}[u.Scheme]
 			}
 			n, err := strconv.Atoi(port)
 			if err != nil || n < 1 || n > 65535 {
@@ -162,6 +170,9 @@ type proxy struct {
 	transport   *http.Transport
 	caPEM       []byte
 	tlsConfig   *tls.Config
+	controlDial func(context.Context, string, string) (net.Conn, error)
+	// tunnelDial dials a declared ssh host at an address pinned at launch.
+	tunnelDial  func(ctx context.Context, host, port string) (net.Conn, error)
 	mu          sync.Mutex
 	closed      bool
 	connections map[*trackedConn]bool
@@ -205,6 +216,10 @@ func (l trackedListener) Accept() (net.Conn, error) {
 		return nil, err
 	}
 	return l.owner.track(c)
+}
+
+func withControlDial(dial func(context.Context, string, string) (net.Conn, error)) proxyOption {
+	return func(p *proxy) { p.controlDial = dial }
 }
 
 func startProxy(ctx context.Context, ds []destination, opts ...proxyOption) (*proxy, error) {
@@ -312,7 +327,43 @@ func startProxyWithDialer(ctx context.Context, ds []destination, resolver smokes
 		_ = os.RemoveAll(dir)
 		return nil, err
 	}
+	controlAddresses := map[string]bool{}
+	for _, d := range ds {
+		if d.control {
+			controlAddresses[net.JoinHostPort(d.host, d.port)] = true
+		}
+	}
+	p.tunnelDial = func(call context.Context, host, port string) (net.Conn, error) {
+		// Only addresses pinned at launch, which a listed host has checked against
+		// the reserved ranges; never DNS again.
+		ips := pins[strings.ToLower(host)]
+		if len(ips) == 0 {
+			return nil, errors.New("session destination has no pinned address")
+		}
+		var last error
+		for _, ip := range ips {
+			attempt, cancel := context.WithTimeout(call, config.ConnectTimeout/time.Duration(len(ips)))
+			c, err := dial(attempt, "tcp", net.JoinHostPort(ip.String(), port), config.ConnectTimeout)
+			cancel()
+			if err == nil {
+				return p.track(c)
+			}
+			last = err
+			if call.Err() != nil {
+				break
+			}
+		}
+		return nil, last
+	}
 	config.ProxyDialTimeout = func(call context.Context, network, address string, timeout time.Duration) (net.Conn, error) {
+		dialControl := p.controlDial != nil && controlAddresses[address]
+		if dialControl {
+			c, err := p.controlDial(call, network, address)
+			if err != nil {
+				return nil, err
+			}
+			return p.track(c)
+		}
 		c, err := dial(call, network, address, timeout)
 		if err != nil {
 			return nil, err
@@ -377,6 +428,10 @@ func startProxyWithDialer(ctx context.Context, ds []destination, resolver smokes
 				return
 			}
 			if r.Method == http.MethodConnect {
+				if d.scheme == "ssh" {
+					p.serveTunnel(w, r)
+					return
+				}
 				p.serveConnect(w, r, p.server.Handler)
 				return
 			}
@@ -454,15 +509,50 @@ func allowedDestination(r *http.Request, ds []destination) (destination, bool) {
 		}
 		if !d.control {
 			if r.Method == http.MethodConnect {
-				return d, d.scheme == "https"
+				return d, d.scheme == "https" || d.scheme == "ssh"
 			}
-			return d, u.Scheme == d.scheme
+			// ssh is a tunnel, not an HTTP origin, even in an absolute ssh:// URL.
+			return d, d.scheme != "ssh" && u.Scheme == d.scheme
 		}
 		return d, r.Method != http.MethodConnect && u.Scheme == "http" && d.paths[u.EscapedPath()] &&
 			(r.Method == "GET" || r.Method == "POST" || r.Method == "DELETE") &&
 			strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ")
 	}
 	return destination{}, false
+}
+
+// serveTunnel carries an admitted CONNECT to a declared ssh host as raw bytes.
+// Nothing is decrypted: the host, its port and the address pinned at launch are
+// the whole policy.
+func (p *proxy) serveTunnel(w http.ResponseWriter, r *http.Request) {
+	host, port, err := net.SplitHostPort(r.Host)
+	if err != nil {
+		http.Error(w, "session destination denied", http.StatusForbidden)
+		return
+	}
+	upstream, err := p.tunnelDial(r.Context(), host, port)
+	if err != nil {
+		http.Error(w, "session destination unavailable", http.StatusBadGateway)
+		return
+	}
+	defer upstream.Close()
+	client, buffered, err := http.NewResponseController(w).Hijack()
+	if err != nil {
+		return
+	}
+	defer client.Close()
+	if _, err := buffered.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n"); err != nil {
+		return
+	}
+	if err := buffered.Flush(); err != nil {
+		return
+	}
+	done := make(chan struct{})
+	go func() { _, _ = io.Copy(upstream, buffered.Reader); _ = upstream.Close(); close(done) }()
+	_, _ = io.Copy(client, upstream)
+	_ = client.Close()
+	_ = upstream.Close()
+	<-done
 }
 
 func (p *proxy) close() {

@@ -888,3 +888,53 @@ func wrapUnavailableErr(err error) error {
 	}
 	return fmt.Errorf("%w: %w", store.ErrStoreUnavailable, err)
 }
+
+// isPoolResetErr reports that the pooled connection under a store transaction
+// was ended before the transaction could start: pgx's closed-connection error
+// (pgconn.ErrConnClosed, reached through its unexported connLockError), which
+// database/sql does not retry, and the 57Pxx session-ending codes a restart,
+// failover, idle-session timeout or administrator termination delivers to the
+// first request on that connection. 57014 query_canceled is
+// statement-level and stays a write fault. 57P04 (database dropped) is not a
+// reset: a retry cannot succeed against a database that no longer exists.
+//
+// It is a separate function from isBackendUnavailable on purpose: that one is
+// fingerprinted by the migration-immutability gate (scripts/check-migration-hashes.py),
+// and changing it would rewrite the hash of every migration constructor.
+func isPoolResetErr(err error) bool {
+	if errors.Is(err, pgconn.ErrConnClosed) {
+		return true
+	}
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && strings.HasPrefix(pgErr.Code, "57P") && pgErr.Code != "57P04"
+}
+
+// wrapBeginErr wraps a failure to start a store transaction (BeginTx, and the
+// tenant binding that opens it, on the request-path entry points: View, Mutate,
+// the selective envelopes, System, the audit reader and rollout transitions) in
+// store.ErrStoreUnavailable, which is where the first request after a pool
+// reset fails: measured on PostgreSQL 16, pgx's "conn closed" comes
+// out of BeginTx itself. A failure on a later statement of an open transaction
+// keeps the wrapUnavailableErr rule. Every other error takes that rule
+// unchanged.
+func wrapBeginErr(err error) error {
+	if err != nil && isPoolResetErr(err) && !errors.Is(err, store.ErrStoreUnavailable) {
+		return fmt.Errorf("%w: %w", store.ErrStoreUnavailable, err)
+	}
+	return wrapUnavailableErr(err)
+}
+
+// viewBeginErr classifies a failure to start a read transaction. Once the
+// caller's own context is done, database/sql returns ctx.Err(), and
+// context.DeadlineExceeded satisfies net.Error, so wrapBeginErr would report a
+// caller's deadline as a database outage. That is a caller fault: it stays
+// unwrapped (the regression review). Mutate keeps wrapBeginErr unchanged: it already
+// reported a caller's deadline as unavailable before the regression, and that
+// published answer is not changed here. System and the audit reader's reads,
+// request-path entries too, use this one.
+func viewBeginErr(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return err
+	}
+	return wrapBeginErr(err)
+}

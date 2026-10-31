@@ -13,6 +13,7 @@ import {
   isKnownRefusal,
   newOperationId,
   outcomeOf,
+  reconcileAction,
   refusalKey,
 } from './model'
 import type { PublicationIntent } from './types'
@@ -139,6 +140,29 @@ describe('intentActions', () => {
     ).toEqual({ reconcile: true, abandon: false })
     expect(asked).toContain('gitpublish:merge:admin')
     expect(asked).toContain('gitpublish:target:admin')
+  })
+
+  it('reconciles an uncertain issue comment with its own write permission', () => {
+    const can = (p: string) => p === 'gitpublish:issue_comment:write'
+    expect(
+      intentActions(
+        intent({ state: 'uncertain', effect: 'issue_comment' }),
+        can,
+      ),
+    ).toEqual({ reconcile: true, abandon: false })
+    expect(actionAuthority(reconcileAction('issue_comment'))).toEqual({
+      permission: 'gitpublish:issue_comment:write',
+      aal3: false,
+    })
+  })
+
+  it('labels every intent effect in every language', () => {
+    for (const code of LANGUAGE_CODES) {
+      const messages = JSON.parse(
+        readFileSync(join(__dirname, 'i18n', `${code}.json`), 'utf8'),
+      ) as { effects: Record<string, string> }
+      expect(Object.keys(messages.effects), code).toContain('issue_comment')
+    }
   })
 })
 

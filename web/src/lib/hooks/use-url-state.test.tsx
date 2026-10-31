@@ -67,6 +67,25 @@ describe('useUrlState', () => {
     expect(result.current[0]).toEqual({ q: 'deny', actor: 'user:1' })
   })
 
+  it('reads back the very string it wrote, when the router wrote it quoted', async () => {
+    // The router writes a string that would read as JSON (`404`, `true`, `"x"`)
+    // quoted, so that its own reader gets a string back. A link typed by hand
+    // (`?q=404`) is not quoted and reads as written.
+    const { defaultStringifySearch } = await vi.importActual<
+      typeof import('@tanstack/react-router')
+    >('@tanstack/react-router')
+    const wrote = { q: '404', actor: 'true', target: '"x"', id: 'run-1' }
+    seedLocation(`/audit${defaultStringifySearch(wrote)}`)
+    const { result } = renderHook(() =>
+      useUrlState(['q', 'actor', 'target', 'id']),
+    )
+    expect(result.current[0]).toEqual(wrote)
+    seedLocation('/audit?q=404')
+    expect(renderHook(() => useUrlState(['q'])).result.current[0]).toEqual({
+      q: '404',
+    })
+  })
+
   it('patch sets a key and reflects it via a replace navigation', () => {
     const { result } = renderHook(() => useUrlState(['q']))
     act(() => result.current[1]({ q: 'deny' }))
@@ -321,6 +340,20 @@ describe('useValidatedUrlState cleans the address bar', () => {
     const { result } = renderHook(() => useValidatedUrlState(['scope'], decode))
     // Without the latch the report would vanish with the key it described.
     expect(result.current[2]).toEqual(['scope'])
+  })
+
+  it('keeps the report through a cleanup the view makes, and drops it on the operator’s own change', () => {
+    seedLocation('/audit?scope=nonsense&tab=x')
+    const { result } = renderHook(() =>
+      useValidatedUrlState(['scope', 'tab'], decode),
+    )
+    expect(result.current[2]).toEqual(['scope'])
+    // keepReport: the screen tidying the address is not the operator's next move.
+    act(() => result.current[1]({ tab: undefined }, { keepReport: true }))
+    expect(result.current[2]).toEqual(['scope'])
+    // Without it, the same patch is the operator's next deliberate change.
+    act(() => result.current[1]({ tab: 'y' }))
+    expect(result.current[2]).toEqual([])
   })
 
   it('does not touch the URL when nothing was refused', () => {

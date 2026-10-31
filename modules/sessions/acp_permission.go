@@ -222,7 +222,9 @@ func (s *acpSession) resolveServerRequest(req *acpServerRequest, key string, raw
 }
 
 // acpRefusesWithoutFacts reports whether a driver's permission request must be
-// refused for lack of facts. Gemini CLI names a command only in a title and a
+// refused for lack of facts. Cursor CLI is held to the same rule: its permission request was
+// never measured, so a request that names nothing the policy can review is refused. Gemini CLI
+// names a command only in a title and a
 // file only in its locations, and a title is a description, not a fact. A request
 // that is not a plain read, search or thought, and gave the live policy nothing
 // to review, would be allowed blind by a preset that allows, and shown to a person
@@ -237,14 +239,19 @@ func (s *acpSession) resolveServerRequest(req *acpServerRequest, key string, raw
 // model controls. Such a call goes to the authority like any other tool request,
 // and the call itself reaches the session MCP edge under the session's policy.
 func acpRefusesWithoutFacts(driver string, call acpToolCall, ownMCPOnly bool) bool {
-	if driver != providerDriverGemini || call.facts.Complete {
+	if (driver != providerDriverGemini && driver != providerDriverCursor) || call.facts.Complete {
 		return false
+	}
+	if driver == providerDriverCursor {
+		// Cursor's request shape was never measured: not even a plain read, search or thought
+		// is allowed without something the policy can review.
+		return true
 	}
 	switch call.Kind {
 	case "read", "search", "think":
 		return false
 	}
-	return !(ownMCPOnly && geminiSessionMCPCall(call))
+	return !(driver == providerDriverGemini && ownMCPOnly && geminiSessionMCPCall(call))
 }
 
 // geminiSessionMCPCall reports whether call is a call to a tool of the server named

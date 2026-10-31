@@ -6,13 +6,115 @@ package sqlstore
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
+	"sync"
+	"time"
 )
+
+// guardAdmissionGraphFor is the post-module graph of a manifest. The graph and the
+// receipt histories compiled over it are a pure function of the manifest, which a binary
+// derives from its own registry. Admission asks for them at every unit batch, rollout
+// opening, fence close and serving check of one open, and each derivation hashes every
+// compiled edition again, so the process derives them once per manifest and releases them
+// when opens stop (guardAdmissionKeep). Nothing read from a database is cached: only the
+// compiled editions the database is compared against. Callers must not modify what they get.
+func guardAdmissionGraphFor(current guardManifest) (guardEditionGraph, error) {
+	compiled, err := guardAdmissionCompiled.get(current)
+	if err != nil {
+		return guardEditionGraph{}, err
+	}
+	return compiled.graph, nil
+}
+
+// guardAdmissionKeep is how long compiled editions outlive their last use. The
+// receipt histories of a Business census hold about 100 MiB; an open needs them for
+// seconds, so a long-running process gives the memory back, while consecutive opens
+// (a restart in the same process, a suite booting estates) keep reusing them.
+const guardAdmissionKeep = time.Minute
+
+// guardAdmissionEntry is the compiled editions of one manifest, and the copy of that
+// manifest they were compiled from: no caller's backing array is part of an entry. The
+// cache finds it by manifestDigest, which hashes each spec's stored SpecSHA256 and not the
+// spec, so the copy decides whether an entry is a manifest's.
+type guardAdmissionEntry struct {
+	manifest guardManifest
+	boot     *guardBootVariants
+}
+
+// guardAdmissionCache holds the compiled editions of the manifests a process asks about:
+// the binary's own, and the compiled ancestors an admission walk checks one by one. They are
+// bounded by the compiled editions, not by any input, and released with the idle timer.
+type guardAdmissionCache struct {
+	keep     time.Duration
+	mu       sync.Mutex
+	byDigest map[[32]byte]guardAdmissionEntry
+	idle     *time.Timer
+}
+
+var guardAdmissionCompiled = &guardAdmissionCache{keep: guardAdmissionKeep}
+
+// get returns the compiled editions of current. A manifest that differs from the entry
+// under its digest in any field (an edited or hand-built one carrying a stale digest) gets
+// editions compiled from itself, and the entry stays as it was.
+func (c *guardAdmissionCache) get(current guardManifest) (*guardBootVariants, error) {
+	digest, err := current.manifestDigest()
+	if err != nil {
+		return nil, err
+	}
+	c.mu.Lock()
+	cached, ok := c.byDigest[digest]
+	c.touch()
+	c.mu.Unlock()
+	if ok && reflect.DeepEqual(cached.manifest, current) {
+		return cached.boot, nil
+	}
+	own := current
+	own.Specs = cloneGuardSpecs(current.Specs)
+	graph, err := buildGuardAdmissionGraph(own)
+	if err != nil {
+		return nil, err
+	}
+	entry := guardAdmissionEntry{manifest: own, boot: &guardBootVariants{
+		graph: graph, variantsByEpoch: make(map[int64][]guardBootstrapReceiptVariant), admission: true,
+	}}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if cached, ok := c.byDigest[digest]; ok {
+		if reflect.DeepEqual(cached.manifest, current) {
+			return cached.boot, nil
+		}
+		return entry.boot, nil
+	}
+	if c.byDigest == nil {
+		c.byDigest = make(map[[32]byte]guardAdmissionEntry)
+	}
+	c.byDigest[digest] = entry
+	c.touch()
+	return entry.boot, nil
+}
+
+// touch re-arms the release; the caller holds mu.
+func (c *guardAdmissionCache) touch() {
+	if c.idle == nil {
+		c.idle = time.AfterFunc(c.keep, c.release)
+		return
+	}
+	c.idle.Reset(c.keep)
+}
+
+// release drops every entry. A caller that still holds one keeps it, and the next
+// get derives it again, so releasing is never a correctness event.
+func (c *guardAdmissionCache) release() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	clear(c.byDigest)
+}
 
 // Post-module admission extends the closed graph with a completed Community
 // predecessor. Historical migration callbacks keep their original declarations
 // and transitive source hashes; canonical encoders and SQL writers are shared.
-func guardAdmissionGraphFor(current guardManifest) (guardEditionGraph, error) {
+func buildGuardAdmissionGraph(current guardManifest) (guardEditionGraph, error) {
 	g, err := guardEditionGraphFor(current)
 	if err != nil {
 		return g, err
@@ -23,9 +125,9 @@ func guardAdmissionGraphFor(current guardManifest) (guardEditionGraph, error) {
 	return addGuardCommunityPredecessors(g, current)
 }
 
-func guardAdmissionDeltaTables(d guardEditionDelta) []string {
+func guardAdmissionDeltaTables(target guardManifest, d guardEditionDelta) []string {
 	if d == guardDeltaCommercial {
-		return guardCommercialTables[:]
+		return guardProfileTables(target)
 	}
 	return guardEditionDeltaTables(d)
 }
@@ -53,16 +155,17 @@ func guardAdmissionParentEpochs(g guardEditionGraph, epoch int64) []int64 {
 	out := make([]int64, 0, len(original)+1)
 	for _, parent := range original {
 		if epoch < 0 {
-			parent = -parent
+			parent = epoch + guardNodeEpoch(epoch) - parent
 		}
 		if _, present := g.nodes[parent]; present {
 			out = append(out, parent)
 		}
 	}
-	membership, ok := guardEditionMembershipForEpoch(epoch)
-	if epoch > 0 && ok && membership.has(guardDeltaAccessEvidence) {
-		if _, present := g.nodes[-epoch]; present {
-			out = append(out, -epoch)
+	membership, ok := guardEditionMembershipForEpoch(guardNodeEpoch(epoch))
+	if ok && membership.has(guardDeltaAccessEvidence) {
+		parent := guardProfileParent(epoch)
+		if _, present := g.nodes[parent]; present {
+			out = append(out, parent)
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
@@ -76,12 +179,16 @@ func guardAdmissionEdge(g guardEditionGraph, from, to int64) (guardManifestEdge,
 		return guardManifestEdge{}, fmt.Errorf("%w: edition %d -> %d is not in this graph",
 			ErrGuardManifestNoEdge, from, to)
 	}
-	delta, err := guardAdmissionDelta(from, to)
+	source, target := from, to
+	if guardProfileParent(to) == from {
+		source, target = -guardNodeEpoch(from), guardNodeEpoch(to)
+	}
+	delta, err := guardAdmissionDelta(source, target)
 	if err != nil {
 		return guardManifestEdge{}, err
 	}
 	want := map[string]bool{}
-	for _, table := range guardAdmissionDeltaTables(delta) {
+	for _, table := range guardAdmissionDeltaTables(toNode.Manifest, delta) {
 		want[table] = true
 	}
 	additions := make([]guardSpec, 0, len(want))

@@ -6,7 +6,7 @@ description: >-
 ---
 
 :::note[Business]
-Audit-Export (`GET /v1/audit/export`, `olivares audit export`), Verzeichnisarchive und die Prüfung externer Archive erfordern Business. Community behält das signierte Ledger, `olivares audit verify` und `olivares dr backup`; Export liefert HTTP 501 oder Exit-Code 9. Audit-Weiterleitung und der DDIL-Air-Gap-Transfer erfordern ebenfalls Business.
+Audit-Export (`GET /v1/audit/export`, `olivares audit export`), Ledger-Prüfung (`GET /v1/audit/verify`, `olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`), Verzeichnisarchive und die Prüfung externer Archive erfordern Business. Community behält das signierte Ledger, dessen Lesezugriff und `olivares dr backup`; die entsprechenden Routen und Befehle liefern HTTP 501 oder Exit-Code 9. Audit-Weiterleitung und DDIL-Transfers mit Audit-Segmenten erfordern ebenfalls Business.
 :::
 
 Eine Control Plane für KI ist ein Sicherheitsprodukt. Wenn sie überzeichnet, was
@@ -47,7 +47,7 @@ etwas noch nicht abdeckt, sagt die Seite das, statt es zu suggerieren.
 - **Releases sind signiert und verifizierbar.** Signatur, SLSA-Provenienz, SBOM und OpenVEX lassen sich allesamt
   [verifizieren](/de/how-to/verify-a-release/). Die Verifikation ist noch nicht vollständig ohne Netzwerk möglich: schlüssellose
   Prüfungen brauchen Sigstore-Trusted-Root-Material, und der SLSA-Schritt hat keinen Offline-Modus. Das Produkt liefert ein
-  [Air-Gap-Bundle](/de/how-to/air-gap-install/). Das nächste Release ist **<!-- release -->0.4<!-- /release -->**, noch nicht veröffentlicht. Bauen Sie bis zur Veröffentlichung aus dem Quellcode.
+  [Air-Gap-Bundle](/de/how-to/air-gap-install/). Das nächste Release ist **<!-- release -->0.5<!-- /release -->**, noch nicht veröffentlicht. Bauen Sie bis zur Veröffentlichung aus dem Quellcode.
 
 ## Open Core — was offen ist vs. kommerziell
 

@@ -14,7 +14,7 @@ import (
 )
 
 // SearchKinds contributes governance policies to the federated console search
-//. Gated on the SAME read permission as GET /policies, so search can
+// . Gated on the SAME read permission as GET /policies, so search can
 // never widen what a caller could already list. Results carry name, policy kind
 // and enabled state only — never the policy spec.
 func (m *Module) SearchKinds() []api.SearchKind {

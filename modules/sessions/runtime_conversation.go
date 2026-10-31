@@ -24,6 +24,11 @@ func (m *Module) conversationHistory(ctx context.Context, tenant model.TenantID,
 	if rec.String(colRunProfileDriver) != providerDriverCodex || threadID == "" {
 		return "", nil
 	}
+	// False is written only for a new Codex run, and made true durably before
+	// input can reach the tool. NULL on older runs is unknown, never empty.
+	if attempted, known := rec[colRunCodexInputAttempted].(bool); known && !attempted {
+		return "", nil
+	}
 	if m.earlierLaunchValuesMayBeUnheld(ctx, tenant, rec) {
 		// Current vault values cannot redact secrets from earlier generations
 		// after rotation, nor expired Git read tokens from earlier launches, nor
@@ -49,7 +54,7 @@ func (m *Module) conversationHistory(ctx context.Context, tenant model.TenantID,
 	case errors.Is(err, errStoredReaderStop):
 		return "", errors.New("stored conversation reader could not be stopped without error")
 	case err != nil:
-		return "", errors.New("stored conversation could not be read; live output remains available where bridged")
+		return "", errors.New("the saved conversation could not be read; live output is still available while the session is running")
 	}
 	if _, _, err = m.revalidateStoredProfile(ctx, tenant, rec); err != nil {
 		return "", errors.New("stored conversation provider home authorization changed during the read")

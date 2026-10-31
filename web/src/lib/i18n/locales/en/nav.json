@@ -15,13 +15,6 @@
     "protocols": "Protocols",
     "infrastructure": "Infrastructure"
   },
-  "filter": {
-    "placeholder": "Filter navigation…",
-    "label": "Filter navigation",
-    "clear": "Clear filter",
-    "results": "Matches: {{n}}",
-    "empty": "No view matches “{{query}}”"
-  },
   "items": {
     "estate": "Estate",
     "home": "Now",
@@ -32,7 +25,6 @@
     "reach": "Reach",
     "health": "Health & SLA",
     "capabilities": "MCP & skills",
-    "skills": "Skills catalog",
     "protocolBindings": "Protocol bindings",
     "communications": "Communications",
     "communicationsInbox": "Communications inbox",
@@ -77,6 +69,7 @@
     "eventing": "Webhooks & events",
     "session-viewer": "Session viewer",
     "backups": "Backups",
+    "updates": "Updates",
     "logs": "Logs",
     "inferenceProxy": "Inference proxy",
     "alerting": "Alerting",
@@ -86,8 +79,8 @@
     "providerBindings": "Source bindings",
     "providerAccounts": "Provider accounts",
     "agent-tools": "AI tools",
-    "mcpServers": "MCP servers",
-    "storedBudgets": "Budgets"
+    "storedBudgets": "Budgets",
+    "usage": "Usage"
   },
   "workspace": {
     "open": "Open {{workspace}}",
@@ -109,7 +102,6 @@
     "reach": "See which destinations each tool can reach, and which are waiting for approval.",
     "health": "Agent and MCP uptime and SLAs",
     "capabilities": "Govern MCP servers, skills and tools",
-    "skills": "Browse skill packs and assign them to departments, agent groups and agents",
     "protocolBindings": "Compose and reconcile governed A2A and MCP bindings",
     "communications": "Channels, direct notices and the personal inbox of the selected workspace",
     "communicationsInbox": "Messages addressed to you: open and acknowledge each one",
@@ -129,9 +121,8 @@
     "work": "Shared work: items, dependencies, acceptance and decisions",
     "agentops": "Start sessions and follow what each one does, including the ones Olivares finds",
     "agentArtifacts": "Skills, MCP extensions and instruction files — registry, posture and supply-chain BOM",
-    "models": "Models, routing and provider keys",
+    "models": "Models, routing and governance",
     "agent-tools": "See the accounts and API keys sessions run as; installing and signing in the tools is for deployment administrators",
-    "mcpServers": "Connect remote MCP servers to this organization, test them and choose which tools sessions may use",
     "modelOps": "Owned models, admission and deployments",
     "finops": "Token cost, budgets and spend",
     "adoption": "Productivity, acceptance & model mix",
@@ -166,9 +157,11 @@
     "eventing": "Outbound webhook subscriptions, the captured event log, deliveries and the dead-letter queue",
     "team-costs": "Cost attribution by team: sessions, tokens and spend, with a daily trend and a per-project and per-model breakdown",
     "backups": "Encrypted disaster-recovery snapshots of the control plane: create, schedule, download and restore",
+    "updates": "The version this engine runs, the newest signed release in its channel, and one action to install it",
     "logs": "The live engine log stream, with level and module filters, search and pause",
     "sourceDiff": "Compare a base and a head revision of a connected Git repository, file by file",
-    "storedBudgets": "Consumption against each stored limit. Reserved capacity counts toward the limit."
+    "storedBudgets": "Consumption against each stored limit. Reserved capacity counts toward the limit.",
+    "usage": "Each account's official 5-hour and weekly limits, nearest first, and today's tokens and cost."
   },
   "commandActions": {
     "eventing": {
@@ -198,14 +191,12 @@
   "areas": {
     "infrastructure": {
       "label": "Infrastructure",
-      "question": "What resources and workspaces do I have?",
       "sections": {
         "estate": "Inventory and workspaces"
       }
     },
     "ai": {
       "label": "AI",
-      "question": "What sessions, profiles and models do I observe or manage?",
       "sections": {
         "sessions": "Sessions",
         "environments": "Profiles and environments",
@@ -216,7 +207,6 @@
     },
     "data-context": {
       "label": "Data & context",
-      "question": "What knowledge, capabilities and artifacts do I connect or reuse?",
       "sections": {
         "capabilities": "Capabilities",
         "knowledge": "Knowledge and artifacts"
@@ -224,14 +214,12 @@
     },
     "work-communications": {
       "label": "Work & communications",
-      "question": "What work do I coordinate, and how does it communicate?",
       "sections": {
         "work": "Work and communications"
       }
     },
     "automation": {
       "label": "Automation",
-      "question": "What flows, events and notifications do I automate?",
       "sections": {
         "workflows": "Flows and orchestration",
         "events": "Events and notifications"
@@ -239,7 +227,6 @@
     },
     "security-identity": {
       "label": "Security & identity",
-      "question": "Who has access, under which rules, and how do I protect the environment?",
       "sections": {
         "access": "Identity and access",
         "policy": "Policies and governance boundaries",
@@ -248,14 +235,12 @@
     },
     "deployment": {
       "label": "Delivery",
-      "question": "How do I prepare and control a deployment?",
       "sections": {
         "deployments": "Deployments"
       }
     },
     "observation": {
       "label": "Oversight",
-      "question": "What is happening, what does it cost, and what can I prove?",
       "sections": {
         "operations": "Status and activity",
         "cost-adoption": "Costs and adoption",
@@ -264,7 +249,6 @@
     },
     "system": {
       "label": "System & settings",
-      "question": "How do I administer the organization, the installation and my preferences?",
       "sections": {
         "administration": "Administration",
         "maintenance": "Installation and maintenance",
@@ -273,36 +257,8 @@
       }
     }
   },
-  "directory": {
-    "areas": "Areas",
-    "expand": "Show {{area}} modules",
-    "collapse": "Hide {{area}} modules",
-    "modulesOf": "{{area}} modules",
-    "empty": "No entries in this area are available to you",
-    "emptyHint": "Entries appear here when your role in the current organization grants access to a module of this area.",
-    "backHome": "Go to Now",
-    "area": "Area"
-  },
   "personal": {
-    "favorites": "Favorites",
-    "add": "Add {{name}} to favorites",
-    "remove": "Remove {{name}} from favorites",
-    "viewAll": "View all ({{count}})",
-    "manage": "Manage favorites",
-    "empty": "Star a module to keep it here.",
-    "scope": "Saved to your account, in every browser.",
-    "saveFailed": "Favorites could not be saved to your account. They are kept in this browser and saved again with your next change or sign-in.",
-    "temporary": "Favorites stay in memory for now.",
-    "clear": "Clear favorites",
-    "recents": "Recent",
-    "recentManage": "Manage recent modules",
-    "recentViewAll": "View recent ({{count}})",
-    "recentEmpty": "Modules you open appear here.",
-    "recentScope": "Opened in this tab. Cleared on reload, sign-out or account and organization changes.",
-    "recentRemove": "Remove {{name}} from recent modules",
-    "recentClear": "Clear recent modules",
-    "pinRow": "Pin {{name}} to favorites (p)",
-    "unpinRow": "Unpin {{name}} from favorites (p)"
+    "saveFailed": "Your changes could not be saved to your account. They apply for this visit only."
   },
   "scope": {
     "tenant": "Organization",
@@ -334,7 +290,6 @@
     "starting": "The session is starting…",
     "startAgain": "Start the session again to send a message.",
     "turnAria": "Session turn",
-    "attachedWaiting": "Needs you",
     "rawLine": "Raw line",
     "advancedHint": "Send one NDJSON line to stdin. The sentence field is the default.",
     "wirePlaceholder": "Send an NDJSON line to stdin…",
@@ -364,27 +319,36 @@
     "modelPicker": "Model: {{value}}",
     "effortPicker": "Effort: {{value}}",
     "accessPicker": "Access: {{value}}",
-    "accessKeeps": "This session keeps its access. A different access starts a new session."
+    "accessKeeps": "This session keeps its access. A different access starts a new session.",
+    "queue": {
+      "title": "Queued messages",
+      "hold": {
+        "turn": "The tool is working. The first message goes when its turn ends.",
+        "approval": "Waiting for an approval. The queue is kept.",
+        "limit": "The account's limit ended the last turn. The queue is kept.",
+        "stopped": "The session is stopped. The queue is kept.",
+        "ready": "Sending the next message…"
+      },
+      "steer": "Steer",
+      "sendNow": "Send now",
+      "edit": "Edit message",
+      "editAria": "Edit the queued message",
+      "save": "Save",
+      "cancel": "Cancel",
+      "remove": "Remove message",
+      "moveUp": "Move earlier",
+      "moveDown": "Move later",
+      "failed": "The queue could not be updated.",
+      "placeholder": "Enter queues a message for after this turn",
+      "placeholderSteer": "Enter queues for after this turn, Ctrl+Enter steers it now",
+      "discarded": "The session was released with these messages still queued:",
+      "copy": "Copy"
+    }
   },
   "shell": {
-    "journeysLabel": "Journeys",
-    "journeys": {
-      "home": "Now",
-      "sessions": "Sessions",
-      "agent-tools": "Tools",
-      "rules": "Rules",
-      "audit": "Ledger",
-      "organization": "Organization",
-      "storedBudgets": "Budgets"
-    },
-    "phoneBarLabel": "Main",
-    "newSession": "New session",
     "searchCommands": "Search and commands",
     "search": "Search",
     "stopAll": "Stop all",
-    "allAreas": "All areas",
-    "more": "More",
-    "moreLabel": "More: all areas",
     "workspaceCount": "Workspaces: {{count}}",
     "rail": {
       "title": "Sessions",
@@ -450,10 +414,40 @@
       "usage": "{{tool}} usage",
       "fiveHour": "5h",
       "week": "wk",
+      "toolsUnreadable": "AI tools not read · Retry",
       "version": "Version"
     },
     "account": {
       "version": "Version {{version}}"
-    }
+    },
+    "collapse": "Collapse navigation",
+    "expand": "Expand navigation",
+    "openNavigation": "Open navigation",
+    "closeNavigation": "Close navigation"
+  },
+  "places": {
+    "now": "Now",
+    "sessions": "Sessions",
+    "files": "Files & workspaces",
+    "work": "Work & communications",
+    "ai-tools": "AI tools",
+    "models": "Models",
+    "mcp-skills": "MCP & skills",
+    "sources": "Sources",
+    "rules": "Rules & approvals",
+    "usage": "Usage & cost",
+    "activity": "Activity & audit",
+    "access": "Access map",
+    "people": "People & groups",
+    "security": "Security",
+    "operations": "Operations",
+    "license": "License",
+    "settings": "Settings"
+  },
+  "groups": {
+    "work": "Work",
+    "tools": "Tools",
+    "control": "Control",
+    "admin": "Admin"
   }
 }

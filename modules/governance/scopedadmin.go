@@ -9,9 +9,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
+
+	cedar "github.com/cedar-policy/cedar-go"
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -122,6 +125,9 @@ type scopedGrant struct {
 	Scope       scopeSpec
 	CreatedBy   string
 	Note        string
+	ExpiresAt   string
+	Remind14At  string
+	Remind1At   string
 }
 
 // --- store I/O ----------------------------------------------------------------------
@@ -132,9 +138,9 @@ func recToCustomRole(r model.Record) customRole {
 		DisplayName: r.String(colRBACDisplayName),
 		Description: r.String(colRBACDescription),
 		Base:        r.String(colRBACBaseRole),
-		Perms:       jsonStrings(r.String(colRBACPerms)),
+		Perms:       storedSessionPermissions(r, colRBACPerms),
 		Groups:      jsonStrings(r.String(colRBACGroups)),
-		Excludes:    jsonStrings(r.String(colRBACExcludes)),
+		Excludes:    storedSessionPermissions(r, colRBACExcludes),
 		CreatedBy:   r.String(colRBACCreatedBy),
 	}
 }
@@ -144,7 +150,7 @@ func recToPermGroup(r model.Record) permGroup {
 		Name:        r.String(colRBACName),
 		DisplayName: r.String(colRBACDisplayName),
 		Description: r.String(colRBACDescription),
-		Perms:       jsonStrings(r.String(colRBACPerms)),
+		Perms:       storedSessionPermissions(r, colRBACPerms),
 		CreatedBy:   r.String(colRBACCreatedBy),
 	}
 }
@@ -159,6 +165,9 @@ func recToScopedGrant(r model.Record) scopedGrant {
 		Scope:       scopeSpec{Tree: r.String(colSGScopeTree), Ref: r.String(colSGScopeRef), Class: r.String(colSGScopeClass)},
 		CreatedBy:   r.String(colSGCreatedBy),
 		Note:        r.String(colSGNote),
+		ExpiresAt:   r.String(colSGExpiresAt),
+		Remind14At:  r.String(colSGRemind14At),
+		Remind1At:   r.String(colSGRemind1At),
 	}
 }
 
@@ -223,7 +232,7 @@ func loadPermGroups(ctx context.Context, sc store.Scope) (map[string]permGroup, 
 	return out, nil
 }
 
-func loadScopedGrants(ctx context.Context, sc store.Scope) ([]scopedGrant, error) {
+func loadAllScopedGrants(ctx context.Context, sc store.Scope) ([]scopedGrant, error) {
 	repo, err := sc.Ext(scopedGrantKind)
 	if err != nil {
 		return nil, err
@@ -237,6 +246,29 @@ func loadScopedGrants(ctx context.Context, sc store.Scope) ([]scopedGrant, error
 		out = append(out, recToScopedGrant(r))
 	}
 	return out, nil
+}
+
+func loadScopedGrants(ctx context.Context, sc store.Scope) ([]scopedGrant, error) {
+	grants, err := loadAllScopedGrants(ctx, sc)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	out := grants[:0]
+	for _, grant := range grants {
+		if grantCurrent(grant, now) {
+			out = append(out, grant)
+		}
+	}
+	return out, nil
+}
+
+func grantCurrent(grant scopedGrant, now time.Time) bool {
+	if grant.ExpiresAt == "" {
+		return true
+	}
+	expires, err := time.Parse(time.RFC3339Nano, grant.ExpiresAt)
+	return err == nil && now.Before(expires)
 }
 
 // --- the permission catalog + effective perms ---------------------------------------
@@ -304,7 +336,12 @@ func effectivePermsOf(roleName string, custom bool, class string, roles map[stri
 			continue
 		}
 		if class != "" && kind != class {
-			continue
+			// The split operations still act on a run. A class filter must not
+			// discard an output/stop permission already present in the role's set.
+			legacyKind, _, _ := splitPerm(string(legacySessionPermissions[cedar.String(p)]))
+			if legacyKind != class {
+				continue
+			}
 		}
 		out[p] = true
 	}
@@ -335,8 +372,9 @@ func isAdminCapableGrant(g scopedGrant, roles map[string]customRole, groups map[
 
 // delegationDomain is one (scope, grantable-perms) pair an actor may delegate within.
 type delegationDomain struct {
-	scope scopeSpec
-	perms map[string]bool
+	scope     scopeSpec
+	perms     map[string]bool
+	expiresAt string
 }
 
 // grantAppliesToActor reports whether grant g would match the acting principal (its
@@ -378,7 +416,7 @@ func actorDomains(actor auth.Principal, tenant model.TenantID, allGrants []scope
 		if !grantAppliesToActor(g, actor, tenant) || !isAdminCapableGrant(g, roles, groups) {
 			continue
 		}
-		domains = append(domains, delegationDomain{scope: g.Scope, perms: effectivePermsOfGrant(g, roles, groups)})
+		domains = append(domains, delegationDomain{scope: g.Scope, perms: effectivePermsOfGrant(g, roles, groups), expiresAt: g.ExpiresAt})
 	}
 	return domains
 }
@@ -388,8 +426,20 @@ func actorDomains(actor auth.Principal, tenant model.TenantID, allGrants []scope
 // domain of the actor — its scope contained AND its permission set a subset. Reads the
 // agent-group→workspace mapping from sc for scope containment.
 func canDelegate(ctx context.Context, sc store.Scope, actor auth.Principal, tenant model.TenantID, g scopedGrant, allGrants []scopedGrant, roles map[string]customRole, groups map[string]permGroup) error {
+	return canDelegateAt(ctx, sc, actor, tenant, g, allGrants, roles, groups, time.Now())
+}
+
+func canDelegateAt(ctx context.Context, sc store.Scope, actor auth.Principal, tenant model.TenantID, g scopedGrant, allGrants []scopedGrant, roles map[string]customRole, groups map[string]permGroup, now time.Time) error {
 	if actor.Superadmin {
 		return nil
+	}
+	var childExpires time.Time
+	if g.ExpiresAt != "" {
+		var err error
+		childExpires, err = time.Parse(time.RFC3339Nano, g.ExpiresAt)
+		if err != nil {
+			return validationError("invalid child grant expiry")
+		}
 	}
 	domains := actorDomains(actor, tenant, allGrants, roles, groups)
 	if len(domains) == 0 {
@@ -397,6 +447,15 @@ func canDelegate(ctx context.Context, sc store.Scope, actor auth.Principal, tena
 	}
 	gperms := effectivePermsOfGrant(g, roles, groups)
 	for _, d := range domains {
+		if d.expiresAt != "" {
+			parentExpires, err := time.Parse(time.RFC3339Nano, d.expiresAt)
+			if err != nil {
+				return fmt.Errorf("governance: invalid delegator expiry: %w", err)
+			}
+			if !now.Before(parentExpires) || g.ExpiresAt == "" || childExpires.After(parentExpires) {
+				continue
+			}
+		}
 		contained, err := scopeContains(ctx, sc, d.scope, g.Scope)
 		if err != nil {
 			return err
@@ -405,7 +464,40 @@ func canDelegate(ctx context.Context, sc store.Scope, actor auth.Principal, tena
 			return nil
 		}
 	}
-	return ceilingError("cannot delegate above your own scope or role")
+	return ceilingError("cannot delegate above your own scope, role or expiry")
+}
+
+// AdministersWorkspace reports whether actor administers the department workspace:
+// one of its delegation domains (tenant admin/owner, or an admin-capable scoped grant
+// with no class filter) contains it, the definition canDelegate and requireNodeAdmin
+// use. Core asks it before creating a department under that parent
+// (api.WorkspaceAdministration). An unknown workspace is ErrNotFound.
+func (m *Module) AdministersWorkspace(ctx context.Context, actor auth.Principal, tenant model.TenantID, workspace model.ID) (bool, error) {
+	if actor.Superadmin {
+		return true, nil
+	}
+	if m.data == nil {
+		return false, errors.New("governance: AdministersWorkspace requires module data")
+	}
+	admin := false
+	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+		ws, err := sc.Workspaces().Get(ctx, workspace)
+		if err != nil {
+			return err
+		}
+		state, err := loadManagedProjectionState(ctx, sc)
+		if err != nil {
+			return err
+		}
+		node := scopeSpec{Tree: scopeWorkspace, Ref: ws.Slug}
+		for _, d := range actorDomains(actor, tenant, state.grants, state.roles, state.groups) {
+			if admin, err = scopeContains(ctx, sc, d.scope, node); err != nil || admin {
+				return err
+			}
+		}
+		return nil
+	})
+	return admin, err
 }
 
 // permSubset reports whether every permission in a is present in b.
@@ -492,6 +584,22 @@ func findAgentGroupBySlug(ctx context.Context, sc store.Scope, slug string) (mod
 // can reach the delegation API and sub-delegate within its ceiling). Deterministic
 // (sorted) so an unchanged rowset re-projects to identical bytes.
 func projectManagedCedar(grants []scopedGrant, roles map[string]customRole, groups map[string]permGroup) string {
+	return projectManagedCedarAt(grants, roles, groups, time.Now())
+}
+
+func projectManagedCedarAt(grants []scopedGrant, roles map[string]customRole, groups map[string]permGroup, now time.Time) string {
+	active := make([]scopedGrant, 0, len(grants))
+	for _, grant := range grants {
+		if grantCurrent(grant, now) {
+			active = append(active, grant)
+		}
+	}
+	return projectManagedCedarVersion(active, roles, groups, true)
+}
+
+// The old rendering is used only to recognize a stored machine projection. A
+// hand-authored or divergent revision is never replaced from structured rows.
+func projectManagedCedarVersion(grants []scopedGrant, roles map[string]customRole, groups map[string]permGroup, exact bool) string {
 	sorted := append([]scopedGrant(nil), grants...)
 	sort.Slice(sorted, func(i, j int) bool { return scopedGrantKeyOf(sorted[i]) < scopedGrantKeyOf(sorted[j]) })
 
@@ -506,10 +614,17 @@ func projectManagedCedar(grants []scopedGrant, roles map[string]customRole, grou
 			continue
 		}
 		perms := effectivePermsOfGrant(g, roles, groups)
+		if !exact {
+			for narrow, old := range legacySessionPermissions {
+				if perms[string(old)] {
+					delete(perms, string(narrow))
+				}
+			}
+		}
 		if len(perms) == 0 {
 			continue
 		}
-		rules = append(rules, policytext.Rule{Subject: subj, Actions: sortedPerms(perms), When: cedarScopeWhen(g.Scope)})
+		rules = append(rules, policytext.Rule{Subject: subj, Actions: sortedPerms(perms), When: cedarScopeWhen(g.Scope), GrantID: g.ID.String()})
 		// The tenant-wide delegation capability (reach the rbac API to sub-delegate) is
 		// emitted for a USER or a GROUP subject (U7): an admin-capable grant to a
 		// directory group IS a delegation DIRECTED at that group's members — the IdP-group
@@ -572,7 +687,51 @@ func projectManagedCedar(grants []scopedGrant, roles map[string]customRole, grou
 			rules = append(rules, policytext.Rule{Subject: subj, Actions: acts})
 		}
 	}
-	return policytext.Render(rules)
+	var source strings.Builder
+	for _, rule := range rules {
+		if exact && hasSessionPermission(rule.Actions) {
+			source.WriteString(sessionExactAnnotation)
+		}
+		source.WriteString(policytext.Render([]policytext.Rule{rule}))
+	}
+	return source.String()
+}
+
+// managedProjectionWithGrantIDs upgrades a recognized machine projection in
+// memory, including pre-split session actions and missing grant annotations. A
+// divergent policy or mismatched stored grant ID is never replaced from rows.
+func managedProjectionWithGrantIDs(current string, state managedProjectionState) string {
+	projected := projectManagedCedar(state.grants, state.roles, state.groups)
+	legacy := projectManagedCedarVersion(state.grants, state.roles, state.groups, false)
+	matches := func(source string) bool { return current == source || current == withoutGrantIDAnnotations(source) }
+	if !matches(projected) && !matches(legacy) && !matches(legacyManagedSessionSource(legacy)) {
+		return current
+	}
+	return projected
+}
+
+// managedCedarForEvaluation gives reload and mutation confirmation the same
+// in-memory projection without changing the stored revision or its digest.
+func managedCedarForEvaluation(ctx context.Context, sc store.Scope, managed string) (string, error) {
+	if managed == "" || strings.Contains(managed, sessionExactAnnotation) {
+		return managed, nil
+	}
+	state, err := loadManagedProjectionState(ctx, sc)
+	if err != nil {
+		return "", err
+	}
+	return managedProjectionWithGrantIDs(managed, state), nil
+}
+
+func withoutGrantIDAnnotations(source string) string {
+	lines := strings.Split(source, "\n")
+	kept := lines[:0]
+	for _, line := range lines {
+		if !strings.HasPrefix(line, "@"+grantIDAnnotation+"(") {
+			kept = append(kept, line)
+		}
+	}
+	return strings.Join(kept, "\n")
 }
 
 // delegationActions returns the actions the tenant-wide delegation permit may carry for
@@ -969,7 +1128,11 @@ func observeCedarDurableSnapshot(
 		return observed, errors.New("governance: unsigned Cedar freshness carries a tenant staleness bound")
 	}
 
-	combined := mergeCedarSources(mergeCedarSources(free, managed), adopted)
+	managedForEvaluation, err := managedCedarForEvaluation(ctx, sc, managed)
+	if err != nil {
+		return observed, err
+	}
+	combined := mergeCedarSources(mergeCedarSources(free, managedForEvaluation), adopted)
 	selection := activationID{authored: authored, managed: managedRevision, adopted: adoptedRevision}
 	bound := deploymentBound
 	if freshness.MaxStaleness > 0 {
@@ -1090,4 +1253,43 @@ func (m *Module) reloadTenantGrantsLogged(ctx context.Context, tenant model.Tena
 				"tenant", tenant.String(), "err", err)
 		}
 	}
+}
+
+const sessionExactAnnotation = `@olivares_session_permissions("exact")` + "\n"
+
+func hasSessionPermission(permissions []string) bool {
+	for _, permission := range permissions {
+		if permission == "sessions:run:read" || permission == "sessions:run:write" || legacySessionPermissions[cedar.String(permission)] != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// Null/false denotes a pre-split row. Expand its explicit permissions (and
+// exclusions) on read; new writes persist exact lists and never inherit this rule.
+func storedSessionPermissions(row model.Record, column string) []string {
+	permissions := jsonStrings(row.String(column))
+	if row.Bool(colRBACSessionExact) {
+		return permissions
+	}
+	for _, permission := range permissions {
+		for narrow, old := range legacySessionPermissions {
+			if permission == string(old) && !slices.Contains(permissions, string(narrow)) {
+				permissions = append(permissions, string(narrow))
+			}
+		}
+	}
+	return permissions
+}
+
+// Before these core permissions became grantable they could not appear in the
+// managed action list. Strip only those additions when recognizing old bytes.
+func legacyManagedSessionSource(source string) string {
+	for _, permission := range []string{string(auth.PermAuthenticatorWrite), "audit:read", string(auth.PermAuthzRead), "accessgraph:read"} {
+		action := "Action::" + policytext.Str(permission)
+		source = strings.ReplaceAll(source, action+", ", "")
+		source = strings.ReplaceAll(source, ", "+action, "")
+	}
+	return source
 }

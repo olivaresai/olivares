@@ -208,6 +208,9 @@ func (e *Engine) installV2(ctx context.Context, req RequestV2, approved *PlanV2,
 	}
 	exeAbs := filepath.Join(req.DestRoot, staging, filepath.FromSlash(plan.Selection.Layout.EntryPoint))
 	fmt.Fprintf(progress, "probing the staged executable: %s --version\n", exeAbs)
+	if err := e.refuseUnconfinedUnsigned(plan.Selection.Driver); err != nil {
+		return nil, plan, err
+	}
 	probe, err := p.Probe(e.probeContext(ctx), exeAbs, filepath.Join(req.DestRoot, scratch), plan.Selection.Version)
 	if err != nil {
 		return nil, plan, err
@@ -297,6 +300,11 @@ func (e *Engine) revalidateV2(ctx context.Context, root *os.Root, p PackageProvi
 	}
 	if rec.VerificationKind == VerificationCatalogSHA256 {
 		if err := verifyDeclaredReceipt(ctx, root, relRelease, rec); err != nil {
+			return nil, err
+		}
+	}
+	if rec.VerificationKind == VerificationOriginTarball {
+		if err := verifyCursorReceipt(ctx, root, relRelease, rec); err != nil {
 			return nil, err
 		}
 	}

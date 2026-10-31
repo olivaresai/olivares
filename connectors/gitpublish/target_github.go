@@ -17,10 +17,11 @@ type githubTargetBinding struct {
 
 func (githubTargetKind) bind(cfg map[string]string) (TargetRow, error) {
 	b := githubTargetBinding{apiTargetBinding: apiTarget(cfg, githubsrc.DefaultAPIBase), appID: strings.TrimSpace(cfg["app_id"]), installationID: strings.TrimSpace(cfg["installation_id"])}
+	b.webBase = githubWebBase(b.base)
 	return targetRow(cfg, cfg["org"], b), nil
 }
 func (githubTargetKind) capabilities() TargetCapabilities {
-	return TargetCapabilities{Effects: []Effect{EffectPush, EffectPullRequest, EffectMerge, EffectObserve, EffectRead}, MergeMethods: []string{"merge", "squash", "rebase"}, CIPaths: []string{".github/workflows"}, NarrowRead: true}
+	return TargetCapabilities{Effects: []Effect{EffectPush, EffectPullRequest, EffectMerge, EffectIssueComment, EffectObserve, EffectRead}, MergeMethods: []string{"merge", "squash", "rebase"}, CIPaths: []string{".github/workflows"}, NarrowRead: true}
 }
 func (githubTargetKind) diffSource() DiffSource { return githubDiffSource{githubsrc.New()} }
 func (b githubTargetBinding) open(repo TargetRepository, credential Secret, deps HostDependencies) (Host, error) {

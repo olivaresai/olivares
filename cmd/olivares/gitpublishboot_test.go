@@ -247,6 +247,16 @@ func (f fakeGitpublishSources) GetByID(_ context.Context, id model.ID) (model.So
 	return def, ok, nil
 }
 
+func (f fakeGitpublishSources) List(_ context.Context, scope model.TenantID) ([]model.SourceDef, error) {
+	var out []model.SourceDef
+	for _, def := range f {
+		if def.Scope == scope {
+			out = append(out, def)
+		}
+	}
+	return out, nil
+}
+
 type fakeGitpublishSecrets struct {
 	values map[string]string
 	reads  []string
@@ -311,6 +321,10 @@ func TestGitpublishCustodySelectsApprovedBindings(t *testing.T) {
 	if err != nil || rb.ID != "gh:acme/widgets" || rb.Version != 3 || rb.Owner != "acme" || rb.Name != "widgets" || rb.RepoID != "api.github.com/acme/widgets" {
 		t.Fatalf("repository binding = %+v %v", rb, err)
 	}
+	webBase, err := c.RepositoryWebBase(ctx, gitpublishTestTenant, gitpublishTestWorkspace, "gh:acme/widgets")
+	if err != nil || webBase != "https://github.com" {
+		t.Fatalf("repository web base = %q, %v", webBase, err)
+	}
 	if filepath.Dir(rb.LocalPath) != c.root || !strings.HasSuffix(rb.LocalPath, ".git") {
 		t.Fatalf("server repository %q is not engine-owned under %q", rb.LocalPath, c.root)
 	}
@@ -339,6 +353,10 @@ func TestGitpublishCustodySelectsApprovedBindings(t *testing.T) {
 	glrb, err := c.RepositoryBinding(ctx, gitpublishTestTenant, gitpublishTestWorkspace, "gl:acme/tools")
 	if err != nil || glrb.RepoID != "gitlab.com/acme/tools" {
 		t.Fatalf("gitlab repository binding = %+v %v", glrb, err)
+	}
+	webBase, err = c.RepositoryWebBase(ctx, gitpublishTestTenant, gitpublishTestWorkspace, "gl:acme/tools")
+	if err != nil || webBase != "https://gitlab.com" {
+		t.Fatalf("gitlab repository web base = %q, %v", webBase, err)
 	}
 	if host, err := c.OpenHost(ctx, gitpublishTestTenant, glcb, glrb); err != nil {
 		t.Fatal(err)
@@ -443,7 +461,7 @@ func TestGitpublishCustodyOpensApprovedSelfHostedHosts(t *testing.T) {
 	doer := &gitpublishRecordDoer{status: http.StatusCreated, body: `{"iid":7,"state":"opened","source_branch":"agent/run-1","target_branch":"main"}`}
 	c.doer = doer
 
-	open := func(cred, repo, repoID string) gp.Host {
+	open := func(cred, repo, repoID, webBase string) gp.Host {
 		t.Helper()
 		cb, err := c.CredentialBinding(ctx, gitpublishTestTenant, gitpublishTestWorkspace, cred)
 		if err != nil {
@@ -453,6 +471,10 @@ func TestGitpublishCustodyOpensApprovedSelfHostedHosts(t *testing.T) {
 		if err != nil || rb.RepoID != repoID {
 			t.Fatalf("%s repository binding = %+v %v", repo, rb, err)
 		}
+		base, err := c.RepositoryWebBase(ctx, gitpublishTestTenant, gitpublishTestWorkspace, repo)
+		if err != nil || base != webBase {
+			t.Fatalf("%s repository web base = %q, %v", repo, base, err)
+		}
 		host, err := c.OpenHost(ctx, gitpublishTestTenant, cb, rb)
 		if err != nil {
 			t.Fatalf("%s open = %v, want the approved self-hosted host", repo, err)
@@ -460,11 +482,11 @@ func TestGitpublishCustodyOpensApprovedSelfHostedHosts(t *testing.T) {
 		return host
 	}
 
-	ghes := open("gh", "gh:acme/widgets", "ghe.example.com/acme/widgets")
+	ghes := open("gh", "gh:acme/widgets", "ghe.example.com/acme/widgets", "https://ghe.example.com")
 	if push, _, _ := ghes.PushTarget(gp.Token{}); !strings.EqualFold(push, "https://ghe.example.com/acme/widgets.git") {
 		t.Fatalf("GHES push target = %q", push)
 	}
-	gitlab := open("gl", "gl:acme/tools", "gitlab.example.com/acme/tools")
+	gitlab := open("gl", "gl:acme/tools", "gitlab.example.com/acme/tools", "https://gitlab.example.com")
 	if push, _, _ := gitlab.PushTarget(gp.Token{}); push != "https://gitlab.example.com/acme/tools.git" {
 		t.Fatalf("GitLab push target = %q", push)
 	}

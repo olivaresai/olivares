@@ -30,10 +30,13 @@ const testClientID = "client-1"
 // real oidcProvider.validate run end-to-end (discovery → code exchange → ID-token
 // signature/iss/aud/exp verify → our nonce/azp/email checks) without a live IdP.
 type oidcTestIDP struct {
-	srv      *httptest.Server
-	key      *rsa.PrivateKey
-	idToken  string         // returned by the token endpoint; set per test before validate
-	userinfo map[string]any // returned by /userinfo; nil ⇒ 404 (endpoint not exercised)
+	srv          *httptest.Server
+	key          *rsa.PrivateKey
+	idToken      string         // returned by the token endpoint; set per test before validate
+	userinfo     map[string]any // returned by /userinfo; nil ⇒ 404 (endpoint not exercised)
+	userinfoBody string         // non-empty ⇒ 502 with this raw body
+
+	noUserinfoEndpoint bool // discovery does not advertise userinfo_endpoint; set before provider()
 }
 
 func newOIDCTestIDP(t *testing.T) *oidcTestIDP {
@@ -45,14 +48,18 @@ func newOIDCTestIDP(t *testing.T) *oidcTestIDP {
 	idp := &oidcTestIDP{key: key}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSONTest(w, map[string]any{
+		doc := map[string]any{
 			"issuer":                                idp.srv.URL,
 			"authorization_endpoint":                idp.srv.URL + "/authorize",
 			"token_endpoint":                        idp.srv.URL + "/token",
 			"jwks_uri":                              idp.srv.URL + "/jwks",
 			"userinfo_endpoint":                     idp.srv.URL + "/userinfo",
 			"id_token_signing_alg_values_supported": []string{"RS256"},
-		})
+		}
+		if idp.noUserinfoEndpoint {
+			delete(doc, "userinfo_endpoint")
+		}
+		writeJSONTest(w, doc)
 	})
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, _ *http.Request) {
 		pub := key.PublicKey
@@ -70,6 +77,11 @@ func newOIDCTestIDP(t *testing.T) *oidcTestIDP {
 		})
 	})
 	mux.HandleFunc("/userinfo", func(w http.ResponseWriter, _ *http.Request) {
+		if idp.userinfoBody != "" {
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = w.Write([]byte(idp.userinfoBody))
+			return
+		}
 		if idp.userinfo == nil {
 			w.WriteHeader(http.StatusNotFound)
 			return

@@ -2,7 +2,10 @@
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
 #
-# Enforce `olivares/no-raw-palette` over web/src/features with the REAL eslint.config.js.
+# Enforce `olivares/no-raw-palette` over web/src with the REAL eslint.config.js: no raw
+# palette class, arbitrary color value or bare color string outside the design tokens, which
+# would paint the same in Light, Dark and Black and escape the contrast tests. The config
+# names the files whose colors must stay literal and leaves tests and the dev page out.
 #
 # This was a vitest case (web/src/features/raw-palette.test.ts) that ran a full
 # programmatic ESLint pass over 777 files INSIDE a vitest worker: 148s and 113s alone,
@@ -31,20 +34,22 @@ if [ ! -d web/node_modules ]; then
   exit 2
 fi
 
-salida="$(mktemp)"
-trap 'rm -f "$salida"' EXIT
+report_file="$(mktemp)"
+error_file="$(mktemp)"
+trap 'rm -f "$report_file" "$error_file"' EXIT
 
 # ESLint exits non-zero when ANY rule reports; the JSON is still what we judge, so the
 # exit code is captured and only used to tell "it ran" from "it could not run".
-pnpm --dir web exec eslint 'src/features/**/*.{ts,tsx}' --format json >"$salida" 2>/dev/null
+pnpm --dir web exec eslint 'src/**/*.{ts,tsx}' --format json >"$report_file" 2>"$error_file"
 rc=$?
 
-if [ ! -s "$salida" ]; then
+if [ ! -s "$report_file" ]; then
   echo "check-raw-palette: ESLint produced no report (rc=$rc) — NOT a clean verdict" >&2
+  head -n 20 "$error_file" >&2
   exit 2
 fi
 
-python3 - "$salida" "$raiz/web" <<'PY'
+python3 - "$report_file" "$raiz/web" <<'PY'
 import json, os, sys
 
 with open(sys.argv[1], encoding='utf-8') as fh:
@@ -56,16 +61,24 @@ with open(sys.argv[1], encoding='utf-8') as fh:
 
 base = sys.argv[2]
 faltas = []
+ilegibles = []
 for r in informe:
     for m in r.get('messages', []):
+        donde = f"{os.path.relpath(r['filePath'], base)}:{m.get('line')}:{m.get('column')} {m.get('message')}"
         if m.get('ruleId') == 'olivares/no-raw-palette':
-            faltas.append(
-                f"{os.path.relpath(r['filePath'], base)}:{m.get('line')}:{m.get('column')} {m.get('message')}"
-            )
+            faltas.append(donde)
+        elif m.get('fatal'):
+            # A file ESLint could not parse was never checked: not a clean verdict.
+            ilegibles.append(donde)
 
-print(f'check-raw-palette: {len(informe)} files linted, {len(faltas)} raw-palette violations')
+print(f'check-raw-palette: {len(informe)} files linted, {len(faltas)} raw-color violations, {len(ilegibles)} unparsed')
+if ilegibles:
+    print('Files ESLint could not parse, so the raw color rule never ran on them:', file=sys.stderr)
+    for f in ilegibles:
+        print(f'  {f}', file=sys.stderr)
+    raise SystemExit(2)
 if faltas:
-    print('Raw Tailwind palette classes bypass the semantic design tokens:', file=sys.stderr)
+    print('Raw colors bypass the semantic design tokens:', file=sys.stderr)
     for f in faltas:
         print(f'  {f}', file=sys.stderr)
     raise SystemExit(1)

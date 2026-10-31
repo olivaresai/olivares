@@ -1,0 +1,30 @@
+{
+  "title": "アカウント別の使用量とコスト",
+  "subtitle": "公式の 5 時間と週の上限を、今日のトークンとコストと並べて表示します。",
+  "windows": {
+    "fiveHour": "5 時間",
+    "week": "週"
+  },
+  "accounts": {
+    "heading": "アカウント",
+    "loading": "各ツールのアカウントを読み込み中…",
+    "error": "アカウントの上限を読み込めませんでした。",
+    "empty": "上限を報告したアカウントはまだありません。",
+    "resets": "{{when}}にリセット",
+    "stale": "最終読み込み {{at}}",
+    "details": "詳細",
+    "detailsFor": "{{account}} の詳細",
+    "adminOnly": "アカウントの上限はシステム管理者に表示されます。"
+  },
+  "today": {
+    "heading": "今日",
+    "loading": "今日のセッションを読み込み中…",
+    "error": "今日のセッションを読み込めませんでした。",
+    "sessions_other": "{{count}} 件のセッション",
+    "tokens": "入力 {{input}} · 出力 {{output}}",
+    "atLeast": "少なくとも",
+    "unpriced_other": "{{count}} 件のセッションがコストを報告していません。",
+    "untokened_other": "{{count}} 件のセッションがトークンを報告していません。",
+    "viewSessions": "セッションを表示"
+  }
+}

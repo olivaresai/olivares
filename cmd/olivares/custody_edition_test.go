@@ -246,19 +246,13 @@ func TestCommunityAuditRecoverKeepsEditionExitCode(t *testing.T) {
 	}
 }
 
-// `audit verify` is read-only and reaches the off-box signer through auditVerifyBoot,
-// not boot, so a Community operator can still check a ledger signed off-box. Whatever
-// else it reports about this empty directory, it is not the Business refusal.
-func TestCommunityAuditVerifyIsNotRefusedByOffBoxSigner(t *testing.T) {
+// Verification is refused before opening an off-box ledger in Community.
+func TestCommunityAuditVerifyRefusedBeforeOffBoxSigner(t *testing.T) {
 	asEdition(t, "community")
 	clearOlivaresEnv(t)
 	t.Setenv(envLedgerSigner, "aws-kms")
-	t.Setenv("OLIVARES_LEDGER_KMS_AWS_REGION", "eu-west-1")
-	t.Setenv("OLIVARES_LEDGER_KMS_AWS_KEY_ID", "alias/test")
-	t.Setenv("AWS_ACCESS_KEY_ID", "AKIDEXAMPLE")
-	t.Setenv("AWS_SECRET_ACCESS_KEY", "secret-example")
 	_, _, err := execRootOwnProcess(t, "audit", "verify", "--data-dir", filepath.Join(t.TempDir(), "absent"))
-	if err != nil && (exitcode.From(err) == exitcode.Edition || strings.Contains(err.Error(), "Business")) {
-		t.Fatalf("Community audit verify was refused as a Business capability: %v", err)
+	if err == nil || exitcode.From(err) != exitcode.Edition {
+		t.Fatalf("verify = %v, want edition refusal", err)
 	}
 }

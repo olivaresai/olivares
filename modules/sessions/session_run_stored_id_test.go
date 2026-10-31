@@ -104,7 +104,7 @@ func TestManagedStopRunQuestionAuthorizesTheStoredRunID(t *testing.T) {
 	op := f.operator("stored-id@w2.test", auth.RoleEditor, true, 2*time.Minute)
 	denied, deniedLive := f.launch("thread-stored-denied")
 	sibling, siblingLive := f.launch("thread-stored-sibling")
-	f.m.ManagedStopAuthority = NewManagedStopAuthority(f.authr, auth.NewAuthorizer(runForbid(t, f.st, f.tenant, storedRunIDForTest(t, f.st, f.tenant, denied.RunRef), permRunWrite)), f.st.Leader())
+	f.m.ManagedStopAuthority = NewManagedStopAuthority(f.authr, auth.NewAuthorizer(runForbid(t, f.st, f.tenant, storedRunIDForTest(t, f.st, f.tenant, denied.RunRef), permRunStop)), f.st.Leader())
 
 	res, err := f.call(f.request(op, denied, deniedLive.launchID, "stored-denied"))
 	f.refuseWithNoJournalRow(res, err, "stored-denied", ManagedStopForbidden)

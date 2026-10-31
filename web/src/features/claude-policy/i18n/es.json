@@ -117,9 +117,9 @@
   "ref": {
     "ms": {
       "paths": "Rutas de managed-settings.json",
-      "legacyPath": "La ruta antigua de Windows C:\\ProgramData\\ClaudeCode ya no está soportada (eliminada en {{since}}).",
+      "legacyPath": "La ruta antigua de Windows <path /> ya no está soportada (eliminada en {{since}}).",
       "precedence": "Precedencia de ajustes (de mayor a menor)",
-      "dropIn": "Directorio drop-in: {{dir}}",
+      "dropIn": "Directorio drop-in: <path />",
       "serverManaged": "Tier server-managed",
       "failClosed": "Fail-closed",
       "noMerge": "Sin fusión",

@@ -38,16 +38,20 @@ import (
 )
 
 const namespaceArg = "--session-network-v1"
+const containerArg = "--session-container-network-v1"
+const containerExecArg = "--session-container-exec-v1"
+
 const execArg = "--session-network-exec-v1"
 
 type helperSpec struct {
-	Socket  string
-	Preview string
-	CAPEM   []byte
-	Policy  Policy
-	Files   int
-	ReadyFD int
-	Args    []string
+	Container bool
+	Socket    string
+	Preview   string
+	CAPEM     []byte
+	Policy    Policy
+	Files     int
+	ReadyFD   int
+	Args      []string
 }
 
 // Wrap keeps the caller's confinement helper and held descriptors, and adds a
@@ -58,7 +62,7 @@ func Wrap(ctx context.Context, cmd *exec.Cmd, policy Policy) (waitReady func() e
 	if err != nil {
 		return nil, nil, "", err
 	}
-	p, err := startProxy(ctx, ds, withCredential(policy))
+	p, err := startProxy(ctx, ds, withCredential(policy), withControlDial(policy.ControlDial))
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("session egress proxy: %w", err)
 	}
@@ -160,13 +164,16 @@ func DialPreview(ctx context.Context, socket, address string) (net.Conn, error) 
 
 // Handles recognizes only the private network helper flags.
 func Handles(args []string) bool {
-	return len(args) > 0 && (args[0] == namespaceArg || args[0] == execArg)
+	return len(args) > 0 && (args[0] == namespaceArg || args[0] == execArg || args[0] == containerArg || args[0] == containerExecArg)
 }
 
 // RunHelper keeps the TCP bridges outside the filtered tool process. next
 // enters the existing filesystem helper, which signals readiness after Landlock.
 func RunHelper(args []string, next func([]string, *os.File) int) int {
-	if len(args) >= 3 && args[0] == execArg {
+	if len(args) == 2 && args[0] == containerArg {
+		return runContainerHelper(args[1])
+	}
+	if len(args) >= 3 && (args[0] == execArg || args[0] == containerExecArg) {
 		fd, err := strconv.Atoi(args[1])
 		if err != nil || fd < 3 {
 			return 126
@@ -174,9 +181,25 @@ func RunHelper(args []string, next func([]string, *os.File) int) int {
 		ready := os.NewFile(uintptr(fd), "session-egress-ready")
 		defer ready.Close()
 		unix.CloseOnExec(fd)
-		if err := restrictSockets(); err != nil {
+		if err := restrictSockets(args[0] == containerExecArg); err != nil {
 			_, _ = fmt.Fprintf(ready, "socket restrictions failed: %v\n", err)
 			fmt.Fprintln(os.Stderr, "olivares: session network confinement failed:", err)
+			return 126
+		}
+		if args[0] == containerExecArg {
+			program, err := exec.LookPath(args[2])
+			if err != nil {
+				_, _ = fmt.Fprintf(ready, "container tool lookup failed: %v\n", err)
+				fmt.Fprintln(os.Stderr, "olivares: container tool lookup failed:", err)
+				return 126
+			}
+			if _, err := ready.WriteString("ready\n"); err != nil {
+				return 126
+			}
+			if err := syscall.Exec(program, args[2:], os.Environ()); err != nil { // #nosec G204 -- the engine's own container runner supplies the program and argv; no shell
+				fmt.Fprintln(os.Stderr, "olivares: container tool exec failed:", err)
+				return 126
+			}
 			return 126
 		}
 		return next(args[2:], ready)
@@ -243,8 +266,10 @@ func serveNamespace(req helperSpec, ready *os.File) (int, error) {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
 	defer signal.Stop(signals)
-	if err := loopbackUp(); err != nil {
-		return 126, err
+	if !req.Container {
+		if err := loopbackUp(); err != nil {
+			return 126, err
+		}
 	}
 	ds, err := destinations(req.Policy)
 	if err != nil {
@@ -277,7 +302,7 @@ func serveNamespace(req helperSpec, ready *os.File) (int, error) {
 					(errors.Is(err, unix.EAFNOSUPPORT) || errors.Is(err, unix.EADDRNOTAVAIL)) {
 					continue
 				}
-				return 126, err
+				return 126, relayListenError(err, d.port)
 			}
 			listening = true
 			own[portOf(l.Addr())] = true
@@ -316,11 +341,17 @@ func serveNamespace(req helperSpec, ready *os.File) (int, error) {
 	}
 	// The mount layer, when the launch asked for one, is applied here: this is
 	// the last stage that holds the capability (the next one drops them all).
-	helperArgs, err := confine.ConsumeMounts(req.Args[2:])
-	if err != nil {
-		return 126, err
+	helperArgs := req.Args
+	stage := containerExecArg
+	if !req.Container {
+		var err error
+		helperArgs, err = confine.ConsumeMounts(req.Args[2:])
+		if err != nil {
+			return 126, err
+		}
+		stage = execArg
 	}
-	argv := append([]string{"__olivares_confine", execArg, strconv.Itoa(req.ReadyFD)}, helperArgs...)
+	argv := append([]string{"__olivares_confine", stage, strconv.Itoa(req.ReadyFD)}, helperArgs...)
 	child := exec.Command(self, argv...) // #nosec G204 -- reexecutes the engine's existing helper
 	child.Stdin, child.Stdout, child.Stderr = os.Stdin, os.Stdout, os.Stderr
 	var caFile string
@@ -582,4 +613,15 @@ func endpointRelay(socket string, d destination) http.Handler {
 		}
 		reverse.ServeHTTP(w, forward)
 	})
+}
+
+// relayListenError names how to allow a refused relay port. On the Olivares Server the
+// session's relay may bind only a port labeled for a local model runtime (11434, 1234,
+// 8000, 8080: olivares_model_runtime_port_t); a provider on any other loopback port is
+// refused until its administrator labels it.
+func relayListenError(err error, port string) error {
+	if !errors.Is(err, unix.EACCES) {
+		return err
+	}
+	return fmt.Errorf("%w; on an SELinux host, label the port for a local model runtime: semanage port -a -t olivares_model_runtime_port_t -p tcp %s (or port -m if it already has a label)", err, port)
 }

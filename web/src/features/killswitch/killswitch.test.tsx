@@ -785,7 +785,7 @@ describe('KillswitchView — forced post-review', () => {
   })
 })
 
-// HU 047 (09b, one-admin install): starting the estate again needs two OTHER admin
+// acceptance (09b, one-admin install): starting the estate again needs two OTHER admin
 // accounts to approve and one to review; the console said nothing before the stop, and a
 // refused review left its dialog silent.
 describe('KillswitchView — the two-admin rule, said before and after', () => {

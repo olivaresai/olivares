@@ -577,6 +577,11 @@ func TestCreateRun_PersistsTheTemplateRevisionItRanUnder(t *testing.T) {
 		t.Fatal("the run does not record which revision of the template it ran under")
 	}
 	first := dto.TemplateVersion
+	if _, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
+		TemplateID: id, ExpectedTemplateVersion: first, Actor: "user:u1", ActorKind: "user",
+	}); err != nil {
+		t.Fatalf("createRun with the current expected template version: %v", err)
+	}
 
 	// Edit the template and relaunch: the new run must record the NEW revision.
 	retermTemplate(t, m, tenant, id, tplBody{
@@ -591,6 +596,11 @@ func TestCreateRun_PersistsTheTemplateRevisionItRanUnder(t *testing.T) {
 	}
 	if next.TemplateVersion == first {
 		t.Errorf("both runs record revision %d; an edited template is indistinguishable from the one approved", first)
+	}
+	if _, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
+		TemplateID: id, ExpectedTemplateVersion: first, Actor: "user:u1", ActorKind: "user",
+	}); statusOf(err) != http.StatusConflict {
+		t.Fatalf("stale expected template version launched: err=%v status=%d", err, statusOf(err))
 	}
 }
 

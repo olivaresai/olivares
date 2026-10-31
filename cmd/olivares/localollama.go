@@ -23,7 +23,7 @@ const localOllamaName = "Ollama on this server"
 
 // registerLocalOllama adds the Ollama this engine runs (agenttoolsapi ollama.go) as a
 // provider once it answers (HU-R17), at its loopback endpoint, with no key, in the ONE
-// tenant the administrator started it from (Root on FH 033). Sharing a server resource
+// tenant the administrator started it from (Root on first-hour check). Sharing a server resource
 // with every tenant would be a tenancy decision nobody made; another tenant adds the
 // same endpoint in Providers, and the Ollama row shows its address. A start outside a
 // served business tenant registers nothing. A tenant that already has an active Ollama
@@ -63,7 +63,7 @@ func registerLocalOllama(rt *sessions.Module, st store.Store) func(context.Conte
 			}
 			ref = rec.Ref
 		}
-		// The record's model list is what an OpenCode launch on it may use (FH 087): it is
+		// The record's model list is what an OpenCode launch on it may use (first-hour check): it is
 		// read here, when Ollama starts and after each model download, so nobody has to
 		// test the provider in Providers first. A failed read is recorded like a failed
 		// test in Providers: the record keeps the probe's state and reason and its model

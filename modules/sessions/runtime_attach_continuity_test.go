@@ -356,7 +356,7 @@ type attachLagWire struct {
 	NextSeq int64  `json:"next_seq"`
 }
 
-// dev#2786: the console tells a change of model with when it happened, and a frame
+// the regression: the console tells a change of model with when it happened, and a frame
 // replayed after a reload must keep the time the engine read it, not the replay's.
 func TestAttachHTTP_OutputCarriesTheTimeTheEngineReadIt(t *testing.T) {
 	h, fr, admin, tenant := attachHTTPHarness(t, WithSessionWorkspaceRoot(t.TempDir()))

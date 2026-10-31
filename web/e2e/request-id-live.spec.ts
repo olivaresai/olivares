@@ -22,7 +22,7 @@ async function entra(page: Page) {
   await page.getByRole('button', { name: /^sign in$/i }).click()
   await expect(
     page
-      .getByRole('navigation', { name: 'Journeys', exact: true })
+      .getByRole('navigation', { name: 'Main navigation', exact: true })
       .getByRole('link', { name: 'Now', exact: true }),
   ).toBeVisible({ timeout: 20_000 })
 }

@@ -4,7 +4,7 @@
 //
 // The console's type is self-hosted and is the website's: Inter for text, Space Grotesk for
 // titles and figures, JetBrains Mono 400/500 for machine text, all under the SIL Open Font
-// License 1.1 (dev#2543). This pins what ships: the exact font files, their license texts next
+// License 1.1. This pins what ships: the exact font files, their license texts next
 // to them in the built console, the notice that credits them, and the first-paint budget —
 // three files, at most 95 KB, the medium mono weight declared but loaded only when a page asks.
 /// <reference types="node" />

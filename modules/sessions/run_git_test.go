@@ -218,7 +218,7 @@ func TestSessionGitHTTP(t *testing.T) {
 		assertPublished(t, "Git status", statusOp, got)
 	}
 	reader := h.viewerToken(admin, tenant, "git-reader@example.invalid")
-	if got := h.do("GET", base, reader, tenantHdr(tenant)); got.code != http.StatusOK {
+	if got := h.do("GET", base, reader, tenantHdr(tenant)); got.code != http.StatusForbidden {
 		t.Fatalf("reader status: %d %s", got.code, got.raw)
 	}
 	for _, action := range []string{"stage", "unstage", "commit", "branch"} {

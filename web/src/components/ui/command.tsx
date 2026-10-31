@@ -155,7 +155,7 @@ export function CommandShortcut({
     <span
       className={cn(
         'ml-auto flex h-5 items-center rounded-sm border border-border bg-muted px-1.5',
-        'font-mono text-[11px] leading-none tracking-wider text-muted-foreground',
+        'text-metadata-s leading-none tracking-wider text-muted-foreground',
         className,
       )}
       {...props}

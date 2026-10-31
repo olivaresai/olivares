@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// SR2C P2 round 2 (2026-10-03): the work-outbox pump registers its nudge
+// review P2 round 2 (2026-10-03): the work-outbox pump registers its nudge
 // goroutine and its module's sessions callback BEFORE the hook-config refusal —
 // so a boot that fails there must unwind them (cancel + join + withdraw), or a
 // failed boot leaks a goroutine and a callback into a dead store. This boots

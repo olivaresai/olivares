@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -18,10 +19,10 @@ import (
 
 // auditListCmd is `olivares audit ls`: the most recent events of the engine's
 // ledger, newest first. The other audit verbs prove and export the ledger offline;
-// this one answers "what just happened" (HU-29: no command showed recent events).
+// this one answers "what just happened" (acceptance: no command showed recent events).
 //
 // The API walks the ledger oldest first and every list appends an `audit.read`
-// event (HU-15 counted 41 of 56 rows), so this reads the head, then a window
+// event (acceptance counted 41 of 56 rows), so this reads the head, then a window
 // before it, and leaves the reads out unless --all.
 func auditListCmd() *cobra.Command {
 	var (
@@ -46,48 +47,9 @@ func auditListCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			path := "/v1/audit"
-			if system {
-				path = "/v1/audit/system"
-			}
-			var head struct {
-				HeadSeq int64 `json:"head_seq"`
-			}
-			_, b, err := cfg.do(cmd.Context(), "GET", path+"?limit=1", nil)
+			items, _, err := auditRecentEvents(cmd.Context(), &cfg, system, all, limit, nil)
 			if err != nil {
 				return err
-			}
-			if err := json.Unmarshal(b, &head); err != nil {
-				return err
-			}
-			q := url.Values{"limit": {"1000"}}
-			q.Set("from", fmt.Sprint(max(int64(1), head.HeadSeq-int64(limit)*5)))
-			if !all {
-				q.Set("exclude_action", "audit.read")
-			}
-			_, b, err = cfg.do(cmd.Context(), "GET", path+"?"+q.Encode(), nil)
-			if err != nil {
-				return err
-			}
-			var page struct {
-				Items []struct {
-					Seq        int64  `json:"seq"`
-					OccurredAt string `json:"occurred_at"`
-					Actor      string `json:"actor"`
-					Action     string `json:"action"`
-					TargetKind string `json:"target_kind"`
-					TargetID   string `json:"target_id"`
-				} `json:"items"`
-			}
-			if err := json.Unmarshal(b, &page); err != nil {
-				return err
-			}
-			items := page.Items
-			if len(items) > limit {
-				items = items[len(items)-limit:]
-			}
-			for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 {
-				items[i], items[j] = items[j], items[i]
 			}
 			table := termrender.Table{Header: []string{"time", "actor", "action", "target"}, Empty: "No events yet."}
 			for _, it := range items {
@@ -105,6 +67,84 @@ func auditListCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&system, "system", false, "the system ledger (installs, sign-ins, deployment-wide actions)")
 	cmd.Flags().BoolVar(&all, "all", false, "include the ledger's own read events (audit.read)")
 	return cmd
+}
+
+// auditRow is one ledger event as `audit ls` lists it; its JSON is what
+// `audit ls -o json` prints.
+type auditRow struct {
+	Seq        int64  `json:"seq"`
+	OccurredAt string `json:"occurred_at"`
+	Actor      string `json:"actor"`
+	Action     string `json:"action"`
+	TargetKind string `json:"target_kind"`
+	TargetID   string `json:"target_id"`
+}
+
+// auditFilterPages bounds how many pages one filtered read follows.
+const auditFilterPages = 20
+
+// auditRecentEvents reads the newest events of the ledger, newest first. It is
+// the one read behind `audit ls` and the audit ledger screen of `olivares ui`.
+// filter holds the API's own filters (actor, action, q, since); without any the
+// read looks at the window before the head, and with one it follows the ledger
+// from the start, because the API walks forward only. complete is false when the
+// read stopped after auditFilterPages pages with more still to scan: the rows are
+// then the newest of what was scanned, not of the ledger.
+func auditRecentEvents(ctx context.Context, cfg *agentClientConfig, system, all bool, limit int, filter url.Values) (rows []auditRow, complete bool, err error) {
+	path := "/v1/audit"
+	if system {
+		path = "/v1/audit/system"
+	}
+	var head struct {
+		HeadSeq int64 `json:"head_seq"`
+	}
+	_, b, err := cfg.do(ctx, "GET", path+"?limit=1", nil)
+	if err != nil {
+		return nil, false, err
+	}
+	if err := json.Unmarshal(b, &head); err != nil {
+		return nil, false, err
+	}
+	q := url.Values{"limit": {"1000"}}
+	for name, values := range filter {
+		q[name] = values
+	}
+	from := max(int64(1), head.HeadSeq-int64(limit)*5)
+	if len(filter) > 0 {
+		from = 1
+	}
+	q.Set("from", fmt.Sprint(from))
+	if !all {
+		q.Set("exclude_action", "audit.read")
+	}
+	items := []auditRow{} // an empty ledger prints [] in JSON, as it always has
+	for range auditFilterPages {
+		_, b, err = cfg.do(ctx, "GET", path+"?"+q.Encode(), nil)
+		if err != nil {
+			return nil, false, err
+		}
+		var page struct {
+			Items    []auditRow `json:"items"`
+			NextFrom int64      `json:"next_from"`
+			HasMore  bool       `json:"has_more"`
+		}
+		if err := json.Unmarshal(b, &page); err != nil {
+			return nil, false, err
+		}
+		items = append(items, page.Items...)
+		if len(items) > limit {
+			items = items[len(items)-limit:]
+		}
+		if !page.HasMore || page.NextFrom <= 0 {
+			complete = true
+			break
+		}
+		q.Set("from", fmt.Sprint(page.NextFrom))
+	}
+	for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 {
+		items[i], items[j] = items[j], items[i]
+	}
+	return items, complete, nil
 }
 
 // auditTime shows an event time in this computer's zone, to the second.

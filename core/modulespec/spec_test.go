@@ -80,13 +80,13 @@ func TestModuleSpecKernel(t *testing.T) {
 	for _, spec := range All() {
 		if spec.Kind == "kernel" {
 			kernel = append(kernel, spec.Namespace)
-			if spec.Selectable != (spec.Namespace != "session-cockpit") {
+			if spec.Selectable != (spec.Namespace != "session-cockpit" && spec.Namespace != "aiterms") {
 				t.Errorf("%s: selectable = %v", spec.Namespace, spec.Selectable)
 			}
 		}
 	}
 	slices.Sort(kernel)
-	if want := []string{"governance", "session-cockpit", "sessions"}; !slices.Equal(kernel, want) {
+	if want := []string{"aiterms", "governance", "session-cockpit", "sessions"}; !slices.Equal(kernel, want) {
 		t.Fatalf("kernel = %v, want %v", kernel, want)
 	}
 }

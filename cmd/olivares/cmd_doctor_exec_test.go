@@ -6,6 +6,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/olivaresai/olivares/modules/sessions"
 )
 
 // `doctorExecutable` is the bound that answers gosec G204 for the two exec seams in
@@ -61,5 +63,11 @@ func TestDoctorDepsRefuseBeforeExec(t *testing.T) {
 	if _, _, err := deps.runOutput(t.Context(), "definitely-not-a-program"); err == nil ||
 		!strings.Contains(err.Error(), "refuses to execute") {
 		t.Errorf("runOutput: want the named refusal, got %v", err)
+	}
+	// The image query is the third exec seam: a runtime path LookPath returned relative
+	// must be refused before it runs.
+	if _, err := deps.containerImage(t.Context(), sessions.ContainerRuntime{Path: "podman", Image: sessions.DefaultContainerImage}); err == nil ||
+		!strings.Contains(err.Error(), "refuses to execute") {
+		t.Errorf("containerImage: want the named refusal for a relative runtime path, got %v", err)
 	}
 }

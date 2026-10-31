@@ -14,7 +14,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { drApi, drKeys } from './api'
 import { BackupList } from './backup-list'
-import { BackupSchedule } from './backup-schedule'
+import { BackupSchedule, BackupProtectionStatus } from './backup-schedule'
 import { BackupTriggerDialog } from './backup-trigger-dialog'
 import { PendingRestores } from './pending-restores'
 import { RestoreDialog } from './restore-dialog'
@@ -57,6 +57,7 @@ export function BackupsView() {
         </TabsList>
 
         <TabsContent value="backups">
+          <BackupProtectionStatus />
           <PendingRestores />
           <BackupList
             data={backupsQ.data?.items ?? []}

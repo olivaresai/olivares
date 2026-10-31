@@ -214,13 +214,18 @@ func modelsURL(kind, baseURL string) (string, error) {
 }
 
 // authHeaders sets the credential header each kind documents. Anthropic uses
-// x-api-key plus a version; the other three are bearer.
-func authHeaders(req *http.Request, kind, key string) {
+// x-api-key plus a version, unless a preset row says its vendor takes a bearer
+// token (auth); the other three are bearer.
+func authHeaders(req *http.Request, kind string, auth modelprovider.AuthScheme, key string) {
 	switch kind {
 	case sessions.ProviderKindGemini:
 		req.Header.Set("x-goog-api-key", key)
 	case sessions.ProviderKindAnthropic:
-		req.Header.Set("x-api-key", key)
+		if auth == modelprovider.AuthBearer {
+			req.Header.Set("Authorization", "Bearer "+key)
+		} else {
+			req.Header.Set("x-api-key", key)
+		}
 		req.Header.Set("anthropic-version", anthropicVersionHeader)
 	default:
 		req.Header.Set("Authorization", "Bearer "+key)
@@ -239,8 +244,14 @@ func (p providerProbe) Probe(ctx context.Context, req sessions.ProviderProbeRequ
 }
 
 func (p providerProbe) ProbeService(ctx context.Context, req sessions.ProviderProbeRequest, service string) (sessions.ProviderProbeResult, error) {
-	if service != "" && (service != modelprovider.ServiceDeepSeek || req.Kind != sessions.ProviderKindOpenAICompatible || req.BaseURL != modelprovider.DeepSeekBaseURL) {
-		return sessions.ProviderProbeResult{}, errors.New("unsupported provider service or endpoint")
+	// A service is one row of the preset catalog, and the probe asks only the
+	// endpoint that row names, with the credential header it names.
+	var row modelprovider.Preset
+	if service != "" {
+		var ok bool
+		if row, ok = modelprovider.LookupPreset(service); !ok || req.Kind != row.Kind || req.BaseURL != row.BaseURL {
+			return sessions.ProviderProbeResult{}, errors.New("unsupported provider service or endpoint")
+		}
 	}
 	ctx, cancel := context.WithTimeout(ctx, providerProbeTimeout)
 	defer cancel()
@@ -262,8 +273,8 @@ func (p providerProbe) ProbeService(ctx context.Context, req sessions.ProviderPr
 		return sessions.ProviderProbeResult{Models: models, Detail: fmt.Sprintf("%d local models listed", len(models))}, nil
 	}
 	endpoint, err := modelsURL(req.Kind, req.BaseURL)
-	if service == modelprovider.ServiceDeepSeek {
-		endpoint, err = modelprovider.DeepSeekModelsURL, nil
+	if row.ModelsURL != "" {
+		endpoint, err = row.ModelsURL, nil
 	}
 	if err != nil {
 		return sessions.ProviderProbeResult{}, err
@@ -278,7 +289,7 @@ func (p providerProbe) ProbeService(ctx context.Context, req sessions.ProviderPr
 		if err != nil {
 			return sessions.ProviderProbeResult{}, err
 		}
-		authHeaders(hreq, req.Kind, req.APIKey)
+		authHeaders(hreq, req.Kind, row.Auth, req.APIKey)
 		hreq.Header.Set("Accept", "application/json")
 		hreq.Header.Set("User-Agent", providerProbeUserData+"/"+version)
 		resp, err := client.Do(hreq)
@@ -357,6 +368,26 @@ func (p providerProbe) ProbeService(ctx context.Context, req sessions.ProviderPr
 		if !payload.HasMore {
 			sort.Strings(models)
 			detail := fmt.Sprintf("%d models listed", len(models))
+			if row.KeyCheckURL != "" {
+				check, err := http.NewRequestWithContext(ctx, http.MethodGet, row.KeyCheckURL, nil)
+				if err != nil {
+					return sessions.ProviderProbeResult{}, err
+				}
+				authHeaders(check, req.Kind, row.Auth, req.APIKey)
+				check.Header.Set("Accept", "application/json")
+				check.Header.Set("User-Agent", providerProbeUserData+"/"+version)
+				answer, err := client.Do(check)
+				if err != nil {
+					return sessions.ProviderProbeResult{}, errors.New("the provider key endpoint could not be reached")
+				}
+				_ = answer.Body.Close()
+				if answer.StatusCode == http.StatusUnauthorized || answer.StatusCode == http.StatusForbidden {
+					return sessions.ProviderProbeResult{}, fmt.Errorf("%w: the provider answered %d for this credential", sessions.ErrProviderRefused, answer.StatusCode)
+				}
+				if answer.StatusCode != http.StatusOK {
+					return sessions.ProviderProbeResult{}, fmt.Errorf("the provider key endpoint answered %d", answer.StatusCode)
+				}
+			}
 			if len(models) == 0 {
 				detail = "the provider accepted the credential and listed no models"
 			}

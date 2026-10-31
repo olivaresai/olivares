@@ -19,6 +19,7 @@ import (
 	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/eventbus/natsbus"
+	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/compliance"
 	"github.com/olivaresai/olivares/modules/governance"
@@ -49,6 +50,9 @@ func init() { thisEdition = editionPortsForBuild() }
 // port means the capability is not in this edition; every caller keeps the answer it
 // gave before (501 *_unavailable, 403, CLI exit code 9, an inert gate).
 type editionPorts struct {
+	// nil preserves the shared admission chain. A decorator must retain its inner gate.
+	sessionLaunchGate func([]api.Module, sessions.LaunchGate) sessions.LaunchGate
+
 	// Reported by license status and the activation service.
 	name string
 	// The binary links commercial add-ons; Community help hides the add-on-only commands.
@@ -58,6 +62,11 @@ type editionPorts struct {
 
 	// nil adds no route: next is served unchanged.
 	httpRoutes func(next http.Handler, eng *engine, log *slog.Logger) http.Handler
+	// nil asks nothing. Otherwise the engine router asks it about every route an
+	// authenticated caller reaches, the listener and the engine's own in-process callers
+	// alike (api.Options.EditionRouteGate); its error answers in place of the route. The
+	// Business build's licence gate for its write routes sits here.
+	routeGate func(method, pattern string) error
 	// nil serves the AGPL console bundle; the public dist keeps its path.
 	consoleFS func(base fs.FS) fs.FS
 
@@ -115,6 +124,21 @@ type editionPorts struct {
 	// nil gives a session no managed credentials: a launch that names one answers 501
 	// business_required (modules/sessions session_credentials.go).
 	sessionCredentialBroker func(deps sessionCredentialDeps, log *slog.Logger) sessions.SessionCredentialBroker
+	// Business choices inside routes and commands Community also serves. Each gate is asked
+	// at the moment of the call and answers whether the live licence covers it; its error is
+	// the add-on refusal (403 addon_requires_license, or the CLI's error). nil is Community,
+	// which keeps its own answer: 501 business_required, or exit code 9 for ddil.
+	// steerOthers: steering a session another person started (modules/sessions steering_edition.go).
+	steerOthers func() error
+	// siemSink: creating or changing a SIEM sink on an event subscription.
+	siemSink func() error
+	// businessApprovals: an approval policy beyond the Community line (modules/governance policy.go).
+	businessApprovals func() error
+	// profileAssignment: assigning provider profiles, AI tools and department instructions and
+	// templates (modules/sourcescope profile_assignment.go).
+	profileAssignment func() error
+	// ddilImport: applying a DDIL bundle; dataDir is the command's --data-dir.
+	ddilImport func(dataDir string) error
 	// nil subscribes no feed, and the CLI answers honestly that the add-on is not in this edition.
 	threatIntelSource editionEnvPort[threatIntelSource]
 	// Every edition fills it; Community sends the operator-configured upstream credential to every target.
@@ -174,6 +198,10 @@ type editionPorts struct {
 	enterpriseReportSource func(getenv func(string) string, comp *compliance.Module, gov *governance.Module, pins mcpc.ToolPinVerifier, log *slog.Logger) reporting.EnterpriseReportSource
 	// nil refuses a "teamsbot" output kind naming Business; the Apache Teams webhook destination is untouched.
 	outputConnector func(kind string) (sdk.OutputConnector, bool)
+	// nil: a stored approval policy bound to a change record approves nothing (deny closed);
+	// Community cannot author one. destination answers the live connector behind a destination
+	// the tenant may address.
+	changeRecordReader func(destination func(model.TenantID, string) (sdk.OutputConnector, bool)) governance.ChangeRecordReader
 	// nil: the passive PagerDuty/Opsgenie notify sinks behave exactly as before.
 	incidentCloseLoop func(ctx context.Context, getenv func(string) string, log *slog.Logger) incidentCloseLoop
 
@@ -191,12 +219,16 @@ type editionPorts struct {
 	// Every edition fills it; Community mounts only the session-cockpit placeholder and links none of the engine.
 	moduleRegistrars func(EditionConfig) []api.Module
 	// nil opens no extra port.
-	agentServers editionPort[[]editionAuxServer]
+	agentServers func(EditionAgentDeps) []editionAuxServer
 	// nil adds no promotion recovery. Constructed once per serving boot before
 	// OnPromote/Run; a non-nil result is boot-owned even when construction fails.
 	promotionRecovery func(context.Context, EditionConfig, []api.Module, store.Store, *slog.Logger) (EditionPromotionRecovery, error)
 	// nil: there are no private read resources to bind or close.
 	bindModuleDependencies func(context.Context, EditionConfig, []api.Module, EditionDependencies, *slog.Logger) ([]io.Closer, error)
+	// Names the environment variables that override a setting the edition keeps in the
+	// deployment settings (edition_settings.go), each with the setting it overrides; doctor
+	// reports the ones that are set. nil: this edition keeps no such settings.
+	editionSettingEnvs func() map[string]string
 }
 
 // editionPort builds one capability. A nil port builds the zero value: the capability is absent.

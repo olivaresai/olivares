@@ -31,12 +31,12 @@ We will keep you updated through triage and fix, and we are glad to credit repor
 
 ## Supported versions
 
-The project is **beta**; the next release is <!-- release -->`0.4`<!-- /release -->. Security fixes are applied to the `main` branch and ship as the next signed release — there is no separate maintenance branch yet. Each release's cut date is in its own [`CHANGELOG.md`](CHANGELOG.md) section.
+The project is **beta**; the next release is <!-- release -->`0.5`<!-- /release -->. Security fixes are applied to the `main` branch and ship as the next signed release — there is no separate maintenance branch yet. Each release's cut date is in its own [`CHANGELOG.md`](CHANGELOG.md) section.
 
 | Version | Supported |
 |---|---|
 | `main` (development) | Yes |
-| Olivares <!-- release -->`0.4`<!-- /release --> (next release) | Yes — fixes ship as the next release |
+| Olivares <!-- release -->`0.5`<!-- /release --> (next release) | Yes — fixes ship as the next release |
 | Older tagged releases | No — upgrade to the latest release |
 
 This table grows into a real support matrix as releases accumulate.
@@ -169,7 +169,7 @@ Out of scope: third-party dependencies (report upstream; tell us so we can pin/p
 For a security product, build integrity is part of the trust model, not an afterthought:
 
 - **Signed releases** with cosign / Sigstore, published **SBOMs** (syft), and checksums —
-  Olivares <!-- release -->0.4<!-- /release --> is the next release, not yet published. Once its artifacts are available,
+  Olivares <!-- release -->0.5<!-- /release --> is the next release, not yet published. Once its artifacts are available,
   `scripts/verify-release.sh` verifies their chain before use.
 - **Minimal, non-root** container images on a digest-pinned Debian 13 slim base (the STIG image on UBI 9 minimal), and a single static, memory-safe Go binary, which removes whole classes of C memory-corruption CVEs.
 - **Minimal, pinned dependencies**; no `curl | bash` without checksums.

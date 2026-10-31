@@ -47,7 +47,6 @@ vi.mock('@/lib/api/search', async (importOriginal) => {
 })
 
 import { CommandMenu } from './command-menu'
-import { useAreasSheet } from './areas-sheet-store'
 import { FEATURE_VIEWS } from '@/features/registry'
 import { queryKeys } from '@/lib/api/query'
 import { useCommandStore } from '@/stores/command'
@@ -149,38 +148,17 @@ describe('CommandMenu', () => {
     },
   )
 
-  it('opens the AI tools section inside Settings from the palette (#2905)', async () => {
+  it('offers AI tools as its own page, never as a section of Settings (0.5 fold)', async () => {
     const user = userEvent.setup()
     searchConsoleMock.mockResolvedValue({ results: [], truncated: false })
     openPalette()
     await user.type(screen.getByRole('combobox'), 'AI tools')
     await waitFor(() => expect(searchConsoleMock).toHaveBeenCalled())
-    const entry = (await screen.findAllByRole('option')).find((option) =>
-      option.getAttribute('data-value')?.startsWith('settings:aiTools '),
+    const values = (await screen.findAllByRole('option')).map((option) =>
+      option.getAttribute('data-value'),
     )
-    expect(entry).toBeDefined()
-    await user.click(entry!)
-    expect(navigateMock).toHaveBeenCalledWith({
-      to: '/settings',
-      search: { section: 'aiTools' },
-      hash: '',
-    })
-  })
-
-  it('does not offer the AI tools section to a person who may not open that page (#2905)', async () => {
-    const user = userEvent.setup()
-    searchConsoleMock.mockResolvedValue({ results: [], truncated: false })
-    authState.can = (permission) => permission !== 'sessions:provider:read'
-    openPalette()
-    await user.type(screen.getByRole('combobox'), 'AI tools')
-    await waitFor(() => expect(searchConsoleMock).toHaveBeenCalled())
-    expect(
-      screen
-        .queryAllByRole('option')
-        .some((option) =>
-          option.getAttribute('data-value')?.startsWith('settings:aiTools '),
-        ),
-    ).toBe(false)
+    expect(values.some((v) => v?.startsWith('settings:aiTools '))).toBe(false)
+    expect(values.some((v) => v?.startsWith('view:agent-tools '))).toBe(true)
   })
 
   it('lists no hideInNav view and therefore no parameterized route', () => {
@@ -242,6 +220,33 @@ describe('CommandMenu', () => {
     expect(navigateMock).toHaveBeenCalledWith({ to: '/eventing' })
     // Selecting a result closes the palette.
     expect(useCommandStore.getState().open).toBe(false)
+  })
+
+  // 0.5: Administration no longer opens on its people tab, so a hit that relied on the
+  // page's default tab named the wrong list. Each kind names the list that holds it.
+  it.each([
+    ['user', 'Ada Lovelace', { to: '/identity', search: { tab: 'people' } }],
+    [
+      'connector',
+      'Ada-Drive',
+      { to: '/console', search: { tab: 'connectors' } },
+    ],
+  ])('opens a %s hit on the list that holds it', async (kind, name, want) => {
+    const user = userEvent.setup()
+    searchConsoleMock.mockResolvedValue({
+      results: [{ kind, id: 'x1', name, detail: '' }],
+      truncated: false,
+    })
+    openPalette()
+
+    await user.type(screen.getByRole('combobox'), 'ada')
+    const hit = await screen.findByText(
+      (_, node) =>
+        node?.getAttribute('data-slot') === 'palette-name' &&
+        node.textContent === name,
+    )
+    await user.click(hit)
+    expect(navigateMock).toHaveBeenCalledWith({ ...want, hash: '' })
   })
 
   it('does not hit the endpoint below the minimum query length', async () => {
@@ -326,7 +331,7 @@ describe('CommandMenu', () => {
   })
 
   // N1 — the palette shares the sidebar's index and ranking.
-  it('ranks the exact label first and shows Area › Section beside each module', async () => {
+  it('ranks the exact label first and shows Group › Place beside each page', async () => {
     const user = userEvent.setup()
     useCommandStore.getState().setOpen(true)
     renderIntel(<CommandMenu />)
@@ -342,24 +347,24 @@ describe('CommandMenu', () => {
         values.indexOf(values.find((v) => v.startsWith('view:finops'))!),
       )
     } else expect(values.some((v) => v.startsWith('view:finops'))).toBe(false)
-    expect(options[0]).toHaveTextContent('AI › Models')
+    expect(options[0]).toHaveTextContent('Tools › Models')
   })
 
-  it('offers the areas as destinations, only those with an authorized leaf', async () => {
+  it('offers no retired area: its name finds the pages it held, each beside its place', async () => {
     const user = userEvent.setup()
     useCommandStore.getState().setOpen(true)
     renderIntel(<CommandMenu />)
-    await user.type(screen.getByRole('combobox'), 'security')
+    await user.type(screen.getByRole('combobox'), 'oversight')
     const options = screen.getAllByRole('option')
     const values = options.map((o) => o.getAttribute('data-value') ?? '')
-    // The exact-label module comes first, the area right behind it, tagged as an area.
-    expect(values[0]).toMatch(/^view:security /)
-    expect(values[1]).toMatch(/^area:security-identity /)
-    expect(options[1]).toHaveTextContent('Area')
-    await user.click(options[1])
-    expect(navigateMock).toHaveBeenCalledWith({
-      to: '/areas/security-identity',
-    })
+    expect(values.some((v) => v.startsWith('area:'))).toBe(false)
+    const usage = options.find((o) =>
+      o.getAttribute('data-value')?.startsWith('view:usage '),
+    )!
+    expect(usage).toHaveTextContent('Control › Usage & cost')
+    expect(screen.queryByText(/Oversight ›/)).toBeNull()
+    await user.click(usage)
+    expect(navigateMock).toHaveBeenCalledWith({ to: '/usage' })
   })
 
   it('finds the Claude Code doors by their former name and the administration console by its old one', async () => {
@@ -660,7 +665,7 @@ describe('the palette of a new installation', () => {
 })
 
 // #2544: with no sidebar, every page is two actions away: ⌘K, then the page, with nothing
-// typed. And All areas, the directory the sidebar used to be, is one of the palette's rows.
+// typed. All areas retired in 0.5: the left navigation is the one directory.
 describe('the palette with no sidebar', () => {
   it('lists every page the person may open with nothing typed, so each is two actions away', () => {
     openPalette()
@@ -678,19 +683,11 @@ describe('the palette with no sidebar', () => {
     expect(pages.filter((id) => !offered.has(id))).toEqual([])
   })
 
-  it('opens All areas from its own row, giving focus back to what opened the palette', async () => {
+  it('offers no All areas row: the left navigation is the one directory (0.5)', async () => {
     const user = userEvent.setup()
-    useAreasSheet.setState({ open: false, opener: null })
-    const opener = document.createElement('button')
-    document.body.append(opener)
-    opener.focus()
     openPalette()
     await user.type(screen.getByRole('combobox'), 'all areas')
-    await user.click(screen.getByRole('option', { name: 'All areas' }))
-    expect(useAreasSheet.getState().open).toBe(true)
-    expect(useAreasSheet.getState().opener).toBe(opener)
-    expect(useCommandStore.getState().open).toBe(false)
-    opener.remove()
+    expect(screen.queryByRole('option', { name: 'All areas' })).toBeNull()
   })
 })
 

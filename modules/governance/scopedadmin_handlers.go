@@ -32,9 +32,9 @@ const maxRBACNameLen = 64
 // --- DTOs (mirror the frontend) ----------------------------------------------------
 
 type catalogDTO struct {
-	Kinds        []string `json:"kinds"`         // every grantable kind: tree kinds + module kinds
+	Kinds        []string `json:"kinds"`         // every grantable kind: tree, tenant-only core and module kinds
 	TreeKinds    []string `json:"tree_kinds"`    // the subset that lives in the tree (auth.TreeScopeableKinds)
-	Permissions  []string `json:"permissions"`   // the module permissions a mounted module declared (whole, not kind × verb)
+	Permissions  []string `json:"permissions"`   // exact non-tree core and mounted module permissions
 	Verbs        []string `json:"verbs"`         // read | write | admin
 	BuiltinRoles []string `json:"builtin_roles"` // viewer | editor | admin | owner
 	ScopeTrees   []string `json:"scope_trees"`   // tenant | workspace | agent_group | folder
@@ -76,6 +76,7 @@ type scopedGrantDTO struct {
 	ScopeClass  string `json:"scope_class,omitempty"`
 	Note        string `json:"note,omitempty"`
 	CreatedBy   string `json:"created_by,omitempty"`
+	ExpiresAt   string `json:"expires_at,omitempty"`
 }
 
 // delegationDomainDTO is one (scope, grantable-perms) pair the actor may delegate
@@ -114,7 +115,7 @@ func toScopedGrantDTO(g scopedGrant) scopedGrantDTO {
 		ID: g.ID.String(), SubjectKind: g.SubjectKind, SubjectRef: g.SubjectRef,
 		Role: g.Role, RoleCustom: g.RoleCustom,
 		ScopeTree: g.Scope.Tree, ScopeRef: g.Scope.Ref, ScopeClass: g.Scope.Class,
-		Note: g.Note, CreatedBy: g.CreatedBy,
+		Note: g.Note, CreatedBy: g.CreatedBy, ExpiresAt: g.ExpiresAt,
 	}
 }
 
@@ -299,7 +300,7 @@ func validateScopeRefs(ctx context.Context, sc store.Scope, s scopeSpec) error {
 	// inert grants. Lifting this is the job of the step that makes module routes resolve
 	// the tree, not of a relaxed check here.
 	if s.Class != "" && s.Tree != scopeTenant && !auth.IsTreeScopeableKind(s.Class) {
-		return validationError("scope_class " + s.Class + " is a module permission kind: it can only be scoped at tenant level, because module routes do not resolve the workspace/agent-group/folder tree")
+		return validationError("scope_class " + s.Class + " is outside the scope tree: it can only be scoped at tenant level, because these permissions do not resolve the workspace/agent-group/folder tree")
 	}
 	// An agent-group only ever contains agents (the resolver folds agent-group membership
 	// onto agent entities only), so any non-agent class would project a permit that can
@@ -322,7 +323,7 @@ func (m *Module) handleRBACCatalog(w http.ResponseWriter, _ *http.Request, _ api
 	writeJSON(w, http.StatusOK, catalogDTO{
 		Kinds:        auth.ScopeableKinds(),
 		TreeKinds:    auth.TreeScopeableKinds(),
-		Permissions:  permStrings(auth.ModulePermissions()),
+		Permissions:  permStrings(append(auth.ModulePermissions(), auth.TenantGrantablePermissions()...)),
 		Verbs:        []string{auth.VerbRead, auth.VerbWrite, auth.VerbAdmin},
 		BuiltinRoles: []string{auth.RoleViewer, auth.RoleEditor, auth.RoleAdmin, auth.RoleOwner},
 		ScopeTrees:   []string{scopeTenant, scopeWorkspace, scopeAgentGroup, scopeFolder},
@@ -331,7 +332,7 @@ func (m *Module) handleRBACCatalog(w http.ResponseWriter, _ *http.Request, _ api
 }
 
 // rejectInertTreeScopedGrant refuses a grant bounded to a workspace/agent-group/folder
-// whose ENTIRE effective permission set is module permissions.
+// whose entire effective permission set is outside the scope tree.
 //
 // The class-shaped version of this is caught by validateScopeRefs; this is the ROLE-shaped
 // version, and leaving it open would have been worse than inert. A module route authorizes
@@ -357,8 +358,8 @@ func rejectInertTreeScopedGrant(g scopedGrant, perms map[string]bool) error {
 			return nil // at least one permission the scope tree can actually reach
 		}
 	}
-	return validationError("this grant confers only module permissions, and a " + g.Scope.Tree +
-		" scope cannot reach them: module routes do not resolve the workspace/agent-group/folder tree, so the grant would authorize nothing. Grant it at tenant scope, or include a permission on a scope-tree resource kind")
+	return validationError("this grant confers only permissions outside the scope tree, and a " + g.Scope.Tree +
+		" scope cannot reach them: these permissions do not resolve the workspace/agent-group/folder tree, so the grant would authorize nothing. Grant it at tenant scope, or include a permission on a scope-tree resource kind")
 }
 
 // permStrings renders a permission slice for the wire (never nil, so the field is an
@@ -715,24 +716,26 @@ func (m *Module) handleRevokeScopedGrant(w http.ResponseWriter, r *http.Request,
 
 func roleRecord(name, display, desc, base string, perms, groups, excludes []string, author string) model.Record {
 	return model.Record{
-		colRBACName:        name,
-		colRBACDisplayName: display,
-		colRBACDescription: desc,
-		colRBACBaseRole:    base,
-		colRBACPerms:       jsonStringsCol(perms),
-		colRBACGroups:      jsonStringsCol(groups),
-		colRBACExcludes:    jsonStringsCol(excludes),
-		colRBACCreatedBy:   author,
+		colRBACName:         name,
+		colRBACDisplayName:  display,
+		colRBACDescription:  desc,
+		colRBACBaseRole:     base,
+		colRBACPerms:        jsonStringsCol(perms),
+		colRBACSessionExact: true,
+		colRBACGroups:       jsonStringsCol(groups),
+		colRBACExcludes:     jsonStringsCol(excludes),
+		colRBACCreatedBy:    author,
 	}
 }
 
 func groupRecord(name, display, desc string, perms []string, author string) model.Record {
 	return model.Record{
-		colRBACName:        name,
-		colRBACDisplayName: display,
-		colRBACDescription: desc,
-		colRBACPerms:       jsonStringsCol(perms),
-		colRBACCreatedBy:   author,
+		colRBACName:         name,
+		colRBACDisplayName:  display,
+		colRBACDescription:  desc,
+		colRBACPerms:        jsonStringsCol(perms),
+		colRBACSessionExact: true,
+		colRBACCreatedBy:    author,
 	}
 }
 
@@ -747,6 +750,9 @@ func grantRecord(g scopedGrant, author string) model.Record {
 		colSGScopeClass:  g.Scope.Class,
 		colSGCreatedBy:   author,
 		colSGNote:        g.Note,
+		colSGExpiresAt:   g.ExpiresAt,
+		colSGRemind14At:  g.Remind14At,
+		colSGRemind1At:   g.Remind1At,
 	}
 }
 

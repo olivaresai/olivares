@@ -39,7 +39,7 @@ func TestProtocolReplayNestedRetryOwnership(t *testing.T) {
 						backend = splitOwnerPostgresBackendForTest(t, "retry-ownership-postgres")
 					}
 					fixture := communicationOpenFixtureWithClock(t, backend, nil)
-					// 120 s, not 15 s, and the figure is MEASURED, not chosen: under -race on ci-runner-8 with nine
+					// 120 s, not 15 s, and the figure is MEASURED, not chosen: under -race on build-host with nine
 					// runners on the same host (run 35084428433, race-sessions p2, 2026-09-16) every scenario of the
 					// sqlite engine took 33-37 s and nested_conflict 43.09 s, so a 15 s budget over the scenario's own
 					// work (rows read, two claims, the nested replay, the guard-ledger read at the end) expired inside

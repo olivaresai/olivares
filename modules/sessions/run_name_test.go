@@ -21,17 +21,17 @@ func TestValidateCreateRefusesRunNameTheRenameRefuses(t *testing.T) {
 
 	const msg = "name must be at most 200 characters and hold no control or invisible characters"
 	for _, name := range []string{
-		"zero​width",               // ZERO WIDTH SPACE (Cf)
-		"bidi‮override",            // RIGHT-TO-LEFT OVERRIDE (Cf)
-		"line separator",           // LINE SEPARATOR (Zl)
-		"paragraph\u2029separator", // PARAGRAPH SEPARATOR (Zp)
-		"tab\tinside",              // control
-		"hangulㅤfiller",            // HANGUL FILLER (default ignorable)
-		"variation️",               // VARIATION SELECTOR-16
-		"braille\u2800blank",       // BRAILLE PATTERN BLANK, a symbol that draws nothing
-		"\u2800",                   // a name of nothing but blank
-		strings.Repeat("n", 201),   // over the limit
-		strings.Repeat("\u00e9", 201),   // 201 runes, 402 bytes
+		"zero\u200bwidth",             // ZERO WIDTH SPACE (Cf)
+		"bidi\u202eoverride",          // RIGHT-TO-LEFT OVERRIDE (Cf)
+		"line\u2028separator",         // LINE SEPARATOR (Zl)
+		"paragraph\u2029separator",    // PARAGRAPH SEPARATOR (Zp)
+		"tab\tinside",                 // control
+		"hangul\u3164filler",          // HANGUL FILLER (default ignorable)
+		"variation\ufe0f",             // VARIATION SELECTOR-16
+		"braille\u2800blank",          // BRAILLE PATTERN BLANK, a symbol that draws nothing
+		"\u2800",                      // a name of nothing but blank
+		strings.Repeat("n", 201),      // over the limit
+		strings.Repeat("\u00e9", 201), // 201 runes, 402 bytes
 	} {
 		t.Run(name, func(t *testing.T) {
 			p := CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Name: name}
@@ -48,7 +48,7 @@ func TestValidateCreateRefusesRunNameTheRenameRefuses(t *testing.T) {
 		"Morning review":                       "Morning review",
 		"  padded  ":                           "padded",
 		strings.Repeat("n", 200):               strings.Repeat("n", 200),
-		strings.Repeat("\u00e9", 200):               strings.Repeat("\u00e9", 200),
+		strings.Repeat("\u00e9", 200):          strings.Repeat("\u00e9", 200),
 		"  " + strings.Repeat("n", 200) + "  ": strings.Repeat("n", 200), // the limit is on the trimmed name
 	} {
 		p := CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Name: name}

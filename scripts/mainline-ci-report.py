@@ -29,8 +29,8 @@ def pages(request, path, field=None):
 
 
 # Each reported workflow and the event that starts its main run. mainline-ci reports only from
-# the public repository; the scheduled battery pass of merge-gate-check reports wherever it runs.
-REPORTED = {"mainline-ci": "push", "merge-gate-check": "schedule"}
+# the public repository; scheduled battery and full-history secrets scans report wherever they run.
+REPORTED = {"mainline-ci": "push", "merge-gate-check": "schedule", "secrets-weekly": "schedule"}
 
 
 def reportable(run, repo):

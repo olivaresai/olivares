@@ -105,11 +105,12 @@ func (m *Module) ReloadActivePDP(ctx context.Context, tenant model.TenantID) err
 // mutation. Callers hold lockPolicyAuthorizationEpoch before reading them; `selection`
 // is completed with the newly selected authored revision after append/rollback.
 type cedarMutationInputs struct {
-	managed   string
-	adopted   string
-	selection activationID
-	freshness FreshnessRecord
-	signed    bool
+	managed              string
+	managedForEvaluation string
+	adopted              string
+	selection            activationID
+	freshness            FreshnessRecord
+	signed               bool
 }
 
 func readCedarMutationInputs(ctx context.Context, sc store.Scope) (cedarMutationInputs, error) {
@@ -128,15 +129,19 @@ func readCedarMutationInputs(ctx context.Context, sc store.Scope) (cedarMutation
 	if err != nil {
 		return cedarMutationInputs{}, err
 	}
+	managedForEvaluation, err := managedCedarForEvaluation(ctx, sc, managed)
+	if err != nil {
+		return cedarMutationInputs{}, err
+	}
 	return cedarMutationInputs{
-		managed: managed, adopted: adopted,
+		managed: managed, managedForEvaluation: managedForEvaluation, adopted: adopted,
 		selection: activationID{managed: managedRevision, adopted: adoptedRevision},
 		freshness: freshness, signed: signed,
 	}, nil
 }
 
 func compileProspectiveCedar(authored string, inputs cedarMutationInputs) error {
-	if _, err := compileGrantSet(mergeCedarSources(mergeCedarSources(authored, inputs.managed), inputs.adopted)); err != nil {
+	if _, err := compileGrantSet(mergeCedarSources(mergeCedarSources(authored, inputs.managedForEvaluation), inputs.adopted)); err != nil {
 		return validationError("cedar policy would not compile in the active authored+managed+adopted union: " + err.Error())
 	}
 	return nil
@@ -168,7 +173,7 @@ func (m *Module) cedarExpectedState(
 		authoredDigest: contentDigest(authored),
 		managedDigest:  contentDigest(inputs.managed),
 		adoptedDigest:  contentDigest(inputs.adopted),
-		unionDigest:    contentDigest(mergeCedarSources(mergeCedarSources(authored, inputs.managed), inputs.adopted)),
+		unionDigest:    contentDigest(mergeCedarSources(mergeCedarSources(authored, inputs.managedForEvaluation), inputs.adopted)),
 		freshness:      freshness,
 		available:      true,
 		freshnessValid: selection == (activationID{}) || bound <= 0 || !freshness.RefreshedAt.IsZero(),

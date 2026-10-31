@@ -9,28 +9,19 @@ import {
 } from '@tanstack/react-query'
 import {
   ChevronRight,
-  Download,
   File as FileIcon,
   FilePlus,
   Folder,
   FolderPlus,
   Home,
-  Lock,
-  Pencil,
   RefreshCw,
-  Save,
-  Trash2,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { CodeEditor } from '@/components/ui/code-editor'
-import type { CodeLanguage } from '@/components/ui/code-languages'
 import { Button } from '@/components/ui/button'
-import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -38,49 +29,93 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
-import { Switch } from '@/components/ui/switch'
 import { toast } from '@/components/ui/toaster'
-import { HeadDiff } from '@/features/shared/head-diff'
-import { headUnavailable } from '@/features/shared/head-unavailable'
 import { useAuth } from '@/lib/auth/context'
 import { ApiError } from '@/lib/api/errors'
+import {
+  useUrlState,
+  type UrlState,
+  type UrlStatePatch,
+} from '@/lib/hooks/use-url-state'
 import { cn } from '@/lib/utils'
 import { agentOpsApi, agentOpsKeys } from './api'
-import type { FileEntry, SensitivityHit, WorkspaceDTO } from './types'
+import type { FileEntry, WorkspaceDTO } from './types'
+import { FileViewer } from './workspace-file-viewer'
 import './i18n'
-import { downloadBlob } from '@/lib/api/download'
 
 const PAGE = 200
 
 /**
  * WorkspaceBrowser — a governed Finder over one workspace: navigate dir-by-dir (the
  * API lists ONE level + keyset pagination, so the client walks the tree), read with
- * DLP sensitivity labels, and — when the workspace mounts read-write — edit via
- * CodeMirror, create, move/rename and delete. Every access is jailed server-side; the
- * UI never renders content through an HTML sink (the editor is text-only).
+ * DLP sensitivity labels, preview documents and images, and edit text in CodeMirror.
+ * Every access is jailed server-side; HTML runs only in a fully sandboxed iframe.
  */
 export function WorkspaceBrowser({ workspace }: { workspace: WorkspaceDTO }) {
   const { activeTenant } = useAuth()
+  const scope = `${activeTenant}:${workspace.workspace_ref}:${workspace.root_path}`
+  const [location, patchLocation] = useUrlState(['workspace', 'path', 'file'], {
+    history: 'push',
+  })
+  // The scope the URL's folder and file belong to. A link opened on this scope keeps
+  // them; after the scope changes they are the old scope's, so they are dropped from
+  // the URL and hidden until that lands.
+  const [ownedScope, setOwnedScope] = useState(scope)
+  const locationMatches =
+    location.workspace === undefined ||
+    location.workspace === workspace.workspace_ref
+  if (
+    ownedScope !== scope &&
+    location.path === undefined &&
+    location.file === undefined
+  ) {
+    setOwnedScope(scope)
+  }
+  const stale = ownedScope !== scope || !locationMatches
+  useEffect(() => {
+    if (!stale) return
+    patchLocation(
+      {
+        ...(locationMatches ? {} : { workspace: undefined }),
+        path: undefined,
+        file: undefined,
+      },
+      { history: 'replace' },
+    )
+  }, [stale, locationMatches, patchLocation])
   return (
     <Browser
-      key={`${activeTenant}:${workspace.workspace_ref}:${workspace.root_path}`}
+      key={scope}
       workspace={workspace}
+      location={stale ? {} : location}
+      onLocation={patchLocation}
     />
   )
 }
 
-function Browser({ workspace }: { workspace: WorkspaceDTO }) {
-  const { t } = useTranslation('agentops')
+function Browser({
+  workspace,
+  location,
+  onLocation,
+}: {
+  workspace: WorkspaceDTO
+  location: UrlState
+  onLocation: UrlStatePatch
+}) {
+  const { t } = useTranslation(['agentops', 'common'])
   const { activeTenant, can } = useAuth()
   const qc = useQueryClient()
   const wref = workspace.workspace_ref
   const writable =
     workspace.mount_mode === 'rw' && can('sessions:workspace:write')
 
-  const [dir, setDir] = useState('') // '' = root
-  const [selected, setSelected] = useState<string | null>(null)
-  const [editing, setEditing] = useState(false)
-  const [editValue, setEditValue] = useState('')
+  const dir = location.path ?? '' // '' = root
+  const selected = location.file ?? null
+  const [draft, setDraft] = useState<{ path: string; value: string } | null>(
+    null,
+  )
+  const editing = draft?.path === selected
+  const editValue = editing ? draft.value : ''
 
   const invalidateDir = () =>
     qc.invalidateQueries({
@@ -111,26 +146,21 @@ function Browser({ workspace }: { workspace: WorkspaceDTO }) {
   const file = fileQuery.data
 
   const openEntry = (e: FileEntry) => {
-    if (e.type === 'dir') {
-      setDir(e.path)
-      setSelected(null)
-      setEditing(false)
-    } else {
-      setSelected(e.path)
-      setEditing(false)
-    }
+    setDraft(null)
+    if (e.type === 'dir') onLocation({ path: e.path, file: undefined })
+    else onLocation({ file: e.path })
   }
 
   const crumbs = dir ? dir.split('/') : []
 
   const save = useMutation({
-    mutationFn: () =>
-      agentOpsApi.writeFile(wref, selected as string, editValue),
-    onSuccess: () => {
+    mutationFn: (submitted: { path: string; value: string }) =>
+      agentOpsApi.writeFile(wref, submitted.path, submitted.value),
+    onSuccess: (_result, submitted) => {
       toast.success(t('browser.saved'))
-      setEditing(false)
+      setDraft((current) => (current === submitted ? null : current))
       void qc.invalidateQueries({
-        queryKey: agentOpsKeys.file(activeTenant, wref, selected ?? ''),
+        queryKey: agentOpsKeys.file(activeTenant, wref, submitted.path),
       })
       void invalidateDir()
     },
@@ -144,10 +174,7 @@ function Browser({ workspace }: { workspace: WorkspaceDTO }) {
         <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-1.5 text-caption">
           <button
             type="button"
-            onClick={() => {
-              setDir('')
-              setSelected(null)
-            }}
+            onClick={() => onLocation({ path: undefined, file: undefined })}
             className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <Home className="size-3" />
@@ -160,10 +187,7 @@ function Browser({ workspace }: { workspace: WorkspaceDTO }) {
                 <ChevronRight className="size-3 text-muted-foreground" />
                 <button
                   type="button"
-                  onClick={() => {
-                    setDir(target)
-                    setSelected(null)
-                  }}
+                  onClick={() => onLocation({ path: target, file: undefined })}
                   className="rounded px-1 py-0.5 font-mono text-foreground hover:bg-muted"
                 >
                   {c}
@@ -220,33 +244,45 @@ function Browser({ workspace }: { workspace: WorkspaceDTO }) {
             <Spinner />
           </div>
         ) : fileQuery.error ? (
-          <p role="alert" className="p-4 text-body text-danger">
-            {fileQuery.error instanceof ApiError
-              ? fileQuery.error.message
-              : String(fileQuery.error)}
-          </p>
+          <div role="alert" className="p-4">
+            <p className="text-body text-danger">
+              {fileQuery.error instanceof ApiError
+                ? fileQuery.error.message
+                : String(fileQuery.error)}
+            </p>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="mt-2"
+              onClick={() => void fileQuery.refetch()}
+            >
+              {t('common:actions.retry')}
+            </Button>
+          </div>
         ) : file ? (
           <FileViewer
+            key={selected}
             workspace={workspace}
             path={selected}
             file={file}
             writable={writable}
             editing={editing}
             editValue={editValue}
-            onEdit={() => {
-              setEditValue(file.content)
-              setEditing(true)
+            onEdit={() => setDraft({ path: selected, value: file.content })}
+            onCancel={() => setDraft(null)}
+            onChange={(value) =>
+              setDraft((current) => (current ? { ...current, value } : current))
+            }
+            onSave={() => {
+              if (draft) save.mutate(draft)
             }}
-            onCancel={() => setEditing(false)}
-            onChange={setEditValue}
-            onSave={() => save.mutate()}
             saving={save.isPending}
             onDeleted={() => {
-              setSelected(null)
+              onLocation({ file: undefined })
               void invalidateDir()
             }}
             onMoved={(to) => {
-              setSelected(to)
+              onLocation({ file: to })
               void invalidateDir()
             }}
           />
@@ -353,248 +389,6 @@ function FileList({
   )
 }
 
-// --- File viewer / editor --------------------------------------------------------
-
-function FileViewer({
-  workspace,
-  path,
-  file,
-  writable,
-  editing,
-  editValue,
-  onEdit,
-  onCancel,
-  onChange,
-  onSave,
-  saving,
-  onDeleted,
-  onMoved,
-}: {
-  workspace: WorkspaceDTO
-  path: string
-  file: import('./types').FileReadResponse
-  writable: boolean
-  editing: boolean
-  editValue: string
-  onEdit: () => void
-  onCancel: () => void
-  onChange: (v: string) => void
-  onSave: () => void
-  saving: boolean
-  onDeleted: () => void
-  onMoved: (to: string) => void
-}) {
-  const { t } = useTranslation('agentops')
-  const { activeTenant } = useAuth()
-  const qc = useQueryClient()
-  const isBinary = file.encoding !== 'utf-8'
-  const lang: CodeLanguage = path.toLowerCase().endsWith('.json')
-    ? 'json'
-    : 'text'
-
-  const [confirmDel, setConfirmDel] = useState(false)
-  const [recursive, setRecursive] = useState(false)
-  const [moveOpen, setMoveOpen] = useState(false)
-  const [moveTo, setMoveTo] = useState(path)
-
-  // What git HEAD holds for this file. A 404 (no repository, a file never committed) is
-  // an answer: the file shows without a Changes view. Any other failure is said so under
-  // the file. Each read is an audited, policy-checked read, so a cut-off file does not
-  // ask and a focus change does not ask again.
-  const head = useQuery({
-    queryKey: agentOpsKeys.fileHead(
-      activeTenant,
-      workspace.workspace_ref,
-      path,
-    ),
-    queryFn: () => agentOpsApi.readFile(workspace.workspace_ref, path, 'HEAD'),
-    enabled: !isBinary && !file.truncated,
-    refetchOnWindowFocus: false,
-  })
-  const committed =
-    head.data &&
-    head.data.encoding === 'utf-8' &&
-    !head.data.truncated &&
-    !file.truncated
-      ? head.data.content
-      : undefined
-
-  const del = useMutation({
-    mutationFn: () =>
-      agentOpsApi.deleteFile(workspace.workspace_ref, path, recursive),
-    onSuccess: () => {
-      toast.success(t('browser.deletedFile'))
-      setConfirmDel(false)
-      onDeleted()
-    },
-    onError: errToast(t),
-  })
-  const move = useMutation({
-    mutationFn: () =>
-      agentOpsApi.moveFile(workspace.workspace_ref, path, moveTo.trim()),
-    onSuccess: () => {
-      toast.success(t('browser.moved'))
-      setMoveOpen(false)
-      void qc.invalidateQueries({ queryKey: agentOpsKeys.all(activeTenant) })
-      onMoved(moveTo.trim())
-    },
-    onError: errToast(t),
-  })
-
-  return (
-    <>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="truncate font-mono text-body font-medium text-foreground">
-          {path}
-        </span>
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={() => downloadFile(file)}>
-            <Download className="size-3.5" />
-            {t('browser.download')}
-          </Button>
-          {writable && !isBinary && !editing && (
-            <Button variant="ghost" size="sm" onClick={onEdit}>
-              <Pencil className="size-3.5" />
-              {t('browser.edit')}
-            </Button>
-          )}
-          {writable && (
-            <Button variant="ghost" size="sm" onClick={() => setMoveOpen(true)}>
-              {t('browser.move')}
-            </Button>
-          )}
-          {writable && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setConfirmDel(true)}
-            >
-              <Trash2 className="size-3.5" />
-              {t('browser.delete')}
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <SensitivityBadges hits={file.sensitivity} />
-      {file.truncated && (
-        <p className="text-caption text-warning">{t('browser.truncated')}</p>
-      )}
-
-      {isBinary ? (
-        <p className="rounded-md border border-border bg-muted p-4 text-body text-muted-foreground">
-          {t('browser.binary')}
-        </p>
-      ) : (
-        <HeadDiff
-          key={path}
-          committed={editing ? undefined : committed}
-          current={file.content}
-          language={lang}
-          height="26rem"
-          unavailable={!editing && headUnavailable(head.error)}
-        >
-          <CodeEditor
-            value={editing ? editValue : file.content}
-            onChange={editing ? onChange : undefined}
-            language={lang}
-            readOnly={!editing}
-            ariaLabel={t('browser.editorAria')}
-            height="26rem"
-          />
-        </HeadDiff>
-      )}
-
-      {editing && (
-        <div className="flex items-center justify-end gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onCancel}
-            disabled={saving}
-          >
-            {t('browser.cancel')}
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={onSave}
-            disabled={saving}
-          >
-            {saving ? (
-              <Spinner className="size-3.5" />
-            ) : (
-              <Save className="size-3.5" />
-            )}
-            {saving ? t('browser.saving') : t('browser.save')}
-          </Button>
-        </div>
-      )}
-      {!writable && (
-        <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
-          <Lock className="size-3" />
-          {t('browser.readOnlyWorkspace')}
-        </p>
-      )}
-
-      <ConfirmDialog
-        open={confirmDel}
-        onOpenChange={setConfirmDel}
-        tone="danger"
-        title={t('browser.deleteTitle', { name: path })}
-        description={t('browser.deleteBody')}
-        confirmLabel={t('browser.delete')}
-        pending={del.isPending}
-        onConfirm={() => del.mutate()}
-      >
-        <label className="flex items-center gap-2">
-          <Switch checked={recursive} onCheckedChange={setRecursive} />
-          {t('browser.deleteRecursive')}
-        </label>
-      </ConfirmDialog>
-
-      <Dialog open={moveOpen} onOpenChange={setMoveOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t('browser.moveTitle')}</DialogTitle>
-            <DialogDescription>
-              {t('browser.moveFromLabel')}: {path}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="move-to">{t('browser.moveToLabel')}</Label>
-            <Input
-              id="move-to"
-              value={moveTo}
-              onChange={(e) => setMoveTo(e.target.value)}
-              mono
-            />
-          </div>
-          <DialogFooter>
-            <Button
-              variant="secondary"
-              onClick={() => setMoveOpen(false)}
-              disabled={move.isPending}
-            >
-              {t('browser.cancel')}
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => move.mutate()}
-              disabled={
-                move.isPending || !moveTo.trim() || moveTo.trim() === path
-              }
-            >
-              {move.isPending && <Spinner className="size-3.5" />}
-              {t('browser.move')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  )
-}
-
 // --- Create actions (new folder / new file) --------------------------------------
 
 function BrowserCreateActions({
@@ -682,61 +476,9 @@ function BrowserCreateActions({
   )
 }
 
-// --- helpers ---------------------------------------------------------------------
-
-function SensitivityBadges({
-  hits,
-  className,
-}: {
-  hits?: SensitivityHit[]
-  className?: string
-}) {
-  if (!hits || hits.length === 0) return null
-  const sev = (s?: string) => {
-    switch ((s ?? '').toLowerCase()) {
-      case 'high':
-        return 'border-danger-line bg-danger-soft text-danger'
-      case 'medium':
-        return 'border-warning-line bg-warning-soft text-warning'
-      default:
-        return 'border-border bg-muted text-muted-foreground'
-    }
-  }
-  return (
-    <div className={cn('flex flex-wrap items-center gap-1', className)}>
-      {hits.map((h, i) => (
-        <span
-          key={`${h.class}-${i}`}
-          title={[h.rule, h.severity].filter(Boolean).join(' · ')}
-          className={cn(
-            'inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[11px] font-medium',
-            sev(h.severity),
-          )}
-        >
-          {h.class}
-          {h.count ? ` ×${h.count}` : ''}
-        </span>
-      ))}
-    </div>
-  )
-}
-
-function downloadFile(file: import('./types').FileReadResponse): void {
-  let blob: Blob
-  if (file.encoding === 'base64') {
-    const bin = atob(file.content)
-    const bytes = new Uint8Array(bin.length)
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-    blob = new Blob([bytes], { type: 'application/octet-stream' })
-  } else {
-    blob = new Blob([file.content], { type: 'text/plain;charset=utf-8' })
-  }
-  downloadBlob(blob, file.path.split('/').pop() || 'file')
-}
-
 function errToast(t: (k: string) => string) {
   return (err: unknown) =>
     toast.error(err instanceof ApiError ? err.message : t('browser.title'))
 }
 
-export { SensitivityBadges }
+export { SensitivityBadges } from './workspace-file-viewer'

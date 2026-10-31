@@ -32,6 +32,7 @@ const api = vi.hoisted(() => ({
   inputText: vi.fn(),
   getRun: vi.fn(),
   commands: vi.fn(),
+  activity: vi.fn(),
 }))
 vi.mock('@/features/agentops/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/agentops/api')>()),
@@ -101,6 +102,11 @@ beforeEach(() => {
   api.input.mockResolvedValue({ accepted: true })
   api.inputText.mockResolvedValue({ accepted: true })
   api.commands.mockResolvedValue(CATALOG)
+  api.activity.mockResolvedValue({
+    transcript: 'read',
+    compactions: [],
+    context_tokens: 100,
+  })
 })
 
 /** What a Claude run is sent for one typed sentence: a stream-json user frame. */
@@ -747,5 +753,74 @@ describe('the "/" menu', () => {
       within(menu).queryByText(/may be out of date/),
     ).not.toBeInTheDocument()
     expect(screen.getByTestId('slash-notice-status')).toHaveTextContent('')
+  })
+})
+
+// Native compaction uses the ordinary input path without consuming the draft.
+describe('context compaction', () => {
+  it('compacts now while preserving the unsent draft', async () => {
+    const user = userEvent.setup()
+    api.activity.mockResolvedValue({
+      transcript: 'read',
+      compactions: [],
+      context_tokens: 100,
+    })
+    api.input.mockImplementation(async () => {
+      api.activity.mockResolvedValue({
+        transcript: 'read',
+        compactions: [{}],
+        context_tokens: 20,
+      })
+      return { accepted: true }
+    })
+    renderIntel(
+      <WorkComposer
+        attached={{ run: { ...RUNNING, state: 'idle' }, group: 'active' }}
+      />,
+    )
+    const field = screen.getByRole('textbox', { name: 'Session turn' })
+    await user.type(field, 'Keep this draft')
+    await user.click(screen.getByRole('button', { name: 'Context' }))
+    const compact = screen.getByRole('button', { name: 'Compact now' })
+    await waitFor(() => expect(compact).toBeEnabled())
+    await user.click(compact)
+    await waitFor(() =>
+      expect(api.input).toHaveBeenCalledWith(
+        'run_live',
+        userFrame('/compact'),
+        undefined,
+      ),
+    )
+    await waitFor(() => expect(compact).toBeEnabled(), { timeout: 3000 })
+    expect(field).toHaveValue('Keep this draft')
+  })
+
+  it('blocks a queued message when native compaction is refused', async () => {
+    const user = userEvent.setup()
+    api.activity.mockResolvedValue({ transcript: 'read', compactions: [] })
+    api.input.mockRejectedValue(new Error('Denied by session policy'))
+    renderIntel(
+      <WorkComposer
+        attached={{ run: { ...RUNNING, state: 'idle' }, group: 'active' }}
+      />,
+    )
+    const field = screen.getByRole('textbox', { name: 'Session turn' })
+    await user.type(field, 'Send after compaction')
+    await user.click(screen.getByRole('button', { name: 'Context' }))
+    const checkbox = screen.getByRole('checkbox', {
+      name: 'Compact before send',
+    })
+    await waitFor(() => expect(checkbox).toBeEnabled())
+    await user.click(checkbox)
+    await user.keyboard('{Escape}')
+    await user.click(screen.getByTestId('composer-send'))
+    await waitFor(() => expect(toasts.error).toHaveBeenCalled())
+    expect(api.input).toHaveBeenCalledTimes(1)
+    expect(api.input).toHaveBeenCalledWith(
+      'run_live',
+      userFrame('/compact'),
+      undefined,
+    )
+    expect(field).toHaveValue('Send after compaction')
   })
 })

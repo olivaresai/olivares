@@ -8,9 +8,9 @@ A Community engine answers `501 business_required` to a launch that names a cred
 
 ## Store a credential
 
-A credential is one JSON document sealed as `credential/<name>` in the tenant's secrets.
-Names use lowercase letters, digits, `.`, `_` and `-`. Writing it needs tenant
-administration and step-up:
+A credential is one JSON document sealed as `credential/<name>` in the tenant's secrets
+(the console's Secrets, or this API). Names use lowercase letters, digits, `.`, `_` and `-`.
+Writing it needs tenant administration and step-up:
 
 ```sh
 curl -X PUT "$OLIVARES_URL/v1/console/secrets?scope=tenant" -H "Authorization: Bearer $TOKEN" \
@@ -22,7 +22,7 @@ The value is one of:
 
 | kind | fields |
 | --- | --- |
-| `ssh` | `host`, `port` (22), `user`, `known_hosts` (required: the host key lines in OpenSSH format, `[host]:port` for a port other than 22), and one of `private_key` (an unprotected OpenSSH or PEM key) or `ca_private_key` with `ttl_seconds` (30 to 3600, default 300) |
+| `ssh` | `host`, `port` (22), `user`, `known_hosts` (required: the host key lines in OpenSSH format, `[host]:port` for a port other than 22; the host keys are the only ones a login is bound to, a `@revoked` key is refused and a `@cert-authority` line is ignored), and one of `private_key` (an unprotected OpenSSH or PEM key) or `ca_private_key` with `ttl_seconds` (30 to 3600, default 300) |
 | `postgres` | `host`, `port` (5432), `database`, `user`, `password`, `sslmode` (`verify-full` by default, or `verify-ca`, `require`, `disable`) and, for a server behind a private CA, `root_cert` (PEM) |
 | `http` | `base_url` (`https`, or any scheme for a loopback address), `header` (default `Authorization`) and `value` |
 
@@ -31,9 +31,17 @@ reaches one is through its helper.
 
 ## Give it to a session
 
-Name the credentials in `credentials` when the session starts (at most 8). The caller needs
-tenant administration, as for `secret_env`; resuming a session asks again and starts fresh
-helpers.
+Name the credentials when the session starts (at most 8). The caller needs tenant
+administration, as for `secret_env`; resuming a session asks again and starts fresh helpers.
+From the CLI:
+
+```sh
+olivares session start . --credential prod-db --credential build-host
+```
+
+The console's New session offers the tenant's credential names under More options, and a
+scripted launch names them the same way (`olivares agent session create --credential
+<name>`). The API field:
 
 ```json
 {"provider_profile_ref": "...", "credentials": ["prod-db", "build-host", "billing-api"]}
@@ -52,10 +60,13 @@ With `ca_private_key` the agent holds a key made for the session and its certifi
 while the session runs and stops when it ends, so a short `ttl_seconds` costs a long session
 nothing and a finished session keeps access for at most that long. The target needs the CA in
 `TrustedUserCAKeys` and the account in `AuthorizedPrincipalsFile`. The agent signs a login for
-the credential's `user` only, so the key is not turned into another account. It does not tie a
-login to the credential's `host`: a session can use the key or certificate against any host that
-accepts that account (the `ssh_config` and `known_hosts` the helper writes are the client's own
-files). Give a credential to sessions that may reach every host that trusts it.
+the credential's `user` only, so the key is not turned into another account. A login is signed only
+for a session bound to a host key that the credential's `known_hosts` names: OpenSSH 8.9 and later
+bind the session before they sign, and a host with any other key is refused, even where the same CA
+is trusted. The host keys in known_hosts are the trust: a host name is not checked, so a key listed for one name is trusted wherever it is presented. A client that does not bind the session (including OpenSSH older than 8.9 and
+other clients without this extension) gets no signature, since the credential then names no host it can use. The
+`ssh_config` and `known_hosts` the helper writes are the client's own files; the engine checks the
+host against its own copy of the credential's `known_hosts`.
 
 The secret is in no environment variable, no file the session can read, no run read, no launch
 event (which names the credentials and their kinds) and no stored output (a value a remote

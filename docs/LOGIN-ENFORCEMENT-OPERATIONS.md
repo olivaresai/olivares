@@ -203,12 +203,17 @@ or group-reconciliation steps, or emit their completion audit events. Earlier ju
 account creation can already have persisted the account and its initial binding; that earlier
 effect is not rolled back by this refusal.
 
-The completion effects of an **admitted** login then run in their own best-effort
-transactions. They are **not atomic** with issuance and a failure among them never revokes the
-issued session. They finish before the token is returned to the caller, and because a session
-carries no grant snapshot — every request loads grants in its own read — the first use of the
-token sees membership changes that successfully committed. A failed best-effort reconciliation
-does not establish that the asserted groups were applied.
+The completion effects of an **admitted** login then run in their own transactions. They are
+**not atomic** with issuance. They finish before the token is returned to the caller, and
+because a session carries no grant snapshot — every request loads grants in its own read — the
+first use of the token sees membership changes that successfully committed. The subject binding
+is best-effort. The group reconciliation is not: group membership is a fact deny rules reason
+over, so where the login applies the asserted groups, a failed reconciliation withdraws the
+issued session (it is revoked and its token is never returned), writes one
+`auth.login.blocked` record with the reason `sso_group_reconcile_failed`, and answers
+`503 sso_group_reconcile_failed`, which a later attempt may clear. An account that lost its
+standing since the session was issued is answered `401` like any refused login. The cause
+is only in the engine log.
 
 The audit order is `sso.login`, followed by `sso.user.subject_bound` and
 `sso.group.reconcile` when the corresponding completion effects occur.

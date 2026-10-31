@@ -6,7 +6,7 @@ package sessions
 
 import (
 	"context"
-	"strings"
+	"time"
 
 	"github.com/olivaresai/olivares/core/model"
 )
@@ -22,15 +22,30 @@ type callerAsks struct {
 	// profileAccess asks whether the caller may use a tool and one profile of it
 	// (provider_profile_access.go). A launch with no caller to ask, a recovery, leaves it nil.
 	profileAccess func(profileRef, driver string) error
+	// standing asks the departments of the caller (department_standards.go). A launch with no
+	// caller to ask, or a build with no assignments wired, leaves it nil: no standards.
+	standing func() (launchStanding, error)
+	// workspaceRights asks whether the caller holds, on the registered folder a launch or
+	// resume names, the rights its session will exercise there (workspace_api.go). A launch with
+	// no caller to ask leaves it nil.
+	workspaceRights func(ref string) error
+}
+
+// refuseWorkspace is the folder question for the workspace a launch or resume names.
+func (a callerAsks) refuseWorkspace(ref string) error {
+	if a.workspaceRights == nil || ref == "" {
+		return nil
+	}
+	return a.workspaceRights(ref)
 }
 
 // askCallerQuestions settles MayRunUnrestricted and MayUseSecretEnv for the terms
 // as they are now, after the template and the profile policy have been applied:
-// "full" asks the first (refuseUnrestrictedFor), secret_env, git_read and credentials
+// "full" and "auto" ask the first (refuseUnrestrictedFor), secret_env, git_read and credentials
 // ask the second (refuseSecretEnvFor, refuseGitReadFor, refuseCredentialsFor). Any
 // other launch asks neither.
 func (p *CreateRunParams) askCallerQuestions() {
-	if p.asks.runUnrestricted != nil && strings.TrimSpace(p.PermissionMode) == permModeBypass {
+	if p.asks.runUnrestricted != nil && needsRunAdministration(p.PermissionMode) {
 		p.MayRunUnrestricted = p.asks.runUnrestricted()
 	}
 	if p.asks.secretEnv != nil && (len(p.SecretEnv) > 0 || p.GitRead != "" || len(p.Credentials) > 0) {
@@ -46,8 +61,24 @@ func (p *CreateRunParams) askCallerQuestions() {
 // Resume supplies the policy from its revalidated stored profile. A new launch
 // resolves its selected profile here, before any claim, credential or persistence.
 func (m *Module) prepareLaunchTerms(ctx context.Context, tenant model.TenantID, p *CreateRunParams, resumePolicy sessionPolicy) (templateDTO, []mergeConflict, error) {
+	// The department's default template governs a launch that names none, so it is named
+	// before the template is applied. Its standards are not read when nobody asks.
+	var standing *launchStanding
+	if !p.resuming {
+		var err error
+		if standing, err = p.standingOfLaunch(); err != nil {
+			return templateDTO{}, nil, m.errStandardsUnreadable(err)
+		}
+	}
+	defaulted, err := m.applyDepartmentDefaultTemplate(ctx, tenant, p, standing)
+	if err != nil {
+		return templateDTO{}, nil, err
+	}
 	tpl, conflicts, err := m.applyLaunchTemplate(ctx, tenant, p)
 	if err != nil {
+		if defaulted {
+			err = m.errDefaultTemplate(standing, err)
+		}
 		return templateDTO{}, nil, err
 	}
 	if p.resuming {
@@ -73,13 +104,36 @@ func (m *Module) prepareLaunchTerms(ctx context.Context, tenant model.TenantID, 
 			return templateDTO{}, nil, err
 		}
 		if err := m.resolveLaunchProfileInto(ctx, tenant, p); err != nil {
-			return templateDTO{}, nil, err
+			return templateDTO{}, nil, m.attributedToDefault(defaulted, standing, err)
 		}
+	}
+	if err := m.refuseRemoteInputs(*p); err != nil {
+		return templateDTO{}, nil, err
 	}
 	if err := m.validateLaunchSpeed(ctx, tenant, p); err != nil {
 		return templateDTO{}, nil, err
 	}
+	// The department's instructions go ahead of the launch's own, once the profile has said
+	// which tool this is. A resume and a queued launch read them again, as they do the template.
+	if err := m.applyDepartmentInstructions(ctx, tenant, p, standing); err != nil {
+		return templateDTO{}, nil, err
+	}
 	// Every launch, a resume and a queued one too, hands Claude Code the exact id.
 	resolveClaudeModelAlias(p)
+	if p.TimeoutSeconds > 0 && p.runDeadline.IsZero() {
+		p.runDeadline = m.now().Add(time.Duration(p.TimeoutSeconds * float64(time.Second)))
+	}
+	if !p.runDeadline.IsZero() {
+		remaining := p.runDeadline.Sub(m.now())
+		if remaining <= 0 {
+			return templateDTO{}, nil, conflictErr("run timeout reached")
+		}
+		if p.MaxDuration <= 0 || remaining < p.MaxDuration {
+			p.MaxDuration = remaining
+		}
+	}
+	if p.CostCapMicroUSD > 0 && p.costSpent >= p.CostCapMicroUSD {
+		return templateDTO{}, nil, conflictErr("run cost cap reached")
+	}
 	return tpl, conflicts, nil
 }

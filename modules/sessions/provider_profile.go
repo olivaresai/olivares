@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/core/model"
@@ -45,16 +46,17 @@ const (
 
 // sessions.provider_profile columns.
 const (
-	colPPRef         = "profile_ref"
-	colPPDriver      = "driver"
-	colPPEnvRef      = "environment_ref"
-	colPPConfigHome  = "config_home"
-	colPPUserHome    = "user_home"
-	colPPDisplayName = "display_name"
-	colPPAccent      = "accent"
-	colPPState       = "state"
-	colPPHomeSlot    = "home_slot"
-	colPPRetiredAt   = "retired_at"
+	colPPRef          = "profile_ref"
+	colPPDriver       = "driver"
+	colPPEnvRef       = "environment_ref"
+	colPPConfigHome   = "config_home"
+	colPPUserHome     = "user_home"
+	colPPMaxDataClass = "max_data_class"
+	colPPDisplayName  = "display_name"
+	colPPAccent       = "accent"
+	colPPState        = "state"
+	colPPHomeSlot     = "home_slot"
+	colPPRetiredAt    = "retired_at"
 	// colPPAuthSource is the EXPLICITLY AUTHORIZED authentication source of this
 	// profile: `provider_account_home` or `managed_injection`. It is an
 	// authorization, not identity — it can be changed by an operator with profile
@@ -133,6 +135,7 @@ var (
 
 // ProviderProfile is the module's own view of one profile row.
 type ProviderProfile struct {
+	MaxDataClass   string
 	ID             model.ID
 	Ref            string
 	Driver         string
@@ -208,10 +211,11 @@ type ProviderHomeSnapshot struct {
 
 // CreateProfileInput is the validated create request.
 type CreateProfileInput struct {
-	Driver      string
-	ConfigHome  string
-	UserHome    string
-	DisplayName string
+	MaxDataClass string
+	Driver       string
+	ConfigHome   string
+	UserHome     string
+	DisplayName  string
 	// AuthSource is the authorized authentication source. Empty authorizes none,
 	// which refuses every launch whose driver requires one.
 	AuthSource string
@@ -264,6 +268,7 @@ func (m *Module) registerProviderProfileSchema(reg store.ExtensionRegistry) erro
 			{Name: colPPEnvRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneEnvRef},
 			{Name: colPPConfigHome, Kind: model.KindText, Principal: pdeclNoneHomePath},
 			{Name: colPPUserHome, Kind: model.KindText, Principal: pdeclNoneHomePath},
+			{Name: colPPMaxDataClass, Kind: model.KindText, Nullable: true, Principal: model.None("operator-selected provider classification metadata, a closed enum: data_class.go:9-16")},
 			{Name: colPPDisplayName, Kind: model.KindText, Principal: model.None("an operator-chosen profile name, bounded and shown only: provider_profile.go:367, provider_profile.go:438")},
 			{Name: colPPAccent, Kind: model.KindText, Nullable: true, Principal: model.None("a closed display-only color enum, projected without identity or launch authority: provider_profile.go:455, provider_account_api.go:127, provider_profile_api.go:207")},
 			{Name: colPPState, Kind: model.KindText, Indexed: true, Principal: model.None("a profile lifecycle state, a closed set: provider_profile.go:72-78, provider_profile.go:719")},
@@ -422,7 +427,7 @@ func standardConfigDir(driver string) (string, bool) {
 // tool's standard configuration directory inside it. The console's sign-in writes
 // the login there and reads its status there; an own-login profile runs on it.
 //
-// Root on FH 036 (EU, refresh 08): this was the ENGINE USER's own home (~/.claude,
+// Root on first-hour check (EU, refresh 08): this was the ENGINE USER's own home (~/.claude,
 // ~/.codex, ~/.grok), so a fresh install reported, and would have launched on, a
 // vendor login nobody gave the product. Nothing here reads the engine's HOME or
 // inherits CLAUDE_CONFIG_DIR, CODEX_HOME or the like from its environment. It is
@@ -512,10 +517,9 @@ const serverUserLoginSentence = "This profile uses this server's user login; sig
 
 // usesServerUserLogin reports an own-login profile whose configuration home is the
 // engine user's own tool directory (~/.claude, ~/.codex, ~/.grok,
-// ~/.config/opencode): the shape profiles were given before FH 036. Such a profile
-// is shown as such and not launched, until an administrator chooses what to do with
-// it. Only the PATH is compared; no file under it is opened.
-func usesServerUserLogin(driver, authSource, configHome string) bool {
+// ~/.config/opencode). Cursor also keeps its credential below HOME, so its user home
+// must not be the engine user's either. Only PATHs are compared; no file is opened.
+func usesServerUserLogin(driver, authSource, configHome, userHome string) bool {
 	rel, ok := standardConfigDir(driver)
 	if !ok || authSource != AuthSourceAccountHome || strings.TrimSpace(configHome) == "" {
 		return false
@@ -523,6 +527,13 @@ func usesServerUserLogin(driver, authSource, configHome string) bool {
 	home, err := os.UserHomeDir()
 	if err != nil || !filepath.IsAbs(home) {
 		return false
+	}
+	engineHome := filepath.Clean(home)
+	if real, err := filepath.EvalSymlinks(engineHome); err == nil {
+		engineHome = real
+	}
+	if driver == providerDriverCursor && filepath.Clean(userHome) == engineHome {
+		return true
 	}
 	want := filepath.Join(filepath.Clean(home), rel)
 	if real, err := filepath.EvalSymlinks(want); err == nil {
@@ -570,8 +581,8 @@ func (m *Module) ownLoginConfigHome(tenant model.TenantID, driver string) (strin
 // creates for this profile (<profile homes root>/<profile ref>, 0700), so a
 // session never runs with the operator's ~/.ssh, other projects or dotfiles as
 // its home. Only the tool's own variable (CLAUDE_CONFIG_DIR, CODEX_HOME, …)
-// points at the login. OpenCode stores auth under HOME, so its default profile
-// shares the product-created login HOME instead.
+// points at the login. OpenCode and Cursor store auth under HOME, so their default
+// profiles share the product-created login HOME instead.
 func (m *Module) standardAccountHomes(tenant model.TenantID, driver, ref string) (configHome, userHome string, err error) {
 	if _, ok := standardConfigDir(driver); !ok {
 		return "", "", badRequest("config_home and user_home are required for this driver")
@@ -583,9 +594,10 @@ func (m *Module) standardAccountHomes(tenant model.TenantID, driver, ref string)
 		return "", "", err
 	}
 	userHome = filepath.Join(m.profileHomesRoot, ref)
-	if driver == providerDriverOpenCode {
-		// OPENCODE_CONFIG_DIR does not relocate auth.json. OpenCode's own
-		// login and session must share the native XDG data home under HOME.
+	if driver == providerDriverOpenCode || driver == providerDriverCursor {
+		// OPENCODE_CONFIG_DIR does not relocate auth.json, and CURSOR_CONFIG_DIR moves only
+		// cli-config.json: the login of either tool lives under HOME. Its own login and its
+		// session must share that HOME.
 		userHome, _, _ = ToolLoginHome(m.toolLoginsRoot, tenant, driver)
 	}
 	if err := os.MkdirAll(userHome, 0o700); err != nil {
@@ -702,6 +714,7 @@ func profileFromRecord(rec model.Record) ProviderProfile {
 		EnvironmentRef:        rec.String(colPPEnvRef),
 		ConfigHome:            rec.String(colPPConfigHome),
 		UserHome:              rec.String(colPPUserHome),
+		MaxDataClass:          rec.String(colPPMaxDataClass),
 		DisplayName:           rec.String(colPPDisplayName),
 		Accent:                rec.String(colPPAccent),
 		AccountName:           rec.String(colPPAccountName),
@@ -765,7 +778,7 @@ func validateRecordBinding(ctx context.Context, sc store.Scope, driver, ref stri
 	if rec.String(colPRState) != ProviderRecordActive {
 		return ErrProviderRecordRevoked
 	}
-	if rec.String("service") != "" {
+	if !modelprovider.NativeService(rec.String("service")) {
 		return errServiceProviderNative
 	}
 	if !recordServesDriver(rec.String(colPRKind), rec.String(colPRBaseURL), driver) {
@@ -777,7 +790,7 @@ func validateRecordBinding(ctx context.Context, sc store.Scope, driver, ref stri
 // refuseKeyUnderOwnLogin is the coherence rule for a profile's credential: a key
 // from Providers is used by a managed credential only, so a profile that would
 // carry one under the tool's own login is refused rather than stored unused
-// (HU 030). Nothing at launch reads a record under an own-login profile.
+// . Nothing at launch reads a record under an own-login profile.
 func refuseKeyUnderOwnLogin(source, recordRef string) error {
 	if source == AuthSourceAccountHome && strings.TrimSpace(recordRef) != "" {
 		return &runErr{http.StatusUnprocessableEntity,
@@ -794,6 +807,9 @@ func refuseKeyUnderOwnLogin(source, recordRef string) error {
 func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in CreateProfileInput) (ProviderProfile, error) {
 	if m.Data == nil {
 		return ProviderProfile{}, errNoData
+	}
+	if err := validateDataClass(in.MaxDataClass); err != nil {
+		return ProviderProfile{}, err
 	}
 	env, err := m.localEnvironment()
 	if err != nil {
@@ -876,15 +892,16 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 			}
 		}
 		rec := model.Record{
-			colPPRef:         ref,
-			colPPDriver:      driver,
-			colPPEnvRef:      env,
-			colPPConfigHome:  configHome,
-			colPPUserHome:    userHome,
-			colPPDisplayName: name,
-			colPPState:       ProfileActive,
-			colPPHomeSlot:    activeHomeSlot(env, driver, configHome),
-			colPPAuthSource:  authSource,
+			colPPRef:          ref,
+			colPPDriver:       driver,
+			colPPEnvRef:       env,
+			colPPConfigHome:   configHome,
+			colPPUserHome:     userHome,
+			colPPMaxDataClass: in.MaxDataClass,
+			colPPDisplayName:  name,
+			colPPState:        ProfileActive,
+			colPPHomeSlot:     activeHomeSlot(env, driver, configHome),
+			colPPAuthSource:   authSource,
 
 			colPPProviderRecordRef: recordRef,
 		}
@@ -901,6 +918,11 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 			return err
 		}
 		out = profileFromRecord(created)
+		if in.MaxDataClass != "" {
+			if err := appendProfileMaxDataClassAudit(ctx, sc, in.WorkGrantActor, out, ""); err != nil {
+				return err
+			}
+		}
 		if egressHosts != "" {
 			if err := appendProfileEgressHostsAudit(ctx, sc, in.WorkGrantActor, out); err != nil {
 				return err
@@ -973,8 +995,9 @@ func (m *Module) ListProfiles(ctx context.Context, tenant model.TenantID, state 
 // ProfilePatch is the ONLY mutation a profile accepts after creation: a new
 // label and/or a lifecycle transition. Everything else is identity.
 type ProfilePatch struct {
-	DisplayName *string
-	State       *string
+	MaxDataClass *string
+	DisplayName  *string
+	State        *string
 	// AuthSource re-authorizes (or withdraws, with "") the profile's
 	// authentication source. It is not identity, so it does not create a new
 	// profile; it does not reach a LIVE process either — a running child keeps the
@@ -1015,6 +1038,11 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 	}
 	if !validProfileRef(ref) {
 		return ProviderProfile{}, ErrProfileNotFound
+	}
+	if p.MaxDataClass != nil {
+		if err := validateDataClass(*p.MaxDataClass); err != nil {
+			return ProviderProfile{}, err
+		}
 	}
 	var name string
 	if p.DisplayName != nil {
@@ -1097,6 +1125,10 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 			}
 			setOrNull(rec, colPPSessionWorkGrant, encodeProfileWorkGrant(grant))
 		}
+		previousMaxDataClass := rec.String(colPPMaxDataClass)
+		if p.MaxDataClass != nil {
+			rec[colPPMaxDataClass] = *p.MaxDataClass
+		}
 		if p.DisplayName != nil {
 			rec[colPPDisplayName] = name
 		}
@@ -1156,6 +1188,11 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 			return err
 		}
 		out = profileFromRecord(updated)
+		if p.MaxDataClass != nil {
+			if err := appendProfileMaxDataClassAudit(ctx, sc, p.WorkGrantActor, out, previousMaxDataClass); err != nil {
+				return err
+			}
+		}
 		if p.SessionEgressHosts != nil {
 			if err := appendProfileEgressHostsAudit(ctx, sc, p.WorkGrantActor, out); err != nil {
 				return err
@@ -1247,10 +1284,10 @@ func (m *Module) snapshotForLaunch(tenant model.TenantID, prof ProviderProfile, 
 	if err := revalidateHome("user_home", prof.UserHome); err != nil {
 		return ProviderHomeSnapshot{}, err
 	}
-	// FH 036, here because launch, resume and a queued launch all come through this
+	// first-hour check, here because launch, resume and a queued launch all come through this
 	// snapshot (SR2 on 65d841a1): a profile on this server's user login is not used,
 	// and a tool login belongs to the organization that signed it in.
-	if usesServerUserLogin(prof.Driver, prof.AuthSource, prof.ConfigHome) {
+	if usesServerUserLogin(prof.Driver, prof.AuthSource, prof.ConfigHome, prof.UserHome) {
 		return ProviderHomeSnapshot{}, &runErr{http.StatusConflict, serverUserLoginSentence}
 	}
 	if err := m.refuseForeignToolLogin(tenant, prof.Driver, prof.ConfigHome, prof.UserHome); err != nil {

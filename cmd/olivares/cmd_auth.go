@@ -139,7 +139,7 @@ func newAuthCmd() *cobra.Command {
   olivares auth use-context production`,
 	}
 	cmd.AddCommand(newAuthBootstrapCmd(), newAuthLoginCmd(), newAuthLogoutCmd(), newAuthStatusCmd(),
-		newAuthUseContextCmd(), newAuthTOTPPolicyCmd(), newAuthOSAccountCmd())
+		newAuthUseContextCmd(), newAuthSessionsCmd(), newAuthTOTPPolicyCmd(), newAuthOSAccountCmd())
 	return cmd
 }
 

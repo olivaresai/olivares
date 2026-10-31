@@ -30,12 +30,13 @@ Claude Code hook 路径仍为 `olivares claude-hook`（PreToolUse PEP）。那�
 
 | 权限 | 路由 |
 |---|---|
-| `sessions:run:read` | `GET /runs`、`GET /runs/{ref}`、`GET /runs/{ref}/events`、`GET /runs/{ref}/attach`、`GET /runs/{ref}/handoff`、`GET /runs/{ref}/activity`、`GET /runs/{ref}/activity/agents/{agent}`、`GET /runs/{ref}/messages`、`POST /runs/{ref}/pin`、`DELETE /runs/{ref}/pin` |
-| `sessions:run:write` | `POST /runs`、`POST /runs/{ref}/input`、`POST /runs/{ref}/interrupt`、`POST /runs/{ref}/stop`、`POST /runs/{ref}/resume`、`POST /runs/{ref}/move`、`POST /runs/{ref}/handoff`, `PUT /runs/{ref}/name`, `POST /runs/{ref}/archive`, `DELETE /runs/{ref}/archive` |
+| `sessions:run:read` | `GET /runs`, `GET /runs/{ref}`, `POST /runs/{ref}/pin`, `DELETE /runs/{ref}/pin` |
+| `sessions:output:read` | `GET /runs/{ref}/events`, `GET /runs/{ref}/attach`, `GET /runs/{ref}/changes`, `GET /runs/{ref}/changes/file`, `GET /runs/{ref}/git`, `GET /runs/{ref}/diff`, `GET /runs/{ref}/diff/file`, `GET /runs/{ref}/handoff`, `GET /runs/{ref}/activity`, `GET /runs/{ref}/activity/agents/{agent}`, `GET /runs/{ref}/messages`, `GET /runs/{ref}/attachments/{id}` |
+| `sessions:run:write` | `POST /runs`、`POST /runs/{ref}/input`、`POST /runs/{ref}/interrupt`、`POST /runs/{ref}/resume`、`POST /runs/{ref}/move`、`POST /runs/{ref}/handoff`, `PUT /runs/{ref}/name`, `POST /runs/{ref}/archive`, `DELETE /runs/{ref}/archive` |
+| `sessions:stop:write` | `POST /runs/{ref}/stop` |
 | `sessions:run:admin` | `POST /runs/{ref}/cleanup`、`DELETE /runs/{ref}` |
 
-viewer 可以列出会话，并为自己固定（pin）会话。创建、输入和停止需要 write 权限。
-路由上的授权器是执行点；缺少权限时返回 403。
+viewer 可以列出会话并为自己固定会话。创建和输入需要 `sessions:run:write`，停止需要 `sessions:stop:write`。输出、会话记录以及文件或 Git 内容现在需要 `sessions:output:read`，editor 及以上角色默认拥有此权限。viewer 保留元数据和个人标记，但未经明确授权将失去对这些内容的访问权限。缺少权限时返回 403。
 
 ## 控制台读取的路由
 
@@ -54,6 +55,9 @@ viewer 可以列出会话，并为自己固定（pin）会话。创建、输入�
 | `POST`, `DELETE` | `/runs/{ref}/pin` | 为调用者固定会话，或取消固定。该固定属于调用者本人，并跟随其到另一台浏览器或机器；它从不改变他人的列表。两次调用都是幂等的，均返回 200 `{run_ref, pinned, pinned_at}`。每人最多保留 20 个固定：固定第 21 个时，最旧的一个被移除。释放或删除会话会清除其上的所有固定。`GET /runs` 和 `GET /runs/{ref}` 携带调用者自己的 `pinned` 与 `pinned_at`；`GET /runs` 还会返回调用者落在本页之外的已固定会话（比 `limit` 多至多 20 行；`pagination=cursor` 不增加任何行，因为它本身一次就能遍历每个会话）。固定属于创建它的凭证：某人的控制台与 `olivares login` 会话共享固定，API 令牌则保留各自的固定。已释放的会话回答 409 |
 | `POST`, `DELETE` | `/runs/{ref}/snooze` | 为调用者将会话延后到某一时刻，或结束延后。`POST` 接受 `{until}`，即一个未来的 RFC 3339 时间（否则为 400）；再次 `POST` 会移动该时间。延后属于调用者本人，与固定一样：控制台会在 `until` 之前将该会话移出此人的列表，其他人的列表不变。两者均返回 200 `{run_ref, snoozed_until?, done}`。`GET /runs` 和 `GET /runs/{ref}` 仅在延后仍有效期间携带调用者的 `snoozed_until`。释放或删除会话会清除其上的所有延后。已释放的会话回答 409 |
 | `POST`, `DELETE` | `/runs/{ref}/done` | 为调用者将会话标记为已完成，或清除该标记。控制台会把已完成的会话归入此人列表中的「更早」。两者均幂等，并返回 200 `{run_ref, snoozed_until?, done}`。`GET /runs` 和 `GET /runs/{ref}` 携带调用者的 `done`。释放或删除会话会清除其上的所有标记。已释放的会话回答 409 |
+| `GET`、`POST`、`PUT` | `/runs/{ref}/queue` | 工具工作期间为会话排好的消息。`GET` 返回 `{run_ref, items, hold?, can_steer}`：按发送顺序排列的消息（`id`、`text`、`queued_by`、`queued_at`）、第一条尚未发出的原因（`hold`：`turn`、`approval`、`limit` 或 `stopped`；可立即发出时不出现），以及工具是否接受向进行中的轮次插入消息（`can_steer`）。`POST` 接受 `{text}`，返回 201 和该消息；会话不忙时立即发送。`PUT` 接受 `{ids}`，即队列中每个 id 按新顺序各出现一次（否则 400），返回队列。队列保存在服务器上，因此刷新页面后仍在，并显示在每台设备上。轮次结束时，第一条消息通过会话的输入只发送一次；已停止、被中断或达到额度的会话，以及等待批准的会话，会保留队列。写入权限和版本规则与 `/input` 相同；由工作项启动的会话和已释放的会话返回 409。释放会话会丢弃其队列，`POST /runs/{ref}/cleanup` 的返回以 `discarded_queue` 列出被丢弃的消息 |
+| `PATCH`、`DELETE` | `/runs/{ref}/queue/{id}` | 修改一条排队消息的文本（`{text}`，返回 200 和该消息），或将其移出队列而不发送（返回 200 和队列）。不在队列中的 id 返回 404 |
+| `POST` | `/runs/{ref}/queue/{id}/steer` | 立即通过会话的输入发送一条排队消息：工具接受时发入进行中的轮次（`can_steer`），否则作为下一条消息。消息先离开队列，因此只发送一次；在写入任何内容之前被拒绝时，它会回到原位。返回 202 `{accepted}`。不接受向进行中轮次插入消息的工具，在其轮次进行期间返回 409 |
 | `PUT` | `/runs/{ref}/name` | 请求体 `{name}`。重命名会话。名称会去除首尾空白；空名称会清除名称，客户端改用各自的命名。超过 200 个字符、包含控制字符或不可见字符（格式字符、行或段落分隔符：零宽空格、方向覆盖字符）或缺少 `name` 时回答 400。返回 200 及运行对象。名称属于会话，因此每个读取者都能看到。在审计账本中记录为 `sessions.run.renamed`，记录的是运行引用而不是名称；与会话现有名称相同的名称不改变任何内容，也不记录任何内容 |
 | `POST`, `DELETE` | `/runs/{ref}/archive` | 归档会话或取消归档。无请求体。返回 200 及运行对象，归档期间包含 `archived_at`。归档既不停止也不移除会话。该标记属于会话而非调用者：会话对所有人都处于归档状态。`GET /runs` 不因此缩小范围；由各客户端在其列表中省略已归档的会话。两个调用都是幂等的：归档已归档的会话会保留其 `archived_at`，且不记录任何内容。在审计账本中记录为 `sessions.run.archived` 和 `sessions.run.unarchived` |
 | `POST` | `/runs/{ref}/move` | 请求体 `{provider_profile_ref}`。将已停止或失败的 Claude Code 会话重新绑定到同一工具的另一个配置文件，并携带其对话。不启动任何内容。返回 200 及运行对象 |
@@ -152,7 +156,8 @@ Claude Code、Codex、Gemini CLI 或 OpenCode 会话的已存储对话（Grok �
 
 ### 批准文件夹的设置命令
 
-设置命令属于已登记的文件夹，保存在引擎存储中。仓库文件与环境变量无法更改它。目前，这些操作与会话启动期间都不会执行该命令。
+设置命令属于已登记的文件夹，保存在引擎存储中。仓库文件与环境变量无法更改它。
+保存和批准命令不会执行它；工作树启动会执行它，具体如下。
 
 - `PUT /workspaces/{ref}/setup-command` 接受 `{"command":"npm ci"}`。准确的 UTF-8 文本会被原样保留，包括空白；
   最多 8192 字节，且不得含 NUL。空字符串会清除该命令。需要工作区管理权限。
@@ -165,7 +170,27 @@ Claude Code、Codex、Gemini CLI 或 OpenCode 会话的已存储对话（Grok �
 当命令没有匹配的批准时，工作树启动会在创建工作树之前返回 409。其说明语句会指明该命令与批准步骤。只要更改一个字符（包括空白），
 就需要重新批准。最后一次批准作为证据保留；其哈希必须等于 `setup_command_sha256` 才会生效，因此把命令改回此前已批准的文本，
 会再次应用该批准。任何能读取该文件夹的人都能读取此命令，所以不要把机密放进去。带有 `"no_setup":true` 的 `POST /runs`
-只对该次启动跳过设置。对带工作树会话的交接会启动新工作树，并需要同样的批准；它没有跳过选项。其他启动与 resume 保持其现有行为。
+只对该次启动跳过设置。对带工作树会话的交接会启动新工作树，并需要同样的批准；它没有跳过选项。不使用工作树的启动保持其现有行为。
+
+新工作树创建后、会话首轮之前，已批准的命令在工作树文件夹中以 `/bin/sh -c` 执行一次。
+它在文件夹隔离（工作树及其 Git 元数据）和会话网络策略下运行。相同的允许列表也适用于下载：
+绑定提供商密钥的会话只能访问其提供商和明确允许的主机，因此运行安装程序前请允许包注册表。
+它不会收到会话的环境变量、凭据、提供商账户主目录或凭据文件；其 `PATH` 与会话相同，
+因此能找到会话配置中的程序。非零退出状态或达到时间限制而停止都会阻止启动，运行账本会记录包含命令最后输出的
+`worktree_setup` 事件。请求最多等待命令 20 秒。在此时间内结束的命令照常响应：失败时响应为 422
+并携带最后输出。此时仍在运行的命令归会话所有：响应为 201，`state` 为 `pending`，命令在会话的
+文件夹隔离下继续运行，停止请求会结束它。其时间限制为 10 分钟。会话的第一次输入最多等待命令完成 30 秒，
+之后会以 409（`session is not running`，`state=pending`）被拒绝，由调用方重新发送。控制台会保留第一条消息直到会话就绪再发送，
+因此安装程序运行期间发送的消息会在其结束后送达，绝不会进入尚未准备好的文件夹。失败、达到限制或被停止的命令会使运行变为 `failed`（停止请求则为
+`stopped`），并保留相同的事件和最后输出；任何输入都不会到达工具。resume 会等待其命令结束，
+并保持 20 秒限制。在 Linux 上，命令结束后，它留下的任何进程都会停止。在其他平台上，为避免留下分离的进程，启动会被拒绝。命令写入的文件会与原有文件一样接受检查：能运行程序或重定向
+流量的项目智能体配置会阻止启动。
+
+命令在工作树会话首次启动时执行。等待批准的启动会在批准允许启动时执行命令。设置失败后，
+resume 会先再次执行命令；如果命令未获批准或未能成功完成，会话不会启动。设置成功后，
+即使后续启动步骤失败，resume 也不会再次执行命令。如果无法确认进程清理完成，resume 将被拒绝；
+请停止剩余进程并创建新的工作树。`no_setup` 会跳过该次启动及后续 resume 的设置。
+对于记录设置状态之前的旧版本工作树运行，如果从未启动，则会改为执行一次已批准的设置。
 
 使用 CLI 时，用 `olivares agent workspace setup <ref> --command 'npm ci'` 设置，用 `olivares agent workspace setup <ref>` 读取，
 并用 `olivares agent workspace approve-setup <ref> --sha256 <hash>` 批准所显示的哈希。`olivares session start --worktree --no-setup`
@@ -186,6 +211,8 @@ Claude Code、Codex、Gemini CLI 或 OpenCode 会话的已存储对话（Grok �
 （读取会与工作区文件读取一样被审计）；超过 16 MiB 的文件回答 413。没有工作树的会话以及其他租户的运行回答 404；分支已不存在，
 或与工作区没有共同历史时，回答 409。对于仓库中任何分支、标签或远程分支都未持有的提交 id，`worktree_from` 同样回答 422。
 
+对该 diff 某一行的评论会作为下一条消息回到智能体，与其他输入一样经由 `POST /runs/{ref}/input`。加上 `review_comment`（`path`、从 1 开始的 `line`，以及 `side`：`original` 表示 `base` 处的文件，`modified` 表示 `head` 处的文件）来指明位置。格式错误的位置，或与 `attachments` 一同发送的位置，回答 400 且不发送任何内容。输入被接受后，审计账本会记录 `sessions.run.review_comment`，含运行、路径、行和侧；评论本身是工具收到的消息，不会复制进账本。`olivares session diff <session>` 以 unified diff 形式输出同一份 diff。
+
 ### 仓库携带的智能体配置
 
 克隆的仓库可能携带会运行程序或重定向流量的智能体配置。会话在某个文件夹中启动时，引擎将其视为不受信任的输入。
@@ -198,21 +225,27 @@ Claude Code、Codex、Gemini CLI 或 OpenCode 会话的已存储对话（Grok �
 | Codex | `.codex/config.toml` | `hooks`、`notify`、`mcp_servers`、`model_providers`、`otel`、任何顶层 `*_base_url`，以及名称列在最后一行中的 `shell_environment_policy.set` 条目；`profiles.<name>` 下的相同键 |
 | Gemini CLI | `.gemini/settings.json` | `hooks`、`mcpServers`、`toolDiscoveryCommand`、`toolCallCommand`、`proxy`、`tools.discoveryCommand`、`tools.callCommand`、`mcp.serverCommand`、`telemetry.otlpEndpoint` |
 | Gemini CLI | `.gemini/.env`、`.env` | 名称列在最后一行中的条目 |
+| OpenCode | `opencode.json`、`opencode.jsonc` | 除 `$schema`、`theme`、`keybinds`、`logLevel`、`model`、`small_model`、`username`、`share`、`autoupdate`、`snapshot`、`layout` 之外的每个顶层键；文本中任何位置的每个 `{file:…}` 和 `{env:…}` 标记，其中 `{file:}` 绑定到它所指文件的 sha256 |
+| OpenCode | `.opencode/` | 整个文件夹：每个文件按其 sha256（文件夹内的链接按其目标），其自身的 `.gitignore` 除外；其中的 `opencode.json` 和 `opencode.jsonc` 按上一行处理，`{file:}` 从 `.opencode/` 读取 |
 | 环境变量名称 | | `NODE_OPTIONS`、`NODE_EXTRA_CA_CERTS`、`NODE_TLS_REJECT_UNAUTHORIZED`、`LD_PRELOAD`、`LD_LIBRARY_PATH`、`LD_AUDIT`、`DYLD_INSERT_LIBRARIES`、`BASH_ENV`、`PATH`、`PYTHONPATH`、`GIT_SSH_COMMAND`、`GIT_EXTERNAL_DIFF`、`SSL_CERT_FILE`、`CLAUDE_CODE_SHELL_PREFIX`、`ANTHROPIC_CUSTOM_HEADERS`、`AWS_ENDPOINT_URL*`，以及任何以 `_BASE_URL`、`_API_BASE`、`_ENDPOINT` 或 `_PROXY` 结尾的名称（`NO_PROXY` 只会收窄代理，不被标记） |
+
+批准 `.opencode/` 前，请审阅 `package.json`，然后在该文件夹运行 `OpenCode=1.19.4; npm install --ignore-scripts --save-exact @opencode-ai/plugin@"$OpenCode"`。该包版本对应固定的 OpenCode 1.19.4，安装脚本保持禁用。检查要求存在 `node_modules/`，且 `package-lock.json` 的根条目包含 `@opencode-ai/plugin` 和所有声明的依赖。否则会拒绝会话并提示先安装依赖。已安装的目录树属于批准哈希的一部分；更改后需要重新批准。
 
 存在但无法按其格式读取的文件（不是有效的 JSON 或 TOML、超过 1 MiB、嵌套深度超过 64 层、不是常规文件）计为被标记，
 因为无法证明其安全。在 TOML 中，点号键或表头的每一段都计为一层，与解析后的文档一致，并计入包围它的方括号：
 一个 30 段的表头加上 35 层嵌套的内联表，共 65 层。文件一旦含有 `[[array]]` 表头，表头各段即计为两次，
-因为每一段都可能指代一个数组及其元素。超大文件在每次检查时都会被完整哈希。没有任何内容被标记的文件夹照常启动。
+因为每一段都可能指代一个数组及其元素。超大文件在每次检查时都会被完整哈希，但 OpenCode 文件在用于解析的受限读取后即被拒绝。没有任何内容被标记的文件夹照常启动。
 
 - `GET /workspaces/{ref}/project-config` 按文件列出被标记的键及其值（URL 中的密码会被掩码），以及恰好覆盖该被标记部分的 `sha256`，
-  涵盖三种工具的全部文件，并附带 `approved` 与最近一次 `approval`。它读取的是文件夹本身；从另一提交启动的工作树可能带有不同的已跟踪文件，
+  涵盖上述所有工具的全部文件，并附带 `approved` 与最近一次 `approval`。它读取的是文件夹本身；从另一提交启动的工作树可能带有不同的已跟踪文件，
   其拒绝提示会说明它自己的哈希。
 - `POST /workspaces/{ref}/project-config/approve` 接受 `{"sha256":"<reviewed hash>"}`，需要工作区管理权限，并拒绝智能体身份。
   批准会存储操作者、时间与哈希，并在同一事务中写入一条 `sessions.workspace.approve-project-config` 审计条目。
 
 对于读取被标记文件的工具，除非已存储的批准等于当前哈希，否则其启动或 resume 返回 409。更改被标记值的一个字符，
 或增加、移除被标记的键，都需要重新批准；更改未被标记的键则不需要。没有跳过该检查的选项。
+
+有些配置无法用哈希绑定，因此任何批准都不能让会话使用它。其条目带有 `refused` 原因；在该配置被更改或移除之前，无论批准了什么，该工具的每次启动或 resume 都返回 409：带有 `{env:…}` 标记的 OpenCode 文件；不是有效 JSONC 的 OpenCode 文件；所指文件位于文件夹之外、位于 `~` 下、为绝对路径或路径前后带空格，或者不是不超过 1 MiB 的普通文件的 `{file:…}`；合计所指文件超过 8192 个或 64 MiB 的 `{file:…}` 标记；展开后的替换内容超过 64 MiB；非空 `plugin` 或 `instructions` 键；超过 1 MiB 或不是普通文件的 OpenCode 文件；作为指向文件夹之外链接的 `opencode.json(c)` 或 `.opencode`；不是文件夹的 `.opencode`；以及超过 8192 个条目、64 MiB 或 1024 个文件夹，或带有指向外部的链接、链接循环、非普通文件条目或检查无法读取的文件夹或文件的 `.opencode/` 文件夹。
 
 携带引擎 hook 的 Claude Code 会话以 `--setting-sources ""` 启动；在 Claude Code 2.1.299 上，该会话不加载项目或本地设置文件，
 也不加载项目 `.mcp.json`，因此此类启动不会被拒绝。不带引擎 hook 的 Claude Code 启动（远程控制，或没有 hook 端点的引擎）

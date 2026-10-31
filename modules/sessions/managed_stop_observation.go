@@ -82,7 +82,7 @@ func (m *Module) stopAndObserveManagedRun(
 	// The stop and the finalize wait ignore the caller's cancellation: past the
 	// dispatch fence a walked-away caller must not cut the wait short. The wait is
 	// still bounded, by 2×waitDelay inside stopLiveEffect.
-	finalize, stopErr, revokeErr := m.stopLiveEffect(context.WithoutCancel(actx), lr, req.Reason, timedPhase)
+	finalize, stopErr, revokeErr := m.stopLiveEffect(context.WithoutCancel(actx), lr, req.Reason, req.Principal.Actor(), timedPhase)
 	effectEnded := time.Now()
 	m.logManagedStopStage(operationRef, "stop", effectStarted, revocationStarted)
 	m.logManagedStopStage(operationRef, "revocation", revocationStarted, revocationEnded,

@@ -110,12 +110,13 @@ const (
 // custom_role / permission_group columns (a reusable, tenant-wide permission
 // bundle of verb+kind permissions; minimal data — no column holds a credential).
 const (
-	colRBACName        = "name" // tenant-unique operator identity
-	colRBACDisplayName = "display_name"
-	colRBACDescription = "description"
-	colRBACPerms       = "permissions" // JSON array of "<kind>:<verb>" strings (direct perms)
-	colRBACGroups      = "groups"      // JSON array of permission-group names a custom role includes
-	colRBACCreatedBy   = "created_by"  // audit-actor string — provenance only
+	colRBACName         = "name" // tenant-unique operator identity
+	colRBACDisplayName  = "display_name"
+	colRBACDescription  = "description"
+	colRBACSessionExact = "session_permissions_exact" // nullable: stored bundles retain legacy explicit session coverage
+	colRBACPerms        = "permissions"               // JSON array of "<kind>:<verb>" strings (direct perms)
+	colRBACGroups       = "groups"                    // JSON array of permission-group names a custom role includes
+	colRBACCreatedBy    = "created_by"                // audit-actor string — provenance only
 	// structured subtraction. A custom role may name a BUILT-IN role as its base
 	// and subtract from it, so "editor except models:keys:write" is one row that stays
 	// true as the catalog grows, instead of a snapshot enumeration that silently goes
@@ -137,6 +138,9 @@ const (
 	colSGScopeClass  = "scope_class"  // resource-kind filter ("" = any scopeable kind)
 	colSGCreatedBy   = "created_by"   // audit-actor string — provenance only
 	colSGNote        = "note"         // optional bounded operator prose
+	colSGExpiresAt   = "expires_at"   // null = legacy grant never expires
+	colSGRemind14At  = "remind_14_at" // one-shot 14-day reminder marker
+	colSGRemind1At   = "remind_1_at"  // one-shot 1-day reminder marker
 )
 
 // nhi_lifecycle columns (the mutable per-NHI lifecycle overlay).
@@ -266,6 +270,7 @@ const (
 	colApprovalReview     = "review"
 	colChangeClass        = "change_class"
 	colChangePaths        = "change_paths"
+	colChangeRecord       = "change_record"
 	colPolicyRef          = "policy_ref"
 	colExpiresAt          = "expires_at"
 	colEscalateAt         = "escalate_at"
@@ -284,12 +289,14 @@ const (
 
 // approval_decision columns (the append-only, immutable human-decision trail).
 const (
-	colApprovalID  = "approval_id"
-	colDecision    = "decision"
-	colDecider     = "decider"      // audit-actor string — provenance in the trail
-	colDeciderUser = "decider_user" // stable user id — SoD + duplicate-decider key
-	colLevel       = "level"
-	colNote        = "note"
+	colApprovalID          = "approval_id"
+	colDecision            = "decision"
+	colDecisionScope       = "scope"
+	colSessionScopeAllowed = "session_scope_allowed"
+	colDecider             = "decider"      // audit-actor string — provenance in the trail
+	colDeciderUser         = "decider_user" // stable user id — SoD + duplicate-decider key
+	colLevel               = "level"
+	colNote                = "note"
 )
 
 // breakglass grant columns (a time-boxed emergency-access window; mutable
@@ -567,6 +574,10 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colChangeClass, Kind: model.KindText, Nullable: true, Principal: model.None("a change class from a closed set, matched against approval policies and rendered only: approvals.go:365, approvals.go:127, changeclass.go:57")},
 			{Name: colChangePaths, Kind: model.KindJSON, Nullable: true, Principal: model.Nested([]string{}, model.ClassEvidence,
 				model.Leaf("[]", model.None("bounded repository paths of a proposed change, rendered only and never resolved to an account: approvals.go:133, approvals.go:281, changeclass.go:124")))},
+			// The change record an approval was decided under (system, key, destination and
+			// states as JSON): set when a bound policy's approval is given, so a spend checks
+			// the record the approvers saw. Added nullable like the consume markers.
+			{Name: colChangeRecord, Kind: model.KindText, Nullable: true, Principal: model.None("the change record an approval was decided under, checked against the change system's record and never an account: approval_changerecord.go:155, approval_changerecord.go:160, approval_changerecord.go:183, approval_changerecord.go:214")},
 			{Name: colExpiresAt, Kind: model.KindTimestamp, Nullable: true, Indexed: true},
 			{Name: colEscalateAt, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colEscalatedAt, Kind: model.KindTimestamp, Nullable: true},
@@ -576,6 +587,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			// table without a hand-authored migration (sqlstore reconcileColumns).
 			{Name: colConsumedBy, Kind: model.KindText, Nullable: true, Indexed: true, Principal: model.None("the consuming caller's tool-use id, compared only with a later consumer id: approvals.go:1023, and shown only as a spent flag: approvals.go:131")},
 			{Name: colConsumedAt, Kind: model.KindTimestamp, Nullable: true},
+			{Name: colSessionScopeAllowed, Kind: model.KindBool, Nullable: true},
 		},
 	}); err != nil {
 		return err
@@ -587,6 +599,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		AppendOnly: true, // immutable action→human evidence (docs/SECURITY-HARDENING.md)
 		Fields: []model.FieldSpec{
 			{Name: colApprovalID, Kind: model.KindUUID, Indexed: true, Principal: model.None("the id of the approval this decision belongs to: approvals.go:590")},
+			{Name: colDecisionScope, Kind: model.KindText, Nullable: true, Principal: model.None("single-use or session duration of a human provider decision, never an account: the closed \"\"|session vocabulary validated at approvals.go:645, read at approvals.go:547")},
 			{Name: colDecision, Kind: model.KindText, Principal: model.None("approve or reject, compared at approvals.go:608")},
 			{Name: colDecider, Kind: model.KindText, Principal: pdeclActorEvidence},
 			{Name: colDeciderUser, Kind: model.KindText, Indexed: true, Principal: pdeclUserRestrict},
@@ -977,6 +990,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colRBACDisplayName, Kind: model.KindText, Nullable: true, Principal: pdeclRBACProse},
 			{Name: colRBACDescription, Kind: model.KindText, Nullable: true, Principal: pdeclRBACProse},
 			{Name: colRBACPerms, Kind: model.KindJSON, Principal: pdeclStringList(pdeclPermission)},
+			{Name: colRBACSessionExact, Kind: model.KindBool, Nullable: true},
 			{Name: colRBACGroups, Kind: model.KindJSON, Nullable: true, Principal: pdeclStringList(model.None("a permission-group name, resolved against the tenant's permission groups: scopedadmin_handlers.go:511-514"))},
 			// additive nullable columns — an existing row reads back Base "" and
 			// Excludes nil, which is exactly the pre semantics (no base, no subtraction).
@@ -1005,6 +1019,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colRBACDisplayName, Kind: model.KindText, Nullable: true, Principal: pdeclRBACProse},
 			{Name: colRBACDescription, Kind: model.KindText, Nullable: true, Principal: pdeclRBACProse},
 			{Name: colRBACPerms, Kind: model.KindJSON, Principal: pdeclStringList(pdeclPermission)},
+			{Name: colRBACSessionExact, Kind: model.KindBool, Nullable: true},
 			{Name: colRBACCreatedBy, Kind: model.KindText, Principal: pdeclActorEvidence},
 		},
 		Indexes: []model.IndexSpec{{
@@ -1033,6 +1048,9 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colSGScopeClass, Kind: model.KindText, Principal: model.None("a scopeable resource kind: scopedadmin_handlers.go:291")},
 			{Name: colSGCreatedBy, Kind: model.KindText, Principal: pdeclActorEvidence},
 			{Name: colSGNote, Kind: model.KindText, Nullable: true, Principal: model.None("bounded operator prose (scopedadmin_handlers.go:969), rendered only: scopedadmin_handlers.go:118")},
+			{Name: colSGExpiresAt, Kind: model.KindTimestamp, Nullable: true, Indexed: true, Principal: model.None("optional grant expiry, read as a timestamp by scopedadmin.go:165 and grant_expiry.go:168, never as a principal")},
+			{Name: colSGRemind14At, Kind: model.KindTimestamp, Nullable: true, Principal: model.None("one-shot 14-day notification marker, written only by the expiry sweep: grant_expiry.go:168-174")},
+			{Name: colSGRemind1At, Kind: model.KindTimestamp, Nullable: true, Principal: model.None("one-shot 1-day notification marker, written only by the expiry sweep: grant_expiry.go:169")},
 		},
 		Indexes: []model.IndexSpec{{
 			// One grant per (subject, role, scope): the dedup backstop. scope_ref/

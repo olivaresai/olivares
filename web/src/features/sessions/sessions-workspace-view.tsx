@@ -516,7 +516,7 @@ function Inner({
   const episodio = episode.n
 
   /**
-   * HOW MANY PAGES THE LIST HAS ASKED FOR (dev#3120). Load more asks again for a longer
+   * HOW MANY PAGES THE LIST HAS ASKED FOR. Load more asks again for a longer
    * page of each half, up to the engine's ceiling; a new episode starts from one page.
    * The rows already read stay on screen while the longer page comes, but only when they
    * are THIS episode's previous page still in the cache (`keepPage`), never another
@@ -1317,7 +1317,7 @@ function Inner({
         cell: ({ row }) => {
           const v = row.original.live?.current_action
           return v ? (
-            <ActionName value={v} className="block truncate" />
+            <ActionName value={v} className="block truncate" copy={false} />
           ) : (
             <span className="text-muted-foreground">—</span>
           )
@@ -1329,7 +1329,7 @@ function Inner({
         header: t('cols.model'),
         cell: ({ getValue }) => {
           const v = getValue<string>()
-          // The model by its name (dev#3120); the id it sorts and filters by is the hover.
+          // The model by its name; the id it sorts and filters by is the hover.
           return v ? (
             <span className="text-caption text-muted-foreground" title={v}>
               {modelName(v)}
@@ -1719,7 +1719,7 @@ function Inner({
           .filter(Boolean)
           .join(' · ')
 
-  // THE LIST SAYS ITS OWN LIMITS, AT ITS FOOT (dev#3120): what the role cannot see, and
+  // THE LIST SAYS ITS OWN LIMITS, AT ITS FOOT: what the role cannot see, and
   // that the page is the most recent part with the way to load more. Nothing of it sits
   // over the rail and the conversation.
   const listFooter =
@@ -1924,7 +1924,7 @@ function Inner({
                 'table',
                 <>
                   {/* WHAT THIS TABLE COULD NOT SEE, said in the table it is about and
-                      nowhere else (dev#3120): a missing grant and a page that is not the
+                      nowhere else: a missing grant and a page that is not the
                       whole list change what the Origin column can claim, so they sit above
                       it, quietly, and never over the rail and the conversation. */}
                   {!canLiveRead && (

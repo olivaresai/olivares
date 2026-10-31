@@ -5,18 +5,35 @@
 // THE NARRATIVE AS A CONVERSATION. Attach frames are mapped before they are
 // painted: the default view is operator, assistant, tool, system, result. The
 // raw line is one click away (inspect), never the row itself.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import type { TFunction } from 'i18next'
+import { Quote } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { useTranslation } from 'react-i18next'
 import { agentOpsKeys } from '@/features/agentops/api'
 import { MessageImages } from '@/features/agentops/attachment-ui'
-import { useRunAttach } from '@/features/agentops/attach'
+import { readAttachPage, useRunAttach } from '@/features/agentops/attach'
 import { readsNativeRecord } from '@/features/agentops/provider-contract'
 import { modelName } from '@/features/agentops/model-name'
 import { useTurnInterrupt } from '@/features/agentops/turn-interrupt'
 import type { AttachFrame, RunDTO } from '@/features/agentops/types'
 import { CopyButton } from '@/components/ui/copy-button'
+import { Button } from '@/components/ui/button'
+import { useAuth } from '@/lib/auth/context'
+import {
+  readSessionDraft,
+  sessionDraftKey,
+  writeSessionDraft,
+} from '@/lib/session-drafts'
 import { formatDuration, formatInt } from '@/lib/format'
 import { isTypingTarget } from '@/lib/keybindings/model'
 import '@/features/shared/i18n'
@@ -30,6 +47,8 @@ import {
   mapConversationFrames,
   type ConversationItem,
 } from './conversation-frames'
+import { ConversationApproval } from './conversation-approval'
+import { ConversationCard, ConversationTaskList } from './conversation-cards'
 import { systemFailed, systemText } from './conversation-text'
 import {
   InspectButton,
@@ -37,9 +56,11 @@ import {
   KeyboardInspect,
   openOnWords,
   threadParts,
+  type Part,
   WorkRow,
 } from './conversation-work'
 import { MarkdownText } from './markdown-text'
+import { samePlain } from './same-plain'
 import { parseMarkdown, plainText } from './markdown'
 import { MessageBar, MessageRail } from './message-navigator'
 import { useMessageNavigator } from './use-message-navigator'
@@ -51,11 +72,21 @@ import {
   wordsShown,
   type SentTurn,
 } from './sent-turns'
+import { useConversationTasks } from './use-conversation-tasks'
 import './i18n'
 
 const MAX_FRAMES = 5000
+/** A session opens on its last this many frames and reads earlier ones this many at a time: the engine
+ * buffers up to 4096 frames or 8 MiB, and replaying all of them at every open is what a page avoids. */
+const PAGE_FRAMES = 500
 /** The side pane's Activity is read again at most this often while the tool writes. */
 const ACTIVITY_REFRESH_MS = 1_500
+/** Past this many rows a conversation keeps in the page only the rows near what is on screen, with a spacer for
+ * the rest above and below: a long session's thousands of rows stay out of the document. Below it
+ * every row is in the page, as before, so the browser's own find reaches all of them. */
+const VIRTUAL_FROM = 500
+const ROW_ESTIMATE_PX = 64
+const TAIL_ROWS = 40
 
 /** How an ACP turn stopped, in words; an outcome this console does not know is shown as
  * the agent sent it. */
@@ -74,12 +105,26 @@ function stopText(t: TFunction, reason: string): string {
   }
 }
 
-export function SessionConversation({
+export function SessionConversation(
+  props: Parameters<typeof ConversationBody>[0],
+) {
+  const tenant = useTenantStore((s) => s.activeTenant)
+  const generation = useSessionStore((s) => s.credentialGeneration)
+  return (
+    <ConversationBody
+      key={`${props.run.run_ref}\n${tenant ?? ''}\n${generation}`}
+      {...props}
+    />
+  )
+}
+
+function ConversationBody({
   run,
   selectedId,
   onInspect,
   onFolder,
   onModel,
+  composerId,
 }: {
   run: RunDTO
   selectedId?: string | null
@@ -88,23 +133,59 @@ export function SessionConversation({
   onFolder?: (cwd: string | null) => void
   /** The model the session's own turns run on now, for the header to say. */
   onModel?: (model: string | null) => void
+  /** The work surface's own field; a preview without a composer only offers copying. */
+  composerId?: string
 }) {
   const { t } = useTranslation('sessions')
   const { t: tShared } = useTranslation('shared')
   const [frames, setFrames] = useState<AttachFrame[]>([])
   const [history, setHistory] = useState<string | null>(null)
   const [dropped, setDropped] = useState(0)
+  // Whether the engine buffers frames before the first one here, and a page being read or failed.
+  const [earlier, setEarlier] = useState(false)
+  const [paging, setPaging] = useState<'reading' | 'failed' | null>(null)
   const generation = useSessionStore((s) => s.credentialGeneration)
   const tenant = useTenantStore((s) => s.activeTenant)
+  const { activeTenant, principal, can } = useAuth()
+  const draftKey = sessionDraftKey(activeTenant, principal, run.run_ref)
+  const canQuote = can('sessions:run:write')
+  // One function while the composer, the draft and the identity stay: the rows are memoized, and a new function on
+  // every frame would paint them all again.
+  const quote = useMemo(
+    () =>
+      composerId && draftKey && canQuote
+        ? (text: string) => {
+            if (
+              useSessionStore.getState().credentialGeneration !== generation ||
+              useTenantStore.getState().activeTenant !== tenant
+            )
+              return
+            const comment = readSessionDraft(draftKey)
+            const cited = text
+              .split(/\r?\n/)
+              .map((line) => `> ${line}`)
+              .join('\n')
+            writeSessionDraft(
+              draftKey,
+              `${comment ? `${comment}\n\n` : ''}${cited}\n\n`,
+            )
+            // React paints the new draft before the caret moves. A different signed-in owner
+            // or conversation must never receive this deferred focus.
+            requestAnimationFrame(() => {
+              const field = document.getElementById(composerId)
+              if (
+                !(field instanceof HTMLTextAreaElement) ||
+                field.dataset.sessionDraftKey !== draftKey
+              )
+                return
+              field.focus()
+              field.setSelectionRange(field.value.length, field.value.length)
+            })
+          }
+        : undefined,
+    [composerId, draftKey, canQuote, generation, tenant],
+  )
   const ownerKey = `${run.run_ref}\n${tenant ?? ''}\n${generation}`
-  const [owner, setOwner] = useState(ownerKey)
-  // Clear before painting a different run, tenant or signed-in identity.
-  if (owner !== ownerKey) {
-    setOwner(ownerKey)
-    setFrames([])
-    setHistory(null)
-    setDropped(0)
-  }
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const [autoscroll, setAutoscroll] = useState(true)
 
@@ -152,6 +233,8 @@ export function SessionConversation({
     onFrame,
     onHistory: setHistory,
     onLag,
+    tail: PAGE_FRAMES,
+    onPage: setEarlier,
   })
 
   // Protocol bookkeeping (handshakes, replies, lifecycle notifications) is no row: it read
@@ -166,7 +249,7 @@ export function SessionConversation({
       ).filter((item) => item.systemKind !== 'protocol' && !isQuiet(item)),
     [frames, history],
   )
-  // The first message the console sent, until the tool shows it itself (HU2-27).
+  // The first message the console sent, until the tool shows it itself.
   const sent = useRunSentTurns(run.run_ref)
   const { pending, echoed } = useMemo(
     () => (sent ? settleTurns(items, sent) : { pending: [], echoed: [] }),
@@ -188,6 +271,64 @@ export function SessionConversation({
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [items, autoscroll])
+  // WHAT GROWS AFTER A FRAME is followed too: the request card that loads after the
+  // transcript, a block opened at the end. Only while the person follows the end.
+  const columnRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = scrollRef.current
+    const column = columnRef.current
+    if (!autoscroll || !el || !column || typeof ResizeObserver !== 'function')
+      return
+    const follow = new ResizeObserver(() => {
+      el.scrollTop = el.scrollHeight
+    })
+    follow.observe(column)
+    return () => follow.disconnect()
+  }, [autoscroll])
+
+  // AN EARLIER PAGE goes above the rows already read, and the row the person was on stays where it was.
+  const pageRef = useRef<AbortController | null>(null)
+  const anchorRef = useRef<number | null>(null)
+  useEffect(() => () => pageRef.current?.abort(), [ownerKey])
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (anchorRef.current === null || !el) return
+    el.scrollTop = el.scrollHeight - anchorRef.current
+    anchorRef.current = null
+  }, [frames])
+  const firstSeq = frames[0]?.seq
+  const room = MAX_FRAMES - frames.length
+  const showEarlier = async () => {
+    if (firstSeq === undefined || room <= 0) return
+    pageRef.current?.abort()
+    const controller = new AbortController()
+    pageRef.current = controller
+    setPaging('reading')
+    setAutoscroll(false)
+    try {
+      const page = await readAttachPage({
+        runRef,
+        token: useSessionStore.getState().csrfToken,
+        tenant: useTenantStore.getState().activeTenant,
+        from: Math.max(1, firstSeq - Math.min(PAGE_FRAMES, room)),
+        before: firstSeq,
+        signal: controller.signal,
+      })
+      if (controller.signal.aborted) return
+      const el = scrollRef.current
+      anchorRef.current = el ? el.scrollHeight - el.scrollTop : null
+      setFrames((prev) => [
+        ...page.frames.filter((f) => f.seq < (prev[0]?.seq ?? Infinity)),
+        ...prev,
+      ])
+      setEarlier(page.earlier)
+      setPaging(null)
+    } catch {
+      if (!controller.signal.aborted) setPaging('failed')
+    } finally {
+      if (pageRef.current === controller) pageRef.current = null
+    }
+  }
 
   const onScroll = useCallback(() => {
     const el = scrollRef.current
@@ -202,12 +343,12 @@ export function SessionConversation({
     () => items.filter((item) => item.kind === 'operator').length,
     [items],
   )
-  // A note the tool has shown is forgotten: its own row tells it from now on (dev#2787).
+  // A note the tool has shown is forgotten: its own row tells it from now on.
   useEffect(() => {
     if (echoed.length) useSentTurns.getState().drop(runRef, echoed)
   }, [echoed, runRef])
   // A message sent from now on is echoed by a frame after the newest one shown here
-  // (dev#2787). Nothing is said before a frame arrives: after a remount, the newest frame
+  //. Nothing is said before a frame arrives: after a remount, the newest frame
   // the session showed before is still the right place.
   const newestSeq = frames.length ? frames[frames.length - 1]!.seq : undefined
   const said = useMemo(() => wordsShown(items), [items])
@@ -228,6 +369,8 @@ export function SessionConversation({
   // The person's messages as a rail and a panel (#2129). A jump leaves the newest output
   // behind: following it again is the person scrolling back down.
   const stopFollowing = useCallback(() => setAutoscroll(false), [])
+  // The navigator reaches a row that is not in the page by asking for it first.
+  const revealRef = useRef<(itemId: string) => Promise<void>>(async () => {})
   const messages = useMessageNavigator({
     runRef,
     // A legacy run names no driver: the engine answers for it, as it always did.
@@ -235,12 +378,18 @@ export function SessionConversation({
     items,
     scrollRef,
     onJump: stopFollowing,
+    reveal: useCallback((itemId: string) => revealRef.current(itemId), []),
   })
 
-  // THE THREAD AS IT READS (dev#3119): the calls between two replies fold into one row, a
+  // THE THREAD AS IT READS: the calls between two replies fold into one row, a
   // subagent's calls into its Agent row, and the calls of the last row, while they run,
   // are one live line with their clock.
-  const parts = useMemo(() => threadParts(items), [items])
+  const tasks = useConversationTasks(run, tenant)
+  const authoritativeTodos = !tasks.isError && tasks.data?.transcript === 'read'
+  const parts = useMemo(
+    () => threadParts(items, authoritativeTodos),
+    [items, authoritativeTodos],
+  )
   const live = isLiveRun(run) && !ended
   const last = parts[parts.length - 1]
   const runningNow =
@@ -254,6 +403,80 @@ export function SessionConversation({
   }, [])
   const canInterrupt =
     pane !== null && runningNow.length > 0 && turn.allowed && !turn.pending
+  // THE ROWS IN THE PAGE. Past VIRTUAL_FROM, only the rows near the screen render; a spacer stands for
+  // the others, sized from the rows already measured, so the scroll height, following the end and the scrollbar
+  // stay what the whole thread would give.
+  const listRef = useRef<HTMLOListElement>(null)
+  const virtual = parts.length > VIRTUAL_FROM
+  const [listTop, setListTop] = useState(0)
+  const virtualizer = useVirtualizer({
+    count: virtual ? parts.length : 0,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_ESTIMATE_PX,
+    getItemKey: (index) => partKey(parts[index]!),
+    overscan: 20,
+    gap: 4,
+    scrollMargin: listTop,
+    initialRect: { width: 0, height: 640 },
+    // A row is never 0 px tall in a browser; a document without layout (a test) measures every one at 0, and
+    // the estimate keeps the window to what a screen holds there too.
+    measureElement: (el) =>
+      el.getBoundingClientRect().height || ROW_ESTIMATE_PX,
+  })
+  const windowRows = virtual ? virtualizer.getVirtualItems() : []
+  // Until the scroller has a size (its first measure; a document without layout never has one), the window is the
+  // end of the thread: what following the end shows.
+  const tail = virtual && windowRows.length === 0
+  const shown = !virtual
+    ? parts.map((_, index) => index)
+    : tail
+      ? parts
+          .slice(-TAIL_ROWS)
+          .map((_, k) => parts.length - Math.min(parts.length, TAIL_ROWS) + k)
+      : windowRows.map((row) => row.index)
+  const lastRow = windowRows[windowRows.length - 1]
+  const padTop = windowRows[0]
+    ? Math.max(0, windowRows[0].start - listTop - 4)
+    : 0
+  const padBottom = lastRow
+    ? Math.max(0, virtualizer.getTotalSize() - (lastRow.end - listTop) - 4)
+    : 0
+  // Each rendered row is measured (and watched, for a block that opens): its root is the list item, after the top
+  // spacer, in the order of `shown`.
+  useLayoutEffect(() => {
+    const list = listRef.current
+    const scroller = scrollRef.current
+    if (!virtual || !list || !scroller) return
+    const top =
+      list.getBoundingClientRect().top -
+      scroller.getBoundingClientRect().top +
+      scroller.scrollTop
+    if (Math.abs(top - listTop) > 1) setListTop(top)
+    let k = 0
+    for (const el of Array.from(list.children)) {
+      if (!(el instanceof HTMLElement) || el.dataset.spacer !== undefined)
+        continue
+      const index = shown[k++]
+      if (index === undefined) break
+      el.dataset.index = String(index)
+      virtualizer.measureElement(el)
+    }
+  }, [virtual, listTop, shown, virtualizer])
+  useLayoutEffect(() => {
+    revealRef.current = async (itemId: string) => {
+      if (!virtual) return
+      const index = parts.findIndex((part) =>
+        part.kind === 'work'
+          ? part.items.some((item) => item.id === itemId)
+          : part.item.id === itemId,
+      )
+      if (index < 0) return
+      virtualizer.scrollToIndex(index, { align: 'center' })
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      )
+    }
+  })
   const interruptRef = useRef(turn.interrupt)
   useEffect(() => {
     interruptRef.current = turn.interrupt
@@ -298,8 +521,9 @@ export function SessionConversation({
           {/* ONE CENTERED COLUMN, 760 px: the transcript is read, not scanned, and a line
             longer than that is a line nobody follows. */}
           {/* While the rail shows, the column keeps clear of it: a message's Copy sits at
-              its right edge on a narrow pane (dev#2788). */}
+              its right edge on a narrow pane. */}
           <div
+            ref={columnRef}
             data-slot="conversation-column"
             className={cn(
               'mx-auto w-full max-w-[760px] px-4 py-4',
@@ -309,6 +533,23 @@ export function SessionConversation({
             {/* A LINK THAT DROPPED OR IS COMING UP SAYS SO, ONCE, QUIETLY, while the turns
               already read stay on the page. Without it a stale transcript reads as a
               finished one. */}
+            {earlier && room > 0 ? (
+              <div className="mb-2 flex flex-col items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={paging === 'reading'}
+                  onClick={() => void showEarlier()}
+                >
+                  {t('conversation.earlier')}
+                </Button>
+                {paging === 'failed' ? (
+                  <p role="status" className="text-caption text-warning">
+                    {t('conversation.earlierFailed')}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             {status === 'error' || status === 'connecting' ? (
               <p
                 role="status"
@@ -329,9 +570,29 @@ export function SessionConversation({
                   : t('conversation.empty')}
               </p>
             ) : (
-              <ol className="flex flex-col gap-1">
-                {parts.map((part, index) =>
-                  part.kind === 'work' ? (
+              <ol ref={listRef} className="flex flex-col gap-1">
+                {padTop > 0 ? (
+                  <li aria-hidden data-spacer="" style={{ height: padTop }} />
+                ) : null}
+                {shown.map((index) => {
+                  const part = parts[index]!
+                  return part.kind === 'card' ? (
+                    <ConversationCard
+                      key={part.item.id}
+                      card={part.item.toolCard!}
+                      run={run}
+                      answerable={
+                        (run.state === 'running' || run.state === 'idle') &&
+                        !ended &&
+                        can('sessions:run:write') &&
+                        pending.length === 0 &&
+                        !run.pending_approval_ref &&
+                        !items
+                          .slice(items.indexOf(part.item) + 1)
+                          .some((later) => later.kind === 'operator')
+                      }
+                    />
+                  ) : part.kind === 'work' ? (
                     <WorkRow
                       key={`work-${part.items[0]!.id}`}
                       items={part.items}
@@ -350,9 +611,17 @@ export function SessionConversation({
                       runRef={run.run_ref}
                       selected={selectedId === part.item.id}
                       onInspect={onInspect}
+                      onQuote={quote}
                     />
-                  ),
-                )}
+                  )
+                })}
+                {padBottom > 0 ? (
+                  <li
+                    aria-hidden
+                    data-spacer=""
+                    style={{ height: padBottom }}
+                  />
+                ) : null}
                 {pending.map((turn, i) => (
                   <SentTurnRow
                     key={`sent-${i}`}
@@ -362,6 +631,9 @@ export function SessionConversation({
                 ))}
               </ol>
             )}
+            <ConversationTaskList key={ownerKey} run={run} query={tasks} />
+            {/* The request the session waits on, after what led to it, answered here. */}
+            <ConversationApproval run={run} />
           </div>
         </div>
         <MessageRail nav={messages} />
@@ -387,18 +659,33 @@ function interrupts(e: KeyboardEvent): boolean {
   )
 }
 
-function ConversationRow({
+function ConversationRowView({
   item,
   runRef,
   selected,
   onInspect,
+  onQuote,
 }: {
   item: ConversationItem
   runRef: string
   selected: boolean
   onInspect?: (item: ConversationItem) => void
+  onQuote?: (text: string) => void
 }) {
   const { t } = useTranslation('sessions')
+  const contentRef = useRef<HTMLDivElement>(null)
+  const replyText = () => plainText(parseMarkdown(item.text ?? ''))
+  const quoteReply = () => {
+    const selection = window.getSelection()
+    const selected =
+      selection &&
+      !selection.isCollapsed &&
+      contentRef.current?.contains(selection.anchorNode) &&
+      contentRef.current.contains(selection.focusNode)
+        ? selection.toString()
+        : ''
+    onQuote?.(selected.trim() ? selected : replyText())
+  }
   const inspect = () => onInspect?.(item)
   const openFromWords = openOnWords(inspect)
 
@@ -470,10 +757,10 @@ function ConversationRow({
     ].filter(Boolean)
     // THE END OF A TURN IS A DIVIDER, not a bare "Result" button: "Finished in 8s" when
     // the tool said how long, "Result" when it did not ("Worked for" is the work row's,
-    // dev#3119). It opens what the button showed inline: how the turn stopped, the model,
+    // the regression). It opens what the button showed inline: how the turn stopped, the model,
     // the tokens, the cost and the raw frame. A failed turn keeps its duration:
     // "Result · 8.0s", never a silent "Finished in". Every turn names the model that
-    // produced it (dev#2786).
+    // produced it.
     const label = [
       item.durationMs === undefined
         ? t('conversation.result')
@@ -598,19 +885,23 @@ function ConversationRow({
         data-testid="conversation-item"
         data-item-id={item.id}
         data-kind={item.kind}
+        ref={contentRef}
         onClick={openFromWords}
         className={cn(
           'w-full rounded-ctl text-left text-body-l text-text [overflow-wrap:anywhere]',
           selected && 'bg-active',
         )}
       >
-        <MarkdownText text={item.text || item.summary} />
+        <MarkdownText text={item.text || item.summary} copyBlocks />
         <KeyboardInspect onInspect={onInspect ? inspect : undefined} />
       </div>
       {item.text ? (
         <MessageActions
           align="start"
-          text={() => plainText(parseMarkdown(item.text ?? ''))}
+          text={replyText}
+          onQuote={
+            onQuote && item.kind === 'assistant' ? quoteReply : undefined
+          }
         />
       ) : null}
     </li>
@@ -620,7 +911,7 @@ function ConversationRow({
 /** The person's message as the console sent it: there is no frame to inspect. A message
  * the engine refused says so, with the engine's reason, in the danger color; one held
  * for its launch's approval says it goes when the session runs; one the engine took says
- * so until the tool shows it (dev#2787). */
+ * so until the tool shows it. */
 function SentTurnRow({ turn, ended }: { turn: SentTurn; ended: boolean }) {
   const { t } = useTranslation('sessions')
   return (
@@ -646,14 +937,16 @@ function SentTurnRow({ turn, ended }: { turn: SentTurn; ended: boolean }) {
   )
 }
 
-/** Under a message: Copy, its words as the person reads them (dev#2788). A message without
- * words (only images, or a reply with no text) has none: its row shows a label, not words. */
+/** Copy the words as read; a writable reply can also be quoted into its composer.
+ * A message without words has neither action. */
 function MessageActions({
   align,
   text,
+  onQuote,
 }: {
   align: 'start' | 'end'
   text: () => string
+  onQuote?: () => void
 }) {
   const { t } = useTranslation('common')
   return (
@@ -669,6 +962,35 @@ function MessageActions({
         copiedLabel={t('ui.copy.copied')}
         failedLabel={t('ui.copy.failed')}
       />
+      {onQuote ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={t('ui.quoteReply')}
+          title={t('ui.quoteReply')}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={onQuote}
+        >
+          <Quote aria-hidden="true" />
+        </Button>
+      ) : null}
     </div>
   )
+}
+
+/** A long session gets a frame at a time: only the row whose item changed paints again. */
+const ConversationRow = memo(
+  ConversationRowView,
+  (a, b) =>
+    a.runRef === b.runRef &&
+    a.selected === b.selected &&
+    a.onInspect === b.onInspect &&
+    a.onQuote === b.onQuote &&
+    samePlain(a.item, b.item),
+)
+
+/** A thread part's key, as the list keys it. */
+function partKey(part: Part): string {
+  return part.kind === 'work' ? `work-${part.items[0]!.id}` : part.item.id
 }

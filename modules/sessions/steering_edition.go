@@ -16,16 +16,21 @@ import (
 // Steering a session (input, resume, peers) is Community for the person who started it.
 // Steering a session another person started is Business: a Community engine answers
 // 501 business_required, as every Business capability does, and the Business edition sets
-// Dependencies.SteerOthers. The role check (sessions:run:write) runs first and is the same
-// in both editions.
+// Dependencies.SteerOthers, which it asks on each call: without a licence that covers
+// steering, the colleague hears 403 addon_requires_license. The role check
+// (sessions:run:write) runs first and is the same in both editions.
 
-// refuseForeignSteering writes the Community refusal and reports true when the caller is
-// steering a session another person started. It also reports true, with the run error
-// written, when the run cannot be read: the gate never opens on an error. The route
-// already answered an unknown or concealed run with its own 404.
+// refuseForeignSteering writes the edition's refusal (Community's 501, or a Business
+// engine's licence refusal) and reports true when the caller is steering a session another
+// person started. It also reports true, with the run error written, when the run cannot
+// be read: the gate never opens on an error. The route already answered an unknown or
+// concealed run with its own 404.
 func (m *Module) refuseForeignSteering(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) bool {
-	if m.rt.SteerOthers {
-		return false
+	var unlicensed error
+	if m.rt.SteerOthers != nil {
+		if unlicensed = m.rt.SteerOthers(); unlicensed == nil {
+			return false
+		}
 	}
 	rec, err := m.loadRun(r.Context(), mc.Tenant, chi.URLParam(r, "ref"))
 	if err != nil {
@@ -34,6 +39,11 @@ func (m *Module) refuseForeignSteering(w http.ResponseWriter, r *http.Request, m
 	}
 	if !foreignSteering(runLauncher(rec), mc.Principal) {
 		return false
+	}
+	if unlicensed != nil {
+		status, body, _ := api.StoreErrorBody(unlicensed)
+		writeJSON(w, status, body)
+		return true
 	}
 	writeJSON(w, http.StatusNotImplemented, api.ErrorBody("business_required",
 		"Steering a session another person started requires Olivares Business."))

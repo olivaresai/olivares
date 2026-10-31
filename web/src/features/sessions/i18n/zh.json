@@ -1,4 +1,13 @@
 {
+  "compact": {
+    "context": "上下文",
+    "now": "立即压缩",
+    "beforeSend": "发送前压缩",
+    "working": "正在压缩…",
+    "hint": "总结先前的对话以释放上下文。确认压缩完成前将保留草稿。",
+    "unavailable": "会话空闲且工具支持原生压缩时可用。",
+    "failed": "未确认压缩完成。消息未发送。"
+  },
   "git": {
     "title": "Git",
     "branch": "分支",
@@ -304,16 +313,17 @@
     "currentSession": "当前会话",
     "besideSession": "旁边的会话",
     "switchSession": "切换会话",
-    "closeContext": "关闭上下文",
+    "details": "会话详情",
+    "closeContext": "关闭详情",
     "backTo": "返回{{pane}}",
     "pane": {
       "rail": "会话",
       "narrative": "工作",
-      "context": "上下文"
+      "context": "详情"
     },
     "resize": {
       "rail": "调整会话列表宽度",
-      "context": "调整上下文面板宽度",
+      "context": "调整详情面板宽度",
       "beside": "调整旁边会话的宽度"
     }
   },
@@ -348,7 +358,9 @@
     "planNotRead": "未读取套餐窗口",
     "resets": "{{when}}重置（{{at}}）",
     "stale": "最后已知",
-    "readAt": "读取于 {{at}}"
+    "readAt": "读取于 {{at}}",
+    "permission": "{{name}}：{{what}}",
+    "full": "完全访问：无需询问即可运行，受 <policy>Olivares 策略</policy>约束"
   },
   "evidence": {
     "checks": {
@@ -425,7 +437,7 @@
       "worker": "工作智能体",
       "orchestrator": "编排智能体"
     },
-    "details": "详情",
+    "details": "引用",
     "echoes": "也记录为",
     "folder": "文件夹",
     "temporaryFolder": "此会话的临时文件夹",
@@ -437,12 +449,29 @@
     "noChanges": "此会话不是由 Olivares 启动的，没有可显示的变更。",
     "filesUnavailable": "此文件夹无法浏览。",
     "filesNoAccess": "你的角色无权浏览此文件夹。",
-    "filesFailed": "无法读取该文件夹。"
+    "filesFailed": "无法读取该文件夹。",
+    "facts": {
+      "title": "会话",
+      "state": "状态",
+      "workspace": "工作区",
+      "tool": "工具",
+      "account": "账户",
+      "model": "模型",
+      "access": "访问",
+      "cost": "费用"
+    },
+    "usage": {
+      "title": "账户用量",
+      "fiveHour": "5 小时的 {{percent}}%",
+      "week": "本周的 {{percent}}%"
+    }
   },
   "conversation": {
     "log": "对话",
     "waiting": "正在等待会话…",
     "empty": "还没有消息。",
+    "earlier": "显示更早的输出",
+    "earlierFailed": "无法加载更早的输出。",
     "ended": "会话已结束。",
     "lag_other": "丢失 {{count}} 帧 — 下方输出在缺口之后继续。",
     "tool": "工具",
@@ -468,8 +497,8 @@
     "started": "会话已开始",
     "startedTools_other": "{{count}} 个工具",
     "notSent": "未发送：{{reason}}",
-    "waitingApproval": "启动获批且会话开始后发送。",
-    "workingFolder": "工作文件夹：{{cwd}}",
+    "waitingApproval": "会话就绪后发送。",
+    "workingFolder": "工作文件夹：<path />",
     "temporaryFolder": "工作文件夹：此会话的临时文件夹",
     "workedFor": "已运行 {{duration}}",
     "modelChanged": "模型已更换：{{from}} → {{to}}",
@@ -497,8 +526,11 @@
     "running": {
       "command_other": "正在运行 {{count}} 条 shell 命令",
       "edit": "正在编辑 {{target}}",
+      "editPath": "正在编辑 <path/>",
       "read": "正在读取 {{target}}",
+      "readPath": "正在读取 <path/>",
       "search": "正在搜索 {{target}}",
+      "searchPath": "正在搜索 <lead/><path/>",
       "agent": "{{name}} 正在工作",
       "tool": "正在运行 {{tool}}"
     },
@@ -515,6 +547,14 @@
         "extra": "额外用量限额",
         "usage": "用量限额"
       }
+    },
+    "card": {
+      "question": "问题",
+      "plan": "建议的计划",
+      "todos": "待办列表（已完成 {{done}}/{{total}}）",
+      "send": "发送回答",
+      "answered": "已发送回答：{{answer}}",
+      "sendFailed": "无法发送回答。"
     }
   },
   "changes": {
@@ -563,6 +603,22 @@
       "added": "新增",
       "modified": "修改",
       "deleted": "删除"
+    },
+    "comment": {
+      "title": "评论某一行",
+      "line": "行",
+      "version": "版本",
+      "text": "评论",
+      "send": "发送到会话",
+      "sent": "评论已发送到会话。",
+      "failed": "无法发送评论。请稍后重试。",
+      "notLive": "请先恢复会话，再发送评论。",
+      "noPermission": "发送评论需要向会话写入的权限。",
+      "needLine": "请选择一行：点击行号或直接输入。",
+      "noSuchLine": "文件{{version}}没有第 {{line}} 行。",
+      "empty": "请写下评论。",
+      "atBase": "在起点",
+      "atTip": "在分支末端"
     }
   },
   "peers": {
@@ -682,6 +738,13 @@
     "unreadable": "有 {{n}} 条记录无法读取。"
   },
   "limit": {
+    "settingsSaved": "已保存自动继续设置。",
+    "resumeAtReset": "重置时继续",
+    "snoozeUntilReset": "隐藏至重置",
+    "automatic": "限额重置时自动继续",
+    "resumes": "{{time}} 继续",
+    "cancel": "取消",
+    "cancelled": "已取消定时继续。",
     "usageUntil": "额度已用完，{{time}} 恢复",
     "usage": "额度已用完",
     "rate": "提供商正在限制请求。请稍后再试。"
@@ -692,6 +755,10 @@
   },
   "rowActions": {
     "rename": "重命名…",
+    "regenerateTitle": "重新生成标题",
+    "titleShort": "短",
+    "titleSentence": "标准",
+    "titleLong": "长",
     "renameTitle": "重命名会话",
     "renameDescription": "名称保存在服务器上，并显示在列出此会话的所有位置。留空则恢复为 Olivares 给出的名称。",
     "renameLabel": "名称",
@@ -713,6 +780,52 @@
     "copiedPartial": "已复制。对话记录中有 {{n}} 条记录无法读取，未包含在内。",
     "clipped": "部分消息超过 64 KiB，在副本中已被截断，末尾带有 [...]。",
     "noWholeText": "引擎只发送了每条消息的第一行，因此未复制对话记录。",
-    "transcriptChanged": "复制期间对话记录发生了变化，请重试。"
+    "transcriptChanged": "复制期间对话记录发生了变化，请重试。",
+    "undo": "撤销"
+  },
+  "approval": {
+    "declineSend": "拒绝并发送",
+    "feedbackUnsupported": "此工具无法接收反馈。你的回复将与拒绝决定一同保存。",
+    "title": "需要批准",
+    "why": "原因",
+    "rule": "规则",
+    "reach": "影响范围",
+    "requestedBy": "请求方",
+    "reachUnknown": "未报告",
+    "notYours": "此请求由其他有批准权限的人决定。",
+    "approved": "已批准",
+    "denied": "已拒绝",
+    "ended": "不再等待",
+    "unreadable": "无法读取该请求。"
+  },
+  "terminal": {
+    "title": "终端",
+    "hint": "在此会话文件夹中运行的 shell，受与会话相同的限制，以你的身份运行；你输入的每一条命令行都会被记录。",
+    "open": "打开终端",
+    "close": "关闭",
+    "copy": "复制",
+    "paste": "粘贴",
+    "again": "打开新终端",
+    "reconnecting": "正在重新连接…",
+    "ended": "终端已结束。",
+    "endedWith": "终端已结束（退出码 {{code}}）。",
+    "input": "终端输入",
+    "label": "终端",
+    "noFolder": "此会话没有文件夹，无法打开终端。",
+    "unavailable": "此处无法使用该会话的文件夹，因此无法在其中打开终端。",
+    "problem": {
+      "step_up": "请先确认你的身份，然后再次打开终端。",
+      "refused": "你无权在此文件夹中打开终端。",
+      "busy": "打开的终端太多了，请先关闭一个。",
+      "failed": "无法打开终端，请稍后再试。"
+    },
+    "keys": {
+      "esc": "Esc",
+      "tab": "Tab",
+      "ctrlC": "Ctrl+C",
+      "up": "上",
+      "down": "下"
+    },
+    "closeLabel": "关闭终端"
   }
 }

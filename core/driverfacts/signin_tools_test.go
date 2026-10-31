@@ -12,7 +12,7 @@ import (
 // The tools that can sign in are the rows with a SignIn: nothing else lists them.
 // A tool whose row gains a SignIn joins the set with no other edit.
 func TestSignInToolsAreTheRowsThatDeclareASignIn(t *testing.T) {
-	if got, want := SignInKeys(), []string{"claude", "codex", "grok", "opencode", "gemini-cli"}; !slices.Equal(got, want) {
+	if got, want := SignInKeys(), []string{"claude", "codex", "grok", "opencode", "gemini-cli", "cursor"}; !slices.Equal(got, want) {
 		t.Fatalf("sign-in keys = %v, want %v", got, want)
 	}
 	rows = append(rows, Facts{Key: "newtool", Name: "New Tool", Program: "newtool", SignIn: SignInDevice})
@@ -49,7 +49,7 @@ func TestJoinList(t *testing.T) {
 // The tools a session can run are the rows with a Session; the resolve refusal
 // names them from here.
 func TestSessionKeysAreTheRowsThatDeclareASession(t *testing.T) {
-	if got, want := SessionKeys(), []string{"claude", "codex", "grok", "opencode", "gemini-cli"}; !slices.Equal(got, want) {
+	if got, want := SessionKeys(), []string{"claude", "codex", "grok", "opencode", "gemini-cli", "cursor"}; !slices.Equal(got, want) {
 		t.Fatalf("session keys = %v, want %v", got, want)
 	}
 }

@@ -23,7 +23,7 @@ import (
 // Helper re-exec only. In the engine process a locked goroutine that exits would
 // fire the parent-death signal of the short-lived children the engine starts (git;
 // modules/sessions/procrunner_pdeathsig_linux.go). A session's guard ends its tree instead.
-func restrictSockets() error {
+func restrictSockets(container bool) error {
 	runtime.LockOSThread() // the existing Landlock helper execs from this thread
 	var arch uint32
 	switch runtime.GOARCH {
@@ -37,7 +37,23 @@ func restrictSockets() error {
 	if err := unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
 		return err
 	}
-	if err := confine.DropCapabilities(true); err != nil {
+	// The runtime has already emptied a container's bounding set. Verify that
+	// fact instead of asking for CAP_SETPCAP, which --cap-drop=ALL removed.
+	if container {
+		for capability := 0; ; capability++ {
+			held, err := unix.PrctlRetInt(unix.PR_CAPBSET_READ, uintptr(capability), 0, 0, 0)
+			if errors.Is(err, unix.EINVAL) {
+				break
+			}
+			if err != nil {
+				return err
+			}
+			if held != 0 {
+				return errors.New("container retained a bounding capability")
+			}
+		}
+	}
+	if err := confine.DropCapabilities(!container); err != nil {
 		return err
 	}
 	deny := uint32(unix.SECCOMP_RET_ERRNO) | uint32(unix.EPERM)

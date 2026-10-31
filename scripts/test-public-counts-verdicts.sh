@@ -315,6 +315,36 @@ for leg in check-config-env-docs check-cli-ref-docs check-openapi-op-description
 done
 mv "$BANCO/saved-env.sh" "$ARBOL/scripts/check-config-env-docs.sh"
 
+# ── A · --counts-only (the dev pull-request check) runs the count body alone ────────────
+# The body is python3 and needs no Go toolchain; the three Go legs are skipped by name. A
+# healthy tree must pass in that form, and one extra integration must still fail with the
+# legs skipped, not with a CANNOT LOOK from a leg that did not run. The probe lives in the
+# fixture tree only: the directory copies are new inodes, the real tree is never touched.
+bash "$ARBOL/scripts/check-public-counts.sh" --counts-only >"$BANCO/A-healthy.log" 2>&1
+comprobar "counts-only: healthy tree passes without Go" 0 "$?"
+# The drift expectation takes the live count from the healthy run's derived line, not a
+# hardcoded number: the next PR that adds a connector and updates README.md would otherwise
+# turn this cell red with nothing wrong (review of #2790).
+integraciones="$(sed -n 's/^derived:.* integrations=\([0-9][0-9]*\).*/\1/p' "$BANCO/A-healthy.log" | head -n 1)"
+mkdir -p "$ARBOL/connectors/zz-count-probe" && printf 'package zzcountprobe\n' >"$ARBOL/connectors/zz-count-probe/probe.go"
+[ -f "$ARBOL/connectors/zz-count-probe/probe.go" ] || {
+	echo "test-public-counts-verdicts: ⛔ CANNOT INSPECT: the cell A probe never landed" >&2
+	exit 2
+}
+bash "$ARBOL/scripts/check-public-counts.sh" --counts-only >"$BANCO/A-drift.log" 2>&1
+comprobar "counts-only: one extra integration is red" 1 "$?"
+if grep -q "SKIP check-config-env-docs" "$BANCO/A-drift.log" \
+	&& grep -q "SKIP check-cli-ref-docs" "$BANCO/A-drift.log" \
+	&& grep -q "SKIP check-openapi-op-descriptions" "$BANCO/A-drift.log" \
+	&& grep -qF "states $integraciones integrations (measured: $((integraciones + 1)))" "$BANCO/A-drift.log" \
+	&& ! grep -q "CANNOT LOOK" "$BANCO/A-drift.log"; then
+	printf '  ok    %-56s\n' "counts-only skips all three legs, reports the drift"
+	pass_count=$((pass_count + 1))
+else
+	printf '  FAIL %-56s\n' "counts-only skips all three legs, reports the drift"
+	fail_count=$((fail_count + 1))
+fi
+
 # ── 8 · y el árbol REAL no se ha tocado en ningún momento ──────────────────────────────
 # Es la celda que responde por el arreglo entero, y además cubre un riesgo NUEVO que el
 # hardlink introduce: si el gate escribiera EN SITIO sobre un fichero enlazado, corrompería el

@@ -46,7 +46,7 @@ func (d *afterFrameMutation) Mutate(ctx context.Context, tenant model.TenantID, 
 	return d.ModuleData.Mutate(ctx, tenant, fn)
 }
 
-// SR2C on 4a0b7e20 (its fixture): the refusal closed call admission after recording its
+// review on 4a0b7e20 (its fixture): the refusal closed call admission after recording its
 // attempt, whatever had happened meanwhile. A result read during that write ended the
 // refused turn and reopened admission for the input already accepted after it; the
 // refusal then closed it again, and the next input was refused as "the previous session

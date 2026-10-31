@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/license"
 	"github.com/olivaresai/olivares/core/model"
 )
 
@@ -104,7 +105,7 @@ func TestSteeringAnotherPersonsSessionRequiresBusiness(t *testing.T) {
 	ref := f.launch(f.owner)
 
 	// Business: the colleague's calls are the calls they were before the edition split.
-	f.m.rt.SteerOthers = true
+	f.m.rt.SteerOthers = steerOthersLicensed
 	if got := f.do(f.colleague, ref, steeringCalls[0]); got.code != http.StatusAccepted {
 		t.Errorf("Business colleague: input = %d %s, want 202", got.code, got.raw)
 	}
@@ -113,7 +114,7 @@ func TestSteeringAnotherPersonsSessionRequiresBusiness(t *testing.T) {
 	}
 
 	// Community: the launcher steers their own session.
-	f.m.rt.SteerOthers = false
+	f.m.rt.SteerOthers = nil
 	if got := f.do(f.owner, ref, steeringCalls[0]); got.code != http.StatusAccepted {
 		t.Errorf("Community launcher: input = %d %s, want 202", got.code, got.raw)
 	}
@@ -129,6 +130,38 @@ func TestSteeringAnotherPersonsSessionRequiresBusiness(t *testing.T) {
 		if got := f.do(f.viewer, ref, c); got.code != http.StatusForbidden {
 			t.Errorf("viewer: %s = %d %s, want 403", c.name, got.code, got.raw)
 		}
+	}
+}
+
+// steerOthersLicensed is the Business seam under a licence that covers steering.
+func steerOthersLicensed() error { return nil }
+
+// A Business build asks its gate on every colleague's call: without a licence that covers
+// steering, the colleague hears 403 addon_requires_license and the call never runs, while
+// the launcher still steers their own session.
+func TestSteeringAnotherPersonsSessionNeedsALiveLicence(t *testing.T) {
+	f := newSteeringFixture(t)
+	ref := f.launch(f.owner)
+	asked := 0
+	f.m.rt.SteerOthers = func() error {
+		asked++
+		return license.AddonRequired("session-steering", "steer-others")
+	}
+	for _, c := range steeringCalls {
+		got := f.do(f.colleague, ref, c)
+		errBody, _ := got.body["error"].(map[string]any)
+		if got.code != http.StatusForbidden || errBody["code"] != "addon_requires_license" {
+			t.Errorf("unlicensed colleague: %s = %d %s, want 403 addon_requires_license", c.name, got.code, got.raw)
+		}
+	}
+	if asked != len(steeringCalls) {
+		t.Errorf("the gate was asked %d times for %d colleague calls; want once per call", asked, len(steeringCalls))
+	}
+	if got := f.do(f.owner, ref, steeringCalls[0]); got.code != http.StatusAccepted {
+		t.Errorf("unlicensed launcher: input = %d %s, want 202", got.code, got.raw)
+	}
+	for _, c := range steeringCalls[1:] {
+		requireReached(t, "unlicensed launcher", c.name, f.do(f.owner, ref, c))
 	}
 }
 

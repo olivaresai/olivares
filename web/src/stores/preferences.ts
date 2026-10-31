@@ -1,15 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { preferenceStorage } from '@/lib/preference-storage'
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 
 /**
- * UI preferences — local, non-sensitive operator settings persisted across
- * reloads. Table density is a foundation primitive: the data tables build
+ * UI preferences — non-sensitive operator settings kept in the user's server row. Table density is a foundation primitive: the data tables build
  * read it so the whole console switches compact/comfortable as one.
  */
 export type Density = 'compact' | 'comfortable'
+
+/** How much of a session's first message its title keeps; the engine's own set. */
+export const TITLE_STYLES = ['short', 'sentence', 'long'] as const
+export type TitleStyle = (typeof TITLE_STYLES)[number]
 
 /**
  * The ONE place the density preference becomes a dimension. `DataTable` reads it for
@@ -84,56 +88,6 @@ export function densityHeightToken(density: Density): string {
 }
 
 /**
- * AREA EXPANSION (N1) — which of the nine navigation areas the operator holds open in the
- * expanded sidebar. Its OWN versioned field, separate from `collapsedNavGroups` (the five
- * retired hub ids, left untouched for compatibility) and from density and theme, which
- * it never resets.
- *
- * Two lists, because "open" has two sources and only one of them is a preference:
- *   - `open`   — areas the operator opened on purpose. Persisted; they stay open.
- *   - `closed` — areas the operator collapsed on purpose WHILE they were the active area,
- *                so the active area can be folded without changing route. Arriving at a
- *                route inside an area removes that area from `closed` (revealArea), which
- *                is how "the active route opens its area on arrival" and "I folded it, leave
- *                it folded" coexist.
- * The active area itself is derived from the url on every render, never stored.
- */
-export const AREA_EXPANSION_VERSION = 1 as const
-
-export interface AreaExpansion {
-  v: typeof AREA_EXPANSION_VERSION
-  open: string[]
-  closed: string[]
-}
-
-export const DEFAULT_AREA_EXPANSION: AreaExpansion = {
-  v: AREA_EXPANSION_VERSION,
-  open: [],
-  closed: [],
-}
-
-/** True when a persisted value is an AreaExpansion this build understands. Anything else —
- * a future version, a hand-edited blob, a truncated write — is discarded for the default
- * rather than trusted, so a bad entry can never leave the navigation without areas. */
-export function isAreaExpansion(value: unknown): value is AreaExpansion {
-  if (!value || typeof value !== 'object') return false
-  const v = value as Record<string, unknown>
-  const strings = (x: unknown) =>
-    Array.isArray(x) && x.every((s) => typeof s === 'string')
-  return v.v === AREA_EXPANSION_VERSION && strings(v.open) && strings(v.closed)
-}
-
-/** Whether an area renders open: opened on purpose, or active and not folded on purpose. */
-export function isAreaOpen(
-  expansion: AreaExpansion,
-  areaId: string,
-  activeAreaId: string | null,
-): boolean {
-  if (expansion.open.includes(areaId)) return true
-  return activeAreaId === areaId && !expansion.closed.includes(areaId)
-}
-
-/**
  * The two appearance switches the design tokens honor, written onto <html>:
  * `data-density` keys the spacing tokens (comfortable by default, compact on request) and
  * `data-motion="reduce"` stops the motion tokens and animations, exactly as the operating
@@ -159,15 +113,15 @@ interface PreferencesState {
   /** Nav group ids the operator collapsed in the expanded sidebar. Retired hub ids;
    * kept so an existing persisted preference keeps its shape. Not read by the N1 sidebar. */
   collapsedNavGroups: string[]
-  /** N1 area expansion — see AreaExpansion. */
-  navAreas: AreaExpansion
+  /** The left navigation folded to its icons (0.5). */
+  navCollapsed: boolean
+  /** The style the console asks the engine for when it titles a session. */
+  titleStyle: TitleStyle
+  setTitleStyle: (titleStyle: TitleStyle) => void
+  setNavCollapsed: (navCollapsed: boolean) => void
   setDensity: (density: Density) => void
   setReduceMotion: (reduceMotion: boolean) => void
   toggleNavGroup: (group: string) => void
-  /** Open or fold one area on purpose. */
-  setAreaOpen: (areaId: string, open: boolean) => void
-  /** The route entered this area: it opens unless the operator folds it again. */
-  revealArea: (areaId: string) => void
 }
 
 export const usePreferencesStore = create<PreferencesState>()(
@@ -176,7 +130,10 @@ export const usePreferencesStore = create<PreferencesState>()(
       density: 'comfortable',
       reduceMotion: false,
       collapsedNavGroups: [],
-      navAreas: DEFAULT_AREA_EXPANSION,
+      navCollapsed: false,
+      titleStyle: 'sentence',
+      setTitleStyle: (titleStyle) => set({ titleStyle }),
+      setNavCollapsed: (navCollapsed) => set({ navCollapsed }),
       setDensity: (density) => set({ density }),
       setReduceMotion: (reduceMotion) => set({ reduceMotion }),
       toggleNavGroup: (group) =>
@@ -185,46 +142,27 @@ export const usePreferencesStore = create<PreferencesState>()(
             ? s.collapsedNavGroups.filter((g) => g !== group)
             : [...s.collapsedNavGroups, group],
         })),
-      setAreaOpen: (areaId, open) =>
-        set((s) => ({
-          navAreas: {
-            v: AREA_EXPANSION_VERSION,
-            open: open
-              ? [...new Set([...s.navAreas.open, areaId])]
-              : s.navAreas.open.filter((a) => a !== areaId),
-            closed: open
-              ? s.navAreas.closed.filter((a) => a !== areaId)
-              : [...new Set([...s.navAreas.closed, areaId])],
-          },
-        })),
-      revealArea: (areaId) =>
-        set((s) =>
-          s.navAreas.closed.includes(areaId)
-            ? {
-                navAreas: {
-                  ...s.navAreas,
-                  closed: s.navAreas.closed.filter((a) => a !== areaId),
-                },
-              }
-            : s,
-        ),
     }),
     {
+      storage: createJSONStorage(() => preferenceStorage),
       name: 'olivares.prefs',
       // The persisted blob is untrusted input. Every field the older store already had
-      // rehydrates exactly as before; the sidebar fold fields a pre-Estate blob may
-      // still carry are read and dropped here; `navAreas` rehydrates only when it is an
-      // AreaExpansion of THIS version, otherwise the default — so a corrupt or future
-      // value can never reset density or theme, and never hides the areas.
+      // rehydrates exactly as before; the navigation fields of earlier shells a blob
+      // may still carry (the pre-Estate sidebar fold, All areas' `navAreas`) are read
+      // and dropped here, so a corrupt or retired value can never reset density or
+      // theme, and never folds the navigation.
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<PreferencesState> & {
           sidebarCollapsed?: unknown
           sidebarChoices?: unknown
           sidebarUnsent?: unknown
+          navAreas?: unknown
         }
         const {
-          navAreas,
+          navAreas: _areas,
+          navCollapsed,
           reduceMotion,
+          titleStyle,
           sidebarCollapsed: _collapsed,
           sidebarChoices: _choices,
           sidebarUnsent: _unsent,
@@ -236,9 +174,10 @@ export const usePreferencesStore = create<PreferencesState>()(
           // A blob saved before the setting existed (or holding anything but `true`)
           // keeps full motion; the system preference still applies on its own.
           reduceMotion: reduceMotion === true,
-          navAreas: isAreaExpansion(navAreas)
-            ? navAreas
-            : DEFAULT_AREA_EXPANSION,
+          // Anything but `true` keeps the navigation open.
+          navCollapsed: navCollapsed === true,
+          // Anything but one of the engine's styles takes the default.
+          titleStyle: TITLE_STYLES.find((s) => s === titleStyle) ?? 'sentence',
         }
       },
     },

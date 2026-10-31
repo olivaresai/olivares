@@ -612,6 +612,8 @@ describe('v26.10 design tokens — the generated file is the approved system', (
       ['overline', '0.75rem', '1rem', undefined, '500'], // micro 12
       ['mono', '0.8125rem', '1.25rem'], // meta 13
       ['mono-s', '0.75rem', '1.125rem'], // micro 12
+      ['metadata', '0.6875rem', '1rem'], // metadata 11
+      ['metadata-s', '0.625rem', '0.875rem'], // counters and key hints 10
     ]
     for (const [step, size, lh, track, weight] of LADDER) {
       expect(theme[`text-${step}`], `--text-${step}`).toBe(size)
@@ -623,8 +625,9 @@ describe('v26.10 design tokens — the generated file is the approved system', (
       (k) => /^text-[\w-]+$/.test(k) && !k.includes('--'),
     )
     expect(new Set(steps)).toEqual(new Set(LADDER.map(([s]) => `text-${s}`)))
-    // Six sizes in all (the design's figure, title, head, body, meta and micro).
-    expect(new Set(LADDER.map(([, size]) => size)).size).toBe(6)
+    // Eight sizes in all: the design's figure, title, head, body, meta and micro, then the
+    // two metadata sizes below the micro step (see metadata-step.test.ts for where they go).
+    expect(new Set(LADDER.map(([, size]) => size)).size).toBe(8)
   })
 
   it('uses the design radii for controls, cards and panels', () => {

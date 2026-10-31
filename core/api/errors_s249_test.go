@@ -35,6 +35,9 @@ func TestStatusFor_LoginEnforcement(t *testing.T) {
 		// person signing in can act on, not a 401 that reads as a wrong password.
 		{"sso_groups_indeterminate", auth.ErrSSOGroupsIndeterminate, http.StatusForbidden, "sso_groups_indeterminate"},
 		{"sso_groups_indeterminate wrapped", fmt.Errorf("complete sso: %w", auth.ErrSSOGroupsIndeterminate), http.StatusForbidden, "sso_groups_indeterminate"},
+		// The asserted groups could not be stored: a withdrawn sign-in, retryable, not a 500.
+		{"sso_group_reconcile_failed", auth.ErrSSOGroupReconcile, http.StatusServiceUnavailable, "sso_group_reconcile_failed"},
+		{"sso_group_reconcile_failed wrapped", fmt.Errorf("complete sso: %w", auth.ErrSSOGroupReconcile), http.StatusServiceUnavailable, "sso_group_reconcile_failed"},
 		{"invalid credentials stay 401", auth.ErrInvalidCredentials, http.StatusUnauthorized, "unauthenticated"},
 	}
 	for _, tc := range cases {

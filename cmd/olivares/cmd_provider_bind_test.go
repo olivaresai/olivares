@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// TestProviderBindMakesTheProfileUseTheKey is FH 025: `provider bind` set only the
+// TestProviderBindMakesTheProfileUseTheKey is first-hour check: `provider bind` set only the
 // profile's provider record, so the profile stayed on the tool's own login and the
 // engine never opened the key ("Not logged in"). Binding also moves the profile to the
 // managed credential; --unbind returns it to the tool's own login.

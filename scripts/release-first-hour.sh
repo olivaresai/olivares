@@ -23,10 +23,10 @@ unset _olivares_git_env
 }
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
-# Fail closed instead of racing another run for the daemon-wide tags. Released with the process.
+# Wait for one prior run instead of racing for daemon-wide tags. Released with the process.
 exec 9>"${FIRST_HOUR_LOCK:-/tmp/olivares-first-hour.lock}"
-flock -n 9 || {
-  echo 'another release-first-hour run owns this Docker daemon'\''s image tags; rerun when it ends' >&2
+flock -w 3600 9 || {
+  echo 'another release-first-hour run owns this Docker daemon'\''s image tags after waiting 60 minutes' >&2
   exit 1
 }
 version=$(sed '/^#/d; /^$/d' RELEASE-VERSION)
@@ -202,7 +202,7 @@ compose+=(-f "$work/provider.yml")
 # Chromium must not see link/address changes from neighboring jobs on the runner host.
 # Share only the engine's network namespace; the locked harness and its evidence stay
 # separate from the engine's filesystem. The image supplies Chromium and its libraries.
-browser_image=mcr.microsoft.com/playwright:v1.64.0-noble@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f
+browser_image=mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea
 harness_version=$(node -p 'require("./web/node_modules/@playwright/test/package.json").version')
 [[ $browser_image == "mcr.microsoft.com/playwright:v$harness_version-noble@"* ]] || {
   echo 'FAIL: Playwright image version differs from the locked harness' >&2

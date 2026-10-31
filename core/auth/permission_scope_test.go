@@ -17,7 +17,7 @@ func TestScopeableKinds(t *testing.T) {
 	}
 	// IAM / system / unknown kinds are NOT scopeable (their resources are not in the
 	// Tree — see the contract's honest limits).
-	for _, k := range []string{"user", "membership", "token", "tenant", "audit", "system", "nope"} {
+	for _, k := range []string{"user", "membership", "token", "tenant", "system", "nope"} {
 		if auth.IsScopeableKind(k) {
 			t.Errorf("%q must not be scopeable", k)
 		}
@@ -43,9 +43,9 @@ func TestRoleResourcePerms(t *testing.T) {
 	if !has(viewer, "agent:read") || has(viewer, "agent:write") {
 		t.Errorf("viewer resource perms wrong: %v", viewer)
 	}
-	// Viewer's audit:read / tenant:read are NOT resource perms (not scopeable kinds).
-	if has(viewer, "audit:read") || has(viewer, "tenant:read") {
-		t.Errorf("viewer must not expose non-resource reads in RoleResourcePerms: %v", viewer)
+	// The ledger read is tenant-grantable; tenant settings remain outside the catalog.
+	if !has(viewer, "audit:read") || has(viewer, "tenant:read") {
+		t.Errorf("viewer must expose audit, but not tenant settings in RoleResourcePerms: %v", viewer)
 	}
 
 	admin := auth.RoleResourcePerms(auth.RoleAdmin)

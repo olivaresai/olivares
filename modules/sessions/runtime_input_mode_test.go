@@ -183,6 +183,11 @@ func TestRuntimeInputModeOwnedDriverBeforeRecording(t *testing.T) {
 			if err := runtimeInputModeAdmissionForTest(t, f, request, record); err != nil || recorded != 1 {
 				t.Fatalf("owned-driver Text preflight: %v", err)
 			}
+			fact, err := f.m.loadRun(context.Background(), f.tenant, target.RunRef)
+			attempted, known := fact[colRunCodexInputAttempted].(bool)
+			if err != nil || !known || attempted {
+				t.Fatalf("mode preflight changed the unused conversation: known=%v attempted=%v error=%v", known, attempted, err)
+			}
 			if after := readFixtureRecord(t, path); !reflect.DeepEqual(before, after) {
 				t.Fatalf("preflight invoked the driver: before=%+v after=%+v", before, after)
 			}

@@ -44,7 +44,7 @@ func TestThreatIntelFollowsTheSourceBeingTurnedOnLater(t *testing.T) {
 	t.Cleanup(func() { _ = bus.Close() })
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	subscribeThreatIntel(ctx, func(string) string { return "" }, bus, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	subscribeThreatIntel(ctx, func(string) string { return "" }, bus, &editionLiveGates{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	publish := func() {
 		t.Helper()

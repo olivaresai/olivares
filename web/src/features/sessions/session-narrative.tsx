@@ -26,6 +26,7 @@ import type { ConversationItem } from './conversation-frames'
 import {
   capabilities,
   operatorName,
+  runTitle,
   primaryRun,
   sessionReference,
   sessionShortId,
@@ -57,6 +58,7 @@ export function SessionNarrative({
   back,
   peerSessions,
   stacked,
+  composerId,
 }: {
   resolution: SessionResolution
   pinned: boolean
@@ -81,6 +83,7 @@ export function SessionNarrative({
   peerSessions?: readonly UnifiedSession[]
   /** The header's sheet form: the facts on a line of their own (`ThreadHeader`). */
   stacked?: boolean
+  composerId?: string
 }) {
   const { t } = useTranslation('sessions')
   const { target, session, live, loading, grants } = resolution
@@ -123,9 +126,10 @@ export function SessionNarrative({
   // ⛔ THE HEADING ANSWERS *WHICH* SESSION. It must not be the sentence the overview tells
   //    (*what it did*), and it must not be the raw reference either, which is what
   //    `sessionLabel` painted here in the monospaced face. So: the name its operator typed,
-  //    else the distinguishing tail of the reference — whose whole value is on `title` and
+  //    else the title the engine cut from its first message (it says which session this is,
+  //    as no later action does), else the distinguishing tail of the reference — whose whole value is on `title` and
   //    in the identifiers block.
-  const named = operatorName(session)
+  const named = operatorName(session) ?? runTitle(session)
   const shortId = sessionShortId(session)
   const reference = sessionReference(session)
   const titleHint = [named, shortId, reference]
@@ -199,6 +203,7 @@ export function SessionNarrative({
       {hasThread(resolution) && run ? (
         <SessionConversation
           run={run}
+          composerId={composerId}
           selectedId={inspectedId}
           onInspect={onInspect}
           onFolder={onFolder}

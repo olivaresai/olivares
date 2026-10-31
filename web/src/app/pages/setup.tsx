@@ -5,8 +5,9 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Navigate, useNavigate } from '@tanstack/react-router'
 import { useForm } from 'react-hook-form'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { z } from 'zod'
+import { useState } from 'react'
 import { isEngineEmail } from '@/lib/email'
 import { AuthShell } from '@/components/layout/auth-shell'
 import { Button } from '@/components/ui/button'
@@ -15,6 +16,7 @@ import { withInlineCommands } from '@/components/ui/inline-commands'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
+import { PathText } from '@/components/ui/path-text'
 import { toast } from '@/components/ui/toaster'
 import { authApi } from '@/lib/api/endpoints'
 import { ApiError } from '@/lib/api/errors'
@@ -35,6 +37,8 @@ export function SetupPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const serverInfo = useServerInfo()
+  const [backupKeySaved, setBackupKeySaved] = useState(false)
+  const backupKeyPath = serverInfo.data?.backup_key_path
   const setActiveTenant = useTenantStore((s) => s.setActiveTenant)
   const form = useForm<SetupValues>({
     resolver: zodResolver(schema),
@@ -50,12 +54,20 @@ export function SetupPage() {
     // catalog that did not load send nothing (the engine default) rather than
     // the English text under a different handle.
     mutationFn: (values: SetupValues) => {
+      const request = {
+        ...values,
+        ...(serverInfo.data?.backup_key_required
+          ? { backup_key_saved: backupKeySaved }
+          : {}),
+      }
       const lng = i18n.resolvedLanguage
       const organization =
         lng && lng !== 'en'
           ? t('setup.organization', { fallbackLng: false, defaultValue: '' })
           : ''
-      return authApi.setup(organization ? { ...values, organization } : values)
+      return authApi.setup(
+        organization ? { ...request, organization } : request,
+      )
     },
     onSuccess: async (created, values) => {
       // Setup creates the first organization together with the superadmin that
@@ -206,10 +218,45 @@ export function SetupPage() {
             </p>
           )}
 
+          {serverInfo.data?.backup_key_required && (
+            <div className="flex flex-col gap-2">
+              <p className="text-caption text-muted-foreground">
+                {backupKeyPath ? (
+                  <Trans
+                    t={t}
+                    i18nKey="setup.backupKeyHint"
+                    components={{
+                      path: <PathText value={backupKeyPath} size="small" />,
+                    }}
+                  />
+                ) : (
+                  t('errors:generic')
+                )}
+              </p>
+              <label
+                className="flex items-start gap-2 text-body"
+                htmlFor="backup-key-saved"
+              >
+                <input
+                  id="backup-key-saved"
+                  type="checkbox"
+                  checked={backupKeySaved}
+                  disabled={!backupKeyPath}
+                  onChange={(e) => setBackupKeySaved(e.target.checked)}
+                />
+                {t('setup.backupKeySaved')}
+              </label>
+            </div>
+          )}
+
           <Button
             type="submit"
             variant="primary"
-            disabled={mutation.isPending}
+            disabled={
+              mutation.isPending ||
+              (serverInfo.data?.backup_key_required === true &&
+                (!backupKeySaved || !backupKeyPath))
+            }
             className="w-full"
           >
             {mutation.isPending ? t('setup.creating') : t('setup.submit')}

@@ -105,7 +105,7 @@ func newMCPListCmd(flags *authClientFlags) *cobra.Command {
 				if s["enabled"] == true {
 					state, role = "on", termrender.RoleOK
 					if len(mcpAllowedTools(s)) == 0 {
-						// On with nothing callable is not usable; say so (HU 025).
+						// On with nothing callable is not usable; say so.
 						state, role = "on, no tool allowed", termrender.RoleWarn
 					}
 				}

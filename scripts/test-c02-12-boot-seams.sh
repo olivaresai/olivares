@@ -7,6 +7,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CHECK="$ROOT/scripts/check-c02-12-boot-seams.sh"
+PORT_COUNT="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["ports"])' "$ROOT/design/c02-12-boot-seams.json")"
 _tmp_base="${TMPDIR:-/workspace/.olivares-tmptest}"
 mkdir -p "$_tmp_base"
 TMP="$(mktemp -d "$_tmp_base/c0212.XXXXXX")"
@@ -117,7 +118,7 @@ expect "firing: doc claiming invariant closed is FAIL" 1
 stage
 mutate "$PORTS_T" $'\tagentServers ' $'\tunaccounted editionPort[any]\n\tagentServers '
 run
-expect "firing: an unaccounted port is FAIL on the count" 1 'live port count 59 != pinned 58'
+expect "firing: an unaccounted port is FAIL on the count" 1 "live port count $((PORT_COUNT + 1)) != pinned $PORT_COUNT"
 
 stage
 mutate "$PORTS_T" $'\tbindModuleDependencies ' $'\trenamedBinding '

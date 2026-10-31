@@ -56,6 +56,14 @@ const (
 	// is authored against one catalog entry. Writing them is Business (profile_assignment.go).
 	sourceProfile = "profile"
 	sourceTool    = "tool"
+
+	// A session template (by its id) is what a department carries as its standards: as
+	// "instructions" its custom instructions are the text every session of the department
+	// is given, as "template" it is the department's default session template. Only the
+	// department tree (scope_tree workspace) assigns them, and writing them is Business
+	// (standards.go).
+	sourceInstructions = "instructions"
+	sourceTemplate     = "template"
 )
 
 // Exported source-type identifiers, for composition-root adapters building Resolve
@@ -133,6 +141,12 @@ const (
 	// key: an allow and a forbid for the same (source, tree, ref) are contradictory and
 	// the unique index correctly forbids both (the effect is updated in place).
 	colEffect = "effect"
+	// colExpiresAt bounds an enabled binding without changing the natural key.
+	// An expired allow still confines the source; it simply grants nothing.
+	colExpiresAt  = "expires_at"
+	colExpiredAt  = "expired_at"
+	colRemind14At = "remind_14_at"
+	colRemind1At  = "remind_1_at"
 )
 
 // connector_assignment columns.
@@ -182,6 +196,7 @@ const (
 	colPRProposerUser  = "proposer_user"   // model.User id of the proposer ("" if person-less)
 	colPRDecidedByUser = "decided_by_user" // model.User id of the decider ("" while pending)
 	colPRNote          = "note"
+	colPRWorkspaceID   = "workspace_id" // stored approver scope for access_request
 )
 
 // guard_posture columns. The source_type/source_ref pair is intentionally separate
@@ -233,6 +248,10 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 				// pre row reconciles to an allow binding unchanged. NOT in the unique
 				// index below — the natural key stays (source_type, source_ref, tree, ref).
 				{Name: colEffect, Kind: model.KindText, Nullable: true, Principal: model.None("a closed effect set (allow or forbid): binding.go:128-129")},
+				{Name: colExpiresAt, Kind: model.KindTimestamp, Nullable: true, Indexed: true, Principal: model.None("optional binding expiry, read as a timestamp by resolver.go:616 and expiry.go:70, never as a principal")},
+				{Name: colExpiredAt, Kind: model.KindTimestamp, Nullable: true, Principal: model.None("one-shot expiry audit marker, written only by the expiry sweep: expiry.go:111-114")},
+				{Name: colRemind14At, Kind: model.KindTimestamp, Nullable: true, Principal: model.None("one-shot 14-day notification marker, written only by the expiry sweep: expiry.go:89-95")},
+				{Name: colRemind1At, Kind: model.KindTimestamp, Nullable: true, Principal: model.None("one-shot 1-day notification marker, written only by the expiry sweep: expiry.go:89-90")},
 			},
 			Indexes: []model.IndexSpec{{
 				Name:    "sourcescope_binding_uniq",
@@ -307,8 +326,9 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		},
 		// (F2/F5): pending posture-change requests (dual-control on relaxations).
 		{
-			Kind:  postureRequestKind,
-			Table: postureRequestTable,
+			Kind:             postureRequestKind,
+			Table:            postureRequestTable,
+			WorkspaceLineage: model.WorkspaceLineageSpec{Column: colPRWorkspaceID, Encoding: model.WorkspaceLineageID, Unset: model.WorkspaceUnsetHidden},
 			Fields: []model.FieldSpec{
 				{Name: colPRSourceType, Kind: model.KindText, Indexed: true, Principal: model.None("the proposal's source type, a lookup key: posture.go:1042")},
 				{Name: colPRSourceRef, Kind: model.KindText, Indexed: true, Principal: model.None("the proposal's source reference or connector name, a lookup key: posture.go:1042")},
@@ -337,6 +357,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 				// unguarded.
 				{Name: colPRProposerUser, Kind: model.KindText, Nullable: true, Principal: model.Ref(model.EncodeUserID, model.ClassRestrict)},
 				{Name: colPRDecidedByUser, Kind: model.KindText, Nullable: true, Principal: model.Ref(model.EncodeUserID, model.ClassRestrict)},
+				{Name: colPRWorkspaceID, Kind: model.KindText, Nullable: true, Principal: model.None("the stored workspace whose department admin or owner may decide an access request, read as a workspace id by access_request.go:227 and :286")},
 			},
 		},
 	}

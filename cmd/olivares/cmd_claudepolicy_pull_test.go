@@ -33,8 +33,9 @@ type pullPlane struct {
 	// reply is the plane's answer to a check-in; status 0 means 200.
 	reply  string
 	status int
-	// artifactQuery is the query string of the last artifact request.
+	// artifactQuery is the query string of the last artifact request, artifactPath its path.
 	artifactQuery string
+	artifactPath  string
 }
 
 func newPullPlane(t *testing.T, tenant, surface string, revision int64, content string, mutate func(map[string]any)) *pullPlane {
@@ -61,6 +62,7 @@ func newPullPlane(t *testing.T, tenant, surface string, revision int64, content 
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/artifact"):
 			p.mu.Lock()
 			p.artifactQuery = r.URL.RawQuery
+			p.artifactPath = r.URL.EscapedPath()
 			p.mu.Unlock()
 			_ = json.NewEncoder(w).Encode(p.artifact)
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/checkin"):

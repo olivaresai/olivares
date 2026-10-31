@@ -434,7 +434,7 @@ func readDirectoryAgentGroup(
 		// One bounded List per chunk: a chunk never exceeds the page cap, and
 		// no single query binds more than 500 parameters — PostgreSQL admits at
 		// most 65,535, so a larger group must never reach the driver in one IN
-		// (SR5C round 2; the same bound core/auth's groupsByIDs and
+		// (review round 2; the same bound core/auth's groupsByIDs and
 		// sourcescope's idChunk use). The loop below iterates members, so
 		// chunking never touches the membership order.
 		const idChunk = 500

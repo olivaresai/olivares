@@ -317,7 +317,7 @@ func TestAgentDeployRegistersTheProfileAndBindsTheProvider(t *testing.T) {
 	if body["auth_source"] != "managed_injection" || body["provider_record_ref"] != "prv_fixture" {
 		t.Fatalf("body=%v", body)
 	}
-	// HU-07: no home is typed or defaulted from this account's home; the engine makes
+	// acceptance: no home is typed or defaulted from this account's home; the engine makes
 	// the profile's own. $HOME/.claude was refused when missing (422) and, when it was
 	// the engine user's own login, never launched.
 	if _, ok := body["config_home"]; ok {
@@ -379,7 +379,7 @@ func TestAgentDeployWithoutProviderDoesNotAuthoriseInjection(t *testing.T) {
 	}
 }
 
-// HU-07: with no home named and no provider, deploy asks the engine for the profile a
+// acceptance: with no home named and no provider, deploy asks the engine for the profile a
 // new session of the driver uses (the resolve rule `session start` and the console
 // use), so a fresh account needs no path and a second deploy reuses the profile. The
 // CLI names nothing but the driver: no home, no auth source, no provider.

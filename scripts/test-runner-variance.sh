@@ -22,7 +22,7 @@ mkdir -p "$TMP/logs"
 cat > "$TMP/jobs.json" <<J
 {"jobs":[{"run":"R1","job":"race-modules","id":1,"runner":"srv17"},
          {"run":"R1","job":"race-rest","id":2,"runner":"srv17"},
-         {"run":"R2","job":"race-modules","id":3,"runner":"ci-runner-9"}]}
+         {"run":"R2","job":"race-modules","id":3,"runner":"build-host"}]}
 J
 corre(){ OLIVARES_RV_JOBS="${1:-$TMP/jobs.json}" OLIVARES_RV_LOGDIR="${2:-$TMP/logs}" \
          bash "${3:-$SUT}" > "$TMP/out" 2>&1; echo $?; }
@@ -30,7 +30,7 @@ corre(){ OLIVARES_RV_JOBS="${1:-$TMP/jobs.json}" OLIVARES_RV_LOGDIR="${2:-$TMP/l
 check "(1) complete fixture -> rc 0" 0 "$(corre)"
 check "(1b) package comes from the FOURTH field and is not lost" 0 "$( grep -q 'modules/governance' "$TMP/out"; echo $? )"
 check "(1c) sorts by duration within the package" 0 \
-  "$( awk '/modules\/governance/{f=1;next} f&&/srv17/{print "ok";exit} f&&/ci-runner-9/{print "mal";exit}' "$TMP/out" | grep -qx ok; echo $? )"
+  "$( awk '/modules\/governance/{f=1;next} f&&/srv17/{print "ok";exit} f&&/build-host/{print "mal";exit}' "$TMP/out" | grep -qx ok; echo $? )"
 
 # 2 · LA CUENTA QUE ESTE GUION EXISTE PARA PROTEGER: dos paquetes del MISMO job son UNA asignacion.
 check "(2) 4 observations across 3 independent assignments" 0 \
@@ -85,7 +85,7 @@ check "(10c) ONLY its MESSAGE detects it: inflates 3 assignments to 5" 0 \
 # 11 · MODO JOB · la duracion sale de los SELLOS, sin log, y sirve para jobs sin lineas `ok pkg Ns`
 cat > "$TMP/sellos.json" <<J
 {"jobs":[{"run":"R1","job":"secrets","id":1,"runner":"srv17","ini":"2026-08-30T06:00:00Z","fin":"2026-08-30T06:26:27Z"},
-         {"run":"R2","job":"secrets","id":2,"runner":"ci-runner-7","ini":"2026-08-30T07:00:00Z","fin":"2026-08-30T08:06:18Z"}]}
+         {"run":"R2","job":"secrets","id":2,"runner":"build-host","ini":"2026-08-30T07:00:00Z","fin":"2026-08-30T08:06:18Z"}]}
 J
 J11=$( OLIVARES_RV_MODE=job OLIVARES_RV_JOBS="$TMP/sellos.json" bash "$SUT" > "$TMP/out" 2>&1; echo $? )
 check "(11) job mode -> rc 0 WITHOUT any log" 0 "$J11"
@@ -361,7 +361,7 @@ cat > "$TMP/livejobs.json" <<J
    "started_at":"2026-08-30T06:00:00Z","completed_at":"2026-08-30T06:10:00Z","conclusion":"success","steps":[]},
   {"name":"race-rest","status":"completed","id":12,"runner_name":"srv17",
    "started_at":"2026-08-30T06:00:00Z","completed_at":"2026-08-30T06:05:00Z","conclusion":"success","steps":[]},
-  {"name":"race-core","status":"completed","id":13,"runner_name":"ci-runner-9",
+  {"name":"race-core","status":"completed","id":13,"runner_name":"build-host",
    "started_at":"2026-08-30T06:00:00Z","completed_at":"2026-08-30T06:08:00Z","conclusion":"success","steps":[]},
   {"name":"race-modules-extra","status":"completed","id":14,"runner_name":"trap",
    "started_at":"2026-08-30T06:00:00Z","completed_at":"2026-08-30T06:01:00Z","conclusion":"success","steps":[]},

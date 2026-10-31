@@ -32,14 +32,14 @@ func has(ps []auth.Permission, want string) bool {
 }
 
 // TestEmptyCatalogIsExactlyTheOldBehaviour pins the deny-closed property: an engine that
-// registers no module keeps the pre catalog, so the widening can only ever be caused
-// by a module actually declaring a permission.
+// registers no module keeps only the code-defined core catalog. A module capability
+// enters the catalog only when a module declares it.
 func TestEmptyCatalogIsExactlyTheOldBehavior(t *testing.T) {
 	auth.ResetModuleCatalog()
 	t.Cleanup(auth.ResetModuleCatalog)
 
-	if got := len(auth.ScopeableKinds()); got != len(auth.TreeScopeableKinds()) {
-		t.Errorf("empty catalog: ScopeableKinds()=%d, want the %d tree kinds", got, len(auth.TreeScopeableKinds()))
+	if got := len(auth.ScopeableKinds()); got != len(auth.TreeScopeableKinds())+len(auth.TenantGrantablePermissions()) {
+		t.Errorf("empty catalog: ScopeableKinds()=%d, want %d core kinds", got, len(auth.TreeScopeableKinds())+len(auth.TenantGrantablePermissions()))
 	}
 	if auth.IsScopeableKind("models:keys") {
 		t.Error("an unregistered module kind must not be scopeable")

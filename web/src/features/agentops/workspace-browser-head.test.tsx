@@ -8,6 +8,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fakeRouter } from '@/test/fake-router'
+
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1', can: () => true }),
@@ -70,6 +75,7 @@ const settled = (qc: QueryClient) =>
   waitFor(() => expect(qc.isFetching()).toBe(0))
 
 beforeEach(() => {
+  fakeRouter.reset('/workspaces')
   vi.clearAllMocks()
   vi.mocked(agentOpsApi.listFiles).mockResolvedValue({
     path: '',
@@ -96,6 +102,7 @@ describe('WorkspaceBrowser — against git HEAD', () => {
     const user = userEvent.setup()
     show()
     await user.click(await screen.findByText('README.md'))
+    await user.click(await screen.findByRole('button', { name: 'Source' }))
     expect(await screen.findByTestId('editor')).toHaveTextContent(
       'edited in the console',
     )
@@ -153,6 +160,7 @@ describe('WorkspaceBrowser — against git HEAD', () => {
       const user = userEvent.setup()
       const qc = show()
       await user.click(await screen.findByText('README.md'))
+      await user.click(await screen.findByRole('button', { name: 'Source' }))
       await settled(qc)
       expect(
         await screen.findByText('Could not compare with HEAD.'),
@@ -162,6 +170,7 @@ describe('WorkspaceBrowser — against git HEAD', () => {
         screen.queryByRole('button', { name: 'Changes since HEAD' }),
       ).toBeNull()
       cleanup()
+      fakeRouter.reset('/workspaces')
     }
   })
 
@@ -177,6 +186,7 @@ describe('WorkspaceBrowser — against git HEAD', () => {
     const user = userEvent.setup()
     const qc = show()
     await user.click(await screen.findByText('README.md'))
+    await user.click(await screen.findByRole('button', { name: 'Source' }))
     await screen.findByTestId('editor')
     await settled(qc)
     await user.click(screen.getByText('new.txt'))
@@ -196,11 +206,13 @@ describe('WorkspaceBrowser — against git HEAD', () => {
     const user = userEvent.setup()
     show()
     await user.click(await screen.findByText('README.md'))
+    await user.click(await screen.findByRole('button', { name: 'Source' }))
     await user.click(
       await screen.findByRole('button', { name: 'Changes since HEAD' }),
     )
     expect(screen.getByTestId('code-diff')).toBeInTheDocument()
     await user.click(screen.getByText('docs.md'))
+    await user.click(await screen.findByRole('button', { name: 'Source' }))
     await waitFor(() =>
       expect(agentOpsApi.readFile).toHaveBeenCalledWith(
         'ws_1',
@@ -225,6 +237,7 @@ describe('WorkspaceBrowser — against git HEAD', () => {
     const user = userEvent.setup()
     show()
     await user.click(await screen.findByText('README.md'))
+    await user.click(await screen.findByRole('button', { name: 'Source' }))
     await screen.findByRole('button', { name: 'Changes since HEAD' })
     await user.click(screen.getByRole('button', { name: 'Edit' }))
     expect(
@@ -254,6 +267,7 @@ describe('WorkspaceBrowser — against git HEAD', () => {
     const user = userEvent.setup()
     const qc = show()
     await user.click(await screen.findByText('README.md'))
+    await user.click(await screen.findByRole('button', { name: 'Source' }))
     await screen.findByRole('button', { name: 'Changes since HEAD' })
     expect(headReads()).toBe(1)
     expect(fileReads()).toBe(1)
@@ -284,6 +298,7 @@ describe('WorkspaceBrowser scope retirement', () => {
     )
     const view = render(subject(workspace))
     await user.click(await screen.findByText('README.md'))
+    await user.click(await screen.findByRole('button', { name: 'Source' }))
     await user.click(await screen.findByRole('button', { name: 'Edit' }))
     expect(
       await screen.findByRole('button', { name: 'Save' }),
@@ -299,6 +314,40 @@ describe('WorkspaceBrowser scope retirement', () => {
     expect(screen.queryByTestId('editor')).toBeNull()
     expect(agentOpsApi.writeFile).not.toHaveBeenCalled()
     await user.click(await screen.findByText('README.md'))
+    await user.click(await screen.findByRole('button', { name: 'Source' }))
     expect(await screen.findByTestId('editor')).toHaveTextContent('checkout B')
+  })
+})
+
+describe('WorkspaceBrowser — open in the editor', () => {
+  it('offers the file in the person’s editor at the first line that differs from HEAD', async () => {
+    vi.mocked(agentOpsApi.readFile).mockImplementation(async (_ws, path, rev) =>
+      text(
+        path,
+        rev === 'HEAD' ? '# Title\n' : '# Title\nedited in the console\n',
+      ),
+    )
+    const user = userEvent.setup()
+    show()
+    await user.click(await screen.findByText('README.md'))
+    expect(
+      await screen.findByRole('link', { name: 'Open in VS Code' }),
+    ).toHaveAttribute('href', 'vscode://file/srv/repo/README.md:2')
+  })
+
+  it('opens at the top of a file that has no HEAD version', async () => {
+    vi.mocked(agentOpsApi.readFile).mockImplementation(
+      async (_ws, path, rev) => {
+        if (rev === 'HEAD') throw new ApiError(404, 'not_found', 'not in HEAD')
+        return text(path, 'created in the console\n')
+      },
+    )
+    const user = userEvent.setup()
+    const qc = show()
+    await user.click(await screen.findByText('new.txt'))
+    await settled(qc)
+    expect(
+      screen.getByRole('link', { name: 'Open in VS Code' }),
+    ).toHaveAttribute('href', 'vscode://file/srv/repo/new.txt')
   })
 })

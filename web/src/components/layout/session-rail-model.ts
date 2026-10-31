@@ -29,7 +29,10 @@ import {
   isMarkedDone,
   isSnoozed,
 } from '@/features/sessions/session-groups'
-import type { RailState } from '@/features/sessions/session-display-state'
+import type {
+  RailState,
+  SessionStatus,
+} from '@/features/sessions/session-display-state'
 
 export const RAIL_GROUP_IDS = [
   'needsYou',
@@ -50,6 +53,8 @@ export interface RailRow {
   key: string
   kind: 'session' | 'handoff'
   state: RailState
+  /** The one of five states the row's mark and word say (Sessions, Now, the palette). */
+  status: SessionStatus
   /** The engine's own title for the row, or null when it sent none. */
   title: string | null
   /** A reference the row can always be named by: the session or work item id. */
@@ -88,6 +93,9 @@ export interface RailSources {
 interface RailDestinations {
   sessionTo?: '/sessions' | '/agentops'
   canOpenApprovals?: boolean
+  /** Which sessions a caller lists in Needs you (handoffs are always listed). It decides
+   * from the merged session, not the row's key, and runs before the display cap. */
+  keepNeeds?: (row: RailRow, session: UnifiedSession) => boolean
 }
 
 export function approvalDestination(approval: string) {
@@ -109,9 +117,9 @@ function distinctTitle(
   return title && shared.has(title) ? `${title} · ${sessionShortId(s)}` : title
 }
 
-/** The state a session's row says: the one place this file asks the classifier. */
-function railState(s: UnifiedSession): RailState {
-  return sessionDisplayState(s).rail
+/** What a session's row says: the one place this file asks the classifier. */
+function displayOf(s: UnifiedSession) {
+  return sessionDisplayState(s)
 }
 
 /** One row per session: a launched run and what was observed of it are one session
@@ -124,7 +132,7 @@ function sessionRow(
 ): RailRow {
   const run = primaryRun(s.runs)
   const live = s.live
-  const state = railState(s)
+  const { rail: state, status } = displayOf(s)
   const waitingOn =
     state === 'need' && destinations.canOpenApprovals !== false && run
       ? runAwaitedApproval(run)
@@ -150,6 +158,7 @@ function sessionRow(
     key: s.key,
     kind: 'session',
     state,
+    status,
     title: distinctTitle(named.text || null, s, shared),
     reference: sessionReference(s),
     // A title that IS the tool and folder already says what the caption would.
@@ -167,6 +176,7 @@ function handoffRow(item: HandoffInboxItem, now: number): RailRow {
     key: `handoff:${item.carrier.delivery_id}`,
     kind: 'handoff',
     state: 'need',
+    status: 'needs-you',
     title: null,
     reference: item.work_item.id,
     meta: null,
@@ -184,11 +194,21 @@ function handoffRow(item: HandoffInboxItem, now: number): RailRow {
  * Archived the archived sessions (#2795): no count and no list shows them, and the
  * command menu still finds them there. */
 /** The sessions a stop of every agent would end: each one that has not ended, idle and
- * waiting ones too, counted as Now counts its running sessions. */
-export function aliveSessions(sources: RailSources): number {
+ * waiting ones too, counted as Now counts its running sessions; `shown` narrows them. */
+export function aliveSessions(
+  sources: RailSources,
+  shown: (s: UnifiedSession) => boolean = () => true,
+): number {
   return mergeSessions([...sources.live], [...(sources.runs ?? [])]).filter(
-    (s) => railState(s) !== 'ended',
+    (s) => displayOf(s).rail !== 'ended' && shown(s),
   ).length
+}
+
+/** The sessions open as the list shows them: alive, and not folded away (archived or
+ * snoozed, which the list keeps under its own folds). The one total the list, the
+ * Sessions badge and "N sessions open" print, so an archive and its Undo move all three. */
+export function openSessions(sources: RailSources): number {
+  return aliveSessions(sources, (s) => !isArchived(s) && !isSnoozed(s))
 }
 
 export function railGroups(
@@ -215,8 +235,10 @@ export function railGroups(
     if (isArchived(s)) archived.push(row)
     else if (isSnoozed(s)) snoozed.push(row)
     else if (isMarkedDone(s)) earlier.push(row)
-    else if (row.state === 'need') needs.push(row)
-    else if (row.state === 'live') working.push(row)
+    // Before the cap: a row the caller drops must not take one of the eight places.
+    else if (row.state === 'need') {
+      if (destinations.keepNeeds?.(row, s) ?? true) needs.push(row)
+    } else if (row.state === 'live') working.push(row)
     else earlier.push(row)
   }
   const cap = (rows: RailRow[]) => rows.slice(0, RAIL_ROWS_PER_GROUP)

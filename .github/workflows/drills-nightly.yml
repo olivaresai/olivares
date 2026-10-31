@@ -40,6 +40,24 @@ jobs:
     permissions:
       contents: read
       issues: write # open/update the drill-failure tracking issue
+    services:
+      # The PostgreSQL server the DR drill restores into (a throwaway database with
+      # its own roles, removed afterwards). Same digest the pg-majors matrix pins.
+      postgres:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 30s --health-start-period 60s --health-start-interval 1s
+          --health-timeout 5s
+          --health-retries 12
+          --memory=1g
+          --memory-swap=1536m
+          --cpus=2
+          --pids-limit=512
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -59,8 +77,15 @@ jobs:
       # Each drill runs in its own step and never aborts the job on failure, so a DR
       # incident does not hide a PSIRT incident (and vice versa). pipefail makes the
       # task exit code — not tee's — decide `failed`.
+      - name: resolve the PostgreSQL service port into the scratch DSN
+        env:
+          PGPORT_HOST: ${{ job.services.postgres.ports['5432'] }}
+        run: bash scripts/ci-postgres-service.sh resolve
       - name: DR round-trip drill (task dr:drill)
         id: dr
+        env:
+          # The drill also runs on PostgreSQL and prints its RTO next to the SQLite one.
+          DR_DRILL_SCRATCH_DSN: env:OLIVARES_TEST_POSTGRES_SUPERUSER_DSN
         run: |
           set -uo pipefail
           if task dr:drill 2>&1 | tee "$RUNNER_TEMP/drill-dr.log"; then
@@ -143,11 +168,15 @@ jobs:
           # El motor imprime su token de un solo uso al arrancar; se espera a que aparezca en vez
           # de dormir a ciegas — un sleep fijo convierte una caja lenta en un falso «no he podido
           # mirar».
+          # An engine that exits (a busy port, the regression) ends the wait at once, and a missing
+          # token reaches the report below with the engine's own error instead of ending the
+          # step under bash -e and pipefail.
           for _ in $(seq 1 60); do
             grep -qoE 'olst_[A-Z0-9]+' "$RUNNER_TEMP/walk-engine.log" && break
+            kill -0 "$engine_pid" 2>/dev/null || break
             sleep 2
           done
-          TOK="$(grep -oE 'olst_[A-Z0-9]+' "$RUNNER_TEMP/walk-engine.log" | head -1)"
+          TOK="$(grep -oE 'olst_[A-Z0-9]+' "$RUNNER_TEMP/walk-engine.log" | head -1 || true)"
           if [ -z "$TOK" ]; then
             echo "::error::console-walk: the engine did not print a first-start token; the check cannot run without it."
             sed -n '1,40p' "$RUNNER_TEMP/walk-engine.log"
@@ -199,6 +228,21 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          # The dev runners have no gh CLI (exit 127 on 2026-10-30), so the REST API is
+          # called with curl and python3. The token stays in a 0600 header file, never argv.
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          auth="$RUNNER_TEMP/drill-api-auth"
+          (umask 077 && printf 'Authorization: Bearer %s\n' "$GH_TOKEN" > "$auth")
+          trap 'rm -f "$auth"' EXIT
+          api_post() {
+            curl -fsS -X POST -H "@$auth" -H 'Accept: application/vnd.github+json' \
+              -H 'Content-Type: application/json' --data-binary @- "$1" >/dev/null
+          }
+          find_open_issue() {
+            curl -fsS -H "@$auth" -H 'Accept: application/vnd.github+json' \
+              "$api/issues?labels=drills-nightly&state=open&per_page=100" \
+              | python3 -c 'import json,sys; t=sys.argv[1]; print(next((str(i["number"]) for i in json.load(sys.stdin) if i["title"] == t and "pull_request" not in i), ""))' "$1"
+          }
           # printf (not a heredoc) builds the body so YAML block-scalar indentation
           # can never swallow a heredoc terminator; the backticks are literal.
           open_or_update() {
@@ -211,13 +255,15 @@ jobs:
               "The nightly **${desc}** FAILED — a broken drill means the documented runbook path is broken (operational incident)." \
               "${RUN_URL}" "${COMMIT_SHA}" "${tail_log}" \
               "This issue is auto-deduplicated: while it stays open, subsequent nightly failures of this same drill append a comment instead of opening a new issue. Close it once the drill is green again.")"
-            existing="$(gh issue list --label drills-nightly --state open --json number,title \
-              | jq -r --arg t "$title" ".[] | select(.title == \$t) | .number" | head -1)"
-            if [ -n "${existing:-}" ]; then
-              gh issue comment "$existing" --body "$body"
+            existing="$(find_open_issue "$title")"
+            if [ -n "$existing" ]; then
+              python3 -c 'import json,sys; print(json.dumps({"body": sys.stdin.read()}))' <<<"$body" \
+                | api_post "$api/issues/$existing/comments"
             else
-              gh issue create --title "$title" --label drills-nightly --body "$body" \
-                || gh issue create --title "$title" --body "$body"
+              python3 -c 'import json,sys; print(json.dumps({"title": sys.argv[1], "labels": ["drills-nightly"], "body": sys.stdin.read()}))' "$title" <<<"$body" \
+                | api_post "$api/issues" \
+                || python3 -c 'import json,sys; print(json.dumps({"title": sys.argv[1], "body": sys.stdin.read()}))' "$title" <<<"$body" \
+                  | api_post "$api/issues"
             fi
           }
           if [ "${DR_FAILED}" = "true" ]; then
@@ -239,3 +285,76 @@ jobs:
         run: |
           echo "::error::a nightly drill failed — see the tracking issue(s)"
           exit 1
+
+  # Point-in-time recovery on every supported PostgreSQL major (docs/DR-RUNBOOK.md
+  # §6-7). The PITR path (WAL archiving, pg_basebackup, recovery to an instant, then
+  # `dr restore` of the companion) is the near-zero-RPO tier the runbook promises, and
+  # it was exercised nowhere. The test starts its own server per major from the
+  # server binaries, so this job installs them and starts no service container.
+  pitr:
+    if: github.event_name == 'workflow_dispatch' || vars.CI_NIGHTLIES == 'true'
+    runs-on: ${{ vars.CI_RUNNER_DB || vars.CI_RUNNER || 'ubuntu-latest' }}
+    # Bound, not measured: four majors, each an initdb, a seeded estate, a base backup,
+    # a WAL replay and two engine boots. Re-read it from a real run.
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+      - name: install go-task (pinned)
+        uses: ./.github/actions/olivares-tool-cache
+      # task dr:pitr FAILS, not skips, when a major is missing.
+      - name: install the PostgreSQL 15-18 server binaries
+        if: runner.environment == 'github-hosted'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-common
+          # The packages would create and start a cluster per major; the test starts its own.
+          sudo sed -i 's/^#\?create_main_cluster.*/create_main_cluster = false/' /etc/postgresql-common/createcluster.conf
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y --no-install-recommends postgresql-15 postgresql-16 postgresql-17 postgresql-18
+      # Self-hosted runners have no PostgreSQL 15-18 under /usr/lib/postgresql and no sudo to add them.
+      # The helper unpacks the pinned PGDG packages into this job's scratch (the bsdtar pattern) and
+      # prints the two lines the drill needs; they reach the next step through $GITHUB_ENV.
+      - name: provide the PostgreSQL 15-18 server binaries (self-hosted)
+        if: runner.environment != 'github-hosted'
+        run: |
+          set -euo pipefail
+          bash scripts/ensure-pitr-pg-binaries.sh --dest "$RUNNER_TEMP/pitr-pg" >> "$GITHUB_ENV"
+      - name: point-in-time recovery drill (task dr:pitr)
+        # The four tests ran in about 8 minutes on one build host; the step bound keeps
+        # the job's failure reporter alive if one wedges.
+        timeout-minutes: 50
+        run: task dr:pitr
+
+  report-pitr-failure:
+    needs: pitr
+    if: always() && needs.pitr.result == 'failure' && github.event_name == 'schedule' && vars.CI_NIGHTLIES == 'true'
+    runs-on: ${{ vars.CI_RUNNER_LIGHT || vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: failure telemetry (scheduled runs have no PR to report to)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          # No gh CLI on the dev runners (exit 127 on 2026-10-30): REST via curl, token in a 0600 header file.
+          auth="$RUNNER_TEMP/pitr-api-auth"
+          (umask 077 && printf 'Authorization: Bearer %s\n' "$GH_TOKEN" > "$auth")
+          trap 'rm -f "$auth"' EXIT
+          python3 -c 'import json,sys; print(json.dumps({"title": sys.argv[1], "labels": ["drills-nightly"], "body": sys.argv[2]}))' \
+            "drills-nightly: PostgreSQL point-in-time recovery drill failed ($(date -u +%F))" \
+            "Run: ${RUN_URL}. A broken PITR drill means the documented near-zero-RPO recovery path is broken (docs/DR-RUNBOOK.md §6-7)." \
+            | curl -fsS -X POST -H "@$auth" -H 'Accept: application/vnd.github+json' \
+              -H 'Content-Type: application/json' --data-binary @- \
+              "https://api.github.com/repos/${GH_REPO}/issues" >/dev/null

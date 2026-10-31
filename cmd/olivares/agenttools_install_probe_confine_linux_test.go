@@ -166,3 +166,31 @@ func TestReleaseArchiveProbeRunsConfinedAndReadsItsLibraries(t *testing.T) {
 		t.Errorf("engine euid %d: the probe CapEff %s NoNewPrivs %s, want none and 1", os.Geteuid(), got["CapEff"], got["NoNewPrivs"])
 	}
 }
+
+func TestServerFreeToolDetectProbeIsConfined(t *testing.T) {
+	if s := confine.Probe(); s.Mode != confine.ModeLandlock {
+		t.Fatal("this security reproducer requires Landlock: " + s.Reason)
+	}
+	dir := toolinstalltest.ExecCapableDir(t)
+	dataDir := t.TempDir()
+	engineFile := filepath.Join(dataDir, "engine-only")
+	if err := os.WriteFile(engineFile, []byte("engine-only\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	exe := filepath.Join(dir, "grok")
+	script := "#!/bin/sh\necho 'grok 1.0.13'\nif /bin/cat '" + engineFile + "' >/dev/null 2>&1; then echo EngineFileRead; fi\n"
+	if err := os.WriteFile(exe, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OLIVARES_DATA_DIR", dataDir)
+	cands, err := toolInstallEngine(context.Background()).Detect(context.Background(), toolinstall.DetectOptions{
+		Driver: toolinstall.DriverGrok, Root: filepath.Join(dataDir, "tools"), Home: t.TempDir(), ProbePaths: []string{exe},
+	})
+	if err != nil || len(cands) != 1 || cands[0].Probe == nil {
+		t.Fatalf("detect = %+v, %v", cands, err)
+	}
+	output := cands[0].Probe.Output
+	if strings.Contains(output, "EngineFileRead") || !strings.Contains(output, "1.0.13") {
+		t.Fatalf("server-free probe was not confined: %s", output)
+	}
+}

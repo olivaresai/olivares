@@ -7,7 +7,7 @@
 # deterministic partition of them.
 #
 # Background: on 2026-09-11 the race-modules job (run 34545731818, job 103097824594,
-# ci-runner-2) was killed by its 210-minute step ceiling with 28 packages reported green,
+# build-host) was killed by its 210-minute step ceiling with 28 packages reported green,
 # modules/sessions still running and five packages never reported. Those 28 sum 31545 s of
 # package wall inside 12600 s of step wall, so the leg did not hang: it did not fit on one
 # runner. This helper adds a selector so CI can spend four runners on it.
@@ -58,7 +58,7 @@ say() { printf 'modules-race-partition: %s\n' "$*" >&2; }
 fail() { printf 'modules-race-partition: FAIL — %s\n' "$*" >&2; exit 1; }
 blind() { printf 'modules-race-partition: COULD NOT LOOK — %s\n' "$*" >&2; exit 2; }
 
-# Declared seconds, measured in job 103097824594 at -p=5 on ci-runner-2, rounded. This is a
+# Declared seconds, measured in job 103097824594 at -p=5 on build-host, rounded. This is a
 # balance hint: a package absent from it takes DEFAULT_WEIGHT and is still owned by exactly
 # one partition, so a stale table costs balance and cannot cost coverage. On the live
 # 34-package inventory a cost-blind round robin splits 8212/15538/10513/3863 s (4.02x) and

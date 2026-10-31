@@ -130,9 +130,11 @@ rows) ⇒ those pseudonyms become anonymous (Recital 26). The events are retaine
 WITHIN the post-erasure flow and its result goes in the receipt (`verify_ok/checked`).
 
 **Honest limits:**
-- **Backups**: a backup taken before the shred contains the key; effective crypto-erasure
-  completes when the last backup containing it expires. Align your backup window (DR
-  runbook) with your Art. 12(3) deadline commitment and document it in the case.
+- **Backups**: a backup taken before the shred contains the key until its retention
+  removes it. Each erasure leaves a tombstone outside the store (ids, data classes, the
+  instant and the subject sealed under a data-dir key), and every restore applies the
+  erasure again before the estate serves (DR runbook, restore step 7). The backup stays
+  beyond use until it expires; declare that retention term in the case.
 - **Legacy PII in ledger meta:** the IP from `auth.login.failed` is retained for
   security (Art. 6(1)(f), Recital 49); `knowledge.kb.create` used to write the KB name into meta
   — already fixed (meta no longer carries the name, not even hashed: a keyless hash of a

@@ -159,3 +159,16 @@ func appendProfileWorkGrantAudit(ctx context.Context, sc store.Scope, actor auth
 	})
 	return err
 }
+
+// appendProfileMaxDataClassAudit seals an approval change in its write transaction.
+func appendProfileMaxDataClassAudit(ctx context.Context, sc store.Scope, actor auth.Principal, profile ProviderProfile, previous string) error {
+	event, err := sc.Audit().Append(ctx, model.AuditDraft{
+		Actor: orSystem(actor.Actor()), ActorKind: orSystemKind(actor.ActorKind()),
+		Action: "sessions.provider_profile.max_data_class", TargetKind: providerProfileKind, TargetID: profile.ID,
+		Meta: map[string]any{"profile_ref": profile.Ref, "max_data_class": profile.MaxDataClass, "previous_max_data_class": previous},
+	})
+	if err == nil && event.Seq == 0 {
+		return errors.New("provider profile max data class audit was not persisted")
+	}
+	return err
+}

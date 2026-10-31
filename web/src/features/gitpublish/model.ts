@@ -13,8 +13,8 @@
 //    administrator takes responsibility and proves nothing about the host.
 import { ApiError, NetworkError } from '@/lib/api/errors'
 import type {
+  IntentEffect,
   IntentState,
-  PublicationEffect,
   PublicationIntent,
   PublicationTarget,
 } from './types'
@@ -28,10 +28,13 @@ export function hasChangeAPI(target: PublicationTarget): boolean {
 /** The closed refusal vocabulary the module answers with (errors.go, targets.go,
  * publish.go, reconcile.go, routes.go `decode`). Each code has copy under `refusals.<code>`. */
 export const REFUSAL_CODES = [
+  'approval_denied',
+  'approval_unavailable',
   'authority_expired',
   'authority_unavailable',
   'base_not_allowed',
   'binding_not_approved',
+  'commit_refused',
   'content_mismatch',
   'default_branch_refused',
   'dispatch_deadline_passed',
@@ -42,9 +45,13 @@ export const REFUSAL_CODES = [
   'host_unavailable',
   'intent_settled',
   'invalid_request',
+  'link_not_allowed',
   'lookup_incomplete',
+  'no_branch',
+  'no_commit',
   'not_found',
   'not_mergeable',
+  'nothing_to_ship',
   'operation_conflict',
   'protected_branch_refused',
   'push_prefix_overlaps_base',
@@ -143,11 +150,12 @@ export function outcomeOf(
 /** The actions an engine route requires, as it mounts them (routes.go APIRoutes and the
  * in-handler admissions). `aal3` is the step-up floor the sealed door enforces. */
 export type GovernedAction =
-  | PublicationEffect
+  | IntentEffect
   | 'target'
   | 'reconcile_push'
   | 'reconcile_pull_request'
   | 'reconcile_merge'
+  | 'reconcile_issue_comment'
   | 'abandon'
 
 export interface ActionAuthority {
@@ -155,10 +163,11 @@ export interface ActionAuthority {
   aal3: boolean
 }
 
-const EFFECT_AUTHORITY: Record<PublicationEffect, ActionAuthority> = {
+const EFFECT_AUTHORITY: Record<IntentEffect, ActionAuthority> = {
   push: { permission: 'gitpublish:push:write', aal3: false },
   pull_request: { permission: 'gitpublish:pull_request:write', aal3: false },
   merge: { permission: 'gitpublish:merge:admin', aal3: true },
+  issue_comment: { permission: 'gitpublish:issue_comment:write', aal3: false },
 }
 
 const TARGET_ADMIN: ActionAuthority = {
@@ -178,12 +187,14 @@ export function actionAuthority(action: GovernedAction): ActionAuthority {
       return { ...EFFECT_AUTHORITY.pull_request, aal3: false }
     case 'reconcile_merge':
       return { ...EFFECT_AUTHORITY.merge, aal3: false }
+    case 'reconcile_issue_comment':
+      return { ...EFFECT_AUTHORITY.issue_comment, aal3: false }
     default:
       return EFFECT_AUTHORITY[action]
   }
 }
 
-export function reconcileAction(effect: PublicationEffect): GovernedAction {
+export function reconcileAction(effect: IntentEffect): GovernedAction {
   return `reconcile_${effect}` as GovernedAction
 }
 
@@ -239,4 +250,24 @@ export function parseMergeBases(text: string): string[] {
     .split(/[\n,]/)
     .map((s) => s.trim())
     .filter(Boolean)
+}
+
+/** A failed request as an outcome, except the step-up demand: the hook runs that ceremony
+ * and sends the same request once it succeeds. */
+export function failureOf(error: unknown): PublicationOutcome | null {
+  if (!error) return null
+  if (error instanceof ApiError && error.isStepUpRequired) return null
+  return outcomeOf({ error })
+}
+
+/** The page of a pull request, only when it is a plain https link: the engine builds it from
+ * the repository's approved address, and the console still never renders another scheme. */
+export function safePullRequestUrl(url?: string): string | null {
+  if (!url) return null
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'https:' ? parsed.href : null
+  } catch {
+    return null
+  }
 }

@@ -14,6 +14,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { sessionToken } from './live-session'
+import { openWorkingFold } from './open-working-fold'
 
 const demoTenant = process.env.DEMO_TENANT ?? ''
 const EMAIL = 'demo@olivares.local'
@@ -202,6 +203,7 @@ test.describe('a session row has one actions menu', () => {
     const runRef = await launch(page, 'row-menu journey')
     launched.push(runRef)
     await page.goto('/sessions')
+    await openWorkingFold(page)
     const row = rowOf(page, runRef)
     await expect(row).toBeVisible()
     const clipboard = () => page.evaluate(() => navigator.clipboard.readText())
@@ -322,6 +324,7 @@ test.describe('a session row has one actions menu', () => {
       )
     const pinned = page.getByRole('group', { name: /^Pinned/ })
     await page.goto('/sessions')
+    await openWorkingFold(page)
 
     for (const [i, how] of openers.entries()) {
       const ref = refs[i]
@@ -426,6 +429,7 @@ test.describe('a session row has one actions menu', () => {
         await page.setViewportSize({ width, height: width > 400 ? 800 : 844 })
         await page.emulateMedia({ colorScheme })
         await page.goto('/sessions')
+        await openWorkingFold(page)
         await expect
           .poll(() =>
             page

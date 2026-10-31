@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -40,6 +41,7 @@ func providerRecordPermissions() []auth.Permission {
 
 // providerRecordRoutes mounts the provider-record administration surface under /v1/m/sessions/.
 func (m *Module) providerRecordRoutes(reg api.RouteRegistrar) {
+	reg.Handle("GET", "/provider-presets", permProviderRead, m.handleListProviderPresets)
 	reg.Handle("GET", "/providers", permProviderRead, m.handleListProviderRecords)
 	reg.Handle("POST", "/providers", permProviderWrite, m.handleCreateProviderRecord)
 	reg.Handle("GET", "/providers/{ref}", permProviderRead, m.handleGetProviderRecord)
@@ -116,6 +118,11 @@ func toProviderRecordDTO(r ProviderRecord) providerRecordDTO {
 		ProbeState:   r.ProbeState, ProbeDetail: r.ProbeDetail, ProbeLatencyMS: r.ProbeMillis,
 		ProbedAt: r.ProbedAt, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, RevokedAt: r.RevokedAt,
 	}
+}
+
+// handleListProviderPresets lists the vendor endpoints a provider can be registered at by preset; it holds no secret and no tenant data.
+func (m *Module) handleListProviderPresets(w http.ResponseWriter, _ *http.Request, _ api.ModuleContext) {
+	writeJSON(w, http.StatusOK, listResponse[modelprovider.Preset]{Items: modelprovider.Presets()})
 }
 
 // handleListProviderRecords lists the tenant's registered providers as kinds, names and hints, never a credential.
@@ -244,7 +251,7 @@ func (m *Module) handleRevokeProviderRecord(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, toProviderRecordDTO(rec))
 }
 
-// providerStepUp is HU-28 (Root 2026-10-02 19:20Z): adding a provider key, or replacing its key
+// providerStepUp is acceptance (Root 2026-10-02 19:20Z): adding a provider key, or replacing its key
 // or address, asks for the deployment's administrative step-up, as adding a person does
 // (5ef7ef98); revoking narrows access and does not. The policy is none by
 // default, so nothing changes until an operator turns it on. A token is not a person and passes,

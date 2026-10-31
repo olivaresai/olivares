@@ -27,8 +27,9 @@ import (
 // privilege-shaped actions (creating/archiving a workspace) additionally require
 // administrative step-up (requireStepUp) — operational edits (renaming an agent-group) do not.
 
-// slugPattern bounds a tenant-unique slug to a short, URL-safe handle.
-var slugPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
+// SlugPattern bounds a tenant-unique slug to a short, URL-safe handle. A department is a workspace,
+// so a module that names one by its slug reads this rule and does not copy it.
+var SlugPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // --- Workspaces --------------------------------------------------------------
 
@@ -77,6 +78,7 @@ type createWorkspaceInput struct {
 	Name     string         `json:"name"`
 	Slug     string         `json:"slug"`
 	Settings map[string]any `json:"settings"`
+	ParentID string         `json:"parent_id"`
 }
 
 // updateWorkspaceInput is the PATCH payload. Slug is immutable (it is the stable
@@ -153,25 +155,47 @@ func (s *Server) handleGetWorkspace(w http.ResponseWriter, r *http.Request, mc M
 	writeJSON(w, http.StatusOK, dto)
 }
 
-// handleCreateWorkspace creates a workspace. Creating one is OWNER-only (decision
-//): a workspace-admin administers WITHIN a workspace, it does not
-// mint them. So beyond the tenant:admin RBAC gate we require the caller to be the
-// tenant owner (or a superadmin), and — as a privilege-shaped action — AAL3.
+// workspaceCreateRoute admits POST /v1/workspaces. A root is a tenant act, admitted
+// on tenant:admin exactly as before. A create under parent_id is delegated
+// administration, gated like the grant routes: coarsely on the Access Control right
+// (auth.PermRBACAdmin, which every admin-capable subject holds and an editor does
+// not, and a caller confined to a workspace is refused), then the handler asks
+// whether the caller administers that parent. A body
+// that cannot be read takes the root admission, whose handler answers 400 as before.
+func (s *Server) workspaceCreateRoute() coreAdmission {
+	root := s.tenantRoute("tenant:admin")
+	child := s.tenantRoute(auth.PermRBACAdmin)
+	return func(w http.ResponseWriter, r *http.Request) (ModuleContext, bool) {
+		if parent, err := bodyEntityString(r, "parent_id", true); err == nil && parent != "" {
+			return child(w, r)
+		}
+		return root(w, r)
+	}
+}
+
+// handleCreateWorkspace creates a workspace. Creating a root is OWNER-only
+// (decision): a workspace-admin administers WITHIN a workspace, it
+// does not mint roots. So beyond the tenant:admin RBAC gate we require the caller
+// to be the tenant owner (or a superadmin), and — as a privilege-shaped action —
+// AAL3. A parent_id creates a sub-department, the Business department surface
+// (DepartmentCreator; Community answers 501): the owner may name any parent, and
+// anyone else only a parent it administers (WorkspaceAdministration). The route's
+// tenant-wide Access Control gate already refuses a confined caller, owner or not.
 func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	p := mc.Principal
 	tenant := mc.Tenant
-	if !s.requireOwner(w, r, p, tenant) {
-		return
-	}
-	if !s.requireStepUp(w, r, p) {
-		return
+	// The root path refuses in the order it always has: owner, step-up, then the body.
+	if parent, err := bodyEntityString(r, "parent_id", true); err != nil || parent == "" {
+		if !s.requireOwner(w, r, p, tenant) || !s.requireStepUp(w, r, p) {
+			return
+		}
 	}
 	var in createWorkspaceInput
 	if err := decodeJSON(w, r, &in); err != nil {
 		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
-	if !slugPattern.MatchString(in.Slug) {
+	if !SlugPattern.MatchString(in.Slug) {
 		s.badRequest(w, r, "slug must match [a-z0-9][a-z0-9-]* (max 63 chars)")
 		return
 	}
@@ -183,11 +207,17 @@ func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request, m
 		s.badRequest(w, r, "name is required")
 		return
 	}
+	ws := model.Workspace{
+		Name: in.Name, Slug: in.Slug, Status: model.StatusActive, Settings: in.Settings,
+		ParentID: model.ID(in.ParentID),
+	}
+	if in.ParentID != "" {
+		s.createWorkspaceUnder(w, r, p, tenant, ws)
+		return
+	}
 	var dto WorkspaceDTO
 	err := s.st.Mutate(r.Context(), tenant, func(sc store.Scope) error {
-		created, err := sc.Workspaces().Create(r.Context(), model.Workspace{
-			Name: in.Name, Slug: in.Slug, Status: model.StatusActive, Settings: in.Settings,
-		})
+		created, err := sc.Workspaces().Create(r.Context(), ws)
 		if err != nil {
 			return err
 		}
@@ -199,6 +229,39 @@ func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request, m
 		return
 	}
 	writeJSON(w, http.StatusCreated, dto)
+}
+
+// createWorkspaceUnder creates ws under ws.ParentID through the Business
+// department service, for the owner or an administrator of that parent.
+func (s *Server) createWorkspaceUnder(w http.ResponseWriter, r *http.Request, p auth.Principal, tenant model.TenantID, ws model.Workspace) {
+	creator, ok := s.departments.(DepartmentCreator)
+	if !ok {
+		s.writeError(w, r, ErrDepartmentsUnavailable)
+		return
+	}
+	if !isOwner(p, tenant) {
+		admin := false
+		if s.workspaceAdmin != nil {
+			var err error
+			if admin, err = s.workspaceAdmin.AdministersWorkspace(r.Context(), p, tenant, ws.ParentID); err != nil {
+				s.writeError(w, r, err)
+				return
+			}
+		}
+		if !admin {
+			s.writeError(w, r, errForbidden)
+			return
+		}
+	}
+	if !s.requireStepUp(w, r, p) {
+		return
+	}
+	created, err := creator.CreateWorkspace(r.Context(), p, tenant, ws)
+	if err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, workspaceDTOFor(p, tenant, created))
 }
 
 // handleUpdateWorkspace renames a workspace, edits its settings, or archives it
@@ -414,7 +477,7 @@ func (s *Server) handleCreateAgentGroup(w http.ResponseWriter, r *http.Request, 
 		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
-	if !slugPattern.MatchString(in.Slug) {
+	if !SlugPattern.MatchString(in.Slug) {
 		s.badRequest(w, r, "slug must match [a-z0-9][a-z0-9-]* (max 63 chars)")
 		return
 	}
@@ -809,14 +872,20 @@ func (s *Server) handleWorkspaceContents(w http.ResponseWriter, r *http.Request,
 // the bar for actions reserved to ownership (e.g. minting a workspace). It writes
 // a 403 and returns false otherwise. It runs AFTER the RBAC gate.
 func (s *Server) requireOwner(w http.ResponseWriter, r *http.Request, p auth.Principal, tenant model.TenantID) bool {
-	if p.Superadmin {
-		return true
-	}
-	if role, ok := p.RoleIn(tenant); ok && role == auth.RoleOwner {
+	if isOwner(p, tenant) {
 		return true
 	}
 	s.writeError(w, r, errForbidden)
 	return false
+}
+
+// isOwner reports whether p is the tenant owner or a superadmin.
+func isOwner(p auth.Principal, tenant model.TenantID) bool {
+	if p.Superadmin {
+		return true
+	}
+	role, ok := p.RoleIn(tenant)
+	return ok && role == auth.RoleOwner
 }
 
 // ⛔ AQUI HABIA UN SOLO `groupRoster` QUE DECIA PAGINAR Y CORTABA. Su comentario afirmaba
@@ -873,9 +942,17 @@ func groupMemberRow(
 func drainGroupRoster(
 	r *http.Request, sc store.Scope, groupID model.ID,
 ) ([]model.AgentGroupMember, error) {
+	return drainMemberRows(r, sc, model.Filter{Column: "group_id", Op: model.OpEq, Value: groupID.String()})
+}
+
+// drainMemberRows returns EVERY membership row matching one filter (a group's roster, or an
+// agent's memberships), or an error. Same fail-closed traversal as drainGroupRoster.
+func drainMemberRows(
+	r *http.Request, sc store.Scope, filter model.Filter,
+) ([]model.AgentGroupMember, error) {
 	const pageSize, maxPages = 1000, 100
 	q := model.Query{
-		Filters: []model.Filter{{Column: "group_id", Op: model.OpEq, Value: groupID.String()}},
+		Filters: []model.Filter{filter},
 		Limit:   pageSize,
 	}
 	var out []model.AgentGroupMember

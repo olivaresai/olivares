@@ -27,6 +27,17 @@ type mockOffsite struct {
 	objects map[string][]byte
 	bucket  string
 	t       *testing.T
+	// lockConfig is the bucket's ObjectLockConfiguration document; empty answers
+	// ObjectLockConfigurationNotFoundError, as a bucket without Object Lock does,
+	// and "denied" answers AccessDenied.
+	lockConfig string
+	// modified overrides the fixed LastModified of a listed key.
+	modified map[string]time.Time
+	// lockUntil records the lock mode and retain-until each locked PUT carried,
+	// retention the PutObjectRetention bodies, deletes every DELETE that arrived.
+	lockUntil map[string]string
+	retention map[string]string
+	deletes   []string
 }
 
 func (m *mockOffsite) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -42,6 +53,23 @@ func (m *mockOffsite) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			m.serveList(w, r)
 			return
 		}
+		if _, ok := r.URL.Query()["object-lock"]; ok && key == "" {
+			m.mu.Lock()
+			cfg := m.lockConfig
+			m.mu.Unlock()
+			if cfg == "denied" {
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = fmt.Fprint(w, "<Error><Code>AccessDenied</Code></Error>")
+				return
+			}
+			if cfg == "" {
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = fmt.Fprint(w, "<Error><Code>ObjectLockConfigurationNotFoundError</Code></Error>")
+				return
+			}
+			_, _ = fmt.Fprint(w, cfg)
+			return
+		}
 		m.mu.Lock()
 		b, ok := m.objects[key]
 		m.mu.Unlock()
@@ -54,11 +82,25 @@ func (m *mockOffsite) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		b, _ := io.ReadAll(r.Body)
 		m.mu.Lock()
-		m.objects[key] = b
+		if _, ok := r.URL.Query()["retention"]; ok {
+			if m.retention == nil {
+				m.retention = map[string]string{}
+			}
+			m.retention[key] = string(b)
+		} else {
+			m.objects[key] = b
+			if until := r.Header.Get("X-Amz-Object-Lock-Retain-Until-Date"); until != "" {
+				if m.lockUntil == nil {
+					m.lockUntil = map[string]string{}
+				}
+				m.lockUntil[key] = r.Header.Get("X-Amz-Object-Lock-Mode") + " " + until
+			}
+		}
 		m.mu.Unlock()
 		w.WriteHeader(http.StatusOK)
 	case http.MethodDelete:
 		m.mu.Lock()
+		m.deletes = append(m.deletes, key)
 		delete(m.objects, key)
 		m.mu.Unlock()
 		w.WriteHeader(http.StatusNoContent)
@@ -82,7 +124,11 @@ func (m *mockOffsite) serveList(w http.ResponseWriter, r *http.Request) {
 	m.mu.Lock()
 	for k, v := range m.objects {
 		if prefix == "" || strings.HasPrefix(k, prefix) {
-			res.Contents = append(res.Contents, entry{Key: k, Size: int64(len(v)), LastModified: "2026-07-09T10:00:00.000Z"})
+			modified := "2026-07-09T10:00:00.000Z"
+			if at, ok := m.modified[k]; ok {
+				modified = at.UTC().Format(time.RFC3339)
+			}
+			res.Contents = append(res.Contents, entry{Key: k, Size: int64(len(v)), LastModified: modified})
 		}
 	}
 	m.mu.Unlock()

@@ -29,6 +29,16 @@ const (
 	EventingSecretKeyEnv  = "OLIVARES_EVENTING_SECRET_KEY"
 )
 
+// ErasureReplayMarker is the data-dir file a restore leaves before it replaces the
+// store. The restore, or else the next serve boot before it opens the service,
+// applies the erasure tombstones again and removes it (docs/DR-RUNBOOK.md).
+const ErasureReplayMarker = "erasure-replay.pending"
+
+// MarkErasureReplay leaves ErasureReplayMarker in dataDir.
+func MarkErasureReplay(dataDir string) error {
+	return os.WriteFile(filepath.Join(dataDir, ErasureReplayMarker), nil, 0o600)
+}
+
 // SealerKeyFiles identifies the data-directory sealers and their environment overrides.
 var SealerKeyFiles = []struct{ Name, Env string }{
 	{SecretStoreKeyFile, SecretStoreKeyEnv},

@@ -21,11 +21,14 @@ func TestCoreOpenAPIPermissionAnnotations(t *testing.T) {
 	// purpose: growing it must be a conscious two-file change.
 	exempt := map[string]bool{
 		"enrolTOTP": true, "activateTOTP": true, "getTOTPStatus": true, "removeTOTP": true,
-		"logout":           true,
-		"refreshToken":     true,
-		"whoami":           true,
-		"searchConsole":    true,
-		"authCapabilities": true,
+		"logout":               true,
+		"listAuthSessions":     true,
+		"createSessionPairing": true,
+		"deleteAuthSession":    true,
+		"refreshToken":         true,
+		"whoami":               true,
+		"searchConsole":        true,
+		"authCapabilities":     true,
 		// The subject completes its own native proof; administration was authorized separately.
 		"completeOSAccountBinding": true,
 		// The signed-in user's own browser session (browser_session.go).

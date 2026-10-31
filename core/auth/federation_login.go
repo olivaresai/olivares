@@ -59,6 +59,14 @@ func (a *Authenticator) GroupMappingAvailable() bool { return a.groupMapper != n
 // (ResolvedIdP.AllowsEmail), so that claimant is the selected provider. A refusal by the
 // binding answers ErrUnauthenticated, like any refused assertion, and leaves one audit
 // record. The global/"" scope is the deployment's own provider and is not bound.
+//
+// Where the asserted groups apply (a GroupMapper, a business tenant, SCIM not
+// authoritative), two more refusals keep "unknown" from becoming "no groups":
+// ErrSSOGroupsIndeterminate before any account is looked up when the provider could not
+// read the user's groups, and ErrSSOGroupReconcile when the asserted groups could not be
+// stored, which withdraws the session already issued (its token never leaves this
+// function). A withdrawn sign-in still leaves the sso.login record and the subject
+// binding, next to the auth.login.blocked record that names the reason.
 func (a *Authenticator) CompleteSSO(ctx context.Context, id FederatedIdentity, ip string, tenant model.TenantID, scimAuthoritative bool) (string, model.AuthSession, error) {
 	if id.AAL != 0 && id.AAL != AAL1 && id.AAL != AAL2 {
 		return "", model.AuthSession{}, ErrUnauthenticated
@@ -78,13 +86,15 @@ func (a *Authenticator) CompleteSSO(ctx context.Context, id FederatedIdentity, i
 	// JIT-creates and never reconciles groups at login. The flag is the RESOLVED IdP's,
 	// so it is the policy of the config that actually authenticated the user.
 	authoritative := scimAuthoritative
-	// An IdP that could not send the user's full group list (Entra group overage) leaves
-	// the asserted groups UNKNOWN. Group membership is a fact deny rules reason over: the
-	// list arrives empty, nothing is reconciled, and the membership a forbid relies on is
-	// never added, so the forbid stops applying. Where the asserted groups would be used,
-	// the login is refused before any account is looked up or provisioned.
+	// An IdP that could not send the user's full group list (Entra group overage), or a
+	// provider that could not read it, leaves the asserted groups UNKNOWN. Group
+	// membership is a fact deny rules reason over: the list arrives empty, nothing is
+	// reconciled, and the membership a forbid relies on is never added, so the forbid
+	// stops applying. Where the asserted groups would be used, the login is refused
+	// before any account is looked up or provisioned. The cause goes to the log only.
 	groupsApply := a.assertedGroupsApply(tenant, authoritative)
 	if groupsApply && id.GroupsIndeterminate {
+		a.log.Warn("auth: sso sign-in refused, the user's groups are unknown", "reason", id.GroupsIndeterminateWhy, "scope", tenant.String())
 		a.auditSSORefused(ctx, "", ip, tenant, "sso_groups_indeterminate")
 		return "", model.AuthSession{}, ErrSSOGroupsIndeterminate
 	}
@@ -176,12 +186,12 @@ func (a *Authenticator) CompleteSSO(ctx context.Context, id FederatedIdentity, i
 			return "", model.AuthSession{}, err
 		}
 	}
-	// Completion effects of the admitted login run in their own best-effort transactions:
-	// they are not atomic with issuance, and a failure never revokes the issued session.
-	// They finish before the token is returned. A session carries no grant snapshot and
-	// every request loads grants in its own AuthView, so the first use of this token
-	// already sees the reconciled membership. The audit order is sso.login, then
-	// sso.user.subject_bound and sso.group.reconcile.
+	// Completion effects of the admitted login run in their own transactions: they are not
+	// atomic with issuance. The subject binding is best-effort; the group reconciliation
+	// is not (below). They finish before the token is returned. A session carries no
+	// grant snapshot and every request loads grants in its own AuthView, so the first use
+	// of this token already sees the reconciled membership. The audit order is sso.login,
+	// then sso.user.subject_bound and sso.group.reconcile.
 	//
 	// U3 — bind the issuer-qualified subject onto an email-matched account that
 	// has none, NOW that it has passed every eligibility guard (active, non-superadmin)
@@ -190,16 +200,29 @@ func (a *Authenticator) CompleteSSO(ctx context.Context, id FederatedIdentity, i
 	// must leave no trace" invariant: a disabled or superadmin account, any assertion
 	// refused above, or a refused session never persists an attacker-influenced binding
 	// or audit row. Best-effort and never-overwrite; a no-op for a JIT-created account
-	// (bound at create) or when no issuer was surfaced.
+	// (bound at create) or when no issuer was surfaced. The invariant covers refusals up
+	// to the session's issuance: the group reconciliation below can still refuse after
+	// this stamp, which then stays, on an account that passed every guard.
 	a.bindSubjectIfUnset(ctx, user.ID, id.QualifiedSubject())
 	// U2 — reconcile the user's directory-group membership from the groups the
 	// IdP asserted, so login-driven membership lights up the MappedRole elevation and
 	// group-subject (S256) grants that already exist. A no-op in the open build (no
 	// GroupMapper), for a "" tenant, when SCIM is authoritative, or with no asserted
-	// groups. Best-effort: a reconciliation error never fails an otherwise-valid login
-	// (the user simply carries the memberships they already had).
+	// groups. A reconciliation error fails the login: the IdP asserted memberships that
+	// were not stored, and membership is a fact deny rules reason over, so completing
+	// the sign-in would let a forbid that depends on it stop applying. The issued session
+	// is revoked and the token never leaves this function. The caller is answered with a
+	// fixed error: an account that lost its standing since the session was issued is
+	// refused like any other (ErrUnauthenticated, no account state revealed), anything
+	// else is ErrSSOGroupReconcile, which a later attempt may clear. The cause is logged.
 	if groupsApply && len(id.Groups) > 0 {
-		a.reconcileAssertedGroups(ctx, user.ID, tenant, id.Groups)
+		if err := a.reconcileAssertedGroups(ctx, user.ID, tenant, id.Groups); err != nil {
+			a.refuseIssuedSSO(ctx, user.ID, sess.ID, ip, tenant, "sso_group_reconcile_failed", err)
+			if errors.Is(err, ErrConsentRequired) || errors.Is(err, ErrRetirementPending) {
+				return "", model.AuthSession{}, ErrUnauthenticated
+			}
+			return "", model.AuthSession{}, ErrSSOGroupReconcile
+		}
 	}
 	return token, sess, nil
 }
@@ -488,11 +511,44 @@ func (a *Authenticator) auditSSORefused(ctx context.Context, account model.ID, i
 	}
 }
 
+// ssoWithdrawTimeout bounds the writes that withdraw a refused sign-in, which run even
+// when the request that began it has gone.
+const ssoWithdrawTimeout = 10 * time.Second
+
+// refuseIssuedSSO withdraws a sign-in whose session was already issued and whose token
+// was not returned: the session is revoked and one audit record carries reason (a stable
+// code, never assertion data) like auditSSORefused. The cause goes to the operator's log
+// under the same code. The two writes are independent and outlive a cancelled request
+// (a gone client is a likely reason the reconcile failed); a failure of either is
+// logged and the refusal stands. A session left unrevoked has a token nobody holds and
+// expires on its own.
+func (a *Authenticator) refuseIssuedSSO(ctx context.Context, account model.ID, session model.ID, ip string, scope model.TenantID, reason string, cause error) {
+	a.log.Warn("auth: sso sign-in refused after the session was issued", "reason", reason, "user", account.String(), "session", session.String(), "err", cause)
+	// Each write has its own budget: a slow store that used it all on the revoke must not
+	// cost the audit record too.
+	revokeCtx, cancelRevoke := context.WithTimeout(context.WithoutCancel(ctx), ssoWithdrawTimeout)
+	defer cancelRevoke()
+	if err := a.st.AuthMutate(revokeCtx, func(as store.AuthScope) error {
+		s, err := as.Sessions().Get(revokeCtx, session)
+		if err != nil {
+			return err
+		}
+		s.Revoked = true
+		_, err = as.Sessions().Update(revokeCtx, s)
+		return err
+	}); err != nil {
+		a.log.Error("auth: withdrawing a refused sso session", "err", err, "reason", reason, "session", session.String())
+	}
+	auditCtx, cancelAudit := context.WithTimeout(context.WithoutCancel(ctx), ssoWithdrawTimeout)
+	defer cancelAudit()
+	a.auditSSORefused(auditCtx, account, ip, scope, reason)
+}
+
 // bindSubjectIfUnset stamps the issuer-qualified subject onto an account that has
 // none, so a later login correlates by subject (rename-resilient U3). It runs
 // ONLY from CompleteSSO, AFTER the eligibility guards (active + non-superadmin) and a
-// successful session issuance, so a refused login or a refused session never persists a
-// binding or an audit row. It re-reads the account in
+// successful session issuance, so a login refused before that, or a refused session,
+// never persists a binding or an audit row. It re-reads the account in
 // its own transaction and NEVER overwrites an existing binding — a second issuer that
 // merely matched the account's email cannot seize its identity. Best-effort: any error
 // (including a lost race on the unique index) is swallowed, the login still succeeds,
@@ -527,8 +583,8 @@ func (a *Authenticator) bindSubjectIfUnset(ctx context.Context, userID model.ID,
 // the asserted→group MATCHING the open build lacks). It is ADD-ONLY: it never
 // removes a membership, so it can never fight SCIM or an operator over the roster
 // (SCIM/operator own removal); the SCIM-authoritative toggle (D4) is the escape
-// hatch for deployments that want SCIM to be the only writer. Best-effort — the
-// caller ignores the error (login still succeeds with the memberships already held).
+// hatch for deployments that want SCIM to be the only writer. An error means the
+// asserted memberships were not stored: CompleteSSO then refuses the login.
 // CompleteSSO calls it only after the session was issued, so a refused session adds no
 // membership.
 //
@@ -543,8 +599,8 @@ func (a *Authenticator) bindSubjectIfUnset(ctx context.Context, userID model.ID,
 // membership. The per-tenant gate (authenticator.go loadGrants) still requires a
 // direct membership before any group confers anything, so a bare group row never
 // admits on its own.
-func (a *Authenticator) reconcileAssertedGroups(ctx context.Context, userID model.ID, tenant model.TenantID, asserted []string) {
-	_ = a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+func (a *Authenticator) reconcileAssertedGroups(ctx context.Context, userID model.ID, tenant model.TenantID, asserted []string) error {
+	return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
 		// Session issuance and completion are separate transactions: pin and
 		// recheck standing so a late assertion cannot restore offboarded rows.
 		if err := prepareUserAuthorityWrite(ctx, as, userID); err != nil {

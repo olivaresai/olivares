@@ -102,16 +102,39 @@ print(value if isinstance(value, str) else json.dumps(value))
             self.assertEqual(result.returncode, 1, result.stderr)
         self.assertEqual(self.run_gate('release-first-hour.yml', jobs={'jobs': []}).returncode, 1)
 
-    def test_only_first_hour_may_use_identical_tree(self):
-        self.assertEqual(self.run_gate('release-first-hour.yml', sha=self.same,
-            run=dict(id=123, head_sha=self.base, event='push', status='completed', conclusion='success'), tree=True).returncode, 0)
-        for sha in (self.same, self.workflow_change, self.changed):
-            run = dict(id=123, head_sha=self.base, event='push', status='completed', conclusion='success')
-            self.assertEqual(self.run_gate(sha=sha, run=run).returncode, 1)
-        for sha in (self.workflow_change, self.changed):
-            self.assertEqual(self.run_gate('release-first-hour.yml', sha=sha, tree=True).returncode, 0)
-            run = dict(id=123, head_sha=self.base, event='push', status='completed', conclusion='success')
-            self.assertEqual(self.run_gate('release-first-hour.yml', sha=sha, run=run, tree=True).returncode, 1)
+    def test_qualification_may_use_identical_tree_only_when_opted_in(self):
+        run = dict(id=123, head_sha=self.base, event='push', status='completed', conclusion='success')
+        for workflow in ('race-full.yml', 'release-first-hour.yml'):
+            with self.subTest(workflow=workflow):
+                result = self.run_gate(workflow, sha=self.same, run=run, tree=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('tree identical', result.stdout)
+                for sha in (self.same, self.workflow_change, self.changed):
+                    self.assertEqual(self.run_gate(workflow, sha=sha, run=run).returncode, 1)
+                for sha in (self.workflow_change, self.changed):
+                    self.assertEqual(self.run_gate(workflow, sha=sha, run=run, tree=True).returncode, 1)
+                for event in ('pull_request', 'schedule'):
+                    untrusted = dict(run, event=event)
+                    self.assertEqual(self.run_gate(workflow, sha=self.same, run=untrusted, tree=True).returncode, 1)
+        self.assertEqual(self.run_gate('release-first-hour.yml', sha=self.same, run=run, tree=True,
+            jobs={'jobs': [{'name': 'release-first-hour', 'conclusion': 'skipped'}]}).returncode, 1)
+
+    def test_real_merge_reuses_pr_head_for_both_qualifications(self):
+        self.git('checkout', '-qb', 'release-candidate', self.base)
+        (self.root / 'product').write_text('release')
+        self.git('add', 'product')
+        self.git('commit', '-qm', 'release candidate')
+        head = self.git('rev-parse', 'HEAD')
+        self.git('checkout', '-qb', 'integration', self.base)
+        self.git('merge', '--no-ff', '-qm', 'merge reviewed candidate', head)
+        merged = self.git('rev-parse', 'HEAD')
+        self.assertNotEqual(merged, head)
+        self.assertEqual(self.git('rev-parse', merged + '^{tree}'), self.git('rev-parse', head + '^{tree}'))
+        for workflow in ('race-full.yml', 'release-first-hour.yml'):
+            run = dict(id=123, head_sha=head, event='workflow_dispatch', status='completed', conclusion='success')
+            result = self.run_gate(workflow, sha=merged, run=run, tree=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('head ' + head, result.stdout)
 
     def test_api_and_malformed_responses_fail_closed(self):
         for value in ('error', 'not json', {}, {'workflow_runs': None},
@@ -162,7 +185,7 @@ print(value if isinstance(value, str) else json.dumps(value))
 
     def test_invalid_inputs_refuse_before_http(self):
         for kwargs in ({'sha': 'bad'}, {'workflow': '../bad.yml'}, {'GH_TOKEN': ''},
-                       {'GITHUB_REPOSITORY': 'invalid'}, {'tree': True}):
+                       {'GITHUB_REPOSITORY': 'invalid'}, {'workflow': 'other.yml', 'tree': True}):
             self.assertEqual(self.run_gate(**kwargs).returncode, 2)
 
     def test_first_hour_compatibility_entrypoint(self):

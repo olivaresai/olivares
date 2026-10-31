@@ -12,11 +12,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 func TestBackgroundProvidersReturnBeforeNativeProbesFinish(t *testing.T) {
@@ -124,10 +126,12 @@ func TestBackgroundProvidersStillAuthorizeTheTenantAndValidateTheOption(t *testi
 }
 
 // The stubs answer the way the real tools do (measured on Claude Code 2.1.289 and
-// Codex 0.160.0) and exit 9 when a probe is not read-only: a secret in the
-// environment, hooks or MCP left on. A stub answers a request only when the request
-// asks for it, so a wrong subtype or method is a missing reply, not a pass.
-const providerStubGuard = `[ -z "$ANTHROPIC_API_KEY$OPENAI_API_KEY$GH_TOKEN" ] || exit 9
+// Codex 0.160.0) and fire a canary when a probe is not read-only: a secret in the
+// environment, hooks, plugins or MCP left on, a session started. A canary is a line
+// in canary.log next to the stub and an exit 9. A stub answers a request only when
+// the request asks for it, so a wrong subtype or method is a missing reply, not a pass.
+const providerStubGuard = `fire() { echo "$(basename "$0"): $*" >> "$(dirname "$0")/canary.log"; exit 9; }
+[ -z "$ANTHROPIC_API_KEY$OPENAI_API_KEY$GH_TOKEN" ] || fire "a secret reached the tool"
 echo "$*" >> "$(dirname "$0")/$(basename "$0").runs"
 `
 
@@ -136,14 +140,19 @@ const providerClaude = `#!/bin/sh
 case "$1" in
 --version) echo "2.1.289 (Claude Code)"; exit 0;;
 -p)
-  case "$*" in *disableAllHooks*) ;; *) exit 9;; esac
-  case "$*" in *--strict-mcp-config*) ;; *) exit 9;; esac
+  case "$*" in *disableAllHooks*) ;; *) fire "a session ran the user's hooks";; esac
+  case "$*" in *--strict-mcp-config*) ;; *) fire "a session started the user's MCP servers";; esac
   echo '{"type":"system","subtype":"init"}'
   while read line; do
     id=$(printf '%s' "$line" | sed 's/.*"request_id":"\([^"]*\)".*/\1/')
     case "$line" in
+    *'"type":"user"'*) fire "a prompt was sent to the model";;
     *'"subtype":"get_usage"'*)
-      if [ -f "$CLAUDE_CONFIG_DIR/.stub-api-key" ]; then
+      if [ -f "$CLAUDE_CONFIG_DIR/.stub-monthly" ]; then
+        printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s","response":{"subscription_type":"enterprise","rate_limits_available":true,"rate_limits":{"limits":[{"kind":"spend","group":"monthly","percent":85,"severity":"warning","resets_at":"2030-11-01T00:00:00Z"}],"extra_usage":{"is_enabled":true,"monthly_limit":10000,"used_credits":8500,"utilization":85,"currency":"USD"}}}}}\n' "$id"
+      elif [ -f "$CLAUDE_CONFIG_DIR/.stub-no-percent" ]; then
+        printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s","response":{"subscription_type":"max","rate_limits_available":true,"rate_limits":{"limits":[{"kind":"session","group":"session","severity":"normal","resets_at":"2026-10-06T01:00:00+00:00","scope":null},{"kind":"weekly_all","group":"weekly","percent":78,"severity":"warning","resets_at":"2026-10-09T01:00:00+00:00","scope":null}]}}}}\n' "$id"
+      elif [ -f "$CLAUDE_CONFIG_DIR/.stub-api-key" ]; then
         printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s","response":{"subscription_type":null,"rate_limits_available":false,"rate_limits":null}}}\n' "$id"
       else
         printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s","response":{"subscription_type":"max","rate_limits_available":true,"rate_limits":{"five_hour":{"utilization":40,"resets_at":"x"},"iguana_necktie":{"utilization":0},"limits":[{"kind":"session","group":"session","percent":40,"severity":"normal","resets_at":"2026-10-06T01:00:00.000000+00:00","scope":null,"is_active":false},{"kind":"weekly_all","group":"weekly","percent":78,"severity":"warning","resets_at":"2026-10-09T01:00:00+00:00","scope":null,"is_active":true},{"kind":"weekly_scoped","group":"weekly","percent":0,"severity":"normal","resets_at":"2026-10-09T01:00:00+00:00","scope":{"model":{"id":null,"display_name":"Fable"},"surface":null},"is_active":false}]}}}}\n' "$id"
@@ -173,12 +182,14 @@ const providerCodex = `#!/bin/sh
 case "$1" in
 --version) echo "codex-cli 0.160.0"; exit 0;;
 app-server)
-  case "$*" in *"--disable hooks"*) ;; *) exit 9;; esac
-  case "$*" in *"mcp_servers={}"*) ;; *) exit 9;; esac
+  case "$*" in *"--disable hooks"*) ;; *) fire "app-server ran the user's hooks";; esac
   [ -f "$CODEX_HOME/.stub-silent" ] && exit 3
   ready=
   while read line; do
     case "$line" in
+    # Measured on codex-cli 0.162.1: a thread starts the configured MCP servers and
+    # writes a rollout, and no -c switch unloads those servers. The reads never ask.
+    *'"method":"thread/'*|*'"method":"turn/'*) fire "a thread or turn request starts a session";;
     *'"method":"initialize"'*)
       echo '{"method":"remoteControl/status/changed","params":{"status":"disabled"}}'
       echo '{"id":1,"result":{"userAgent":"stub","codexHome":"x","platformFamily":"unix","platformOs":"linux"}}';;
@@ -186,7 +197,13 @@ app-server)
     *'"method":"account/read"'*)
       [ -n "$ready" ] && echo '{"id":2,"result":{"account":{"type":"chatgpt","email":"fran@example.test","planType":"promax"},"requiresOpenaiAuth":true}}';;
     *'"method":"account/rateLimits/read"'*)
-      [ -n "$ready" ] && echo '{"id":3,"result":{"rateLimits":{"primary":{"usedPercent":100,"windowDurationMins":10080,"resetsAt":1791756824},"secondary":{"usedPercent":12.5,"windowDurationMins":300,"resetsAt":1791700000}}}}';;
+      if [ -f "$CODEX_HOME/.stub-credits" ]; then
+        [ -n "$ready" ] && echo '{"id":3,"result":{"rateLimits":{"credits":{"hasCredits":true,"unlimited":false,"balance":"12.50"}}}}'
+      elif [ -f "$CODEX_HOME/.stub-no-used" ]; then
+        [ -n "$ready" ] && echo '{"id":3,"result":{"rateLimits":{"primary":{"windowDurationMins":10080,"resetsAt":1791756824},"secondary":{"usedPercent":12.5,"windowDurationMins":300,"resetsAt":1791700000}}}}'
+      else
+        [ -n "$ready" ] && echo '{"id":3,"result":{"rateLimits":{"primary":{"usedPercent":100,"windowDurationMins":10080,"resetsAt":1791756824},"secondary":{"usedPercent":12.5,"windowDurationMins":300,"resetsAt":1791700000}}}}'
+      fi;;
     *'"method":"model/list"'*)
       if [ -f "$CODEX_HOME/.stub-models-error" ]; then echo '{"id":4,"error":{"code":-32000,"message":"model list unavailable"}}';
       else [ -n "$ready" ] && echo '{"id":4,"result":{"data":[{"model":"gpt-6","displayName":"GPT-6","hidden":false},{"model":"internal-only","displayName":"x","hidden":true}],"nextCursor":null}}'; fi;;
@@ -212,8 +229,24 @@ esac
 exit 2
 `
 
+const providerCursor = `#!/bin/sh
+` + providerStubGuard + `
+case "$1" in
+--version) echo "2026.10.22-27dcf5f"; exit 0;;
+status)
+  if [ -f "$HOME/.config/cursor/auth.json" ]; then printf '{"status":"authenticated","isAuthenticated":true,"hasAccessToken":true,"hasRefreshToken":true,"userInfo":{"email":"fran@example.test"}}\n'; exit 0; fi
+  # Signed out the tool was also seen to say so on stderr only, still with exit status 0.
+  if [ -f "$HOME/.status-error" ]; then echo "Error: Authentication required. Please run 'agent login' first, or set CURSOR_API_KEY environment variable." >&2; exit 0; fi
+  printf '{"status":"unauthenticated","isAuthenticated":false,"message":"Not logged in"}\n'; exit 0;;
+esac
+exit 2
+`
+
 const providerOpenCode = `#!/bin/sh
 ` + providerStubGuard + `
+# Measured on opencode 1.19.4: ` + "`models`" + ` runs the JavaScript plugins of the user's
+# configuration before it answers. OPENCODE_PURE=1 is the tool's switch for none.
+[ "$OPENCODE_PURE" = 1 ] || fire "the user's plugins ran (OPENCODE_PURE is not 1)"
 case "$1 $2" in
 "--version ") echo "1.18.30"; exit 0;;
 "auth list")
@@ -225,13 +258,21 @@ esac
 exit 2
 `
 
+const providerGemini = `#!/bin/sh
+` + providerStubGuard + `
+case "$1" in
+--version) echo "0.1.0"; exit 0;;
+esac
+exit 2
+`
+
 // newProvidersServer serves the module with the provider stubs. The engine user's own
 // logins (the decoy home of newSignInServer) are signed in for every tool.
 func newProvidersServer(t *testing.T) (call func(method, path string, body any) (int, map[string]any), m *Module, tenantHome string) {
 	t.Helper()
 	call, home := newSignInServer(t, func(mod *Module, bin string) {
 		m = mod
-		for name, script := range map[string]string{"claude": providerClaude, "codex": providerCodex, "grok": providerGrok, "opencode": providerOpenCode} {
+		for name, script := range map[string]string{"claude": providerClaude, "codex": providerCodex, "grok": providerGrok, "opencode": providerOpenCode, "gemini-cli": providerGemini, "cursor": providerCursor} {
 			if err := os.WriteFile(filepath.Join(bin, name), []byte(script), 0o755); err != nil {
 				t.Fatal(err)
 			}
@@ -330,6 +371,37 @@ func TestProvidersShowTheEngineUsersOwnLogins(t *testing.T) {
 	}
 	if oc := all["opencode"]; oc["state"] != "ready" || len(modelIDs(oc)) != 2 {
 		t.Fatalf("opencode = %v", oc)
+	}
+}
+
+// Cursor CLI is read like the other signed-in tools: its own version, its own status document,
+// the account masked, and `agent login` named when nobody is signed in.
+func TestProvidersReportCursorFromItsOwnStatus(t *testing.T) {
+	call, m, _ := newProvidersServer(t)
+	p := providers(t, call, "")["cursor"]
+	if p["state"] != "ready" || p["default"] != true || p["version"] != "2026.10.22-27dcf5f" ||
+		p["email"] != "f***@example.test" || p["auth_method"] != "Cursor account" {
+		t.Fatalf("cursor = %v", p)
+	}
+	if src, _ := p["source"].(string); !strings.Contains(src, "--version") || !strings.Contains(src, "status --format json") {
+		t.Fatalf("cursor source = %q, want the two commands it ran", src)
+	}
+	if err := os.Remove(filepath.Join(os.Getenv("HOME"), ".config", "cursor", "auth.json")); err != nil {
+		t.Fatal(err)
+	}
+	ageProviders(m)
+	if p := providers(t, call, "")["cursor"]; p["state"] != "not_signed_in" || p["next_command"] != "agent login" {
+		t.Fatalf("cursor signed out = %v", p)
+	}
+	// The same answer given on stderr only is read as signed out, not as an unreadable answer.
+	if err := os.WriteFile(filepath.Join(os.Getenv("HOME"), ".status-error"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ageProviders(m)
+	// A refresh that fails keeps the last good snapshot and marks it stale, so the state alone
+	// would not show a read that failed.
+	if p := providers(t, call, "")["cursor"]; p["state"] != "not_signed_in" || p["stale"] == true || p["error"] != nil {
+		t.Fatalf("cursor signed out on stderr = %v, want a fresh not_signed_in and not an error", p)
 	}
 }
 
@@ -518,6 +590,11 @@ func TestCodexWindowLabels(t *testing.T) {
 			t.Errorf("%d minutes = %q, want %q", minutes, got, want)
 		}
 	}
+	for minutes, want := range map[int]string{10080: "seven_day", 300: "five_hour", 1440: "1440m", 45: "45m"} {
+		if got := (codexWindow{Minutes: minutes}).limit().Window; got != want {
+			t.Errorf("%d minutes is window %q, want %q", minutes, got, want)
+		}
+	}
 }
 
 func TestOpenCodeErrorsKeepTheCauseWithoutCredentials(t *testing.T) {
@@ -575,5 +652,321 @@ func TestLimitResetsAtIsWhenTheUsedUpWindowsLift(t *testing.T) {
 	}
 	if _, ok := m.LimitResetsAt(ctx, "", "nobody"); ok {
 		t.Fatal("an unknown instance reported a reset")
+	}
+}
+
+// A window the tool names without a percent is unknown, never 0 percent: a zero would
+// tell a dispatcher the account has all of its allowance left.
+func TestAWindowWithoutAPercentIsUnknownNeverZero(t *testing.T) {
+	for _, tc := range []struct {
+		driver, envDir, flag, wantLabel string
+	}{
+		{"claude", "CLAUDE_CONFIG_DIR", ".stub-no-percent", "Weekly"},
+		{"codex", "CODEX_HOME", ".stub-no-used", "5-hour"},
+	} {
+		t.Run(tc.driver, func(t *testing.T) {
+			call, _, _ := newProvidersServer(t)
+			if err := os.WriteFile(filepath.Join(os.Getenv(tc.envDir), tc.flag), nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			limits := limitsByLabel(providers(t, call, "")[tc.driver])
+			if len(limits) != 1 || limits[tc.wantLabel]["percent"] == nil {
+				t.Fatalf("%s limits = %v, want only the %s window the tool gave a percent for", tc.driver, limits, tc.wantLabel)
+			}
+		})
+	}
+}
+
+// An account's usage is what its own tool reports from its own home: the 5-hour and weekly
+// windows named by a stable id, a window the account's tool gave nothing for is simply
+// absent, and a login that is not the account's never answers for it.
+func TestAccountUsageIsReadFromTheAccountsOwnHome(t *testing.T) {
+	_, m, home := newProvidersServer(t)
+	ctx := context.Background()
+	tenant := model.TenantID(filepath.Base(home))
+	signIn := func(driver, ref, file string) string {
+		dir := filepath.Join(home, driver, ref, map[string]string{"claude": ".claude", "codex": ".codex"}[driver])
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, file), []byte("{}"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+	signIn("claude", "ppf_a", ".credentials.json")
+	got := m.AccountUsage(ctx, tenant, "claude", "ppf_a", true)
+	byWindow := map[string]float64{}
+	for _, u := range got {
+		byWindow[u.Window] = u.Utilization
+		if u.ObservedAt.IsZero() || u.ResetsAt == nil || u.Label == "" {
+			t.Fatalf("window %+v lacks its label, reset or observation time", u)
+		}
+	}
+	if want := map[string]float64{"five_hour": 40, "seven_day": 78, "seven_day:fable": 0}; !reflect.DeepEqual(byWindow, want) {
+		t.Fatalf("claude windows = %v, want %v", byWindow, want)
+	}
+
+	if got := m.AccountUsage(ctx, tenant, "claude", "ppf_other", true); got != nil {
+		t.Fatalf("an account that is not signed in carried usage: %+v", got)
+	}
+	apiKey := signIn("claude", "ppf_key", ".credentials.json")
+	if err := os.WriteFile(filepath.Join(apiKey, ".stub-api-key"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.AccountUsage(ctx, tenant, "claude", "ppf_key", true); len(got) != 0 {
+		t.Fatalf("a login the tool reports no plan limits for carried usage: %+v", got)
+	}
+	if got := m.AccountUsage(ctx, tenant, "grok", "ppf_g", true); got != nil {
+		t.Fatalf("a tool that reports no usage carried some: %+v", got)
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(m.program("grok")), "grok.runs")); err == nil {
+		t.Fatal("a tool that reports no usage was started to be asked")
+	}
+
+	signIn("codex", "ppf_c", "auth.json")
+	byWindow = map[string]float64{}
+	for _, u := range m.AccountUsage(ctx, tenant, "codex", "ppf_c", true) {
+		byWindow[u.Window] = u.Utilization
+	}
+	if want := map[string]float64{"five_hour": 12.5, "seven_day": 100}; !reflect.DeepEqual(byWindow, want) {
+		t.Fatalf("codex windows = %v, want %v", byWindow, want)
+	}
+}
+
+// Without wait a cold account answers nothing now, never a made-up value, and the probe it
+// started serves the next read.
+func TestAccountUsageColdReadAnswersNothingThenTheProbeResult(t *testing.T) {
+	_, m, home := newProvidersServer(t)
+	ctx := context.Background()
+	tenant := model.TenantID(filepath.Base(home))
+	dir := filepath.Join(home, "claude", "ppf_a", ".claude")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.AccountUsage(ctx, tenant, "claude", "ppf_a", false); got != nil {
+		t.Fatalf("a cold read answered %+v before the tool did", got)
+	}
+	m.wg.Wait()
+	if got := m.AccountUsage(ctx, tenant, "claude", "ppf_a", false); len(got) != 3 {
+		t.Fatalf("the read after the probe = %+v, want the three windows", got)
+	}
+}
+
+// A refresh that failed keeps the last answer with its error; that is no report from the
+// tool, so the account's usage is unknown again rather than the old numbers served as current.
+func TestAccountUsageIsUnknownWhenTheRefreshFailed(t *testing.T) {
+	_, m, home := newProvidersServer(t)
+	ctx := context.Background()
+	tenant := model.TenantID(filepath.Base(home))
+	dir := filepath.Join(home, "claude", "ppf_a", ".claude")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.AccountUsage(ctx, tenant, "claude", "ppf_a", true); len(got) != 3 {
+		t.Fatalf("warm read = %+v, want the three windows", got)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".stub-garbage"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ageProviders(m)
+	if got := m.AccountUsage(ctx, tenant, "claude", "ppf_a", true); got != nil {
+		t.Fatalf("usage after a failed refresh = %+v, want unknown", got)
+	}
+}
+
+// However many accounts ask, only maxConcurrentProbes instances are probed at once: a probe
+// that finds every slot taken waits, and starts when one is released.
+func TestAccountUsageProbesWaitForAFreeSlot(t *testing.T) {
+	_, m, home := newProvidersServer(t)
+	ctx := context.Background()
+	tenant := model.TenantID(filepath.Base(home))
+	dir := filepath.Join(home, "claude", "ppf_a", ".claude")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := cap(m.probeSlots); got != 4 {
+		t.Fatalf("the engine bounds probes to %d at once, want 4", got)
+	}
+	m.probeSlots = make(chan struct{}, 1)
+	m.probeSlots <- struct{}{} // every slot taken
+	runs := filepath.Join(filepath.Dir(m.program("claude")), "claude.runs")
+	if m.AccountUsage(ctx, tenant, "claude", "ppf_a", false) != nil {
+		t.Fatal("a cold read answered")
+	}
+	time.Sleep(300 * time.Millisecond)
+	if _, err := os.Stat(runs); err == nil {
+		t.Fatal("a probe started with every slot taken")
+	}
+	<-m.probeSlots
+	m.wg.Wait()
+	if got := m.AccountUsage(ctx, tenant, "claude", "ppf_a", false); len(got) != 3 {
+		t.Fatalf("after the slot was released = %+v, want the three windows", got)
+	}
+	if held := len(m.probeSlots); held != 0 {
+		t.Fatalf("a finished probe kept %d slot(s)", held)
+	}
+}
+
+// The window id is for the account's usage; the published tool providers shape keeps its keys.
+func TestProviderLimitJSONKeepsItsPublishedKeys(t *testing.T) {
+	raw, err := json.Marshal(codexWindow{UsedPercent: new(12.5), Minutes: 300}.limit())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "window") {
+		t.Fatalf("the providers limit carries the window id: %s", raw)
+	}
+}
+
+// An account launched on the organization's own login lives in the tenant login's directory,
+// so the account read and the `<tool>/olivares` instance share one probe cache entry. A cache
+// entry is a probe of a directory, not of a reader: whoever refreshed it must not decide which
+// instance a later reader's snapshot names (the reset time of a run's limit and the `instance`
+// of `tool providers` both read it).
+func TestAccountUsageDoesNotRelabelTheTenantLoginSharingItsHome(t *testing.T) {
+	call, m, home := newProvidersServer(t)
+	ctx := context.Background()
+	tenant := model.TenantID(filepath.Base(home))
+	tenantHome := m.loginHome
+	m.SetLoginHome(func(ctx context.Context, tn model.TenantID, driver, _ string) (string, string, error) {
+		return tenantHome(ctx, tn, driver, "")
+	})
+	dir := filepath.Join(home, "codex", ".codex")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "auth.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// The account read refreshes the shared entry first.
+	if got := m.AccountUsage(ctx, tenant, "codex", "ppf_own", true); len(got) != 2 {
+		t.Fatalf("account usage = %+v, want the two windows", got)
+	}
+	// The stub's codex has its weekly window at 100 percent: that reset is the fallback of a run's limit.
+	at, ok := m.LimitResetsAt(ctx, tenant, "codex/olivares")
+	if want := time.Unix(1791756824, 0); !ok || !at.Equal(want) {
+		t.Fatalf("reset of the tenant login after an account read = %v %v, want %v", at, ok, want)
+	}
+	all := providers(t, call, "?tenant_id="+url.QueryEscape(tenant.String()))
+	if p := all["codex/olivares"]; p == nil || p["default"] != false || p["state"] != "ready" {
+		t.Fatalf("the tenant login is not listed as codex/olivares after an account read: %v", all)
+	}
+	if _, ok := all["ppf_own"]; ok {
+		t.Fatal("the tenant login is listed under an account reference")
+	}
+}
+
+func TestProvidersBackgroundReadsDoNotWriteTheLedger(t *testing.T) {
+	call, _, st := newSignInServerWithStore(t)
+	count := func() int {
+		t.Helper()
+		n := 0
+		err := st.View(context.Background(), model.SystemTenantID, func(sc store.Scope) error {
+			return sc.Audit().Walk(context.Background(), 0, func(ev model.AuditEvent) error {
+				if ev.Action == "agenttools.providers" {
+					n++
+				}
+				return nil
+			})
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	for _, tc := range []struct {
+		query        string
+		status, rows int
+	}{
+		{"", 200, 1},
+		{"?background=false", 200, 1},
+		{"?background=true", 200, 0},
+		{"?background=invalid", 400, 1},
+	} {
+		t.Run(tc.query, func(t *testing.T) {
+			before := count()
+			for range 2 {
+				code, body := call("GET", "/v1/m/agenttools/providers"+tc.query, nil)
+				if code != tc.status {
+					t.Fatalf("%s: %d %v", tc.query, code, body)
+				}
+			}
+			if got := count() - before; got != 2*tc.rows {
+				t.Fatalf("provider audit rows = %d, want %d", got, 2*tc.rows)
+			}
+		})
+	}
+}
+
+func TestAccountUsageIncludesMonthlySpendAndCredits(t *testing.T) {
+	_, m, home := newProvidersServer(t)
+	tenant := model.TenantID(filepath.Base(home))
+	for _, tc := range []struct {
+		driver, ref, auth, flag, window string
+		percent                         float64
+	}{
+		{"claude", "ppf_month", ".credentials.json", ".stub-monthly", "monthly_spend", 85},
+		{"codex", "ppf_credit", "auth.json", ".stub-credits", "credits", 0},
+	} {
+		t.Run(tc.driver, func(t *testing.T) {
+			dir := filepath.Join(home, tc.driver, tc.ref, map[string]string{"claude": ".claude", "codex": ".codex"}[tc.driver])
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			for _, name := range []string{tc.auth, tc.flag} {
+				if err := os.WriteFile(filepath.Join(dir, name), []byte("{}"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got := m.AccountUsage(context.Background(), tenant, tc.driver, tc.ref, true)
+			if len(got) != 1 || got[0].ObservedAt.IsZero() {
+				t.Fatalf("account report = %+v, want one observed fact", got)
+			}
+			if tc.driver == "claude" && (got[0].ResetsAt == nil || got[0].Label != "Monthly spend") {
+				t.Fatalf("monthly spend lost its reset or label: %+v", got[0])
+			}
+			if got[0].Window != tc.window || got[0].Utilization != tc.percent {
+				t.Fatalf("usage = %+v", got[0])
+			}
+			if tc.driver == "codex" && (got[0].Credit == nil || got[0].Credit.Balance == nil || *got[0].Credit.Balance != "12.50" || !got[0].Credit.HasCredits || got[0].Credit.Unlimited) {
+				t.Fatalf("credit = %+v", got[0].Credit)
+			}
+
+		})
+	}
+}
+
+func TestClaudeMonthlyUsageKeepsUnknownAndDisabledDistinct(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		want       int
+		percent    float64
+	}{
+		{"absent", `{}`, 0, 0},
+		{"unknown", `{"extra_usage":{"is_enabled":true,"utilization":null}}`, 0, 0},
+		{"disabled with known usage", `{"extra_usage":{"is_enabled":false,"utilization":100}}`, 1, 100},
+		{"known zero", `{"extra_usage":{"is_enabled":true,"utilization":0}}`, 1, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := &prober{snap: &ProviderSnapshot{}}
+			p.claudeUsage("get_usage", []byte(`{"response":{"subtype":"success","response":{"rate_limits_available":true,"rate_limits":`+tc.body+`}}}`))
+			if len(p.snap.Limits) != tc.want {
+				t.Fatalf("limits = %+v", p.snap.Limits)
+			}
+			if tc.want > 0 && p.snap.Limits[0].Percent != tc.percent {
+				t.Fatalf("percent = %v", p.snap.Limits[0].Percent)
+			}
+		})
 	}
 }

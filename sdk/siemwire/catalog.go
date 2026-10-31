@@ -150,7 +150,7 @@ func LedgerExportFormats() FormatSet {
 
 // EventingSinkFormats is the eventing subscription sink_format surface. It adds
 // the raw-JSON passthrough and defaults to OCSF (the SIEM-sink default since
-//). It does NOT accept TokenOTLPLogRecord: an eventing sink POSTs one
+// ). It does NOT accept TokenOTLPLogRecord: an eventing sink POSTs one
 // rendered body per event to an HTTP destination across ALL selected event
 // types, and a bare LogRecord line is not an OTLP /v1/logs request — the
 // surface only offers dialects every subscribed event can be delivered in.

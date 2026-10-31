@@ -133,7 +133,7 @@ it('offers OpenCode its own ChatGPT sign-in and relays the link and the code', a
   expect(
     within(dialog).getByRole('link', { name: /open the sign-in page/i }),
   ).toHaveAttribute('href', 'https://auth.openai.example/device')
-  // HU2-18, #2551: the key form opens in this same dialog, on OpenAI — a button in
+  // acceptance, #2551: the key form opens in this same dialog, on OpenAI — a button in
   // the sheet, not a page link that reloads and loses the dialog.
   expect(
     within(dialog).queryByRole('link', {

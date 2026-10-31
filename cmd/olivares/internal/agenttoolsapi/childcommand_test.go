@@ -17,7 +17,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/toolinstall"
 	"github.com/olivaresai/olivares/core/driverfacts"
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
 // Every child of this module goes through the composition's ChildCommand, which
@@ -93,9 +95,9 @@ func TestEveryToolChildGoesThroughTheChildCommand(t *testing.T) {
 	codex, _ := driverfacts.Lookup("codex")
 	for _, want := range []string{
 		"claude --version", // a one-shot probe command
-		"claude " + strings.Join(claude.StatusArgs, " "),     // the status read
-		"codex app-server --disable hooks -c mcp_servers={}", // a stdio exchange
-		"codex " + strings.Join(codex.LoginArgs, " "),        // the login
+		"claude " + strings.Join(claude.StatusArgs, " "), // the status read
+		"codex app-server --disable hooks",               // a stdio exchange
+		"codex " + strings.Join(codex.LoginArgs, " "),    // the login
 	} {
 		if !ran[want] {
 			t.Errorf("%q did not go through the ChildCommand; children: %v", want, slices.Collect(maps.Keys(ran)))
@@ -125,5 +127,74 @@ func TestAToolChildThatCannotBeConfinedDoesNotRun(t *testing.T) {
 	}
 	if code, body := call("POST", "/v1/m/agenttools/sign-in", map[string]string{"driver": "codex"}); code != 503 {
 		t.Errorf("sign-in start = %d %v, want 503", code, body)
+	}
+}
+
+// Without confinement on the node, the login and the status read of an
+// unsigned install (none-origin-only Grok Build, origin-tarball Cursor CLI)
+// are refused with one sentence naming Landlock and the tool never runs; a
+// signed tool signs in as before (#3312).
+func TestUnsignedToolChildRefusedWhileUnconfined(t *testing.T) {
+	var m *Module
+	bin := ""
+	call, _ := newSignInServer(t, func(mod *Module, dir string) {
+		m, bin = mod, dir
+		for name, script := range map[string]string{"claude": providerClaude, "grok": providerGrok, "cursor": providerCursor} {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		cat, err := toolinstall.NewCapabilityCatalog(
+			toolinstall.NewCatalog(toolinstall.NewClaude(toolinstall.ClaudeOptions{})),
+			toolinstall.NewGrok(toolinstall.GrokOptions{}), toolinstall.NewCursor(toolinstall.CursorOptions{}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		mod.engine = toolinstall.NewEngineWithCapabilities(cat, toolinstall.EngineOptions{})
+	})
+	previous := hostConfinement
+	hostConfinement = func() confine.State {
+		return confine.State{Mode: confine.ModeNone, Reason: "landlock unavailable in this test"}
+	}
+	t.Cleanup(func() { hostConfinement = previous })
+
+	// The login of an unsigned install is refused before the tool starts.
+	code, body := call("POST", "/v1/m/agenttools/sign-in", map[string]string{"driver": "grok"})
+	refusalError := func(body map[string]any) map[string]any {
+		e, _ := body["error"].(map[string]any)
+		return e
+	}
+	if e := refusalError(body); code != 422 || e["code"] != toolinstall.KindVerificationUnavailable {
+		t.Fatalf("grok sign-in start = %d %v, want 422 %s", code, body, toolinstall.KindVerificationUnavailable)
+	}
+	if msg := fmt.Sprint(refusalError(body)["message"]); !strings.Contains(msg, "Landlock") || !strings.Contains(msg, "olivares doctor") {
+		t.Errorf("grok sign-in refusal %q does not name Landlock and the fix", msg)
+	}
+
+	// The status read of an unsigned install is refused the same way.
+	code, body = call("GET", "/v1/m/agenttools/sign-in?driver=cursor", nil)
+	if e := refusalError(body); code != 422 || e["code"] != toolinstall.KindVerificationUnavailable {
+		t.Fatalf("cursor status read = %d %v, want 422 %s", code, body, toolinstall.KindVerificationUnavailable)
+	}
+	if msg := fmt.Sprint(refusalError(body)["message"]); !strings.Contains(msg, "Landlock") {
+		t.Errorf("cursor status refusal %q does not name Landlock", msg)
+	}
+
+	// Neither unsigned tool ran.
+	for _, driver := range []string{"grok", "cursor"} {
+		if _, err := os.Stat(filepath.Join(bin, driver+".runs")); !os.IsNotExist(err) {
+			t.Errorf("%s ran without confinement: %v", driver, err)
+		}
+	}
+
+	// A signed tool signs in as before.
+	code, body = call("POST", "/v1/m/agenttools/sign-in", map[string]string{"driver": "claude"})
+	if code != 202 || body["state"] != "needs_code" {
+		t.Fatalf("claude sign-in start = %d %v, want 202 needs_code", code, body)
+	}
+	call("DELETE", "/v1/m/agenttools/sign-in/"+body["id"].(string), nil)
+	m.wg.Wait()
+	if _, err := os.Stat(filepath.Join(bin, "claude.runs")); err != nil {
+		t.Errorf("the signed tool's login did not run: %v", err)
 	}
 }

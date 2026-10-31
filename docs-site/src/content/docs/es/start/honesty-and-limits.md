@@ -6,7 +6,7 @@ description: >-
 ---
 
 :::note[Business]
-La exportación de auditoría (`GET /v1/audit/export`, `olivares audit export`), los archivos en directorios y la verificación de archivos externos requieren Business. Community conserva el registro firmado, `olivares audit verify` y `olivares dr backup`; la exportación devuelve HTTP 501 o código de salida 9. El reenvío de auditoría y la transferencia DDIL entre sitios aislados también requieren Business.
+La exportación de auditoría (`GET /v1/audit/export`, `olivares audit export`), la verificación del registro (`GET /v1/audit/verify`, `olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`), los archivos en directorios y la verificación de archivos externos requieren Business. Community conserva el registro firmado, su lectura y `olivares dr backup`; las rutas y los comandos de evidencias devuelven HTTP 501 o código de salida 9. El reenvío de auditoría y las transferencias DDIL con segmentos de auditoría también requieren Business.
 :::
 
 Un control plane para IA es un producto de seguridad. Si exagera lo que cubre,
@@ -44,7 +44,7 @@ cubre algo, la página lo dice en lugar de dar a entender que sí lo hace.
 - **Las releases están firmadas y son verificables.** Firma, procedencia SLSA, SBOM y OpenVEX pueden todos
   [verificarse](/es/how-to/verify-a-release/). La verificación aún no funciona del todo sin red: las comprobaciones sin clave
   necesitan el material de raíz de confianza de Sigstore y el paso SLSA no tiene modo sin conexión. El producto incluye un
-  [bundle air-gap](/es/how-to/air-gap-install/). La próxima release es **<!-- release -->0.4<!-- /release -->**, aún no publicada. Compila desde el código fuente hasta su publicación.
+  [bundle air-gap](/es/how-to/air-gap-install/). La próxima release es **<!-- release -->0.5<!-- /release -->**, aún no publicada. Compila desde el código fuente hasta su publicación.
 
 ## Open core — qué es abierto vs comercial
 

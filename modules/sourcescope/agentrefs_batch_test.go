@@ -54,7 +54,7 @@ type countingAgents struct {
 	inner store.Repository[model.Agent]
 	gets  int
 	lists int
-	maxIn int // largest id set one List bound (SR5C round 2: the parameter regression)
+	maxIn int // largest id set one List bound (review round 2: the parameter regression)
 }
 
 func (c *countingAgents) Get(ctx context.Context, id model.ID) (model.Agent, error) {
@@ -248,7 +248,7 @@ func BenchmarkAgentRefsByGroup(b *testing.B) {
 	})
 }
 
-// SR5C (2026-10-03): past the List page cap the batched read must CHUNK, or
+// review (2026-10-03): past the List page cap the batched read must CHUNK, or
 // the projection silently skips the agents beyond the first page — and one IN
 // for the whole group would exceed PostgreSQL's 65,535-parameter limit long
 // before the projection cap (round 2). 1,500 members > listCap: the answer
@@ -265,7 +265,7 @@ func TestAgentRefsByGroupBatchedPagesPastTheCap(t *testing.T) {
 	agentRefsBigGroupSuite(t, st)
 }
 
-// SR5C round 2: the same parameter regression on PostgreSQL — the limit the
+// review round 2: the same parameter regression on PostgreSQL — the limit the
 // chunk bound exists for. NOT RUN (and said so) when no PostgreSQL is
 // configured; a skip is not a pass.
 func TestAgentRefsByGroupBatchedPagesPastTheCapPostgres(t *testing.T) {

@@ -42,6 +42,12 @@ export type UrlHistoryMode = 'replace' | 'push'
 /** What one patch may override for itself. */
 export interface UrlPatchOptions {
   history?: UrlHistoryMode
+  /**
+   * For a change the VIEW makes, not the operator (taking a value out of the address
+   * that the screen could not use): the report of what an earlier refusal named stays,
+   * so the notice for it is not erased by a cleanup that is not the operator's next move.
+   */
+  keepReport?: boolean
 }
 
 /** Set (or clear) owned keys and reflect them into the URL. */
@@ -80,9 +86,21 @@ function readSearch(keys: readonly string[], search?: string): UrlState {
   const out: UrlState = {}
   for (const k of keys) {
     const v = params.get(k)
-    if (v !== null && v !== '') out[k] = v
+    if (v !== null && v !== '') out[k] = unquoted(v)
   }
   return out
+}
+
+/** The router writes a string that would read as JSON (`404`, `true`, `"x"`) quoted,
+ * so its own reader gets a string back (`defaultStringifySearch`): undo that quoting. */
+function unquoted(value: string): string {
+  if (!value.startsWith('"')) return value
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return typeof parsed === 'string' ? parsed : value
+  } catch {
+    return value
+  }
 }
 
 /** Same owned keys, same values — used to avoid a re-render per navigation. */
@@ -233,8 +251,10 @@ export function useValidatedUrlState<T>(
 
   const patchAndClearReport = useCallback<UrlStatePatch>(
     (p, patchOptions) => {
-      setReported([])
-      setSeenIssues(null)
+      if (!patchOptions?.keepReport) {
+        setReported([])
+        setSeenIssues(null)
+      }
       patch(p, patchOptions)
     },
     [patch],

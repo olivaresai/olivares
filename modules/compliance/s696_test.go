@@ -21,7 +21,7 @@ import (
 // agrees with the CONSOLE. That gap is not hypothetical: it is exactly how `tool-pinning`
 // shipped a console whose two writes could never succeed (capabilities.test.tsx:189-192
 // was green while toolpins.go answered 400, because the double accepted what production
-// rejects — an internal design note (not shipped) §5.8).
+// rejects — an internal audit §5.8).
 //
 // So the payloads below are VERBATIM the bytes web/src/features/compliance/api.ts puts on
 // the wire for the retention plane, and they go through the real router, the real auth

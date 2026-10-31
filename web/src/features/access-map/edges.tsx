@@ -55,7 +55,7 @@ export function AccessEdgeComp({
       {showLabel && (
         <EdgeLabelRenderer>
           <div
-            className="pointer-events-none absolute rounded-sm border bg-surface px-1 text-[10px] font-semibold leading-tight tabular-nums shadow-xs"
+            className="pointer-events-none absolute rounded-sm border bg-surface px-1 text-metadata-s font-semibold leading-tight tabular-nums shadow-xs"
             style={{
               transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
               color: data.color,

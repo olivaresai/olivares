@@ -7,6 +7,7 @@ package gitpublish
 import (
 	"context"
 	"errors"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -30,37 +31,53 @@ const (
 // fakeHost is a controllable Git host. Writes can be held; every call is
 // counted so tests can assert that nothing was dispatched twice.
 type fakeHost struct {
-	mu            sync.Mutex
-	defaultBranch string
-	protected     map[string]bool
-	refs          map[string]string
-	changes       []gp.Change
-	mints         int
-	releases      int
-	creates       int
-	merges        int
-	mintErr       error
-	refErr        map[string]error
-	hidden        map[string]bool
-	lookupErr     error
-	createRes     *gp.Result
-	mergeRes      *gp.Result
-	onCreate      func(h *fakeHost)
-	onMerge       func(h *fakeHost)
-	release       error
-	mintSecret    string // returned by Mint when set (the ssh key, say)
-	sshTarget     bool   // PushTarget answers the ssh transport
+	mu             sync.Mutex
+	defaultBranch  string
+	protected      map[string]bool
+	refs           map[string]string
+	changes        []gp.Change
+	comments       []gp.Comment
+	commentBodies  []string
+	mints          int
+	releases       int
+	creates        int
+	merges         int
+	commentCreates int
+	mintErr        error
+	mintEffects    []gp.Effect
+	onMint         func(h *fakeHost)
+	refErr         map[string]error
+	hidden         map[string]bool
+	lookupErr      error
+	createRes      *gp.Result
+	mergeRes       *gp.Result
+	mergeOutcome   *gp.MergeOutcome
+	commentRes     *gp.Result
+	onComment      func(h *fakeHost)
+	onCreate       func(h *fakeHost)
+	onMerge        func(h *fakeHost)
+	release        error
+	commitTreeErr  error
+	commitTrees    int
+	mintSecret     string // returned by Mint when set (the ssh key, say)
+	sshTarget      bool   // PushTarget answers the ssh transport
+	branchErr      error
 }
 
 func newFakeHost() *fakeHost {
 	return &fakeHost{defaultBranch: "main", protected: map[string]bool{}, refs: map[string]string{"main": shaBase}, refErr: map[string]error{}, hidden: map[string]bool{}}
 }
 
-func (h *fakeHost) Mint(context.Context, gp.Effect) (gp.Token, error) {
+func (h *fakeHost) Mint(_ context.Context, effect gp.Effect) (gp.Token, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.mintEffects = append(h.mintEffects, effect)
 	if h.mintErr != nil {
-		return gp.Token{}, h.mintErr
+		err := h.mintErr
+		if h.onMint != nil {
+			h.onMint(h)
+		}
+		return gp.Token{}, err
 	}
 	h.mints++
 	return gp.NewToken(gp.NewSecret(h.mintSecret)), nil
@@ -91,6 +108,9 @@ func (h *fakeHost) Ref(_ context.Context, _ gp.Token, b string) (gp.RefObservati
 func (h *fakeHost) Branch(_ context.Context, _ gp.Token, b string) (gp.BranchInfo, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.branchErr != nil {
+		return gp.BranchInfo{}, h.branchErr
+	}
 	_, exists := h.refs[b]
 	return gp.BranchInfo{Default: h.defaultBranch, Exists: exists, Protected: h.protected[b]}, nil
 }
@@ -102,6 +122,12 @@ func (h *fakeHost) ref(b string) string {
 }
 
 func (h *fakeHost) CommitTree(context.Context, gp.Token, string) (string, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.commitTrees++
+	if h.commitTreeErr != nil {
+		return "", h.commitTreeErr
+	}
 	return shaTree, nil
 }
 
@@ -148,6 +174,31 @@ func (h *fakeHost) CreateChange(_ context.Context, _ gp.Token, s gp.ChangeSpec) 
 	return c, gp.Result{Class: gp.Applied}
 }
 
+func (h *fakeHost) CreateComment(_ context.Context, _ gp.Token, s gp.CommentSpec) (gp.Comment, gp.Result) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.commentCreates++
+	h.commentBodies = append(h.commentBodies, s.Body)
+	if h.commentRes != nil {
+		return gp.Comment{}, *h.commentRes
+	}
+	c := gp.Comment{ID: strconv.Itoa(900 + h.commentCreates), URL: "https://git.example/comment/" + strconv.Itoa(900+h.commentCreates), Body: s.Body, CreatedAt: time.Now()}
+	h.comments = append(h.comments, c)
+	if h.onComment != nil {
+		h.onComment(h)
+	}
+	return c, gp.Result{Class: gp.Applied}
+}
+
+func (h *fakeHost) ListComments(_ context.Context, _ gp.Token, _ int) ([]gp.Comment, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.lookupErr != nil {
+		return nil, h.lookupErr
+	}
+	return append([]gp.Comment(nil), h.comments...), nil
+}
+
 func (h *fakeHost) MergeChange(_ context.Context, _ gp.Token, n int, sha, _ string) (gp.MergeOutcome, gp.Result) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -162,6 +213,12 @@ func (h *fakeHost) MergeChange(_ context.Context, _ gp.Token, n int, sha, _ stri
 		if c.Number == n {
 			if c.HeadSHA != sha {
 				return gp.MergeOutcome{}, gp.Result{Class: gp.Rejected, Reason: "head_mismatch", Host: gp.HostError{Status: 409, Code: "conflict"}}
+			}
+			if h.mergeOutcome != nil {
+				outcome := *h.mergeOutcome
+				h.changes[i].Open, h.changes[i].Merged, h.changes[i].MergeCommitSHA = false, outcome.Merged, outcome.MergeCommitSHA
+				h.refs[c.BaseRef] = outcome.MergeCommitSHA
+				return outcome, gp.Result{Class: gp.Applied}
 			}
 			h.changes[i].Open, h.changes[i].Merged, h.changes[i].MergeCommitSHA = false, true, shaMerged
 			h.refs[c.BaseRef] = shaMerged
@@ -295,15 +352,18 @@ func (g *fakeGit) count() int {
 
 // fakeCustody approves one credential binding and one repository binding.
 type fakeCustody struct {
-	mu        sync.Mutex
-	host      *fakeHost
-	cbVer     int64
-	rbVer     int64
-	owners    []string
-	hostKind  string
-	tenant    model.TenantID
-	workspace model.ID
-	approved  map[string]bool
+	mu         sync.Mutex
+	host       *fakeHost
+	cbVer      int64
+	rbVer      int64
+	owners     []string
+	hostKind   string
+	repoID     string
+	webBase    string
+	webBaseErr error
+	tenant     model.TenantID
+	workspace  model.ID
+	approved   map[string]bool
 }
 
 // inScope approves bindings only in the harness tenant and workspace; an
@@ -331,7 +391,26 @@ func (c *fakeCustody) RepositoryBinding(_ context.Context, tn model.TenantID, ws
 	if !c.approved[id] || !c.inScope(tn, ws) {
 		return RepositoryBinding{}, ErrBindingNotApproved
 	}
-	return RepositoryBinding{ID: id, Version: c.rbVer, RepoID: "R_1", Owner: "acme", Name: "widgets", LocalPath: "/srv/olivares/gitpublish/r1.git"}, nil
+	repoID := c.repoID
+	if repoID == "" {
+		repoID = "R_1"
+	}
+	return RepositoryBinding{ID: id, Version: c.rbVer, RepoID: repoID, Owner: "acme", Name: "widgets", LocalPath: "/srv/olivares/gitpublish/r1.git"}, nil
+}
+
+func (c *fakeCustody) RepositoryWebBase(_ context.Context, tn model.TenantID, ws model.ID, id string) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.approved[id] || !c.inScope(tn, ws) {
+		return "", ErrBindingNotApproved
+	}
+	if c.webBaseErr != nil {
+		return "", c.webBaseErr
+	}
+	if c.webBase != "" {
+		return c.webBase, nil
+	}
+	return "https://github.com", nil
 }
 
 func (c *fakeCustody) OpenHost(context.Context, model.TenantID, CredentialBinding, RepositoryBinding) (gp.Host, error) {
@@ -340,12 +419,14 @@ func (c *fakeCustody) OpenHost(context.Context, model.TenantID, CredentialBindin
 
 // fakeAuthority admits by principal; tests inject denials and an A4 hook.
 type fakeAuthority struct {
-	mu       sync.Mutex
-	admits   int
-	locks    int
-	deny     map[model.ID]error // by workspace
-	recheck  func() error
-	stepUpAt int
+	mu     sync.Mutex
+	admits int
+	locks  int
+	deny   map[model.ID]error // by workspace
+	// denyPermission refuses a question for one permission.
+	denyPermission map[auth.Permission]error
+	recheck        func() error
+	stepUpAt       int
 }
 
 type fakeAdmission struct {
@@ -358,6 +439,9 @@ func (a *fakeAuthority) Admit(_ context.Context, p auth.Principal, _ model.Tenan
 	defer a.mu.Unlock()
 	a.admits++
 	if err := a.deny[q.Workspace]; err != nil {
+		return nil, err
+	}
+	if err := a.denyPermission[q.Permission]; err != nil {
 		return nil, err
 	}
 	if q.MinimumAAL > p.AAL {

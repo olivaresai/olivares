@@ -235,6 +235,9 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 	if len(selection.Members) == 0 {
 		return nil
 	}
+	if spec.RunOn != "" {
+		return conflictErr("remote sessions do not support centrally assigned skill files")
+	}
 	rec, err := m.loadRun(ctx, tenant, runRef)
 	if err != nil {
 		return err

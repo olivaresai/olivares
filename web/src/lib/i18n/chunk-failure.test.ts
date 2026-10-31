@@ -5,6 +5,7 @@
 // Offline, a language whose auth dictionary cannot load keeps the console in English; back
 // online, choosing it again loads it, without a reload. The dictionary used to be a module
 // import, and a failed import stays failed in the browser until the page reloads.
+import { preferenceStorage } from '@/lib/preference-storage'
 import { afterEach, expect, it, vi } from 'vitest'
 import i18n, { authBackend, setLanguage } from './index'
 
@@ -66,5 +67,6 @@ it('keeps the latest choice when an earlier dictionary arrives late', async () =
   await late
   expect(i18n.language).toBe('en')
   expect(document.documentElement.lang).toBe('en')
-  expect(localStorage.getItem('olivares.lang')).toBe('en')
+  expect(preferenceStorage.getItem('olivares.lang')).toBe('en')
+  expect(localStorage.getItem('olivares.lang')).toBeNull()
 })

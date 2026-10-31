@@ -93,6 +93,12 @@ type toolRow struct {
 	Version   string `json:"version,omitempty"`
 	SignedIn  *bool  `json:"signed_in,omitempty"`
 	Account   string `json:"account,omitempty"`
+	// probeFailed is set when the tool's own sign-in status could not be read; its
+	// installed and signed-in answers are then unknown, not no. Not in the JSON.
+	// unreadSignIn (cmd_ui_tools.go) infers a related case from SignedIn == nil
+	// alone and also catches an inventory-installed tool whose probe answered
+	// installed:false; the two are not equal, so change them together.
+	probeFailed bool `json:"-"`
 }
 
 func newToolListCmd() *cobra.Command {
@@ -248,19 +254,22 @@ func (c *agentClientConfig) toolRows(ctx context.Context) ([]toolRow, error) {
 		if !toolSignsIn(d) {
 			continue
 		}
-		if st, ok := c.toolSignInStatus(ctx, d); ok {
-			r.Installed = r.Installed || st.Installed
-			if st.Installed {
-				signed := st.SignedIn
-				r.SignedIn, r.Account = &signed, st.Account
-			}
+		st, ok := c.toolSignInStatus(ctx, d)
+		if !ok {
+			r.probeFailed = true
+			continue
+		}
+		r.Installed = r.Installed || st.Installed
+		if st.Installed {
+			signed := st.SignedIn
+			r.SignedIn, r.Account = &signed, st.Account
 		}
 	}
 	out := make([]toolRow, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, *r)
 	}
-	order := map[string]int{"claude": 0, "codex": 1, "grok": 2, "opencode": 3, "gemini-cli": 4, "ollama": 5}
+	order := map[string]int{"claude": 0, "codex": 1, "grok": 2, "opencode": 3, "gemini-cli": 4, "cursor": 5, "ollama": 6}
 	sort.Slice(out, func(i, j int) bool {
 		oi, iok := order[out[i].Driver]
 		oj, jok := order[out[j].Driver]
@@ -931,6 +940,7 @@ var modelServerStartWait = 10 * time.Minute
 func newToolStartCmd() *cobra.Command {
 	var cfg agentClientConfig
 	var modelRef string
+	var container bool
 	cmd := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "write"},
 		Use:         "start <ollama|llama-cpp|vllm>",
@@ -938,17 +948,23 @@ func newToolStartCmd() *cobra.Command {
 		Long: "start runs the installed Ollama, llama.cpp (llama-server) or vLLM as a service of the\n" +
 			"engine, as AI tools › Ollama › Start does, and registers its endpoint in your organization's\n" +
 			"Providers once it answers, so OpenCode sessions can run on its models. The engine starts it\n" +
-			"again after a restart until it is stopped (olivares tool stop). llama.cpp and vLLM must be\n" +
+			"again after a restart until it is stopped (olivares tool stop). Ollama runs its installed\n" +
+			"program unless --container asks for Ollama's image through Podman or Docker, with the\n" +
+			"models directory mounted. llama.cpp and vLLM must be\n" +
 			"installed on the engine's PATH, run on loopback only and answer a key the engine makes for\n" +
 			"them; name the model with --model: for llama-cpp an absolute .gguf path or a Hugging Face\n" +
 			"user/repo[:quantization], for vllm an absolute model directory or a Hugging Face user/repo.",
 		Example: "  olivares tool start ollama\n" +
+			"  olivares tool start ollama --container\n" +
 			"  olivares tool start llama-cpp --model /srv/models/gemma-3-1b-it-Q4_K_M.gguf\n" +
 			"  olivares tool start vllm --model Qwen/Qwen3-0.6B",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			driver := strings.ToLower(strings.TrimSpace(args[0]))
 			if driver == "llama-cpp" || driver == "vllm" {
+				if container {
+					return sentence(exitcode.Usage, "--container asks for Ollama's image; llama.cpp and vLLM run from their installed programs.")
+				}
 				if strings.TrimSpace(modelRef) == "" {
 					return sentence(exitcode.Usage, "Name the model to serve: olivares tool start %s --model <model>", driver)
 				}
@@ -971,6 +987,9 @@ func newToolStartCmd() *cobra.Command {
 			if t := strings.TrimSpace(cfg.tenant); t != "" {
 				body["tenant_id"] = t
 			}
+			if container {
+				body["container"] = true
+			}
 			if _, _, err := cfg.do(ctx, "POST", agentToolsPath+"/ollama/start", body, http.StatusAccepted); err != nil {
 				return err
 			}
@@ -979,8 +998,16 @@ func newToolStartCmd() *cobra.Command {
 				Message  string   `json:"message"`
 				Endpoint string   `json:"endpoint"`
 				Models   []string `json:"models"`
+				Runtime  string   `json:"runtime"`
 			}
-			deadline := time.Now().Add(ollamaStartWait)
+			wait := ollamaStartWait
+			if container {
+				// The first container start may have to pull the image first. The engine's
+				// own ready clock starts before this one (a stale container is removed
+				// first), so the CLI keeps a margin over it instead of racing it.
+				wait = modelServerStartWait + 2*time.Minute
+			}
+			deadline := time.Now().Add(wait)
 			for {
 				status, b, err := cfg.do(ctx, "GET", agentToolsPath+"/ollama", nil, http.StatusOK)
 				if err != nil {
@@ -1006,7 +1033,11 @@ func newToolStartCmd() *cobra.Command {
 			}
 			return renderOut(cmd, func(w io.Writer) error {
 				r := renderTo(w)
-				r.Line(fmt.Sprintf("Ollama is running at %s.", termSafe(st.Endpoint)))
+				if st.Runtime == "container" {
+					r.Line(fmt.Sprintf("Ollama is running in a container at %s.", termSafe(st.Endpoint)))
+				} else {
+					r.Line(fmt.Sprintf("Ollama is running at %s.", termSafe(st.Endpoint)))
+				}
 				if msg := strings.TrimSpace(st.Message); msg != "" {
 					r.Line(termSafe(msg))
 				}
@@ -1019,6 +1050,7 @@ func newToolStartCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&modelRef, "model", "", "llama-cpp: an absolute .gguf path or a Hugging Face user/repo[:quantization]; vllm: an absolute model directory or a Hugging Face user/repo")
+	cmd.Flags().BoolVar(&container, "container", false, "ollama: run Ollama's image through Podman or Docker with the models directory mounted, instead of the installed program")
 	cfg.addFlags(cmd)
 	return cmd
 }
@@ -1117,7 +1149,14 @@ func newToolStopCmd() *cobra.Command {
 				return sentence(exitcode.Err, "%s did not stop (it is %s). Try again in a moment.", svc.name, termSafe(firstNonEmptyCLI(state, "in an unknown state")))
 			}
 			return renderOut(cmd, func(w io.Writer) error {
-				renderTo(w).Line(svc.name + " stopped.")
+				r := renderTo(w)
+				r.Line(svc.name + " stopped.")
+				// The engine can answer "stopped" while warning that a container it started
+				// may still serve (no runtime can be driven to remove it). The person has to
+				// remove it, so the warning is the command's answer, not JSON-only.
+				if msg, _ := st["message"].(string); strings.TrimSpace(msg) != "" {
+					r.Line(termSafe(strings.TrimSpace(msg)))
+				}
 				return nil
 			}, st)
 		},

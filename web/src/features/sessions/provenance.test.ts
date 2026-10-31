@@ -13,6 +13,7 @@ import {
   runAwaitedApproval,
   runMatchesObserved,
   sessionLabel,
+  sessionListName,
   sessionNaming,
   sessionShortId,
   sessionTitle,
@@ -340,7 +341,7 @@ describe('capabilities — "you cannot" and "nobody can" are different answers',
     expect(capOf(caps, 'stop').available).toBe(true)
   })
 
-  // HU 025 (refresh 05, real Claude Code): the turn interrupt worked from the CLI and
+  // acceptance (refresh 05, real Claude Code): the turn interrupt worked from the CLI and
   // the console never offered it where the person works. It is a capability of the
   // model like stop, so the header and the drawer show it from the same answer.
   it('offers interrupt only for a running bridged run the caller may write to', () => {
@@ -498,6 +499,29 @@ describe('sessionLabel / sessionSearchKey', () => {
       ],
     )
     expect(sessionLabel(rows[0]!)).toBe('nightly-indexer')
+  })
+
+  it('names a session with no name by the title the engine cut, and a name wins over it', () => {
+    const titled = mergeSessions(
+      [live('sess-ours', { summary: 'a later sentence' })],
+      [
+        run('run-1', {
+          claude_session_id: 'sess-ours',
+          title: 'Fix the login bug',
+        }),
+      ],
+    )[0]!
+    // Over the live sentence: it says what the session was asked, which no later action replaces.
+    expect(sessionLabel(titled)).toBe('Fix the login bug')
+    expect(sessionSearchKey(titled)).toContain('Fix the login bug')
+    expect(sessionListName(titled, 'Untitled').from).toBe('title')
+
+    const named = mergeSessions(
+      [],
+      [run('run-2', { name: 'nightly-indexer', title: 'Fix the login bug' })],
+    )[0]!
+    expect(sessionLabel(named)).toBe('nightly-indexer')
+    expect(sessionListName(named, 'Untitled').text).toBe('nightly-indexer')
   })
 
   /**
@@ -1116,7 +1140,7 @@ describe('one launch is one row (J5): legacy rows keyed by the run’s own ident
   })
 })
 
-describe('sharedNames — one list, distinct names (HU 029)', () => {
+describe('sharedNames — one list, distinct names', () => {
   it('gives every row whose name another row carries its distinguishing tail', () => {
     const name =
       'Read the repository and write a short summary of what each package'

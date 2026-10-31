@@ -99,6 +99,22 @@ describe('chordMatches', () => {
       false,
     )
   })
+
+  it('takes the letter the layout typed over its physical key, when it typed one', () => {
+    const approve = parseChord('Alt+a')!
+    // AZERTY: A sits where QWERTY has Q, and Q where QWERTY has A.
+    expect(
+      chordMatches(approve, { key: 'a', code: 'KeyQ', altKey: true }),
+    ).toBe(true)
+    expect(
+      chordMatches(approve, { key: 'q', code: 'KeyA', altKey: true }),
+    ).toBe(false)
+    // Option+A types "å" on a Mac, and a Cyrillic layout types "ф": the physical key.
+    for (const key of ['å', 'ф'])
+      expect(chordMatches(approve, { key, code: 'KeyA', altKey: true })).toBe(
+        true,
+      )
+  })
 })
 
 describe('resolveBinding — last matching rule wins', () => {

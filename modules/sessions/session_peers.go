@@ -109,12 +109,13 @@ func (m *Module) handleSetRunPeers(w http.ResponseWriter, r *http.Request, mc ap
 	}
 	defer releasePeers()
 	var dto runDTO
+	var rec model.Record
 	err = mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
 		if err != nil {
 			return err
 		}
-		rec, err := findRunRec(r.Context(), repo, ref)
+		rec, err = findRunRec(r.Context(), repo, ref)
 		if err != nil {
 			return err
 		}
@@ -156,6 +157,7 @@ func (m *Module) handleSetRunPeers(w http.ResponseWriter, r *http.Request, mc ap
 		writeRunErr(w, err)
 		return
 	}
+	m.showTitle(r.Context(), mc, rec, &dto)
 	writeJSON(w, http.StatusOK, dto)
 }
 

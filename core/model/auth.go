@@ -280,10 +280,29 @@ type AuthSession struct {
 	// fixed once at UTC microsecond precision by the verified producer.
 	// Nil is a legacy or never-elevated session; expiry never reconstructs it.
 	AALAuthenticatedAt *Timestamp
+	// LastUsedAt is the last observed authentication, to within a minute.
+	// Nil is a legacy row that has not authenticated since this was recorded.
+	LastUsedAt *Timestamp
+	// ClientKind is the transport most recently observed: browser cookie or
+	// bearer token. Client transport hints are display-only, never verified device
+	// identity or authorization evidence. Empty is a legacy unknown transport.
+	ClientKind string
+	// DeviceName is the owner-chosen display label for a paired device.
+	DeviceName string
+	// PairingSourceID marks a pending one-time link, not an authenticating session.
+	// Acceptance clears it only after validating the source session again.
+	PairingSourceID ID
 }
 
+const (
+	SessionClientBrowser = "browser"
+	SessionClientToken   = "token"
+	SessionClientUnknown = "unknown"
+	SessionClientPairing = "pairing"
+)
+
 // WebAuthnCredential is a registered FIDO2/WebAuthn authenticator for a user
-//. It stores PUBLIC material only: the credential id and the
+// . It stores PUBLIC material only: the credential id and the
 // public-key/attestation record the verifier needs — never a private key, never
 // a challenge. It lives in the system tenant next to the other credential rows.
 type WebAuthnCredential struct {
@@ -394,6 +413,10 @@ type APIToken struct {
 	BoundTenantID TenantID
 	// Role is the built-in role the token acts with in its bound tenant.
 	Role string
+	// GroupDerivedRole marks that Role came from a directory-group elevation at
+	// issue time. Only this role is re-evaluated against the current roster; a role
+	// granted directly to the user remains valid after direct membership removal.
+	GroupDerivedRole bool
 	// IsSuperadmin grants the system role (requires BoundTenantID zero).
 	IsSuperadmin bool
 	// ExpiresAt is the optional expiry (nil = no expiry).

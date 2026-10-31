@@ -30,7 +30,7 @@ import (
 	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
-// dev#1517, real use: the real npm, through the production runner, Landlock and
+// the regression, real use: the real npm, through the production runner, Landlock and
 // the egress proxy, installs a package from a private registry declared on its
 // profile, and a session on another profile cannot reach that registry. Two
 // record-bound (network-confined) Claude profiles are launched through the real

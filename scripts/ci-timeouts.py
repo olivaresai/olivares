@@ -65,7 +65,7 @@ def valor_visible(valor, limite=80):
 
     `cannot_check` truncates the message, but the formatting runs first: a multi-megabyte string
     or bytes value was rendered in full only to be cut. Cut first, then quote, so the refusal
-    stays a bounded amount of work whatever the value holds (dev#2645 review).
+    stays a bounded amount of work whatever the value holds (the regression review).
     """
     if isinstance(valor, (str, bytes)) and len(valor) > limite:
         return "%r... (%d chars)" % (valor[:limite], len(valor))
@@ -102,34 +102,34 @@ def por_yaml(fs):
             cannot_check("%s could not be parsed: %s" % (os.path.basename(f), exc))
         # A document that is not a mapping (a sequence, or a bare scalar) cannot hold jobs. It
         # was skipped silently while the plain reader refuses the same file; skipping it let a
-        # readable sibling workflow turn the missing rows into CLEAN (dev#2645 review).
+        # readable sibling workflow turn the missing rows into CLEAN (the regression review).
         if not isinstance(d, dict):
             cannot_check("%s: document is not a mapping" % os.path.basename(f))
         # `jobs:` may parse as a string or a sequence (`jobs: |`, `jobs: [a]`). Walking it raised
         # AttributeError, the helper exited 1, and the gate reported a crash instead of the
-        # documented NOPUEDO (dev#2645 review).
+        # documented NOPUEDO (the regression review).
         trabajos = d.get("jobs")
         if trabajos is not None and not isinstance(trabajos, dict):
             cannot_check("%s: jobs is not a mapping" % os.path.basename(f))
         for nombre, job in (trabajos or {}).items():
             # A scalar job holds no cap and no steps; skipping it hid a shape the plain reader
-            # refuses, so the two paths disagreed on the same file (dev#2645 review).
+            # refuses, so the two paths disagreed on the same file (the regression review).
             if not isinstance(job, dict):
                 cannot_check("%s: job %s is not a mapping"
                              % (os.path.basename(f), valor_visible(nombre)))
             # Presence, not truthiness: a declared null cap (`.get()` returned None) used to
-            # drop the whole job from the rows (dev#2645 review).
+            # drop the whole job from the rows (the regression review).
             if "timeout-minutes" not in job:
                 continue
             techo = job["timeout-minutes"]
             # `int(techo)` raised on a string and truncated a float or a bool; GitHub accepts
             # only an integer, so any other type is a value the reader cannot attribute. A
-            # traceback is not the documented NOPUEDO (dev#2645 review).
+            # traceback is not the documented NOPUEDO (the regression review).
             if type(techo) is not int:
                 cannot_check("%s: timeout-minutes is not an integer (%s)"
                              % (os.path.basename(f), valor_visible(techo)))
             # GitHub reads a positive number of minutes. Zero or a negative cap was printed as a
-            # row the plain reader refuses (dev#2645 review).
+            # row the plain reader refuses (the regression review).
             if techo < 1:
                 cannot_check("%s: timeout-minutes is not a positive integer (%s)"
                              % (os.path.basename(f), valor_visible(techo)))
@@ -141,7 +141,7 @@ def por_yaml(fs):
                              % (os.path.basename(f), valor_visible(pasos_val)))
             pasos = pasos_val or []
             # A scalar step carries no guard, but it is still an item of the list: filtering it
-            # out printed a different step count than the plain reader (dev#2645 review).
+            # out printed a different step count than the plain reader (the regression review).
             conguarda = [s for s in pasos
                          if isinstance(s, dict) and "timeout-minutes" in s]
             for s in conguarda:
@@ -178,12 +178,12 @@ ESTILOS_LISTA = (4, 6)
 # A structural key's colon must be followed by whitespace: `jobs:#c` is a plain scalar (`#` needs
 # a space before it), NBSP is not a separator in YAML, and `timeout-minutes:30` is not a key the
 # reader can attribute. `\s*` accepted all three and turned an unreadable file into rows
-# (dev#2645 review). CRLF needs no pattern support: text mode's universal newlines turn `\r\n`
+# (the regression review). CRLF needs no pattern support: text mode's universal newlines turn `\r\n`
 # into `\n` before any match, so a `\r?` here would be dead.
 RE_JOBS = re.compile(r"^jobs:(?: +(#.*)?)?$")
 # YAML also reads `"jobs":` and `jobs :` as the jobs key, and the reader knows neither: it ignored
 # the key, and a valid sibling file turned the missing rows into CLEAN. PyYAML walks the quoted
-# key and refuses a non-mapping value, so refusing the spelling is the safe direction (dev#2645
+# key and refuses a non-mapping value, so refusing the spelling is the safe direction (the regression
 # review). Only the top-level jobs key is spelled out here; every other quoted key stays unread
 # as before.
 RE_JOBS_CLAVE = re.compile(r"""^(?:["']jobs["'][ \t]*|jobs[ \t]+):""")
@@ -191,7 +191,7 @@ RE_TOP = re.compile(r"^\S")
 # A column-0 line that is not a mapping key is block structure this reader cannot attribute: a
 # sequence or flow document (`- a`, `{jobs: ...}`), a malformed marker (`----`), or junk. PyYAML
 # rejects those streams, and ignoring the line let a later `jobs:` block be read from a file it
-# rejects (dev#2645 review). `---foo: bar` and `...foo: bar` are mapping keys and stay readable.
+# rejects (the regression review). `---foo: bar` and `...foo: bar` are mapping keys and stay readable.
 RE_TOP_CLAVE = re.compile(r"^[^\s#][^#]*?:(?:[ \t]|$)")
 # At column 0, a sequence entry or an explicit key is block structure even when the line holds a
 # colon: `- a: b` is a sequence of mappings and `? x: y` an explicit key. A flow node has no
@@ -221,13 +221,13 @@ RE_FIN_STEPS = re.compile(r"^    (?!-(?: |$))\S")
 # sobre los 18 workflows de hoy: 51 menciones = 22 techos de job + 27 guardas de paso + 2 lineas
 # de comentario puro (que se saltan antes), asi que la red no produce ni un rehuse falso.
 RE_MENCION = re.compile(r"timeout-minutes")
-# Three more shapes the reader cannot attribute, refused instead of guessed (dev#2637). A quoted,
+# Three more shapes the reader cannot attribute, refused instead of guessed. A quoted,
 # anchored or otherwise unusual job id did not match RE_JOB, so the PREVIOUS job kept reading and
 # the new job's ceiling overwrote its own (a false CLEAN); an alias hides a step's guard; and a
 # leading zero is octal in YAML 1.1, so `010` is 8 there and 10 here (the larger ceiling is the
 # unsafe direction).
 #   RE_COL2   a column-2 line inside `jobs:` that RE_JOB did not take.
-#   RE_COL1   a column-1 line inside `jobs:` (dev#2645): the mapping is indented by one space, so the job
+#   RE_COL1   a column-1 line inside `jobs:`: the mapping is indented by one space, so the job
 #             ids are at column 1 and what sits at column 2 is nested in them, a block scalar body or a
 #             nested key, never a job. Reading it as a job printed a row PyYAML does not have, and
 #             the body of a `z: |` job replaced the ceiling of the one before it.
@@ -260,7 +260,7 @@ RE_MENCION = re.compile(r"timeout-minutes")
 #             the line alone (`a-"b: "c`). Those are both, see clase_comilla.
 #   RE_ENTERO a positive plain decimal with no leading zero; `\d` would accept `²` and `٣`,
 #             `[0-9]` does not. Zero minutes is not a value GitHub reads, and it used to print a
-#             row PyYAML's path now refuses (dev#2645 review).
+#             row PyYAML's path now refuses (the regression review).
 RE_COL1 = re.compile(r"^ \S")
 RE_COL2 = re.compile(r"^  \S")
 RE_ANCLA = re.compile(r"(?:^\s*(?:-\s+)*|:\s+|[\[,]\s*)(?:![^\s]*\s+)?[&*][\w-]")
@@ -268,18 +268,18 @@ RE_BLOQUE = re.compile(r"^( *)((?:- +)*)((?:[!&][^\s#]*\s+)*)((?:[^\s#][^#]*?:\s
 # Any indicator at the value position, whatever its suffix. A suffix the strict form rejects
 # (`| junk`, `|0`, `|2`, `|#c`, `>good`, and `a#b: |`, whose key's `#` is a plain scalar char, not
 # a comment) is invalid YAML or not modelled by this reader, but it used to ignore the line, read
-# the body as structure and print a row: an approval PyYAML does not give (dev#2645 review).
+# the body as structure and print a row: an approval PyYAML does not give (the regression review).
 RE_BLOQUE_LAXO = re.compile(r"^ *(?:- +)*(?:[!&][^\s#]*\s+)*(?:[^\s](?:(?![ \t]#).)*?:\s+)?[|>]")
 RE_SALTO = re.compile("[\\x85\\u2028\\u2029]")
 # A document marker or directive is structure this reader cannot follow: `safe_load` reads one
 # document and raises on a second, and a directive changes how the document is read. Malformed
 # spellings (`---#c`, `%YAML1.2`, an indented ` ---`) are refused too: PyYAML raises on them, and
 # skipping the line printed rows from a stream it rejects. A marker needs whitespace, a comment or
-# the end of the line after it, so `---foo: bar` stays a mapping key and is read (dev#2645 review).
+# the end of the line after it, so `---foo: bar` stays a mapping key and is read (the regression review).
 RE_DOC = re.compile(r"^\s*(?:---|\.\.\.)(?=[ \t#]|$)|^\s*%")
 RE_ENTERO = re.compile(r"[1-9][0-9]*")
 # A line longer than this is refused before any pattern runs: RE_ANCLA backtracks, and a line of
-# 100 KB held the reader for 48.7 s (dev#2645). The longest line of the 37 workflows has 796
+# 100 KB held the reader for 48.7 s. The longest line of the 37 workflows has 796
 # characters. The body of a block scalar is script text, so its lines are not read and not capped.
 MAX_LINEA = 4096
 # A double-quoted token whose escapes spell a name this reader reads (timeout-minutes, steps, jobs)
@@ -372,7 +372,7 @@ def comilla_sin_cerrar(ln):
 def nodo_inicio_flujo(ln, i, pila, cierre=False):
     """True when the `[` or `{` at ln[i] opens a YAML node, not text of a plain scalar.
 
-    A flow indicator opens a node only at a node start (dev#2645): the line start, after a `- ` or
+    A flow indicator opens a node only at a node start: the line start, after a `- ` or
     `? ` indicator, after `key: `, after a tag or anchor, or after `[`, `{` or `,` inside a flow
     collection. Anywhere else it is a character of a plain scalar (`echo [x]`). A `[`, `{` or `,`
     outside a flow collection is such a character too, so `[ {` in a shell line is text. Inside a
@@ -381,7 +381,7 @@ def nodo_inicio_flujo(ln, i, pila, cierre=False):
     a tag or anchor cannot start one, and the loose tag test would read `!cancelled() }` in an
     `if:` line as a node start. A line start is not a node start for one either: a line beginning
     `}}/postgres?sslmode=disable` is how a multi-line `${{ ... }}` expression continues, which the
-    reader already treats as text (dev#2645 review).
+    reader already treats as text (the regression review).
     """
     k = i
     while k and ln[k - 1] == " ":
@@ -394,7 +394,7 @@ def nodo_inicio_flujo(ln, i, pila, cierre=False):
         # close in a file this reader can read, because a collection left open on its line was
         # already refused. A line starting with `]` or `,` is refused too: it can only be a
         # plain-scalar continuation, which this reader does not attribute — over-refusal, the
-        # allowed direction of the one-way rule (dev#2645 review).
+        # allowed direction of the one-way rule (the regression review).
         return not cierre or ln[i:i + 2] != "}}"
     if antes.endswith(":") and (k < i or pila):
         return True
@@ -403,7 +403,7 @@ def nodo_inicio_flujo(ln, i, pila, cierre=False):
     if antes[-1] == "?" and antes.rsplit(" ", 1)[-1] == "?":
         # An explicit-key indicator stands alone (the line start or `key: ?` case is handled
         # above). A question mark glued to a word (`really?`) is plain-scalar text, and a flow
-        # opener after it is text too (dev#2645 review).
+        # opener after it is text too (the regression review).
         return True
     if cierre:
         return False
@@ -415,7 +415,7 @@ def flujo_sin_cerrar(ln):
 
     A flow collection may span lines, and a `#` after a space hides its closing bracket, so read
     line by line `env: { # }` left the reader in the job and a cap inside the collection replaced
-    the job's own (1000 against 10, dev#2645); a header-looking line inside one opened a fake block
+    the job's own (1000 against 10, the regression); a header-looking line inside one opened a fake block
     that hid an escaped key. A collection that does not close on its line is a shape the reader
     cannot attribute, so it refuses it the way `comilla_sin_cerrar` refuses an open quote. Brackets
     inside a quoted string are text, and a `#` after a space ends the line. A closer or a comma
@@ -450,7 +450,7 @@ def flujo_sin_cerrar(ln):
                 comilla = c
             elif recien:
                 # A quote where a separator would be is text after a collection that already
-                # closed: the value cannot continue with a scalar (dev#2645 review).
+                # closed: the value cannot continue with a scalar (the regression review).
                 roto = True
             i += 1
             continue
@@ -482,7 +482,7 @@ def flujo_sin_cerrar(ln):
         elif c not in " \t":
             # Text where a separator or the end of the line would be: the collection closed and
             # the value cannot continue with a plain scalar. PyYAML rejects the line; reading it
-            # printed a row (dev#2645 review).
+            # printed a row (the regression review).
             if recien:
                 roto = True
             recien = False
@@ -495,7 +495,7 @@ def colones_planos(ln):
 
     A plain scalar cannot hold an unquoted `: `: PyYAML rejects `env: FOO: bar` and
     `runs-on: ubuntu: latest` with "mapping values are not allowed here", while the reader
-    ignored the line and printed a row (dev#2645 review). Only a colon followed by a space or
+    ignored the line and printed a row (the regression review). Only a colon followed by a space or
     the end of the line separates here; `https://` is one plain scalar. A quote hides a colon
     only when it certainly opens a string (`key: "a: b"`): a quote inside a plain scalar is text
     for YAML, so `run: echo "a: b"` is refused exactly as PyYAML refuses it. A colon inside a
@@ -545,7 +545,7 @@ def por_lectura_plana(fs):
         try:
             # `utf-8-sig` strips a BOM at the start of the stream, which YAML allows and PyYAML
             # ignores. With plain `utf-8` the first line kept it (`jobs:` did not match) and the
-            # file printed no rows although PyYAML reads it (dev#2645 review).
+            # file printed no rows although PyYAML reads it (the regression review).
             with open(f, encoding="utf-8-sig") as fh:
                 lineas = fh.read().split("\n")
         except Exception as exc:
@@ -573,7 +573,7 @@ def por_lectura_plana(fs):
             if job is not None and not visto_mas:
                 # A job id with no lines under it is a null value, not a job without a cap: the
                 # PyYAML path refuses it as a non-mapping. Printing only the sibling jobs let a
-                # readable tree turn the missing one into CLEAN (dev#2645 review).
+                # readable tree turn the missing one into CLEAN (the regression review).
                 cannot_check("%s: job %r is not a mapping" % (base, job))
             if job is not None and techo is not None:
                 filas.append((base, job, techo, suma, pasos, conguarda))
@@ -586,7 +586,7 @@ def por_lectura_plana(fs):
             # The body of a block scalar is script text, not YAML: a `timeout-minutes` written
             # there is neither a ceiling nor a guard. Inside jobs it is still counted as a
             # mention, so the attribution check below refuses it instead of letting it pass
-            # unread (dev#2645); outside jobs the gate does not read it at all. The block is
+            # unread; outside jobs the gate does not read it at all. The block is
             # tracked everywhere, because a top-level `env: X: |` body must not be read either.
             if bloque is not None and sangria > bloque:
                 if en_jobs and RE_MENCION.search(ln):
@@ -598,13 +598,13 @@ def por_lectura_plana(fs):
                 cannot_check("%s: %d characters in a line, over the %d the plain reader checks"
                              % (base, len(ln), MAX_LINEA))
             # Checked here, after the body skip, so a marker or directive inside a block scalar is
-            # text: only structural lines are refused (dev#2645 review).
+            # text: only structural lines are refused (the regression review).
             if RE_DOC.match(ln):
                 cannot_check("%s: document marker or directive, unsupported format" % base)
             # A `jobs:` with a value is not the bare mapping the reader knows: `jobs: |` is a
             # scalar whose body may hide the real jobs, `jobs: {}` is inline. The body tracker
             # used to skip the scalar and print nothing, so a readable sibling file turned the
-            # missing rows into CLEAN; refuse the header itself (dev#2645 review).
+            # missing rows into CLEAN; refuse the header itself (the regression review).
             if ln.startswith("jobs:") and not RE_JOBS.match(ln):
                 cannot_check("%s: jobs with a value (%r), unsupported format" % (base, ln.strip()))
             if RE_JOBS_CLAVE.match(ln):
@@ -612,7 +612,7 @@ def por_lectura_plana(fs):
                              "unsupported format" % base)
             # A column-0 line that is not a plain key ends the document this reader knows. Ignoring
             # it kept the reader inside the previous job, so an explicit `? env` key's cap replaced
-            # the job's own (dev#2645 review). Sequence/flow documents, malformed markers and junk
+            # the job's own (the regression review). Sequence/flow documents, malformed markers and junk
             # are refused here too; PyYAML rejects every one of those streams.
             if RE_TOP.match(ln) and (RE_TOP_ESTRUCTURA.match(ln) or not RE_TOP_CLAVE.match(ln)):
                 cannot_check("%s: unsupported top-level line (%r), only mapping keys are read"
@@ -627,7 +627,7 @@ def por_lectura_plana(fs):
                 # A plain key cannot hold `: `: PyYAML rejects `if: echo a: |`, but the regex took
                 # the whole text as the key and skipped the following line, which could hide a
                 # cap. A quoted key holding `: ` is refused too; the real tree has none
-                # (dev#2645 review).
+                # (the regression review).
                 clave = re.sub(r":\s+$", "", b.group(4))
                 if ": " in clave:
                     cannot_check("%s: block scalar key with an unquoted colon (%r), unsupported format"
@@ -643,7 +643,7 @@ def por_lectura_plana(fs):
                 cannot_check("%s: block scalar indicator on its own line (%r), unsupported format"
                              % (base, ln.strip()))
             # A value cannot hold a second unquoted `: `. PyYAML refuses the line ("mapping
-            # values are not allowed here"); the reader ignored it and printed a row (dev#2645
+            # values are not allowed here"); the reader ignored it and printed a row (the regression
             # review). Checked after the block header so its key keeps its own, more precise
             # refusal, and after the body skip because script text is not YAML.
             if colones_planos(ln) > 1:
@@ -687,7 +687,7 @@ def por_lectura_plana(fs):
                 continue
             # A `steps:` that is not the bare key is not the list the reader knows. The line used
             # to be ignored as a job key, so the job printed with zero steps and no guards, and a
-            # zero-space `steps:#c` was read as the list itself (dev#2645 review).
+            # zero-space `steps:#c` was read as the list itself (the regression review).
             if ln.startswith("    steps:") and not RE_STEPS.match(ln):
                 cannot_check("%s/%s: steps with a value (%r), unsupported format"
                              % (base, job, ln.strip()))
@@ -727,7 +727,7 @@ def por_lectura_plana(fs):
         if not vistas:
             # `safe_load` of an empty or comment-only stream is None, not a mapping, and the
             # PyYAML path refuses it. The plain reader printed no rows, so a readable sibling
-            # turned the silence into CLEAN (dev#2645 review).
+            # turned the silence into CLEAN (the regression review).
             cannot_check("%s: document is not a mapping" % base)
         if menciones != atribuidas:
             cannot_check("%s: %d mention(s) of timeout-minutes and only %d attributed — an unsupported format "

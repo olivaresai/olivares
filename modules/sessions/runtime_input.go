@@ -13,6 +13,8 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
+	"testing"
 	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
@@ -170,7 +172,7 @@ func validateRuntimeInputTarget(target RuntimeInputTarget) error {
 // starts a nested transaction. Successful validation is not a transferable
 // permit: delivery rechecks the original launch under the run operation lock.
 func (m *Module) ValidateRuntimeInputTargetInScope(ctx context.Context, sc store.Scope, target RuntimeInputTarget) error {
-	_, err := m.runtimeInputTargetInScope(ctx, sc, target, "")
+	_, err := m.runtimeInputTargetInScope(ctx, sc, target, "", false)
 	return err
 }
 
@@ -185,7 +187,7 @@ func (m *Module) ValidateRuntimeInputTargetInScope(ctx context.Context, sc store
 func (m *Module) ValidateRuntimeInputModeInScope(ctx context.Context, sc store.Scope, target RuntimeInputTarget, mode RuntimeInputMode) error {
 	switch mode {
 	case RuntimeInputText, RuntimeInputRaw:
-		_, err := m.runtimeInputTargetInScope(ctx, sc, target, mode)
+		_, err := m.runtimeInputTargetInScope(ctx, sc, target, mode, false)
 		return err
 	default:
 		return ErrRuntimeInputUnsupported
@@ -195,7 +197,7 @@ func (m *Module) ValidateRuntimeInputModeInScope(ctx context.Context, sc store.S
 // An empty mode validates target custody only, as required by the exported
 // target-only validator. Mode validation and delivery supply a closed mode so
 // unsupported input is rejected before work authority or Claim enters the write set.
-func (m *Module) runtimeInputTargetInScope(ctx context.Context, raw store.Scope, target RuntimeInputTarget, mode RuntimeInputMode) (model.Record, error) {
+func (m *Module) runtimeInputTargetInScope(ctx context.Context, raw store.Scope, target RuntimeInputTarget, mode RuntimeInputMode, markInput bool) (model.Record, error) {
 	if err := validateRuntimeInputTarget(target); err != nil {
 		return nil, err
 	}
@@ -275,6 +277,16 @@ func (m *Module) runtimeInputTargetInScope(ctx context.Context, raw store.Scope,
 	if err := fenceWithin(ctx, raw, live.claim.SID, live.claim.Holder, live.claim.Fence, now.Time()); err != nil {
 		return nil, err
 	}
+	// Only checked delivery asks for this: its I/O half never opens a second
+	// mutation after commit, so the input fact joins its admission transaction.
+	// A preflight or validation sends nothing and must leave the fact alone.
+	if markInput && mode == RuntimeInputText && rec.String(colRunProfileDriver) == providerDriverCodex && !rec.Bool(colRunCodexInputAttempted) {
+		rec[colRunCodexInputAttempted] = true
+		rec, err = runs.Update(ctx, rec)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return rec, nil
 }
 
@@ -342,7 +354,7 @@ func (m *Module) DeliverRuntimeInput(ctx context.Context, request RuntimeInputRe
 		if _, err := request.Authority.AuthorityFor(now.Time(), request.Target); err != nil {
 			return err
 		}
-		rec, err = m.runtimeInputTargetInScope(ctx, sc, request.Target, request.Mode)
+		rec, err = m.runtimeInputTargetInScope(ctx, sc, request.Target, request.Mode, false)
 		if err != nil {
 			return err
 		}
@@ -416,10 +428,57 @@ type RuntimeInputChecks interface {
 
 const maxCheckedRuntimeInputLease = 250 * time.Millisecond
 
+// testCheckedRuntimeInputCeilings is empty (the 250ms contract) except in a
+// `go test` binary that called SetTestCheckedRuntimeInputCeiling; the newest
+// override still held wins.
+var testCheckedRuntimeInputCeilings struct {
+	sync.Mutex
+	stack []*time.Duration
+}
+
+// CheckedRuntimeInputCeiling is the longest remaining deadline
+// DeliverRuntimeInputChecked accepts: 250ms, always, outside a test binary.
+// A caller that builds the request context reads it instead of hard-coding 250ms.
+func CheckedRuntimeInputCeiling() time.Duration {
+	testCheckedRuntimeInputCeilings.Lock()
+	defer testCheckedRuntimeInputCeilings.Unlock()
+	if n := len(testCheckedRuntimeInputCeilings.stack); n > 0 {
+		return *testCheckedRuntimeInputCeilings.stack[n-1]
+	}
+	return maxCheckedRuntimeInputLease
+}
+
+// SetTestCheckedRuntimeInputCeiling widens the ceiling so a test on a loaded
+// runner can tolerate a stall inside the checked-delivery section, and returns
+// an idempotent restore that removes only this override. Restores may run in
+// any order. It panics unless the running program is a `go test` binary
+// (testing.Testing()) and never accepts less than 250ms; it is not reachable
+// from production config or an environment variable. It does not extend the
+// authority proofs or the work lease: the deadline must still fit every one of
+// them. A test that widens this process-wide ceiling must not call t.Parallel.
+func SetTestCheckedRuntimeInputCeiling(d time.Duration) (restore func()) {
+	if !testing.Testing() {
+		panic("sessions.SetTestCheckedRuntimeInputCeiling is test-only")
+	}
+	if d < maxCheckedRuntimeInputLease {
+		panic("sessions.SetTestCheckedRuntimeInputCeiling: the ceiling can only be widened")
+	}
+	override := &d
+	testCheckedRuntimeInputCeilings.Lock()
+	testCheckedRuntimeInputCeilings.stack = append(testCheckedRuntimeInputCeilings.stack, override)
+	testCheckedRuntimeInputCeilings.Unlock()
+	return func() {
+		testCheckedRuntimeInputCeilings.Lock()
+		defer testCheckedRuntimeInputCeilings.Unlock()
+		testCheckedRuntimeInputCeilings.stack = slices.DeleteFunc(testCheckedRuntimeInputCeilings.stack, func(p *time.Duration) bool { return p == override })
+	}
+}
+
 // DeliverRuntimeInputChecked composes restrictive checks with the last authority
 // transaction before delivery. The caller supplies the ORIGINAL request context,
-// whose finite deadline has at most 250ms remaining and is bounded by its original
-// request lease. This entry ceiling cannot establish when an external lease began.
+// whose finite deadline has at most CheckedRuntimeInputCeiling remaining (250ms
+// in production) and is bounded by its original request lease. This entry ceiling
+// cannot establish when an external lease began.
 // No wait creates or extends a lease, and no callback receives a transport handle.
 //
 // The order is caller-owned exclusions, run lock, complete directory/account
@@ -427,13 +486,20 @@ const maxCheckedRuntimeInputLease = 250 * time.Millisecond
 // No database lock spans I/O. The existing Process contract must honor the same
 // deadline; an internal driver mutex may delay return without authorizing a late
 // write. This method is not a receiver-side instantaneous revocation protocol.
+//
+// The store's COMMIT is a synchronous disk write inside the section (a WAL fsync
+// on a file store) and takes longer on a loaded disk. A commit that outlasts the
+// deadline is refused (or unknown) before any write starts: the deadline is
+// checked again after the commit. A write that completes past the deadline is
+// reported unknown. The commit stays before the write: the Claim must be durable
+// before the first byte.
 func (m *Module) DeliverRuntimeInputChecked(ctx context.Context, request RuntimeInputRequest, checks RuntimeInputChecks) (RuntimeInputResult, error) {
 	refused := RuntimeInputResult{Outcome: RuntimeInputRefused}
 	if ctx == nil || m == nil || m.Data == nil || m.rt == nil || nilRuntimeInputChecks(checks) {
 		return refused, ErrRuntimeInputAuthority
 	}
 	deadline, ok := ctx.Deadline()
-	if !ok || deadline.IsZero() || time.Until(deadline) > maxCheckedRuntimeInputLease {
+	if !ok || deadline.IsZero() || time.Until(deadline) > CheckedRuntimeInputCeiling() {
 		return refused, ErrRuntimeInputAuthority
 	}
 	if err := runtimeInputDeadline(ctx, deadline); err != nil {
@@ -525,7 +591,7 @@ func (m *Module) DeliverRuntimeInputChecked(ctx context.Context, request Runtime
 		if !ok {
 			return ErrRuntimeInputTarget
 		}
-		rec, err = m.runtimeInputTargetInScope(ctx, sc, request.Target, request.Mode)
+		rec, err = m.runtimeInputTargetInScope(ctx, sc, request.Target, request.Mode, true)
 		if err != nil {
 			return err
 		}

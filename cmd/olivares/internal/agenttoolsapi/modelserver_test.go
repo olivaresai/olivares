@@ -245,7 +245,7 @@ func apiError(out map[string]any) (code, message string) {
 
 func portOf(addr string) string { return addr[strings.LastIndex(addr, ":")+1:] }
 
-// A LOCAL OPENAI-COMPATIBLE SERVER IS A SERVICE OF THE ENGINE (dev#2422). `llama-server` and
+// A LOCAL OPENAI-COMPATIBLE SERVER IS A SERVICE OF THE ENGINE. `llama-server` and
 // `vllm serve` were started by hand; Start runs the installed one as the engine's own child on
 // loopback, with a key the engine made for it, and registers it in Providers so OpenCode can
 // be bound to it.

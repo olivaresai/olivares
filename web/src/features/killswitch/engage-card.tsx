@@ -142,7 +142,7 @@ export function StopAllConfirm({
     () => onOpenChange(false),
     () => setReason(''),
   )
-  // HU 047 (09b, one-admin install): starting the estate again needs two OTHER admin
+  // acceptance (09b, one-admin install): starting the estate again needs two OTHER admin
   // accounts to approve and one to review. With fewer than three active admin accounts
   // the confirmation says so before the stop; a roster that cannot be read says it too.
   const roster = useQuery({

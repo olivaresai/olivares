@@ -8,7 +8,7 @@
 # WHY: `race-workspace` raced every workspace module in ONE step and died on the
 # step ceiling at 75 min with 14 packages green and finops/governance never
 # started. A sweep that cannot finish is not evidence of anything, and the
-# release preflight (release.yml) requires a GREEN race-full on the tagged SHA.
+# release preflight requires a green race-full on the tagged SHA or identical tree.
 #
 # ⛔ THE GROUPS LIVE IN ONE PLACE — scripts/race-groups.json — and the workflow
 # matrix is BUILT from it (`groups`). Writing the names in the YAML too is the
@@ -32,9 +32,19 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT}"
 
 SPEC="${OLIVARES_RACE_GROUPS:-scripts/race-groups.json}"
+SHARDER="${ROOT}/scripts/lib/test_name_shard.py"
+RUN_EXPR_LIMIT=100000
 say() { printf 'race-groups: %s\n' "$*"; }
 fail()   { printf 'race-groups: FAIL — %s\n' "$*" >&2; exit 1; }
 cannot() { printf 'race-groups: COULD NOT LOOK — %s\n' "$*" >&2; exit 2; }
+check_run_expression_size() {
+  local owner="$1" expression="$2" bytes
+  bytes="$(printf '%s' "$expression" | wc -c)"
+  [ "$bytes" -le "$RUN_EXPR_LIMIT" ] && return 0
+  fail "the -run expression of ${owner} is ${bytes} bytes, over the ${RUN_EXPR_LIMIT}-byte limit this reader declares (the kernel refuses a single argument over MAX_ARG_STRLEN, 131072 bytes). Declare more shards for this package."
+}
+[ -r "${SHARDER}" ] || cannot "cannot read ${SHARDER}"
+export SHARDER
 
 [ -f "${SPEC}" ] || cannot "cannot find ${SPEC}"
 [ -f go.work ]   || cannot "go.work is absent from ${ROOT}"
@@ -53,45 +63,37 @@ enumerate() {
   done < <(go work edit -json | sed -n 's/.*"DiskPath": "\(.*\)".*/\1/p')
 }
 
-CACHE="${TMPDIR:-/tmp}/race-groups-pkgs.$$"
+CACHE="$(mktemp "${TMPDIR:-/tmp}/race-groups-pkgs.XXXXXX")" || cannot "cannot create the package inventory"
 trap 'rm -f "${CACHE}" "${LIST:-}" "${TESTS_CACHE:-}" "${TLIST:-}"' EXIT
 pkgs() {
   [ -s "${CACHE}" ] || enumerate | grep -v '^$' | sort -u > "${CACHE}"
   cat "${CACHE}"
 }
 
-# ── Los tests del paquete RAIZ, para el reparto por -run ──────────────────────────
-# Se leen del FUENTE (no de un `go test -list`, que compila con -race y cuesta minutos).
-# `^func TestX(` es la forma que Go reconoce como test de nivel superior.
-TESTS_CACHE="${TMPDIR:-/tmp}/race-root-tests.$$"
+# ── Test names come through the one source enumerator ─────────────────────────────
+# `go list` applies the build constraints, and pr-suite-shards.sh reads complete Test/Fuzz/
+# Example declarations without compiling. The race sweep keeps its existing Test* universe.
+TESTS_CACHE="$(mktemp "${TMPDIR:-/tmp}/race-root-tests.XXXXXX")" || cannot "cannot create the root test inventory"
 root_tests() {
-  local dir
-  dir="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1],encoding="utf-8"))["root_package"])' "${SPEC}" | sed 's|github.com/olivaresai/olivares/||')"
-  [ -d "${dir}" ] || cannot "cannot find the root package directory: ${dir}"
+  local pkg
+  pkg="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1],encoding="utf-8"))["root_package"])' "${SPEC}")"
   if [ ! -s "${TESTS_CACHE}" ]; then
-    # ⛔ EL UNIVERSO SALE DE `go list`, NO DE UN GLOB DE `*_test.go`. Medido por
-    # sobre la primera version: el glob daba 1827 y `go test -list` 1811. La diferencia
-    # son QUINCE `TestE2E*` detras de una etiqueta de build —ficheros que Go NO compila
-    # en esta configuracion— mas `TestMain`, que no es un test sino el arranque del
-    # binario y `-run` nunca selecciona.
-    #
-    # Contar tests que la build EXCLUYE no es un detalle de aritmetica: inflaba
-    # `tests_now`, desequilibraba el reparto con tests que no existen, y —lo peor— si
-    # un turno se quedara SOLO con tests etiquetados, su `-run` casaria CERO y saldria
-    # 0 pareciendo verde, que es justo el fallo que este control existe para cortar.
-    #
-    # `go list` aplica las MISMAS restricciones de build que `go test` y no compila
-    # nada, asi que es barato. Se piden los dos conjuntos: los tests del paquete y los
-    # del paquete _test externo.
-    local files
-    files="$(cd "${dir}" && go list -f '{{range .TestGoFiles}}{{.}}
-{{end}}{{range .XTestGoFiles}}{{.}}
-{{end}}' . 2>/dev/null | grep -v '^$')" || cannot "go list failed in ${dir}"
-    [ -n "${files}" ] || cannot "go list returned no test files in ${dir}"
-    ( cd "${dir}" && printf '%s\n' "${files}" | tr '\n' '\0' | xargs -0 grep -hoE '^func Test[A-Za-z0-9_]+' ) \
-      | sed 's/^func //' | grep -vx 'TestMain' | sort -u > "${TESTS_CACHE}"
+    bash "${ROOT}/scripts/pr-suite-shards.sh" tests "${pkg}" | sed -n '/^Test/p' > "${TESTS_CACHE}" \
+      || cannot "cannot enumerate the tests of ${pkg}"
   fi
   cat "${TESTS_CACHE}"
+}
+
+group_tests() {
+  local group="$1" packages pkg tests
+  packages="$("$0" packages "${group}")" || return $?
+  tests="$(
+    while IFS= read -r pkg; do
+      [ -n "${pkg}" ] || continue
+      bash "${ROOT}/scripts/pr-suite-shards.sh" tests "${pkg}" || exit $?
+    done <<< "${packages}"
+  )" || return $?
+  printf '%s\n' "${tests}" | sed -n '/^Test/p' | sort -u
 }
 
 case "${1:-}" in
@@ -117,7 +119,7 @@ print(json.dumps(out))' "${SPEC}"
       python3 -c 'import json,sys;n=[g["name"] for g in json.load(open(sys.argv[1],encoding="utf-8"))["groups"]];sys.exit(0 if sys.argv[2] in n else 3)' "${SPEC}" "${G}" \
         || fail "unknown group: ${G}"
     fi
-    LIST="${TMPDIR:-/tmp}/race-groups-list.$$"
+    LIST="$(mktemp "${TMPDIR:-/tmp}/race-groups-list.XXXXXX")" || cannot "cannot create the package list"
     pkgs > "${LIST}"
     python3 - "${SPEC}" "${LIST}" "${G}" <<'PY'
 import json, sys
@@ -159,8 +161,8 @@ PY
     # ⛔ Y LA LISTA VIAJA POR FICHERO, NO POR TUBERÍA: un `<<'PY'` YA ocupa el stdin
     # con el PROGRAMA, así que `pkgs | python3 - <<'PY'` deja al python leyendo su
     # propio código como si fueran datos y la lista llega VACÍA.
-    LIST="${TMPDIR:-/tmp}/race-groups-list.$$"
-    TLIST="${TMPDIR:-/tmp}/race-groups-tests.$$"
+    LIST="$(mktemp "${TMPDIR:-/tmp}/race-groups-list.XXXXXX")" || cannot "cannot create the package list"
+    TLIST="$(mktemp "${TMPDIR:-/tmp}/race-groups-tests.XXXXXX")" || cannot "cannot create the root test list"
     pkgs > "${LIST}"
     root_tests > "${TLIST}"
     python3 - "${SPEC}" "${LIST}" "${TLIST}" <<'PY'
@@ -255,21 +257,28 @@ for g in spec["groups"]:
     if counts.get(g["name"], 0) == 0:
         fail("group %s has no packages: it is unnecessary, or its patterns are stale" % g["name"])
 
-# (5) EL REPARTO DEL PAQUETE RAIZ, por `-run`. Aqui el fallo silencioso es peor que
-#     en los paquetes: **un `-run` que no casa con nada sale 0 y parece verde**, asi
-#     que un turno con familias rancias publicaria un exito sin ejecutar un test.
-# El universo lo produce root_tests() —una sola funcion, la misma que usa `root-run`—
-# y llega por FICHERO (sys.argv[3]): dos enumeraciones distintas para el mismo conjunto
-# es como se cuelan los 16 tests que midio de diferencia.
+# (5) GENERATED ASSIGNMENT. Shard names and clocks stay declared; every test is assigned
+# exactly once by the shared SHA-256 implementation. Empty selections remain findings because
+# `go test -run` over an empty selection exits 0.
+import importlib.util as _importlib
+import os as _os
+import subprocess as _subprocess
+
+_helper_spec = _importlib.spec_from_file_location("test_name_shard", _os.environ["SHARDER"])
+_sharder = _importlib.module_from_spec(_helper_spec)
+_helper_spec.loader.exec_module(_sharder)
+
+def assign(domain, shards, tests):
+    try:
+        return _sharder.assign(domain, [s["name"] for s in shards], sorted(tests))
+    except ValueError as exc:
+        fail(str(exc))
+
 tests = set(l.strip() for l in open(sys.argv[3], encoding="utf-8") if l.strip())
 if not tests:
     print("race-groups: COULD NOT LOOK — the root test inventory was empty", file=sys.stderr)
     sys.exit(2)
 
-# ⛔ LA MISMA GUARDA, POR GRUPO. El override de `go_timeout_minutes` de un grupo puede pasarse del
-# techo del paso igual que el de la raiz, y entonces el reloj del paso mata al job ANTES de que el
-# de Go pueda dar su diagnostico: se pierde el motivo, que es lo caro. La de la raiz esta doce
-# lineas mas abajo desde el 2026-08-29; esta la exige el mismo argumento.
 for _g in spec.get("groups", []):
     _to = _g.get("go_timeout_minutes")
     if _to is None:
@@ -286,40 +295,12 @@ if spec["root_go_timeout_minutes"] >= spec["root_step_ceiling_minutes"]:
          "race-root; the Go timer starts AFTER compilation with -race"
          % (spec["root_go_timeout_minutes"], spec["root_step_ceiling_minutes"]))
 
-hits = {}
+assigned = assign("race:" + spec["root_package"], shards, tests)
 for s in shards:
-    fams = s["families"]
-    if not fams:
-        fail("shard %s declares no families: its -run would match NOTHING and exit 0" % s["name"])
-    own = [t for t in tests if any(t.startswith("Test" + f) for f in fams)]
-    if not own:
-        fail("shard %s matches NO test: its families are stale and `-run` would exit "
-             "0 without executing anything" % s["name"])
-    for t_ in own:
-        hits.setdefault(t_, []).append(s["name"])
+    if not assigned[s["name"]]:
+        fail("shard %s selects no test: its generated -run would exit 0 without executing anything" % s["name"])
 
-huerf = sorted(t_ for t_ in tests if t_ not in hits)
-if huerf:
-    fail("%d test(s) in the root package belong to no shard: they would not run and nobody would "
-         "notice" % len(huerf), huerf)
-dobles = sorted(t_ for t_, v in hits.items() if len(v) > 1)
-if dobles:
-    fail("%d test(s) belong to TWO shards (a family is a prefix of another family in another shard): "
-         "they would run twice" % len(dobles), ["%s → %s" % (t_, ",".join(hits[t_])) for t_ in dobles])
-
-# ⛔ LA CIFRA DECLARADA ES INFORMATIVA, Y ESO TAMBIEN SE MIDIO. Empezo siendo una igualdad
-# dura y el arbol EXPORTADO la rompe: alli hay 355 ficheros de test en la raiz y no 356, o
-# sea 1808 tests y no 1811. Una spec que solo vale en el arbol del hub no sirve, porque la
-# matriz de race-full se construye TAMBIEN sobre el export y sobre el repositorio publico.
-# `tests_now` queda como la foto con la que se calibra, y se imprime junto a la cuenta VIVA
-# para que la deriva se vea; lo que decide es una propiedad que no depende del arbol.
-#
-# Y lo que se comprueba de verdad es el EQUILIBRIO, que es la razon de existir del reparto:
-# ningun turno puede llevarse mas de `max_shard_share` del universo, porque un turno gordo
-# es exactamente el paso que no cabe en el techo del job.
-# Las duraciones MEDIDAS que se guardan para calibrar tienen que nombrar grupos que existan:
-# una cifra atada a un grupo que ya no esta es la misma rancidez que un patron muerto, y encima
-# es la que se lee para decidir el proximo reparto.
+# Measurements may inform future shard-count changes, but they cannot name a removed group.
 mr = spec.get("measured_run") or {}
 nombres_g = {g["name"] for g in spec["groups"]}
 for k in (mr.get("minutes") or {}):
@@ -328,53 +309,40 @@ for k in (mr.get("minutes") or {}):
              "rebalancing would be tied to a removed group" % k)
 
 share = spec.get("max_shard_share", 0.30)
-live = {}
 for s in shards:
-    live[s["name"]] = len([t_ for t_ in tests if any(t_.startswith("Test" + f) for f in s["families"])])
-for s in shards:
-    frac = live[s["name"]] / float(len(tests))
+    frac = len(assigned[s["name"]]) / float(len(tests))
     if frac > share:
         fail("shard %s contains %.1f%% of the tests (limit %.1f%%): an oversized shard is "
              "a step that cannot fit within the job limit" % (s["name"], frac * 100, share * 100))
 
-# (6) LOS SHARDS DE UN GRUPO parten sus tests por `-run`, y ahi el fallo silencioso es el mismo
-#     que en la raiz: un `-run` que no casa con nada SALE 0 Y PARECE VERDE. Se exige lo mismo:
-#     todo test del paquete en EXACTAMENTE un turno, ninguno en dos, ningun turno vacio.
-import os as _os, re as _re, glob as _glob
+# (6) Group shards use the same generated assignment and the same source enumerator as the
+# runner. A package read failure is COULD NOT LOOK, never an empty test inventory.
 for g in spec["groups"]:
     sh = g.get("shards")
     if not sh:
         continue
     pkgs_g = [k for k, v in owner.items() if v == g["name"]]
-    dirs = [k.replace("github.com/olivaresai/olivares/", "") for k in pkgs_g]
     tg = set()
-    for dd in dirs:
-        for f in _glob.glob(_os.path.join(dd, "*_test.go")):
-            for line in open(f, encoding="utf-8", errors="replace"):
-                m = _re.match(r"^func (Test[A-Za-z0-9_]+)", line)
-                if m and m.group(1) != "TestMain":
-                    tg.add(m.group(1))
+    for pkg in pkgs_g:
+        out = _subprocess.run(["bash", "scripts/pr-suite-shards.sh", "tests", pkg],
+                              capture_output=True, text=True)
+        if out.returncode != 0:
+            print("race-groups: COULD NOT LOOK — cannot enumerate the tests of %s: %s"
+                  % (pkg, out.stderr.strip().splitlines()[-1] if out.stderr.strip() else "no reason given"),
+                  file=sys.stderr)
+            sys.exit(2)
+        tg.update(line for line in out.stdout.splitlines() if line.startswith("Test"))
     if not tg:
         fail("group %s declares shards, but its tests could not be found" % g["name"])
-    hits_g = {}
+    assigned_g = assign("race-group:" + g["name"], sh, tg)
     for s in sh:
-        own = [t_ for t_ in tg if any(t_.startswith("Test" + f) for f in s["families"])]
-        if not own:
-            fail("shard %s of %s matches NO test: its -run would exit 0 without running anything"
+        if not assigned_g[s["name"]]:
+            fail("shard %s of %s selects no test: its generated -run would exit 0 without running anything"
                  % (s["name"], g["name"]))
-        for t_ in own:
-            hits_g.setdefault(t_, []).append(s["name"])
-    huer = sorted(t_ for t_ in tg if t_ not in hits_g)
-    if huer:
-        fail("%d test(s) in %s belong to no shard" % (len(huer), g["name"]), huer)
-    dob = sorted(t_ for t_, v in hits_g.items() if len(v) > 1)
-    if dob:
-        fail("%d test(s) in %s belong to TWO shards (one family prefixes another)" % (len(dob), g["name"]),
-             ["%s -> %s" % (t_, ",".join(hits_g[t_])) for t_ in dob])
     print("race-groups: group %s — %d test(s) in %d shard(s), 0 orphans, 0 duplicates"
           % (g["name"], len(tg), len(sh)))
 
-root_reparto = " ".join("%s=%d(decl %d)" % (s["name"], live[s["name"]], s["tests_now"]) for s in shards)
+root_reparto = " ".join("%s=%d" % (s["name"], len(assigned[s["name"]])) for s in shards)
 
 reparto = " ".join("%s=%d" % (g["name"], counts.get(g["name"], 0)) for g in spec["groups"])
 print("race-groups: CLEAN — %d package(s) with tests, 0 orphans, 0 stale patterns, "
@@ -430,12 +398,40 @@ print((g[0].get("parallel") if g else None) or d.get("default_parallel",0))' "${
     [ "${3:-}" = "--json" ] && JS="-json"
     RFLAG=""
     if [ -n "${SHARD}" ]; then
-      RE="$(python3 -c 'import json,sys
-d=json.load(open(sys.argv[1],encoding="utf-8"))
-g=[x for x in d["groups"] if x["name"]==sys.argv[2]][0]
-s=[x for x in g.get("shards",[]) if x["name"]==sys.argv[3]]
-print("^Test(" + "|".join(sorted(s[0]["families"], key=len, reverse=True)) + ")" if s else "")' "${SPEC}" "${G}" "${SHARD}")"
-      [ -n "${RE}" ] || fail "unknown shard in ${G}: ${SHARD}"
+      TLIST="$(mktemp "${TMPDIR:-/tmp}/race-group-tests.XXXXXX")" || cannot "cannot create the group test list"
+      group_tests "${G}" > "${TLIST}" || exit $?
+      RE_RAW="$(python3 - "${SPEC}" "${G}" "${SHARD}" "${TLIST}" <<'PY'
+import importlib.util
+import json
+import os
+import sys
+
+spec = json.load(open(sys.argv[1], encoding="utf-8"))
+group_name, want = sys.argv[2:4]
+group = [g for g in spec["groups"] if g["name"] == group_name][0]
+shards = group.get("shards", [])
+if want not in [s["name"] for s in shards]:
+    print(0)
+    sys.exit(0)
+helper_spec = importlib.util.spec_from_file_location("test_name_shard", os.environ["SHARDER"])
+sharder = importlib.util.module_from_spec(helper_spec)
+helper_spec.loader.exec_module(sharder)
+tests = [line.strip() for line in open(sys.argv[4], encoding="utf-8") if line.strip()]
+try:
+    assigned = sharder.assign("race-group:" + group_name, [s["name"] for s in shards], tests)
+    print(1)
+    print(sharder.expression(assigned[want]))
+except ValueError as exc:
+    print("race-groups: FAIL — " + str(exc), file=sys.stderr)
+    sys.exit(1)
+PY
+      )" || exit $?
+      mapfile -t RE_META <<< "${RE_RAW}"
+      KNOWN="${RE_META[0]}"
+      RE="${RE_META[1]:-}"
+      [ "${KNOWN}" = 1 ] || fail "unknown shard in ${G}: ${SHARD}"
+      [ -n "${RE}" ] || fail "shard ${SHARD} of group ${G} selects no test"
+      check_run_expression_size "shard ${SHARD} of group ${G}" "${RE}"
       RFLAG="-run ${RE}"
       say "shard ${SHARD} of group ${G}" >&2
     fi
@@ -461,24 +457,51 @@ print("^Test(" + "|".join(sorted(s[0]["families"], key=len, reverse=True)) + ")"
 
   root-run)
     S="${2:?usage: $0 root-run <shard>}"
-    TLIST="${TMPDIR:-/tmp}/race-root-tests-list.$$"
+    TLIST="$(mktemp "${TMPDIR:-/tmp}/race-root-tests-list.XXXXXX")" || cannot "cannot create the root test list"
     root_tests > "${TLIST}"
-    read -r RE TO CEIL < <(python3 - "${SPEC}" "${S}" <<'PY'
-import json, sys
+    RE_RAW="$(python3 - "${SPEC}" "${S}" "${TLIST}" <<'PY'
+import importlib.util
+import json
+import os
+import sys
+
 spec = json.load(open(sys.argv[1], encoding="utf-8"))
 want = sys.argv[2]
-sh = [s for s in spec["root_shards"] if s["name"] == want]
-if not sh:
-    print("", 0, 0); sys.exit(0)
-fams = sorted(sh[0]["families"], key=len, reverse=True)
-print("^Test(" + "|".join(fams) + ")",
-      spec["root_go_timeout_minutes"], spec["root_step_ceiling_minutes"])
+shards = spec["root_shards"]
+if want not in [s["name"] for s in shards]:
+    print(0)
+    sys.exit(0)
+helper_spec = importlib.util.spec_from_file_location("test_name_shard", os.environ["SHARDER"])
+sharder = importlib.util.module_from_spec(helper_spec)
+helper_spec.loader.exec_module(sharder)
+tests = [line.strip() for line in open(sys.argv[3], encoding="utf-8") if line.strip()]
+try:
+    assigned = sharder.assign("race:" + spec["root_package"], [s["name"] for s in shards], tests)
+    print(1)
+    print(sharder.expression(assigned[want]))
+    print(spec["root_go_timeout_minutes"])
+    print(spec["root_step_ceiling_minutes"])
+except ValueError as exc:
+    print("race-groups: FAIL — " + str(exc), file=sys.stderr)
+    sys.exit(1)
 PY
-    )
-    [ -n "${RE}" ] || fail "unknown shard: ${S} (declared shards: $("$0" root-shards))"
+    )" || exit $?
+    mapfile -t RE_META <<< "${RE_RAW}"
+    KNOWN="${RE_META[0]}"
+    RE="${RE_META[1]:-}"
+    TO="${RE_META[2]:-}"
+    CEIL="${RE_META[3]:-}"
+    [ "${KNOWN}" = 1 ] || fail "unknown shard: ${S} (declared shards: $("$0" root-shards))"
+    [ -n "${RE}" ] || fail "shard ${S} selects no test"
+    check_run_expression_size "root shard ${S}" "${RE}"
     # ⛔ UN `-run` QUE NO CASA CON NADA SALE 0 Y PARECE VERDE. Se cuenta ANTES.
-    n="$(grep -cE "${RE}" "${TLIST}" || true)"
-    [ "${n}" -gt 0 ] || fail "shard ${S} matches no test: its families are stale"
+    GREP_RC=0
+    n="$(grep -cE "${RE}" "${TLIST}")" || GREP_RC=$?
+    case "${GREP_RC}" in
+      0|1) ;;
+      *) cannot "grep exited ${GREP_RC} counting the tests selected by root shard ${S}" ;;
+    esac
+    [ "${n}" -gt 0 ] || fail "shard ${S} selects no test"
     # ⛔ A STDERR A PROPOSITO: en el workflow esta salida va POR UNA TUBERIA al `tee` que
     # escribe el .jsonl y al awk del progreso. Por stdout, esta linea ensuciaria el .jsonl
     # con texto que no es JSON —el fichero con el que luego se recalibra el reparto— y

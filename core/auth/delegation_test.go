@@ -1329,6 +1329,49 @@ func TestMintDelegationCapsTTLAtConfiguredMax(t *testing.T) {
 	}
 }
 
+func TestVerifyTokenSourceFollowsGroupRemoval(t *testing.T) {
+	f := newDelegFixture(t)
+	if err := f.st.AuthMutate(f.ctx, func(as store.AuthScope) error {
+		group, err := as.Groups().Get(f.ctx, f.groupID)
+		if err != nil {
+			return err
+		}
+		group.MappedRole = auth.RoleAdmin
+		_, err = as.Groups().Update(f.ctx, group)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	subject, err := f.a.Authenticate(f.ctx, f.subjectSession)
+	if err != nil {
+		t.Fatal(err)
+	}
+	subjectToken, _, err := f.a.IssueToken(f.ctx, subject, auth.TokenSpec{
+		Name: "group-elevated-subject", BoundTenant: f.tenant, Role: auth.RoleAdmin,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, _, err := f.a.MintDelegationHandle(f.ctx, f.admin, auth.MintDelegationRequest{
+		SubjectToken: subjectToken, PEPServiceID: f.serviceA.ID, Operations: []string{"messages"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.st.AuthMutate(f.ctx, func(as store.AuthScope) error {
+		return as.Groups().Delete(f.ctx, f.groupID)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	verified, err := f.a.VerifyAndClaimDelegation(f.ctx, f.pepA, handleProof(token), freshPresented("n-group-remove", "messages"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if verified.EffectiveRole() != auth.RoleEditor {
+		t.Fatalf("effective role after group removal = %q, want direct editor", verified.EffectiveRole())
+	}
+}
+
 func parts(token string) (kind, prefix, secret string, ok bool) {
 	p, sel, sec, k := auth.ParseToken(token)
 	return "", p, sec, k && sel != ""

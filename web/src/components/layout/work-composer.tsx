@@ -1,8 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useIsMutating, useMutation, useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
+import {
+  useIsMutating,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import { ArrowUp, ChevronDown } from 'lucide-react'
 import {
   useEffect,
@@ -30,8 +34,9 @@ import { AttachButton, AttachmentTray } from '@/features/agentops/attachment-ui'
 import { imagesIn, useImageDraft } from '@/features/agentops/attachments'
 import { modelName } from '@/features/agentops/model-name'
 import { SessionMode, useAccessWords } from '@/features/sessions/session-meter'
-import { ContextRing } from '@/features/sessions/context-ring'
-import { toolName } from '@/features/agentops/tool-names'
+import { ContextControls } from '@/features/sessions/context-controls'
+import { compactSession } from '@/features/sessions/compact-session'
+import { toolName } from '@/features/agentops/engine-tools'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import '@/features/agentops/i18n'
 import { launchFailureMessage } from '@/features/agentops/launch-readiness'
@@ -45,21 +50,26 @@ import {
   ModelList,
 } from '@/features/agentops/model-effort-picker'
 import {
-  sendBlockedReason,
-  sessionTurnBody,
-} from '@/features/agentops/session-turn'
+  sendMode,
+  useQueueTurn,
+  useRunQueue,
+} from '@/features/agentops/run-queue'
+import { sendBlockedReason, sendTurn } from '@/features/agentops/session-turn'
 import type { RunCommandDTO, RunDTO } from '@/features/agentops/types'
-import { currentControlFence } from '@/features/agentops/work-fence'
+import { isWorkBound } from '@/features/agentops/work-fence'
 import { DictateButton } from '@/features/dictation/dictate-button'
 import { joinDictation } from '@/features/dictation/join'
 import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
-import { APPROVAL_READ } from '@/features/governance/use-pending-approvals'
-import { useViewAccess } from '@/features/navigation/authorization'
-import { viewById } from '@/features/navigation/model'
+import { governanceApi, governanceKeys } from '@/features/governance/api'
+import {
+  useDecision,
+  useMayDecide,
+} from '@/features/governance/decision-dialog'
+import '@/features/sessions/i18n'
 import {
   isResumableRun,
-  runAwaitedApproval,
   startsAgain,
+  runAwaitedApproval,
 } from '@/features/sessions/provenance'
 import {
   sentPlace,
@@ -81,8 +91,8 @@ import { resolveBinding } from '@/lib/keybindings/model'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { cn } from '@/lib/utils'
 import { useTenantLabel } from './tenant-label'
-import { approvalDestination } from './session-rail-model'
 import { SlashMenu } from './slash-menu'
+import { WorkComposerQueue } from './work-composer-queue'
 import {
   commandLabel,
   filterCommands,
@@ -263,7 +273,12 @@ export function WorkComposer({
   // Scope all local composer state at once, including an in-flight send's callbacks.
   return (
     <SessionComposer
-      key={draftKey ?? JSON.stringify([activeTenant, attached.run.run_ref])}
+      key={JSON.stringify([
+        draftKey,
+        activeTenant,
+        attached.run.run_ref,
+        runAwaitedApproval(attached.run),
+      ])}
       frame={frame}
       attached={attached}
       draftKey={draftKey}
@@ -285,10 +300,20 @@ function SessionComposer({
 }) {
   const { t } = useTranslation('nav')
   const { activeTenant, can } = useAuth()
-  const { navigable } = useViewAccess()
   const boundary = useAuthBoundary()
   const org = useTenantLabel()
 
+  const approvalId = runAwaitedApproval(attached.run)
+  const approvalQuery = useQuery({
+    queryKey: governanceKeys.approval(activeTenant, approvalId ?? ''),
+    queryFn: () => governanceApi.getApproval(approvalId!),
+    enabled: !!approvalId && can('governance:approval:read'),
+    refetchInterval: 12_000,
+  })
+  const { mayDecide } = useMayDecide(approvalQuery.data)
+  const decline = useDecision(approvalId ?? '', 'reject')
+  const canDecline =
+    !!approvalId && mayDecide && can('governance:approval:read')
   const canWrite = can('sessions:run:write')
   const canReadProfiles = can('sessions:profile:read')
   const canReadWorkspaces = can('sessions:workspace:read')
@@ -342,13 +367,22 @@ function SessionComposer({
   const wireReasonId = useId()
   // A session's sends are one queue: a send that outlives its composer instance
   // (a round trip through another session) still blocks the field it came from.
+  const queryClient = useQueryClient()
+  const [compactBeforeSend, setCompactBeforeSend] = useState(false)
+  const compactionAbort = useRef(new AbortController())
+  useEffect(() => {
+    compactionAbort.current = new AbortController()
+    return () => compactionAbort.current.abort()
+  }, [])
   const turnQueue = ['session-turn', activeTenant, attached.run.run_ref]
-  const sendTurn = useMutation({
+  const sendMutation = useMutation({
     mutationKey: turnQueue,
     mutationFn: async (payload: {
       run: string
       value: string
       asWire: boolean
+      compactOnly?: boolean
+      compactFirst?: boolean
       draftSnapshot?: string | null
       attachments?: string[]
       /** The sign-in and organization the message was sent under. */
@@ -357,6 +391,15 @@ function SessionComposer({
       place?: Pick<SentTurn, 'after' | 'shown'>
     }) => {
       const run = attached.run
+      const signal = compactionAbort.current.signal
+      if (payload.compactOnly || payload.compactFirst) {
+        await compactSession(run, signal, t('sessions:compact.failed'))
+        signal.throwIfAborted()
+        void queryClient.invalidateQueries({
+          queryKey: agentOpsKeys.runActivity(activeTenant, run.run_ref),
+        })
+        if (payload.compactOnly) return { accepted: true }
+      }
       // A message with images is one body for every tool: the engine encodes it.
       if (payload.attachments?.length)
         return agentOpsApi.inputWithAttachments(
@@ -364,19 +407,24 @@ function SessionComposer({
           payload.value,
           payload.attachments,
         )
-      const body = sessionTurnBody(run, payload.value, payload.asWire)
-      // Only an active work lease contributes a control fence.
-      const fence = await currentControlFence(run)
-      return 'text' in body
-        ? agentOpsApi.inputText(run.run_ref, body.text, fence)
-        : agentOpsApi.input(run.run_ref, body.line, fence)
+      return sendTurn(
+        run,
+        payload.value,
+        payload.asWire,
+        payload.compactFirst ? signal : undefined,
+      )
     },
     retry: false,
     onSuccess: (_ok, payload) => {
+      if (payload.compactOnly) return
+      // A message that reached the tool starts its turn: the queue's hold is now "turn".
+      void queryClient.invalidateQueries({
+        queryKey: agentOpsKeys.runQueue(activeTenant, payload.run),
+      })
       if (payload.asWire) setWire('')
       else {
         // The conversation shows the message now; the tool shows it when it takes the
-        // turn, and then only its own row stays (dev#2787).
+        // turn, and then only its own row stays.
         // A slash command is answered by the tool, not shown as a message.
         if (
           payload.partition &&
@@ -406,7 +454,18 @@ function SessionComposer({
   const waitingApproval = attached.run.state === 'waiting_approval'
   // An in-flight send counts even when this instance did not start it.
   const sendsInQueue = useIsMutating({ mutationKey: turnQueue })
-  const sending = sendTurn.isPending || sendsInQueue > 0
+  const sending =
+    sendMutation.isPending || sendsInQueue > 0 || decline.isPending
+  // THE QUEUE: while the tool works, Enter lines the message up on the server
+  // and Ctrl+Enter steers it into the turn. A session started by a work item takes
+  // input through its lease, so it has no queue here.
+  const queueBound = canWrite && runLive && !isWorkBound(attached.run)
+  const queueRead = useRunQueue(attached.run, queueBound)
+  const queue = queueRead.data
+  const queueTurn = useQueueTurn(attached.run, (text) => {
+    if (turnRef.current.trim() === text) changeTurn('')
+  })
+  const deciding = useRef(false)
 
   // THE "/" MENU: while the first word of the message is a slash command being typed,
   // the session's own tool says what it offers (commands, skills, agents), asked again
@@ -429,6 +488,7 @@ function SessionComposer({
   // for a click that rewrites the draft under it.
   const menuOpen =
     canWrite &&
+    !approvalId &&
     runLive &&
     !sending &&
     !!activeTenant &&
@@ -498,35 +558,73 @@ function SessionComposer({
   }
   // A disabled Send says why, from the state that disables it.
   const sendReason = sendBlockedReason({
-    live: runLive,
+    live: approvalId ? canDecline : runLive,
     draft: turn,
     sending,
     uploading: images.uploading,
-    waitingApproval,
+    waitingApproval: !!approvalId || waitingApproval,
   })
   const wireReason = sendBlockedReason({
-    live: runLive,
+    live: runLive && !approvalId,
     draft: wire,
     sending,
-    waitingApproval,
+    waitingApproval: !!approvalId || waitingApproval,
   })
-  const sendSentence = () => {
+  // `steer` is the person's other choice while the tool works (Ctrl+Enter): into the
+  // running turn now, where the plain Enter lines the message up behind it.
+  const sendSentence = async (steer = false) => {
     const value = turn.trim()
-    if (!value || sending || images.uploading || !runLive) return
-    sendTurn.mutate({
-      run: attached.run.run_ref,
-      value,
-      asWire: false,
-      draftSnapshot: sessionDraftSnapshot(draftKey),
-      attachments: images.ids,
-      partition: sentTurnsPartition(),
-      place: sentPlace(attached.run.run_ref, value),
-    })
+    if (!value || sendReason !== null) return
+    if (approvalId) {
+      const snapshot = sessionDraftSnapshot(draftKey)
+      decline.mutate(
+        { decision: 'reject', note: value },
+        {
+          onSuccess: () => {
+            if (sessionDraftSnapshot(draftKey) === snapshot) changeTurn('')
+          },
+        },
+      )
+      return
+    }
+    if (queueTurn.isPending || deciding.current) return
+    const sendNow = () =>
+      sendMutation.mutate({
+        run: attached.run.run_ref,
+        value,
+        compactFirst: compactBeforeSend,
+        asWire: false,
+        draftSnapshot: sessionDraftSnapshot(draftKey),
+        attachments: images.ids,
+        partition: sentTurnsPartition(),
+        place: sentPlace(attached.run.run_ref, value),
+      })
+    // Images go with a direct send, as does a session no queue serves.
+    if (!queueBound || images.ids.length > 0) return sendNow()
+    // The run's state on screen may be seconds old (a turn begun a moment ago still reads
+    // idle), so the engine is asked, not the card: a turn that just ended is not queued
+    // behind and one that just began is not sent into. A session with nothing running or
+    // waiting takes the message as it always did.
+    deciding.current = true
+    try {
+      const fresh = await queryClient
+        .fetchQuery({
+          queryKey: agentOpsKeys.runQueue(activeTenant, attached.run.run_ref),
+          queryFn: ({ signal }) =>
+            agentOpsApi.queue(attached.run.run_ref, { signal }),
+          staleTime: 0,
+        })
+        .catch(() => undefined)
+      if (sendMode(fresh, steer) === 'queue') queueTurn.mutate(value)
+      else sendNow()
+    } finally {
+      deciding.current = false
+    }
   }
   const sendWire = () => {
     const value = wire.trim()
-    if (!value || sending || !runLive) return
-    sendTurn.mutate({ run: attached.run.run_ref, value, asWire: true })
+    if (!value || sending || !runLive || approvalId) return
+    sendMutation.mutate({ run: attached.run.run_ref, value, asWire: true })
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -563,7 +661,7 @@ function SessionComposer({
     if (command !== 'launcher.start' && command !== 'launcher.startBackground')
       return
     e.preventDefault()
-    sendSentence()
+    void sendSentence(command === 'launcher.startBackground')
   }
 
   const attachedWorkspace = workspaces.find(
@@ -627,7 +725,7 @@ function SessionComposer({
   const speedChanged =
     chosenSpeed.fastMode !== attached.run.fast_mode ||
     (chosenSpeed.serviceTier ?? '') !== (attached.run.service_tier ?? '')
-  // dev#2786: a Claude session records the exact id its catalog selector launched on
+  // the regression: a Claude session records the exact id its catalog selector launched on
   // (claude-opus-5-5 for a launch with no model), which the catalog does not list. Its
   // own Fast mode was checked at that launch; whether the id takes Fast mode is unknown
   // here, so Off stays offered and On waits for a listed model.
@@ -650,21 +748,9 @@ function SessionComposer({
     return <ScopeLine {...attachedScope} className="px-3 py-2" />
   }
 
-  // The one state word the composer ever says is the link to the approval a person may open.
-  const status = t('nav:launcher.attachedWaiting')
-  const approvalsView = viewById('permissions')
-  const awaited = runAwaitedApproval(attached.run)
-  const approval =
-    attached.group === 'attention' &&
-    approvalsView &&
-    navigable(approvalsView) &&
-    can(APPROVAL_READ) &&
-    awaited
-      ? approvalDestination(awaited)
-      : null
   const hasText = turn.trim().length > 0
   const driver = attached.run.provider_driver
-  // Tool, model and effort are said once per pane, here (dev#3120): the model by the
+  // Tool, model and effort are said once per pane, here: the model by the
   // name every surface gives it ("Claude Opus 5.5"), with the id one hover away. The
   // catalog's own names stay in the list it opens, so the chip does not change on open.
   const chipParts = (model: string) =>
@@ -674,7 +760,7 @@ function SessionComposer({
   const toolModel = chipParts(sessionModel && modelName(sessionModel))
   const chipText = toolModel || t('agentops:create.model')
   const chipTitle = sessionModel ? chipParts(sessionModel) : chipText
-  // THREE PICKERS (dev#3162): the model by its name, the effort
+  // THREE PICKERS: the model by its name, the effort
   // in a word, the access in the words New session offers. The tool is the pane header's.
   const modelText = sessionModel
     ? modelName(sessionModel)
@@ -688,7 +774,7 @@ function SessionComposer({
   // placeholder is the one place a disabled field already is read.
   // A session that is not running offers one step, named as the header's button names it:
   // Resume, or Start again for a run that never got going. One the engine cannot resume
-  // has ended, and one still starting says so (dev#3120).
+  // has ended, and one still starting says so.
   const notLive =
     sendReason !== 'live.blocked.notLive'
       ? null
@@ -705,8 +791,17 @@ function SessionComposer({
     sendReason === 'live.blocked.approval'
       ? t(`agentops:${sendReason}`)
       : null)
-  // The field teaches what can be typed (dev#3162): the pane header names the session.
-  const placeholder = blockedText ?? t('nav:launcher.askPlaceholder')
+  // The field teaches what can be typed: the pane header names the session.
+  // While the tool works the field says what Enter does.
+  const placeholder =
+    blockedText ??
+    (queue?.hold === 'turn'
+      ? t(
+          queue.can_steer
+            ? 'nav:launcher.queue.placeholderSteer'
+            : 'nav:launcher.queue.placeholder',
+        )
+      : t('nav:launcher.askPlaceholder'))
   const card = (
     <div
       data-testid="work-composer"
@@ -731,20 +826,6 @@ function SessionComposer({
         'focus-within:border-line-strong focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus',
       )}
     >
-      {approval ? (
-        <p
-          data-testid="composer-approval"
-          className="px-4 pt-3 text-caption text-text-2"
-        >
-          <Link
-            to={approval.to as never}
-            search={approval.search as never}
-            className="underline underline-offset-[3px] hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-          >
-            {status}
-          </Link>
-        </p>
-      ) : null}
       {menuOpen ? (
         <SlashMenu
           listId={slashListId}
@@ -771,6 +852,7 @@ function SessionComposer({
           {t('nav:launcher.draftSaveFailed')}
         </p>
       ) : null}
+      <WorkComposerQueue run={attached.run} queue={queue} />
       <AttachmentTray
         images={images.images}
         uploading={images.uploading}
@@ -779,6 +861,7 @@ function SessionComposer({
       <textarea
         ref={fieldRef}
         id={inputId}
+        data-session-draft-key={draftKey ?? undefined}
         value={turn}
         rows={2}
         onChange={(e) => changeTurn(e.target.value)}
@@ -805,10 +888,11 @@ function SessionComposer({
             : undefined
         }
         data-testid="launcher-input"
-        disabled={!runLive || sending}
+        disabled={(!runLive && !waitingApproval) || sending}
         className="max-h-48 min-h-14 w-full resize-none bg-transparent px-4 pt-3 pb-1 text-body-l text-text outline-none placeholder:text-text-3 disabled:cursor-not-allowed"
       />
-      <div className="flex min-w-0 items-center gap-2 px-3 pb-3">
+      {/* The row wraps on a narrow screen: the buttons move below, the pickers keep their words. */}
+      <div className="flex min-w-0 flex-wrap items-center gap-2 px-3 pb-3">
         {/* ALWAYS THERE: a session whose tool has not said its model yet still takes the
             choice, and the scope of the next action lives in this popover. */}
         <Popover
@@ -1058,9 +1142,23 @@ function SessionComposer({
             dashed: a control that cannot act says so by being quiet, and why in its
             name. */}
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          <ContextRing run={attached.run} />
+          <ContextControls
+            run={attached.run}
+            busy={sending}
+            beforeSend={compactBeforeSend}
+            onBeforeSend={setCompactBeforeSend}
+            onCompact={() => {
+              if (!canWrite || sending || attached.run.state !== 'idle') return
+              sendMutation.mutate({
+                run: attached.run.run_ref,
+                value: '/compact',
+                asWire: false,
+                compactOnly: true,
+              })
+            }}
+          />
           <AttachButton
-            disabled={!runLive || sendTurn.isPending}
+            disabled={!runLive || !!approvalId || sending}
             onFiles={images.add}
           />
           <DictateButton
@@ -1070,21 +1168,31 @@ function SessionComposer({
           />
           <Button
             type="button"
-            variant={hasText && sendReason === null ? 'primary' : 'ghost'}
-            size="icon"
-            className="rounded-full disabled:border-solid disabled:border-transparent"
+            variant={
+              canDecline
+                ? 'danger'
+                : hasText && sendReason === null
+                  ? 'primary'
+                  : 'ghost'
+            }
+            size={canDecline ? 'base' : 'icon'}
+            className="max-w-full rounded-full disabled:border-solid disabled:border-transparent"
             disabled={sendReason !== null}
-            aria-label={t('nav:launcher.send')}
+            aria-label={
+              canDecline
+                ? t('sessions:approval.declineSend')
+                : t('nav:launcher.send')
+            }
             aria-describedby={sendReason ? sendReasonId : undefined}
             title={
               sendReason
                 ? t(`agentops:${sendReason}`)
-                : `${t('nav:launcher.send')} ⏎`
+                : `${approvalId ? t('sessions:approval.declineSend') : t('nav:launcher.send')} ⏎`
             }
-            onClick={sendSentence}
+            onClick={() => void sendSentence()}
             data-testid="composer-send"
           >
-            <ArrowUp />
+            {canDecline ? t('sessions:approval.declineSend') : <ArrowUp />}
           </Button>
         </div>
         {sendReason ? (

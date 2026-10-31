@@ -130,7 +130,7 @@ echo "race-hot-tests: ${count} hot tests selected" >&2
 #
 # THE COST CENSUS, AND EXACTLY WHAT IT IS. scripts/hot-race-costs.tsv carries
 # `<entry><TAB><milliseconds>` hints measured on ONE developer container on 2026-09-13,
-# where this whole selection ran 343.6s; the same selection exceeded 900s on ci-runner-8.
+# where this whole selection ran 343.6s; the same selection exceeded 900s on build-host.
 # A hint is therefore a DECLARED SCHEDULING INPUT: a relative ordering used to divide work
 # deterministically, NOT a prediction of remote wall time and NOT evidence about any runner.
 # What a partition costs in CI is a CI measurement, and check-test-timeout-headroom.sh is

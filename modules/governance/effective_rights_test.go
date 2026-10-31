@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -60,6 +62,34 @@ func wantStates(t *testing.T, where string, state map[string]string, rights []st
 			t.Errorf("%s: %s = %q, want %q", where, right, state[right], want)
 		}
 	}
+}
+
+// rightDetailAt returns one right's complete wire object, including its explanation.
+func rightDetailAt(t *testing.T, h *harness, caller string, tenant model.TenantID, subject, kind, id, right string) (resp, map[string]any) {
+	t.Helper()
+	r := h.do("GET", rightsURL(subject, kind, id), caller, nil, tenantHdr(tenant))
+	if r.code != http.StatusOK {
+		t.Fatalf("effective-rights = %d %s", r.code, r.raw)
+	}
+	for _, item := range r.body["rights"].([]any) {
+		detail := item.(map[string]any)
+		if detail["name"] == right {
+			return r, detail
+		}
+	}
+	t.Fatalf("right %q missing from %s", right, r.raw)
+	return r, nil
+}
+
+// explanationRefs flattens a reason's group chain into "kind:ref" steps.
+func explanationRefs(t *testing.T, value any) []string {
+	t.Helper()
+	var out []string
+	for _, item := range value.([]any) {
+		step := item.(map[string]any)
+		out = append(out, step["kind"].(string)+":"+step["ref"].(string))
+	}
+	return out
 }
 
 // A grant scoped to one workspace shows only at nodes inside it, and each answer matches
@@ -288,4 +318,274 @@ func TestEffectiveRightsRefuseAConfinedAdminUnderTheScopedEngine(t *testing.T) {
 	if r := h.do("GET", target, confined, nil, tenantHdr(tenant)); r.code != http.StatusForbidden {
 		t.Errorf("confined admin = %d %s, want 403", r.code, r.raw)
 	}
+}
+
+// A nested directory grant names the exact row, scope and user-to-group chain that
+// carried the right. The membership timestamp is the age of the stored directory rows.
+func TestEffectiveRightsExplainANestedDirectoryGrant(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	agent := h.createAgent(tenant, "worker", "")
+	uid, _ := h.roleUser(admin, tenant, "viewer@acme.io", auth.RoleViewer)
+
+	var child, parent model.UserGroup
+	if err := h.st.AuthMutate(context.Background(), func(as store.AuthScope) error {
+		var err error
+		child, err = as.Groups().Create(context.Background(), model.UserGroup{TargetTenantID: tenant, DisplayName: "G1"})
+		if err != nil {
+			return err
+		}
+		parent, err = as.Groups().Create(context.Background(), model.UserGroup{TargetTenantID: tenant, DisplayName: "G2"})
+		if err != nil {
+			return err
+		}
+		_, err = as.GroupMembers().Create(context.Background(), model.UserGroupMember{GroupID: child.ID, UserID: model.ID(uid)})
+		return err
+	}); err != nil {
+		t.Fatalf("seed nested directory groups: %v", err)
+	}
+	adminPrincipal, err := h.authr.Authenticate(context.Background(), admin)
+	if err != nil {
+		t.Fatalf("authenticate group administrator: %v", err)
+	}
+	if _, err := h.authr.ConfigureGroupParent(context.Background(), adminPrincipal, tenant, child.ID, parent.ID); err != nil {
+		t.Fatalf("nest G1 under G2: %v", err)
+	}
+	principal, found, err := h.authr.PrincipalForUser(context.Background(), uid, auth.AAL3)
+	if err != nil || !found {
+		t.Fatalf("resolve nested member = %v %v", found, err)
+	}
+	if got, want := principal.GroupsIn(tenant), []string{child.ID.String(), parent.ID.String()}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("nested membership closure = %v, want %v", got, want)
+	}
+	createGrant(t, h, admin, tenant, map[string]any{"subject_kind": "group", "subject_ref": parent.ID.String(), "role": auth.RoleEditor, "scope_tree": "tenant"})
+	grants := h.rbac("GET", "grants", admin, tenant, nil)
+	if grants.code != http.StatusOK || len(items(grants)) != 1 {
+		t.Fatalf("grant list = %d %s", grants.code, grants.raw)
+	}
+	grantID := items(grants)[0].(map[string]any)["id"].(string)
+	// A managed policy written before grant annotations has no such annotation.
+	// The stored row still has to be identified, not hidden behind a policy number.
+	var projected string
+	if err := h.st.View(context.Background(), tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(model.Kind("governance.policy_revision"))
+		if err != nil {
+			return err
+		}
+		rows, _, err := repo.List(context.Background(), model.Query{Limit: 1000})
+		for _, row := range rows {
+			if row.String("surface") == "cedar-managed" && row.Bool("active") {
+				projected = row.String("content")
+			}
+		}
+		return err
+	}); err != nil {
+		t.Fatalf("read managed projection: %v", err)
+	}
+	if projected == "" {
+		t.Fatal("managed projection missing")
+	}
+	lines := strings.Split(projected, "\n")
+	kept := lines[:0]
+	for _, line := range lines {
+		if !strings.HasPrefix(line, "@olivares_grant_id(") {
+			kept = append(kept, line)
+		}
+	}
+	seedStoredCedar(t, h, tenant, "cedar-managed", strings.Join(kept, "\n"))
+	if err := h.gov.ReloadActivePDP(context.Background(), tenant); err != nil {
+		t.Fatalf("reload legacy managed policy: %v", err)
+	}
+
+	r, detail := rightDetailAt(t, h, admin, tenant, uid, "agent", agent.ID.String(), "Write")
+	if detail["state"] != "held" {
+		t.Fatalf("Write = %q, want held through the nested grant: %s", detail["state"], r.raw)
+	}
+	because, _ := detail["because"].([]any)
+	if len(because) != 1 {
+		t.Fatalf("because = %v, want one determining grant", because)
+	}
+	reason := because[0].(map[string]any)
+	if reason["grant_id"] != grantID {
+		t.Errorf("grant_id = %v, want %s", reason["grant_id"], grantID)
+	}
+	node := reason["node"].(map[string]any)
+	if node["kind"] != "tenant" || node["ref"] != tenant.String() {
+		t.Errorf("grant node = %v, want tenant %s", node, tenant)
+	}
+	subject := reason["subject"].(map[string]any)
+	if subject["kind"] != "group" || subject["ref"] != parent.ID.String() {
+		t.Errorf("matched subject = %v, want group %s", subject, parent.ID)
+	}
+	wantChain := []string{"user:" + uid, "group:" + child.ID.String(), "group:" + parent.ID.String()}
+	if got := explanationRefs(t, subject["chain"]); !reflect.DeepEqual(got, wantChain) {
+		t.Errorf("group chain = %v, want %v", got, wantChain)
+	}
+	if asOf, ok := r.body["membership_as_of"].(string); !ok || asOf == "" {
+		t.Errorf("membership_as_of = %v, want the stored directory timestamp", r.body["membership_as_of"])
+	} else if want := parent.UpdatedAt.Time().UTC().Format(time.RFC3339Nano); asOf != want {
+		// G1 was updated when it was nested; G2 is now the oldest row in the chain.
+		t.Errorf("membership_as_of = %s, want oldest directory row %s", asOf, want)
+	}
+}
+
+// An inherited-rights filter names its own row and the container where it cut the right.
+func TestEffectiveRightsExplainAnInheritanceFilter(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	payments := h.createWorkspace(tenant, "payments")
+	agent := h.createAgentIn(tenant, "pay-bot", payments)
+	uid, _ := h.roleUser(admin, tenant, "editor@acme.io", auth.RoleEditor)
+	readerID, reader := h.roleUser(admin, tenant, "reader@acme.io", auth.RoleAdmin)
+	// The filter hides the node from an inherited admin too. A grant at the filtered
+	// node survives and lets this administrator read both the node and the answer.
+	createGrant(t, h, admin, tenant, map[string]any{"subject_kind": "user", "subject_ref": readerID, "role": auth.RoleAdmin, "scope_tree": "workspace", "scope_ref": "payments"})
+	filter := h.rbac("POST", "inheritance-filters", admin, tenant, map[string]any{
+		"scope_tree": "workspace", "scope_ref": "payments", "scope_class": "agent",
+	})
+	if filter.code != http.StatusCreated {
+		t.Fatalf("create inheritance filter = %d %s", filter.code, filter.raw)
+	}
+	filterID := filter.body["id"].(string)
+
+	_, detail := rightDetailAt(t, h, reader, tenant, uid, "agent", agent.ID.String(), "Write")
+	if detail["state"] != "not_held" {
+		t.Fatalf("Write = %q, want not_held below the filter", detail["state"])
+	}
+	removed, _ := detail["removed_by"].([]any)
+	if len(removed) != 1 {
+		t.Fatalf("removed_by = %v, want the inheritance filter", removed)
+	}
+	reason := removed[0].(map[string]any)
+	if reason["kind"] != "irf" || reason["id"] != filterID {
+		t.Errorf("removal = %v, want irf %s", reason, filterID)
+	}
+	node := reason["node"].(map[string]any)
+	if node["kind"] != "workspace" || node["ref"] != "payments" {
+		t.Errorf("filter node = %v, want workspace payments", node)
+	}
+}
+
+// An unconstrained principal matches the user, not the user's credential handle.
+func TestEffectiveRightsExplainAnUnconstrainedPrincipalAsTheUser(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	payments := h.createWorkspace(tenant, "payments")
+	agent := h.createAgentIn(tenant, "pay-bot", payments)
+	uid, _ := h.roleUser(admin, tenant, "viewer@acme.io", auth.RoleViewer)
+	h.publishGrant(admin, tenant, `permit(principal, action == Action::"agent:write", resource == Resource::"`+agent.ID.String()+`");`)
+	_, detail := rightDetailAt(t, h, admin, tenant, uid, "agent", agent.ID.String(), "Write")
+	if detail["state"] != "held" {
+		t.Fatalf("Write = %v, want held", detail["state"])
+	}
+	because, _ := detail["because"].([]any)
+	if len(because) != 1 {
+		t.Fatalf("because = %v, want one determining policy", because)
+	}
+	subject := because[0].(map[string]any)["subject"].(map[string]any)
+	if subject["kind"] != "user" || subject["ref"] != uid {
+		t.Errorf("matched subject = %v, want user %s", subject, uid)
+	}
+	node := because[0].(map[string]any)["node"].(map[string]any)
+	if node["kind"] != "agent" || node["ref"] != agent.ID.String() {
+		t.Errorf("matched node = %v, want agent %s", node, agent.ID)
+	}
+	h.publishGrant(admin, tenant, `forbid(principal in Role::"viewer", action == Action::"agent:write", resource == Resource::"`+agent.ID.String()+`");`)
+	_, detail = rightDetailAt(t, h, admin, tenant, uid, "agent", agent.ID.String(), "Write")
+	removed, _ := detail["removed_by"].([]any)
+	if detail["state"] != "not_held" || len(removed) != 1 {
+		t.Fatalf("direct forbid = %v, want one removal and not_held", detail)
+	}
+	node = removed[0].(map[string]any)["node"].(map[string]any)
+	if node["kind"] != "agent" || node["ref"] != agent.ID.String() {
+		t.Errorf("matched removal node = %v, want agent %s", node, agent.ID)
+	}
+}
+
+// A forbid names its policy and scope instead of collapsing into a bare denial.
+func TestEffectiveRightsExplainAForbid(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	payments := h.createWorkspace(tenant, "payments")
+	agent := h.createAgentIn(tenant, "pay-bot", payments)
+	uid, _ := h.roleUser(admin, tenant, "editor@acme.io", auth.RoleEditor)
+	h.publishGrant(admin, tenant, "@id(\"deny-pay-write\")\nforbid(principal in Role::\"editor\", action == Action::\"agent:write\", resource) when { resource in Workspace::\"payments\" };")
+
+	_, detail := rightDetailAt(t, h, admin, tenant, uid, "agent", agent.ID.String(), "Write")
+	if detail["state"] != "not_held" {
+		t.Fatalf("Write = %q, want not_held by the forbid", detail["state"])
+	}
+	removed, _ := detail["removed_by"].([]any)
+	if len(removed) != 1 {
+		t.Fatalf("removed_by = %v, want the forbid", removed)
+	}
+	reason := removed[0].(map[string]any)
+	if reason["kind"] != "forbid" || reason["id"] != "deny-pay-write" {
+		t.Errorf("removal = %v, want forbid deny-pay-write", reason)
+	}
+	node := reason["node"].(map[string]any)
+	if node["kind"] != "workspace" || node["ref"] != "payments" {
+		t.Errorf("forbid node = %v, want workspace payments", node)
+	}
+}
+
+// Legacy managed revisions must keep both reported permissions and live mutation status.
+func TestLegacyManagedGrantKeepsWhoamiAndDisableLive(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "legacy-managed")
+	uid, viewer := h.roleUser(admin, tenant, "viewer@legacy.io", auth.RoleViewer)
+	createGrant(t, h, admin, tenant, map[string]any{"subject_kind": "user", "subject_ref": uid, "role": auth.RoleEditor, "scope_tree": "tenant"})
+	var legacy string
+	if err := h.st.View(t.Context(), tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(model.Kind("governance.policy_revision"))
+		if err != nil {
+			return err
+		}
+		rows, _, err := repo.List(t.Context(), model.Query{Limit: 1000})
+		for _, row := range rows {
+			if row.String("surface") == "cedar-managed" && row.Bool("active") {
+				for _, line := range strings.Split(row.String("content"), "\n") {
+					if !strings.HasPrefix(line, "@olivares_grant_id(") && !strings.HasPrefix(line, "@olivares_session_permissions(") {
+						legacy += line + "\n"
+					}
+				}
+			}
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, permission := range []string{"authenticator:write", "audit:read", "authz:read", "accessgraph:read", "sessions:output:read", "sessions:stop:write"} {
+		action := `Action::"` + permission + `"`
+		legacy = strings.ReplaceAll(legacy, action+", ", "")
+		legacy = strings.ReplaceAll(legacy, ", "+action, "")
+	}
+	legacy = strings.TrimSuffix(legacy, "\n")
+	if legacy == "" {
+		t.Fatal("missing legacy managed policy")
+	}
+	if strings.Contains(legacy, "sessions:output:read") || strings.Contains(legacy, "sessions:stop:write") {
+		t.Fatal("managed policy is not pre-split")
+	}
+	seedStoredCedar(t, h, tenant, "cedar-managed", legacy)
+	if err := h.gov.ReloadActivePDP(t.Context(), tenant); err != nil {
+		t.Fatal(err)
+	}
+	t.Run("whoami", func(t *testing.T) {
+		if perms, _ := whoamiPerms(t, h, viewer, tenant); !hasPerm(perms, "agent:write") {
+			t.Errorf("legacy whoami lost agent:write: %v", perms)
+		}
+	})
+	t.Run("disable", func(t *testing.T) {
+		h.publishGrant(admin, tenant, `permit(principal, action == Action::"agent:read", resource);`)
+		r := h.do("DELETE", "/v1/m/governance/pdp/active?engine=cedar", admin, nil, tenantHdr(tenant))
+		if r.code != http.StatusOK || r.body["live_activation"] != "applied" {
+			t.Errorf("legacy disable = %d %s, want applied", r.code, r.raw)
+		}
+	})
 }

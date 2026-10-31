@@ -7,6 +7,7 @@
 // how they differ from the workspace, where Sessions opens them.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentOpsApi } from '@/features/agentops/api'
@@ -145,6 +146,50 @@ describe('session folders on the Workspace page', () => {
       screen.getByRole('link', { name: 'Manage folders' }),
     ).toHaveAttribute('href', '/agentops?tab=workspaces')
     expect(screen.getByText(/separate from workspaces/)).toBeVisible()
+  })
+
+  it('focuses the folder filter on entry, so typing finds a folder and one click opens it', async () => {
+    useWorkspaceStore.getState().setActiveWorkspace('w1')
+    folders([
+      folder('ws_1', 'payments-api', '/srv/work/payments-api'),
+      folder('ws_2', undefined, '/srv/work/web-app'),
+    ])
+    const user = userEvent.setup()
+    show()
+    const find = await screen.findByRole('searchbox', { name: 'Find a folder' })
+    expect(find).toHaveFocus()
+    await screen.findByRole('row', { name: /^payments-api / })
+    // By name or by path, accents and case aside.
+    await user.keyboard('WEB')
+    expect(screen.queryByRole('row', { name: /^payments-api / })).toBeNull()
+    expect(screen.getByRole('row', { name: /^web-app / })).toBeVisible()
+    await user.clear(find)
+    await user.type(find, 'srv/work/pay')
+    expect(screen.getByRole('row', { name: /^payments-api / })).toBeVisible()
+    expect(screen.queryByRole('row', { name: /^web-app / })).toBeNull()
+    // The second click: the folder's wiki opens beside the list.
+    await user.click(
+      screen.getByRole('button', { name: 'Open wiki for payments-api' }),
+    )
+    expect(
+      await screen.findByRole('dialog', { name: 'payments-api' }),
+    ).toBeVisible()
+  })
+
+  it('says when no folder matches the filter, not that there are none', async () => {
+    useWorkspaceStore.getState().setActiveWorkspace('w1')
+    folders([folder('ws_1', 'payments-api', '/srv/work/payments-api')])
+    const user = userEvent.setup()
+    show()
+    await screen.findByRole('row', { name: /^payments-api / })
+    await user.type(
+      screen.getByRole('searchbox', { name: 'Find a folder' }),
+      'nothing-like-it',
+    )
+    expect(
+      screen.getByText('No folder matches “nothing-like-it”.'),
+    ).toBeVisible()
+    expect(screen.queryByText(/No session folders yet/)).toBeNull()
   })
 
   it('shows them on the selection page too, when no workspace is chosen', async () => {

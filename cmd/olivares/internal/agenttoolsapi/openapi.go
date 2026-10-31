@@ -82,7 +82,10 @@ func (*Module) OperationDocumentation(method, pattern string) (api.ModuleOperati
 		declaration.SuccessResponses = map[string]any{"200": jsonResponse("Whether Ollama is installed and runs on this node, its endpoint and its models", ollamaStatusSchema())}
 	case "POST /ollama/start":
 		declaration.BodyKind = api.ModuleOperationJSONBody
-		declaration.RequestBody = map[string]any{"required": false, "content": map[string]any{"application/json": map[string]any{"schema": jsonObject(map[string]any{"tenant_id": map[string]any{"type": "string", "format": "uuid", "description": "The business tenant whose Providers get this endpoint once Ollama answers; omitted, none does."}})}}}
+		declaration.RequestBody = map[string]any{"required": false, "content": map[string]any{"application/json": map[string]any{"schema": jsonObject(map[string]any{
+			"tenant_id": map[string]any{"type": "string", "format": "uuid", "description": "The business tenant whose Providers get this endpoint once Ollama answers; omitted, none does."},
+			"container": map[string]any{"type": "boolean", "default": false, "description": "Run the Ollama image as this engine's managed container instead of the installed program; the models directory is mounted, and the node needs Podman or Docker. Omitted or false keeps the installed program."},
+		})}}}
 		declaration.SuccessResponses = map[string]any{"202": jsonResponse("Ollama is starting, or already runs, on this node", ollamaStatusSchema())}
 	case "POST /ollama/stop":
 		declaration.BodyKind = api.ModuleOperationBodyless
@@ -129,7 +132,7 @@ func providerSchema() map[string]any {
 
 func ollamaStatusSchema() map[string]any {
 	text := func() map[string]any { return map[string]any{"type": "string"} }
-	return map[string]any{"type": "object", "properties": map[string]any{"installed": map[string]any{"type": "boolean"}, "state": map[string]any{"type": "string", "enum": []string{"stopped", "starting", "running", "failed"}}, "message": text(), "endpoint": text(), "models": map[string]any{"type": "array", "items": text()}}, "required": []string{"installed", "state", "models"}}
+	return map[string]any{"type": "object", "properties": map[string]any{"installed": map[string]any{"type": "boolean"}, "state": map[string]any{"type": "string", "enum": []string{"stopped", "starting", "running", "failed"}}, "message": text(), "endpoint": text(), "models": map[string]any{"type": "array", "items": text()}, "runtime": map[string]any{"type": "string", "enum": []string{"process", "container"}, "description": "Which flavour serves the row: the installed program or a container."}}, "required": []string{"installed", "state", "models"}}
 }
 
 func modelServerStatusSchema() map[string]any {

@@ -14,12 +14,21 @@ import type { CcState } from './types'
 export type RailState = 'need' | 'live' | 'ended' | 'idle'
 export type StateTone = 'needs' | 'working' | 'idle' | 'failed'
 
+/**
+ * THE FIVE STATES A PERSON READS, each with one glyph (`SessionStatusMark`) and
+ * one word. Working: a process is at work. Needs you: it waits for a person. Done: the
+ * turn or the run finished. Failed: the run failed. Idle: an observed session at rest.
+ * Every list that says a session's state (Sessions, Now, the palette) reads this one.
+ */
+export type SessionStatus = 'working' | 'needs-you' | 'done' | 'failed' | 'idle'
+
 interface SessionDisplayState {
   runState?: RunState
   observedState?: CcState
   group: WorkGroupId
   rail: RailState
   tone: StateTone
+  status: SessionStatus
 }
 
 /** Engine facts only. Liveness and input permission remain separate from display. */
@@ -52,18 +61,32 @@ export function sessionDisplayState(
         : live?.cc_state === 'ended'
           ? 'ended'
           : 'idle'
+  const tone: StateTone =
+    run?.state === 'failed'
+      ? 'failed'
+      : group === 'attention'
+        ? 'needs'
+        : group === 'active'
+          ? 'working'
+          : 'idle'
+  // A run that answered its turn, stopped or ended is Done; only an observed session at
+  // rest, or one the engine said nothing of, is Idle.
+  const status: SessionStatus =
+    tone === 'failed'
+      ? 'failed'
+      : tone === 'needs'
+        ? 'needs-you'
+        : tone === 'working'
+          ? 'working'
+          : run || live?.cc_state === 'ended'
+            ? 'done'
+            : 'idle'
   return {
     runState: run?.state,
     observedState: run ? undefined : live?.cc_state,
     group,
     rail,
-    tone:
-      run?.state === 'failed'
-        ? 'failed'
-        : group === 'attention'
-          ? 'needs'
-          : group === 'active'
-            ? 'working'
-            : 'idle',
+    tone,
+    status,
   }
 }

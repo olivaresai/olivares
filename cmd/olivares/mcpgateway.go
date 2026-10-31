@@ -83,7 +83,7 @@ func buildAgentGatewayServer(eng *engine, log *slog.Logger) (*http.Server, error
 			authenticator = eng.sessionHooks.SessionCredentials
 		}
 		mux.Handle("/session/mcp", &sessionMCPHandler{authr: authenticator, issuedSessionOnly: issued, admits: eng.admits(), work: eng.sessionsMod.CallSessionWork,
-			configurer: eng, publisher: eng.sessionPublisher(),
+			configurer: eng, publisher: eng.sessionPublisher(), connections: eng.sessionsMod,
 			checkOrchestration: func(ctx context.Context, p auth.Principal, tenant model.TenantID) error {
 				return scope.WithScope(ctx, p, tenant, false, func(store.Scope) error { return nil })
 			}})
@@ -317,9 +317,11 @@ func buildMCPResourceServerWithDurableTaskStore(
 			IntrospectionAuth: it.IntrospectionAuth,
 		})
 	}
-	ri := thisEdition.mcpRenderInspector.get(osGetenv, log)
+	// The render inspector follows an administrator's settings while the server runs
+	// (edition_live.go); the edition's constructor is only the boot value.
+	renderInspector := eng.gates().renderInspector.bootFrom(func() mcpc.RenderInspector { return thisEdition.mcpRenderInspector.get(osGetenv, log) })
 	em := thisEdition.mcpElicitationMediator.get(osGetenv, log)
-	mcpContentGateLog(log, ri, em)
+	mcpContentGateLog(log, renderInspector(), em)
 
 	var taskGate mcpc.TaskGate
 	if eng.finops != nil && !rsTenant.IsZero() {
@@ -359,7 +361,7 @@ func buildMCPResourceServerWithDurableTaskStore(
 		SubscriptionLedger:    subscriptionLedger,
 		Auditor:               mcpgateway.GateAuditor{Log: log, Store: eng.store, Tenant: rsTenant},
 		PinVerifier:           eng.pinVerifier,
-		RenderInspector:       ri,
+		RenderInspectorSource: renderInspector,
 		ElicitationMediator:   em,
 
 		// The validated EXPLICIT mode, or "" when the operator stated none.

@@ -272,6 +272,42 @@
       "lastCredential": "Cannot delete your only passkey. Register another one first."
     }
   },
+  "sessions": {
+    "title": "Your sign-ins",
+    "description": "Browsers and clients where you are signed in. End any session you no longer use or recognize.",
+    "endAll": "End all others",
+    "none": "No live sign-ins",
+    "noneHint": "Your current and recent sign-ins appear here.",
+    "client": "Client",
+    "lastUsed": "Last used",
+    "created": "Created",
+    "expires": "Expires",
+    "actionsColumn": "Actions",
+    "current": "This session",
+    "end": "End",
+    "endLabel": "End {{kind}} sign-in from {{created}}",
+    "endTitle": "End sign-in?",
+    "endBody": "This sign-in will stop working on that browser or client. You can sign in again there later.",
+    "endAllTitle": "End all other sign-ins?",
+    "endAllBody": "The other sign-ins listed here will end. This session stays active.",
+    "endAllFailed_one": "{{count}} sign-in could not be ended. Review the list and try again.",
+    "endAllFailed_other": "{{count}} sign-ins could not be ended. Review the list and try again.",
+    "ended": "Sign-in ended.",
+    "kinds": {
+      "browser": "Browser",
+      "token": "Token",
+      "unknown": "Unknown",
+      "pairing": "Awaiting pairing"
+    },
+    "deviceName": "Device name",
+    "pair": "Pair a device",
+    "pairLink": "One-time link",
+    "pairHint": "Copy this private link to the device. It expires in 10 minutes and works once.",
+    "pairTitle": "Pair this device",
+    "acceptHint": "Continue only if you requested this link from your own account. This device will gain access to that account.",
+    "pairInvalid": "This link is missing, expired, or already used. Create another link from your sign-in settings.",
+    "accept": "Pair this device"
+  },
   "totp": {
     "title": "TOTP second factor",
     "description": "A time-based one-time password (RFC 6238) as an additional factor on your local account. It adds to — never replaces — your passkeys.",

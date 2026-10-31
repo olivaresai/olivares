@@ -33,6 +33,28 @@ type DepartmentService interface {
 	SetGroupParent(ctx context.Context, p auth.Principal, tenant model.TenantID, id, parent model.ID) (model.UserGroup, error)
 }
 
+// DepartmentCreator is the OPTIONAL capability of a DepartmentService that creates
+// a workspace under a parent: POST /v1/workspaces with a parent_id. It creates ws
+// under ws.ParentID in one write and audits it, so an unparented department never
+// exists. The route and handler have already refused a confined caller, one who neither
+// owns the tenant nor administers the parent (WorkspaceAdministration), and a
+// missing step-up. It is optional, the repository's idiom for an added edition
+// capability, so a service built before it keeps compiling; a service without it
+// answers 501 departments_unavailable, which grants less.
+type DepartmentCreator interface {
+	CreateWorkspace(ctx context.Context, p auth.Principal, tenant model.TenantID, ws model.Workspace) (model.Workspace, error)
+}
+
+// WorkspaceAdministration is the OPTIONAL capability of a mounted module that says
+// whether a caller administers a department: one of its delegation domains (tenant
+// administration or an admin-capable scoped grant) contains the workspace. The
+// governance module answers it with the definition its delegation ceiling and its
+// inheritance filters use, so a department admin creates under its own department
+// and nowhere else. Without such a module only the owner creates under a parent.
+type WorkspaceAdministration interface {
+	AdministersWorkspace(ctx context.Context, p auth.Principal, tenant model.TenantID, workspace model.ID) (bool, error)
+}
+
 // ErrDepartmentsUnavailable: no department service is wired (the Community build).
 // 501, like the other edition seams.
 var ErrDepartmentsUnavailable = errors.New("api: departments unavailable")

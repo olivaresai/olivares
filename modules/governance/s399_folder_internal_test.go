@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/model"
 )
 
 // `folder` scope tree for delegated administration. A grant bounded to a folder
@@ -37,6 +38,34 @@ func TestProjectManagedCedarFolder(t *testing.T) {
 	}
 	if src2 := projectManagedCedar(grants, roles, groups); src2 != src {
 		t.Error("folder projection is not deterministic")
+	}
+}
+
+// Sharing a folder is a scoped grant, so it is capped by the delegation ceiling: someone who
+// holds Read and Access Control on a folder can share Read, never Write.
+func TestFolderSharerCeiling(t *testing.T) {
+	// The mounted governance module declares Access Control; without it the role below
+	// would confer Read alone.
+	auth.ResetModuleCatalog()
+	if err := auth.RegisterModulePermissions([]auth.Permission{auth.PermRBACAdmin}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(auth.ResetModuleCatalog)
+	tenant := model.TenantID("t1")
+	sharer := auth.ScopedPrincipal("c", "sharer", tenant, auth.RoleViewer)
+	roles := map[string]customRole{"folder-sharer": {Name: "folder-sharer", Perms: []string{"resource:read", string(auth.PermRBACAdmin)}}}
+	folder := scopeSpec{Tree: scopeFolder, Ref: "f", Class: "resource"}
+	held := []scopedGrant{{SubjectKind: subjectRole, SubjectRef: auth.RoleViewer, Role: "folder-sharer", RoleCustom: true, Scope: scopeSpec{Tree: scopeFolder, Ref: "f"}}}
+	share := func(role string, scope scopeSpec) error {
+		g := scopedGrant{SubjectKind: subjectGroup, SubjectRef: "g", Role: role, Scope: scope}
+		return canDelegate(context.Background(), nil, sharer, tenant, g, held, roles, nil)
+	}
+	if err := share(auth.RoleViewer, folder); err != nil {
+		t.Errorf("sharing Read within the sharer's rights: %v", err)
+	}
+	const sentence = "cannot delegate above your own scope, role or expiry"
+	if msg, ok := asCeiling(share(auth.RoleEditor, folder)); !ok || msg != sentence {
+		t.Errorf("sharing Write: %q, want the ceiling sentence %q", msg, sentence)
 	}
 }
 

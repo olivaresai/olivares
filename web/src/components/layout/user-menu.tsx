@@ -5,14 +5,12 @@ import { useNavigate, useRouterState } from '@tanstack/react-router'
 import {
   CircleHelp,
   KeyRound,
-  LayoutGrid,
   LogOut,
   Palette,
   Settings,
   SquareTerminal,
-  Star,
 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -34,8 +32,6 @@ import { useServerInfo } from '@/lib/hooks/use-server-info'
 import { useThemeStore, type Theme } from '@/stores/theme'
 import { CommandLineDialog } from './command-line-dialog'
 import { ChangePasswordDialog } from './change-password-dialog'
-import { useAreasSheet } from './areas-sheet-store'
-import { useFavoriteThisPage } from './personal-navigation'
 import { THEME_OPTIONS } from './theme-toggle'
 
 /**
@@ -88,10 +84,9 @@ function initialsOf(name: string): string {
   return (trimmed.slice(0, 2) || '?').toUpperCase()
 }
 
-/** The account menu: identity, role, the edition and version, All areas (every page the top
- * bar does not name), this page in favorites, Settings, the theme, help for this page, the
- * command line, and sign-out (#3161 moved the version, the theme and favorites here from the
- * top bar; the engine's state went to the status bar). The engine does not return the
+/** The account menu: identity, role, the edition and version, Settings, the theme, help for
+ * this page, the command line, and sign-out (#3161 moved the version and the theme here from
+ * the top bar; the engine's state went to the status bar). The engine does not return the
  * principal's email to itself (minimum data), so we show the display name and the principal
  * id (`actor`). */
 export function UserMenu() {
@@ -100,11 +95,8 @@ export function UserMenu() {
   const navigate = useNavigate()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const version = useServerInfo().data?.version
-  const favorite = useFavoriteThisPage()
   const theme = useThemeStore((s) => s.theme)
   const setTheme = useThemeStore((s) => s.setTheme)
-  // All areas gives focus back to the account button, not to the menu item it closed.
-  const trigger = useRef<HTMLButtonElement>(null)
 
   const name = principal?.display_name || principal?.actor || ''
   const initials = initialsOf(name)
@@ -118,7 +110,6 @@ export function UserMenu() {
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button
-            ref={trigger}
             variant="ghost"
             size="icon"
             className="rounded-full"
@@ -164,24 +155,6 @@ export function UserMenu() {
             </div>
           </div>
           <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onSelect={() => useAreasSheet.getState().show(trigger.current)}
-          >
-            <LayoutGrid />
-            {t('nav:shell.allAreas')}
-          </DropdownMenuItem>
-          {favorite ? (
-            <DropdownMenuItem onSelect={favorite.toggle}>
-              <Star
-                className={
-                  favorite.saved
-                    ? 'fill-accent-soft text-accent-text'
-                    : undefined
-                }
-              />
-              {favorite.label}
-            </DropdownMenuItem>
-          ) : null}
           <DropdownMenuItem onSelect={() => void navigate({ to: '/settings' })}>
             <Settings />
             {t('nav:items.settings')}

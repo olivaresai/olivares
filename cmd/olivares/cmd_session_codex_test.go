@@ -29,7 +29,7 @@ func codexRecordedLines(t *testing.T) []string {
 	return strings.Split(strings.TrimSpace(string(raw)), "\n")
 }
 
-// TestSessionViewRendersARecordedCodexTurn is HU 016: `session follow` printed a Codex
+// TestSessionViewRendersARecordedCodexTurn is acceptance: `session follow` printed a Codex
 // session's protocol frames raw. It must read like a Claude session: the reply text,
 // the turn's end, and none of the driver's handshake.
 func TestSessionViewRendersARecordedCodexTurn(t *testing.T) {

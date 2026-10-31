@@ -7,7 +7,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -49,7 +49,8 @@ import { ProfileSheet } from './profile-sheet'
 import { ProfileSignInDialog } from './profile-sign-in'
 import { ToolBox } from './tool-box'
 import { needsDefaultRow, useProfileList } from './use-profiles'
-import { toolFacts, toolLabel as nameOf } from './inventory'
+import { toolName as nameOf } from '@/features/agentops/engine-tools'
+import { toolFacts } from './inventory'
 import './i18n'
 
 /** A service the engine runs for sessions, not a tool with logins: it has no profiles. */
@@ -64,8 +65,12 @@ export function AgentToolsView() {
 
 function Tools({ epoch }: { epoch: number }) {
   const { t } = useTranslation('agentTools')
-  const { isSuperadmin, activeTenant } = useAuth()
+  const { isSuperadmin, activeTenant, can } = useAuth()
   const qc = useQueryClient()
+  // The page's next step (#3388): whoever may add a provider key does it from the header.
+  const canAddKey =
+    can('sessions:provider:read') && can('sessions:provider:write')
+  const [addingKey, setAddingKey] = useState(false)
   const tenant = useTenantStore((s) => s.activeTenant)
   const scope = [...agentToolsKeys.all, epoch]
   const inventoryKey = [...scope, 'inventory']
@@ -178,7 +183,7 @@ function Tools({ epoch }: { epoch: number }) {
     if (job.data && job.data.state !== 'running') {
       void qc.invalidateQueries({ queryKey: inventoryKey })
       // The profile rows read the tool's own status and what it runs on: a finished
-      // install changes both (HU2-30: "Not installed" stayed next to "Installed" until a
+      // install changes both (acceptance: "Not installed" stayed next to "Installed" until a
       // reload).
       void qc.invalidateQueries({ queryKey: firstHourKeys.all(tenant) })
       void qc.invalidateQueries({ queryKey: [...scope, 'providers', tenant] })
@@ -230,21 +235,31 @@ function Tools({ epoch }: { epoch: number }) {
         title={t('title')}
         description={t(isSuperadmin ? 'description' : 'descriptionMember')}
         actions={
-          isSuperadmin ? (
-            <Button
-              variant="outline"
-              onClick={() => {
-                void inventory.refetch()
-                void providers.refetch()
-                // The profile rows read each login from the tool itself.
-                void qc.invalidateQueries({
-                  queryKey: firstHourKeys.all(tenant),
-                })
-              }}
-              disabled={inventory.isFetching}
-            >
-              {t('refresh')}
-            </Button>
+          isSuperadmin || canAddKey ? (
+            <>
+              {isSuperadmin ? (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    void inventory.refetch()
+                    void providers.refetch()
+                    // The profile rows read each login from the tool itself.
+                    void qc.invalidateQueries({
+                      queryKey: firstHourKeys.all(tenant),
+                    })
+                  }}
+                  disabled={inventory.isFetching}
+                >
+                  {t('refresh')}
+                </Button>
+              ) : null}
+              {canAddKey ? (
+                <Button variant="primary" onClick={() => setAddingKey(true)}>
+                  <Plus aria-hidden />
+                  {t('addProviderKey')}
+                </Button>
+              ) : null}
+            </>
           ) : undefined
         }
       />
@@ -428,7 +443,7 @@ function Tools({ epoch }: { epoch: number }) {
             <QueryErrorState
               error={preview.error}
               description={message(preview.error)}
-              // HU2-28: a release lookup can fail for a while (GitHub's limit for this network);
+              // acceptance: a release lookup can fail for a while (GitHub's limit for this network);
               // Retry plans the same tool and version again.
               retry={() => {
                 if (preview.variables) preview.mutate(preview.variables)
@@ -522,7 +537,11 @@ function Tools({ epoch }: { epoch: number }) {
           )}
         </>
       ) : null}
-      <AccountsAndKeys folded={isSuperadmin} />
+      <AccountsAndKeys
+        folded={isSuperadmin}
+        adding={addingKey}
+        onAddingChange={setAddingKey}
+      />
     </div>
   )
 }

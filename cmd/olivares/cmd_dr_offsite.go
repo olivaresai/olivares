@@ -16,6 +16,7 @@ import (
 	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/spf13/cobra"
 
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/core/dr"
 )
 
@@ -100,7 +101,11 @@ func addOffsiteFlags(cmd *cobra.Command, f *offsiteFlags) {
 func (f offsiteFlags) configured() bool { return strings.TrimSpace(f.bucket) != "" }
 
 // client resolves credentials by reference and builds an offsite client.
-func (f offsiteFlags) client() (*dr.OffsiteClient, error) {
+func (f offsiteFlags) client() (*dr.OffsiteClient, error) { return f.newClient(0) }
+
+// newClient builds the offsite client; retainFor > 0 makes it the append-only
+// writer, which locks what it puts for that long and never deletes.
+func (f offsiteFlags) newClient(retainFor time.Duration) (*dr.OffsiteClient, error) {
 	akid, err := readSecretRef(f.akidFile, "AWS_ACCESS_KEY_ID")
 	if err != nil {
 		return nil, fmt.Errorf("offsite access key id: %w", err)
@@ -122,7 +127,21 @@ func (f offsiteFlags) client() (*dr.OffsiteClient, error) {
 		AccessKeyID:     akid,
 		SecretAccessKey: secret,
 		SessionToken:    token,
+		Immutable:       retainFor > 0,
+		RetainFor:       retainFor,
 	})
+}
+
+// offsiteLockWarning names what a bucket's Object Lock configuration leaves open,
+// or returns "" when it is enabled with no bypassable default.
+func offsiteLockWarning(bucket string, st dr.OffsiteLockStatus) string {
+	switch {
+	case !st.Enabled:
+		return fmt.Sprintf("warning: offsite bucket %s has no Object Lock: any credential that can delete objects can delete every bundle (create the bucket with Object Lock and use dr backup --offsite-immutable)", bucket)
+	case st.DefaultMode == "GOVERNANCE":
+		return fmt.Sprintf("warning: offsite bucket %s defaults to GOVERNANCE retention, which a credential with s3:BypassGovernanceRetention can lift; use COMPLIANCE (dr backup --offsite-immutable locks each bundle in COMPLIANCE mode)", bucket)
+	}
+	return ""
 }
 
 // readSecretRef reads a credential from a file (trimmed) if set, otherwise from the
@@ -262,15 +281,15 @@ func applyGFSLocal(dir, keepName string, policy dr.GFSPolicy, now time.Time, out
 // These entries are OBJECT names, not paths, because that is what an object is on
 // the mirror: `retention.offsite` is a different field from `retention.local` and
 // its values are the keys `dr ls --offsite` lists and `dr pull --name` takes.
-func applyGFSOffsite(ctx context.Context, cli *dr.OffsiteClient, keepName string, policy dr.GFSPolicy, now time.Time, out io.Writer) retentionOutcome {
-	objs, err := cli.List(ctx)
+//
+// With lock set (the separate pruner on an Object Lock bucket), it also extends the
+// COMPLIANCE retention of every bundle the plan keeps to CreatedAt + the span of the
+// tiers that keep it, so the lock follows GFS instead of the writer's shorter one.
+func applyGFSOffsite(ctx context.Context, cli *dr.OffsiteClient, keepName string, policy dr.GFSPolicy, now time.Time, lock bool, out io.Writer) retentionOutcome {
+	metas, err := cli.RetentionBundles(ctx)
 	if err != nil {
 		fmt.Fprintf(out, "warning: offsite GFS prune skipped (%v)\n", err)
 		return retentionOutcome{Skipped: true}
-	}
-	metas := make([]dr.BundleMeta, 0, len(objs))
-	for _, o := range objs {
-		metas = append(metas, dr.BundleMeta{Name: o.Name, CreatedAt: o.LastModified})
 	}
 	var pruned []string
 	plan := dr.PlanGFS(metas, policy, now)
@@ -285,7 +304,83 @@ func applyGFSOffsite(ctx context.Context, cli *dr.OffsiteClient, keepName string
 		fmt.Fprintf(out, "GFS pruned offsite bundle: %s\n", b.Name)
 		pruned = append(pruned, b.Name)
 	}
+	for _, d := range plan.Decided {
+		span := policy.KeepLockSpan(d.Reason)
+		until := d.Bundle.CreatedAt.Add(span).UTC()
+		if !lock || !d.Keep || span == 0 || !until.After(now) {
+			continue
+		}
+		if err := cli.ExtendRetention(ctx, d.Bundle.Name, until); err != nil {
+			fmt.Fprintf(out, "warning: could not extend the lock of offsite %s (%v)\n", d.Bundle.Name, err)
+			continue
+		}
+		fmt.Fprintf(out, "locked offsite bundle until %s: %s\n", until.Format(time.RFC3339), d.Bundle.Name)
+	}
 	return retentionOutcome{Deleted: pruned}
+}
+
+// drPruneResult is what `dr prune --offsite -o json` reports: the mirror and the
+// object names it deleted.
+type drPruneResult struct {
+	Bucket  string   `json:"bucket"`
+	Prefix  string   `json:"prefix"`
+	Deleted []string `json:"deleted"`
+}
+
+// drPruneCmd applies GFS retention to the offsite mirror on its own, so the
+// deleting credential lives apart from the append-only writer (`dr backup
+// --offsite-immutable`): a stolen writer credential cannot destroy the copies.
+func drPruneCmd() *cobra.Command {
+	var of offsiteFlags
+	var gf gfsFlags
+	var offsite bool
+	cmd := &cobra.Command{
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "prune",
+		Short:       "Apply GFS retention to the offsite S3/R2 mirror with its own credential",
+		Long: "prune deletes the offsite bundles a GFS policy expires and, on an Object Lock bucket,\n" +
+			"extends the COMPLIANCE lock of the bundles it keeps. Run it with a credential that may\n" +
+			"delete, kept apart from the one dr backup --offsite-immutable writes with.",
+		Example: "  olivares dr prune --offsite --gfs-daily 7 --gfs-weekly 4 --offsite-bucket olivares-dr \\\n" +
+			"    --offsite-access-key-id-file /run/secrets/prune-key-id --offsite-secret-access-key-file /run/secrets/prune-secret",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if !offsite {
+				return fmt.Errorf("dr prune applies to the offsite mirror: pass --offsite (local retention runs with dr backup)")
+			}
+			if !gf.any() {
+				return fmt.Errorf("dr prune needs a GFS policy: pass at least one --gfs-* flag")
+			}
+			if !of.configured() {
+				return fmt.Errorf("an offsite target is required: pass --offsite-bucket (and endpoint/creds)")
+			}
+			human, err := commentaryOut(cmd)
+			if err != nil {
+				return err
+			}
+			cli, err := of.client()
+			if err != nil {
+				return err
+			}
+			// Without a readable lock configuration the prune still runs; it only
+			// skips extending locks, which needs Object Lock on the bucket.
+			st, err := cli.LockStatus(cmd.Context())
+			if err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not read the Object Lock configuration of offsite bucket %s, so no lock is extended (%v)\n", of.bucket, err)
+			} else if w := offsiteLockWarning(of.bucket, st); w != "" {
+				fmt.Fprintln(cmd.ErrOrStderr(), w)
+			}
+			o := applyGFSOffsite(cmd.Context(), cli, "", gf.policy(), time.Now(), st.Enabled, human)
+			if o.Skipped {
+				return fmt.Errorf("offsite prune: the mirror could not be listed")
+			}
+			return renderJSONOnly(cmd, drPruneResult{Bucket: of.bucket, Prefix: of.prefix, Deleted: append([]string{}, o.Deleted...)})
+		},
+	}
+	addOffsiteFlags(cmd, &of)
+	addGFSFlags(cmd, &gf)
+	cmd.Flags().BoolVar(&offsite, "offsite", false, "prune the offsite mirror (required: this command never touches local bundles)")
+	return cmd
 }
 
 // pushBundleOffsite streams a local bundle to the offsite target under its basename.
@@ -402,6 +497,7 @@ func drListCmd() *cobra.Command {
 	var of offsiteFlags
 	var dir string
 	var offsite bool
+	var maxAge time.Duration
 	cmd := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "read"},
 		// Canonical short verb first (`ls`/`rm` across the CLI); the old
@@ -418,6 +514,10 @@ func drListCmd() *cobra.Command {
 			// family did, which made scripting a restore a parsing exercise.
 			items := []drBundleListItem{}
 			source := ""
+			if maxAge > 0 && !offsite {
+				return fmt.Errorf("--max-age checks the offsite mirror: pass --offsite")
+			}
+			var newest *dr.OffsiteObject
 			if offsite {
 				if !of.configured() {
 					return fmt.Errorf("an offsite target is required: pass --offsite-bucket (and endpoint/creds)")
@@ -429,6 +529,16 @@ func drListCmd() *cobra.Command {
 				objs, err := cli.List(cmd.Context())
 				if err != nil {
 					return err
+				}
+				// The lock check is advice on stderr: the listing and its exit
+				// status stay what they were, so scripts reading them are unchanged.
+				if st, lerr := cli.LockStatus(cmd.Context()); lerr != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not read the Object Lock configuration of offsite bucket %s (%v)\n", of.bucket, lerr)
+				} else if w := offsiteLockWarning(of.bucket, st); w != "" {
+					fmt.Fprintln(cmd.ErrOrStderr(), w)
+				}
+				if len(objs) > 0 {
+					newest = &objs[0]
 				}
 				source = "offsite"
 				for _, o := range objs {
@@ -455,7 +565,7 @@ func drListCmd() *cobra.Command {
 					})
 				}
 			}
-			return renderOut(cmd, func(w io.Writer) error {
+			err := renderOut(cmd, func(w io.Writer) error {
 				if len(items) == 0 {
 					if offsite {
 						_, err := fmt.Fprintln(w, "(no offsite bundles)")
@@ -477,10 +587,23 @@ func drListCmd() *cobra.Command {
 				}
 				return nil
 			}, items)
+			if err != nil || maxAge <= 0 {
+				return err
+			}
+			// The missing-backup alert: a scheduler or the nightly drill runs this
+			// and reads exit 7 as "the offsite copy is not current".
+			if newest == nil {
+				return exitcode.New(exitcode.Degraded, fmt.Errorf("offsite alert: no offsite bundle newer than %s (the mirror is empty)", maxAge))
+			}
+			if age := time.Since(newest.LastModified); age > maxAge {
+				return exitcode.New(exitcode.Degraded, fmt.Errorf("offsite alert: no offsite bundle newer than %s (newest is %s, %s old)", maxAge, newest.Name, age.Round(time.Minute)))
+			}
+			return nil
 		},
 	}
 	addOffsiteFlags(cmd, &of)
 	cmd.Flags().StringVar(&dir, "dir", "", "local backup directory (default <data-dir>/backups)")
 	cmd.Flags().BoolVar(&offsite, "offsite", false, "list the offsite mirror instead of the local directory")
+	cmd.Flags().DurationVar(&maxAge, "max-age", 0, "with --offsite: exit 7 when the newest offsite bundle is older than this (missing-backup alert; 0 = off)")
 	return cmd
 }

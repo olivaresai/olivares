@@ -60,14 +60,12 @@ class ReleaseNotes(unittest.TestCase):
                         self.assertNotEqual(missing.returncode, 0)
 
     def test_pr_lint_refuses_a_release_version_without_its_dated_section_first(self) -> None:
-        source = (ROOT / '.github/workflows/pr-ci.yml').read_text()
-        step = re.search(r'      - name: the release version has its dated CHANGELOG section\n'
-                         r'        run: (.+)\n', source)
-        self.assertIsNotNone(step, 'pr-lint does not check RELEASE-VERSION against CHANGELOG.md')
-        self.assertLess(step.start(), source.index('      - name: DCO required and attribution'),
-                        'the release check must run before the other pr-lint steps')
-        block = source[step.start():].split('\n      - ', 1)[0]
-        self.assertEqual(block.count('\n'), 1, 'a key after name and run can stop the step failing the job')
+        # Both workflow callers execute this task. Its first command must reject
+        # an undated release before the remaining common checks can run.
+        source = (ROOT / 'Taskfile.yml').read_text()
+        command = source.split('  lint:public:\n', 1)[1].split('    cmds:\n', 1)[1].splitlines()[0]
+        command = command.removeprefix('      - ')
+        self.assertTrue(command.startswith('python3 scripts/render-release-notes.py '))
         with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR')) as tmp:
             work = Path(tmp) / 'checkout'
             (work / 'scripts').mkdir(parents=True)
@@ -81,7 +79,7 @@ class ReleaseNotes(unittest.TestCase):
                                            ('0.3', cut, False), ('0.3', next_cut, True)):
                 (work / 'RELEASE-VERSION').write_text('# Next release\n' + version + '\n')
                 (work / 'CHANGELOG.md').write_text(changelog)
-                result = subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', step[1]], cwd=work,
+                result = subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', command], cwd=work,
                                         capture_output=True, text=True)
                 with self.subTest(version=version, cut=ok):
                     self.assertEqual(result.returncode == 0, ok, result.stderr)

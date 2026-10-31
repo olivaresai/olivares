@@ -96,6 +96,31 @@ func TestApprovalSeparationOfDuty(t *testing.T) {
 	}
 }
 
+func TestApprovalRequesterFieldsAreEngineOnly(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	_, a2 := h.roleUser(admin, tenant, "a2@x.io", "admin")
+	spoofed := model.NewID()
+	r := h.createApproval(a2, tenant, map[string]any{"action": "deploy", "requestedby": "user:" + spoofed.String(), "requestedbyuser": spoofed.String()})
+	if r.code != http.StatusBadRequest {
+		t.Fatalf("wire input overrode the authenticated requester = %d %s, want 400", r.code, r.raw)
+	}
+	for _, field := range []string{"requested_by", "requested_by_user"} {
+		r = h.createApproval(a2, tenant, map[string]any{"action": "deploy", field: spoofed.String()})
+		if r.code != http.StatusBadRequest {
+			t.Fatalf("%s wire input = %d %s, want 400", field, r.code, r.raw)
+		}
+	}
+	r = h.createApproval(a2, tenant, map[string]any{"action": "deploy"})
+	if r.code != http.StatusCreated {
+		t.Fatalf("ordinary requester create = %d %s", r.code, r.raw)
+	}
+	if rr := h.decide(a2, tenant, r.body["id"].(string), "approve"); rr.code != http.StatusForbidden {
+		t.Fatalf("creator approved their own request = %d %s, want 403", rr.code, rr.raw)
+	}
+}
+
 func TestApprovalMultiApprovalAndDuplicateDecider(t *testing.T) {
 	h := newHarness(t)
 	admin := h.adminLogin()

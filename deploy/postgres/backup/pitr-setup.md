@@ -11,7 +11,8 @@ near-zero-RPO option in the AWS DR taxonomy's *Backup & Restore* tier and the
 foundation the multi-region topology builds on.
 
 > The ledger continuity guarantee is **the same** either way: after recovery you
-> install the signing keys and run `olivares dr verify` / `/v1/audit/verify`.
+> install the signing keys and verify the chain with `olivares dr restore` of the companion
+> bundle (below) and `/v1/audit/verify`.
 > PITR only changes how the *store bytes* are recovered, not how the *chain* is
 > verified. Pair PITR with a **`dr backup --pitr-ref` companion bundle** (keys +
 > chain-tip manifest, no store bytes) so the keys and the expected tips travel
@@ -84,8 +85,15 @@ so the bundle is just the encrypted keys + the chain-tip manifest.
    olivares dr restore --engine=postgres \
      --dsn="$OLIVARES_DSN" --data-dir=/var/lib/olivares \
      --in=/backups/olivares-dr-pitr-<ts>.drbundle \
-     --passphrase-file=/run/secrets/dr-pass
+     --passphrase-file=/run/secrets/dr-pass \
+     --operator "you@example.com" --reason "INC-42 recovery to 11:55"
    ```
+
+   The recovered database already holds the estate, so the restore is a declared one:
+   `--operator` and `--reason` are required and are recorded in the recovered ledger. (In
+   the owner/app split also pass `--owner-dsn`, and `--admin-dsn` for the full tenant set.)
+   Recover to an instant after the last tenant was created, or take a new companion after
+   creating one: a tenant that is not in the companion's manifest is reported, not passed.
 
    `dr restore` sees the PITR companion (no store bytes), installs the keys, then
    verifies every tenant chain + per-event signatures + checkpoints against the

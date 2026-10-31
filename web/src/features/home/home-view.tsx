@@ -21,8 +21,8 @@
 // and the live sessions it observes (one page each), the pending requests, the ledger's
 // head and the monthly budget. A read the role may not make is not made, and a source
 // with no answer leaves its clause out: nothing here is a made-up zero.
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { lazy, Suspense, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { LayoutDashboard } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/lib/auth/context'
@@ -30,11 +30,7 @@ import { auditApi } from '@/lib/api/endpoints'
 import { EmptyState } from '@/components/ui/empty-state'
 import { IntelPage } from '@/features/_intel'
 import { currentAnswer } from '@/features/executive/derive'
-import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
-import { sessionsApi, sessionsKeys } from '@/features/sessions/api'
-import { mergeSessions } from '@/features/sessions/provenance'
 import { usePendingApprovals } from '@/features/governance/use-pending-approvals'
-import { useMinuteClock } from '@/components/layout/use-session-rail'
 import { EstateLanes } from './estate-lanes'
 import {
   decodeSessionAddress,
@@ -45,17 +41,13 @@ import { useValidatedUrlState } from '@/lib/hooks/use-url-state'
 import { EstateSummary } from './estate-summary'
 import { LiveCards } from './live-cards'
 import { useMonthBudget } from './month-budget'
-import {
-  actsForPeople,
-  dayCost,
-  dayIsFloor,
-  isLiveSession,
-} from './now-sessions'
+import { actsForPeople, dayCost, isLiveSession } from './now-sessions'
 import { NowQueue, useFlaggedRequest, useNeedsYouRows } from './now-queue'
 import { NowStart } from './now-start'
 import { ProofLine } from './proof-line'
 import { RecentWork } from './recent-work'
 import { pendingReason, tileState } from './view-state'
+import { useRecentSessions } from './use-recent-sessions'
 import './i18n'
 
 // The sheet carries the whole conversation renderer: loaded on the first open, not with
@@ -66,13 +58,9 @@ const SessionSheet = lazy(() =>
   })),
 )
 
-/** How many runs Estate reads for the sessions region (it shows the newest few). */
-const HOME_RUN_PARAMS = { limit: 30 } as const
-
 export function HomeView() {
   const { t } = useTranslation(['home', 'nav'])
   const { activeTenant, can } = useAuth()
-  const queryClient = useQueryClient()
   // THE SESSION OPEN OVER THE ESTATE (#2549): a place, so opening one is a history entry
   // and Back closes it; closing replaces it, so Back does not reopen it. The address is
   // untrusted: one that names no session is cleared and said, as on Sessions.
@@ -88,53 +76,21 @@ export function HomeView() {
   if (sheet.address && !sheetUsed) setSheetUsed(true)
 
   // --- the reads (only the permitted ones run) --------------------------------
-  // Live sessions are tenant-wide (GET /v1/m/sessions/live takes no workspace selector).
-  const canSessions = can('sessions:live:read')
-  const sessionsQ = useQuery({
-    queryKey: sessionsKeys.live(activeTenant),
-    queryFn: () => sessionsApi.live(),
-    enabled: canSessions,
-    // The clock ticks the figures between polls; this cadence is what certifies
-    // new usage (the costs are the engine's numbers, never extrapolated).
-    refetchInterval: 15_000,
-  })
-  // The sessions Olivares operates, so a launched session is on Estate by its name and
-  // state (one row with what was observed of it, merged below), with its session facts.
-  const canRuns = can('sessions:run:read')
-  const runsQ = useQuery({
-    queryKey: [...agentOpsKeys.runs(activeTenant, HOME_RUN_PARAMS), 'home'],
-    queryFn: () => agentOpsApi.listRuns(HOME_RUN_PARAMS),
-    enabled: canRuns,
-  })
+  const {
+    canSessions,
+    canRuns,
+    sessionsQ,
+    runsQ,
+    liveAnswer,
+    runsAnswer,
+    recentSessions,
+    now,
+    floor,
+  } = useRecentSessions()
   // Pending requests for Needs you: the approval queue's own read (shared cache).
   const pendingApprovals = usePendingApprovals()
   const month = useMonthBudget()
 
-  // ⛔ A PAUSED READ OUTLIVES THE PERMISSION THAT DISPATCHED IT unless it is cancelled.
-  //    `enabled: false` stops a query from STARTING, not one already dispatched and
-  //    paused (query-core continues every paused retryer when the client comes back
-  //    online). Cancelling with TanStack's default `revert` puts it back to pending/idle,
-  //    where a later re-grant starts it afresh. Scoped to the exact key.
-  useEffect(() => {
-    if (canSessions) return
-    void queryClient.cancelQueries({
-      queryKey: sessionsKeys.live(activeTenant),
-      exact: true,
-    })
-  }, [canSessions, activeTenant, queryClient])
-
-  // Only CURRENT, permitted answers (`currentAnswer`): a read the role lost, or one whose
-  // refetch failed, keeps its old rows on the query, and those must not paint a card or
-  // count toward a figure.
-  const liveAnswer = currentAnswer(canSessions, sessionsQ)
-  const runsAnswer = currentAnswer(canRuns, runsQ)
-  const recentSessions = useMemo(
-    () =>
-      liveAnswer || runsAnswer
-        ? mergeSessions(liveAnswer?.items ?? [], runsAnswer?.items ?? [])
-        : undefined,
-    [liveAnswer, runsAnswer],
-  )
   // Each session once: a live one is a card, an ended one a Recent work row.
   const liveSessions = useMemo(
     () => (recentSessions ?? []).filter(isLiveSession),
@@ -150,18 +106,6 @@ export function HomeView() {
   ]
   const readsSessions = sessionReads.length > 0
   const recentState = tileState(canRuns ? runsQ : sessionsQ)
-  // The minute clock moves "today" past midnight without a reload.
-  const now = useMinuteClock()
-  // A page cut short hides a day's sessions only if all it holds is from that day on.
-  const activity = {
-    live: (liveAnswer?.items ?? []).map((l) => Date.parse(l.last_event_at)),
-    runs: (runsAnswer?.items ?? []).map((r) =>
-      Date.parse(r.last_activity_at ?? r.started_at ?? r.created_at ?? ''),
-    ),
-  }
-  const floor = (daysAgo: number) =>
-    dayIsFloor(liveAnswer?.has_more, activity.live, now, daysAgo) ||
-    dayIsFloor(runsAnswer?.has_more, activity.runs, now, daysAgo)
   // A cut page leaves yesterday unknown: no figure rather than part of one.
   const yesterday =
     recentSessions && !floor(1) ? dayCost(recentSessions, now, 1) : null
@@ -172,17 +116,19 @@ export function HomeView() {
     settledSessions?.length === 0
   )
 
-  // What needs a person: the pending requests and the rows of the list beside them.
-  const needsRows = useNeedsYouRows(
-    canSessions ? sessionsQ.data?.items : undefined,
-    canSessions,
-  ).rows
   // The current answer only: a page whose refetch failed keeps its old rows on the query,
   // and a request that may have been decided since must not keep its Approve.
   const approvals = currentAnswer(
     pendingApprovals.permitted,
     pendingApprovals.query,
   )
+  // The summary counts the same rows and marks as the list beside it.
+  const needsRows = useNeedsYouRows(
+    liveAnswer?.items,
+    canSessions,
+    runsAnswer?.items,
+    approvals?.items,
+  ).rows
   // A requests read that failed or has not answered leaves the count unknown: the clause
   // waits for it rather than counting the sessions half alone.
   const approvalsUnknown = pendingApprovals.permitted && !approvals
@@ -207,7 +153,7 @@ export function HomeView() {
     return (
       <IntelPage
         icon={LayoutDashboard}
-        title={t('nav:shell.journeys.home')}
+        title={t('nav:places.now')}
         className="gap-0"
       >
         <EmptyState
@@ -221,7 +167,7 @@ export function HomeView() {
   return (
     <IntelPage
       icon={LayoutDashboard}
-      title={t('nav:shell.journeys.home')}
+      title={t('nav:places.now')}
       className="gap-0"
       // THE START LINE (#3121): the verb first, then what it runs on, and the proof at the
       // right, in one row under the title that is there from the first paint. Nothing
@@ -287,7 +233,8 @@ export function HomeView() {
           {canSessions || pendingApprovals.permitted ? (
             <div className="min-w-0 xl:col-start-2 xl:row-start-1">
               <NowQueue
-                sessions={sessionsQ.data?.items}
+                sessions={liveAnswer?.items}
+                runs={runsAnswer?.items}
                 state={tileState(sessionsQ)}
                 sessionsReadable={canSessions}
                 approvals={approvals?.items}

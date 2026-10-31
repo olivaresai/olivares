@@ -189,60 +189,8 @@ if [ "${gto}" -lt "${ceil}" ]; then ok "go_timeout (${gto}m) < step ceiling (${c
 else bad "go_timeout ${gto}m leaves no margin below ceiling ${ceil}m — this is the race-root defect"; fi
 
 # ── EL REPARTO DEL PAQUETE RAIZ (`-run`) ─────────────────────────────────────────
-# Aqui el fallo silencioso es peor: un `-run` que no casa con nada SALE 0. Un turno
-# con familias rancias publicaria exito sin ejecutar un test.
-
-# (k) una familia retirada deja tests sin turno
-stage
-python3 - "${SPEC}" <<'PY'
-import json, sys
-p = sys.argv[1]
-d = json.load(open(p, encoding="utf-8"))
-s = d["root_shards"][0]
-s["families"] = s["families"][1:]
-s["tests_now"] = -1          # la cifra se recalcula, no se ajusta a ojo
-json.dump(d, open(p, "w", encoding="utf-8"))
-PY
-run check
-if [ "$(rc)" = 1 ] && errhas "belong to no shard"; then ok "mutant (removed family) is killed by ORPHANS, not the count"
-else bad "removed family not detected (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
-
-# (l) un turno cuyas familias no existen: su -run saldria 0 sin correr nada
-stage
-python3 - "${SPEC}" <<'PY'
-import json, sys
-p = sys.argv[1]
-d = json.load(open(p, encoding="utf-8"))
-d["root_shards"].append({"name": "root-fantasma", "tests_now": 1,
-                         "families": ["NoExisteEstaFamilia"]})
-json.dump(d, open(p, "w", encoding="utf-8"))
-PY
-run check
-if [ "$(rc)" = 1 ] && errhas "its families are stale"; then ok "mutant (shard matching no tests) is killed"
-else bad "phantom shard not detected (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
-
-# (m) A family prefix in another shard must cause duplicate test ownership.
-#     Construct the overlap; a valid partition need not contain redundant prefixes.
-stage
-python3 - "${SPEC}" <<'PY'
-import json, sys
-p = sys.argv[1]
-d = json.load(open(p, encoding="utf-8"))
-for s in d["root_shards"]:
-    for f in s["families"]:
-        if len(f) > 1:
-            other = next(x for x in d["root_shards"] if x["name"] != s["name"])
-            other["families"].append(f[:-1])
-            for x in d["root_shards"]:
-                x["tests_now"] = -1
-            json.dump(d, open(p, "w", encoding="utf-8"))
-            sys.exit(0)
-raise SystemExit("no root family can form a nonempty proper prefix")
-PY
-run check
-# Require the duplicate-ownership diagnosis, not an unrelated count failure.
-if [ "$(rc)" = 1 ] && errhas "belong to TWO shards"; then ok "mutant (overlapping prefix in another root shard) rejected for duplicate ownership"
-else bad "duplicate ownership passed or failed for another reason (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+# A `-run` that matches nothing EXITS 0. An empty generated shard would report success
+# without running a test; scripts/test-generated-shards.sh proves that refusal and exact coverage.
 
 # (n) el -timeout de la raiz tambien va POR DEBAJO de su techo
 stage
@@ -257,21 +205,19 @@ run check
 if [ "$(rc)" = 1 ] && errhas "leaves no headroom"; then ok "mutant (Go timeout equal to the ceiling) is killed"
 else bad "equal timeouts passed (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
-# (o) un turno que se lleva media raiz es el paso que no cabe en el techo del job. Este es
-#     el control que SUSTITUYE a la igualdad de cifras, asi que tiene que morir de verdad.
+# (o) With three generated shards, at least one must exceed the 30% share limit.
+#     This keeps the balance guard itself under test after the hand-kept lists are gone.
 stage
 python3 - "${SPEC}" <<'PY'
 import json, sys
 p = sys.argv[1]
 d = json.load(open(p, encoding="utf-8"))
-a, b = d["root_shards"][0], d["root_shards"][1]
-a["families"] = sorted(set(a["families"]) | set(b["families"]))
-b["families"] = ["ZzzNoExisteNadaAsi"]
+d["root_shards"] = d["root_shards"][:3]
 json.dump(d, open(p, "w", encoding="utf-8"))
 PY
 run check
-if [ "$(rc)" = 1 ]; then ok "mutant (one shard takes half the root package) is killed"
-else bad "the imbalance passed (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+if [ "$(rc)" = 1 ] && errhas "an oversized shard"; then ok "mutant (three generated root shards) is killed by max_shard_share"
+else bad "the oversized generated shard passed (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (p) y una exclusión rancia SIN la marca de «ausente en el publicado» sigue siendo roja:
 #     la marca no puede convertirse en el camino cómodo para callar cualquier rancidez.
@@ -300,42 +246,6 @@ PY
 run check
 if [ "$(rc)" = 1 ] && errhas "no longer exists"; then ok "mutant (duration bound to a removed group) is killed"
 else bad "the stale measurement passed (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
-
-# (r) los TURNOS DE GRUPO: una familia retirada deja tests sin turno
-stage
-python3 - "${SPEC}" <<'PY'
-import json, sys
-p = sys.argv[1]
-d = json.load(open(p, encoding="utf-8"))
-for g in d["groups"]:
-    if g.get("shards"):
-        g["shards"][0]["families"] = g["shards"][0]["families"][1:]
-json.dump(d, open(p, "w", encoding="utf-8"))
-PY
-run check
-if [ "$(rc)" = 1 ] && errhas "belong to no shard"; then ok "mutant (family removed from a group shard) is killed"
-else bad "group orphans not detected (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
-
-# (s) Construct the same prefix overlap between shards of a workspace group.
-stage
-python3 - "${SPEC}" <<'PY'
-import json, sys
-p = sys.argv[1]
-d = json.load(open(p, encoding="utf-8"))
-for g in d["groups"]:
-    sh = g.get("shards")
-    if not sh or len(sh) < 2:
-        continue
-    for f in sh[0]["families"]:
-        if len(f) > 1:
-            sh[1]["families"].append(f[:-1])
-            json.dump(d, open(p, "w", encoding="utf-8"))
-            sys.exit(0)
-raise SystemExit("no group family can form a nonempty proper prefix")
-PY
-run check
-if [ "$(rc)" = 1 ] && errhas "belong to TWO shards"; then ok "mutant (overlapping prefix in another group shard) rejected for duplicate ownership"
-else bad "group duplicate ownership passed (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (t) un grupo cuyo `go_timeout_minutes` se pasa del techo del PASO. Sin la guarda por grupo el
 #     campo seria decoracion: el reloj del paso mata al job antes de que Go diga por que, y se
@@ -386,6 +296,20 @@ else bad "split ignores a group's shards (rc=$(rc))"; fi
 if grep -qE '^[[:space:]]+run: task lint:race-groups$' "${ROOT}/.github/workflows/pr-ci.yml"; then
   ok "pr-ci runs the race-groups union check on every pull request"
 else bad "pr-ci does not run task lint:race-groups: a new test could reach main in no race shard"; fi
+
+# main-suite is omitted from the public export. Development runs the union control
+# through lint:pr-fast; keep this bench tied to that existing job and task.
+# export-closure: hub-only .github/workflows/main-suite.yml — guarded by its presence below
+if [ -f "${ROOT}/.github/workflows/main-suite.yml" ]; then
+  rg_job="$(awk '/^  pr-lint-fast:$/{on=1;next} on && /^  [A-Za-z0-9_-]+:$/{on=0} on' "${ROOT}/.github/workflows/main-suite.yml")"
+  rg_task="$(awk '/^  lint:pr-fast:$/{on=1;next} on && /^  [A-Za-z0-9_:-]+:$/{on=0} on' "${ROOT}/Taskfile.yml")"
+  if printf '%s\n' "${rg_job}" | grep -qE '^[[:space:]]+run: task lint:pr-fast$' \
+     && printf '%s\n' "${rg_job}" | grep -qE "^    if: .+ && github.event_name == 'pull_request'\$" \
+     && ! printf '%s\n' "${rg_job}" | grep -q 'continue-on-error' \
+     && printf '%s\n' "${rg_task}" | grep -qE '^[[:space:]]+- task: lint:race-groups$'; then
+    ok "main-suite runs the race-groups union check on every development pull request"
+  else bad "main-suite's race-groups wiring failed"; fi
+fi
 
 echo "race-groups selftest: ${pass} passed, ${fail} failed"
 [ "${fail}" -eq 0 ]

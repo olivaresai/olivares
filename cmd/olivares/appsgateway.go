@@ -361,8 +361,9 @@ func (h *appsGatewayHandler) handleManagedSettings(w http.ResponseWriter, r *htt
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	if _, ok := h.authenticateBearer(r.Context(), r); !ok {
-		writeGatewayError(w, http.StatusUnauthorized, "authentication_error", "bearer authentication required", "")
+	if _, err := h.authenticateBearer(r.Context(), r); err != nil {
+		status, errType, message := bearerRefusal(err)
+		writeGatewayError(w, status, errType, message, "")
 		return
 	}
 	body, err := os.ReadFile(h.managedSettingsPath)
@@ -386,9 +387,10 @@ func (h *appsGatewayHandler) handleManagedSettings(w http.ResponseWriter, r *htt
 func (h *appsGatewayHandler) handleSpendLimits(w http.ResponseWriter, r *http.Request) {
 	requestID := spendRequestID(r)
 	w.Header().Set(headerSpendRequestID, requestID)
-	principal, ok := h.authenticateBearer(r.Context(), r)
-	if !ok {
-		writeSpendError(w, http.StatusUnauthorized, "authentication_error", "bearer authentication required", requestID)
+	principal, err := h.authenticateBearer(r.Context(), r)
+	if err != nil {
+		status, errType, message := bearerRefusal(err)
+		writeSpendError(w, status, errType, message, requestID)
 		return
 	}
 	tenant, ok := h.resolveTenant(principal)
@@ -611,15 +613,32 @@ func (h *appsGatewayHandler) writeSpendStoreError(w http.ResponseWriter, err err
 	}
 }
 
-func (h *appsGatewayHandler) authenticateBearer(ctx context.Context, r *http.Request) (auth.Principal, bool) {
+// authenticateBearer resolves the request's bearer. The error is
+// auth.ErrUnauthenticated for a credential that was refused, and the store's own
+// error (wrapping store.ErrStoreUnavailable) when the credential could not be
+// checked: bearerRefusal tells them apart.
+func (h *appsGatewayHandler) authenticateBearer(ctx context.Context, r *http.Request) (auth.Principal, error) {
 	if h.authr == nil {
-		return auth.Principal{}, false
+		return auth.Principal{}, auth.ErrUnauthenticated
 	}
 	p, err := h.authr.Authenticate(ctx, gatewayBearerToken(r))
-	if err != nil || p.IsPurposeRestricted() {
-		return auth.Principal{}, false
+	if errors.Is(err, store.ErrStoreUnavailable) {
+		return auth.Principal{}, err
 	}
-	return p, true
+	if err != nil || p.IsPurposeRestricted() {
+		return auth.Principal{}, auth.ErrUnauthenticated
+	}
+	return p, nil
+}
+
+// bearerRefusal is the gateway's answer to a failed authenticateBearer: a store
+// that could not be read says nothing about the credential, so it is a
+// retryable 503, not a 401 that tells the client to sign in again.
+func bearerRefusal(err error) (status int, errType, message string) {
+	if errors.Is(err, store.ErrStoreUnavailable) {
+		return http.StatusServiceUnavailable, "api_error", "authentication temporarily unavailable"
+	}
+	return http.StatusUnauthorized, "authentication_error", "bearer authentication required"
 }
 
 func (h *appsGatewayHandler) resolveTenant(p auth.Principal) (model.TenantID, bool) {

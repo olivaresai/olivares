@@ -22,7 +22,7 @@ func TestHookCanonDirectorySymlink(t *testing.T) {
 	}
 
 	body := hookCanonPayload(t, map[string]any{"file_path": filepath.Join(link, "db.pem")})
-	out := canonicalizeHookPayloadPaths(body)
+	out := mustCanon(t, body)
 
 	if got, want := hookCanonInputString(t, out, "file_path"), db; got != want {
 		t.Fatalf("canonical file_path = %q, want %q", got, want)
@@ -41,7 +41,7 @@ func TestHookCanonFileSymlink(t *testing.T) {
 	}
 
 	body := hookCanonPayload(t, map[string]any{"file_path": link})
-	out := canonicalizeHookPayloadPaths(body)
+	out := mustCanon(t, body)
 
 	if got := hookCanonInputString(t, out, "file_path"); got != db {
 		t.Fatalf("canonical symlink leaf file_path = %q, want %q", got, db)
@@ -52,7 +52,7 @@ func TestHookCanonMissingLeafUnderDirectorySymlink(t *testing.T) {
 	realSecrets, link := hookCanonSymlinkedSecrets(t)
 
 	body := hookCanonPayload(t, map[string]any{"file_path": filepath.Join(link, "newfile.txt")})
-	out := canonicalizeHookPayloadPaths(body)
+	out := mustCanon(t, body)
 
 	want := filepath.Join(realSecrets, "newfile.txt")
 	if got := hookCanonInputString(t, out, "file_path"); got != want {
@@ -68,7 +68,7 @@ func TestHookCanonNotebookPathSymlink(t *testing.T) {
 	}
 
 	body := hookCanonPayload(t, map[string]any{"notebook_path": filepath.Join(link, "analysis.ipynb")})
-	out := canonicalizeHookPayloadPaths(body)
+	out := mustCanon(t, body)
 
 	if got, want := hookCanonInputString(t, out, "notebook_path"), notebook; got != want {
 		t.Fatalf("canonical notebook_path = %q, want %q", got, want)
@@ -82,7 +82,7 @@ func TestHookCanonicalizeExistingAncestorPathNoChange(t *testing.T) {
 		t.Fatalf("write fixture: %v", err)
 	}
 
-	got, changed := canonicalizeExistingAncestorPath(file)
+	got, changed := mustAncestor(t, file)
 	if changed {
 		t.Fatalf("plain absolute path changed to %q", got)
 	}
@@ -90,7 +90,7 @@ func TestHookCanonicalizeExistingAncestorPathNoChange(t *testing.T) {
 		t.Fatalf("plain absolute path = %q, want %q", got, file)
 	}
 
-	got, changed = canonicalizeExistingAncestorPath("relative/plain.txt")
+	got, changed = mustAncestor(t, "relative/plain.txt")
 	if changed || got != "relative/plain.txt" {
 		t.Fatalf("relative path = (%q, %v), want unchanged", got, changed)
 	}
@@ -104,7 +104,7 @@ func TestHookCanonPayloadWithoutChangesReturnsOriginalBytes(t *testing.T) {
 	}
 	body := []byte(`{"tool_input":{"file_path":` + hookCanonJSONString(file) + `},"tool_name":"Read"}`)
 
-	out := canonicalizeHookPayloadPaths(body)
+	out := mustCanon(t, body)
 	if !bytes.Equal(out, body) {
 		t.Fatalf("unchanged payload was reserialized:\n got %s\nwant %s", out, body)
 	}
@@ -119,7 +119,7 @@ func TestHookCanonUnsupportedPayloadsReturnOriginalBytes(t *testing.T) {
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
-			out := canonicalizeHookPayloadPaths(body)
+			out := mustCanon(t, body)
 			if !bytes.Equal(out, body) {
 				t.Fatalf("payload changed:\n got %s\nwant %s", out, body)
 			}
@@ -157,6 +157,24 @@ func TestHookClientForwardsCanonicalizedFilePath(t *testing.T) {
 	if got != wantPath {
 		t.Fatalf("forwarded file_path = %q, want %q", got, wantPath)
 	}
+}
+
+func mustCanon(t *testing.T, body []byte) []byte {
+	t.Helper()
+	out, err := canonicalizeHookPayloadPaths(body)
+	if err != nil {
+		t.Fatalf("canonicalize payload: %v", err)
+	}
+	return out
+}
+
+func mustAncestor(t *testing.T, path string) (string, bool) {
+	t.Helper()
+	got, changed, err := canonicalizeExistingAncestorPath(path)
+	if err != nil {
+		t.Fatalf("canonicalize ancestor: %v", err)
+	}
+	return got, changed
 }
 
 func hookCanonTempDir(t *testing.T) string {

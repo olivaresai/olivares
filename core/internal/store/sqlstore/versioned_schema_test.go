@@ -34,8 +34,8 @@ func TestSchemaReconciliationIsVersioned(t *testing.T) {
 			if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations_core WHERE version > 20").Scan(&n); err != nil {
 				t.Fatal(err)
 			}
-			if n != 7 { // v21..v26 plus v27 user-group placement
-				t.Fatalf("boot reconciliations recorded = %d, want 7", n)
+			if n != 9 { // v21..v26, v27 user-group placement, v28 auth session inventory, v29 token-role provenance
+				t.Fatalf("boot reconciliations recorded = %d, want 9", n)
 			}
 			if err := st.Close(); err != nil {
 				t.Fatal(err)

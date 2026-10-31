@@ -140,10 +140,24 @@ beforeEach(() => {
 })
 
 describe('ConsoleView — ?tab= deep link', () => {
-  it('opens the RBAC roles surface for ?tab=roles', () => {
-    renderAt('?tab=roles')
-    expect(screen.getByText('RolesTab mounted')).toBeInTheDocument()
-    expect(screen.queryByText('PeopleTab mounted')).toBeNull()
+  it('sends ?tab=roles to People & groups for a tenant administrator, keeping the rest of the address', () => {
+    // 0.5 one navigation: Roles & delegation is People & groups' tab for a tenant
+    // administrator; Administration keeps it only for a delegated (workspace) one.
+    renderAt('?tab=roles&focus=svc_pool')
+    expect(screen.queryByText('RolesTab mounted')).toBeNull()
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(navigate).toHaveBeenCalledTimes(1)
+    const arg = navigate.mock.calls[0]![0] as {
+      to: string
+      search: (p: Record<string, unknown>) => Record<string, unknown>
+      replace: boolean
+      hash: unknown
+    }
+    expect(arg).toMatchObject({ to: '/identity', replace: true, hash: true })
+    expect(arg.search({ tab: 'roles', focus: 'svc_pool' })).toEqual({
+      focus: 'svc_pool',
+      tab: 'roles',
+    })
   })
 
   it('opens the source-bindings surface the access map actually links to (?tab=bindings)', () => {
@@ -151,18 +165,18 @@ describe('ConsoleView — ?tab= deep link', () => {
     expect(screen.getByText('BindingsTab mounted')).toBeInTheDocument()
   })
 
-  it('falls back to People with no tab parameter', () => {
+  it('falls back to Agents with no tab parameter', () => {
     // Non-firing direction: a seam that honoured ANY value would pass the cases above
     // while breaking every plain visit to /console.
     renderAt('')
-    expect(screen.getByText('PeopleTab mounted')).toBeInTheDocument()
+    expect(screen.getByText('AgentsTab mounted')).toBeInTheDocument()
   })
 
-  it('falls back to People for a tab that does not exist', () => {
+  it('falls back to Agents for a tab that does not exist', () => {
     // An unknown value must not render an empty shell — the operator gets the default
     // surface, not a blank console.
     renderAt('?tab=not-a-tab')
-    expect(screen.getByText('PeopleTab mounted')).toBeInTheDocument()
+    expect(screen.getByText('AgentsTab mounted')).toBeInTheDocument()
   })
 
   it('puts the tab strip on the same line as the title', () => {
@@ -213,22 +227,16 @@ describe('ConsoleView — ?tab= deep link', () => {
   })
 
   it.each([
-    ['people', 'PeopleTab mounted'],
     ['agents', 'AgentsTab mounted'],
-    ['sso', 'SSOTab mounted'],
     ['scopes', 'ScopesTab mounted'],
-    ['roles', 'RolesTab mounted'],
     ['bindings', 'BindingsTab mounted'],
     ['secrets', 'SecretsTab mounted'],
-    ['mcpGateway', 'MCPGatewayTab mounted'],
     ['connectors', 'ConnectorsTab mounted'],
     ['wsConnectors', 'WorkspaceConnectorsTab mounted'],
-    ['apiKeys', 'ApiKeysTab mounted'],
-    ['license', 'LicenseTab mounted'],
   ] as const)('opens ?tab=%s', (id, mounted) => {
     renderAt(`?tab=${id}`)
     expect(screen.getByText(mounted)).toBeInTheDocument()
-    expect(screen.getAllByRole('tab')).toHaveLength(12)
+    expect(screen.getAllByRole('tab')).toHaveLength(6)
   })
 })
 
@@ -236,23 +244,23 @@ describe('ConsoleView — URL drives the mounted selection', () => {
   it('follows a later router navigation without remounting', () => {
     // THE N2 DEFECT: initialTab() seeded useState once. A later ?tab= change
     // with Console still mounted left the old panel on screen.
-    const { unmount } = renderAt('?tab=roles')
-    expect(screen.getByText('RolesTab mounted')).toBeInTheDocument()
-    expect(screen.queryByText('PeopleTab mounted')).toBeNull()
+    const { unmount } = renderAt('?tab=agents')
+    expect(screen.getByText('AgentsTab mounted')).toBeInTheDocument()
+    expect(screen.queryByText('ScopesTab mounted')).toBeNull()
 
-    act(() => setSearchStr('?tab=people'))
-    expect(screen.getByText('PeopleTab mounted')).toBeInTheDocument()
-    expect(screen.queryByText('RolesTab mounted')).toBeNull()
+    act(() => setSearchStr('?tab=scopes'))
+    expect(screen.getByText('ScopesTab mounted')).toBeInTheDocument()
+    expect(screen.queryByText('AgentsTab mounted')).toBeNull()
 
-    act(() => setSearchStr('?tab=license'))
-    expect(screen.getByText('LicenseTab mounted')).toBeInTheDocument()
-    expect(screen.queryByText('PeopleTab mounted')).toBeNull()
+    act(() => setSearchStr('?tab=secrets'))
+    expect(screen.getByText('SecretsTab mounted')).toBeInTheDocument()
+    expect(screen.queryByText('ScopesTab mounted')).toBeNull()
     unmount()
   })
 
   it('clears an invalid tab with replace, preserving unrelated search', () => {
     renderAt('?tab=not-a-tab&focus=svc_pool')
-    expect(screen.getByText('PeopleTab mounted')).toBeInTheDocument()
+    expect(screen.getByText('AgentsTab mounted')).toBeInTheDocument()
     expect(navigate).toHaveBeenCalledTimes(1)
     const arg = navigate.mock.calls[0]![0] as {
       search: (p: Record<string, unknown>) => Record<string, unknown>
@@ -270,7 +278,7 @@ describe('ConsoleView — URL drives the mounted selection', () => {
 
 describe('ConsoleView — the URL follows a manual tab change', () => {
   it('writes the new tab, REPLACING the history entry rather than pushing one', async () => {
-    // `replace: true` is not decoration: the console has eleven tabs, and pushing an entry
+    // `replace: true` is not decoration: the console has six tabs, and pushing an entry
     // per click turns Back into a walk through them instead of a way out of the view.
     const user = userEvent.setup()
     renderAt('')
@@ -295,13 +303,13 @@ describe('ConsoleView — the URL follows a manual tab change', () => {
     // The updater is a function for exactly this reason. Returning a bare `{tab}` would
     // silently drop every other consumer's query state on the first tab click.
     const user = userEvent.setup()
-    renderAt('?tab=roles')
+    renderAt('?tab=agents')
     await user.click(screen.getByRole('tab', { name: /secrets/i }))
 
     const arg = navigate.mock.calls[0]![0] as {
       search: (p: Record<string, unknown>) => Record<string, unknown>
     }
-    expect(arg.search({ focus: 'svc_pool', tab: 'roles' })).toEqual({
+    expect(arg.search({ focus: 'svc_pool', tab: 'agents' })).toEqual({
       focus: 'svc_pool',
       tab: 'secrets',
     })
@@ -310,7 +318,7 @@ describe('ConsoleView — the URL follows a manual tab change', () => {
   it('does NOT navigate on the initial deep-linked render', async () => {
     // Non-firing direction: a seam that wrote the URL while reading it would fight the
     // caller's own navigation and could loop.
-    renderAt('?tab=roles')
+    renderAt('?tab=bindings')
     expect(navigate).not.toHaveBeenCalled()
   })
 })

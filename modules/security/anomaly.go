@@ -160,7 +160,7 @@ const (
 const hitlQueueScanLimit = 256
 
 // safetyPostureScanLimit bounds the dedup scan for provider safety-posture findings
-//. Like the HITL queue, it scans the NEWEST rows of the incoming subject kind;
+// . Like the HITL queue, it scans the NEWEST rows of the incoming subject kind;
 // a tenant with more than this many distinct safety subjects could re-insert a stale
 // duplicate beyond the window (the same documented bound as recentAnomalies).
 const safetyPostureScanLimit = 256

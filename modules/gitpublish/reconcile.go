@@ -6,6 +6,7 @@ package gitpublish
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"unicode/utf8"
@@ -136,14 +137,14 @@ func (m *Module) admitIntent(ctx context.Context, c Caller, id model.ID, action 
 		in, err = loadIntent(ctx, sc, id)
 		return err
 	}); err != nil {
-		return Intent{}, errNotFound
+		return Intent{}, intentStoreError(err, "")
 	}
 	perm := permTargetRead
 	switch {
 	case admin:
 		perm = permTargetAdmin
 	case action == actionReconcile:
-		perm = map[string]auth.Permission{effectPush: permPush, effectPullRequest: permPullRequest, effectMerge: permMerge}[in.Effect]
+		perm = map[string]auth.Permission{effectPush: permPush, effectPullRequest: permPullRequest, effectMerge: permMerge, effectIssueComment: permIssueComment}[in.Effect]
 	}
 	if _, err := m.opts.Authority.Admit(ctx, c.Principal, c.Tenant, Question{Permission: perm, Action: action, MinimumAAL: aal, Target: in.Target, Workspace: in.Workspace}); err != nil {
 		return Intent{}, authError(err)
@@ -159,11 +160,11 @@ func (m *Module) observe(ctx context.Context, c Caller, in Intent, source, actor
 		tg, err = loadTarget(ctx, sc, in.Target)
 		return err
 	}); err != nil {
-		return Receipt{Intent: in, Answer: in.State}, nil
+		return Receipt{Intent: in, Answer: in.State}, intentStoreError(err, in.ID)
 	}
 	cb, rb, e := m.bindings(ctx, c.Tenant, tg.Workspace, in.CredentialBinding, in.RepositoryBinding)
 	if e != nil {
-		return Receipt{Intent: in, Answer: in.State}, nil
+		return Receipt{Intent: in, Answer: in.State}, withIntent(e, in.ID)
 	}
 	if cb.Version != in.CredentialVersion || rb.Version != in.RepositoryVersion || rb.RepoID != in.RepoID {
 		// The binding now names another credential or repository: what it
@@ -172,11 +173,21 @@ func (m *Module) observe(ctx context.Context, c Caller, in Intent, source, actor
 	}
 	host, err := m.opts.Custody.OpenHost(ctx, c.Tenant, cb, rb)
 	if err != nil {
-		return Receipt{Intent: in, Answer: in.State}, nil
+		return Receipt{Intent: in, Answer: in.State}, withIntent(refuse("host_unavailable", http.StatusBadGateway), in.ID)
 	}
-	tok, err := host.Mint(ctx, gp.EffectObserve)
+	observeEffect := gp.EffectObserve
+	if in.Effect == effectIssueComment {
+		observeEffect = gp.EffectIssueCommentObserve
+	}
+	tok, err := host.Mint(ctx, observeEffect)
 	if err != nil {
-		return Receipt{Intent: in, Answer: in.State}, nil
+		if errors.Is(err, gp.ErrTokenScope) && errors.Is(err, gp.ErrHostUnavailable) {
+			m.recordReleaseFailure(ctx, c, in.ID, in.Target, hostCode(err))
+		}
+		if errors.Is(err, gp.ErrCredentialRefused) || errors.Is(err, gp.ErrTokenScope) {
+			return Receipt{Intent: in, Answer: in.State}, withIntent(refuse("host_credential_refused", http.StatusBadGateway), in.ID)
+		}
+		return Receipt{Intent: in, Answer: in.State}, withIntent(refuse("host_unavailable", http.StatusBadGateway), in.ID)
 	}
 	rel := &releaser{host: host, tok: tok}
 	defer func() {
@@ -187,17 +198,28 @@ func (m *Module) observe(ctx context.Context, c Caller, in Intent, source, actor
 	return m.observeWith(ctx, c, host, tok, in, source, actor)
 }
 
+// intentStoreError keeps a reconciliation failure attached to its intent.
+func intentStoreError(err error, id model.ID) *Error {
+	var e *Error
+	if errors.As(storeError(err), &e) {
+		return withIntent(e, id)
+	}
+	return withIntent(errUnavailable, id)
+}
+
 // recordUnknown appends an observation that could not be made about this
 // intent and keeps its state.
 func (m *Module) recordUnknown(ctx context.Context, c Caller, in Intent, source, actor, why string) (Receipt, error) {
 	out := in
-	_ = m.data.Mutate(context.WithoutCancel(ctx), c.Tenant, func(sc store.Scope) error {
-		cur, err := loadIntent(ctx, sc, in.ID)
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), settleTimeout)
+	defer cancel()
+	err := m.data.Mutate(rctx, c.Tenant, func(sc store.Scope) error {
+		cur, err := loadIntent(rctx, sc, in.ID)
 		if err != nil {
 			return err
 		}
 		out = cur
-		if err := appendObservation(ctx, sc, cur, Observation{Attempt: cur.Attempt, Source: source, Result: "unknown", HostObject: why, At: m.now()}, actor); err != nil {
+		if err := appendObservation(rctx, sc, cur, Observation{Attempt: cur.Attempt, Source: source, Result: "unknown", HostObject: why, At: m.now()}, actor); err != nil {
 			return err
 		}
 		meta := intentMeta(cur)
@@ -206,8 +228,11 @@ func (m *Module) recordUnknown(ctx context.Context, c Caller, in Intent, source,
 		if actor == "" {
 			kind = ""
 		}
-		return appendAudit(ctx, sc, actor, kind, "gitpublish.intent.reconciled", kindIntent, cur.ID, meta)
+		return appendAudit(rctx, sc, actor, kind, "gitpublish.intent.reconciled", kindIntent, cur.ID, meta)
 	})
+	if err != nil {
+		return Receipt{Intent: in, Answer: in.State}, intentStoreError(err, in.ID)
+	}
 	return Receipt{Intent: out, Answer: out.State}, nil
 }
 
@@ -245,6 +270,14 @@ func (m *Module) observeWith(ctx context.Context, c Caller, host gp.Host, tok gp
 					adopt, obs.Result = true, "present"
 					seen.Present, seen.HeadSHA, seen.Number = true, ch.HeadSHA, ch.Number
 				}
+			}
+		}
+	case effectIssueComment:
+		comments, err := gp.ListComments(rctx, host, tok, in.Requested.Number)
+		if err == nil {
+			obs.Result = "absent_or_old"
+			if comment, ok := findComment(comments, commentBody(in.Requested, in.Digest)); ok {
+				adopt, seen.Present, seen.CommentID, seen.CommentURL, obs.Result = true, true, comment.ID, comment.URL, "present"
 			}
 		}
 	case effectMerge:
@@ -292,7 +325,7 @@ func (m *Module) observeWith(ctx context.Context, c Caller, host gp.Host, tok gp
 		return appendAudit(rctx, sc, actor, kind, "gitpublish.intent.reconciled", kindIntent, out.ID, meta)
 	})
 	if err != nil {
-		return Receipt{Intent: in, Answer: in.State}, nil
+		return Receipt{Intent: in, Answer: in.State}, intentStoreError(err, in.ID)
 	}
 	return Receipt{Intent: out, Answer: out.State}, nil
 }

@@ -69,6 +69,8 @@ var stepConfigs = stepKindTable{
 	stepSessionLaunch: model.Nested(sessionLaunchConfig{}, model.ClassEvidence,
 		model.Leaf("work_item_id", stepLeafID), model.Leaf("work_item_step_ref", stepLeafSlug),
 		model.Leaf("fence_step_ref", stepLeafSlug), model.Leaf("runtime_profile_ref", stepLeafExternal),
+		model.Leaf("workspace_ref", model.None("a registered sessions workspace ref, never an account: workflow_work_ports.go:152")),
+		model.Leaf("isolation", model.None("a closed session isolation mode: openapi.go:320")),
 		model.Leaf("attempt_kind", stepLeafSlug)),
 	stepWorkMessage: model.Nested(workMessageConfig{}, model.ClassObligation, stepParticipantLeaves,
 		model.Leaf("work_item_id", stepLeafID), model.Leaf("work_item_step_ref", stepLeafSlug),
@@ -229,6 +231,8 @@ type sessionLaunchConfig struct {
 	Fence             int64  `json:"fence,omitempty"`
 	FenceStepRef      string `json:"fence_step_ref,omitempty"`
 	RuntimeProfileRef string `json:"runtime_profile_ref"`
+	WorkspaceRef      string `json:"workspace_ref,omitempty"`
+	Isolation         string `json:"isolation,omitempty"`
 	AttemptKind       string `json:"attempt_kind,omitempty"`
 }
 

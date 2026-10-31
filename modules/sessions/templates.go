@@ -252,6 +252,10 @@ func (m *Module) handleUpdateTemplate(w http.ResponseWriter, r *http.Request, mc
 		writeJSON(w, http.StatusBadRequest, errorBody("peers_rule must be same-template or omitted"))
 		return
 	}
+	if err := m.RequireAdminToChangeAssigned(r.Context(), mc.Tenant, mc.Principal, id); err != nil {
+		writeRunErr(w, err)
+		return
+	}
 
 	var dto templateDTO
 	var builtin bool
@@ -300,6 +304,10 @@ func (m *Module) handleDeleteTemplate(w http.ResponseWriter, r *http.Request, mc
 	id := model.ID(chi.URLParam(r, "id"))
 	if id.IsZero() {
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid id"))
+		return
+	}
+	if err := m.refuseToArchiveAssigned(r.Context(), mc.Tenant, id); err != nil {
+		writeRunErr(w, err)
 		return
 	}
 	var builtin bool
@@ -557,6 +565,11 @@ func targetOf(p CreateRunParams) applyTarget {
 // carries a tool allowlist: dontAsk is the only mode under which an allowlist confines
 // anything (see permModeDontAsk), so a template that declares one and stays silent
 // about the mode is relying on a derivation the operator reading it cannot see.
+
+// EditsAndCommandsTemplate is the built-in template behind "Edit files and run
+// commands"; the console finds it by this name and the CLI by this constant.
+const EditsAndCommandsTemplate = "Edits and commands"
+
 var builtinTemplates = []struct {
 	name string
 	desc string
@@ -660,7 +673,7 @@ var builtinTemplates = []struct {
 	// does not class it as privileged (cmd/olivares/sessiongov.go isCriticalLaunch).
 	// It is the dialog's default. Hook enforcement, kill switch and audit apply.
 	{
-		name: "Edits and commands",
+		name: EditsAndCommandsTemplate,
 		desc: "Reads, edits files and runs commands in the session folder without asking; other tools are refused.",
 		body: tplBody{
 			Policies: &tplPolicies{AllowedTools: []string{"Bash", "Edit", "Glob", "Grep", "LS", "MultiEdit", "NotebookEdit", "Read", "TodoWrite", "Write"}},

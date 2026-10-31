@@ -13,7 +13,7 @@
 // role shared across many callers is marked approximate so the identity↔agent
 // resolution is left to module VI. Only S3 events (eventSource
 // s3.amazonaws.com) are processed; other CloudTrail feeds are cloud discovery
-//.
+// .
 //
 // The connector is read-only over the log files and never calls AWS. It imports
 // only the SDK and connector-internal helpers, never the engine (LICENSING.md).

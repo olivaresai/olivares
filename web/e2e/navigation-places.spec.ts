@@ -2,16 +2,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE NAVIGATION AND THE NOW HEADER IN A REAL BROWSER (issue #3121), on the seeded demo
-// engine scripts/web-e2e-demo.sh boots. What jsdom cannot measure is measured here: the Now
-// header keeps its height and the content under it keeps its place while the page loads,
-// the search hint names this platform's key, and every row of All areas fits one line.
+// THE NAVIGATION AND THE NOW HEADER IN A REAL BROWSER (#3121, the one left navigation of
+// 0.5), on the seeded demo engine scripts/web-e2e-demo.sh boots. What jsdom cannot measure is
+// measured here: the Now header keeps its height while the page loads, the search hint names
+// this platform's key, the left navigation cuts no label and folds from the keyboard, the
+// narrow drawer holds the same places, and a retired area directory keeps its query and hash.
 //
-// With CAPTURE_DIR set it also photographs Now, All areas and Sessions at 1280 and 1920 px,
-// in the dark theme of the owner's reference screenshots, for the review.
+// With CAPTURE_DIR set it also photographs the navigation at 1440 px and its drawer at 390 px
+// (light), and Sessions at 1280 and 1920 px (dark), for the review.
 //
 // ⛔ THE DEMO GUARD: without DEMO_TENANT this would grade the login page; it skips instead.
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -53,29 +54,6 @@ async function shoot(page: Page, name: string) {
   mkdirSync(captureDir, { recursive: true })
   await page.mouse.move(0, 0)
   await page.screenshot({ path: `${captureDir}/${name}.png` })
-}
-
-/** Unfold every area of the sheet: each click takes one fold out of the set. */
-async function unfoldAll(sheet: Locator) {
-  const folded = sheet.locator('[data-nav-area] button[aria-expanded="false"]')
-  while ((await folded.count()) > 0) await folded.first().click()
-}
-
-/** Open All areas from the account menu, as it first opens: every area folded. */
-async function openAllAreas(page: Page) {
-  await page.getByRole('button', { name: /, Account$/ }).click()
-  await page.getByRole('menuitem', { name: 'All areas' }).click()
-  const sheet = page.getByRole('dialog', { name: 'All areas' })
-  await expect(sheet).toBeVisible()
-  return sheet
-}
-
-/** Back to the top of the sheet's list, for the picture. */
-async function toTop(sheet: Locator) {
-  await sheet
-    .locator('[data-radix-scroll-area-viewport]')
-    .first()
-    .evaluate((el) => el.scrollTo(0, 0))
 }
 
 test.describe('the navigation and the Now header (#3121) @nav3121', () => {
@@ -156,84 +134,105 @@ test.describe('the navigation and the Now header (#3121) @nav3121', () => {
     const search = page.getByRole('button', { name: 'Search and commands' })
     const platform = await page.evaluate(() => navigator.platform)
     const hint = /mac/i.test(platform) ? '⌘K' : 'Ctrl+K'
-    await expect(search).toContainText(hint)
-    if (hint !== '⌘K') await expect(search).not.toContainText('⌘')
+    // The hint is drawn, not text, so the button's text stays inside its name (WCAG 2.5.3).
+    await expect(search.locator('kbd')).toHaveAttribute('data-keys', hint)
+    await expect(search).toHaveText('Search')
     await expect(search).toHaveAttribute('title', 'Search and commands')
   })
 
-  test('All areas lists each page once, an area then its pages, each on one line', async ({
+  test('the left navigation names each place once, in its groups, and wraps no word', async ({
     page,
   }) => {
-    await page.setViewportSize({ width: 1280, height: 900 })
-    await prefer(page, 'dark')
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await prefer(page, 'light')
     await signIn(page)
     await page.goto('/')
-    const places = await page
-      .getByRole('navigation', { name: 'Journeys' })
-      .getByRole('link')
-      .evaluateAll((links) => links.map((a) => a.getAttribute('href')))
-    const sheet = await openAllAreas(page)
-    await shoot(page, 'all-areas-folded-1280-dark')
-    await unfoldAll(sheet)
-    const rows = sheet.locator('[data-nav-row]')
-    const hrefs = await rows.evaluateAll((links) =>
-      links.map((a) => a.getAttribute('href')),
-    )
-    // A sheet that rendered nothing would pass every check below.
-    expect(hrefs.length).toBeGreaterThan(20)
-    // Each route once, and none the top bar already offers.
-    expect(hrefs.filter((h, i) => hrefs.indexOf(h) !== i)).toEqual([])
-    expect(hrefs.filter((h) => places.includes(h))).toEqual([])
-    // Two levels: no heading between an area and its pages.
-    expect(await sheet.locator('[data-nav-area] [role="group"]').count()).toBe(
-      0,
-    )
-    // Every label on one line at the default width.
-    const wrapped = await rows.evaluateAll((links) =>
-      links
-        .map((a) => {
-          const label = a.querySelector('span') as HTMLElement | null
-          if (!label) return null
-          const style = getComputedStyle(label)
-          const declared = parseFloat(style.lineHeight)
-          // `normal` has no number: the browser's normal line is about 1.2 font sizes.
-          const line = Number.isFinite(declared)
-            ? declared
-            : parseFloat(style.fontSize) * 1.2
-          return label.getBoundingClientRect().height > line * 1.5
-            ? label.textContent
-            : null
-        })
-        .filter(Boolean),
-    )
-    expect(wrapped).toEqual([])
-    await toTop(sheet)
-    await shoot(page, 'all-areas-1280-dark')
-    await page.setViewportSize({ width: 1920, height: 1080 })
-    await shoot(page, 'all-areas-1920-dark')
+    const nav = page.locator('[data-slot="sidebar"]')
+    await expect(nav).toBeVisible()
+    const groups = await nav
+      .locator('section')
+      .evaluateAll((s) => s.map((g) => g.getAttribute('aria-label')))
+    expect(groups).toEqual(['Work', 'Tools', 'Control', 'Admin'])
+    const places = await nav
+      .locator('a[data-place]')
+      .evaluateAll((links) => links.map((a) => a.textContent?.trim()))
+    // A navigation that rendered nothing would pass every check below.
+    expect(places.length).toBeGreaterThan(10)
+    expect(places.filter((p, i) => places.indexOf(p) !== i)).toEqual([])
+    expect(places[0]).toBe('Now')
+    expect(places.at(-1)).toBe('Settings')
+    // No second navigation: no places in the top bar, no All areas, no phone bar.
+    await expect(page.locator('[data-slot="topbar"] nav')).toHaveCount(0)
+    await expect(page.getByText('All areas', { exact: true })).toHaveCount(0)
+    await expect(page.locator('[data-slot="phone-bar"]')).toHaveCount(0)
+    // A label grows to a second line rather than being cut.
+    const cut = await nav
+      .locator('a[data-place] span:not(.sr-only)')
+      .evaluateAll((spans) =>
+        spans
+          .filter((s) => s.scrollWidth > s.clientWidth + 1)
+          .map((s) => s.textContent),
+      )
+    expect(cut).toEqual([])
+    await shoot(page, 'navigation-desktop-light')
   })
 
-  test('on a phone, More lists the places the phone bar leaves out', async ({
+  test('folds to its icons and opens again from the keyboard', async ({
     page,
   }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await prefer(page, 'light')
+    await signIn(page)
+    await page.goto('/')
+    const nav = page.locator('[data-slot="sidebar"]')
+    const wide = (await nav.boundingBox())!.width
+    await page.getByRole('button', { name: 'Collapse navigation' }).focus()
+    await page.keyboard.press('Enter')
+    await expect(nav).toHaveAttribute('data-folded', 'true')
+    expect((await nav.boundingBox())!.width).toBeLessThan(wide)
+    await page.getByRole('button', { name: 'Expand navigation' }).focus()
+    await page.keyboard.press('Space')
+    await expect(nav).not.toHaveAttribute('data-folded', 'true')
+  })
+
+  test('on a phone, the menu button opens the same navigation as a drawer', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await prefer(page, 'light')
+    await signIn(page)
+    await page.goto('/sessions')
+    const desktop = await page
+      .locator('[data-slot="sidebar"] a[data-place]')
+      .evaluateAll((links) => links.map((a) => a.getAttribute('data-place')))
     await page.setViewportSize({ width: 390, height: 844 })
-    await prefer(page, 'dark')
-    await signIn(page)
-    await page.goto('/')
-    await page.getByRole('button', { name: /^More/ }).click()
-    const sheet = page.getByRole('dialog', { name: 'All areas' })
-    await expect(sheet).toBeVisible()
-    await unfoldAll(sheet)
-    const hrefs = await sheet
-      .locator('[data-nav-row]')
-      .evaluateAll((links) => links.map((a) => a.getAttribute('href')))
-    // Rules and Ledger have no room in the phone bar: their pages stay in their areas.
-    expect(hrefs).toEqual(expect.arrayContaining(['/permissions', '/audit']))
-    expect(hrefs).not.toContain('/sessions')
-    await shoot(page, 'all-areas-390-dark')
+    await expect(page.locator('[data-slot="sidebar"]')).toBeHidden()
+    await page.getByRole('button', { name: 'Open navigation' }).click()
+    const drawer = page.locator('[data-slot="navigation-drawer"]')
+    await expect(drawer).toBeVisible()
+    const narrow = await drawer
+      .locator('a[data-place]')
+      .evaluateAll((links) => links.map((a) => a.getAttribute('data-place')))
+    expect(narrow).toEqual(desktop)
+    await shoot(page, 'navigation-mobile-drawer-light')
+    await drawer.getByRole('link', { name: 'Now' }).click()
+    await expect(drawer).toBeHidden()
+    await expect(page).toHaveURL(/\/$/)
   })
 
-  test('captures the top bar on Sessions at both widths', async ({ page }) => {
+  test('a retired area directory lands on its place with its query and hash', async ({
+    page,
+  }) => {
+    await prefer(page, 'light')
+    await signIn(page)
+    await page.goto('/areas/observation?from=2026-10-01#entry-7')
+    await expect(page).toHaveURL(/\/audit\?from=2026-10-01#entry-7$/)
+    await expect(
+      page.locator('[data-slot="sidebar"] [aria-current="page"]'),
+    ).toHaveAttribute('data-place', 'activity')
+  })
+
+  test('captures Sessions at both widths', async ({ page }) => {
     test.skip(!captureDir, 'captures only')
     await prefer(page, 'dark')
     await signIn(page)
@@ -249,13 +248,5 @@ test.describe('the navigation and the Now header (#3121) @nav3121', () => {
       await page.waitForTimeout(2500)
       await shoot(page, `sessions-${width}-dark`)
     }
-    // The places fold to their icons when the bar runs out of room; each keeps a tooltip.
-    await page.setViewportSize({ width: 1024, height: 768 })
-    await page.goto('/')
-    await expect(
-      page.getByRole('heading', { level: 1, name: 'Now' }),
-    ).toBeVisible()
-    await page.waitForTimeout(1500)
-    await shoot(page, 'now-1024-dark-folded')
   })
 })

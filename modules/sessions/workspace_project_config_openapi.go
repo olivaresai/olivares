@@ -26,7 +26,8 @@ func sessionsProjectConfigResponses(method, pattern string) (map[string]any, boo
 		file := oas.Obj("type", "object", "properties", oas.Obj(
 			"file", oas.Obj("type", "string"),
 			"flagged", oas.Obj("type", "object", "description", "Flagged keys by path with their values; URL credentials are masked. Read, never executed."),
-			"unreadable", oas.Obj("type", "string", "description", "Why the file could not be read as the tool's format; it counts as flagged.")))
+			"unreadable", oas.Obj("type", "string", "description", "Why the file could not be read as the tool's format; it counts as flagged."),
+			"refused", oas.Obj("type", "string", "description", "Why no approval can let this file be used: what the tool would load cannot be bound by a hash. A start is refused while it is there.")))
 		responses["200"] = oas.JSONRespSchema("Flagged repo-resident agent configuration of the folder, the SHA-256 that covers it and its approval", oas.Obj("type", "object", "properties", oas.Obj(
 			"workspace_ref", oas.Obj("type", "string"),
 			"files", oas.Obj("type", "array", "items", file),

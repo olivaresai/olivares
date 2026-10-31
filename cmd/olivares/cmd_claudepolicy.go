@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/modules/governance"
 )
 
 // cmd_claudepolicy.go drives the managed-* authoring console
@@ -64,6 +65,31 @@ const claudePolicyModule = "claude-policy"
 var claudePolicySurfaces = []string{
 	"managed-settings", "hooks", "managed-mcp", "sandbox",
 	"codex-requirements", "codex-managed-config", "grok-requirements", "opencode-config", "gemini-cli-settings",
+	claudePolicyInstructions,
+}
+
+// claudePolicyInstructions is the instructions file of Claude Code's managed tier. A department's
+// workstations read their department's, so it is published, pulled and tracked as
+// managed-instructions@<department>, and the engine renders its document from what the department
+// carries (modules/governance, claudepolicy.go).
+const claudePolicyInstructions = "managed-instructions"
+
+// claudePolicyRendered reports whether the engine renders the document of surface itself.
+func claudePolicyRendered(surface string) bool {
+	return strings.HasPrefix(surface, claudePolicyInstructions+"@")
+}
+
+// claudePolicyDocument reads the document a verb sends. A department's instructions are rendered by
+// the engine, so a verb on them needs no file (and a file given is validated as typed); every other
+// surface needs its document.
+func claudePolicyDocument(cmd *cobra.Command, surface, contentFile string) ([]byte, error) {
+	if contentFile == "" {
+		if claudePolicyRendered(surface) {
+			return nil, nil
+		}
+		return nil, exitcode.New(exitcode.Usage, fmt.Errorf("--content-file is required for %s", surface))
+	}
+	return readAgentExecDocument(cmd, contentFile)
 }
 
 func newClaudePolicyCmd() *cobra.Command {
@@ -146,8 +172,11 @@ func claudePolicySurface(name string) (string, error) {
 			return s, nil
 		}
 	}
+	if governance.ManagedSurface(name) {
+		return name, nil // managed-instructions@<department>
+	}
 	return "", exitcode.New(exitcode.Usage, fmt.Errorf(
-		"unknown surface %q (want %s)", name, strings.Join(claudePolicySurfaces, ", ")))
+		"unknown surface %q (want %s, or %s@<department>)", name, strings.Join(claudePolicySurfaces, ", "), claudePolicyInstructions))
 }
 
 // claudePolicyReportIssues renders a validate/dry-run report and decides the exit
@@ -224,7 +253,7 @@ func newClaudePolicyValidateCmd(flags *authClientFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			content, err := readAgentExecDocument(cmd, contentFile)
+			content, err := claudePolicyDocument(cmd, surface, contentFile)
 			if err != nil {
 				return err
 			}
@@ -239,8 +268,7 @@ func newClaudePolicyValidateCmd(flags *authClientFlags) *cobra.Command {
 			return claudePolicyReportIssues(cmd, flags, res, "validation")
 		},
 	}
-	cmd.Flags().StringVar(&contentFile, "content-file", "", "the policy document, '-' for stdin (required)")
-	_ = cmd.MarkFlagRequired("content-file")
+	cmd.Flags().StringVar(&contentFile, "content-file", "", "the policy document, '-' for stdin (required, except for managed-instructions@<department>, which the engine renders from the department)")
 	return cmd
 }
 
@@ -264,7 +292,7 @@ func newClaudePolicyDryRunCmd(flags *authClientFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			content, err := readAgentExecDocument(cmd, contentFile)
+			content, err := claudePolicyDocument(cmd, surface, contentFile)
 			if err != nil {
 				return err
 			}
@@ -279,8 +307,7 @@ func newClaudePolicyDryRunCmd(flags *authClientFlags) *cobra.Command {
 			return claudePolicyReportIssues(cmd, flags, res, "dry-run")
 		},
 	}
-	cmd.Flags().StringVar(&contentFile, "content-file", "", "the policy document, '-' for stdin (required)")
-	_ = cmd.MarkFlagRequired("content-file")
+	cmd.Flags().StringVar(&contentFile, "content-file", "", "the policy document, '-' for stdin (required, except for managed-instructions@<department>, which the engine renders from the department)")
 	return cmd
 }
 
@@ -312,7 +339,7 @@ func newClaudePolicyPublishCmd(flags *authClientFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			content, err := readAgentExecDocument(cmd, contentFile)
+			content, err := claudePolicyDocument(cmd, surface, contentFile)
 			if err != nil {
 				return err
 			}
@@ -367,9 +394,8 @@ func newClaudePolicyPublishCmd(flags *authClientFlags) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&contentFile, "content-file", "", "the policy document, '-' for stdin (required)")
+	cmd.Flags().StringVar(&contentFile, "content-file", "", "the policy document, '-' for stdin (required, except for managed-instructions@<department>, which the engine renders from the department)")
 	cmd.Flags().StringVar(&note, "note", "", "why this revision exists (recorded on the revision)")
-	_ = cmd.MarkFlagRequired("content-file")
 	return cmd
 }
 
@@ -492,6 +518,7 @@ func newClaudePolicyCheckinCmd(flags *authClientFlags) *cobra.Command {
 		artifactSHA    string
 		keyFingerprint string
 		observedFile   string
+		reportTools    bool
 	)
 	cmd := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "write"},
@@ -504,6 +531,8 @@ func newClaudePolicyCheckinCmd(flags *authClientFlags) *cobra.Command {
 			"artifact matches what was signed, so this command reads `verified`: a mismatch\n" +
 			"— a tampered or stale artifact — exits 7 and is recorded as a HIGH drift\n" +
 			"finding by the engine.\n\n" +
+			"--tools reads this workstation's AI tools and their native sign-in state (Business\n" +
+			"inventory). Without it the check-in carries no tool list and the held report stays.\n\n" +
 			"TRUST MODEL, stated because it is easy to over-read this verb: the scope is the\n" +
 			"agent's SELF-ASSERTED host identity, and any principal with write rights may\n" +
 			"report any scope. Every check-in therefore records WHO reported it — forgery is\n" +
@@ -537,6 +566,13 @@ func newClaudePolicyCheckinCmd(flags *authClientFlags) *cobra.Command {
 				}
 				body["observed_content"] = string(observed)
 			}
+			if reportTools {
+				tools, terr := checkinToolsSnapshot(cmd, flags)
+				if terr != nil {
+					return terr
+				}
+				body["tools"] = tools
+			}
 			res, err := agentExecCall{
 				flags: flags, module: claudePolicyModule,
 				method: http.MethodPost, path: "/" + agentExecPathID(surface) + "/checkin", body: body,
@@ -552,6 +588,7 @@ func newClaudePolicyCheckinCmd(flags *authClientFlags) *cobra.Command {
 	cmd.Flags().StringVar(&artifactSHA, "artifact-sha256", "", "the artifact hash the agent verified")
 	cmd.Flags().StringVar(&keyFingerprint, "key-fingerprint", "", "the signing key fingerprint the agent verified against")
 	cmd.Flags().StringVar(&observedFile, "observed-file", "", "the config observed on the host, '-' for stdin")
+	cmd.Flags().BoolVar(&reportTools, "tools", false, "also report this workstation's local AI tools and sign-in state")
 	_ = cmd.MarkFlagRequired("scope")
 	return cmd
 }

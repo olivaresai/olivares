@@ -9,9 +9,13 @@ import { useTranslation } from 'react-i18next'
 import { StatusChip } from '@/components/ui/status-chip'
 import { Button } from '@/components/ui/button'
 import { useProfileProviders } from '@/features/agentops/profile-authentication'
-import type { SignInTool } from '@/features/first-hour/api'
+import { isSigningIn, type SignInTool } from '@/features/first-hour/api'
 import { useAccountSignInStatus } from '@/features/agentops/provider-account-signin'
-import type { ProviderAccountDTO } from '@/features/agentops/types'
+import { AccountUsage } from '@/features/agentops/account-usage'
+import type {
+  ProviderAccountDTO,
+  ProviderAccountUsage,
+} from '@/features/agentops/types'
 import {
   useToolReadiness,
   useToolStatus,
@@ -24,6 +28,8 @@ export type ProfileState =
   | {
       kind: 'account'
       signedIn: boolean | undefined
+      /** The tool still runs a login: no second one is offered (#3388). */
+      signingIn?: boolean
       failed?: boolean
       error?: string
     }
@@ -39,7 +45,11 @@ export interface ProfileRowModel {
   ready: boolean
   /** The profile cannot run: switched off, or a key it needs is gone. */
   off?: boolean
+  /** The windows the account's tool last reported; none for the default login. */
+  usage?: ProviderAccountUsage[]
 }
+
+export { isSigningIn }
 
 /** Compatibility name for the AI-tools states; styling lives in components/ui. */
 export function StateChip({
@@ -68,6 +78,7 @@ export function useProfileDetail(state: ProfileState): string {
       : t('profiles.keyName', { name: state.name })
   }
   if (state.failed) return t('profiles.accountUnreadable')
+  if (state.signingIn) return t('profiles.accountSigningIn')
   if (state.signedIn === undefined) return t('profiles.accountChecking')
   return t(
     state.signedIn ? 'profiles.accountSignedIn' : 'profiles.accountNotSignedIn',
@@ -87,6 +98,7 @@ export function ProfileRowView({
   const detail = useProfileDetail(model.state)
   const needsSignIn =
     model.state.kind === 'account' && model.state.signedIn === false
+  const signingIn = model.state.kind === 'account' && !!model.state.signingIn
   // The whole row opens the profile (the name's button covers it); the state, or the
   // Sign in button above it, comes before the arrow, which ends the row.
   return (
@@ -107,6 +119,7 @@ export function ProfileRowView({
           {model.name}
         </span>
         <span className="truncate text-caption text-text-2">{detail}</span>
+        <AccountUsage usage={model.usage} className="truncate" />
         {model.state.kind === 'account' &&
         model.state.failed &&
         model.state.error ? (
@@ -116,7 +129,13 @@ export function ProfileRowView({
         ) : null}
       </button>
       <span className="relative z-10 flex shrink-0 items-center">
-        {needsSignIn ? (
+        {needsSignIn && signingIn ? (
+          // The tool confirms the login, not this page: until then nothing new starts.
+          <Button variant="secondary" size="sm" disabled>
+            {t('profiles.signingIn')}
+            <span className="sr-only"> {model.name}</span>
+          </Button>
+        ) : needsSignIn ? (
           <Button variant="secondary" size="sm" onClick={onSignIn}>
             {t('profiles.signIn')}
             <span className="sr-only"> {model.name}</span>
@@ -174,6 +193,7 @@ export function useAccountRow(account: ProviderAccountDTO): ProfileRowModel {
       state: { kind: 'key', ...key },
       ready: !off && !!account.provider_record_ref,
       off,
+      usage: account.usage,
     }
   const signedIn = status.data ? status.data.signed_in : undefined
   return {
@@ -182,11 +202,13 @@ export function useAccountRow(account: ProviderAccountDTO): ProfileRowModel {
     state: {
       kind: 'account',
       signedIn,
+      signingIn: signedIn === false && isSigningIn(status.data),
       failed: status.isError,
       error: status.error instanceof Error ? status.error.message : undefined,
     },
     ready: !off && signedIn === true,
     off,
+    usage: account.usage,
   }
 }
 
@@ -233,6 +255,7 @@ export function useDefaultRow(driver: string): {
         state: {
           kind: 'account',
           signedIn,
+          signingIn: signedIn === false && isSigningIn(status.data),
           failed: status.isError,
           error:
             status.error instanceof Error ? status.error.message : undefined,

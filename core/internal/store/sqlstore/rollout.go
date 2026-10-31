@@ -777,7 +777,7 @@ func (s *sqlStore) SetRolloutMode(ctx context.Context, t store.RolloutTransition
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return store.RolloutState{}, fmt.Errorf("sqlstore: rollout transition: begin: %w", err)
+		return store.RolloutState{}, fmt.Errorf("sqlstore: rollout transition: begin: %w", viewBeginErr(ctx, err))
 	}
 	defer func() { _ = tx.Rollback() }()
 

@@ -76,6 +76,10 @@ var stableContractPaths = []string{
 	"/v1/auth/browser-session",
 	"/v1/auth/login",
 	"/v1/auth/logout",
+	"/v1/auth/sessions",
+	"/v1/auth/sessions/pairing",
+	"/v1/auth/sessions/pairing/accept",
+	"/v1/auth/sessions/{id}",
 	// OS-account bindings are already published core auth operations with the
 	// stable tier; keep their contract instead of moving them to module beta.
 	"/v1/auth/os-account-bindings",
@@ -139,6 +143,7 @@ var stableContractPaths = []string{
 	"/v1/console/dr/jobs",
 	"/v1/console/dr/jobs/{id}/stream",
 	"/v1/console/dr/schedule",
+	"/v1/console/appliance/storage/authorize",
 	"/v1/console/activation",
 	"/v1/console/activation/preview",
 	"/v1/console/activation/apply",
@@ -179,6 +184,7 @@ var stableContractPaths = []string{
 	"/v1/users/superadmins",
 	"/v1/users/{id}/disable",
 	"/v1/users/{id}/enable",
+	"/v1/users/{id}/sessions",
 	"/v1/users/{id}/totp",
 	"/v1/users/{id}/totp/reset",
 	"/v1/workspaces",

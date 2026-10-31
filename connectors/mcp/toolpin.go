@@ -256,7 +256,7 @@ type PinSnapshot struct {
 }
 
 // ToolPinAdmin is the optional operator surface a pin verifier may implement
-//: list current pins (drift included) and actuate the two operator
+// : list current pins (drift included) and actuate the two operator
 // verbs — approve (RecordPin) and revoke (Unpin). The console/CLI admin route
 // type-asserts the verifier to this; a community build has no verifier and the
 // surface answers "enterprise pending" honestly.

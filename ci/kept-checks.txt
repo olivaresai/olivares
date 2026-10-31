@@ -128,7 +128,6 @@ lint:program-anchors:selftest
 lint:public-prose:selftest
 lint:publish-inbox-shape
 lint:purge-scratch:selftest
-lint:raw-palette
 lint:readme-task-claims
 lint:rebase-web-branch
 lint:release-anchor-identity:selftest

@@ -197,7 +197,7 @@ it('clearing an anonymous session cancels an in-flight restore', async () => {
   expect(useSessionStore.getState().ready).toBe(true)
 })
 
-// Root on FH 034: every first hour since 06 showed one red request. On a clean install
+// Root on first-hour check: every first hour since 06 showed one red request. On a clean install
 // the page-load restore was sent before server-info, and the setup gate answered it 409
 // setup_required. No session can exist before the first administrator, so it is not sent.
 it('a clean install sends no session restore until setup is done', async () => {

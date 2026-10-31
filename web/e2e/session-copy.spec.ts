@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// COPYING A MESSAGE (dev#2788), against a live seeded engine whose child is the fixture
+// COPYING A MESSAGE, against a live seeded engine whose child is the fixture
 // driver: it echoes the person's message as the tool does, then replies with a list and a
 // code block. Selecting the words and copying them, and the Copy action, both put the
 // exact text on the clipboard, for the person's message, the reply and its code block;
@@ -12,6 +12,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
 import { signInFixture } from './fixture-sign-in'
 
 const demoTenant = process.env.DEMO_TENANT ?? ''
@@ -75,7 +76,7 @@ test('copies a message, a reply and a code block, by selection and by Copy', asy
   const reply = conversation.locator(replyRow)
   await expect(asked).toHaveCount(1, { timeout: 30_000 })
   await expect(reply).toHaveCount(1, { timeout: 30_000 })
-  // The row is its words: nothing else is in its text (dev#2786's journey reads it).
+  // The row is its words: nothing else is in its text (the regression's journey reads it).
   await expect(asked).toHaveText(ASKED)
 
   // Selection: the words of each can be selected, and a copy takes them as shown.
@@ -102,6 +103,16 @@ test('copies a message, a reply and a code block, by selection and by Copy', asy
   await reply.getByRole('button', { name: 'Copy code' }).click()
   await expect.poll(() => clipboard(page)).toBe('make test')
 
+  await reply
+    .getByRole('button', { name: 'Copy Markdown block' })
+    .nth(1)
+    .click()
+  await expect
+    .poll(() => clipboard(page))
+    .toBe(
+      '- **Identify clients:** list who calls the API\n- Check `README.md` for the title',
+    )
+
   // The keyboard alone: from the composer, back to the reply's Copy, and Enter.
   await page.evaluate(() => navigator.clipboard.writeText(''))
   await input.focus()
@@ -118,24 +129,55 @@ test('copies a message, a reply and a code block, by selection and by Copy', asy
   await page.keyboard.press('Enter')
   await expect.poll(() => clipboard(page)).toBe('make test')
 
+  // A quote uses only this reply's selection and leaves the existing comment intact.
+  await input.fill('Explain this recommendation.')
+  await selectAndCopy(page, reply.getByText('Two things matter:'))
+  await conversation
+    .locator('li', { has: replyRow })
+    .getByRole('button', { name: 'Quote reply' })
+    .click()
+  await expect(input).toBeFocused()
+  await expect(input).toHaveValue(
+    'Explain this recommendation.\n\n> Two things matter:\n\n',
+  )
+  await expect(input).toHaveJSProperty(
+    'selectionStart',
+    'Explain this recommendation.\n\n> Two things matter:\n\n'.length,
+  )
+  await page.reload()
+  await expect(input).toHaveValue(
+    'Explain this recommendation.\n\n> Two things matter:\n\n',
+  )
+
   const captures = process.env.E2E_CONVERSATION_CAPTURES
-  if (!captures) return
-  mkdirSync(captures, { recursive: true })
-  for (const theme of ['dark', 'light'] as const)
-    for (const width of [1280, 390]) {
-      await page.evaluate((t) => {
-        window.localStorage.setItem('olivares.theme', t)
-      }, theme)
-      await page.setViewportSize({ width, height: width > 500 ? 900 : 844 })
-      await page.reload()
-      await expect(reply).toHaveCount(1, { timeout: 15_000 })
-      await copyOf(askedRow).scrollIntoViewIfNeeded()
-      await copyOf(askedRow).click()
-      await expect(
-        conversation.locator('li', { has: askedRow }).getByText('Copied'),
-      ).toBeAttached()
-      await page.screenshot({
-        path: join(captures, `session-copy-${width}-${theme}.png`),
-      })
-    }
+  if (captures) {
+    mkdirSync(captures, { recursive: true })
+    for (const theme of ['dark', 'light'] as const)
+      for (const width of [1280, 390]) {
+        await page.evaluate((t) => {
+          window.localStorage.setItem('olivares.theme', t)
+        }, theme)
+        await page.setViewportSize({ width, height: width > 500 ? 900 : 844 })
+        await page.reload()
+        await expect(reply).toHaveCount(1, { timeout: 15_000 })
+        await copyOf(askedRow).scrollIntoViewIfNeeded()
+        await copyOf(askedRow).click()
+        await expect(
+          conversation.locator('li', { has: askedRow }).getByText('Copied'),
+        ).toBeAttached()
+        await page.screenshot({
+          path: join(captures, `session-copy-${width}-${theme}.png`),
+        })
+        const accessibility = await new AxeBuilder({ page })
+          .include('[data-testid="session-conversation"]')
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
+          .analyze()
+        expect(accessibility.violations).toEqual([])
+      }
+  }
+  const quoted = 'Explain this recommendation.\n\n> Two things matter:'
+  await input.press('Enter')
+  await expect(
+    conversation.locator('[data-kind="operator"]', { hasText: quoted }),
+  ).toHaveCount(1, { timeout: 30_000 })
 })

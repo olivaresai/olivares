@@ -50,6 +50,8 @@ const RUTAS_MONTADAS: { id: string; path: string }[] = [
 /** Rutas que a propósito NO se capturan, con el motivo en la misma línea. Vacío hoy: si alguna
  *  llega a estarlo, el motivo se escribe aquí y no en un comentario suelto del spec. */
 const SIN_CAPTURA: Record<string, string> = {
+  '/pair':
+    'Not captured: a valid device pairing requires a live one-time token; without it AcceptPairingPage renders an invalid-link alert and a disabled accept button. The anonymous AT gate still scans this state.',
   // ⛔ EL MOTIVO CAMBIO EL 2026-08-29 Y NO ES UN MATIZ. Decia «se captura pero no se publica»,
   // y eso dejo de ser cierto: hoy NO SE CAPTURA. La toma de la invitacion viva —la que iba a
   // sustituir a esta— choca con step-up AAL3 al pulsar «Onboard user» (medido en dos corridas

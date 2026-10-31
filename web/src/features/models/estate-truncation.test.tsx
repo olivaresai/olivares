@@ -90,6 +90,7 @@ vi.mock('./api', async (importOriginal) => {
 })
 
 const { ModelsView } = await import('./models-view')
+const { ProviderKeyReferences } = await import('./key-references')
 
 beforeEach(() => {
   estateMock.mockReset().mockResolvedValue({ items: [], has_more: false })
@@ -104,6 +105,13 @@ beforeEach(() => {
 async function abrir(nombre: RegExp) {
   const user = userEvent.setup()
   renderIntel(<ModelsView />)
+  // Routing, Access, GPAI posture and the workspace residency sit under the Governance group.
+  if (
+    ['Routing', 'Access', 'GPAI posture', 'Workspace residency'].some((n) =>
+      nombre.test(n),
+    )
+  )
+    await user.click(await screen.findByRole('tab', { name: /^Governance$/i }))
   await user.click(await screen.findByRole('tab', { name: nombre }))
   return user
 }
@@ -122,13 +130,15 @@ describe('El parque, las rutas y las claves piden el techo del motor', () => {
     expect(routingMock).toHaveBeenLastCalledWith({ limit: 1000 })
   })
 
+  // Provider keys live in AI tools since #3388: their list is ProviderKeyReferences.
   it('las claves de proveedor', async () => {
-    await abrir(/^Provider keys$/i)
+    renderIntel(<ProviderKeyReferences />)
+    await screen.findByRole('heading', { name: 'Provider key references' })
     expect(keysMock).toHaveBeenLastCalledWith({ limit: 1000 })
   })
 
   it('la residencia por workspace', async () => {
-    await abrir(/^Provider keys$/i)
+    await abrir(/^Workspace residency$/i)
     expect(residencyMock).toHaveBeenLastCalledWith({ limit: 1000 })
   })
 
@@ -194,14 +204,8 @@ describe('cada aviso mira SU consulta', () => {
       fila: routingPoliciesFixture[0],
     },
     {
-      lista: 'claves',
-      tab: /^Provider keys$/i,
-      mock: () => keysMock,
-      aviso: 'Loaded 1 keys; there are more',
-    },
-    {
       lista: 'residencia',
-      tab: /^Provider keys$/i,
+      tab: /^Workspace residency$/i,
       mock: () => residencyMock,
       aviso: 'Loaded 1 workspaces; there are more',
     },
@@ -241,4 +245,22 @@ describe('cada aviso mira SU consulta', () => {
       for (const ajeno of otros) expect(screen.queryByText(ajeno)).toBeNull()
     })
   }
+})
+
+// The keys left Models (#3388): their notice still reads ITS own query, now in AI tools.
+describe('provider key references in AI tools', () => {
+  it('the keys notice shows only when ITS list has more', async () => {
+    keysMock.mockResolvedValue({ items: [FILA], has_more: true })
+    renderIntel(<ProviderKeyReferences />)
+    expect(
+      await screen.findByText('Loaded 1 keys; there are more'),
+    ).toBeVisible()
+  })
+
+  it('without has_more there is no notice', async () => {
+    keysMock.mockResolvedValue({ items: [FILA], has_more: false })
+    renderIntel(<ProviderKeyReferences />)
+    await screen.findByRole('heading', { name: 'Provider key references' })
+    expect(screen.queryByText('Loaded 1 keys; there are more')).toBeNull()
+  })
 })

@@ -26,6 +26,7 @@ import { expect, test, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { openWorkingFold } from './open-working-fold'
 
 const demoTenant = process.env.DEMO_TENANT ?? ''
 const EMAIL = 'demo@olivares.local'
@@ -125,6 +126,7 @@ test.describe('the work surface', () => {
     await prefer(page, 'dark', 'en')
     await signIn(page)
     await page.goto('/sessions')
+    await openWorkingFold(page)
     const first = await firstRowAddress(page)
 
     // COLD: a context that has never seen this URL opens it and lands on the session.
@@ -218,17 +220,16 @@ test.describe('the work surface', () => {
       await signIn(page)
       await page.setViewportSize({ width: 1600, height: 1000 })
       await page.goto('/sessions')
+      await openWorkingFold(page)
       await expect(page.getByTestId('work-surface')).toBeVisible()
 
-      // THE LAYOUT CLAIM, measured rather than asserted from a class: the side pane
-      // starts closed; opened from the pane header, all three panes
-      // are on screen, side by side rather than stacked, and the thread keeps its 760 px.
+      // THE LAYOUT CLAIM, measured rather than asserted from a class: Details is open by
+      // default, so all three panes are on screen, side by side rather than stacked, and
+      // the thread keeps its 760 px.
       const rail = page.locator('#work-pane-rail')
       const narrative = page.locator('#work-pane-narrative')
       const context = page.locator('#work-pane-context')
       await expect(narrative).toBeVisible()
-      await expect(context).toBeHidden()
-      await page.getByTestId('context-toggle').click()
       for (const pane of [rail, narrative, context])
         await expect(pane).toBeVisible()
       const boxes = await Promise.all(
@@ -241,16 +242,19 @@ test.describe('the work surface', () => {
       // Same row: a "three-pane" surface that wrapped would be three stacked panes.
       expect(Math.abs(boxes[0]!.y - boxes[2]!.y)).toBeLessThan(4)
 
-      // …from 761 px the list and the thread sit side by side, and the context pane
-      // comes forward on its own (the Context icon) instead of beside them…
+      // …below 1120 px the list and the thread stay side by side and Details opens as a
+      // sheet over them (the Details icon); closing it leaves both where they were…
       await page.setViewportSize({ width: 1024, height: 900 })
       await expect(rail).toBeVisible()
       await expect(narrative).toBeVisible()
+      await expect(context).toBeHidden()
       await expect(page.getByTestId('pane-button-rail')).toBeHidden()
-      await page.getByTestId('pane-button-context').click()
-      await expect(context).toBeVisible()
-      await expect(narrative).toBeHidden()
-      await page.getByTestId('pane-button-narrative').click()
+      await page.getByTestId('context-toggle').click()
+      const sheet = page.getByRole('dialog', { name: 'Session details' })
+      await expect(sheet).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(sheet).toBeHidden()
+      await expect(page.getByTestId('context-toggle')).toBeFocused()
       await expect(narrative).toBeVisible()
       // …and BELOW 761 px exactly one is in front, with the back arrow that chooses it.
       await page.setViewportSize({ width: 600, height: 900 })
@@ -271,6 +275,7 @@ test.describe('the work surface', () => {
     await signIn(page)
     await page.setViewportSize({ width: 1600, height: 1000 })
     await page.goto('/sessions')
+    await openWorkingFold(page)
     await expect(page.getByTestId('work-rail')).toBeVisible()
 
     const rows = page.getByTestId('rail-row')
@@ -318,6 +323,7 @@ test.describe('the work surface', () => {
     await signIn(page)
     await page.setViewportSize({ width: 1024, height: 900 })
     await page.goto('/sessions')
+    await openWorkingFold(page)
     await expect(page.getByTestId('work-surface')).toBeVisible()
     const pane = () => new URL(page.url()).searchParams.get('pane')
 
@@ -344,6 +350,7 @@ test.describe('the work surface', () => {
     await prefer(page, 'dark', 'en')
     await signIn(page)
     await page.goto('/sessions')
+    await openWorkingFold(page)
     await expect(page.getByTestId('work-rail')).toBeVisible()
     await page.keyboard.press('ControlOrMeta+k')
     const dialog = page.getByRole('dialog')
@@ -394,6 +401,7 @@ test.describe('the work surface', () => {
     await prefer(page, 'dark', 'en')
     await signIn(page)
     await page.goto('/sessions')
+    await openWorkingFold(page)
     const field = page.getByTestId('rail-filter')
     await expect(field).toBeVisible()
 
@@ -443,6 +451,7 @@ test.describe('the work surface', () => {
     await prefer(page, 'dark', 'en')
     await signIn(page)
     await page.goto('/sessions')
+    await openWorkingFold(page)
     await page.getByTestId('work-surface').waitFor()
     await page.locator('body').click()
     await page.keyboard.press('?')
@@ -468,6 +477,7 @@ test.describe('the work surface', () => {
       await signIn(page)
       await page.setViewportSize({ width: 1600, height: 1000 })
       await page.goto('/sessions')
+      await openWorkingFold(page)
       await expect(page.getByTestId('work-surface')).toBeVisible()
       const text = (await page.locator('body').innerText()) ?? ''
       const raw = text.match(
@@ -516,6 +526,7 @@ test.describe('URL view and panel history', () => {
     }) => {
       await page.setViewportSize({ width: 390, height: 844 })
       await page.goto('/sessions')
+      await openWorkingFold(page)
       const first = await firstRowAddress(page)
       const second = await page
         .getByTestId('rail-row')
@@ -526,13 +537,13 @@ test.describe('URL view and panel history', () => {
         `/sessions?session=${encodeURIComponent(first)}&pane=context`,
       )
       await expect(
-        page.getByRole('radio', { name: 'Context', exact: true }),
+        page.getByRole('radio', { name: 'Details', exact: true }),
       ).toHaveAttribute('aria-checked', 'true')
       await page.goto(
         `/sessions?session=${encodeURIComponent(second!)}&pane=context&panel=${panel}`,
       )
       const choice = page.getByRole('radio', {
-        name: { context: 'Context', changes: 'Changes', files: 'Files' }[panel],
+        name: { context: 'Details', changes: 'Changes', files: 'Files' }[panel],
         exact: true,
       })
       await expect(choice).toHaveAttribute('aria-checked', 'true')
@@ -540,7 +551,7 @@ test.describe('URL view and panel history', () => {
       await expect(choice).toHaveAttribute('aria-checked', 'true')
       await page.goBack()
       await expect(
-        page.getByRole('radio', { name: 'Context', exact: true }),
+        page.getByRole('radio', { name: 'Details', exact: true }),
       ).toHaveAttribute('aria-checked', 'true')
       await page.goForward()
       await expect(choice).toHaveAttribute('aria-checked', 'true')
@@ -605,14 +616,14 @@ test.describe('running thread and Context capture matrix', () => {
         if (width === 390) {
           await page.getByTestId('narrative-menu').click()
           await page
-            .getByRole('menuitem', { name: 'Context', exact: true })
+            .getByRole('menuitem', { name: 'Details', exact: true })
             .click()
-        } else {
-          await page.getByTestId('context-toggle').click()
         }
+        // From 1120 px Details is open beside the thread by default; on a phone the
+        // menu opened it as a sheet.
         await expect(page.getByTestId('session-context')).toBeVisible()
         await expect(
-          page.getByRole('radio', { name: 'Context', exact: true }),
+          page.getByRole('radio', { name: 'Details', exact: true }),
         ).toHaveAttribute('aria-checked', 'true')
         expect(
           (
@@ -651,6 +662,24 @@ test('Files reads and saves the actual worktree and retires its draft on a cache
   await page.goto(`/sessions?session=run:${run}&pane=context&panel=files`)
   expect((await listing).ok()).toBe(true)
   await page.getByText('README.md', { exact: true }).click()
+  expect(new URL(page.url()).searchParams.get('file')).toBe('README.md')
+  expect(new URL(page.url()).searchParams.get('session')).toBe(`run:${run}`)
+  expect(new URL(page.url()).searchParams.get('panel')).toBe('files')
+  await page.reload()
+  await expect(
+    page.getByRole('button', { name: 'Source', exact: true }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'root', exact: true }).click()
+  await expect(page.getByText('Select a file to view or edit.')).toBeVisible()
+  expect(new URL(page.url()).searchParams.has('file')).toBe(false)
+  expect(new URL(page.url()).searchParams.get('session')).toBe(`run:${run}`)
+  expect(new URL(page.url()).searchParams.get('panel')).toBe('files')
+  await page.goBack()
+  await expect(
+    page.getByRole('button', { name: 'Source', exact: true }),
+  ).toBeVisible()
+  expect(new URL(page.url()).searchParams.get('file')).toBe('README.md')
+  await page.getByRole('button', { name: 'Source', exact: true }).click()
   const editor = page.locator('#work-pane-context .cm-content')
   await expect(editor).toContainText('Labelled worktree folder')
   await page.getByRole('button', { name: 'Edit', exact: true }).click()
@@ -674,6 +703,7 @@ test('Files reads and saves the actual worktree and retires its draft on a cache
     page.getByRole('button', { name: 'Save', exact: true }),
   ).toHaveCount(0)
   await page.getByText('README.md', { exact: true }).click()
+  await page.getByRole('button', { name: 'Source', exact: true }).click()
   await expect(editor).toContainText('Labelled local session')
   await expect(editor).not.toContainText('Saved only in the worktree')
   await expect(editor).not.toContainText('Unsaved draft from the worktree')

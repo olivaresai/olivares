@@ -37,3 +37,11 @@ web/src/features/dictation/model/onnx/*.onnx binary
 # repeated-id check refuses (appliance/selinux/test_manifest.py), so the two controls
 # cover each other.
 appliance/selinux/manifest.tsv merge=union
+
+# The changelog: every user-visible change appends its lines to the unreleased section, so the
+# change merged second conflicted on that section (CHANGELOG.md was 6 of the 38 conflicting merge
+# gates from 2026-10-20 to 10-28; the regression re-conflicted on it after a rebase). Union keeps both.
+# What union cannot see, two dated sections for one release, is what render-release-notes.py
+# refuses ("expected one dated CHANGELOG section"), and it runs in pr-ci and in the merge gate,
+# so the two controls cover each other.
+CHANGELOG.md merge=union

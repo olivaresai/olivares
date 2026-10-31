@@ -23,7 +23,7 @@ import * as compliance from '../src/features/compliance/fixtures'
 import * as orchestration from '../src/features/orchestration/fixtures'
 import * as voice from '../src/features/voice/fixtures'
 import { EXTENSION_ROUTES } from '../src/features/extensions'
-import { browserSession } from '../e2e-visual/fixtures'
+import { browserSession, modelsAvailability } from '../e2e-visual/fixtures'
 
 const list = (items: unknown[]) => ({ items, cursor: '', has_more: false })
 
@@ -74,6 +74,7 @@ function bodyFor(p: string): unknown {
   }
 
   if (p.includes('/m/models/')) {
+    if (p.includes('/availability')) return modelsAvailability
     if (p.includes('/catalog')) return models.catalogFixture
     if (p.includes('/routing-policies'))
       return list(models.routingPoliciesFixture)

@@ -13,7 +13,7 @@ import "github.com/olivaresai/olivares/core/auth"
 // is a grammar whose last segment must be read, write or admin. "run:stop" and
 // "lease:stop" cannot be spelled inside it without breaking the tier ordering for
 // every other module, so the questions name their action here and keep their
-// ordinary permission (sessions:run:write, sessions:lease:admin) as the RBAC term.
+// ordinary permission (sessions:stop:write, sessions:lease:admin) as the RBAC term.
 //
 // Declaring them is what makes them usable: the engine refuses a route whose
 // action its own module never declared, so an action nobody registered is

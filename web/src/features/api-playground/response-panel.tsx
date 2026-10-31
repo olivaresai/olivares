@@ -45,17 +45,11 @@ function StatusBadge({ status }: { status: number }) {
       variant="outline"
       className={cn(
         'font-mono tabular-nums',
-        status >= 200 &&
-          status < 300 &&
-          'border-emerald-500/50 text-emerald-600 dark:text-emerald-400',
-        status >= 300 &&
-          status < 400 &&
-          'border-blue-500/50 text-blue-600 dark:text-blue-400',
-        status >= 400 &&
-          status < 500 &&
-          'border-amber-500/50 text-amber-600 dark:text-amber-400',
-        status >= 500 && 'border-red-500/50 text-red-600 dark:text-red-400',
-        status === 0 && 'border-red-500/50 text-red-600 dark:text-red-400',
+        status >= 200 && status < 300 && 'border-success-line text-success',
+        status >= 300 && status < 400 && 'border-info-line text-info',
+        status >= 400 && status < 500 && 'border-warning-line text-warning',
+        status >= 500 && 'border-danger-line text-danger',
+        status === 0 && 'border-danger-line text-danger',
       )}
     >
       {status === 0 ? t('responsePanel.statusError') : status}

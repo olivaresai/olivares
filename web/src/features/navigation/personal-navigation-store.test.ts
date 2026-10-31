@@ -27,22 +27,15 @@ const session = () =>
 beforeEach(() => localStorage.clear())
 
 describe('personal navigation storage boundary', () => {
-  it('writes only after explicit save, reloads IDs, removes and clears', () => {
+  it('keeps unsaved favorites in memory without a browser copy', () => {
     const a = session()
-    expect(localStorage.getItem(key)).toBeNull()
     a.setFavorite(home, true)
     a.setFavorite(settings, true)
-    a.setFavorite(home, true)
-    expect(JSON.parse(localStorage.getItem(key)!)).toEqual({
-      version: 1,
-      favorites: [settings, home],
-    })
-    const reload = session()
-    expect(reload.getSnapshot().favorites).toEqual([settings, home])
-    reload.setFavorite(settings, false)
-    expect(session().getSnapshot().favorites).toEqual([home])
-    reload.clearFavorites()
+    expect(a.getSnapshot().favorites).toEqual([home, settings])
+    expect(localStorage.getItem(key)).toBeNull()
     expect(session().getSnapshot().favorites).toEqual([])
+    a.clearFavorites()
+    expect(a.getSnapshot().favorites).toEqual([])
   })
 
   it('partitions origin, kind/user_id and tenant without deriving token identities', () => {
@@ -119,7 +112,7 @@ describe('personal navigation storage boundary', () => {
     const a = session()
     all.forEach((link) => a.setFavorite(link, true))
     a.setFavorite(settings, true)
-    expect(session().getSnapshot().favorites).toHaveLength(all.length + 1)
+    expect(a.getSnapshot().favorites).toHaveLength(all.length + 1)
   })
 
   it('falls back to memory for missing identity and denied/full storage', () => {
@@ -161,7 +154,7 @@ describe('personal navigation storage boundary', () => {
     a.setFavorite(settings, true)
     a.clearFavorites()
     expect(a.getSnapshot().favorites).toEqual([])
-    expect(session().getSnapshot().favorites).toEqual([home])
+    expect(session().getSnapshot().favorites).toEqual([])
   })
 
   it('consumes only current-partition localStorage events and reads latest bytes', () => {
@@ -206,7 +199,7 @@ describe('favorites on the engine', () => {
     return { remote, release }
   }
 
-  it('shows the account copy over this browser copy, and caches it', async () => {
+  it('shows the account copy over this browser copy, and removes the legacy browser copy', async () => {
     localStorage.setItem(key, JSON.stringify({ version: 1, favorites: [home] }))
     const { remote, release } = engine({ favorites: [settings], stored: true })
     const a = createPersonalNavigationSession({
@@ -218,7 +211,7 @@ describe('favorites on the engine', () => {
     release()
     await settle()
     expect(a.getSnapshot().favorites).toEqual([settings])
-    expect(session().getSnapshot().favorites).toEqual([settings])
+    expect(localStorage.getItem(key)).toBeNull()
     expect(remote.save).not.toHaveBeenCalled()
   })
 
@@ -259,8 +252,8 @@ describe('favorites on the engine', () => {
     expect(() => call.guard()).toThrow()
   })
 
-  it('keeps a change the account did not take, says so, and sends it again at the next sign-in', async () => {
-    const failing = {
+  it('reports a failed save without persisting a browser-only change', async () => {
+    const remote = {
       load: vi.fn(async () => ({ favorites: [], stored: true })),
       save: vi.fn(async () => {
         throw new Error('HTTP 503')
@@ -270,29 +263,38 @@ describe('favorites on the engine', () => {
     const a = createPersonalNavigationSession({
       key,
       current: () => true,
-      remote: failing,
+      remote,
       onSaveError,
     })
     await settle()
     a.setFavorite(home, true)
     await settle()
     expect(onSaveError).toHaveBeenCalledOnce()
-    // The next sign-in: the account still has the older (empty) list.
-    const later = {
-      load: vi.fn(async () => ({ favorites: [], stored: true })),
-      save: vi.fn(async () => ({})),
-    } satisfies FavoritesRemote
-    const b = createPersonalNavigationSession({
+    expect(a.getSnapshot().favorites).toEqual([home])
+    expect(localStorage.getItem(key)).toBeNull()
+  })
+
+  it('retains legacy favorites until the engine accepts the migration', async () => {
+    const legacy = JSON.stringify({ version: 1, favorites: [home] })
+    localStorage.setItem(key, legacy)
+    const remote = {
+      load: vi.fn(async () => ({ favorites: [], stored: false })),
+      save: vi.fn(async () => {
+        throw new Error('offline')
+      }),
+    }
+    createPersonalNavigationSession({ key, current: () => true, remote })
+    await settle()
+    expect(localStorage.getItem(key)).toBe(legacy)
+    const accepted = { load: remote.load, save: vi.fn(async () => ({})) }
+    createPersonalNavigationSession({
       key,
       current: () => true,
-      remote: later,
+      remote: accepted,
     })
     await settle()
-    expect(b.getSnapshot().favorites).toEqual([home])
-    expect(later.save).toHaveBeenCalledWith([home], expect.anything())
-    await settle()
-    // Saved now: not pending any more, so the account copy wins again.
-    expect(JSON.parse(localStorage.getItem(key)!).pending).toBeUndefined()
+    expect(accepted.save).toHaveBeenCalledWith([home], expect.anything())
+    expect(localStorage.getItem(key)).toBeNull()
   })
 
   it('lets a person star every page the console offers', () => {

@@ -50,6 +50,18 @@ type fakeCredentialBroker struct {
 	noEnv          bool
 	noBind         bool
 	read           []string
+	// noRelease is a success with helpers and no way to revoke them; refuse is a refusal that
+	// comes back with the helpers it started; runFile grants a file in the run's own directory
+	// under dataDir (the engine's protected folder).
+	noRelease bool
+	refuse    error
+	runFile   bool
+	dataDir   string
+	// runDirTo makes the run's directory a link to this directory, as a broker's bug or an
+	// attacker's swap would.
+	runDirTo string
+	// releasePanics is a release that panics after it has run, as a broker's bug would.
+	releasePanics bool
 }
 
 func newFakeCredentialBroker(t *testing.T) *fakeCredentialBroker {
@@ -61,7 +73,34 @@ func (f *fakeCredentialBroker) BrokerSessionCredentials(_ context.Context, req C
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.reqs = append(f.reqs, req)
-	release := func() { f.released <- req.RunRef }
+	release := func() {
+		f.released <- req.RunRef
+		if f.releasePanics {
+			panic("CANARY-panic-9913")
+		}
+	}
+	if f.refuse != nil {
+		return BrokeredCredentials{Release: release}, f.refuse
+	}
+	if f.runFile {
+		// The broker's own file: under the engine's data directory, in this run's directory.
+		dir := filepath.Join(f.dataDir, "run", req.RunRef)
+		if f.runDirTo != "" {
+			if err := os.MkdirAll(filepath.Dir(dir), 0o700); err != nil {
+				return BrokeredCredentials{}, err
+			}
+			if err := os.Symlink(f.runDirTo, dir); err != nil {
+				return BrokeredCredentials{}, err
+			}
+		} else if err := os.MkdirAll(dir, 0o700); err != nil {
+			return BrokeredCredentials{}, err
+		}
+		own := filepath.Join(dir, "ssh_config")
+		if err := os.WriteFile(own, []byte("Host prod\n"), 0o600); err != nil {
+			return BrokeredCredentials{}, err
+		}
+		f.read = []string{own}
+	}
 	if f.err != nil {
 		if f.releaseWithErr {
 			return BrokeredCredentials{Release: release}, f.err
@@ -87,12 +126,16 @@ func (f *fakeCredentialBroker) BrokerSessionCredentials(_ context.Context, req C
 	if f.noBind {
 		bind = nil
 	}
-	return BrokeredCredentials{
+	out := BrokeredCredentials{
 		Env: env, Read: read, Withhold: []string{credentialCanary, "short", credentialKeyCanary},
 		Detail:  "credentials " + strings.Join(req.Names, ", "),
 		Bind:    bind,
 		Release: release,
-	}, nil
+	}
+	if f.noRelease {
+		out.Release = nil
+	}
+	return out, nil
 }
 
 func (f *fakeCredentialBroker) requests() []CredentialBrokerRequest {
@@ -274,8 +317,8 @@ func TestCredentials_ABrokerMayNameOnlyItsHelperVariables(t *testing.T) {
 			t.Parallel()
 			m, tenant, fr, broker := credentialHarness(t)
 			broker.env = []EnvVar{{Name: name, Value: "/tmp/x"}}
-			if _, err := createProfiledTestRun(t, m, ctx, tenant, credentialParams(true)); statusOf(err) != http.StatusServiceUnavailable {
-				t.Fatalf("a broker that sets %s: create = %v, want 503", name, err)
+			if _, err := createProfiledTestRun(t, m, ctx, tenant, credentialParams(true)); statusOf(err) != http.StatusUnprocessableEntity {
+				t.Fatalf("a broker that sets %s: create = %v, want 422", name, err)
 			}
 			broker.awaitRelease(t)
 			fr.mu.Lock()
@@ -308,8 +351,8 @@ func TestCredentials_ABrokerCannotShadowAVariableTheLaunchSet(t *testing.T) {
 	m.ProviderVault = vault
 	p := credentialParams(true)
 	p.SecretEnv = []SecretEnvRef{{Env: "SSH_AUTH_SOCK", Secret: "env/agent"}}
-	if _, err := createProfiledTestRun(t, m, ctx, tenant, p); statusOf(err) != http.StatusServiceUnavailable {
-		t.Fatalf("create = %v, want 503: the broker's SSH_AUTH_SOCK shadows the launch's own", err)
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, p); statusOf(err) != http.StatusUnprocessableEntity {
+		t.Fatalf("create = %v, want 422: the broker's SSH_AUTH_SOCK shadows the launch's own", err)
 	}
 	broker.awaitRelease(t)
 }
@@ -558,8 +601,8 @@ func TestCredentials_ABrokerThatNamesAVariableTwiceIsRefused(t *testing.T) {
 	ctx := context.Background()
 	m, tenant, fr, broker := credentialHarness(t)
 	broker.env = []EnvVar{{Name: "SSH_AUTH_SOCK", Value: "/a"}, {Name: "SSH_AUTH_SOCK", Value: "/b"}}
-	if _, err := createProfiledTestRun(t, m, ctx, tenant, credentialParams(true)); statusOf(err) != http.StatusServiceUnavailable {
-		t.Fatalf("create = %v, want 503", err)
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, credentialParams(true)); statusOf(err) != http.StatusUnprocessableEntity {
+		t.Fatalf("create = %v, want 422", err)
 	}
 	broker.awaitRelease(t)
 	if launchCount(fr) != 0 {

@@ -47,7 +47,7 @@ func TestOutOfProcessSourcePlugin(t *testing.T) {
 	// asi que necesita un directorio donde de verdad se pueda ejecutar. Con t.TempDir() en un
 	// montaje noexec el fallo sale como «el loader no arranco el plugin» — acusando al codigo por
 	// una propiedad de la maquina. Es el mismo defecto que loader_test.go tenia, medido el
-	// 2026-08-19 en ci-runner-8.
+	// 2026-08-19 en build-host.
 	bin := filepath.Join(execCapableDir(t), "example-source")
 	build := exec.Command("go", "build", "-o", bin, "github.com/olivaresai/olivares/connectors/example/cmd/example-source")
 	build.Dir = repoRoot

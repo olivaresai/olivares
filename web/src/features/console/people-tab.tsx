@@ -137,6 +137,15 @@ export function PeopleTab({
   // the guard the row's one-click label alone cannot be.
   const [totpResetTarget, setTotpResetTarget] =
     useState<RosterMemberDTO | null>(null)
+  const [sessionsTarget, setSessionsTarget] = useState<RosterMemberDTO | null>(
+    null,
+  )
+  const memberSessionsMutation = usePrivilegedMutation<RosterMemberDTO, void>({
+    mutationFn: (member, authority) =>
+      consoleApi.endMemberSessions(member.user_id, authority),
+    successMessage: t('console:members.sessionsEnded'),
+    onDone: () => setSessionsTarget(null),
+  })
   const memberTOTPResetMutation = usePrivilegedMutation<
     RosterMemberDTO,
     unknown
@@ -254,13 +263,15 @@ export function PeopleTab({
                       member={member}
                       canManage={canManageMembers}
                       // Never offered on your own row or on the organization's only
-                      // active owner: either would lock the organization out (HU-25).
+                      // active owner: either would lock the organization out.
                       canRemove={
                         member.user_id !== principal?.user_id &&
                         !(member.role === 'owner' && activeOwners <= 1)
                       }
                       onToggle={setMemberToggle}
                       onResetTOTP={setTotpResetTarget}
+                      canEndSessions={member.user_id !== principal?.user_id}
+                      onEndSessions={setSessionsTarget}
                     />
                   ))}
                 </tbody>
@@ -324,7 +335,11 @@ export function PeopleTab({
                     <th>{t('console:people.email')}</th>
                     <th>{t('console:people.role')}</th>
                     <th>{t('console:people.expires')}</th>
-                    <th />
+                    <th>
+                      <span className="sr-only">
+                        {t('console:members.action')}
+                      </span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -409,7 +424,11 @@ export function PeopleTab({
                     <tr>
                       <th>{t('console:people.email')}</th>
                       <th>{t('console:superadmins.statusHeader')}</th>
-                      <th />
+                      <th>
+                        <span className="sr-only">
+                          {t('console:members.action')}
+                        </span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -505,6 +524,25 @@ export function PeopleTab({
         </RequireAssurance>
       ) : null}
 
+      {sessionsTarget ? (
+        <RequireAssurance minAal={AAL.HARDWARE} action="console">
+          <ConfirmDialog
+            open
+            onOpenChange={(open) => !open && setSessionsTarget(null)}
+            title={t('console:members.endSessionsFor', {
+              email: sessionsTarget.email,
+            })}
+            description={t('console:members.endSessionsBody', {
+              email: sessionsTarget.email,
+            })}
+            confirmLabel={t('console:members.endSessions')}
+            tone="danger"
+            pending={memberSessionsMutation.isPending}
+            onConfirm={() => memberSessionsMutation.mutate(sessionsTarget)}
+          />
+        </RequireAssurance>
+      ) : null}
+
       <Dialog
         open={toggle !== null}
         onOpenChange={(o) => !o && setToggle(null)}
@@ -545,6 +583,8 @@ function RosterMemberRow({
   canRemove,
   onToggle,
   onResetTOTP,
+  canEndSessions,
+  onEndSessions,
 }: {
   member: RosterMemberDTO
   canManage: boolean
@@ -552,6 +592,8 @@ function RosterMemberRow({
   canRemove: boolean
   onToggle: (member: RosterMemberDTO) => void
   onResetTOTP: (member: RosterMemberDTO) => void
+  canEndSessions: boolean
+  onEndSessions: (member: RosterMemberDTO) => void
 }) {
   const { t } = useTranslation(['console', 'common'])
   const active = member.status === 'active'
@@ -614,6 +656,18 @@ function RosterMemberRow({
       </td>
       <td className="text-right">
         <div className="flex items-center justify-end gap-2">
+          {canManage && active && canEndSessions ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onEndSessions(member)}
+              aria-label={t('console:members.endSessionsFor', {
+                email: member.email,
+              })}
+            >
+              {t('console:members.endSessions')}
+            </Button>
+          ) : null}
           {canManage && !member.sso_only ? (
             <Button
               variant="ghost"
@@ -627,7 +681,7 @@ function RosterMemberRow({
             </Button>
           ) : null}
           {/* Removing a member is an action with a confirmation, never a switch: a
-              switch read "on" beside "Remove" (HU-25). */}
+              switch read "on" beside "Remove". */}
           {canManage && active && canRemove ? (
             <Button
               variant="ghost"

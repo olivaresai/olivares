@@ -207,7 +207,13 @@ func TestAStatusReadItsCallerAbandonedAfterTheLoadTargetIsLogged(t *testing.T) {
 	m, tenant := statusModule(t, "exec sleep 5")
 	logs := captureLog(t)
 	ctx, cancel := context.WithCancel(t.Context())
-	time.AfterFunc(200*time.Millisecond, cancel)
+	defer cancel()
+	command := toolCommand
+	toolCommand = func(ctx context.Context, program string, args ...string) *exec.Cmd {
+		// Start the timer after home resolution, inside the process timing window.
+		time.AfterFunc(200*time.Millisecond, cancel)
+		return command(ctx, program, args...)
+	}
 	if _, _, err := m.LoginStatus(ctx, tenant, "opencode"); err == nil {
 		t.Fatal("a canceled read must return its error")
 	}

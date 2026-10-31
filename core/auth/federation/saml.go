@@ -503,7 +503,9 @@ func (s *samlProvider) validate(_ context.Context, a auth.Assertion) (auth.Feder
 	id.AAL, id.AuthenticatedAt = s.assertionAssurance(assertion)
 	if s.groupsAttr != "" {
 		id.Groups = s.extractGroups(assertion)
-		id.GroupsIndeterminate = hasAttribute(assertion, entraGroupsLinkAttr)
+		if hasAttribute(assertion, entraGroupsLinkAttr) {
+			id.GroupsIndeterminate, id.GroupsIndeterminateWhy = true, "groups_overage"
+		}
 	}
 	return id, nil
 }

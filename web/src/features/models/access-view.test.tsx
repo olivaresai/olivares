@@ -50,6 +50,7 @@ const REGLA = {
 
 async function abrirAcceso(user: ReturnType<typeof userEvent.setup>) {
   renderIntel(<ModelsView />)
+  await user.click(await screen.findByRole('tab', { name: /^Governance$/i }))
   await user.click(await screen.findByRole('tab', { name: /^Access$/i }))
 }
 
@@ -204,6 +205,7 @@ describe('las reglas de acceso a modelos', () => {
   it('al cambiar de tenant no sirve las reglas del anterior', async () => {
     const user = userEvent.setup()
     const vista = renderIntel(<ModelsView />)
+    await user.click(await screen.findByRole('tab', { name: /^Governance$/i }))
     await user.click(await screen.findByRole('tab', { name: /^Access$/i }))
     expect(await screen.findByText('user:alice@demo')).toBeInTheDocument()
 
@@ -225,6 +227,7 @@ describe('las reglas de acceso a modelos', () => {
   it('con el mismo tenant un repintado no vuelve a pedir', async () => {
     const user = userEvent.setup()
     const vista = renderIntel(<ModelsView />)
+    await user.click(await screen.findByRole('tab', { name: /^Governance$/i }))
     await user.click(await screen.findByRole('tab', { name: /^Access$/i }))
     expect(await screen.findByText('user:alice@demo')).toBeInTheDocument()
     const llamadas = accesoMock.mock.calls.length

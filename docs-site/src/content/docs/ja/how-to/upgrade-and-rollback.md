@@ -55,7 +55,7 @@ olivares upgrade --check
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.4
+olivares upgrade --check --current-version 0.5
 ```
 <!-- /release -->
 
@@ -179,7 +179,7 @@ olivares upgrade --install-timer --timer-schedule 'Sun *-*-* 03:00:00'
 `--enterprise --connect` のときは `olivares license connect refresh` も示します。判定はパスで行うため、
 `install.sh --bindir /usr/bin` がそこに置いたバイナリも拒否されます。
 
-コンソールには同じ情報の読み取り専用側があります。**Settings → update status** は
+コンソールには同じ情報の読み取り専用側があります。**運用 → アップデート** (`/updates`) は
 `POST /v1/console/update-check` を呼び出し、設定済みチャネルをオンデマンドで
 チェックします。エアギャップ環境、またはチャネルが未設定のデプロイメントは
 「更新なし」と報告するのではなく、理由を添えて `501` を返します。

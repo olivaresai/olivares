@@ -28,6 +28,7 @@ import {
   usePaneVars,
   type ResizablePane,
 } from '@/components/ui/pane-vars'
+import { useMinWidth } from '@/lib/hooks/use-min-width'
 import { cn } from '@/lib/utils'
 
 /** The side panel's width, 380 px by default (340 px at or below 1360 px) until a person drags it: it stops at 50% of the work area so the page keeps room. */
@@ -38,7 +39,8 @@ const PANEL_PANE: ResizablePane = {
 }
 
 /** Below this width the panel is an overlay sheet over the work. */
-const OVERLAY_QUERY = '(max-width: 1099px)'
+const OVERLAY_BELOW = 1100
+const OVERLAY_QUERY = `(max-width: ${OVERLAY_BELOW - 1}px)`
 
 interface SidePanelState {
   /** The declared panel's title, or null when the page declares none. */
@@ -78,18 +80,26 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
 /** A page's panel. Rendered wherever the page likes; drawn in the frame's panel. */
 export function SidePanelContent({
   title,
+  reveal,
   children,
 }: {
   title: string
+  /** A key that opens the panel each time it changes (a person picked another row);
+   *  undefined leaves the panel as the person last set it. */
+  reveal?: string
   children: ReactNode
 }) {
   const panel = useContext(SidePanelContext)
   const declare = panel?.declare
+  const setOpen = panel?.setOpen
   useEffect(() => {
     if (!declare) return
     declare(title)
     return () => declare(null)
   }, [declare, title])
+  useEffect(() => {
+    if (reveal !== undefined) setOpen?.(true)
+  }, [reveal, setOpen])
   if (!panel?.host || !panel.open) return null
   return createPortal(children, panel.host)
 }
@@ -106,6 +116,7 @@ export function SidePanelHost() {
   const aside = useRef<HTMLElement>(null)
   const area = useRef<HTMLElement | null>(null)
   const vars = usePaneVars(PANEL_PANE)
+  const covers = !useMinWidth(OVERLAY_BELOW)
   if (!title || !open || !setOpen || !setHost) return null
   const close = () => setOpen(false)
   return (
@@ -125,6 +136,8 @@ export function SidePanelHost() {
         id={panelId}
         aria-label={title}
         data-slot="side-panel"
+        // Over the work it is a layer of its own, as a sheet is; beside it, it is not.
+        data-layer={covers || undefined}
         onKeyDown={(e) => {
           if (e.key === 'Escape') close()
         }}

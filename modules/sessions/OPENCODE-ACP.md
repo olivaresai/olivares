@@ -63,4 +63,4 @@ before it reaches the tool (`openCodeSession.Input`). A delivered command with a
 or not, or with a `$ARGUMENTS` or `$1` placeholder next to `!`, a backtick or `@`, or after a `$`
 and capital letters (OpenCode replaces `$1` first, so `$ARG$1UMENTS` forms a new `$ARGUMENTS`), is
 refused at delivery. A prompt without the leading `/command` is not expanded and is sent as typed. Commands
-in the session folder's own `.opencode` are not screened yet (#3076).
+in the session folder's own `.opencode` require exact-hash project-configuration approval (#3076).

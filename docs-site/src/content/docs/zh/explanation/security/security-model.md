@@ -4,7 +4,7 @@ description: "Olivares AI 背后的 secure-by-design 姿态——为何 read-fir
 ---
 
 :::note[Business]
-审计导出（`GET /v1/audit/export`、`olivares audit export`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、`olivares audit verify` 和 `olivares dr backup`；导出返回 HTTP 501 或退出码 9。审计转发和物理隔离网络之间的 DDIL 传输也需要 Business。
+审计导出（`GET /v1/audit/export`、`olivares audit export`）、账本验证（`GET /v1/audit/verify`、`olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、账本读取和 `olivares dr backup`；证据操作返回 HTTP 501 或退出码 9。审计转发和携带审计段的 DDIL 传输也需要 Business。
 :::
 
 Olivares AI 是一款运行在 **客户自有基础设施之内** 的安全产品，它构建一张图，刻画每个 AI 智能体能够触及的范围。

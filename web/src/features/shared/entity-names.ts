@@ -121,7 +121,13 @@ export interface NameLookup {
  * The audit ledger and the recording sessions both name a principal as `user:<uuid>`,
  * so both forms resolve.
  */
-export function useMemberNames(): NameLookup {
+export function useMemberNames(): NameLookup & {
+  /** Every `user:<id>` a typed name answers to: the whole name, the first name, the
+   *  email or its local part. Empty when nobody does; more than one is never a guess.
+   *  `null` when the roster cannot say: not read (yet), or more pages than the one read
+   *  and fewer than two matches on it. */
+  idOf: (name: string) => string[] | null
+} {
   const { activeTenant, can } = useAuth()
   const permitted = can('user:read')
   const { data, isSuccess } = useQuery({
@@ -137,14 +143,37 @@ export function useMemberNames(): NameLookup {
   //    tenant-lifetime test stopped settling.
   return useMemo(() => {
     const byId = new Map<string, string>()
+    // The whole name, the email, its local part and the first name each answer every
+    // person who has that key in any of them.
+    const keys = new Map<string, Set<string>>()
+    const claim = (key: string, id: string) =>
+      keys.set(key, (keys.get(key) ?? new Set()).add(id))
     for (const m of data?.items ?? []) {
       const name = m.display_name?.trim() || m.email?.trim()
-      if (m.user_id && name) byId.set(m.user_id, name)
+      if (!m.user_id || !name) continue
+      byId.set(m.user_id, name)
+      const email = m.email?.trim().toLowerCase()
+      const whole = name.toLowerCase()
+      for (const key of [
+        whole,
+        whole.split(/\s+/)[0],
+        email,
+        email?.split('@')[0],
+      ])
+        if (key) claim(key, m.user_id)
     }
     return {
       ready: isSuccess,
       nameOf: (reference: string | undefined | null) =>
         reference ? (byId.get(bareId(reference)) ?? null) : null,
+      idOf: (typed: string) => {
+        if (!isSuccess) return null
+        const ids = [...(keys.get(typed.trim().toLowerCase()) ?? [])]
+        // One match or none on the first page may not be the whole answer; two already
+        // are several.
+        if (data?.has_more && ids.length < 2) return null
+        return ids.map((id) => `user:${id}`)
+      },
     }
   }, [data, isSuccess])
 }

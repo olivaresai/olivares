@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-// HU025: exercise the management HTTP API and a newly launched session, using
+// acceptance: exercise the management HTTP API and a newly launched session, using
 // the intended CLI enable payload and the console's explicit Allow policy.
 // An explicit empty policy must remain a denial, including after Test/enable.
 func TestManagedMCPProductAPIEnableAndConfigureReachNewSession(t *testing.T) {

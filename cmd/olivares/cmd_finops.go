@@ -139,6 +139,15 @@ func newFinOpsSpendCmd(c modelstackClient) *cobra.Command {
 			Filters: finopsWindowFilters(),
 		}),
 		newModelstackGetCmd(c, modelstackGetSpec{
+			Use:   "changes",
+			Short: "Show the cost per merged change, per department",
+			Long: "Show the cost per merged change, per department, with a roll-up, over the window.\n" +
+				"FinOps is a Business feature: Community answers with a link to its pricing.",
+			Example: `  olivares finops spend changes --since 2026-08-01T00:00:00Z -o json`,
+			Target:  modelstackTarget{Collection: "/spend", Nested: "changes"},
+			Filters: finopsWindowFilters(),
+		}),
+		newModelstackGetCmd(c, modelstackGetSpec{
 			Use:     "unified",
 			Short:   "Show the unified cross-source spend view",
 			Long:    "Show spend unified across every ingested source, so one estate reads as one number.",

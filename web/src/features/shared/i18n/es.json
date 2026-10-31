@@ -49,6 +49,7 @@
     "unknownUser": "Usuario desconocido",
     "unknownWorkspace": "Espacio de trabajo desconocido"
   },
+  "openInEditor": "Abrir en {{editor}}",
   "headDiff": {
     "file": "Archivo",
     "changes": "Cambios desde HEAD",

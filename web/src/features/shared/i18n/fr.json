@@ -49,6 +49,7 @@
     "unknownUser": "Utilisateur inconnu",
     "unknownWorkspace": "Espace de travail inconnu"
   },
+  "openInEditor": "Ouvrir dans {{editor}}",
   "headDiff": {
     "file": "Fichier",
     "changes": "Modifications depuis HEAD",

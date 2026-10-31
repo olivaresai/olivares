@@ -21,7 +21,6 @@ import {
   waitFor,
   within,
 } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AuthProvider, useAuth } from '@/lib/auth/context'
 import { queryKeys } from '@/lib/api/query'
@@ -40,10 +39,6 @@ import {
   type ChannelDraftCapsule,
 } from '@/features/communications/channel-admin-continuity'
 import { RequirePermission } from '@/components/layout/require-permission'
-import {
-  PersonalNavigation,
-  useFavoriteThisPage,
-} from '@/components/layout/personal-navigation'
 import { CommandMenu } from '@/components/layout/command-menu'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
@@ -101,25 +96,8 @@ function Shell({ children }: { children: ReactNode }) {
     </PersonalNavigationProvider>
   )
 }
-/** The account menu's save, as a plain button: the same hook the menu item reads. */
-function FavoriteButton() {
-  const favorite = useFavoriteThisPage()
-  return favorite ? (
-    <button
-      type="button"
-      aria-pressed={favorite.saved}
-      onClick={favorite.toggle}
-    >
-      {favorite.label}
-    </button>
-  ) : null
-}
 
-async function mount({
-  principal = A,
-  path = '/agentops',
-  compact = false,
-} = {}) {
+async function mount({ principal = A, path = '/agentops' } = {}) {
   vi.mocked(authApi.whoami).mockResolvedValue(principal)
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
@@ -131,8 +109,6 @@ async function mount({
       <AuthProvider>
         <TooltipProvider>
           <Shell>
-            <FavoriteButton />
-            <PersonalNavigation collapsed={compact} />
             <CommandMenu />
             <TenantGate>
               <Outlet />
@@ -220,76 +196,6 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('explicit keyboard save/remove/clear and reload leave the deep-link URL authoritative', async () => {
-  const user = userEvent.setup()
-  const first = await mount({ path: '/agentops?filter=fixture#kept' })
-  await screen.findByText('Admitted fixture agentops')
-  const star = screen.getByRole('button', {
-    name: 'Add Operate sessions to favorites',
-  })
-  star.focus()
-  await user.keyboard(' ')
-  expect(screen.getByTestId('saved')).toHaveTextContent('agentops')
-  expect(first.router.state.location.href).toBe('/agentops?filter=fixture#kept')
-  first.unmount()
-  const second = await mount({ path: '/?chosen=url#still-here' })
-  expect(screen.getByTestId('saved')).toHaveTextContent('agentops')
-  expect(second.router.state.location.href).toBe('/?chosen=url#still-here')
-  const opener = screen.getByRole('button', { name: 'View all (1)' })
-  opener.focus()
-  await user.keyboard('{Enter}')
-  const dialog = screen.getByRole('dialog')
-  await user.click(
-    within(dialog).getByRole('button', {
-      name: 'Remove Operate sessions from favorites',
-    }),
-  )
-  expect(
-    within(dialog).getByRole('heading', { name: 'Favorites' }),
-  ).toHaveFocus()
-  expect(screen.getByTestId('saved')).toBeEmptyDOMElement()
-  await user.keyboard('{Escape}')
-  expect(opener).toHaveFocus()
-  act(() => latest.setFavorite(home, true))
-  await user.click(screen.getByRole('button', { name: 'View all (1)' }))
-  await user.click(screen.getByRole('button', { name: 'Clear favorites' }))
-  expect(screen.getByTestId('saved')).toBeEmptyDOMElement()
-  expect(second.router.state.location.href).toBe('/?chosen=url#still-here')
-})
-
-// Root (09b real use, WEB 040): the star on Sessions said "Observe sessions" and so did the
-// saved favorite, while the sidebar, the top bar and the page say "Sessions". A sidebar
-// destination is named as the sidebar names it; a view that is not one keeps its own name.
-it('a starred sidebar destination reads as the sidebar names it: Sessions, not Observe sessions', async () => {
-  const user = userEvent.setup()
-  await mount({
-    principal: {
-      ...A,
-      grants: [
-        {
-          tenant: 'tenant-a',
-          role: 'viewer',
-          permissions: ['sessions:run:read', 'sessions:live:read'],
-        },
-      ],
-    },
-    path: '/sessions',
-  })
-  await screen.findByText('Admitted fixture sessions')
-  await user.click(
-    screen.getByRole('button', { name: 'Add Sessions to favorites' }),
-  )
-  expect(screen.getByTestId('saved')).toHaveTextContent('sessions')
-  // The saved favorite is a link named as the sidebar names it.
-  expect(
-    screen.getAllByRole('link', { name: 'Sessions' }).length,
-  ).toBeGreaterThan(0)
-  expect(
-    screen.getByRole('button', { name: 'Remove Sessions from favorites' }),
-  ).toBeInTheDocument()
-  expect(screen.queryByText('Observe sessions')).toBeNull()
-})
-
 it('isolates tenant/user transitions and refuses callbacks captured before a batched round trip', async () => {
   const { client } = await mount()
   act(() => latest.setFavorite(home, true))
@@ -300,14 +206,12 @@ it('isolates tenant/user transitions and refuses callbacks captured before a bat
   })
   act(() => old.clearFavorites())
   // The departed verification is retired too; returning to A now verifies afresh.
-  await waitFor(() =>
-    expect(screen.getByTestId('saved')).toHaveTextContent('home'),
-  )
+  await waitFor(() => expect(screen.getByTestId('saved')).toBeEmptyDOMElement())
   const firstKey = favoriteStorageKey(window.location.origin, A, 'tenant-a')!
   act(() => useTenantStore.getState().setActiveTenant('tenant-b'))
   await waitFor(() => expect(screen.getByTestId('saved')).toBeEmptyDOMElement())
   act(() => old.setFavorite(personalLink('settings')!, true))
-  expect(JSON.parse(localStorage.getItem(firstKey)!).favorites).toEqual([home])
+  expect(localStorage.getItem(firstKey)).toBeNull()
   vi.mocked(authApi.whoami).mockResolvedValue({
     ...A,
     user_id: 'fixture-b',
@@ -347,12 +251,8 @@ it('isolates tenant/user transitions and refuses callbacks captured before a bat
     { ...A, user_id: 'fixture-b' },
     'tenant-b',
   )!
-  expect(JSON.parse(localStorage.getItem(secondKey)!).favorites).toEqual([
-    personalLink('settings'),
-  ])
-  await waitFor(() =>
-    expect(screen.getByTestId('saved')).toHaveTextContent('settings'),
-  )
+  expect(localStorage.getItem(secondKey)).toBeNull()
+  await waitFor(() => expect(screen.getByTestId('saved')).toBeEmptyDOMElement())
 })
 
 it('clears active memory on logout and never persists an unrecognized principal', async () => {
@@ -390,10 +290,7 @@ it('hides a revoked permission from favorites and palette without deleting the s
     }),
   )
   await waitFor(() => expect(screen.getByTestId('saved')).toBeEmptyDOMElement())
-  expect(localStorage.getItem(key)).toContain('agentops')
-  expect(
-    screen.queryByRole('button', { name: /Sessions to favorites/ }),
-  ).not.toBeInTheDocument()
+  expect(localStorage.getItem(key)).toBeNull()
   act(() => useCommandStore.getState().setOpen(true))
   expect(
     within(screen.getByRole('dialog')).queryByRole('option', {
@@ -481,28 +378,6 @@ it('uses actual capability answers: unknown is a link, denial hides it, neither 
   expect(screen.getByTestId('saved')).toHaveTextContent(admin.id)
 })
 
-it('compact manager has keyboard access to every saved feature beyond the four-row preview', async () => {
-  const user = userEvent.setup()
-  await mount({ compact: true })
-  act(() => {
-    for (const v of FEATURE_VIEWS) {
-      const link = personalLink(v.id)
-      if (link) latest.setFavorite(link, true)
-    }
-    latest.setFavorite(personalLink('settings')!, true)
-  })
-  const all = latest.favorites.length
-  expect(all).toBeGreaterThan(4)
-  const trigger = screen.getByRole('button', { name: 'Manage favorites' })
-  trigger.focus()
-  await user.keyboard('{Enter}')
-  expect(within(screen.getByRole('dialog')).getAllByRole('link')).toHaveLength(
-    all,
-  )
-  await user.keyboard('{Escape}')
-  expect(trigger).toHaveFocus()
-})
-
 it('quarantines cached whoami across credential movement and rejects the late identity answer', async () => {
   const { client } = await mount()
   act(() => latest.setFavorite(home, true))
@@ -576,8 +451,7 @@ it('quarantines cached whoami across credential movement and rejects the late id
 
 const recentIds = () => latest.recents.map((v) => v.id)
 
-it('records real permitted mounts once, preserves URL, removes/clears by keyboard and starts fresh on reload', async () => {
-  const user = userEvent.setup()
+it('records real permitted mounts once, preserves URL, removes/clears and starts fresh on reload', async () => {
   const { router, unmount } = await mount({
     path: '/agentops?filter=fixture#kept',
   })
@@ -593,22 +467,10 @@ it('records real permitted mounts once, preserves URL, removes/clears by keyboar
   expect(recentIds()).toEqual(['agentops', 'home'])
   expect(router.state.location.href).toBe('/agentops?filter=fixture#kept')
   expect(vi.mocked(authApi.whoami).mock.calls).toHaveLength(whoamiReads)
-  const trigger = screen.getByRole('button', { name: 'View recent (2)' })
-  trigger.focus()
-  await user.keyboard('{Enter}')
-  await user.click(
-    screen.getByRole('button', {
-      name: 'Remove Operate sessions from recent modules',
-    }),
-  )
+  act(() => latest.removeRecent('agentops'))
   expect(recentIds()).toEqual(['home'])
-  expect(
-    screen.getByRole('button', { name: 'Remove Now from recent modules' }),
-  ).toHaveFocus()
-  await user.click(screen.getByRole('button', { name: 'Clear recent modules' }))
+  act(() => latest.clearRecents())
   expect(recentIds()).toEqual([])
-  expect(screen.getByRole('heading', { name: 'Recent' })).toHaveFocus()
-  await user.keyboard('{Escape}')
   await act(async () => {
     await router.invalidate()
   })

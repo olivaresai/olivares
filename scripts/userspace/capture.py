@@ -83,7 +83,7 @@ def capture(root, binary, output):
         (home / '.config/go/telemetry/mode').write_text('off')
         dump = home / 'cli.json'
         # The published-source worktree compiles ./cmd/olivares cold and serialized
-        # (-p 1): 600 s measured too tight on the shared dev runners (dev#2708).
+        # (-p 1): 600 s measured too tight on the shared dev runners.
         checked(['go', 'test', '-p', '1', '-parallel', '2', '-count=1',
                  '-run', '^TestCLIRefDump$', './cmd/olivares'], root,
                 dict(env, OLIVARES_CLIREF_DUMP_OUT=str(dump)), timeout=1800)

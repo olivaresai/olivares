@@ -101,7 +101,7 @@ assert_eq() { if [ "$2" != "$3" ]; then fail "$1: got '$2', want '$3'"; fi; echo
 assert_nonempty() { if [ -z "$2" ]; then fail "$1: empty"; fi; echo "    ok: $1 = $2"; }
 
 wait_health() {
-  for _ in $(seq 1 240); do # 120 s, as first-hour-smoke.sh: 20 s failed the nightly quickstart (dev#2775)
+  for _ in $(seq 1 240); do # 120 s, as first-hour-smoke.sh: 20 s failed the nightly quickstart
     curl -sf "$BASE/healthz" >/dev/null 2>&1 && return 0
     sleep 0.5
   done

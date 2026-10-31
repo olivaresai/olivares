@@ -26,12 +26,20 @@ var ErrSSONotConfigured = errors.New("auth: SSO not configured")
 // ErrSSONotConfigured so an operator can tell a misconfiguration from an absent IdP.
 var ErrSSOProviderUnavailable = errors.New("auth: SSO provider unavailable")
 
-// ErrSSOGroupsIndeterminate refuses a sign-in whose IdP said it did not send the user's
-// full group list (Entra group overage: more than 200 groups in a token, 150 in a SAML
-// assertion). Group membership is a security fact that deny rules reason over, so
-// "unknown" must never be read as "no groups". The text reaches the person who signed
-// in, so it names the fix and carries nothing from the assertion.
-var ErrSSOGroupsIndeterminate = errors.New("auth: sso_groups_indeterminate: the identity provider did not send this user's full group list, so sign-in is refused; in Entra, emit only the groups assigned to the application")
+// ErrSSOGroupsIndeterminate refuses a sign-in whose user's group list is unknown: the
+// IdP said it did not send it in full (Entra group overage: more than 200 groups in a
+// token, 150 in a SAML assertion), or the groups claim could not be read, or the UserInfo
+// that had to supply it failed. Group membership is a security fact that deny rules
+// reason over, so "unknown" must never be read as "no groups". The text reaches the
+// person who signed in, so it names the usual fix and carries nothing from the assertion;
+// the operator's log carries the cause (FederatedIdentity.GroupsIndeterminateWhy).
+var ErrSSOGroupsIndeterminate = errors.New("auth: sso_groups_indeterminate: the identity provider did not send this user's full group list, so sign-in is refused; ask an administrator to check the identity provider's group settings (in Entra, emit only the groups assigned to the application)")
+
+// ErrSSOGroupReconcile refuses a sign-in after the IdP's asserted groups could not be
+// stored. The membership they carry is a fact deny rules reason over, so the sign-in
+// does not complete without it; the failure is usually transient. The cause is logged,
+// never answered.
+var ErrSSOGroupReconcile = errors.New("auth: sso_group_reconcile_failed: the groups the identity provider sent could not be stored, so sign-in is refused")
 
 // Protocol names the federation protocol a provider speaks.
 const (
@@ -115,13 +123,18 @@ type FederatedIdentity struct {
 	// operator-owned mapping resolves them (the IdP names the groups, the operator
 	// decides what they mean).
 	Groups []string
-	// GroupsIndeterminate is true when the IdP signalled that Groups is NOT the user's
-	// full list: the OIDC claim named by the groups claim is listed in `_claim_names`
-	// (aggregated or distributed claim, Entra group overage), or the SAML assertion
-	// carries Entra's groups.link attribute instead of the groups. Only set when the
-	// config reads groups at all. CompleteSSO refuses such a login wherever it would
-	// have used Groups, so unknown membership never becomes "no groups".
+	// GroupsIndeterminate is true when Groups is NOT known to be the user's full list:
+	// the OIDC claim named by the groups claim is listed in `_claim_names` (aggregated
+	// or distributed claim, Entra group overage), is present but unreadable, or is
+	// absent from the ID token while the UserInfo that could supply it failed; or the
+	// SAML assertion carries Entra's groups.link attribute instead of the groups. Only
+	// set when the config reads groups at all. CompleteSSO refuses such a login wherever
+	// it would have used Groups, so unknown membership never becomes "no groups".
 	GroupsIndeterminate bool
+	// GroupsIndeterminateWhy is a short stable code for the operator's log saying why
+	// GroupsIndeterminate is set. It is never shown to the person signing in or stored,
+	// and carries nothing from the assertion.
+	GroupsIndeterminateWhy string
 	// AAL is at most AAL2, based only on the selected provider's verified
 	// assertion and its operator-owned mapping. Zero is legacy AAL1.
 	AAL int

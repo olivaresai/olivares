@@ -8,7 +8,7 @@
 // We assign through loose Record casts to add APIs the DOM lib types claim already
 // exist (so a plain `in`/property access would not type-narrow correctly).
 import '@testing-library/jest-dom/vitest'
-import { afterEach, vi } from 'vitest'
+import { afterEach, beforeEach, vi } from 'vitest'
 import { cleanup, configure } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -70,6 +70,14 @@ await i18nReady
 afterEach(() => {
   cleanup()
 })
+
+// The engine's tool table as the shell reads it before it paints (GET /v1/m/sessions/tools).
+// modules/sessions/tools_api_test.go holds the fixture to the engine's answer; each test
+// starts from it, so one that adds a tool row cannot leak it into the next.
+import engineTools from '@/features/agentops/engine-tools.fixture.json'
+import { setEngineTools } from '@/features/agentops/engine-tools'
+setEngineTools(engineTools.tools)
+beforeEach(() => setEngineTools(engineTools.tools))
 
 const win = window as unknown as Record<string, unknown>
 const proto = Element.prototype as unknown as Record<string, unknown>

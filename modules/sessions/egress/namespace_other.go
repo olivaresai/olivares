@@ -22,3 +22,7 @@ func DialPreview(context.Context, string, string) (net.Conn, error) {
 }
 func Handles([]string) bool                                { return false }
 func RunHelper([]string, func([]string, *os.File) int) int { return 126 }
+
+func PrepareContainer(context.Context, Policy, []string) ([]string, string, func() error, func(), error) {
+	return nil, "", nil, nil, errors.New("container network confinement requires Linux")
+}

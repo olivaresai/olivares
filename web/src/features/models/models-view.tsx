@@ -3,7 +3,9 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // Models/providers (module X) — the container. Tabs over catalog / estate / routing /
-// keys / GPAI supplier posture. The routing-policy editor (react-hook-form + zod,
+// keys / GPAI supplier posture. Available is the first tab: what the tools and
+// providers can run now and which sessions use it; routing, access and GPAI sit
+// together under Governance. The routing-policy editor (react-hook-form + zod,
 // the foundation form
 // pattern) configures the policy that the gateway connector executes; "Resolve"
 // previews the decision. The key dialog NEVER accepts a secret — only a reference.
@@ -53,10 +55,10 @@ import { EVIDENCE_PAGE, modelsApi, modelsKeys } from './api'
 import {
   CapabilityMatrix,
   DecisionPanel,
-  KeyRefsTable,
   ModelsTable,
   PricingTable,
 } from './components'
+import { AvailableTab } from './available-tab'
 import { GpaiTab } from './gpai'
 import type { Decision, RoutingPolicy, RoutingStrategy } from './types'
 import './i18n'
@@ -394,27 +396,23 @@ export function ModelsView() {
     queryKey: modelsKeys.routingPolicies(activeTenant, listaParams),
     queryFn: () => modelsApi.routingPolicies(listaParams),
   })
-  const keysQ = useQuery({
-    queryKey: modelsKeys.keys(activeTenant, listaParams),
-    queryFn: () => modelsApi.keys(listaParams),
-  })
 
   const canRouting = can('models:routing:write')
-  const canKeys = can('models:keys:write')
   const [policyOpen, setPolicyOpen] = useState(false)
-  const [keyOpen, setKeyOpen] = useState(false)
 
   return (
     <IntelPage icon={Cpu} title={t('title')} description={t('description')}>
-      <Tabs defaultValue="catalog">
+      <Tabs defaultValue="available">
         <TabsList>
+          <TabsTrigger value="available">{t('tabs.available')}</TabsTrigger>
           <TabsTrigger value="catalog">{t('tabs.catalog')}</TabsTrigger>
           <TabsTrigger value="estate">{t('tabs.estate')}</TabsTrigger>
-          <TabsTrigger value="routing">{t('tabs.routing')}</TabsTrigger>
-          <TabsTrigger value="keys">{t('tabs.keys')}</TabsTrigger>
-          <TabsTrigger value="access">{t('tabs.access')}</TabsTrigger>
-          <TabsTrigger value="gpai">{t('tabs.gpai')}</TabsTrigger>
+          <TabsTrigger value="governance">{t('tabs.governance')}</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="available" className="flex flex-col gap-4">
+          <AvailableTab />
+        </TabsContent>
 
         <TabsContent value="catalog" className="flex flex-col gap-4">
           <AsyncSection query={catalogQ} skeletonHeight={260}>
@@ -469,108 +467,83 @@ export function ModelsView() {
           </SectionCard>
         </TabsContent>
 
-        <TabsContent value="routing" className="flex flex-col gap-4">
-          <SectionCard
-            title={t('routing.title')}
-            description={t('routing.description')}
-            actions={
-              canRouting ? (
-                <PagePrimaryAction>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setPolicyOpen(true)}
-                  >
-                    <Plus />
-                    {t('routing.new')}
-                  </Button>
-                </PagePrimaryAction>
-              ) : null
-            }
-          >
-            <ListTruncationBadge
-              query={policiesQ}
-              label={t('routing.truncated', {
-                n: policiesQ.data?.items?.length ?? 0,
-              })}
-              hint={t('routing.truncatedHint')}
-            />
-            <AsyncSection query={policiesQ} skeletonHeight={200}>
-              {(list) =>
-                list.items.length === 0 ? (
-                  <EmptyState
-                    title={t('routing.empty')}
-                    description={t('routing.emptyHint')}
-                  />
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    {list.items.map((p) => (
-                      <PolicyCard key={p.id} policy={p} />
-                    ))}
-                  </div>
-                )
-              }
-            </AsyncSection>
-          </SectionCard>
-        </TabsContent>
+        <TabsContent value="governance" className="flex flex-col gap-4">
+          <Tabs defaultValue="routing">
+            <TabsList>
+              <TabsTrigger value="routing">{t('tabs.routing')}</TabsTrigger>
+              <TabsTrigger value="access">{t('tabs.access')}</TabsTrigger>
+              <TabsTrigger value="gpai">{t('tabs.gpai')}</TabsTrigger>
+              <TabsTrigger value="residency">
+                {t('residency.title')}
+              </TabsTrigger>
+            </TabsList>
 
-        <TabsContent value="keys" className="flex flex-col gap-4">
-          <ResidencyCard />
+            <TabsContent value="routing" className="flex flex-col gap-4">
+              <SectionCard
+                title={t('routing.title')}
+                description={t('routing.description')}
+                actions={
+                  canRouting ? (
+                    <PagePrimaryAction>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => setPolicyOpen(true)}
+                      >
+                        <Plus />
+                        {t('routing.new')}
+                      </Button>
+                    </PagePrimaryAction>
+                  ) : null
+                }
+              >
+                <ListTruncationBadge
+                  query={policiesQ}
+                  label={t('routing.truncated', {
+                    n: policiesQ.data?.items?.length ?? 0,
+                  })}
+                  hint={t('routing.truncatedHint')}
+                />
+                <AsyncSection query={policiesQ} skeletonHeight={200}>
+                  {(list) =>
+                    list.items.length === 0 ? (
+                      <EmptyState
+                        title={t('routing.empty')}
+                        description={t('routing.emptyHint')}
+                      />
+                    ) : (
+                      <div className="flex flex-col gap-3">
+                        {list.items.map((p) => (
+                          <PolicyCard key={p.id} policy={p} />
+                        ))}
+                      </div>
+                    )
+                  }
+                </AsyncSection>
+              </SectionCard>
+            </TabsContent>
 
-          <SectionCard
-            title={t('keys.title')}
-            description={t('keys.description')}
-            actions={
-              canKeys ? (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => setKeyOpen(true)}
-                >
-                  <Plus />
-                  {t('keys.new')}
-                </Button>
-              ) : null
-            }
-          >
-            <IntelNotice tone="info" className="mb-3">
-              {t('keys.maskedOnly')}
-            </IntelNotice>
-            <ListTruncationBadge
-              query={keysQ}
-              label={t('keys.truncated', {
-                n: keysQ.data?.items?.length ?? 0,
-              })}
-              hint={t('keys.truncatedHint')}
-            />
-            <AsyncSection query={keysQ} skeletonHeight={180}>
-              {(list) =>
-                list.items.length === 0 ? (
-                  <EmptyState
-                    description={t('keys.emptyHint')}
-                    title={t('keys.empty')}
-                  />
-                ) : (
-                  <KeyRefsTable keys={list.items} />
-                )
-              }
-            </AsyncSection>
-          </SectionCard>
-        </TabsContent>
+            <TabsContent value="access" className="flex flex-col gap-4">
+              <ModelAccessTab />
+            </TabsContent>
 
-        <TabsContent value="access" className="flex flex-col gap-4">
-          <ModelAccessTab />
-        </TabsContent>
+            <TabsContent value="gpai" className="flex flex-col gap-4">
+              <GpaiTab />
+            </TabsContent>
 
-        <TabsContent value="gpai" className="flex flex-col gap-4">
-          <GpaiTab />
+            {/* Where each workspace's data may be processed. It rode the provider keys tab
+                for its permission; the keys moved to AI tools (#3388) and the residency
+                stays with model governance. */}
+            <TabsContent value="residency" className="flex flex-col gap-4">
+              <ResidencyCard />
+            </TabsContent>
+          </Tabs>
         </TabsContent>
       </Tabs>
 
       {canRouting ? (
         <PolicyDialog open={policyOpen} onOpenChange={setPolicyOpen} />
       ) : null}
-      {canKeys ? <KeyDialog open={keyOpen} onOpenChange={setKeyOpen} /> : null}
     </IntelPage>
   )
 }
@@ -993,140 +966,6 @@ function PolicyDialog({
             </Button>
             <Button type="submit" variant="primary" disabled={create.isPending}>
               {t('routing.dialog.create')}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-// --- key reference dialog (NEVER a secret) -----------------------------------
-
-function KeyDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean
-  onOpenChange: (v: boolean) => void
-}) {
-  const { t } = useTranslation(['models', 'common'])
-  const { activeTenant } = useAuth()
-  const qc = useQueryClient()
-  const [name, setName] = useState('')
-  const [provider, setProvider] = useState('')
-  const [kind, setKind] = useState('api_key')
-  const [extId, setExtId] = useState('')
-  const [owner, setOwner] = useState('')
-
-  const create = useMutation({
-    mutationFn: () =>
-      modelsApi.createKey({
-        ref_kind: kind,
-        provider_ref: provider.trim(),
-        ext_id: extId.trim(),
-        name: name.trim(),
-        owner_ref: owner.trim() || undefined,
-      }),
-    onSuccess: () => {
-      toast.success(t('keys.dialog.created'))
-      void qc.invalidateQueries({ queryKey: modelsKeys.keys(activeTenant) })
-      onOpenChange(false)
-      setName('')
-      setProvider('')
-      setExtId('')
-      setOwner('')
-    },
-    onError: (e: unknown) => toast.error(String((e as Error).message ?? e)),
-  })
-
-  const valid = name.trim() && provider.trim() && extId.trim()
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t('keys.dialog.title')}</DialogTitle>
-        </DialogHeader>
-        <form
-          className="flex flex-col gap-3"
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (valid) create.mutate()
-          }}
-        >
-          <IntelNotice tone="info">{t('keys.dialog.noSecretNote')}</IntelNotice>
-          <Field label={t('keys.dialog.name')} required>
-            {({ id }) => (
-              <Input
-                id={id}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            )}
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={t('keys.dialog.provider')} required>
-              {({ id }) => (
-                <Input
-                  id={id}
-                  value={provider}
-                  onChange={(e) => setProvider(e.target.value)}
-                />
-              )}
-            </Field>
-            <Field label={t('keys.dialog.kind')}>
-              <Select value={kind} onValueChange={setKind}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="api_key">
-                    {t('keys.kind.api_key')}
-                  </SelectItem>
-                  <SelectItem value="workspace">
-                    {t('keys.kind.workspace')}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
-          <Field
-            label={t('keys.dialog.extId')}
-            description={t('keys.dialog.extIdHint')}
-            required
-          >
-            {({ id }) => (
-              <Input
-                id={id}
-                value={extId}
-                onChange={(e) => setExtId(e.target.value)}
-              />
-            )}
-          </Field>
-          <Field label={t('keys.dialog.owner')}>
-            {({ id }) => (
-              <Input
-                id={id}
-                value={owner}
-                onChange={(e) => setOwner(e.target.value)}
-              />
-            )}
-          </Field>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => onOpenChange(false)}
-            >
-              {t('common:actions.cancel')}
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={!valid || create.isPending}
-            >
-              {t('keys.dialog.create')}
             </Button>
           </DialogFooter>
         </form>

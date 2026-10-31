@@ -119,7 +119,8 @@ bash scripts/misspell-census.sh   # derive category counts; fail if they do not 
 Use `--clase "comment"` to list locations in a class. Every displayed class label
 and its existing alias is accepted.
 
-CI runs the structural lints, `govulncheck` and a full-history `gitleaks` scan.
+CI runs the structural lints, `govulncheck` and `gitleaks`. PRs scan their own commits; main scans
+since its last successful push, with full history weekly and when scanner rules change.
 `task fmt` formats Go and web sources.
 
 ### PostgreSQL for tests
@@ -342,6 +343,23 @@ This check also runs during public export and works without Git metadata; publis
 task names and script paths remain unchanged. The check matches
 common Spanish patterns; review the remaining wording.
 
+## Reading a tool's state never changes it
+
+A status, health, usage or sign-in read of a tool (the provider snapshot, the
+sign-in status, a version probe, an install probe) starts no session, runs none
+of the user's hooks or plugins, starts none of their MCP servers and opens no
+login. Use the tool's own read-only command, and its switch for "no hooks,
+plugins or MCP servers" where it has one. A read the tool cannot make without
+those is not a read.
+
+`readOnlyCommands` in
+[`cmd/olivares/internal/agenttoolsapi/probe_sideeffects_test.go`](cmd/olivares/internal/agenttoolsapi/probe_sideeffects_test.go)
+lists the exact command line of every read of every driver. The test runs them
+against tool stubs that fire a canary when hooks, plugins or MCP servers are
+left on or a session starts. A new driver or a new command adds its row there,
+after measuring it with a canary hook, a canary MCP server and a canary plugin
+in a signed-out scratch home; put the measurement in the pull request.
+
 ## Adding a connector
 
 Connectors extend the product through the SDK:
@@ -383,7 +401,8 @@ Third-party connectors extend the first-party set.
 
 Run `bash scripts/check-migrations.sh` before submitting migration changes. It
 compares SHA-256 content hashes with the branch's merge base against `origin/main`;
-on main it uses the preceding commit, and in a repository without that remote it
+on main it uses the preceding commit, in a tree that shares no commit with
+`origin/main` it uses `origin/main` itself, and in a repository without that remote it
 uses `HEAD`. Set `OLIVARES_MIGRATION_BASE=<commit>` to select an explicit baseline.
 PR CI pins this to the pull request's base SHA. Missing history or unreadable
 source is an error, never an empty successful comparison.

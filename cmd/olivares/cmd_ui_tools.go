@@ -324,7 +324,9 @@ func (u *uiTools) toolItem(row toolRow, running int, reload func(string)) tui.Me
 }
 
 // unreadSignIn is an installed tool with its own sign-in whose state the engine
-// did not give: toolRows leaves it unset when the status read fails.
+// did not give: toolRows leaves it unset when the status read fails, and also
+// when the probe answered installed:false for a tool the inventory lists. The
+// check-in's toolRow.probeFailed flags only the failed read: keep the two in step.
 func unreadSignIn(row toolRow) bool {
 	return row.Installed && row.SignedIn == nil && toolSignsIn(row.Driver)
 }

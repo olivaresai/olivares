@@ -35,6 +35,7 @@ import type {
   ModelAccessGrant,
   ModelAccessInput,
   ModelAdmission,
+  ModelAvailabilityResponse,
   ModelCardDoc,
   ModelGroup,
   ModelGroupInput,
@@ -104,6 +105,11 @@ export const modelsApi = {
   features: () => http.get<unknown>(`${BASE}/features`),
 
   catalog: () => http.get<CatalogResponse>(`${BASE}/catalog`),
+  availability: ({ tenant, signal }: TenantListOptions) =>
+    http.get<ModelAvailabilityResponse>(`${BASE}/availability`, {
+      tenant,
+      signal,
+    }),
   models: ({ tenant, signal, query }: TenantListOptions) =>
     http.get<ListResponse<GovernedModel>>(`${BASE}/models`, {
       tenant,
@@ -302,6 +308,8 @@ type KeyParams = Record<string, string | number | boolean | undefined>
 export const modelsKeys = {
   all: (tenant: string | null) => ['models', tenant] as const,
   catalog: (tenant: string | null) => ['models', tenant, 'catalog'] as const,
+  availability: (tenant: string | null, epoch: number) =>
+    ['models', tenant, 'availability', epoch] as const,
   models: (tenant: string | null, params?: KeyParams) =>
     params === undefined
       ? (['models', tenant, 'estate'] as const)

@@ -3,25 +3,28 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // THE DOCUMENT TITLE: "<Page> · Olivares AI" on every route (WCAG 2.4.2), so a tab, a
-// history entry and a screen reader's page announcement name the page. The page is the
-// place label the top bar shows; a door (FeatureView.doorTo) is named by its own entrance,
-// because it opens the room on its own tab. The one writer of document.title: session
+// history entry and a screen reader's page announcement name the page. The top bar shows
+// the same label. A page is named by its registry label; an address that is a place of the
+// left navigation without being a page of its own (the approval queue, License) by the
+// place's. The one writer of document.title: session
 // notifications put their count in front through setAttentionCount.
 import { useRouterState } from '@tanstack/react-router'
 import type { TFunction } from 'i18next'
 import { useEffect, useReducer } from 'react'
 import { useTranslation } from 'react-i18next'
 import { isBusinessOnlyPath } from '@/features/business-build'
+import { ROUTE_ALIASES } from '@/features/registry'
 // The status-page title reads `health:`, and every route pays for this title, so the
 // namespace is registered here, in the root closure, not by the status page's chunk.
 import '@/features/health/i18n'
+import '@/features/identity/i18n'
 import {
   areaLabel,
   resolveLocation,
-  SETTINGS_UTILITY,
   viewLabel,
 } from '@/features/navigation/model'
-import { destinationLabel, sectionAt } from './shell-destinations'
+import { currentPlace } from '@/features/navigation/places'
+import { APPROVALS_SECTION } from './shell-sections'
 
 let page = ''
 let attention = 0
@@ -47,6 +50,7 @@ const PUBLIC_PAGES: Readonly<Record<string, string>> = {
   '/login': 'auth:login.title',
   '/setup': 'auth:setup.title',
   '/accept-invite': 'auth:invite.title',
+  '/pair': 'identity:sessions.pairTitle',
   // Its heading carries the brand already ("Olivares AI — Status").
   '/status-page': 'health:statusPageLink',
 }
@@ -69,14 +73,25 @@ export function pageLabel(
   if (PUBLIC_PAGES[pathname])
     return t(PUBLIC_PAGES[pathname], { defaultValue: '' })
   const location = resolveLocation(pathname)
-  if (location.kind === 'unknown') return notFoundLabel(t, pathname)
-  if (location.kind === 'settings') return viewLabel(t, SETTINGS_UTILITY.id)
+  if (location.kind === 'unknown') {
+    // A retired address redirects before it paints: it reads as where it lands (#3388).
+    const alias = ROUTE_ALIASES.find((a) => a.from === pathname)
+    return alias
+      ? pageLabel(t, alias.to, { ...search, ...alias.search })
+      : notFoundLabel(t, pathname)
+  }
+  // Settings and its sections that are places of their own (License) by the place's name.
+  if (location.kind === 'settings')
+    return t(`nav:places.${currentPlace(pathname, search) ?? 'settings'}`)
   if (location.kind === 'area') return areaLabel(t, location.area.id)
-  if (location.kind === 'home') return viewLabel(t, location.view.id)
-  if (location.view.doorTo) return viewLabel(t, location.view.id)
-  const section = sectionAt(location.view.id, search)
-  if (section) return t(`nav:shell.journeys.${section.key}`)
-  return destinationLabel(t, location.view.id)
+  // The approval queue is the Rules place's own address.
+  const { view, search: tab } = APPROVALS_SECTION
+  if (
+    location.view.id === view &&
+    Object.entries(tab).every(([k, v]) => search[k] === v)
+  )
+    return t('nav:places.rules')
+  return viewLabel(t, location.view.id)
 }
 
 /** Called once, by the root route, so every route (public, shell or 404) is named. */
@@ -85,6 +100,7 @@ export function useDocumentTitle() {
     'nav',
     'auth',
     'health',
+    'identity',
     'errors',
     'common',
   ])

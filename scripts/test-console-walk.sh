@@ -34,7 +34,7 @@ cd "${ROOT}"
 TMP="$(mktemp -d)"
 cleanup() {
   local pid
-  for pid in "${SRV_PID:-}" "${SRV3_PID:-}"; do
+  for pid in "${SRV_PID:-}" "${SRV3_PID:-}" "${SRV4_PID:-}"; do
     [ -z "${pid}" ] || kill "${pid}" 2>/dev/null || true
   done
   if [ -s "${TMP}/workflow-engine.pid" ]; then
@@ -76,6 +76,10 @@ set -eu
 cat > "$RUNNER_TEMP/olivares" <<'ENGINE'
 #!/usr/bin/env bash
 echo "$$" > "$WALK_TEST_TMP/workflow-engine.pid"
+if [ "${WALK_TEST_ENGINE:-}" = dies ]; then
+  echo 'Error: listener failed: listen tcp 127.0.0.1:18080: bind: address already in use'
+  exit 1
+fi
 echo 'olst_TESTONLY'
 exec sleep 30
 ENGINE
@@ -102,7 +106,7 @@ SH
 # Browser installation is a separate boundary. This replay must not download
 # anything. The install fixture exposes the real dependency only when the
 # workflow provisions the locked web graph; removing that command must fail.
-# The nightly runs on a self-hosted runner without sudo (2026-10-16, dev#2309:
+# The nightly runs on a self-hosted runner without sudo (2026-10-16, the regression:
 # `--with-deps` died on "sudo: a password is required"), and on a GitHub-hosted one
 # that must install the system libraries, so the fixture refuses the wrong flag
 # for each runner.
@@ -183,6 +187,34 @@ for run in 2 1 0 driver driver-hosted; do
   fi
 done
 echo "OK: nightly provisions the declared driver on self-hosted and GitHub-hosted runners, reports walk results 0/1/2, and reaps its engine."
+
+# An engine that exits before it prints a token. On 2026-10-27 the nightly waited
+# 120 s on a dead engine, then `TOK="$(grep … | head -1)"` failed under bash -e and pipefail:
+# the step ended with a bare exit 1 and the engine's own error never reached the log.
+mkdir -p "${TMP}/workflow-dies"
+: > "${TMP}/workflow-dies/output"
+started="$(date +%s)"
+set +e
+PATH="${TMP}/bin:${PATH}" WALK_TEST_TMP="${TMP}" WALK_TEST_RC=0 WALK_TEST_ENGINE=dies \
+  WALK_TEST_PW_DIR="${PW_DIR}" RUNNER_ENVIRONMENT=self-hosted \
+  RUNNER_TEMP="${TMP}/workflow-dies" \
+  GITHUB_OUTPUT="${TMP}/workflow-dies/output" \
+  bash -e "${TMP}/workflow.sh" > "${TMP}/workflow-dies/log" 2>&1
+workflow_rc=$?
+set -e
+waited="$(( $(date +%s) - started ))"
+rm -f "${TMP}/workflow-engine.pid"
+[ "${workflow_rc}" = 0 ] \
+  || { cat "${TMP}/workflow-dies/log" >&2; fail "nightly exited ${workflow_rc} on an engine that died before its token, instead of reporting it"; }
+grep -qx 'failed=true' "${TMP}/workflow-dies/output" \
+  || fail "an engine that died before its token was not classified failed=true"
+grep -q 'did not print a first-start token' "${TMP}/workflow-dies/log" \
+  || { cat "${TMP}/workflow-dies/log" >&2; fail "the nightly did not say the engine printed no token"; }
+grep -q 'address already in use' "${TMP}/workflow-dies/log" \
+  || { cat "${TMP}/workflow-dies/log" >&2; fail "the engine's own error did not reach the nightly log"; }
+[ "${waited}" -lt 30 ] \
+  || fail "the nightly waited ${waited}s on an engine that had already exited"
+echo "OK: an engine that dies before its token is reported with its own error, at once."
 
 # The browser leg reuses that pnpm layout: no root playwright and no direct
 # web/playwright link. Only @playwright/test is visible to the copied real loader.
@@ -372,3 +404,59 @@ grep -q 'route/stall' <(sed -n '/screen(s), .* with findings/,$p' "${TMP}/walk3.
   || { cat "${TMP}/walk3.log" >&2; fail "the stalled screen must appear in the findings summary, not only in its own line"; }
 
 echo "OK: console-walk tells its three answers apart — stream vs stall vs 404, and 'could not look' names where it looked."
+
+# ---------------------------------------------------------------------------
+# Leg 4 — SIGN-IN WAITS FOR SETUP TO FINISH (#3507).
+#
+# The setup form submits with fetch and stays on the same document, so `networkidle`, already
+# reached, answered at once. On the nightly of 2026-10-28 the login step then found the setup
+# form's password box, clicked its submit button while setup was still creating the
+# administrator (the button disabled itself), and spent 30 s on a click that could not happen:
+# `login: NAV locator.click: Timeout 30000ms exceeded`. Here setup answers after 2.5 s and
+# then shows a signed-in shell, so a walk that does not wait for setup reports exactly that.
+# ---------------------------------------------------------------------------
+cat > "${TMP}/setup-decoy.mjs" <<'JS'
+import { createServer } from 'node:http'
+const setup = `<!doctype html><html><body><form id="f">
+<input id="token"><input id="setup-email" type="email"><input id="setup-password" type="password">
+<button type="submit">Create administrator</button></form>
+<script>
+document.getElementById('f').addEventListener('submit', async (e) => {
+  e.preventDefault()
+  e.submitter.disabled = true
+  await fetch('/api/setup', { method: 'POST' })
+  history.pushState({}, '', '/onboarding')
+  document.body.innerHTML = '<nav><a href="/clean">clean</a></nav><p>signed in</p>'
+})
+</script></body></html>`
+const srv = createServer((req, res) => {
+  const u = req.url.split('?')[0]
+  if (u === '/api/setup') {
+    setTimeout(() => { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}') }, 2500)
+    return
+  }
+  res.writeHead(200, { 'content-type': 'text/html' })
+  res.end(u === '/' ? setup : '<!doctype html><html><body><nav><a href="/clean">clean</a></nav><p>clean</p></body></html>')
+})
+srv.listen(0, '127.0.0.1', () => console.log(srv.address().port))
+JS
+node "${TMP}/setup-decoy.mjs" > "${TMP}/port4" 2>"${TMP}/decoy4.err" &
+SRV4_PID=$!
+for _ in $(seq 1 50); do [ -s "${TMP}/port4" ] && break; sleep 0.1; done
+PORT4="$(cat "${TMP}/port4" 2>/dev/null || true)"
+[ -n "${PORT4}" ] || { cat "${TMP}/decoy4.err" >&2; fail "setup decoy never reported a port"; }
+
+set +e
+OLIVARES_WALK_BASE="http://127.0.0.1:${PORT4}" \
+OLIVARES_WALK_OUT="${TMP}/out4" \
+OLIVARES_WALK_IDLE_MS=2000 \
+OLIVARES_WALK_TOKEN='olst_TESTONLY' \
+  node scripts/console-walk.mjs > "${TMP}/walk4.log" 2>&1
+RC4=$?
+set -e
+
+grep -q '^\[login\]' "${TMP}/walk4.log" \
+  && { cat "${TMP}/walk4.log" >&2; fail "the walk ran its login step on the setup form while setup was still creating the administrator"; }
+[ "${RC4}" = "0" ] \
+  || { cat "${TMP}/walk4.log" >&2; fail "a setup that takes 2.5 s must end in a clean walk, got exit ${RC4}"; }
+echo "OK: the walk waits for setup to finish before it signs in."

@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/model"
 )
 
@@ -37,7 +38,7 @@ var providerCodingModels = map[string]string{
 // claudeModelAliases are the Claude Code aliases a launch accepts and never hands
 // the tool: Claude Code resolves an alias, and picks its own default when no model
 // is named, in each process it starts, and one account measured `opus` on
-// claude-opus-4-8 in one session and claude-opus-5-5 in the next (dev#2786). The
+// claude-opus-4-8 in one session and claude-opus-5-5 in the next. The
 // launch passes and records the exact id; the tool's `[1m]` suffix is kept.
 var claudeModelAliases = map[string]string{
 	"default": providerCodingModels[ProviderKindAnthropic],
@@ -74,9 +75,13 @@ func resolveClaudeModelAlias(p *CreateRunParams) {
 }
 
 // initialProviderModel uses only the successful bound test's usable model IDs.
-func initialProviderModel(kind string, models []string) string {
+// A preset's own default, when the vendor lists it, comes before the kind's.
+func initialProviderModel(kind, service string, models []string) string {
 	usable := localModelNames(models)
 	usable = slices.DeleteFunc(usable, func(s string) bool { return !validOpenProviderTerm(s) })
+	if row, ok := modelprovider.LookupPreset(service); ok && slices.Contains(usable, row.Models.Default) {
+		return row.Models.Default
+	}
 	if preferred := providerCodingModels[kind]; slices.Contains(usable, preferred) {
 		return preferred
 	}
@@ -96,19 +101,59 @@ func (m *Module) resolveProviderDefaultModel(ctx context.Context, tenant model.T
 	if err != nil {
 		return err
 	}
-	if rec.State != ProviderRecordActive || rec.ProbeState == ProbeRefused || rec.DefaultModel == nil || *rec.DefaultModel == "" {
+	if rec.State != ProviderRecordActive || rec.ProbeState == ProbeRefused || rec.DefaultModel == nil {
 		return nil
 	}
-	if !validOpenProviderTerm(*rec.DefaultModel) || rec.ProbeState != ProbeOK || !slices.Contains(localModelNames(rec.Models), *rec.DefaultModel) {
+	selected := *rec.DefaultModel
+	if selected == "" && rec.ProbeState != ProbeNever {
+		if preset, ok := modelprovider.LookupPreset(rec.Service); ok {
+			selected = preset.Models.Default
+		}
+	}
+	if selected == "" {
+		return nil
+	}
+	// An unavailable catalog says nothing about a chosen model, just as for an
+	// explicit launch choice. A successful list remains authoritative, even empty.
+	available := rec.ProbeState == ProbeNever || rec.ProbeState == ProbeUnreachable ||
+		rec.ProbeState == ProbeOK && slices.Contains(localModelNames(rec.Models), selected)
+	if !validOpenProviderTerm(selected) || !available {
 		return &codedRunErr{conflictErr("The saved default model for " + rec.DisplayName +
 			" is unavailable: test this provider and choose a listed default in Providers, or choose a model in New session or with --model."),
 			"provider_default_model_unavailable"}
 	}
-	p.Model = *rec.DefaultModel
+	p.Model = selected
 	if p.ProviderHome.Driver == providerDriverOpenCode {
 		// Saved IDs belong to the endpoint. Translate once before admission and
 		// the run snapshot; an explicit native choice above is never translated.
 		p.Model = openCodeModelValue(BoundProvider{Kind: rec.Kind}, p.Model, true)
 	}
 	return nil
+}
+
+// providerPresetModelEnv is minted only for a Claude launch on a preset. Saved
+// defaults override the main role; background roles keep the vendor's map.
+func providerPresetModelEnv(rec ProviderRecord) []EnvVar {
+	row, ok := modelprovider.LookupPreset(rec.Service)
+	if !ok || row.Kind != ProviderKindAnthropic {
+		return nil
+	}
+	main := row.Models.Default
+	if rec.DefaultModel != nil && *rec.DefaultModel != "" {
+		main = *rec.DefaultModel
+	}
+	var env []EnvVar
+	for _, item := range []EnvVar{
+		{Name: "ANTHROPIC_MODEL", Value: main},
+		{Name: "ANTHROPIC_DEFAULT_OPUS_MODEL", Value: row.Models.Opus},
+		{Name: "ANTHROPIC_DEFAULT_SONNET_MODEL", Value: row.Models.Sonnet},
+		{Name: "ANTHROPIC_DEFAULT_HAIKU_MODEL", Value: row.Models.Haiku},
+		{Name: "ANTHROPIC_DEFAULT_FABLE_MODEL", Value: row.Models.Fable},
+		{Name: "CLAUDE_CODE_SUBAGENT_MODEL", Value: row.Models.Subagent},
+	} {
+		if item.Value != "" {
+			env = append(env, item)
+		}
+	}
+	return env
 }

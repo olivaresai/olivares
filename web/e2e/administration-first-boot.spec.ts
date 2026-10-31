@@ -8,7 +8,7 @@ const email = 'admin@example.com'
 const password = 'correct-horse-battery-staple-42'
 
 // Setup consumes a one-time token: scripts/web-e2e.sh gives this spec its own engine.
-test('Administration renders within five seconds on a fresh installation', async ({
+test('the people list renders within five seconds on a fresh installation', async ({
   page,
 }) => {
   test.skip(!setupToken, 'Run via scripts/web-e2e.sh with a fresh engine')
@@ -20,25 +20,30 @@ test('Administration renders within five seconds on a fresh installation', async
   await page.waitForURL('**/onboarding')
   await expect(
     page
-      .getByRole('navigation', { name: 'Journeys', exact: true })
+      .getByRole('navigation', { name: 'Main navigation', exact: true })
       .getByRole('link', { name: 'Now', exact: true }),
   ).toBeVisible()
 
-  // A fresh installation lists every page the person may open: System & settings offers
-  // the setup wizard and Administration, and the address opens Administration directly.
-  await page.goto('/areas/system')
-  const directory = page.locator('[data-slot="area-directory"]')
+  // A fresh installation lists every page the person may open: Settings offers the setup
+  // wizard beside it, People & groups offers Administration, and the address opens the
+  // people list (People & groups, 0.5) directly.
+  await page.goto('/settings')
+  const row = page.locator('[data-slot="destination-sections"]')
   await expect(
-    directory.getByRole('link', { name: 'Setup wizard', exact: true }),
+    row.getByRole('link', { name: 'Setup wizard', exact: true }),
   ).toBeVisible()
+  await page
+    .locator('[data-slot="sidebar"]')
+    .getByRole('link', { name: 'People & groups', exact: true })
+    .click()
   await expect(
-    directory.getByRole('link', { name: 'Administration', exact: true }),
+    row.getByRole('link', { name: 'Administration', exact: true }),
   ).toBeVisible()
 
   const started = performance.now()
-  await page.goto('/console')
+  await page.goto('/identity?tab=people')
   await expect(
-    page.getByRole('heading', { name: 'Administration', exact: true }),
+    page.getByRole('heading', { name: 'Identity & access', exact: true }),
   ).toBeVisible({ timeout: 5_000 })
   await expect(page.getByRole('tabpanel')).toContainText(email, {
     timeout: 5_000,

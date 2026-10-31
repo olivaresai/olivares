@@ -57,7 +57,7 @@ import (
 // all non-sensitive — and a hashed DetailHash. The same bar as skillscan.go.
 
 // findingAuthPosture is the CONTRACT kind of a Claude Code credential-mode posture finding
-//. Consumers (console, compliance) key on this string. It is HOST-level (one finding
+// . Consumers (console, compliance) key on this string. It is HOST-level (one finding
 // family per host per Gather), distinct from the per-skill skill_posture findings.
 const findingAuthPosture = "claude_auth_posture"
 

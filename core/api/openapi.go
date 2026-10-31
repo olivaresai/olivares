@@ -302,6 +302,14 @@ func buildOpenAPI() map[string]any {
 			"get", op("getBrowserSession", "Restore cookie session metadata", tagAuth, true, jsonResp("OK", ref("BrowserSessionResponse")), nil),
 			"post", op("migrateBrowserSession", "Rotate a legacy bearer into a cookie without extending expiry", tagAuth, true, jsonResp("OK", ref("BrowserSessionResponse")), nil)),
 		"/v1/auth/logout", obj("post", op204("logout", "Revoke the calling session", tagAuth, true)),
+		"/v1/auth/sessions", obj("get", op("listAuthSessions",
+			"List the calling person's live sign-ins with creation and last-use metadata, client kind and the current session marked",
+			tagAuth, true, jsonResp("OK", listOf(ref("AuthSession"))), nil)),
+		"/v1/auth/sessions/pairing", obj("post", op("createSessionPairing", "Create a ten-minute one-time link for a named device", tagAuth, true, jsonResp("OK", ref("SessionPairing")), body(ref("SessionPairingInput")))),
+		"/v1/auth/sessions/pairing/accept", obj("post", op("acceptSessionPairing", "Consume a one-time link and sign in this device", tagAuth, false, jsonResp("OK", ref("SessionResponse")), body(ref("SessionPairingAcceptInput")))),
+		"/v1/auth/sessions/{id}", obj("delete", op204("deleteAuthSession",
+			"End one of the calling person's other sessions; cross-user ids are concealed and the current session is refused",
+			tagAuth, true, idParam)),
 		"/v1/account/password", obj("post", passwordChange),
 		"/v1/auth/refresh", obj("post", op("refreshToken", "Renew the calling session token (rotates the credential, extends expiry)", tagAuth, true,
 			jsonResp("OK", ref("SessionResponse")), nil)),
@@ -515,6 +523,8 @@ func buildOpenAPI() map[string]any {
 			"post", op204("disableSuperadmin", "Disable a superadmin account — non-destructive, reversible (superadmin, AAL3 step-up)", tagUsers, true, idParam)),
 		"/v1/users/{id}/enable", obj(
 			"post", op204("enableSuperadmin", "Enable a previously disabled superadmin account (superadmin, AAL3 step-up)", tagUsers, true, idParam)),
+		"/v1/users/{id}/sessions", obj(
+			"delete", op204("deleteUserSessions", "End every live session of a member in the selected organization (user:write and step-up required; audited)", tagUsers, true, idParam, tenantParam)),
 
 		// ── Tokens ─────────────────────────────────────────────────────
 		"/v1/tokens", obj(
@@ -967,6 +977,9 @@ func buildOpenAPI() map[string]any {
 			"Server-Sent Events stream of one DR job's progress: event: job frames with the DRJob payload, heartbeats as comments, until the job completes or fails",
 			tagConsole, true, "SSE stream of DR job progress", "text/event-stream"),
 			drIDParam("id", "The job id.")),
+		"/v1/console/appliance/storage/authorize", obj("post", op("authorizeStorageIntent", "Authorize one exact storage intent without changing a disk", tagConsole, true,
+			jsonResp("OK", obj("type", "object", "properties", obj("allowed", obj("type", "boolean"), "actor", obj("type", "string"), "valid_until", obj("type", "string", "format", "date-time")), "required", arr("allowed", "actor", "valid_until"))),
+			body(obj("type", "object", "additionalProperties", false, "properties", obj("task", obj("type", "string", "enum", arr("storage.backup", "storage.grow")), "target", obj("type", "string", "pattern", "^drive:[0-9a-f]{64}$"), "intent_digest", obj("type", "string", "pattern", "^[0-9a-f]{64}$")), "required", arr("task", "target", "intent_digest"))))),
 		"/v1/console/dr/schedule", obj(
 			"get", op("getDRSchedule", "The scheduled-backup configuration and its last run's outcome", tagConsole, true,
 				jsonResp("OK", ref("DRSchedule")), nil),
@@ -1243,6 +1256,8 @@ func buildOpenAPI() map[string]any {
 			"name", obj("type", "string"),
 			"slug", obj("type", "string", "pattern", "^[a-z0-9][a-z0-9-]{0,62}$"),
 			"settings", obj("type", "object", "additionalProperties", true),
+			"parent_id", obj("type", "string",
+				"description", "The parent department of the same tenant; absent or empty creates a root."),
 		), "required", arr("name", "slug")),
 
 		"UpdateWorkspaceInput", obj("type", "object", "properties", obj(
@@ -1298,6 +1313,7 @@ func buildOpenAPI() map[string]any {
 		), "required", arr("email", "password")),
 
 		"SetupInput", obj("type", "object", "properties", obj(
+			"backup_key_saved", obj("type", "boolean", "description", "Required true on an appliance: the operator confirms saving the recovery key separately from the server and its backups."),
 			"token", obj("type", "string", "description", "One-time setup token from server startup"),
 			"email", obj("type", "string", "format", "email"),
 			"password", obj("type", "string", "format", "password", "minLength", 12),
@@ -1319,6 +1335,20 @@ func buildOpenAPI() map[string]any {
 		), "required", arr("id", "email", "status", "is_superadmin", "created_at", "organization")),
 
 		"SessionResponse", obj("oneOf", arr(ref("LoginResponse"), ref("BrowserSessionResponse"))),
+		"SessionPairingInput", obj("type", "object", "properties", obj("name", obj("type", "string", "minLength", 1, "maxLength", 80)), "required", arr("name")),
+		"SessionPairingAcceptInput", obj("type", "object", "properties", obj("token", obj("type", "string")), "required", arr("token")),
+		"SessionPairing", obj("type", "object", "properties", obj("token", obj("type", "string"), "expires_at", obj("type", "string", "format", "date-time")), "required", arr("token", "expires_at")),
+		"AuthSession", obj("type", "object", "properties", obj(
+			"id", obj("type", "string", "format", "uuid"),
+			"created_at", obj("type", "string", "format", "date-time"),
+			"last_used_at", obj("type", arr("string", "null"), "format", "date-time",
+				"description", "The latest observed authentication, to within a minute; null only for a legacy row not yet observed."),
+			"kind", obj("type", "string", "enum", arr("browser", "token", "unknown", "pairing"),
+				"description", "Display-only transport of the latest observed use, or pairing for a pending link. Unknown is possible for a legacy row."),
+			"name", obj("type", "string", "description", "Owner-chosen paired device label; empty for ordinary sign-ins."),
+			"current", obj("type", "boolean"),
+			"expires_at", obj("type", "string", "format", "date-time"),
+		), "required", arr("id", "created_at", "last_used_at", "kind", "name", "current", "expires_at")),
 		"BrowserSessionResponse", obj("type", "object", "properties", obj(
 			"csrf_token", obj("type", "string"),
 			"session_id", obj("type", "string", "format", "uuid"),
@@ -1452,6 +1482,8 @@ func buildOpenAPI() map[string]any {
 			"version", obj("type", "string"),
 			"engine", obj("type", "string"),
 			"setup_required", obj("type", "boolean"),
+			"backup_key_required", obj("type", "boolean", "description", "Appliance setup requires confirmation that the recovery key was saved separately."),
+			"backup_key_path", obj("type", "string", "description", "The appliance's configured recovery-secret file, including an explicit passphrase-file override; absent when DR is unavailable."),
 			"edition", obj("type", "string"),
 			"tls_pin_sha256", obj("type", "string",
 				"description", "The --pin-sha256 value of the certificate this engine serves (base64 SHA-256 of its SubjectPublicKeyInfo). Absent when the engine serves plain HTTP."),
@@ -1899,11 +1931,14 @@ func buildOpenAPI() map[string]any {
 			"subject", ref("EffectiveRightsRef"),
 			"node", ref("EffectiveRightsRef"),
 			"assurance", obj("type", "integer", "description", "The authenticator assurance level the subject was evaluated at."),
+			"membership_as_of", obj("type", "string", "format", "date-time", "description", "The oldest update timestamp of the directory group and membership rows used for this subject; absent without directory groups."),
 			"path", obj("type", "array", "items", ref("EffectiveRightsStep"),
 				"description", "The node's container lineage, outermost first."),
 			"rights", obj("type", "array", "items", obj("type", "object", "properties", obj(
 				"name", obj("type", "string"),
 				"state", obj("type", "string", "description", "The right's decision state as the engine reports it."),
+				"because", obj("type", "array", "items", ref("EffectiveRightsGrant"), "description", "The determining grants, when the right is held by policy."),
+				"removed_by", obj("type", "array", "items", ref("EffectiveRightsRemoval"), "description", "The inheritance filter or forbid that removed the right."),
 			), "required", arr("name", "state"))),
 		), "required", arr("subject", "node", "assurance", "path", "rights")),
 		"EffectiveRightsRef", obj("type", "object", "properties", obj(
@@ -1915,6 +1950,22 @@ func buildOpenAPI() map[string]any {
 			"ref", obj("type", "string"),
 			"workspace", obj("type", "string", "description", "Set only on an agent group that lives in a different workspace than the node."),
 		), "required", arr("kind", "ref")),
+		"EffectiveRightsGrant", obj("type", "object", "properties", obj(
+			"grant_id", obj("type", "string", "description", "The stored scoped-grant row, when this grant came from one."),
+			"policy_id", obj("type", "string", "description", "The determining Cedar policy, for a free-form grant without a scoped-grant row."),
+			"node", ref("EffectiveRightsStep"),
+			"subject", ref("EffectiveRightsSubject"),
+		), "required", arr("node", "subject")),
+		"EffectiveRightsSubject", obj("type", "object", "properties", obj(
+			"kind", obj("type", "string"),
+			"ref", obj("type", "string"),
+			"chain", obj("type", "array", "items", ref("EffectiveRightsStep"), "description", "The user followed by the direct and ancestor directory groups that reached the matched group."),
+		), "required", arr("kind", "ref")),
+		"EffectiveRightsRemoval", obj("type", "object", "properties", obj(
+			"kind", obj("type", "string", "description", "irf for an inherited-rights filter, or forbid for an authored forbid."),
+			"id", obj("type", "string", "description", "The filter row or forbid policy that removed the right."),
+			"node", ref("EffectiveRightsStep"),
+		), "required", arr("kind")),
 
 		// ── WebAuthn credentials (panel) ────────────────────────
 		"WebAuthnCeremonyOptions", obj("type", "object", "properties", obj(
@@ -2136,14 +2187,27 @@ func buildOpenAPI() map[string]any {
 			"done_at", obj("type", "string", "format", "date-time"),
 		), "required", arr("id", "kind", "status", "phase", "progress", "started_at")),
 		"DRSchedule", obj("type", "object", "properties", obj(
+			"local_target", obj("type", "string", "description", "Managed local backup disk mountpoint; absent uses the original backup directory."),
+			"verify_cron", obj("type", "string", "description", "Independent scratch-restore verification cadence in UTC; empty disables verification."),
+			"rpo_hours", obj("type", "integer", "minimum", 1, "maximum", 8760),
+			"offsite", ref("DROffsite"),
+			"last_verify", obj("type", "string", "format", "date-time"),
+			"last_verify_status", obj("type", "string", "enum", arr("running", "completed", "failed")),
+			"last_verify_error", obj("type", "string"),
+			"last_backup", obj("type", "string", "format", "date-time", "description", "Start of the last successfully written scheduled backup, including when its later offsite copy failed."),
+			"backup_age_seconds", obj("type", "integer", "minimum", 0),
+			"rpo_exceeded", obj("type", "boolean"),
+			"target_free_bytes", obj("type", "integer", "minimum", 0, "description", "Linux target filesystem space available to the service; absent when unavailable."),
 			"enabled", obj("type", "boolean"),
 			"cron", obj("type", "string"),
 			"retain_days", obj("type", "integer", "minimum", 0),
 			"last_run", obj("type", "string", "format", "date-time"),
 			"next_run", obj("type", "string", "format", "date-time"),
-			"last_run_status", obj("type", "string", "enum", arr("completed", "failed"),
+			"last_run_status", obj("type", "string", "enum", arr("running", "completed", "failed"),
 				"description", "The most recent scheduled run's outcome, so a failing schedule is not a silent gap."),
 			"last_run_error", obj("type", "string"),
+			"offsite_lock", obj("type", "string", "enum", arr("compliance", "governance", "no_default", "none", "unknown"),
+				"description", "The offsite bucket's S3 Object Lock as the last scheduled copy read it. Only compliance (a default COMPLIANCE retention) keeps the engine's copies from a stolen server credential; absent until a copy ran against this bucket."),
 			"require_dual_control_restore", obj("type", "boolean",
 				"description", "The effective console restore gate. When armed, a distinct administrator account must approve; CLI restore uses a declared-operator record instead, so estates requiring approval for every restore must also control host access."),
 			"dual_control_disarm_effective_at", obj("type", "string", "format", "date-time"),
@@ -2152,12 +2216,31 @@ func buildOpenAPI() map[string]any {
 		"DRScheduleInput", obj("type", "object", "additionalProperties", false,
 			"description", "The schedule's operator-owned fields. The armed state of the dual-control gate is preserved; server-owned bookkeeping (disarm instant, run history) is ignored on write.",
 			"properties", obj(
+				"local_target", obj("type", "string", "description", "Managed writable ext4 backup mountpoint under /mnt/olivares-backups/<filesystem-uuid>; omitted preserves it, empty restores the default directory."),
+				"verify_cron", obj("type", "string", "description", "UTC cron for scratch verification; omitted preserves it, empty disables it."),
+				"rpo_hours", obj("type", "integer", "minimum", 1, "maximum", 8760),
+				"offsite", ref("DROffsite"),
 				"enabled", obj("type", "boolean"),
 				"cron", obj("type", "string", "description", "The runner's cron grammar; validated on write."),
 				"retain_days", obj("type", "integer", "minimum", 0),
 				"require_dual_control_restore", obj("type", "boolean",
 					"description", "Arm (true) or request the disarm of (false) the dual-control restore gate. Disarm takes effect at the engine's persisted instant, never immediately."),
 			), "required", arr("enabled", "cron", "retain_days")),
+		"DROffsite", obj("type", "object", "additionalProperties", false, "properties", obj(
+			"endpoint", obj("type", "string", "description", "HTTPS S3-compatible endpoint without userinfo; empty uses AWS S3."),
+			"bucket", obj("type", "string", "description", "An empty bucket disables the offsite copy."),
+			"region", obj("type", "string"),
+			"prefix", obj("type", "string"),
+			"credential_ref", obj("type", "string", "description", "store:<name> of a global sealed secret containing JSON access_key_id, secret_access_key and optional session_token. Values never appear in schedule state."),
+			"gfs", ref("DRGFS"),
+		), "required", arr("bucket", "credential_ref", "gfs")),
+		"DRGFS", obj("type", "object", "additionalProperties", false, "properties", obj(
+			"daily", obj("type", "integer", "minimum", 0, "maximum", 3650),
+			"weekly", obj("type", "integer", "minimum", 0, "maximum", 3650),
+			"monthly", obj("type", "integer", "minimum", 0, "maximum", 3650),
+			"yearly", obj("type", "integer", "minimum", 0, "maximum", 3650),
+			"keep_last", obj("type", "integer", "minimum", 0, "maximum", 3650),
+		), "required", arr("daily", "weekly", "monthly", "yearly", "keep_last")),
 
 		// ── Enterprise activation ────────────────────────────
 		"ActivationStatus", obj("type", "object", "properties", obj(

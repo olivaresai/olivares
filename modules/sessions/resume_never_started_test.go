@@ -10,7 +10,7 @@ import (
 )
 
 // A session that ended before its first turn has no conversation to continue
-// (HU-26). Resuming it starts it again, in the same folder, with the same
+// . Resuming it starts it again, in the same folder, with the same
 // settings: one new process, no --resume, the same directory.
 func TestResume_ANeverStartedSessionStartsAgain(t *testing.T) {
 	t.Parallel()

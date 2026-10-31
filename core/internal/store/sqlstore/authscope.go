@@ -118,12 +118,12 @@ func (a *authScope) GroupMembers() store.Repository[model.UserGroupMember] {
 }
 
 func (a *authScope) Sessions() store.Repository[model.AuthSession] {
-	inner := newTypedRepo(a.ts.repo(authSessionDescriptor), authSessionCodec)
+	inner := newTypedRepo(a.ts.repo(authSessionDescriptorV28), authSessionCodec)
 	return authSessionAuthorityRepo(a.ts, inner)
 }
 
 func (a *authScope) Tokens() store.Repository[model.APIToken] {
-	inner := newTypedRepo(a.ts.repo(apiTokenDescriptor), apiTokenCodec)
+	inner := newTypedRepo(a.ts.repo(apiTokenDescriptorV29), apiTokenCodec)
 	return authTokenAuthorityRepo(a.ts, inner)
 }
 

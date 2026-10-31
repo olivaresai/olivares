@@ -43,6 +43,8 @@
     "empty": "Ancora nessuna cartella di sessione. Una cartella compare qui quando una sessione parte al suo interno.",
     "loading": "Lettura delle cartelle delle sessioni…",
     "unavailable": "Le cartelle delle sessioni non sono disponibili.",
-    "truncationHint": "Apri Sessioni per vedere tutte le cartelle."
+    "truncationHint": "Apri Sessioni per vedere tutte le cartelle.",
+    "filter": "Trova una cartella",
+    "noMatch": "Nessuna cartella corrisponde a «{{query}}»."
   }
 }

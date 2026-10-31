@@ -212,16 +212,21 @@ describe('Approvals: each request says what runs, what it reaches and the rule t
         'Matched: Database migrations need a second person',
       ),
     ).toBeInTheDocument()
-    expect(
-      await within(row).findByText(
+    await waitFor(() =>
+      expect(row).toHaveTextContent(
         'Reaches: /srv/payments-api (write), api.openai.com',
       ),
-    ).toBeInTheDocument()
+    )
+    expect(
+      row.querySelector(
+        '[title="Reaches: /srv/payments-api (write), api.openai.com"]',
+      ),
+    ).not.toBeNull()
     // A new network destination reaches the host it names; no rule matched it.
     const other = rowOf('Terraform needs the provider registry')
-    expect(
-      within(other).getByText('Reaches: registry.terraform.io'),
-    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(other).toHaveTextContent('Reaches: registry.terraform.io'),
+    )
     expect(
       within(other).getByText('Matched: no rule, so the default applies'),
     ).toBeInTheDocument()
@@ -236,9 +241,43 @@ describe('Approvals: each request says what runs, what it reaches and the rule t
         'Matched: Database migrations need a second person',
       ),
     ).toBeInTheDocument()
-    expect(
-      await within(panel).findByText(
+    await waitFor(() =>
+      expect(panel).toHaveTextContent(
         'Reaches: /srv/payments-api (write), api.openai.com',
+      ),
+    )
+  })
+
+  it('keeps dollar replacement characters literal in the full reach tooltip', async () => {
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [
+        {
+          run_ref: 'run-1',
+          name: 'Payments migration',
+          workspace_ref: 'ws-1',
+          state: 'running',
+          pending_approval_ref: 'apr-migrate',
+          reaches: {
+            folders: [{ path: '/srv/a$$b$&c', access: 'write' }],
+            hosts: ['api.openai.com'],
+          },
+        } as never,
+      ],
+      has_more: false,
+    })
+    api.listApprovals.mockResolvedValue({
+      items: [migration],
+      has_more: false,
+    })
+    wrap(<GovernanceView />)
+    const row = await waitFor(() => {
+      const found = rowOf('pnpm db:migrate')
+      expect(found).toBeDefined()
+      return found
+    })
+    expect(
+      await within(row).findByTitle(
+        'Reaches: /srv/a$$b$&c (write), api.openai.com',
       ),
     ).toBeInTheDocument()
   })
@@ -513,11 +552,11 @@ describe('Approvals: what cannot be read is said, never guessed', () => {
     api.listApprovals.mockResolvedValue({ items: [migration], has_more: false })
     wrap(<GovernanceView />)
     await waitFor(() => expect(rowOf('pnpm db:migrate')).toBeDefined())
-    expect(
-      await within(rowOf('pnpm db:migrate')).findByText(
+    await waitFor(() =>
+      expect(rowOf('pnpm db:migrate')).toHaveTextContent(
         'Reaches: /srv/payments-api (write), more that could not be read',
       ),
-    ).toBeInTheDocument()
+    )
   })
 })
 

@@ -175,8 +175,8 @@ func TestProfileAccess_LaunchUnderAnUnassignedProfileIsRefusedBeforeAnySpawn(t *
 
 	access.deny(f.b)
 	r := f.launchUnder(t, f.b)
-	if r.code != http.StatusForbidden || !strings.Contains(r.raw, "not assigned") {
-		t.Fatalf("launch under an unassigned profile = %d %s, want 403 not assigned", r.code, r.raw)
+	if r.code != http.StatusForbidden || !strings.Contains(r.raw, "request access from a department admin or owner") {
+		t.Fatalf("launch under an unassigned profile = %d %s, want 403 with the request-access route", r.code, r.raw)
 	}
 	if f.runCount(t) != runs || launchCount(f.fr) != spawned {
 		t.Fatalf("a refused launch left a run row (%d -> %d) or spawned a child (%d -> %d)", runs, f.runCount(t), spawned, launchCount(f.fr))

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package agentcore is the Olivares AI connector for AWS Bedrock AgentCore
-//. It reads the per-account agent directory of the
+// . It reads the per-account agent directory of the
 // bedrock-agentcore-control plane across four service surfaces:
 //
 //   - Identity: workload identities, OAuth2/API-key credential providers.

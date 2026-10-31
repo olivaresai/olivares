@@ -143,6 +143,7 @@
     "actorHint": "Identifiant d’acteur d’audit — jamais une adresse e-mail. L’identité est résolue depuis l’annuaire, et non affichée ici.",
     "expiredAt": "Expirée {{time}}",
     "approveOnce": "Approuver une fois",
+    "approveForSession": "Approuver pour cette session",
     "approving": "Approbation…",
     "deny": "Rejeter",
     "noMatch": "Aucune demande ne correspond à la recherche",
@@ -220,6 +221,7 @@
     "trailEmpty": "Aucune décision consignée pour l’instant",
     "trailEmptyHint": "Chaque décision sur cette approbation — qui a décidé, quand et pourquoi — est consignée ici. Personne n’a encore décidé.",
     "decisionApprove": "Approuvé",
+    "decisionApproveForSession": "Approuvé pour cette session",
     "decisionReject": "Rejeté",
     "reenableNeedsAdmins": "Deux autres comptes administrateur doivent approuver. Créez-les dans Identité et accès, ou avec `olivares users create`.",
     "openIdentity": "Ouvrir Identité et accès",
@@ -687,14 +689,19 @@
     "matched": "Règle appliquée : {{rule}}",
     "matchedDefault": "Règle appliquée : aucune, la valeur par défaut s’applique",
     "matchedUnreadable": "Règle appliquée : une règle que vous ne pouvez pas lire",
-    "reaches": "Atteint : {{list}}",
+    "reaches": "Atteint :",
     "reachFolder": {
-      "write": "{{path}} (écriture)",
-      "read": "{{path}} (lecture seule)",
-      "unknown": "{{path}} (accès inconnu)"
+      "write": "<path /> (écriture)",
+      "read": "<path /> (lecture seule)",
+      "unknown": "<path /> (accès inconnu)"
     },
     "matchedUnknown": "Règle appliquée : une règle qui n’a pas pu être lue",
-    "reachIncomplete": "d’autres éléments illisibles"
+    "reachIncomplete": "d’autres éléments illisibles",
+    "rule": {
+      "default": "Aucune règle, la valeur par défaut s'applique",
+      "unreadable": "Une règle que vous ne pouvez pas lire",
+      "unknown": "Une règle qui n'a pas pu être lue"
+    }
   },
   "list": {
     "loadedOnly": "La recherche ne couvre que les lignes déjà chargées ; chargez-en davantage pour continuer."

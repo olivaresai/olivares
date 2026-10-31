@@ -16,7 +16,88 @@ import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { drApi, drKeys } from './api'
-import type { DRSchedule } from './types'
+import type { DRSchedule, DROffsite } from './types'
+import { formatDateTime } from '@/lib/format'
+
+const emptyOffsite: DROffsite = {
+  endpoint: '',
+  bucket: '',
+  region: '',
+  prefix: '',
+  credential_ref: '',
+  gfs: { daily: 7, weekly: 4, monthly: 12, yearly: 0, keep_last: 1 },
+}
+
+function ProtectionStatus({ data }: { data: DRSchedule }) {
+  const { t } = useTranslation('backups')
+  return (
+    <div className="flex flex-col gap-2" role="status">
+      <p>
+        {t('schedule.lastBackup')}:{' '}
+        {data.last_backup
+          ? formatDateTime(data.last_backup)
+          : t('schedule.notAvailable')}
+        {data.backup_age_seconds !== undefined && (
+          <>
+            {' '}
+            ·{' '}
+            {t('schedule.age', {
+              hours: Math.floor(data.backup_age_seconds / 3600),
+            })}
+          </>
+        )}
+        {data.rpo_exceeded && <> · {t('schedule.overdue')}</>}
+      </p>
+      <p>
+        {t('schedule.lastVerify')}:{' '}
+        {data.last_verify
+          ? formatDateTime(data.last_verify)
+          : t('schedule.notAvailable')}
+        {data.last_verify_status && (
+          <> · {t(`job.status.${data.last_verify_status}`)}</>
+        )}
+      </p>
+      {data.last_verify_error && (
+        <p className="text-danger">{data.last_verify_error}</p>
+      )}
+      {data.last_run_error && (
+        <p className="text-danger">{data.last_run_error}</p>
+      )}
+      {data.offsite?.bucket &&
+        data.offsite_lock &&
+        data.offsite_lock !== 'compliance' && (
+          <p className="text-warning">
+            {withInlineCommands(
+              t(
+                data.offsite_lock === 'unknown'
+                  ? 'schedule.offsiteLockUnknown'
+                  : 'schedule.offsiteLockMissing',
+                { bucket: data.offsite.bucket },
+              ),
+              'code',
+            )}
+          </p>
+        )}
+      <p>
+        {t('schedule.freeSpace')}:{' '}
+        {data.target_free_bytes !== undefined
+          ? t('units.gigabytes', {
+              value: (data.target_free_bytes / 1024 ** 3).toFixed(1),
+            })
+          : t('schedule.notAvailable')}
+      </p>
+    </div>
+  )
+}
+
+export function BackupProtectionStatus() {
+  const q = useQuery({
+    queryKey: drKeys.schedule(),
+    queryFn: () => drApi.getSchedule(),
+    refetchInterval: 60_000,
+  })
+  return q.data ? <ProtectionStatus data={q.data} /> : null
+}
 
 /** Best-effort human preview of a 5-field cron expression. Covers the common
  *  presets; anything exotic falls back to showing the raw expression. */
@@ -65,18 +146,37 @@ export function BackupSchedule() {
   const [retainDays, setRetainDays] = useState(30)
   const [dualControl, setDualControl] = useState(false)
   const [dirty, setDirty] = useState(false)
+  const [verifyCron, setVerifyCron] = useState('')
+  const [rpoHours, setRpoHours] = useState(24)
+  const [offsite, setOffsite] = useState<DROffsite>(emptyOffsite)
 
-  // Seed local state when the query resolves (or re-resolves after a mutation).
+  // Status-only refreshes must not erase a draft. Actual policy changes still
+  // reseed it, including a restore gate another administrator changed.
   // Adjust during render: an effect that setState here was the cascading-render defect.
   const data = scheduleQ.data
   const [seeded, setSeeded] = useState<DRSchedule | undefined>(undefined)
-  if (data !== undefined && data !== seeded) {
+  if (
+    data !== undefined &&
+    data !== seeded &&
+    (!dirty ||
+      data.enabled !== seeded?.enabled ||
+      data.cron !== seeded?.cron ||
+      data.retain_days !== seeded?.retain_days ||
+      data.require_dual_control_restore !==
+        seeded?.require_dual_control_restore ||
+      data.verify_cron !== seeded?.verify_cron ||
+      data.rpo_hours !== seeded?.rpo_hours ||
+      data.offsite !== seeded?.offsite)
+  ) {
     setSeeded(data)
     setEnabled(data.enabled)
     setCron(data.cron)
     setRetainDays(data.retain_days)
     setDualControl(data.require_dual_control_restore ?? false)
     setDirty(false)
+    setVerifyCron(data.verify_cron ?? '')
+    setRpoHours(data.rpo_hours ?? 24)
+    setOffsite(data.offsite ?? emptyOffsite)
   }
 
   const saveMutation = usePrivilegedMutation<void, DRSchedule>({
@@ -86,6 +186,9 @@ export function BackupSchedule() {
         cron: cron.trim(),
         retain_days: retainDays,
         require_dual_control_restore: dualControl,
+        verify_cron: verifyCron.trim(),
+        rpo_hours: rpoHours,
+        offsite,
       }),
     invalidateKeys: [drKeys.schedule()],
     successMessage: t('schedule.updated'),
@@ -113,6 +216,8 @@ export function BackupSchedule() {
           {t('schedule.description')}
         </p>
       </div>
+
+      {data && <ProtectionStatus data={data} />}
 
       <div className="flex items-center gap-3">
         <Switch
@@ -169,6 +274,80 @@ export function BackupSchedule() {
           className="w-32"
         />
       </Field>
+
+      <Field label={t('schedule.verifyCron')} htmlFor="verify-cron">
+        <Input
+          id="verify-cron"
+          value={verifyCron}
+          onChange={(e) => {
+            setVerifyCron(e.target.value)
+            markDirty()
+          }}
+          mono
+        />
+      </Field>
+      <Field label={t('schedule.rpoHours')} htmlFor="rpo-hours">
+        <Input
+          id="rpo-hours"
+          type="number"
+          min={1}
+          max={8760}
+          value={rpoHours}
+          onChange={(e) => {
+            setRpoHours(Number(e.target.value))
+            markDirty()
+          }}
+          className="w-32"
+        />
+      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {(
+          ['endpoint', 'bucket', 'region', 'prefix', 'credential_ref'] as const
+        ).map((key) => (
+          <Field
+            key={key}
+            label={t(`schedule.${key}`)}
+            htmlFor={`offsite-${key}`}
+          >
+            <Input
+              id={`offsite-${key}`}
+              value={offsite[key] ?? ''}
+              onChange={(e) => {
+                setOffsite({ ...offsite, [key]: e.target.value })
+                markDirty()
+              }}
+            />
+          </Field>
+        ))}
+      </div>
+      {offsite.bucket && (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+          {(['daily', 'weekly', 'monthly', 'yearly', 'keep_last'] as const).map(
+            (key) => (
+              <Field
+                key={key}
+                label={t(`schedule.${key}`)}
+                htmlFor={`gfs-${key}`}
+              >
+                <Input
+                  id={`gfs-${key}`}
+                  type="number"
+                  min={0}
+                  max={3650}
+                  value={offsite.gfs[key]}
+                  onChange={(e) => {
+                    setOffsite({
+                      ...offsite,
+                      gfs: { ...offsite.gfs, [key]: Number(e.target.value) },
+                    })
+                    markDirty()
+                  }}
+                />
+              </Field>
+            ),
+          )}
+        </div>
+      )}
 
       <div className="flex flex-col gap-2 border-t border-border pt-6">
         <div className="flex items-center gap-3">

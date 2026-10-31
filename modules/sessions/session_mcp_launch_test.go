@@ -111,3 +111,27 @@ func TestSessionMCPLaunchHandsClaudeAndCodexExactlyTheOneOlivaresServer(t *testi
 		})
 	}
 }
+
+func TestSessionMCPRemoteClaudeCarriesConfiguration(t *testing.T) {
+	const bearer = "fixture-bearer-must-stay-in-env"
+	spec := LaunchSpec{RunOn: "node-remote", Env: []EnvVar{{Name: envHookPEPToken, Value: bearer}}}
+	cleanup, err := ConfigureSessionMCP(&spec, "claude", t.TempDir(), "run-remote", "https://central.example/session/mcp", envHookPEPToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if len(spec.LaunchFiles) != 1 {
+		t.Fatalf("remote --mcp-config %v has no LaunchFile: %v", spec.Args, spec.LaunchFiles)
+	}
+	file := spec.LaunchFiles[0]
+	if file.Path != spec.Args[1] || file.Mode != 0o600 {
+		t.Fatalf("wrong MCP LaunchFile: %v", file)
+	}
+	raw, err := os.ReadFile(file.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != string(file.Data) || strings.Contains(string(file.Data), bearer) {
+		t.Fatal("MCP file missing data or contains credential")
+	}
+}

@@ -32,6 +32,14 @@ func TestWorkspaceProjectConfigCLIReadsAndApprovesExactHash(t *testing.T) {
 			want: ".claude/settings.json",
 		},
 		{
+			// #3076: an entry no approval can let be used says why.
+			args: []string{"project-config", "ws-project"}, method: "GET", path: "/project-config",
+			reply: map[string]any{"workspace_ref": "ws-project", "sha256": projectConfigTestHash, "approved": false, "files": []any{
+				map[string]any{"file": ".opencode", "refused": "holds more than 2048 files"},
+			}},
+			want: "cannot be approved: holds more than 2048 files",
+		},
+		{
 			args: []string{"approve-project-config", "ws-project", "--sha256", projectConfigTestHash}, method: "POST", path: "/project-config/approve",
 			body:  map[string]any{"sha256": projectConfigTestHash},
 			reply: map[string]any{"sha256": projectConfigTestHash, "actor": "user:u1", "at": "2026-10-14T12:00:00Z"},

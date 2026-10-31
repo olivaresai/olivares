@@ -122,8 +122,8 @@ test.describe('Reach real use', () => {
     await other.close()
 
     await page
-      .getByRole('navigation', { name: 'Journeys', exact: true })
-      .getByRole('link', { name: 'Tools', exact: true })
+      .getByRole('navigation', { name: 'Main navigation', exact: true })
+      .getByRole('link', { name: 'Access map', exact: true })
       .click()
     await page.getByRole('link', { name: 'Reach', exact: true }).click()
     await page.waitForURL((url) => url.pathname === '/reach')

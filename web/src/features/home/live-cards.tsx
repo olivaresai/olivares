@@ -129,9 +129,7 @@ function LiveCard({
           </span>
         </span>
         {folder && folder !== (tool ?? naming.name) ? (
-          <span className="truncate font-mono text-caption text-text-3">
-            {folder}
-          </span>
+          <span className="truncate text-caption text-text-3">{folder}</span>
         ) : null}
         {name && tool ? (
           <span className="line-clamp-2 text-body text-text [overflow-wrap:anywhere]">
@@ -142,12 +140,12 @@ function LiveCard({
           </span>
         ) : null}
         {doing?.from === 'action' && doing.text !== naming.name ? (
-          <span className="truncate font-mono text-caption text-text-2">
+          <span className="truncate text-caption text-text-2">
             {doing.text}
           </span>
         ) : null}
         {lineParts.length > 0 || at ? (
-          <span className="mt-auto flex min-w-0 items-center gap-2 pt-1 text-caption text-text-3">
+          <span className="mt-auto flex min-w-0 items-center gap-2 pt-1 text-metadata text-text-3">
             <span className="min-w-0 flex-1 truncate tabular-nums">
               {lineParts.map((part, i) => (
                 <Fragment key={i}>

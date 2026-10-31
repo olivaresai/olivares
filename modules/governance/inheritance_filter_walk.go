@@ -103,21 +103,30 @@ func requestHasScope(req auth.Request) bool {
 // are the target's own container (or the target itself, for a folder or an agent group) in
 // the graph em holds for res. Nil when nothing is filtered.
 func markFilteredNodes(ctx context.Context, sc store.Scope, req auth.Request, em cedar.EntityMap, res cedar.EntityUID) ([]cedar.EntityUID, error) {
+	marks, _, err := markFilteredNodesDetailed(ctx, sc, req, em, res)
+	return marks, err
+}
+
+// markFilteredNodesDetailed also identifies the filter rows, so the effective-rights
+// read can name the exact IRF instead of only reporting that something was filtered.
+func markFilteredNodesDetailed(ctx context.Context, sc store.Scope, req auth.Request, em cedar.EntityMap, res cedar.EntityUID) ([]cedar.EntityUID, []auth.DecisionRemoval, error) {
 	rows, err := inheritanceFiltersOf(ctx, sc, req.Resource.Kind)
 	if err != nil || len(rows) == 0 {
-		return nil, err
+		return nil, nil, err
 	}
 	reach := ancestorsOrSelf(em, res)
 	var marks []cedar.EntityUID
+	var removals []auth.DecisionRemoval
 	seen := map[cedar.EntityUID]bool{}
 	for _, f := range rows {
 		node, ok := inheritanceFilterNode(f)
 		if ok && reach[node] && !seen[node] {
 			seen[node] = true
 			marks = append(marks, node)
+			removals = append(removals, auth.DecisionRemoval{Kind: "irf", ID: f.ID, Node: decisionNode(node)})
 		}
 	}
-	return marks, nil
+	return marks, removals, nil
 }
 
 // ancestorsOrSelf is every entity the graph reaches from start by parent edges, start
@@ -203,12 +212,21 @@ func grantAtOrBelow(policies cedar.PolicyIterator, em cedar.EntityMap, creq ceda
 	if len(marks) == 0 {
 		return true
 	}
+	return len(grantPoliciesAtOrBelow(policies, em, creq, marks)) > 0
+}
+
+// grantPoliciesAtOrBelow returns the determining permits that survive the filter,
+// preserving Cedar's order so their attribution is the decision's attribution.
+func grantPoliciesAtOrBelow(policies cedar.PolicyIterator, em cedar.EntityMap, creq cedar.Request, marks []cedar.EntityUID) []cedar.PolicyID {
 	permits := permitsOf{policies}
-	_, full := cedar.Authorize(permits, em, creq)
+	_, full := authorizeCedar(permits, em, creq)
+	if len(marks) == 0 {
+		return reasonPolicyIDs(full.Reasons)
+	}
 	cutEntities := cutAbove(em, marks)
-	_, cut := cedar.Authorize(permits, cutEntities, creq)
+	_, cut := authorizeCedar(permits, cutEntities, creq)
 	if len(full.Reasons) == 0 || len(cut.Reasons) == 0 {
-		return false
+		return nil
 	}
 	// The lineage-free probe is a stand-in resource: same attributes, no parents, and an id
 	// no row can have. Stripping the real resource's parents would not do, because `in` is
@@ -221,7 +239,7 @@ func grantAtOrBelow(policies cedar.PolicyIterator, em cedar.EntityMap, creq ceda
 	bare[probe] = cedar.Entity{UID: probe, Attributes: em[creq.Resource].Attributes}
 	probeReq := creq
 	probeReq.Resource = probe
-	_, none := cedar.Authorize(permits, bare, probeReq)
+	_, none := authorizeCedar(permits, bare, probeReq)
 	lineageFree := map[cedar.PolicyID]bool{}
 	for _, r := range none.Reasons {
 		lineageFree[r.PolicyID] = true
@@ -241,12 +259,13 @@ func grantAtOrBelow(policies cedar.PolicyIterator, em cedar.EntityMap, creq ceda
 	for _, r := range full.Reasons {
 		carried[r.PolicyID] = true
 	}
-	for _, r := range cut.Reasons {
-		if carried[r.PolicyID] && !lineageFree[r.PolicyID] && anchored[r.PolicyID] {
-			return true
+	var surviving []cedar.PolicyID
+	for _, r := range reasonPolicyIDs(cut.Reasons) {
+		if carried[r] && !lineageFree[r] && anchored[r] {
+			surviving = append(surviving, r)
 		}
 	}
-	return false
+	return surviving
 }
 
 // requiresResourceAnchor proves a necessary positive resource constraint from Cedar's

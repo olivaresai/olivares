@@ -349,7 +349,7 @@ func TestPostgresMajorSupportIsARange(t *testing.T) {
 	// requires a deliberate edit to a SECOND place — this one — which is where the reviewer
 	// asks what evidence the new major has.
 	//
-	// Ratified: 15..18 (an internal design note (not shipped)). All four have
+	// Ratified: 15..18 (an internal audit). All four have
 	// been RUN since — see certifiedPostgresMajors for the dated measurement and the predicate
 	// comparison it turns on. The sentence that said only 15 had run outlived that measurement by
 	// several rounds; verifiedPostgresMajor is the PROVENANCE of the declared strings, which is a

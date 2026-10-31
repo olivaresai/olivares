@@ -20,10 +20,13 @@ import (
 // tables as the source of declared list prices; a curated fallback below keeps only
 // the rows the dataset does not carry.
 //
-// datasetAsOf is the release date of the vendored dataset (genai-prices v0.1.9,
-// 2026-09-25) — the date every dataset answer is stamped with. Bump it together
-// with the module version.
-const datasetAsOf = "2026-09-25"
+// datasetAsOf is the release date of the vendored dataset, genai-prices
+// datasetVersion — the date every dataset answer is stamped with. A module bump
+// moves both; TestDatasetAsOfMatchesLinkedModule fails until it does.
+const (
+	datasetVersion = "v0.1.13"
+	datasetAsOf    = "2026-10-15"
+)
 
 // perMTok is the unit the derived rates are expressed in (USD per million
 // tokens, the unit providers publish).

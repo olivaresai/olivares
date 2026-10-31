@@ -191,7 +191,25 @@ func TestE2E_AccessReads_SelfAudit(t *testing.T) {
 		}
 	}
 
-	// The chain still verifies after the reads.
+	// Community keeps ledger reads; independent verification requires Business.
+	if thisEdition.name == "community" {
+		code, raw := h.req("GET", "/v1/audit/verify", h.adminToken, h.tenantA, nil)
+		if code != http.StatusNotImplemented {
+			t.Fatalf("Community audit verify = %d: %s, want 501", code, raw)
+		}
+		var refusal struct {
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(raw, &refusal); err != nil {
+			t.Fatal(err)
+		}
+		assertEq(t, "audit verification refusal", refusal.Error.Code, "audit_export_unavailable")
+		return
+	}
+
+	// Business still verifies the chain after the reads.
 	v := h.getJSON(h.adminToken, h.tenantA, "/v1/audit/verify")
 	assertEq(t, "audit.ok", v["ok"], true)
 }

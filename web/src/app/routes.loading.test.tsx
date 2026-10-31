@@ -52,6 +52,7 @@ vi.mock('@/features/registry', () => ({
   ],
   NAV_AREAS: [],
   ROUTE_ALIASES: [],
+  TAB_ALIASES: [],
 }))
 vi.mock('@/features/anonymous-registry', () => ({ ANONYMOUS_VIEWS: [] }))
 vi.mock('./pages/login', () => ({ LoginPage: () => <p>Login screen</p> }))
@@ -68,8 +69,10 @@ vi.mock('./pages/settings', () => ({
 vi.mock('@/components/layout/app-frame', () => ({
   AppFrame: ({ children }: { children: ReactNode }) => <main>{children}</main>,
 }))
-vi.mock('@/components/layout/sidebar', () => ({ AreasSheet: () => null }))
-vi.mock('@/components/layout/phone-bar', () => ({ PhoneBar: () => null }))
+vi.mock('@/components/layout/sidebar', () => ({
+  Sidebar: () => null,
+  NavigationDrawer: () => null,
+}))
 vi.mock('@/components/layout/topbar', () => ({ Topbar: () => null }))
 vi.mock('@/components/layout/command-menu', () => ({ CommandMenu: () => null }))
 // The destination row is a shell decoration too; it reads the whole registry this test

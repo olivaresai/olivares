@@ -9,8 +9,11 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -84,6 +87,20 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request, mc ModuleCo
 	if !ok {
 		s.writeError(w, r, errForbidden)
 		return
+	}
+	if s.applianceDR {
+		if s.drSvc == nil {
+			s.writeError(w, r, errDRUnavailable)
+			return
+		}
+		if !in.BackupKeySaved {
+			s.badRequest(w, r, "save the appliance recovery key separately from its backups, then confirm backup_key_saved")
+			return
+		}
+		if _, err := s.drSchedulePassphrase(); err != nil {
+			s.writeError(w, r, err)
+			return
+		}
 	}
 	if err := auth.ValidateEmail(in.Email); err != nil {
 		s.writeError(w, r, err)
@@ -238,7 +255,7 @@ func firstOrgNaming(requested string) (name, slug string) {
 }
 
 // orgSlugFrom folds a human organization name into the short, URL-safe handle
-// shape the rest of the product uses for slugs (slugPattern: a leading
+// shape the rest of the product uses for slugs (SlugPattern: a leading
 // alphanumeric, then alphanumerics and hyphens, 63 chars max). It returns "" when
 // nothing usable survives, which the caller replaces with the default.
 func orgSlugFrom(name string) string {
@@ -440,4 +457,90 @@ func clientIP(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return host
+}
+
+type authSessionDTO struct {
+	Name       string  `json:"name"`
+	ID         string  `json:"id"`
+	CreatedAt  string  `json:"created_at"`
+	LastUsedAt *string `json:"last_used_at"`
+	Kind       string  `json:"kind"`
+	Current    bool    `json:"current"`
+	ExpiresAt  string  `json:"expires_at"`
+}
+
+func handleAuthSessionDTO(session model.AuthSession, current bool) authSessionDTO {
+	var lastUsed *string
+	if session.LastUsedAt != nil {
+		value := session.LastUsedAt.String()
+		lastUsed = &value
+	}
+	kind := session.ClientKind
+	if kind == "" {
+		kind = model.SessionClientUnknown
+	}
+	return authSessionDTO{
+		Name: session.DeviceName, ID: session.ID.String(), CreatedAt: session.CreatedAt.String(), LastUsedAt: lastUsed,
+		Kind: kind, Current: current, ExpiresAt: session.ExpiresAt.String(),
+	}
+}
+
+func (s *Server) handleAuthSessions(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	currentID := mc.Principal.CredID
+	sessions, err := s.authr.ListOwnSessions(r.Context(), mc.Principal)
+	if err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+	slices.SortFunc(sessions, func(a, b model.AuthSession) int {
+		if a.ID == currentID && b.ID != currentID {
+			return -1
+		}
+		if b.ID == currentID && a.ID != currentID {
+			return 1
+		}
+		return b.CreatedAt.Time().Compare(a.CreatedAt.Time())
+	})
+	out := listResponse[authSessionDTO]{Items: make([]authSessionDTO, 0, len(sessions))}
+	for _, session := range sessions {
+		out.Items = append(out.Items, handleAuthSessionDTO(session, session.ID == currentID))
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) handleAuthSessionDelete(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	id, err := model.ParseID(chi.URLParam(r, "id"))
+	if err != nil || id.IsZero() {
+		s.badRequest(w, r, "invalid session id")
+		return
+	}
+	if err := s.authr.RevokeOwnSession(r.Context(), mc.Principal, id); err != nil {
+		if errors.Is(err, auth.ErrCurrentSession) {
+			s.badRequest(w, r, err.Error())
+			return
+		}
+		s.writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleUserSessionsDelete(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	if !s.requireStepUp(w, r, mc.Principal) {
+		return
+	}
+	accountID, ok := totpAccountParam(w, r)
+	if !ok {
+		return
+	}
+	if err := s.authr.RevokeSessionsInTenant(r.Context(), mc.Principal, mc.Tenant, accountID); err != nil {
+		if errors.Is(err, auth.ErrCurrentSession) {
+			s.badRequest(w, r, "Use your own sign-ins to end your sessions.")
+			return
+		}
+		s.writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

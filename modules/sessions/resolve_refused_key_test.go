@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// Root on FH 099: the automatic choice skips a key whose last provider test was refused
+// Root on first-hour check: the automatic choice skips a key whose last provider test was refused
 // when anything else can run the tool (the readiness the console shows). When the
 // refused key is the only option it is still the answer, and the launch says the key
 // was refused.

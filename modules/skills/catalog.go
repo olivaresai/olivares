@@ -883,12 +883,18 @@ func (m *Module) stageArtifact(tenant model.TenantID, id model.ID, pack *Validat
 			mode = 0500
 		}
 		modeErr := file.Chmod(mode)
-		syncErr := file.Sync()
 		closeErr := file.Close()
-		if writeErr != nil || modeErr != nil || syncErr != nil || closeErr != nil {
+		if writeErr != nil || modeErr != nil || closeErr != nil {
 			return nil, refuse("source_unavailable", "catalog artifact write failed")
 		}
-		reread, err := root.ReadFile(target)
+	}
+	// Flush only this revision, after writing every file and before reading it back.
+	// A filesystem-wide sync can wait for unrelated writers past the request deadline.
+	if err := syncStagedTree(root, name, pack.Manifest); err != nil {
+		return nil, refuse("source_unavailable", "catalog artifact sync failed")
+	}
+	for _, entry := range pack.Manifest {
+		reread, err := root.ReadFile(path.Join(name, entry.Path))
 		if err != nil || digest(reread) != entry.Digest {
 			return nil, refuse("source_changed", "catalog artifact")
 		}

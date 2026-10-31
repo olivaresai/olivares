@@ -205,6 +205,13 @@ func newDDILImportCmd() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			// Applying a bundle is forward-going work: the Business build asks its licence
+			// before anything is read or written. Verify, export and keygen never ask.
+			if thisEdition.ddilImport != nil {
+				if err := thisEdition.ddilImport(dataDir); err != nil {
+					return err
+				}
+			}
 			pub, err := loadDDILPublicKey(pubkey)
 			if err != nil {
 				return err

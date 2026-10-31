@@ -11,8 +11,8 @@ import (
 )
 
 // openCodeRecordedFollow is `olivares session follow <name> -o json` on an OpenCode
-// session running a local Ollama model, recorded by HU2 through the product on the
-// candidate (2026-10-02, HU2/captures/B1-cli/09-follow-json.txt), unchanged: the ACP
+// session running a local Ollama model, recorded through the product on
+// 2026-10-02, unchanged: the ACP
 // handshake, two session/prompt results and the second turn's reply as
 // agent_message_chunk frames.
 const openCodeRecordedFollow = "testdata/opencode-follow-recorded.ndjson"
@@ -108,7 +108,7 @@ func TestSessionSendFollowsAnOpenCodeTurn(t *testing.T) {
 	}
 }
 
-// SR2C on cfa80204: a send whose stream ends before the turn's footer shows the reply
+// review on cfa80204: a send whose stream ends before the turn's footer shows the reply
 // it received and still fails as an unfinished turn.
 func TestSessionSendShowsTheReceivedACPReplyWhenTheStreamEndsEarly(t *testing.T) {
 	lines := openCodeRecordedLines(t)
@@ -179,6 +179,7 @@ func TestSessionViewAndSendTreatAGeminiCLIRunAsACP(t *testing.T) {
 		{map[string]any{"provider_driver": "gemini-cli", "transport": "acp"}, true},
 		{map[string]any{"provider_driver": "gemini-cli", "transport": "remote-control"}, false},
 		{map[string]any{"provider_driver": "opencode", "transport": "acp"}, true},
+		{map[string]any{"provider_driver": "cursor", "transport": "acp"}, true},
 		{map[string]any{"provider_driver": "not-a-tool", "transport": "acp"}, false},
 	} {
 		if got := sessionShowsTurns(tc.run); got != tc.want {
@@ -201,5 +202,19 @@ func TestSessionViewAndSendTreatAGeminiCLIRunAsACP(t *testing.T) {
 	want := "Hi.\n! Gemini CLI is waiting for approval to run Writing to note.txt\n✗ quota exceeded\n— turn failed\n"
 	if got := b.String(); got != want {
 		t.Fatalf("view =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// A Cursor CLI prompt that fails is answered with an error instead of a stopReason, as for the
+// other ACP tools: the turn ends as a failure and the view says so.
+func TestSessionViewEndsACursorTurnThatFailed(t *testing.T) {
+	var b strings.Builder
+	v := newSessionView(&b)
+	v.driver = "cursor"
+	if !v.render(`{"jsonrpc":"2.0","id":7,"error":{"code":-32603,"message":"quota exceeded"}}`) || !v.failed {
+		t.Fatal("a prompt answered with an error must end the turn as a failure")
+	}
+	if got, want := b.String(), "✗ quota exceeded\n— turn failed\n"; got != want {
+		t.Fatalf("view = %q, want %q", got, want)
 	}
 }

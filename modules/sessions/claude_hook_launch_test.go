@@ -60,7 +60,7 @@ func TestConfigureClaudeHookPEPPreservesAccountSettings(t *testing.T) {
 	}
 	for _, event := range []string{"PreToolUse", "PostToolUse", "PostToolUseFailure"} {
 		groups := cfg.Hooks[event]
-		if len(groups) != 1 || len(groups[0].Hooks) != 1 || groups[0].Hooks[0].Type != "command" || groups[0].Hooks[0].Command != "'/opt/Olivares AI/olivares' claude-hook --server 'http://127.0.0.1:8447/' --timeout 2m0s --hook-event '"+event+"'" {
+		if len(groups) != 1 || len(groups[0].Hooks) != 1 || groups[0].Hooks[0].Type != "command" || groups[0].Hooks[0].Command != "'/opt/Olivares AI/olivares' claude-hook --server 'http://127.0.0.1:8447/' --timeout 2m0s --hook-event '"+event+"' || exit 2" {
 			t.Fatalf("%s: %+v", event, groups)
 		}
 		if groups[0].Hooks[0].Timeout != 180 {

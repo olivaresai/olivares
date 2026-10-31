@@ -4,7 +4,8 @@
     "codex": "Codex",
     "grok": "Grok Build",
     "opencode": "OpenCode",
-    "gemini-cli": "Gemini CLI"
+    "gemini-cli": "Gemini CLI",
+    "cursor": "Cursor CLI"
   },
   "status": {
     "installed": "已安装",
@@ -26,6 +27,7 @@
     "signInChatGPT": "使用 ChatGPT 登录",
     "useApiKey": "改用 API 密钥",
     "signInGrok": "使用你的 xAI 账户登录",
+    "signInCursor": "使用你的 Cursor 账户登录",
     "signInGoogle": "使用 Google 登录",
     "signIn": "登录"
   },
@@ -102,6 +104,12 @@
     "secretUse": "将 {{name}} 提供给此会话",
     "secretVariable": "{{name}} 的变量",
     "secretsManage": "管理会话密钥",
+    "credentials": "托管凭据（Business）",
+    "credentialsHint": "会话通过引擎运行的助手使用所选的每个凭据；封存的值永远不会到达会话。需要 Olivares Business。",
+    "credentialsNone": "还没有托管凭据。请添加一个以 credential/ 开头的名称。",
+    "credentialUse": "授予此会话 {{name}}",
+    "credentialsManage": "管理托管凭据",
+    "listUnavailable": "引擎未返回密钥列表。目前无法选择任何内容。",
     "openTools": "打开 AI 工具",
     "model": "模型",
     "providerDefault": "默认（{{model}}）",
@@ -113,7 +121,9 @@
     "profile": "配置文件",
     "profileNotSignedIn": "未登录",
     "profileNeedsKey": "需要密钥",
-    "foldersUnreadable": "无法读取已登记的文件夹。请输入此服务器上某个文件夹的路径。"
+    "foldersUnreadable": "无法读取已登记的文件夹。请输入此服务器上某个文件夹的路径。",
+    "folderPermission": "将以“{{name}}”启动，这是此文件夹的默认权限。",
+    "autoAsks": "{{tool}} 没有自动模式：每次操作前都会询问。"
   },
   "lists": {
     "runsTruncated": "最近会话：已加载 {{count}} 个；还有更多。",
@@ -122,10 +132,12 @@
     "foldersHint": "部分已注册文件夹未包含在此列表中。"
   },
   "permission": {
-    "editsOnly": "仅编辑文件",
+    "editsOnly": "自动接受编辑",
     "editsAndCommands": "编辑文件并运行命令",
     "readOnly": "只读",
-    "ask": "每次操作前询问"
+    "ask": "受监督",
+    "auto": "自动",
+    "full": "完全访问"
   },
   "next": {
     "title": "后续步骤（需要时再做）",
@@ -138,5 +150,13 @@
     "cliHint": "此服务器上已安装 olivares 命令。在其他计算机上，可用以下命令安装：",
     "copy": "复制",
     "copied": "已复制"
+  },
+  "permissionSummary": {
+    "readOnly": "只读取和规划。所有更改都会被拒绝。",
+    "ask": "每次执行非读取操作前都会询问。",
+    "editsOnly": "读取和编辑文件无需询问，其他操作都会询问。",
+    "editsAndCommands": "读取、编辑文件和运行命令无需询问，其他工具会被拒绝。",
+    "auto": "由工具自带的、经过审查的自动模式决定。没有自动模式的工具会像“受监督”一样询问。需要运行管理权限。",
+    "full": "不会询问任何内容。Olivares 仍会限制会话并记录每个操作。需要运行管理权限。"
   }
 }

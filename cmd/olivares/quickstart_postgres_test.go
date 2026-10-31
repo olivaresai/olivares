@@ -129,8 +129,12 @@ func TestQuickstartPostgresCreatesPrivateRolesAndReusesThem(t *testing.T) {
 	reader.SetOut(&bytes.Buffer{})
 	reader.SetErr(&bytes.Buffer{})
 	reader.SetArgs([]string{"verify", "--data-dir", dir, "--engine", "sqlite", "--tenant", "10000000-0000-0000-0000-000000000001"})
-	if err := reader.Execute(); err == nil || !strings.Contains(err.Error(), "uses PostgreSQL") {
-		t.Fatalf("read-only CLI must preserve explicit engine selection too: %v", err)
+	if err := reader.Execute(); auditVerificationAvailable {
+		if err == nil || !strings.Contains(err.Error(), "uses PostgreSQL") {
+			t.Fatalf("read-only CLI must preserve explicit engine selection too: %v", err)
+		}
+	} else if err == nil || !strings.Contains(err.Error(), "Business") {
+		t.Fatalf("Community verification must refuse before store selection: %v", err)
 	}
 }
 

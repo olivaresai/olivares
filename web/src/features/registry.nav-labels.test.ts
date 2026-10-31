@@ -9,8 +9,7 @@
 // per view — `nav:items.<id>`. Nothing passes a defaultValue at those call
 // sites, so i18next's contract on a miss is to return the key itself, and the
 // key is then painted verbatim on screen:
-//   - components/layout/sidebar.tsx:294   `viewLabel(t, v.id)`  (All areas entry)
-//   - components/layout/shell-destinations.ts:64 `viewLabel(t, viewId)` (top bar places)
+//   - components/layout/destination-sections.tsx `t(`items.${m.id}`)` (the row above a page)
 //   - components/layout/command-menu.tsx:159,165 (⌘K label AND its search value)
 //   - components/layout/shortcuts.tsx:150 (the g-<key> jump list)
 // A view registered without its label therefore shows the operator the literal

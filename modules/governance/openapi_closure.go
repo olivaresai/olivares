@@ -226,6 +226,7 @@ func governanceScopedGrantSchema() map[string]any {
 		"scope_class", governanceOptionalString("When non-empty, must be a scopeable resource kind compatible with the selected tree."),
 		"note", governanceOptionalString("Capped at 4096 bytes."),
 		"created_by", governanceOptionalString("Output field accepted by the DTO but ignored on create."),
+		"expires_at", governanceOptionalString("Optional RFC3339 expiry; null or omitted preserves a grant that never expires."),
 	), "subject_kind", "subject_ref", "role", "scope_tree")
 }
 

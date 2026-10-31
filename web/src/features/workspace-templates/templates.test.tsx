@@ -346,7 +346,7 @@ describe('TemplateEditor', () => {
     )
   })
 
-  // Design FH 016: a template names vault secrets (env/…) its sessions receive as
+  // Design first-hour check: a template names vault secrets (env/…) its sessions receive as
   // environment variables, by name only.
   it('saves the vault secrets a session receives, by name', async () => {
     api.create.mockResolvedValue(customTemplate)

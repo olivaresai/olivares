@@ -10,10 +10,11 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
-// C2 item 5: a successful work-outbox insert wakes the outbox pump through the
-// registered nudge; every other kind inserts silently.
+// A successful work-outbox insert is reported to its module, which wakes the outbox pump once the
+// mutation has committed (communication_commitnudge_test.go); every other kind inserts silently.
 type nudgeStubRepo struct{ created int }
 
 func (r *nudgeStubRepo) Descriptor() model.EntityDescriptor { return model.EntityDescriptor{} }
@@ -37,10 +38,10 @@ func (r *nudgeStubRepo) UpdateAtTransactionTime(_ context.Context, rec model.Rec
 	return rec, nil
 }
 
-func TestCreateNudgesOnlyOnWorkOutboxInsert(t *testing.T) {
+func TestCreateReportsOnlyAWorkOutboxInsert(t *testing.T) {
 	called := 0
 	tx := &communicationTx{
-		nudge: func() { called++ },
+		onWorkOutboxInsert: func() { called++ },
 		resolveRepository: func(model.Kind) (communicationRepository, error) {
 			return &nudgeStubRepo{}, nil
 		},
@@ -49,18 +50,18 @@ func TestCreateNudgesOnlyOnWorkOutboxInsert(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	if called != 1 {
-		t.Fatalf("an outbox insert must nudge once, got %d", called)
+		t.Fatalf("an outbox insert must be reported once, got %d", called)
 	}
 	if _, err := tx.create(context.Background(), workEventKind, model.Record{}); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	if called != 1 {
-		t.Fatalf("a non-outbox kind must not nudge, got %d", called)
+		t.Fatalf("a non-outbox kind must not be reported, got %d", called)
 	}
 
-	// A failed insert never nudges.
+	// A failed insert is never reported.
 	txErr := &communicationTx{
-		nudge: func() { called++ },
+		onWorkOutboxInsert: func() { called++ },
 		resolveRepository: func(model.Kind) (communicationRepository, error) {
 			return nil, errors.New("no repo")
 		},
@@ -69,7 +70,7 @@ func TestCreateNudgesOnlyOnWorkOutboxInsert(t *testing.T) {
 		t.Fatal("the create must fail")
 	}
 	if called != 1 {
-		t.Fatalf("a failed insert must not nudge, got %d", called)
+		t.Fatalf("a failed insert must not be reported, got %d", called)
 	}
 }
 
@@ -84,20 +85,22 @@ func TestWorkOutboxNudgeNilIsSilent(t *testing.T) {
 	}
 }
 
-// The nudge belongs to the module. Two modules in one process (two engines, as the
-// cmd/olivares tests run them) each wake only their own pump, and one withdrawing its nudge leaves the other's.
+// The wake-up belongs to the module. Two modules in one process (two engines, as the cmd/olivares tests run
+// them) each wake only their own pump, and one withdrawing its nudge leaves the other's.
 func TestEachModuleWakesOnlyItsOwnOutboxPump(t *testing.T) {
-	a, b := &Module{}, &Module{}
+	var committedA, committedB bool
+	a := &Module{Dependencies: &Dependencies{Data: commitOrderModuleData{committed: &committedA}}}
+	b := &Module{Dependencies: &Dependencies{Data: commitOrderModuleData{committed: &committedB}}}
 	woke := map[string]int{}
 	a.SetWorkOutboxNudge(func() { woke["a"]++ })
 	b.SetWorkOutboxNudge(func() { woke["b"]++ })
 	insert := func(m *Module) {
 		t.Helper()
-		tx := &communicationTx{nudge: m.nudgeWorkOutbox, resolveRepository: func(model.Kind) (communicationRepository, error) {
-			return &nudgeStubRepo{}, nil
-		}}
-		if _, err := tx.create(context.Background(), workOutboxKind, model.Record{}); err != nil {
-			t.Fatalf("create: %v", err)
+		err := m.communicationData(model.NewTenantID()).Mutate(context.Background(), func(store.Scope) error {
+			return insertWorkOutboxRows(context.Background(), m, workOutboxKind, 1)
+		})
+		if err != nil {
+			t.Fatalf("mutate: %v", err)
 		}
 	}
 	insert(a)
@@ -111,5 +114,9 @@ func TestEachModuleWakesOnlyItsOwnOutboxPump(t *testing.T) {
 	insert(a)
 	if woke["a"] != 2 || woke["b"] != 0 {
 		t.Fatalf("after b withdrew its nudge, an insert on a woke %v, want a twice and b never", woke)
+	}
+	insert(b)
+	if woke["a"] != 2 || woke["b"] != 0 {
+		t.Fatalf("an insert on module b, whose nudge is withdrawn, woke %v, want no change", woke)
 	}
 }

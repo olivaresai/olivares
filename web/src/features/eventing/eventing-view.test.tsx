@@ -648,7 +648,7 @@ describe('EventingView delivery filters (E3d)', () => {
 })
 
 /**
- * ONE ORANGE PER FIRST SCREEN (dev#2673's console rule 2026-10-17): the section
+ * ONE ORANGE PER FIRST SCREEN (the regression's console rule 2026-10-17): the section
  * header already carries "New subscription" in orange, so the empty list repeats the
  * verb in the secondary style.
  */

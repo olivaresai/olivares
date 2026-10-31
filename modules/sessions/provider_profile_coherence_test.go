@@ -12,7 +12,7 @@ import (
 )
 
 // Step 3: a key bound under the tool's own login was silently unused at launch
-// (HU 030). Such a profile is refused at create and at patch, with the remedy.
+// . Such a profile is refused at create and at patch, with the remedy.
 func TestAKeyUnderTheToolsOwnLoginIsRefused(t *testing.T) {
 	m, tenant, _ := resolveHarness(t)
 	key := addRecord(t, m, tenant, ProviderKindAnthropic, "Team key", "", "sk-ant-fixture-0123456789")

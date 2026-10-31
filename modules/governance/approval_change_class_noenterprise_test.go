@@ -23,6 +23,7 @@ func TestCommunityRejectsChangeClassPolicies(t *testing.T) {
 		"match by class":        {"required_approvals": 2, "match": map[string]any{"action": "gitpublish.push", "change_class": "sensitive"}},
 		"tenant sensitive set":  {"sensitive_paths": []string{"infra/**"}},
 		"other than the launch": {"require_other_than_launcher": true, "match": map[string]any{"action": "gitpublish.push"}},
+		"bound to a record":     {"required_approvals": 1, "match": map[string]any{"action": "gitpublish.push"}, "change_record": map[string]any{"system": "servicenow", "key": "CHG0030001"}},
 	} {
 		r := h.do("POST", govPath+"/policies", admin, map[string]any{"name": "p", "kind": "approval", "enabled": true, "spec": spec}, tenantHdr(tenant))
 		if r.code != http.StatusNotImplemented {

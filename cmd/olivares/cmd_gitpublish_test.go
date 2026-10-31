@@ -13,7 +13,7 @@ import (
 )
 
 // The gitpublish family's harness. Every verb is a thin client over one of the
-// thirteen /v1/m/gitpublish routes, so every assertion here is on the wire —
+// fourteen /v1/m/gitpublish routes, so every assertion here is on the wire —
 // method, path, query and body — exactly as the knowledge family's tests assert
 // on its routes, using the same recorder.
 //

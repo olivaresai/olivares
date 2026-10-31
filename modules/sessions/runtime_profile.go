@@ -56,6 +56,8 @@ func nativeACPToolName(driver string) string {
 		return "OpenCode"
 	case providerDriverGemini:
 		return "Gemini CLI"
+	case providerDriverCursor:
+		return "Cursor CLI"
 	}
 	return ""
 }
@@ -85,6 +87,12 @@ func refuseGrokWithoutItsSandbox(p CreateRunParams, driver string) error {
 func refuseNativeCustomPreset(p CreateRunParams, driver string) error {
 	if driver != providerDriverClaude && launchPreset(p) == PresetCustom {
 		return badRequest("this tool cannot apply the session template's tool restrictions; choose a built-in permission preset")
+	}
+	// launchPermissionMode has already made "auto" ask on a tool without an automatic
+	// mode. A launch path that missed it must not reach a native driver, whose mappers
+	// have no case for it and would start it with no sandbox and no permission rule.
+	if driver != "" && driver != providerDriverClaude && launchPreset(p) == PresetAuto {
+		return badRequest("this tool has no automatic mode; choose supervised")
 	}
 	return nil
 }
@@ -148,6 +156,8 @@ func (m *Module) resolveLaunchProfileInto(ctx context.Context, tenant model.Tena
 	if err := applySessionPolicy(p, snap.Driver, policy); err != nil {
 		return err
 	}
+	// A tool without an automatic mode asks instead: the run stores and runs that mode.
+	p.PermissionMode = launchPermissionMode(snap.Driver, p.PermissionMode)
 	if err := refuseNativeCustomPreset(*p, snap.Driver); err != nil {
 		return err
 	}

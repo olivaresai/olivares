@@ -542,9 +542,17 @@ func (a *Authenticator) IssueToken(ctx context.Context, actor Principal, spec To
 	}
 	var stored model.APIToken
 	err = a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		groupDerived := false
+		if !spec.Superadmin && !actor.Superadmin {
+			direct, found, err := directMembershipRole(ctx, as, actor.UserID, spec.BoundTenant)
+			if err != nil {
+				return err
+			}
+			groupDerived = found && RoleRank(spec.Role) > RoleRank(direct)
+		}
 		t, err := as.Tokens().Create(ctx, model.APIToken{
 			Name: spec.Name, UserID: actor.UserID, Selector: cred.Selector, SecretHash: cred.SecretHash,
-			BoundTenantID: spec.BoundTenant, Role: spec.Role, IsSuperadmin: spec.Superadmin,
+			BoundTenantID: spec.BoundTenant, Role: spec.Role, GroupDerivedRole: groupDerived, IsSuperadmin: spec.Superadmin,
 			ExpiresAt: spec.ExpiresAt,
 		})
 		if err != nil {

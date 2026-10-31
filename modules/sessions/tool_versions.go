@@ -121,7 +121,7 @@ func (m *Module) SetToolVersionPin(ctx context.Context, tenant model.TenantID, p
 			org.Settings = map[string]any{}
 		}
 		org.Settings["tool_versions"] = next
-		if _, err := sc.SetOrgSettings(ctx, org.Settings); err != nil {
+		if _, err := sc.SetOrgSettings(ctx, org.Settings, org.Version); err != nil {
 			return err
 		}
 		action := "sessions.tool.version_pinned"
@@ -217,7 +217,15 @@ func (m *Module) resolveRunProgram(ctx context.Context, tenant model.TenantID, p
 		}
 	}
 	if d, ok := m.driverFor(driver); ok {
-		return m.driverProgram(d), nil
+		program := m.driverProgram(d)
+		if program == "" {
+			name, exe := driver, d.DefaultProgram()
+			if facts, ok := driverfacts.Lookup(driver); ok {
+				name, exe = facts.Name, facts.Program
+			}
+			return "", &runErr{503, name + " is not installed on this node; install it from AI tools or pin its official " + exe + " executable"}
+		}
+		return program, nil
 	}
 	return m.claudeProgram(), nil
 }

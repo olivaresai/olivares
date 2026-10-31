@@ -4,7 +4,7 @@ description: "Sous-commandes et drapeaux vérifiés du binaire unique olivares, 
 ---
 
 :::note[Business]
-L’export d’audit (`GET /v1/audit/export`, `olivares audit export`), les archives en répertoire et la vérification d’archives externes nécessitent Business. Community conserve le registre signé, `olivares audit verify` et `olivares dr backup` ; l’export renvoie HTTP 501 ou le code de sortie 9. Le transfert d’audit et les transferts DDIL contenant des segments d’audit nécessitent aussi Business.
+L’export d’audit (`GET /v1/audit/export`, `olivares audit export`), la vérification du registre (`GET /v1/audit/verify`, `olivares audit verify`), les archives en répertoire et la vérification d’archives externes nécessitent Business. Community conserve le registre signé, sa lecture et `olivares dr backup` ; les routes et commandes de preuve renvoient HTTP 501 ou le code de sortie 9. Le transfert d’audit et les transferts DDIL contenant des segments d’audit nécessitent aussi Business.
 :::
 
 :::note[Éditions et approbations (0.1)]
@@ -174,7 +174,7 @@ traduction humaine. Le guide éditorial qui les entoure est localisé.
 
 ## Complete command reference
 
-This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 964 command nodes — the root command and 963 subcommands, of which 202 are groups that carry subcommands and 40 are hidden diagnostics — together with the 3782 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
+This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 975 command nodes — the root command and 974 subcommands, of which 203 are groups that carry subcommands and 47 are hidden diagnostics — together with the 3882 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
 
 Nothing here is a stability promise: see [Stability](#stability) below for what may still change.
 
@@ -194,6 +194,11 @@ Every command in the tree exits with one of these codes. Scripts and CI pipeline
 | `7` | `Degraded` | the command succeeded but reports a degraded condition (`status` when the engine is not fully ok; `security check` on an affected version). |
 | `8` | `Indeterminate` | the command could not reach a verdict because an input it needs is UNKNOWN, as distinct from a verdict of "fine" (0) or "bad" (7) and from a failure to run (1). `security check` returns it when the build declares no usable version, so no advisory range can be evaluated against it: a clean answer there would be an artifact, not a measurement. A fleet sweep must treat this as "not yet answered", never as "clean". |
 | `9` | `Edition` | the capability asked for is a Business feature that this build or this engine does not have. It is not a failure of the request or of the engine; the answer names where the capability is described. |
+| `10` | `SessionFailed` | SessionFailed is a pipeline turn or session that failed. |
+| `11` | `ApprovalRequired` | ApprovalRequired means the session is waiting for a human decision. |
+| `12` | `RunTimeout` | RunTimeout means the run reached its requested deadline. |
+| `13` | `CostCap` | CostCap means the engine stopped the run at its requested cost ceiling. |
+| `14` | `SessionLimit` | SessionLimit means another tool or policy limit stopped the run. |
 
 ### Flags every command accepts
 
@@ -207,12 +212,13 @@ Command groups declare further flags that their own subcommands inherit. A flag 
 
 ### Command index
 
-All 964 commands, in alphabetical order.
+All 975 commands, in alphabetical order.
 
 | Command | Summary |
 |---|---|
 | [`olivares`](#command-olivares) | Olivares AI — self-hosted engine for enterprise AI |
 | `olivares __extract` | internal: extract text from a rich document on stdin (sandboxed re-exec target) _(hidden)_ |
+| `olivares __place-install-manifest` | internal: place the install manifest inside the data directory (package script) _(hidden)_ |
 | [`olivares accessmap`](#command-olivares-accessmap) | Query the access graph, least-privilege drift and attack paths |
 | [`olivares accessmap attack-paths`](#command-olivares-accessmap-attack-paths) | Reachability, privilege-escalation and exfiltration analyses |
 | [`olivares accessmap attack-paths escalation`](#command-olivares-accessmap-attack-paths-escalation) | List the privilege-escalation chains open to one agent |
@@ -273,21 +279,21 @@ All 964 commands, in alphabetical order.
 | [`olivares agent workspace rm-workspace`](#command-olivares-agent-workspace-rm-workspace) | Deregister a workspace (does NOT delete host files) |
 | [`olivares agent workspace setup`](#command-olivares-agent-workspace-setup) | Read or store a folder's setup command (empty --command clears it) |
 | [`olivares agent workspace stat`](#command-olivares-agent-workspace-stat) | Show metadata for one path |
-| [`olivares audit`](#command-olivares-audit) | See recent events; verify, checkpoint and export the audit ledger |
-| [`olivares audit archive`](#command-olivares-audit-archive) | Export and verify the immutable ledger archive |
+| [`olivares audit`](#command-olivares-audit) | Read and maintain the signed audit ledger |
+| [`olivares audit archive`](#command-olivares-audit-archive) | Export and verify the immutable ledger archive _(hidden)_ |
 | [`olivares audit archive export`](#command-olivares-audit-archive-export) | Export a tenant's ledger as verifiable archive segments to a directory |
 | [`olivares audit archive verify`](#command-olivares-audit-archive-verify) | Verify an exported archive directory offline (no store, no network) |
 | [`olivares audit checkpoint`](#command-olivares-audit-checkpoint) | Write a signed checkpoint (all tenants, or one with --tenant) |
-| [`olivares audit export`](#command-olivares-audit-export) | Export a tenant's ledger to a SIEM format (cef\|leef\|syslog\|otlp\|otlp_envelope\|otlp_log_record\|ocsf) |
+| [`olivares audit export`](#command-olivares-audit-export) | Export a tenant's ledger to a SIEM format (cef\|leef\|syslog\|otlp\|otlp_envelope\|otlp_log_record\|ocsf) _(hidden)_ |
 | [`olivares audit key-transition`](#command-olivares-audit-key-transition) | Record the off-box-signed signing-key epoch boundary after `keys rotate` _(hidden)_ |
 | [`olivares audit ls`](#command-olivares-audit-ls) | Show the most recent audit events, newest first |
-| [`olivares audit observe-report`](#command-olivares-audit-observe-report) | Summarize constrained-observe shadows for an observe→enforce promotion decision |
+| [`olivares audit observe-report`](#command-olivares-audit-observe-report) | Summarize constrained-observe shadows for an observe→enforce promotion decision _(hidden)_ |
 | [`olivares audit recover`](#command-olivares-audit-recover) | Seal a corrupt audit tail and start a governed recovery epoch |
-| [`olivares audit tree`](#command-olivares-audit-tree) | Publish and verify C2SP Merkle checkpoints of the audit ledger |
+| [`olivares audit tree`](#command-olivares-audit-tree) | Publish signed Merkle checkpoints of the audit ledger |
 | [`olivares audit tree checkpoint`](#command-olivares-audit-tree-checkpoint) | Print the signed C2SP checkpoint of a tenant's Merkle tree |
-| [`olivares audit tree prove`](#command-olivares-audit-tree-prove) | Prove one event is inside a saved checkpoint (JSON proof on standard output) |
-| [`olivares audit tree verify`](#command-olivares-audit-tree-verify) | Verify a saved checkpoint, offline, against the ledger or an inclusion proof |
-| [`olivares audit verify`](#command-olivares-audit-verify) | Verify a tenant's chain and its signed checkpoints |
+| [`olivares audit tree prove`](#command-olivares-audit-tree-prove) | Prove one event is inside a saved checkpoint (JSON proof on standard output) _(hidden)_ |
+| [`olivares audit tree verify`](#command-olivares-audit-tree-verify) | Verify a saved checkpoint, offline, against the ledger or an inclusion proof _(hidden)_ |
+| [`olivares audit verify`](#command-olivares-audit-verify) | Verify a tenant's chain and its signed checkpoints _(hidden)_ |
 | [`olivares auth`](#command-olivares-auth) | Sign-in details: status, saved contexts, first-boot setup |
 | [`olivares auth bootstrap`](#command-olivares-auth-bootstrap) | Redeem the one-time first-boot token: create the first organization and superadmin |
 | [`olivares auth login`](#command-olivares-auth-login) | Sign in to an engine and keep the sign-in for the next commands |
@@ -297,6 +303,11 @@ All 964 commands, in alphabetical order.
 | [`olivares auth os-account complete`](#command-olivares-auth-os-account-complete) | Prove native account control from the subject's own sign-in |
 | [`olivares auth os-account get`](#command-olivares-auth-os-account-get) | Read administrative mapping metadata |
 | [`olivares auth os-account revoke`](#command-olivares-auth-os-account-revoke) | Revoke authority and retain the immutable account reservation |
+| [`olivares auth sessions`](#command-olivares-auth-sessions) | List your sign-ins and end another one |
+| [`olivares auth sessions accept`](#command-olivares-auth-sessions-accept) | Read a one-time pairing link from stdin and save this device's sign-in |
+| [`olivares auth sessions end`](#command-olivares-auth-sessions-end) | End one of your other sign-ins |
+| [`olivares auth sessions ls`](#command-olivares-auth-sessions-ls) | List your live sign-ins |
+| [`olivares auth sessions pair`](#command-olivares-auth-sessions-pair) | Create a one-time sign-in link for another device |
 | [`olivares auth status`](#command-olivares-auth-status) | Show the effective CLI identity and authentication context |
 | [`olivares auth totp-policy`](#command-olivares-auth-totp-policy) | Read or set the require-TOTP-for-administrators policy (system:admin) |
 | [`olivares auth totp-policy get`](#command-olivares-auth-totp-policy-get) | Read the policy |
@@ -450,6 +461,7 @@ All 964 commands, in alphabetical order.
 | [`olivares dr drill`](#command-olivares-dr-drill) | Drill synthetic-ledger continuity and print measured RTO |
 | [`olivares dr inspect`](#command-olivares-dr-inspect) | Print a DR bundle's manifest (no KEK needed; no secrets shown) |
 | [`olivares dr ls`](#command-olivares-dr-ls) | List DR bundles (local, or --offsite for the S3/R2 mirror) |
+| [`olivares dr prune`](#command-olivares-dr-prune) | Apply GFS retention to the offsite S3/R2 mirror with its own credential |
 | [`olivares dr pull`](#command-olivares-dr-pull) | Download a DR bundle from the offsite S3/R2 target |
 | [`olivares dr push`](#command-olivares-dr-push) | Upload an existing DR bundle to the offsite S3/R2 target |
 | [`olivares dr restore`](#command-olivares-dr-restore) | Restore a DR bundle and verify ledger continuity (non-zero exit if not safe) |
@@ -528,6 +540,7 @@ All 964 commands, in alphabetical order.
 | [`olivares finops seats utilization`](#command-olivares-finops-seats-utilization) | Show seat utilization |
 | [`olivares finops spend`](#command-olivares-finops-spend) | Report observed AI spend over a window |
 | [`olivares finops spend allocation`](#command-olivares-finops-spend-allocation) | Show how spend allocates to cost centers |
+| [`olivares finops spend changes`](#command-olivares-finops-spend-changes) | Show the cost per merged change, per department |
 | [`olivares finops spend export`](#command-olivares-finops-spend-export) | Export spend in the FOCUS interchange format |
 | [`olivares finops spend ls`](#command-olivares-finops-spend-ls) | Show the spend series for a window |
 | [`olivares finops spend reconciliation`](#command-olivares-finops-spend-reconciliation) | Compare observed spend against provider-reported cost |
@@ -1009,6 +1022,7 @@ All 964 commands, in alphabetical order.
 | [`olivares serve`](#command-olivares-serve) | Run the engine (REST + gRPC + embedded console), TLS-on-by-default |
 | [`olivares session`](#command-olivares-session) | Start, follow, send to, stop and resume agent sessions |
 | [`olivares session archive`](#command-olivares-session-archive) | Archive a session, or unarchive it with --undo |
+| [`olivares session diff`](#command-olivares-session-diff) | Show what a worktree session's branch changed |
 | [`olivares session done`](#command-olivares-session-done) | Mark a session done in your list |
 | [`olivares session events`](#command-olivares-session-events) | Show a session's lifecycle record (start, stop, failures) |
 | [`olivares session follow`](#command-olivares-session-follow) | Show a session's output as it happens |
@@ -1023,10 +1037,12 @@ All 964 commands, in alphabetical order.
 | [`olivares session resume`](#command-olivares-session-resume) | Resume a stopped session |
 | [`olivares session rm`](#command-olivares-session-rm) | Remove a stopped session |
 | [`olivares session send`](#command-olivares-session-send) | Send a message to a session and show the reply |
+| [`olivares session ship`](#command-olivares-session-ship) | Commit a session's work, push it and open a pull request |
 | [`olivares session show`](#command-olivares-session-show) | Show one session |
 | [`olivares session snooze`](#command-olivares-session-snooze) | Hide a session from your list until a moment |
 | [`olivares session start`](#command-olivares-session-start) | Start an agent session in a folder, optionally with a first prompt |
 | [`olivares session stop`](#command-olivares-session-stop) | Stop a session |
+| [`olivares session title`](#command-olivares-session-title) | Make a session's title from its first message |
 | [`olivares session unpin`](#command-olivares-session-unpin) | Unpin a session |
 | [`olivares setup`](#command-olivares-setup) | Guided, validated first-run configuration (profiles, Postgres onboarding, no SQL by hand) |
 | [`olivares skills`](#command-olivares-skills) | Install and manage immutable skills in the catalog |
@@ -1203,6 +1219,18 @@ olivares __extract
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--kind` | `string` | — | rich-document kind (ooxml) |
+
+#### Command: olivares __place-install-manifest
+
+Hidden diagnostic: it does not appear in `--help` output and is not part of the supported surface.
+
+internal: place the install manifest inside the data directory (package script)
+
+```
+olivares __place-install-manifest STAGE TARGET
+```
+
+Declares no flags of its own; it takes those of [`olivares`](#command-olivares) and the root command.
 
 #### Command: olivares accessmap
 
@@ -1741,6 +1769,7 @@ olivares agent session create
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--credential` | `stringArray` | `[]` | managed credential the session may use, by name, sealed for the tenant (Business; repeatable, at most 8) |
 | `--effort` | `string` | — | low\|medium\|high\|xhigh\|max |
 | `--env-allow` | `stringSlice` | `[]` | host env var NAMES to forward to the session (allowlist; nothing else is inherited) |
 | `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
@@ -1958,7 +1987,7 @@ olivares agent tool install
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--driver` | `string` | `claude` | provider tool to install: claude, codex, grok, opencode, gemini-cli or ollama |
+| `--driver` | `string` | `claude` | provider tool to install: claude, codex, grok, opencode, gemini-cli, cursor or ollama |
 | `--plan` | `string` | — | execute this plan file written by 'plan --out'; it is the approval, so no prompt is shown |
 | `--platform` | `string` | — | target platform key: linux-x64, linux-arm64, linux-x64-musl, linux-arm64-musl (default: this host) |
 | `--root` | `string` | — | absolute directory that owns installed tools (default &lt;data-dir&gt;/tools, with data-dir from $OLIVARES_DATA_DIR or the installation default) |
@@ -1990,7 +2019,7 @@ olivares agent tool plan
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--driver` | `string` | `claude` | provider tool to install: claude, codex, grok, opencode, gemini-cli or ollama |
+| `--driver` | `string` | `claude` | provider tool to install: claude, codex, grok, opencode, gemini-cli, cursor or ollama |
 | `--out` | `string` | — | write the plan JSON (with its digest) to this new file for a later 'install --plan' |
 | `--platform` | `string` | — | target platform key: linux-x64, linux-arm64, linux-x64-musl, linux-arm64-musl (default: this host) |
 | `--root` | `string` | — | absolute directory that owns installed tools (default &lt;data-dir&gt;/tools, with data-dir from $OLIVARES_DATA_DIR or the installation default) |
@@ -2303,7 +2332,7 @@ olivares agent workspace stat <ref> <path>
 
 #### Command: olivares audit
 
-See recent events; verify, checkpoint and export the audit ledger
+Read and maintain the signed audit ledger
 
 ```
 olivares audit
@@ -2312,6 +2341,8 @@ olivares audit
 Declares no flags of its own; it takes those of [`olivares`](#command-olivares) and the root command.
 
 #### Command: olivares audit archive
+
+Hidden diagnostic: it does not appear in `--help` output and is not part of the supported surface.
 
 Export and verify the immutable ledger archive
 
@@ -2371,6 +2402,8 @@ olivares audit checkpoint
 | `--tenant` | `string` | — | tenant id (empty = all tenants) |
 
 #### Command: olivares audit export
+
+Hidden diagnostic: it does not appear in `--help` output and is not part of the supported surface.
 
 Export a tenant's ledger to a SIEM format (cef\|leef\|syslog\|otlp\|otlp_envelope\|otlp_log_record\|ocsf)
 
@@ -2432,6 +2465,8 @@ Aliases: `list`, `recent`
 
 #### Command: olivares audit observe-report
 
+Hidden diagnostic: it does not appear in `--help` output and is not part of the supported surface.
+
 Summarize constrained-observe shadows for an observe→enforce promotion decision
 
 ```
@@ -2471,7 +2506,7 @@ olivares audit recover
 
 #### Command: olivares audit tree
 
-Publish and verify C2SP Merkle checkpoints of the audit ledger
+Publish signed Merkle checkpoints of the audit ledger
 
 ```
 olivares audit tree
@@ -2497,6 +2532,8 @@ olivares audit tree checkpoint
 
 #### Command: olivares audit tree prove
 
+Hidden diagnostic: it does not appear in `--help` output and is not part of the supported surface.
+
 Prove one event is inside a saved checkpoint (JSON proof on standard output)
 
 ```
@@ -2516,6 +2553,8 @@ olivares audit tree prove
 
 #### Command: olivares audit tree verify
 
+Hidden diagnostic: it does not appear in `--help` output and is not part of the supported surface.
+
 Verify a saved checkpoint, offline, against the ledger or an inclusion proof
 
 ```
@@ -2534,6 +2573,8 @@ olivares audit tree verify
 | `--tenant` | `string` | — | tenant id |
 
 #### Command: olivares audit verify
+
+Hidden diagnostic: it does not appear in `--help` output and is not part of the supported surface.
 
 Verify a tenant's chain and its signed checkpoints
 
@@ -2692,6 +2733,70 @@ olivares auth os-account revoke <user-id>
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `-y`, `--yes` | `bool` | `false` | proceed without the confirmation prompt (required in a non-interactive session) |
+
+#### Command: olivares auth sessions
+
+List your sign-ins and end another one
+
+```
+olivares auth sessions
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
+
+#### Command: olivares auth sessions accept
+
+Read a one-time pairing link from stdin and save this device's sign-in
+
+```
+olivares auth sessions accept
+```
+
+Declares no flags of its own; it takes those of [`olivares auth sessions`](#command-olivares-auth-sessions) and the root command.
+
+#### Command: olivares auth sessions end
+
+End one of your other sign-ins
+
+```
+olivares auth sessions end <session-id>
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `-y`, `--yes` | `bool` | `false` | proceed without the confirmation prompt (required in a non-interactive session) |
+
+#### Command: olivares auth sessions ls
+
+List your live sign-ins
+
+```
+olivares auth sessions ls
+```
+
+Aliases: `list`
+
+Declares no flags of its own; it takes those of [`olivares auth sessions`](#command-olivares-auth-sessions) and the root command.
+
+#### Command: olivares auth sessions pair
+
+Create a one-time sign-in link for another device
+
+```
+olivares auth sessions pair <device-name>
+```
+
+Declares no flags of its own; it takes those of [`olivares auth sessions`](#command-olivares-auth-sessions) and the root command.
 
 #### Command: olivares auth status
 
@@ -3377,6 +3482,7 @@ olivares claude-policy checkin <surface>
 | `--observed-file` | `string` | — | the config observed on the host, '-' for stdin |
 | `--revision` | `int64` | `0` | the revision the agent applied |
 | `--scope` | `string` | — | **required**. the host id / distribution name this check-in reports for (required) |
+| `--tools` | `bool` | `false` | also report this workstation's local AI tools and sign-in state |
 
 #### Command: olivares claude-policy distribution
 
@@ -3398,7 +3504,7 @@ olivares claude-policy dry-run <surface>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--content-file` | `string` | — | **required**. the policy document, '-' for stdin (required) |
+| `--content-file` | `string` | — | the policy document, '-' for stdin (required, except for managed-instructions@&lt;department&gt;, which the engine renders from the department) |
 
 #### Command: olivares claude-policy publish
 
@@ -3410,7 +3516,7 @@ olivares claude-policy publish <surface>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--content-file` | `string` | — | **required**. the policy document, '-' for stdin (required) |
+| `--content-file` | `string` | — | the policy document, '-' for stdin (required, except for managed-instructions@&lt;department&gt;, which the engine renders from the department) |
 | `--note` | `string` | — | why this revision exists (recorded on the revision) |
 
 #### Command: olivares claude-policy pull
@@ -3438,7 +3544,7 @@ olivares claude-policy validate <surface>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--content-file` | `string` | — | **required**. the policy document, '-' for stdin (required) |
+| `--content-file` | `string` | — | the policy document, '-' for stdin (required, except for managed-instructions@&lt;department&gt;, which the engine renders from the department) |
 
 #### Command: olivares claude-policy versions
 
@@ -4760,6 +4866,7 @@ olivares dr backup
 | `--offsite-access-key-id-file` | `string` | — | file holding the offsite access key id (credential by reference; falls back to $AWS_ACCESS_KEY_ID) |
 | `--offsite-bucket` | `string` | — | offsite bucket for DR bundles (set to enable offsite replication) |
 | `--offsite-endpoint` | `string` | — | S3-compatible endpoint for offsite replication (R2/MinIO/Wasabi); empty = AWS S3 from --offsite-region |
+| `--offsite-immutable` | `bool` | `false` | append-only offsite writer: lock the replicated bundle in S3 Object Lock COMPLIANCE mode for the finest --gfs-* period and never delete offsite (prune with dr prune --offsite and a separate credential) |
 | `--offsite-path-style` | `bool` | `false` | force path-style S3 addressing (implied by a custom --offsite-endpoint) |
 | `--offsite-prefix` | `string` | — | key prefix within the offsite bucket |
 | `--offsite-region` | `string` | — | offsite region (default us-east-1; Cloudflare R2 uses 'auto') |
@@ -4785,6 +4892,9 @@ olivares dr drill
 |---|---|---|---|
 | `--events` | `int` | `500` | ledger events to seed in the ephemeral estate |
 | `--keep-artifacts` | `bool` | `false` | keep the scratch dir instead of removing it (debugging) |
+| `--pg-dump` | `string` | `pg_dump` | pg_dump executable (with --scratch-dsn only) |
+| `--pg-restore` | `string` | `pg_restore` | pg_restore executable (with --scratch-dsn only) |
+| `--scratch-dsn` | `string` | — | also run the drill on PostgreSQL: maintenance DSN of a server where throwaway databases and roles may be created and dropped; accepts a file:/env: reference only |
 
 #### Command: olivares dr inspect
 
@@ -4811,7 +4921,33 @@ Aliases: `list`
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--dir` | `string` | — | local backup directory (default &lt;data-dir&gt;/backups) |
+| `--max-age` | `duration` | `0s` | with --offsite: exit 7 when the newest offsite bundle is older than this (missing-backup alert; 0 = off) |
 | `--offsite` | `bool` | `false` | list the offsite mirror instead of the local directory |
+| `--offsite-access-key-id-file` | `string` | — | file holding the offsite access key id (credential by reference; falls back to $AWS_ACCESS_KEY_ID) |
+| `--offsite-bucket` | `string` | — | offsite bucket for DR bundles (set to enable offsite replication) |
+| `--offsite-endpoint` | `string` | — | S3-compatible endpoint for offsite replication (R2/MinIO/Wasabi); empty = AWS S3 from --offsite-region |
+| `--offsite-path-style` | `bool` | `false` | force path-style S3 addressing (implied by a custom --offsite-endpoint) |
+| `--offsite-prefix` | `string` | — | key prefix within the offsite bucket |
+| `--offsite-region` | `string` | — | offsite region (default us-east-1; Cloudflare R2 uses 'auto') |
+| `--offsite-secret-access-key-file` | `string` | — | file holding the offsite secret access key (credential by reference; falls back to $AWS_SECRET_ACCESS_KEY) |
+| `--offsite-session-token-file` | `string` | — | optional file holding an STS session token (falls back to $AWS_SESSION_TOKEN) |
+
+#### Command: olivares dr prune
+
+Apply GFS retention to the offsite S3/R2 mirror with its own credential
+
+```
+olivares dr prune
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--gfs-daily` | `int` | `0` | GFS retention: keep the newest bundle of each of the last N days (0 = tier off) |
+| `--gfs-keep-last` | `int` | `0` | GFS retention: always keep the N newest bundles regardless of period |
+| `--gfs-monthly` | `int` | `0` | GFS retention: keep the newest bundle of each of the last N months |
+| `--gfs-weekly` | `int` | `0` | GFS retention: keep the newest bundle of each of the last N ISO weeks |
+| `--gfs-yearly` | `int` | `0` | GFS retention: keep the newest bundle of each of the last N years |
+| `--offsite` | `bool` | `false` | prune the offsite mirror (required: this command never touches local bundles) |
 | `--offsite-access-key-id-file` | `string` | — | file holding the offsite access key id (credential by reference; falls back to $AWS_ACCESS_KEY_ID) |
 | `--offsite-bucket` | `string` | — | offsite bucket for DR bundles (set to enable offsite replication) |
 | `--offsite-endpoint` | `string` | — | S3-compatible endpoint for offsite replication (R2/MinIO/Wasabi); empty = AWS S3 from --offsite-region |
@@ -4877,13 +5013,14 @@ olivares dr restore
 | `--data-dir` | `string` | — | data directory (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
 | `--dsn` | `string` | — | store DSN (default a SQLite file in the data dir) |
 | `--engine` | `string` | `sqlite` | store engine: sqlite or postgres |
-| `--force` | `bool` | `false` | overwrite existing keys / store file in the data dir |
+| `--force` | `bool` | `false` | overwrite existing keys / store file in the data dir. Postgres: also replace the objects of an occupied target database, in one transaction (needs --operator and --reason; without it an occupied target is refused) |
 | `--in` | `string` | — | **required**. DR bundle to restore (required) |
 | `--in-place` | `bool` | `false` | replace a LIVE data dir safely: stage + verify BEFORE promoting, auto-preserving the current store/keys as *.pre-restore-&lt;ts&gt; (sqlite only) |
 | `--kek-key-file` | `string` | — | file holding a raw/base64 32-byte key-encryption key (the KMS-unwrapped path); or $OLIVARES_DR_KEK_FILE |
 | `--operator` | `string` | — | who is performing this restore (required when the restore REPLACES an existing estate; recorded in the restored ledger). A declaration, not an authentication: the console's dual-control gate does not reach this path |
 | `--owner-dsn` | `string` | — | Postgres: the owner role, required in a split-role deployment (the app role has no schema CREATE). It runs the migrations AND is the pg_restore target, so the restored objects are owned by the owner exactly as the source's are. Accepts a file:/env: reference |
 | `--passphrase-file` | `string` | — | file holding the backup passphrase (Argon2id-derived KEK); or $OLIVARES_DR_PASSPHRASE_FILE |
+| `--pg-dump` | `string` | `pg_dump` | pg_dump executable for the safety copy taken before --force replaces an occupied Postgres database (needs --admin-dsn) |
 | `--pg-restore` | `string` | `pg_restore` | pg_restore executable (Postgres engine only) |
 | `--reason` | `string` | — | why this restore is being performed — an incident id or change reference (required when the restore REPLACES an existing estate; recorded in the restored ledger) |
 | `--superuser-dsn` | `string` | — | Postgres logical restore only: explicit DBA connection to the target database, used solely to restore isolated directory inventory authority; accepts a file:/env: reference |
@@ -4918,6 +5055,8 @@ olivares dr verify
 | `--in` | `string` | — | **required**. DR bundle to verify (required) |
 | `--kek-key-file` | `string` | — | file holding a raw/base64 32-byte key-encryption key (the KMS-unwrapped path); or $OLIVARES_DR_KEK_FILE |
 | `--passphrase-file` | `string` | — | file holding the backup passphrase (Argon2id-derived KEK); or $OLIVARES_DR_PASSPHRASE_FILE |
+| `--pg-restore` | `string` | `pg_restore` | pg_restore executable (PostgreSQL bundle with --scratch-dsn only) |
+| `--scratch-dsn` | `string` | — | PostgreSQL bundle only: maintenance DSN of a server where a throwaway database and roles may be created and dropped, to restore the bundle there and verify the full chain; accepts a file:/env: reference only |
 
 #### Command: olivares evals
 
@@ -5942,6 +6081,19 @@ Show how spend allocates to cost centers
 
 ```
 olivares finops spend allocation
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--since` | `string` | — | start of the window, RFC3339 (e.g. 2026-08-01T00:00:00Z) |
+| `--until` | `string` | — | end of the window, RFC3339 |
+
+#### Command: olivares finops spend changes
+
+Show the cost per merged change, per department
+
+```
+olivares finops spend changes
 ```
 
 | Flag | Type | Default | Description |
@@ -11114,13 +11266,14 @@ olivares provider add
 | `--default-model` | `string` | — | model for new sessions (empty clears; omission lets the first successful test choose) |
 | `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--key-env` | `string` | — | read the credential from this environment variable instead of stdin (never pass the key as a flag value) |
-| `--kind` | `string` | — | anthropic \| openai \| xai \| gemini \| openai_compatible (default: openai_compatible with --service or --base-url, else from the key) |
+| `--kind` | `string` | — | anthropic \| openai \| xai \| gemini \| openai_compatible (default: the preset's, else openai_compatible with --base-url, else from the key) |
 | `--name` | `string` | — | your own name for this credential; it is what a picker shows (default: the kind's name) |
 | `--no-test` | `bool` | `false` | add the key without testing it |
 | `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--preset` | `string` | — | vendor preset, a ref from the engine's catalog (tab completion lists them; sets kind, endpoint and name) |
 | `--profile` | `string` | — | provider profile reference to bind this credential to in the same run |
 | `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--service` | `string` | — | documented API service preset: deepseek |
+| `--service` | `string` | — | older name of --preset (an empty value means no service) |
 | `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
 | `--timeout` | `duration` | `30s` | _hidden_. request timeout |
 | `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
@@ -12621,6 +12774,25 @@ olivares session archive <session>
 | `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--undo` | `bool` | `false` | unarchive the session |
 
+#### Command: olivares session diff
+
+Show what a worktree session's branch changed
+
+```
+olivares session diff <session> [path...]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
+
 #### Command: olivares session done
 
 Mark a session done in your list
@@ -12864,6 +13036,7 @@ olivares session resume <session>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--at-reset` | `bool` | `false` | resume after the account usage reset |
 | `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
@@ -12913,6 +13086,31 @@ olivares session send <session> [text]
 | `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
 | `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
+
+#### Command: olivares session ship
+
+Commit a session's work, push it and open a pull request
+
+```
+olivares session ship <session>
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--base` | `string` | — | the branch to merge into (default: the target's first merge base) |
+| `--body` | `string` | — | the pull request description |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--draft` | `bool` | `false` | open the pull request as a draft |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--message` | `string` | — | the commit message (default: the title) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--target` | `string` | — | the publication target id (needed when the session's workspace has several) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--title` | `string` | — | the pull request title (default: the first line of the message, else "Work from &lt;session&gt;") |
 | `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
 | `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
@@ -12970,24 +13168,31 @@ olivares session start [folder] [prompt]
 |---|---|---|---|
 | `--account` | `string` | — | launch under this provider account (its name or profile reference; see olivares provider account ls) |
 | `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--cost-cap-micro-usd` | `int64` | `0` | per-run cost ceiling in millionths of a US dollar; enforced by the engine on reported usage |
+| `--credential` | `stringArray` | `[]` | managed credential the session may use, by name, sealed for the tenant (Business; repeatable, at most 8) |
 | `--detach` | `bool` | `false` | with a prompt, send it and return without showing the reply |
 | `--dlp` | `string` | `off` | DLP posture for a folder this command registers: off, label or deny |
 | `--effort` | `string` | — | low\|medium\|high\|xhigh\|max |
+| `--from` | `string` | — | start from this GitHub issue or pull request page: a worktree on a branch named after it, its title and body as the first message |
 | `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--isolation` | `string` | `native` | native (a process beside the engine) or container (podman or Docker on this server; see olivares doctor) |
+| `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--model` | `string` | — | model alias or id (default: the tool's own; Claude Code launches an alias, or none, on its exact id) |
 | `--name` | `string` | — | session name (default: the folder's name; -2, -3 … when taken) |
 | `--no-setup` | `bool` | `false` | skip the folder's setup command for this start |
-| `--permission` | `string` | `edits-and-commands` | what the agent may do without asking: edits-and-commands, edits-only, read-only, ask, or full (every tool, no prompts; administrators only) |
+| `--permission` | `string` | `edits-and-commands` | what the agent may do: read-only, supervised, auto-accept-edits, edits-and-commands, auto (the tool decides each call; administrators only), or full (every tool, no prompts; administrators only) |
 | `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--profile` | `string` | — | provider profile to launch under (default: the one the engine picks, as in the console) |
+| `--repository` | `string` | — | HTTPS repository URL to check out on the engine instead of a folder; the optional argument is the prompt |
+| `--repository-ref` | `string` | — | repository branch, tag or commit (default HEAD) |
 | `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--template` | `string` | — | saved session template ID; its terms apply at launch and resume |
 | `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--timeout` | `duration` | `30s` | request timeout; with --wait, an explicit value sets the run deadline instead (positive, up to 720h) |
 | `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
 | `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
-| `--tool` | `string` | — | agent tool: claude, codex, grok, opencode or gemini-cli (default: the first one that is ready) |
+| `--tool` | `string` | — | agent tool: claude, codex, grok, opencode, gemini-cli or cursor (default: the first one that is ready) |
+| `--wait` | `bool` | `false` | wait for the turn or session to finish; return a pipeline outcome and stop a completed run |
 | `--worktree` | `bool` | `false` | work in a git worktree of its own, on a new branch (the folder must be a git repository's top folder) |
 | `--worktree-from` | `string` | — | start the worktree at this commit id or local branch instead of the current commit (implies --worktree) |
 
@@ -13005,6 +13210,26 @@ olivares session stop <session>
 | `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
+
+#### Command: olivares session title
+
+Make a session's title from its first message
+
+```
+olivares session title <session> [--style short|sentence|long]
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--style` | `string` | — | how much of the first message the title keeps: short, sentence (default) or long |
 | `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
 | `--timeout` | `duration` | `30s` | _hidden_. request timeout |
 | `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
@@ -13581,12 +13806,13 @@ olivares sourcescope bindings create
 | `--cred-ref-kind` | `string` | — | kind of the credential reference |
 | `--effect` | `string` | — | allow or forbid |
 | `--enabled` | `bool` | `false` | whether the binding is in force |
+| `--expires-at` | `string` | — | optional RFC3339 time when the binding stops granting access |
 | `--folder-path` | `string` | — | folder or subtree the binding is anchored to |
 | `--note` | `string` | — | note recorded with the binding |
 | `--scope-ref` | `string` | — | reference within the scope tree |
 | `--scope-tree` | `string` | — | scope tree the binding attaches to (e.g. workspace, agent_group) |
 | `--source-ref` | `string` | — | reference of the source being confined |
-| `--source-type` | `string` | — | mcp, model, provider, knowledge, data, profile or tool |
+| `--source-type` | `string` | — | mcp, model, provider, knowledge, data, profile, tool, instructions or template |
 
 #### Command: olivares sourcescope bindings get
 
@@ -13646,13 +13872,14 @@ olivares sourcescope bindings set <binding-id>
 | `--cred-ref-kind` | `string` | — | kind of the credential reference |
 | `--effect` | `string` | — | allow or forbid |
 | `--enabled` | `bool` | `false` | whether the binding is in force |
+| `--expires-at` | `string` | — | optional RFC3339 time when the binding stops granting access |
 | `--folder-path` | `string` | — | folder or subtree the binding is anchored to |
 | `--note` | `string` | — | note recorded with the binding |
 | `--replace` | `bool` | `false` | accept that every field not passed is RESET to its server default (this endpoint replaces, it does not patch) |
 | `--scope-ref` | `string` | — | reference within the scope tree |
 | `--scope-tree` | `string` | — | scope tree the binding attaches to (e.g. workspace, agent_group) |
 | `--source-ref` | `string` | — | reference of the source being confined |
-| `--source-type` | `string` | — | mcp, model, provider, knowledge, data, profile or tool |
+| `--source-type` | `string` | — | mcp, model, provider, knowledge, data, profile, tool, instructions or template |
 
 #### Command: olivares sourcescope guard-postures
 
@@ -13770,7 +13997,7 @@ olivares sourcescope resolve
 | `--actor-kind` | `string` | — | session or agent |
 | `--actor-ref` | `string` | — | reference of the actor to resolve for |
 | `--source-ref` | `string` | — | reference of the source to resolve |
-| `--source-type` | `string` | — | mcp, model, provider, knowledge, data, profile or tool |
+| `--source-type` | `string` | — | mcp, model, provider, knowledge, data, profile, tool, instructions or template |
 
 #### Command: olivares sourcescope resources
 
@@ -13822,7 +14049,7 @@ olivares sourcescope sources disable-scoping
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--source-ref` | `string` | — | reference of the source to unconfine |
-| `--source-type` | `string` | — | mcp, model, provider, knowledge, data, profile or tool |
+| `--source-type` | `string` | — | mcp, model, provider, knowledge, data, profile, tool, instructions or template |
 | `-y`, `--yes` | `bool` | `false` | proceed without the confirmation prompt (required in a non-interactive session) |
 
 #### Command: olivares sourcescope workspace-connectors
@@ -14230,7 +14457,7 @@ olivares tool install [tool] [--from URL --version VERSION]
 Sign an agent tool in with its own login (Claude, ChatGPT, xAI, Google or OpenCode account)
 
 ```
-olivares tool login <claude|codex|grok|opencode|gemini>
+olivares tool login <claude|codex|grok|opencode|gemini|cursor>
 ```
 
 | Flag | Type | Default | Description |
@@ -14362,6 +14589,7 @@ olivares tool start <ollama|llama-cpp|vllm>
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--container` | `bool` | `false` | ollama: run Ollama's image through Podman or Docker with the models directory mounted, instead of the installed program |
 | `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--model` | `string` | — | llama-cpp: an absolute .gguf path or a Hugging Face user/repo[:quantization]; vllm: an absolute model directory or a Hugging Face user/repo |
 | `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
@@ -14395,7 +14623,7 @@ olivares tool stop <ollama|llama-cpp|vllm>
 Update an agent tool from its verified official release
 
 ```
-olivares tool update <claude|codex|grok|opencode|gemini|ollama>
+olivares tool update <claude|codex|grok|opencode|gemini|cursor|ollama>
 ```
 
 | Flag | Type | Default | Description |
@@ -14922,24 +15150,31 @@ olivares wiki ingest <workspace> <path-under-raw>
 |---|---|---|---|
 | `--account` | `string` | — | launch under this provider account (its name or profile reference; see olivares provider account ls) |
 | `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--cost-cap-micro-usd` | `int64` | `0` | per-run cost ceiling in millionths of a US dollar; enforced by the engine on reported usage |
+| `--credential` | `stringArray` | `[]` | managed credential the session may use, by name, sealed for the tenant (Business; repeatable, at most 8) |
 | `--detach` | `bool` | `false` | with a prompt, send it and return without showing the reply |
 | `--dlp` | `string` | `off` | DLP posture for a folder this command registers: off, label or deny |
 | `--effort` | `string` | — | low\|medium\|high\|xhigh\|max |
+| `--from` | `string` | — | start from this GitHub issue or pull request page: a worktree on a branch named after it, its title and body as the first message |
 | `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--isolation` | `string` | `native` | native (a process beside the engine) or container (podman or Docker on this server; see olivares doctor) |
+| `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--model` | `string` | — | model alias or id (default: the tool's own; Claude Code launches an alias, or none, on its exact id) |
 | `--name` | `string` | — | session name (default: the folder's name; -2, -3 … when taken) |
 | `--no-setup` | `bool` | `false` | skip the folder's setup command for this start |
-| `--permission` | `string` | `edits-and-commands` | what the agent may do without asking: edits-and-commands, edits-only, read-only, ask, or full (every tool, no prompts; administrators only) |
+| `--permission` | `string` | `edits-and-commands` | what the agent may do: read-only, supervised, auto-accept-edits, edits-and-commands, auto (the tool decides each call; administrators only), or full (every tool, no prompts; administrators only) |
 | `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--profile` | `string` | — | provider profile to launch under (default: the one the engine picks, as in the console) |
+| `--repository` | `string` | — | HTTPS repository URL to check out on the engine instead of a folder; the optional argument is the prompt |
+| `--repository-ref` | `string` | — | repository branch, tag or commit (default HEAD) |
 | `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--template` | `string` | — | saved session template ID; its terms apply at launch and resume |
 | `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--timeout` | `duration` | `30s` | request timeout; with --wait, an explicit value sets the run deadline instead (positive, up to 720h) |
 | `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
 | `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
-| `--tool` | `string` | — | agent tool: claude, codex, grok, opencode or gemini-cli (default: the first one that is ready) |
+| `--tool` | `string` | — | agent tool: claude, codex, grok, opencode, gemini-cli or cursor (default: the first one that is ready) |
+| `--wait` | `bool` | `false` | wait for the turn or session to finish; return a pipeline outcome and stop a completed run |
 | `--worktree` | `bool` | `false` | work in a git worktree of its own, on a new branch (the folder must be a git repository's top folder) |
 | `--worktree-from` | `string` | — | start the worktree at this commit id or local branch instead of the current commit (implies --worktree) |
 
@@ -14974,24 +15209,31 @@ olivares wiki lint <workspace>
 |---|---|---|---|
 | `--account` | `string` | — | launch under this provider account (its name or profile reference; see olivares provider account ls) |
 | `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--cost-cap-micro-usd` | `int64` | `0` | per-run cost ceiling in millionths of a US dollar; enforced by the engine on reported usage |
+| `--credential` | `stringArray` | `[]` | managed credential the session may use, by name, sealed for the tenant (Business; repeatable, at most 8) |
 | `--detach` | `bool` | `false` | with a prompt, send it and return without showing the reply |
 | `--dlp` | `string` | `off` | DLP posture for a folder this command registers: off, label or deny |
 | `--effort` | `string` | — | low\|medium\|high\|xhigh\|max |
+| `--from` | `string` | — | start from this GitHub issue or pull request page: a worktree on a branch named after it, its title and body as the first message |
 | `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--isolation` | `string` | `native` | native (a process beside the engine) or container (podman or Docker on this server; see olivares doctor) |
+| `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--model` | `string` | — | model alias or id (default: the tool's own; Claude Code launches an alias, or none, on its exact id) |
 | `--name` | `string` | — | session name (default: the folder's name; -2, -3 … when taken) |
 | `--no-setup` | `bool` | `false` | skip the folder's setup command for this start |
-| `--permission` | `string` | `edits-and-commands` | what the agent may do without asking: edits-and-commands, edits-only, read-only, ask, or full (every tool, no prompts; administrators only) |
+| `--permission` | `string` | `edits-and-commands` | what the agent may do: read-only, supervised, auto-accept-edits, edits-and-commands, auto (the tool decides each call; administrators only), or full (every tool, no prompts; administrators only) |
 | `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--profile` | `string` | — | provider profile to launch under (default: the one the engine picks, as in the console) |
+| `--repository` | `string` | — | HTTPS repository URL to check out on the engine instead of a folder; the optional argument is the prompt |
+| `--repository-ref` | `string` | — | repository branch, tag or commit (default HEAD) |
 | `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--template` | `string` | — | saved session template ID; its terms apply at launch and resume |
 | `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--timeout` | `duration` | `30s` | request timeout; with --wait, an explicit value sets the run deadline instead (positive, up to 720h) |
 | `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
 | `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
-| `--tool` | `string` | — | agent tool: claude, codex, grok, opencode or gemini-cli (default: the first one that is ready) |
+| `--tool` | `string` | — | agent tool: claude, codex, grok, opencode, gemini-cli or cursor (default: the first one that is ready) |
+| `--wait` | `bool` | `false` | wait for the turn or session to finish; return a pipeline outcome and stop a completed run |
 | `--worktree` | `bool` | `false` | work in a git worktree of its own, on a new branch (the folder must be a git repository's top folder) |
 | `--worktree-from` | `string` | — | start the worktree at this commit id or local branch instead of the current commit (implies --worktree) |
 
@@ -15007,24 +15249,31 @@ olivares wiki query <workspace> <question>
 |---|---|---|---|
 | `--account` | `string` | — | launch under this provider account (its name or profile reference; see olivares provider account ls) |
 | `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--cost-cap-micro-usd` | `int64` | `0` | per-run cost ceiling in millionths of a US dollar; enforced by the engine on reported usage |
+| `--credential` | `stringArray` | `[]` | managed credential the session may use, by name, sealed for the tenant (Business; repeatable, at most 8) |
 | `--detach` | `bool` | `false` | with a prompt, send it and return without showing the reply |
 | `--dlp` | `string` | `off` | DLP posture for a folder this command registers: off, label or deny |
 | `--effort` | `string` | — | low\|medium\|high\|xhigh\|max |
+| `--from` | `string` | — | start from this GitHub issue or pull request page: a worktree on a branch named after it, its title and body as the first message |
 | `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--isolation` | `string` | `native` | native (a process beside the engine) or container (podman or Docker on this server; see olivares doctor) |
+| `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--model` | `string` | — | model alias or id (default: the tool's own; Claude Code launches an alias, or none, on its exact id) |
 | `--name` | `string` | — | session name (default: the folder's name; -2, -3 … when taken) |
 | `--no-setup` | `bool` | `false` | skip the folder's setup command for this start |
-| `--permission` | `string` | `edits-and-commands` | what the agent may do without asking: edits-and-commands, edits-only, read-only, ask, or full (every tool, no prompts; administrators only) |
+| `--permission` | `string` | `edits-and-commands` | what the agent may do: read-only, supervised, auto-accept-edits, edits-and-commands, auto (the tool decides each call; administrators only), or full (every tool, no prompts; administrators only) |
 | `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--profile` | `string` | — | provider profile to launch under (default: the one the engine picks, as in the console) |
+| `--repository` | `string` | — | HTTPS repository URL to check out on the engine instead of a folder; the optional argument is the prompt |
+| `--repository-ref` | `string` | — | repository branch, tag or commit (default HEAD) |
 | `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--template` | `string` | — | saved session template ID; its terms apply at launch and resume |
 | `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--timeout` | `duration` | `30s` | request timeout; with --wait, an explicit value sets the run deadline instead (positive, up to 720h) |
 | `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
 | `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
-| `--tool` | `string` | — | agent tool: claude, codex, grok, opencode or gemini-cli (default: the first one that is ready) |
+| `--tool` | `string` | — | agent tool: claude, codex, grok, opencode, gemini-cli or cursor (default: the first one that is ready) |
+| `--wait` | `bool` | `false` | wait for the turn or session to finish; return a pipeline outcome and stop a completed run |
 | `--worktree` | `bool` | `false` | work in a git worktree of its own, on a new branch (the folder must be a git repository's top folder) |
 | `--worktree-from` | `string` | — | start the worktree at this commit id or local branch instead of the current commit (implies --worktree) |
 

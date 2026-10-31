@@ -29,7 +29,8 @@ const maxProjectedAgents = listCap
 // Retraction of stale permitted edges on unbind is a documented follow-up (access-map
 // OR-merges the permitted flag across signals and has no per-signal retract today).
 func (m *Module) publishBindingEdges(ctx context.Context, tenant model.TenantID, b bindingDTO) {
-	if !b.Enabled {
+	// What a department is given is not something anyone may reach: a standard projects no edge.
+	if !b.Enabled || isStandardsSource(b.SourceType) {
 		return
 	}
 	// a FORBID subtracts access — it is not a PERMITTED edge, so it projects nothing.
@@ -218,7 +219,7 @@ func agentRefsByWorkspace(ctx context.Context, sc store.Scope, workspaceID model
 // agents read in batched IN queries of idChunk ids each — AU2-06 measured 1,001
 // queries for one group; now it is the member list plus one bounded query per
 // chunk, with the member-order output and the maxProjectedAgents cap unchanged.
-// The chunk bound is PostgreSQL's 65,535-parameter limit (SR5C round 2): one
+// The chunk bound is PostgreSQL's 65,535-parameter limit (review round 2): one
 // IN for the whole group would exceed it long before maxProjectedAgents.
 func agentRefsByGroup(ctx context.Context, sc store.Scope, groupID model.ID) ([]string, bool, error) {
 	var members []model.AgentGroupMember

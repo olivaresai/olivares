@@ -68,6 +68,12 @@ vi.mock('@/features/agentops/workspace-browser', () => ({
     )
   },
 }))
+// The terminal has its own tests; here it only has to be the thing the Terminal tab shows.
+vi.mock('./session-terminal', () => ({
+  SessionTerminal: ({ workspaceRef }: { workspaceRef: string }) => (
+    <div data-testid="terminal-tab">{workspaceRef}</div>
+  ),
+}))
 vi.mock('./session-changes', () => ({
   SessionChanges: () => <div data-testid="changes-block" />,
 }))
@@ -199,10 +205,16 @@ const tabs = () =>
     .map((r) => r.textContent)
 
 describe('the side pane tabs', () => {
-  it('shows Context, Changes, Files and Preview, and nothing else when no build registers a panel', async () => {
+  it('shows Context, Changes, Files, Preview and Terminal, and nothing else when no build registers a panel', async () => {
     renderPane()
     await screen.findByTestId('session-context')
-    expect(tabs()).toEqual(['Context', 'Changes', 'Files', 'Preview'])
+    expect(tabs()).toEqual([
+      'Details',
+      'Changes',
+      'Files',
+      'Preview',
+      'Terminal',
+    ])
     // Context is the one in front: the scope and the references, not the changes.
     expect(screen.getByTestId('context-details')).toBeInTheDocument()
     expect(screen.queryByTestId('changes-block')).toBeNull()
@@ -216,11 +228,17 @@ describe('the side pane tabs', () => {
     expect(await screen.findByTestId('session-overview')).toBeInTheDocument()
   })
 
-  it("shows the same four tabs when a build's extension object has no sessionPanels at all", async () => {
+  it("shows the same five tabs when a build's extension object has no sessionPanels at all", async () => {
     registered.panels = undefined
     renderPane()
     await screen.findByTestId('session-context')
-    expect(tabs()).toEqual(['Context', 'Changes', 'Files', 'Preview'])
+    expect(tabs()).toEqual([
+      'Details',
+      'Changes',
+      'Files',
+      'Preview',
+      'Terminal',
+    ])
   })
 
   it('shows a registered panel after Files, and renders it for the session on screen', async () => {
@@ -237,9 +255,16 @@ describe('the side pane tabs', () => {
     ]
     renderPane()
     await screen.findByTestId('session-context')
-    expect(tabs()).toEqual(['Context', 'Changes', 'Files', 'Preview', 'Files'])
+    expect(tabs()).toEqual([
+      'Details',
+      'Changes',
+      'Files',
+      'Preview',
+      'Terminal',
+      'Files',
+    ])
     const radios = screen.getAllByRole('radio')
-    await user.click(radios[4]!)
+    await user.click(radios[5]!)
     expect(await screen.findByTestId('git-panel')).toHaveTextContent(
       'git for run-1',
     )
@@ -259,7 +284,13 @@ describe('the side pane tabs', () => {
     auth.can = (p) => p !== 'admin.shell'
     renderPane()
     await screen.findByTestId('session-context')
-    expect(tabs()).toEqual(['Context', 'Changes', 'Files', 'Preview'])
+    expect(tabs()).toEqual([
+      'Details',
+      'Changes',
+      'Files',
+      'Preview',
+      'Terminal',
+    ])
   })
 
   it('Changes shows what the session changed, and moves the scope out of the way', async () => {
@@ -319,8 +350,62 @@ describe('the side pane tabs', () => {
       'run-1',
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     )
-    await user.click(screen.getByRole('radio', { name: 'Context' }))
+    await user.click(screen.getByRole('radio', { name: 'Details' }))
     expect(screen.queryByRole('heading', { name: 'Git' })).toBeNull()
+  })
+
+  it('Terminal opens in the session’s own folder', async () => {
+    renderPane({ panel: 'terminal' })
+    expect(await screen.findByTestId('terminal-tab')).toHaveTextContent(
+      'ws-main',
+    )
+  })
+
+  it('offers no Terminal to a person without the right to write the folder', async () => {
+    auth.can = (p) => p !== 'sessions:workspace:write'
+    renderPane()
+    await screen.findByTestId('session-context')
+    expect(tabs()).toEqual(['Details', 'Changes', 'Files', 'Preview'])
+  })
+
+  it('opens the Terminal of the registered worktree, never the original checkout', async () => {
+    ops.listWorkspaces.mockResolvedValue({
+      items: [
+        {
+          workspace_ref: 'ws-worktree',
+          root_path: '/worktrees/a',
+          state: 'active',
+          mount_mode: 'rw',
+        },
+      ],
+      has_more: false,
+    })
+    renderPane({
+      panel: 'terminal',
+      resolution: resolution([
+        {
+          ...RUN,
+          workspace_path: '/worktrees/a',
+          worktree_branch: 'session/a',
+        },
+      ]),
+    })
+    expect(await screen.findByTestId('terminal-tab')).toHaveTextContent(
+      'ws-worktree',
+    )
+  })
+
+  it('says a session without a folder has nowhere to open a terminal', async () => {
+    renderPane({
+      panel: 'terminal',
+      resolution: resolution([{ ...RUN, workspace_ref: undefined }]),
+    })
+    expect(
+      await screen.findByText(
+        'This session has no folder, so there is nowhere to open a terminal.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByTestId('terminal-tab')).toBeNull()
   })
 
   it('Files opens the workspace browser on the session’s own folder', async () => {
@@ -374,7 +459,7 @@ describe('the side pane tabs', () => {
     await waitFor(() =>
       expect(screen.getByTestId('context-details')).toBeInTheDocument(),
     )
-    expect(screen.getByRole('radio', { name: 'Context' })).toHaveAttribute(
+    expect(screen.getByRole('radio', { name: 'Details' })).toHaveAttribute(
       'aria-checked',
       'true',
     )
@@ -406,7 +491,7 @@ describe('the side pane tabs', () => {
     await screen.findByTestId('session-context')
     const radios = screen.getAllByRole('radio')
     for (let round = 0; round < 2; round++) {
-      await user.click(radios[4]!)
+      await user.click(radios[5]!)
       await user.click(await screen.findByTestId('counter'))
       expect(screen.getByTestId('counter')).toHaveTextContent('run-1 1')
       await user.click(radios[0]!)
@@ -429,7 +514,7 @@ describe('the side pane tabs', () => {
       },
     ]
     renderPane()
-    await user.click((await screen.findAllByRole('radio'))[4]!)
+    await user.click((await screen.findAllByRole('radio'))[5]!)
     await waitFor(() => expect(seen).toBeDefined())
     expect(seen).toEqual({
       ref: 'run-1',
@@ -460,11 +545,12 @@ describe('the side pane tabs', () => {
       const view = renderPane({ resolution: claudeRun, onPanel })
       await screen.findByTestId('session-context')
       expect(tabs()).toEqual([
-        'Context',
+        'Details',
         'Activity',
         'Changes',
         'Files',
         'Preview',
+        'Terminal',
       ])
       expect(ops.activity).not.toHaveBeenCalled()
       await user.click(screen.getByRole('radio', { name: 'Activity' }))
@@ -489,17 +575,24 @@ describe('the side pane tabs', () => {
       resolution: resolution([{ ...RUN, provider_driver: 'opencode' }]),
     })
     await screen.findByTestId('session-context')
-    expect(tabs()).toEqual(['Context', 'Changes', 'Files', 'Preview'])
+    expect(tabs()).toEqual([
+      'Details',
+      'Changes',
+      'Files',
+      'Preview',
+      'Terminal',
+    ])
     expect(ops.activity).not.toHaveBeenCalled()
   })
 
-  it('ignores a registrant that takes the id of Context, Activity, Changes, Files or Preview', async () => {
+  it('ignores a registrant that takes the id of Context, Activity, Changes, Files, Preview or Terminal', async () => {
     registered.panels = [
       'context',
       'activity',
       'changes',
       'files',
       'preview',
+      'terminal',
     ].map((id) => ({
       id,
       labelKey: 'sessions:context.tabFiles',
@@ -508,7 +601,13 @@ describe('the side pane tabs', () => {
     }))
     renderPane()
     await screen.findByTestId('session-context')
-    expect(tabs()).toEqual(['Context', 'Changes', 'Files', 'Preview'])
+    expect(tabs()).toEqual([
+      'Details',
+      'Changes',
+      'Files',
+      'Preview',
+      'Terminal',
+    ])
     expect(screen.queryByText('takeover')).toBeNull()
   })
 })
@@ -528,6 +627,40 @@ describe('Files scope and panel navigation regressions', () => {
       'ws-main',
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     )
+  })
+
+  it('links a session started from an issue back to its page', async () => {
+    renderPane({
+      resolution: resolution([
+        { ...RUN, source_url: 'https://github.com/acme/widgets/issues/17' },
+      ]),
+    })
+    const link = await screen.findByRole('link', { name: 'acme/widgets#17' })
+    expect(link).toHaveAttribute(
+      'href',
+      'https://github.com/acme/widgets/issues/17',
+    )
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link.getAttribute('rel')).toContain('noopener')
+  })
+
+  it('shows no link for a session started any other way, or for a page that is not GitHub’s', async () => {
+    const view = renderPane()
+    await screen.findByText('Details')
+    expect(screen.queryByRole('link', { name: /#\d+$/ })).toBeNull()
+    view.unmount()
+    renderPane({
+      resolution: resolution([
+        { ...RUN, source_url: 'javascript:alert(document.cookie)' },
+      ]),
+    })
+    await screen.findByText('Details')
+    expect(
+      screen
+        .queryAllByRole('link')
+        .filter((a) => a.getAttribute('href')?.startsWith('javascript:')),
+    ).toEqual([])
+    expect(screen.queryByText(/javascript:/)).toBeNull()
   })
 
   it('browses the registered worktree scope, never the original checkout', async () => {
@@ -594,7 +727,7 @@ describe('Files scope and panel navigation regressions', () => {
     view.rerender(
       <SessionContextPane resolution={resolution()} onPanel={() => {}} />,
     )
-    expect(screen.getByRole('radio', { name: 'Context' })).toHaveAttribute(
+    expect(screen.getByRole('radio', { name: 'Details' })).toHaveAttribute(
       'aria-checked',
       'true',
     )

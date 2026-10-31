@@ -24,6 +24,6 @@ export function browserSessionHeaders(
 
 export function journeyNowLink(page: Page) {
   return page
-    .getByRole('navigation', { name: 'Journeys', exact: true })
+    .getByRole('navigation', { name: 'Main navigation', exact: true })
     .getByRole('link', { name: 'Now', exact: true })
 }

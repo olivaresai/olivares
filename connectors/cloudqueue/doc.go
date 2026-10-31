@@ -63,7 +63,7 @@
 // REUSE — Azure buses are NOT re-implemented here. Azure Event Hubs speaks the
 // Apache Kafka wire protocol, so it is reached via connectors/kafka;
 // Azure Service Bus speaks AMQP 1.0, so it is reached via connectors/amqp
-//. An operator points the kafka connector at an Event Hubs namespace
+// . An operator points the kafka connector at an Event Hubs namespace
 // and the amqp connector at a Service Bus namespace; this connector covers AWS
 // (SQS/SNS/EventBridge) and GCP (Pub/Sub) only.
 package cloudqueue

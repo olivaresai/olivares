@@ -38,6 +38,10 @@ import {
  * The replay cursor belongs to the run+tenant+credential identity, not to one HTTP
  * attempt: an explicit retry or a same-identity state/transport restart resumes
  * with `?from=` and keeps seq dedupe. Only a new identity starts at from=0.
+ *
+ * A long session pages: with `tail` a fresh attach opens on the last
+ * `tail` buffered frames, `onPage` hears whether earlier ones are buffered, and
+ * readAttachPage reads them a page at a time.
  */
 export interface UseRunAttachOptions {
   runRef: string | null
@@ -50,6 +54,10 @@ export interface UseRunAttachOptions {
   onLag?: (lag: AttachLag) => void
   onNotice?: (notice: AttachNotice) => void
   onEnd?: () => void
+  /** Opens a fresh attach on the last `tail` buffered frames. */
+  tail?: number
+  /** Whether the buffer holds frames before the ones a tail open sent. */
+  onPage?: (earlier: boolean) => void
 }
 
 export interface UseRunAttachResult {
@@ -71,6 +79,8 @@ export function useRunAttach({
   onLag,
   onNotice,
   onEnd,
+  tail,
+  onPage,
 }: UseRunAttachOptions): UseRunAttachResult {
   const token = useSessionStore((s) => s.csrfToken)
   const credentialGeneration = useSessionStore((s) => s.credentialGeneration)
@@ -85,10 +95,10 @@ export function useRunAttach({
   }, [])
 
   // Stable callback refs so the stream effect doesn't restart on every render.
-  const cbRef = useRef({ onFrame, onHistory, onLag, onNotice, onEnd })
+  const cbRef = useRef({ onFrame, onHistory, onLag, onNotice, onEnd, onPage })
   useEffect(() => {
-    cbRef.current = { onFrame, onHistory, onLag, onNotice, onEnd }
-  }, [onFrame, onHistory, onLag, onNotice, onEnd])
+    cbRef.current = { onFrame, onHistory, onLag, onNotice, onEnd, onPage }
+  }, [onFrame, onHistory, onLag, onNotice, onEnd, onPage])
 
   // Cursor owner is compared privately; the bearer is never placed in React
   // state, a key, or a log. credentialGeneration is the non-secret counter.
@@ -148,6 +158,15 @@ export function useRunAttach({
           cb.onFrame(f)
           break
         }
+        case 'page': {
+          try {
+            const page = JSON.parse(msg.data) as { earlier?: unknown }
+            cb.onPage?.(page.earlier === true)
+          } catch {
+            /* ignore a malformed page */
+          }
+          break
+        }
         case 'lag': {
           try {
             const lag = JSON.parse(msg.data) as AttachLag
@@ -197,6 +216,7 @@ export function useRunAttach({
             query: {
               from: String(cursorRef.current),
               history: requestHistory ? '1' : undefined,
+              tail: tail && cursorRef.current === 0 ? String(tail) : undefined,
             },
             onOpen: () => {
               attempt = 0
@@ -229,7 +249,16 @@ export function useRunAttach({
       cancelled = true
       controller.abort()
     }
-  }, [active, runRef, token, tenant, sessionKey, generation, requestHistory])
+  }, [
+    active,
+    runRef,
+    token,
+    tenant,
+    sessionKey,
+    generation,
+    requestHistory,
+    tail,
+  ])
 
   return {
     status: active ? status : 'closed',
@@ -237,4 +266,45 @@ export function useRunAttach({
     ioUnavailable: active ? ioUnavailable : null,
     retry,
   }
+}
+
+/**
+ * readAttachPage reads one page of a session's buffered output: the frames from
+ * `from` up to `before`, and whether the buffer holds frames before them. It goes
+ * through the attach route and its checks, and throws when the page did not end
+ * (the stream dropped) or the request failed.
+ */
+export async function readAttachPage(opts: {
+  runRef: string
+  token: string | null
+  tenant: string | null
+  from: number
+  before: number
+  signal: AbortSignal
+}): Promise<{ frames: AttachFrame[]; earlier: boolean }> {
+  const frames: AttachFrame[] = []
+  // Set by the page event; a closure assignment TypeScript would not see on a plain let.
+  const end: { earlier: boolean | null } = { earlier: null }
+  await subscribeStream({
+    path: runAttachPath(opts.runRef),
+    token: opts.token,
+    tenant: opts.tenant,
+    signal: opts.signal,
+    query: { from: String(opts.from), before: String(opts.before) },
+    onMessage: (msg) => {
+      try {
+        if (msg.event === 'output') {
+          const f = JSON.parse(msg.data) as AttachFrame
+          if (typeof f.seq === 'number' && f.seq < opts.before) frames.push(f)
+        } else if (msg.event === 'page') {
+          end.earlier =
+            (JSON.parse(msg.data) as { earlier?: unknown }).earlier === true
+        }
+      } catch {
+        /* a malformed frame must never crash the console */
+      }
+    },
+  })
+  if (end.earlier === null) throw new Error('the page did not end')
+  return { frames, earlier: end.earlier }
 }

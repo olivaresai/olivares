@@ -194,6 +194,7 @@ func (m *Module) protocolReplayAttempt(
 	if owning {
 		attemptCollector = &deferredWorkOutboxCollector{}
 	}
+	mark := m.workOutboxMark()
 	err := m.workData(tenant).Mutate(ctx, func(sc store.Scope) error {
 		if len(refs) > 0 {
 			if _, err := auth.PinFence(ctx, sc, auth.FenceDirectory, refs); err != nil {
@@ -273,6 +274,8 @@ func (m *Module) protocolReplayAttempt(
 		if err == nil {
 			m.flushDeferredWorkOutboxDrains(requests)
 		}
+		// A joined communication write only counts its outbox insert; its commit is this one.
+		m.nudgeWorkOutboxSince(mark, err)
 	}
 	return result, err
 }

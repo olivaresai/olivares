@@ -294,3 +294,28 @@ func TestRevertingAFailedReloadRestoresAccess(t *testing.T) {
 		t.Error("reverting to A granted B")
 	}
 }
+
+// TestConnectorLookupFollowsTheTenantScope: a caller that reads through a destination
+// (a change-record policy) sees exactly what delivery sees, and an unaddressable
+// destination looks like an unknown one.
+func TestConnectorLookupFollowsTheTenantScope(t *testing.T) {
+	a, b := model.NewTenantID(), model.NewTenantID()
+	d := newConnectorDispatcher([]notifyDestinationSpec{
+		{Name: "servicenow", Kind: "servicenow", Tenants: []string{a.String()}},
+		{Name: "nobody", Kind: "servicenow", Tenants: []string{}},
+	}, nil, discardLog())
+	conn := &scopeStubConn{}
+	d.conns["servicenow"], d.conns["nobody"] = conn, &scopeStubConn{}
+
+	if got, ok := d.connector(a, "servicenow"); !ok || got != conn {
+		t.Errorf("tenant A lookup = %v %v, want its connector", got, ok)
+	}
+	for _, c := range []struct {
+		tenant model.TenantID
+		name   string
+	}{{b, "servicenow"}, {a, "nobody"}, {a, "missing"}} {
+		if got, ok := d.connector(c.tenant, c.name); ok || got != nil {
+			t.Errorf("lookup of %q = %v %v, want unknown", c.name, got, ok)
+		}
+	}
+}

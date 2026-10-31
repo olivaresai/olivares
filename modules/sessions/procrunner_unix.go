@@ -15,9 +15,12 @@ import (
 // makes context cancellation hard-kill the whole group, so a hung process and
 // any grandchildren it spawned are terminated (a grandchild holding the stdout
 // pipe open would otherwise block the read and wedge teardown forever). On
-// Linux the child also dies with the engine (endWithEngine); a session's launch
-// then replaces that with its guard (watchEngine), which ends the whole tree. On
-// non-Unix this is a no-op and the default per-process kill applies.
+// Linux the child also dies with the engine (endWithEngine). A guarded launch
+// (watchEngine) then replaces both: its cancellation closes the guard's watch
+// instead, because the group kill would take the guard down with the program and
+// leave what left the group; the guard ends the whole tree. Only a launch with no
+// guard (the short-lived children, git) keeps the group kill. On non-Unix this is
+// a no-op and the default per-process kill applies.
 func configureProcGroup(cmd *exec.Cmd) {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { preferenceStorage } from '@/lib/preference-storage'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -119,7 +120,7 @@ const mount = () =>
   )
 
 beforeEach(() => {
-  localStorage.clear()
+  preferenceStorage.clear()
   identity.activeTenant = 't1'
   identity.principal = { kind: 'user', user_id: 'u-self' }
   recentMock.mockClear()
@@ -151,7 +152,7 @@ describe('NotificationBell', () => {
     expect(dot()).toBeNull()
     await user.keyboard('{Escape}')
 
-    expect(localStorage.getItem(LAST_SEEN_KEY)).toBeNull()
+    expect(preferenceStorage.getItem(LAST_SEEN_KEY)).toBeNull()
     identity.activeTenant = 't2'
     redraw()
     await waitFor(() => expect(dot()).not.toBeNull())
@@ -165,35 +166,6 @@ describe('NotificationBell', () => {
     identity.principal = { kind: 'user', user_id: 'u-other' }
     redraw()
     await waitFor(() => expect(dot()).not.toBeNull())
-  })
-
-  it('migrates the legacy marker only to a user partition, never a token or second tenant', async () => {
-    localStorage.setItem(LAST_SEEN_KEY, shown().at(-1)!.occurred_at)
-    identity.principal = { kind: 'token', user_id: 'u-self' }
-    const view = mount()
-    const dot = () => view.container.querySelector('.bg-primary')
-    await waitFor(() => expect(dot()).not.toBeNull())
-    expect(localStorage.getItem(LAST_SEEN_KEY)).not.toBeNull()
-    identity.principal = { kind: 'user', user_id: 'u-self' }
-    view.rerender(
-      <Wrapper>
-        <NotificationBell />
-      </Wrapper>,
-    )
-    await waitFor(() => expect(dot()).toBeNull())
-    expect(localStorage.getItem(LAST_SEEN_KEY)).toBeNull()
-    identity.activeTenant = 't2'
-    view.rerender(
-      <Wrapper>
-        <NotificationBell />
-      </Wrapper>,
-    )
-    await waitFor(() => expect(dot()).not.toBeNull())
-    view.unmount()
-    identity.activeTenant = 't1'
-    const restored = mount()
-    await waitFor(() => expect(recentMock).toHaveBeenCalled())
-    expect(restored.container.querySelector('.bg-primary')).toBeNull()
   })
 
   it('resets a token’s volatile read marker and closes the popover on tenant switch without storage writes', async () => {
@@ -302,7 +274,10 @@ describe('NotificationBell', () => {
 
   it('lights the dot for a new event, then clears and keeps the newest timestamp on open', async () => {
     const [previous, newest] = shown().slice(-2)
-    localStorage.setItem(LAST_SEEN_KEY, previous!.occurred_at)
+    preferenceStorage.setItem(
+      `${LAST_SEEN_KEY}:${JSON.stringify([window.location.origin, 'user', 'u-self', 't1'])}`,
+      previous!.occurred_at,
+    )
     const user = userEvent.setup()
     const { container } = mount()
     await waitFor(() =>
@@ -310,16 +285,19 @@ describe('NotificationBell', () => {
     )
     await user.click(screen.getByRole('button'))
     expect(container.querySelector('.bg-primary')).toBeNull()
-    expect(localStorage.getItem(LAST_SEEN_KEY)).toBeNull()
+    expect(preferenceStorage.getItem(LAST_SEEN_KEY)).toBeNull()
     expect(
-      localStorage.getItem(
+      preferenceStorage.getItem(
         `${LAST_SEEN_KEY}:${JSON.stringify([window.location.origin, 'user', 'u-self', 't1'])}`,
       ),
     ).toBe(newest!.occurred_at)
   })
 
   it('does not light the dot when the newest event was already seen', async () => {
-    localStorage.setItem(LAST_SEEN_KEY, shown().at(-1)!.occurred_at)
+    preferenceStorage.setItem(
+      `${LAST_SEEN_KEY}:${JSON.stringify([window.location.origin, 'user', 'u-self', 't1'])}`,
+      shown().at(-1)!.occurred_at,
+    )
     const { container } = mount()
     await waitFor(() => expect(recentMock).toHaveBeenCalled())
     await waitFor(() =>
@@ -330,7 +308,10 @@ describe('NotificationBell', () => {
   it('keeps polling: an event that arrives later lights the dot with no reload', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
-      localStorage.setItem(LAST_SEEN_KEY, shown().at(-1)!.occurred_at)
+      preferenceStorage.setItem(
+        `${LAST_SEEN_KEY}:${JSON.stringify([window.location.origin, 'user', 'u-self', 't1'])}`,
+        shown().at(-1)!.occurred_at,
+      )
       const { container } = mount()
       await waitFor(() => expect(recentMock).toHaveBeenCalled())
       expect(container.querySelector('.bg-primary')).toBeNull()

@@ -44,7 +44,10 @@
 # contradiction is an explicit pending owner decision; the single-source version check
 # lands with the export-integrity workstream once decided.
 #
-# Usage: check-public-counts.sh [--selftest]
+# Usage: check-public-counts.sh [--selftest | --counts-only]
+#   --counts-only runs the count body and skips the three delegated Go legs (SKIP lines name
+#   them). The body is plain python3 and needs no Go toolchain; the legs do. The dev pull-request
+#   check runs this form, and mainline-ci plus enterprise compliance:catalog:check run the full script.
 #   --selftest runs the red-fixture battery (every trap this gate exists to catch must
 #   FAIL on a fixture) and exits without scanning the tree.
 set -eu
@@ -52,6 +55,8 @@ cd "$(dirname "$0")/.."
 
 CPC_SELFTEST=0
 [ "${1:-}" = "--selftest" ] && CPC_SELFTEST=1
+CPC_COUNTS_ONLY=0
+[ "${1:-}" = "--counts-only" ] && CPC_COUNTS_ONLY=1
 export CPC_SELFTEST
 
 # ── delegated-leg verdicts: collected, never a detour (#569) ───────────────────────────
@@ -109,7 +114,9 @@ cpc_leg_note() { # <rc> <drift-message> <blind-message>
 # own; it lives here because was told not to touch Taskfile.yml. Promoting it is a
 # six-line Taskfile block plus deleting this delegation — the gate itself does not
 # change.
-if [ -x scripts/check-config-env-docs.sh ] || [ -f scripts/check-config-env-docs.sh ]; then
+if [ "$CPC_COUNTS_ONLY" = 1 ]; then
+	echo "SKIP check-config-env-docs: --counts-only (this leg runs in public-counts-go-legs, mainline-ci and enterprise)"
+elif [ -x scripts/check-config-env-docs.sh ] || [ -f scripts/check-config-env-docs.sh ]; then
 	cpc_env_arg=""
 	[ "$CPC_SELFTEST" = "1" ] && cpc_env_arg="--self-test"
 	TMPDIR="$PWD/.config-env-docs-tmp" bash scripts/check-config-env-docs.sh $cpc_env_arg || {
@@ -159,7 +166,9 @@ fi
 #
 # ...called one by one from .githooks/pre-push and .github/workflows/mainline-ci.yml,
 # never from an aggregate.
-if [ -x scripts/check-cli-ref-docs.sh ] || [ -f scripts/check-cli-ref-docs.sh ]; then
+if [ "$CPC_COUNTS_ONLY" = 1 ]; then
+	echo "SKIP check-cli-ref-docs: --counts-only (the Go legs run in mainline-ci and enterprise)"
+elif [ -x scripts/check-cli-ref-docs.sh ] || [ -f scripts/check-cli-ref-docs.sh ]; then
 	cpc_cli_arg=""
 	[ "$CPC_SELFTEST" = "1" ] && cpc_cli_arg="--self-test"
 	TMPDIR="$PWD/.cli-ref-docs-tmp" bash scripts/check-cli-ref-docs.sh $cpc_cli_arg || {
@@ -215,7 +224,9 @@ fi
 #
 # ...called one by one from .githooks/pre-push and .github/workflows/mainline-ci.yml,
 # never from an aggregate.
-if [ -x scripts/check-openapi-op-descriptions.sh ] || [ -f scripts/check-openapi-op-descriptions.sh ]; then
+if [ "$CPC_COUNTS_ONLY" = 1 ]; then
+	echo "SKIP check-openapi-op-descriptions: --counts-only (this leg runs in public-counts-go-legs, mainline-ci and enterprise)"
+elif [ -x scripts/check-openapi-op-descriptions.sh ] || [ -f scripts/check-openapi-op-descriptions.sh ]; then
 	cpc_oad_arg=""
 	[ "$CPC_SELFTEST" = "1" ] && cpc_oad_arg="--self-test"
 	TMPDIR="$PWD/.openapi-op-descriptions-tmp" bash scripts/check-openapi-op-descriptions.sh $cpc_oad_arg || {

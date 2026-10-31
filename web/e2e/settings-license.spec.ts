@@ -6,7 +6,7 @@ import { expect, test } from '@playwright/test'
 
 test.use({ screenshot: 'off', trace: 'off', video: 'off' })
 
-test('Settings and Administration share the license view and search destination', async ({
+test('License is one page: its old Administration address and the Settings search land on it', async ({
   page,
 }) => {
   test.setTimeout(180_000)
@@ -31,9 +31,11 @@ test('Settings and Administration share the license view and search destination'
       await page.setViewportSize({ width, height: 900 })
       for (const path of [
         '/settings?section=edition',
+        // 0.5 one navigation: Administration's copy of the panel left; its address lands here.
         '/console?tab=license',
       ]) {
         await page.goto(path)
+        await expect(page).toHaveURL(/\/settings\?section=edition/)
         await expect(
           page.getByRole('heading', { name: 'Edition & license', exact: true }),
         ).toBeVisible()
@@ -47,8 +49,12 @@ test('Settings and Administration share the license view and search destination'
         await page.keyboard.press('Escape')
       }
       await page.goto('/settings')
+      // License is a place of the sidebar (a drawer item at 390 px), not a row of Settings.
+      if (width < 761)
+        await page.getByRole('button', { name: /open navigation/i }).click()
       await page
-        .getByRole('button', { name: 'Edition & modules', exact: true })
+        .getByRole('navigation', { name: 'Main navigation' })
+        .getByRole('link', { name: 'License', exact: true })
         .click()
       await expect(page.getByText('No license', { exact: true })).toBeVisible()
       await expect(page).toHaveURL(/section=edition/)

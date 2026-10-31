@@ -51,6 +51,31 @@ type Host interface {
 	PushTarget(t Token) (pushURL, scheme string, header Secret)
 }
 
+// CommentHost is the additive issue-comment surface. Host implementations
+// that predate comments remain valid Host values.
+type CommentHost interface {
+	CreateComment(ctx context.Context, t Token, spec CommentSpec) (Comment, Result)
+	ListComments(ctx context.Context, t Token, number int) ([]Comment, error)
+}
+
+// CreateComment dispatches through a host that offers comments.
+func CreateComment(ctx context.Context, host Host, t Token, spec CommentSpec) (Comment, Result) {
+	h, ok := host.(CommentHost)
+	if !ok {
+		return Comment{}, Result{Class: Rejected, Reason: "unsupported_effect", Host: HostError{Status: 422, Code: "validation_failed"}}
+	}
+	return h.CreateComment(ctx, t, spec)
+}
+
+// ListComments reads through a host that offers comments.
+func ListComments(ctx context.Context, host Host, t Token, number int) ([]Comment, error) {
+	h, ok := host.(CommentHost)
+	if !ok {
+		return nil, ErrNotSupported
+	}
+	return h.ListComments(ctx, t, number)
+}
+
 // GitHubConfig is one approved credential binding for one repository.
 type GitHubConfig struct {
 	APIBase        string
@@ -100,6 +125,17 @@ func (g *GitHub) repoURL(suffix string) string {
 	return g.cfg.APIBase + "/repos/" + url.PathEscape(g.cfg.Owner) + "/" + url.PathEscape(g.cfg.Repo) + suffix
 }
 
+func githubWebBase(apiBase string) string {
+	u, err := url.Parse(apiBase)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	if strings.EqualFold(u.Hostname(), "api.github.com") {
+		return "https://github.com"
+	}
+	return "https://" + strings.ToLower(u.Host)
+}
+
 func permissionsFor(e Effect) map[string]string {
 	switch e {
 	case EffectPush:
@@ -110,6 +146,12 @@ func permissionsFor(e Effect) map[string]string {
 		return map[string]string{"contents": "write", "pull_requests": "read"}
 	case EffectRead:
 		return map[string]string{"contents": "read"}
+	case EffectItemRead:
+		return map[string]string{"issues": "read", "pull_requests": "read"}
+	case EffectIssueComment:
+		return map[string]string{"issues": "write"}
+	case EffectIssueCommentObserve:
+		return map[string]string{"issues": "read"}
 	}
 	return map[string]string{"contents": "read", "pull_requests": "read"}
 }
@@ -150,7 +192,9 @@ func (g *GitHub) Mint(ctx context.Context, e Effect) (Token, error) {
 		tok.Repositories = append(tok.Repositories, r.Name)
 	}
 	if len(tok.Repositories) != 1 || !strings.EqualFold(tok.Repositories[0], g.cfg.Repo) {
-		_ = g.Release(ctx, tok)
+		if err := g.Release(ctx, tok); err != nil {
+			return Token{}, errors.Join(ErrTokenScope, err)
+		}
 		return Token{}, ErrTokenScope
 	}
 	return tok, nil
@@ -345,17 +389,93 @@ func (g *GitHub) MergeChange(ctx context.Context, t Token, number int, sha, meth
 		Merged bool   `json:"merged"`
 		SHA    string `json:"sha"`
 	}
-	_ = json.Unmarshal(c.body, &out)
-	return MergeOutcome{Merged: out.Merged, MergeCommitSHA: out.SHA}, res
+	if json.Unmarshal(c.body, &out) != nil || !out.Merged || out.SHA == "" {
+		return MergeOutcome{}, Result{Class: Ambiguous, Reason: "malformed_response", Host: res.Host}
+	}
+	return MergeOutcome{Merged: true, MergeCommitSHA: out.SHA}, res
+}
+
+type ghComment struct {
+	ID        int64     `json:"id"`
+	HTMLURL   string    `json:"html_url"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (c ghComment) comment() Comment {
+	return Comment{ID: strconv.FormatInt(c.ID, 10), URL: c.HTMLURL, Body: c.Body, CreatedAt: c.CreatedAt}
+}
+
+func (g *GitHub) validCommentURL(raw string, number int, id int64) bool {
+	for _, kind := range []string{"issues", "pull"} {
+		expected := githubWebBase(g.cfg.APIBase) + "/" + g.cfg.Owner + "/" + g.cfg.Repo + "/" + kind + "/" + strconv.Itoa(number) + "#issuecomment-" + strconv.FormatInt(id, 10)
+		if strings.EqualFold(canonicalCommentURL(raw), canonicalCommentURL(expected)) {
+			return true
+		}
+	}
+	return false
+}
+
+func canonicalCommentURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	if u.Port() == "443" {
+		u.Host = strings.TrimSuffix(u.Host, ":443")
+	}
+	return u.String()
+}
+
+// CreateComment adds one comment to an issue.
+func (g *GitHub) CreateComment(ctx context.Context, t Token, spec CommentSpec) (Comment, Result) {
+	c, err := do(ctx, g.d, http.MethodPost, g.repoURL("/issues/"+strconv.Itoa(spec.Number)+"/comments"), g.headers(t.secret.Reveal()), map[string]string{"body": spec.Body})
+	if err != nil {
+		return Comment{}, Result{Class: Ambiguous, Reason: "transport", Host: hostError(c.status, c.header, nil)}
+	}
+	res := classifyWrite(c.status, c.header, http.StatusCreated, map[int]string{http.StatusBadRequest: "validation_failed", http.StatusUnprocessableEntity: "validation_failed"})
+	if res.Class != Applied {
+		return Comment{}, res
+	}
+	var out ghComment
+	if json.Unmarshal(c.body, &out) != nil || out.ID == 0 || !g.validCommentURL(out.HTMLURL, spec.Number, out.ID) {
+		return Comment{}, Result{Class: Ambiguous, Reason: "malformed_response", Host: res.Host}
+	}
+	return out.comment(), res
+}
+
+// ListComments lists every comment on an issue, up to the shared page bound.
+func (g *GitHub) ListComments(ctx context.Context, t Token, number int) ([]Comment, error) {
+	q := url.Values{"per_page": {"100"}}
+	next := g.repoURL("/issues/" + strconv.Itoa(number) + "/comments?" + q.Encode())
+	var out []Comment
+	for page := 0; next != ""; page++ {
+		if page == maxPages || !sameOrigin(g.cfg.APIBase, next) {
+			return nil, ErrLookupIncomplete
+		}
+		c, err := do(ctx, g.d, http.MethodGet, next, g.headers(t.secret.Reveal()), nil)
+		if err != nil || c.status != http.StatusOK {
+			he := hostError(c.status, c.header, ErrLookupIncomplete)
+			return nil, &he
+		}
+		var comments []ghComment
+		if json.Unmarshal(c.body, &comments) != nil {
+			return nil, ErrLookupIncomplete
+		}
+		for _, comment := range comments {
+			if comment.ID == 0 || !g.validCommentURL(comment.HTMLURL, number, comment.ID) {
+				return nil, ErrLookupIncomplete
+			}
+			out = append(out, comment.comment())
+		}
+		next = nextLink(c.header)
+	}
+	return out, nil
 }
 
 // PushTarget returns the git URL of the repository on the binding's host.
 func (g *GitHub) PushTarget(t Token) (string, string, Secret) {
-	u, _ := url.Parse(g.cfg.APIBase)
-	gitBase := "https://" + u.Host
-	if strings.EqualFold(u.Hostname(), "api.github.com") {
-		gitBase = "https://github.com"
-	}
+	gitBase := githubWebBase(g.cfg.APIBase)
 	basic := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + t.secret.Reveal()))
 	return gitBase + "/" + g.cfg.Owner + "/" + g.cfg.Repo + ".git", "https", NewSecret("Authorization: Basic " + basic)
 }

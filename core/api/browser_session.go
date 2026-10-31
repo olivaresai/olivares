@@ -127,7 +127,7 @@ func browserCookieApplies(r *http.Request) bool {
 		return false
 	}
 	switch r.URL.Path {
-	case "/v1/auth/login", "/v1/setup", "/v1/server-info", "/v1/auth/totp/challenge", "/v1/invites/accept":
+	case "/v1/auth/sessions/pairing/accept", "/v1/auth/login", "/v1/setup", "/v1/server-info", "/v1/auth/totp/challenge", "/v1/invites/accept":
 		return false
 	}
 	if r.Header.Get("X-Olivares-Session") == "cookie" &&

@@ -162,6 +162,7 @@ type ringRead struct {
 	gap     bool       // true if frames below the cursor were evicted (honest loss)
 	dropped int64      // how many frames were evicted past the cursor (when gap)
 	closed  bool       // the stream has ended (no more frames will ever arrive)
+	earlier bool       // buffered frames remain below the frames read (a reader may page back to them)
 }
 
 // readFrom returns the buffered frames with Seq >= cursor (a copy), the next
@@ -199,5 +200,17 @@ func (r *outputRing) readFrom(cursor int64) ringRead {
 		}
 	}
 	res.next = r.nextSeq
+	res.earlier = start > r.firstSeq
 	return res
+}
+
+// tailCursor is the cursor of the last n buffered frames, never below the retained floor: a fresh attach that
+// opens on them misses nothing it could have read, so it reports no gap. 0 (the whole buffer) when it is empty.
+func (r *outputRing) tailCursor(n int64) int64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.frames) == 0 || r.nextSeq-n <= r.firstSeq {
+		return 0
+	}
+	return r.nextSeq - n
 }

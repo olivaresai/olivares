@@ -86,7 +86,7 @@ func (p *guardianPump) register(rt *runtime.Runtime) error {
 // remaining tenants still sweep (the pass is idempotent — every transition is
 // state-change-guarded in the module). Logged fields are COUNTS ONLY.
 //
-// C2 item 4 (SR2C P1): the pump probes EVERY tenant on every tick and sweeps
+// C2 item 4 (review P1): the pump probes EVERY tenant on every tick and sweeps
 // only where rules exist — the empty probe is one bounded read, so a rule
 // created a second ago still meets the 30-second operator cadence. There is no
 // cached "no rules" decision: the probe IS the recheck.
@@ -122,13 +122,12 @@ func (p *guardianPump) runSweep(ctx context.Context) error {
 			continue
 		}
 		res, serr := p.gov.GuardianSweep(ctx, t)
-		if serr != nil {
-			p.log.Warn("guardian-sweep: tenant pass failed; continuing with the remaining tenants", "tenant", t.String(), "err", serr)
-			continue
-		}
 		if res.Executed+res.Rejected+res.Expired+res.Failed > 0 {
 			p.log.Info("guardian-sweep: advanced pending containments",
 				"tenant", t.String(), "executed", res.Executed, "rejected", res.Rejected, "expired", res.Expired, "failed", res.Failed)
+		}
+		if serr != nil {
+			p.log.Warn("guardian-sweep: tenant pass failed; continuing with the remaining tenants", "tenant", t.String(), "err", serr)
 		}
 	}
 	return nil

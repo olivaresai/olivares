@@ -116,7 +116,18 @@ describe('SessionOverview — the working folder', () => {
     expect(screen.getByTestId('conversation-folder')).toHaveTextContent(
       'Working folder: /projects/example',
     )
+    expect(
+      screen.getByRole('button', { name: 'Copy /projects/example' }),
+    ).toBeInTheDocument()
     expect(screen.queryByText(/temporary folder/)).toBeNull()
+  })
+
+  it('keeps translation markup in a path inert', () => {
+    const value = '</path><path value="/tmp/spoof">'
+    renderOverview(run({ workspace_ref: 'folder-1', workspace_path: value }))
+    const code = document.querySelector('[data-slot="path-text"] code')!
+    expect(code).toHaveAttribute('title', value)
+    expect(code).not.toHaveAttribute('title', '/tmp/spoof')
   })
 
   it('falls back to the folder the tool named in its first frame', () => {
@@ -174,7 +185,7 @@ describe('SessionOverview — the working folder', () => {
 })
 
 describe('SessionOverview — the badges', () => {
-  // dev#3120: "Managed by Olivares" sat on every session Olivares started, the normal
+  // the regression: "Managed by Olivares" sat on every session Olivares started, the normal
   // case, and explained nothing. A chip is shown only for a session that came another way.
   it('says the mode the tool reported, and no chip for a session Olivares started', () => {
     renderOverview(run({ tool_mode: 'plan', provider_driver: 'claude' }))

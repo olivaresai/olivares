@@ -250,6 +250,8 @@ export interface CreateApprovalRequest {
 /** One approval request — the APPROVAL QUEUE row. */
 export interface ApprovalDTO {
   id: string
+  /** The native provider method accepts a grant bounded to this session. */
+  session_scope_allowed?: boolean
   /** The session the request belongs to (canonical id), when the engine names one. */
   session_ref?: string
   /** What will run, as the engine stored it for review (PEP; native drivers via N1):
@@ -293,6 +295,8 @@ export type DecisionVerb = 'approve' | 'reject'
 export interface DecisionInput {
   /** 'approve' | 'reject' (case-insensitive server-side). */
   decision: DecisionVerb
+  /** Only for approval of a supported provider permission; omission is one use. */
+  scope?: 'session'
   /** Decider's note / reason (<=4096). */
   note?: string
 }
@@ -301,6 +305,7 @@ export interface DecisionInput {
 export interface DecisionDTO {
   /** 'approve' | 'reject'. */
   decision: DecisionVerb | string
+  scope?: 'session'
   /** Audit-actor string ('user:<id>'/'token:<id>') — WHO decided, never an email. */
   decider: string
   decided_at?: string

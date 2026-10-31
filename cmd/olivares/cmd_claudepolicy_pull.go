@@ -153,7 +153,8 @@ func newClaudePolicyPullCmd(flags *authClientFlags) *cobra.Command {
 			"  codex-managed-config      /etc/codex/managed_config.toml\n" +
 			"  grok-requirements         /etc/grok/requirements.toml\n" +
 			"  opencode-config           /etc/opencode/opencode.json\n" +
-			"  gemini-cli-settings       /etc/gemini-cli/settings.json",
+			"  gemini-cli-settings       /etc/gemini-cli/settings.json\n" +
+			"  managed-instructions@<department>  /etc/claude-code/CLAUDE.md (that department's file)",
 		Example: "  olivares claude-policy pull opencode-config --scope $(hostname) \\\n" +
 			"    --pin-key-fingerprint 1a2b3c4d5e6f7a8b --out /etc/opencode/opencode.json",
 		Args: cobra.ExactArgs(1),

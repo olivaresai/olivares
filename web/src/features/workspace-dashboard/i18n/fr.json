@@ -43,6 +43,8 @@
     "empty": "Aucun dossier de session pour l'instant. Un dossier apparaît ici dès qu'une session y démarre.",
     "loading": "Lecture des dossiers de session…",
     "unavailable": "Les dossiers de session sont indisponibles.",
-    "truncationHint": "Ouvrez Sessions pour voir tous les dossiers."
+    "truncationHint": "Ouvrez Sessions pour voir tous les dossiers.",
+    "filter": "Trouver un dossier",
+    "noMatch": "Aucun dossier ne correspond à « {{query}} »."
   }
 }

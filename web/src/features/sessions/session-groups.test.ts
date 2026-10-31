@@ -321,8 +321,8 @@ describe('groupSessions — the rail in reading order', () => {
 })
 
 // The list is grouped by what a session needs from the person, and keeps what ended
-// today apart from what ended before (dev#3162).
-describe('the day a session finished (dev#3162)', () => {
+// today apart from what ended before.
+describe('the day a session finished', () => {
   const now = new Date(2026, 9, 23, 15, 0).getTime()
   const today = row({
     session_ref: 's-today',
@@ -368,5 +368,92 @@ describe('the day a session finished (dev#3162)', () => {
     const groups = groupSessions([first, last], new Set(), now)
     expect(groups.find((g) => g.id === 'today')?.sessions).toEqual([first])
     expect(groups.find((g) => g.id === 'settled')?.sessions).toEqual([last])
+  })
+})
+
+// Working sessions fold into one collapsed group, so a running session never moves a row
+// under the pointer; one leaves the fold only when it finishes, fails or asks.
+describe('the Working fold and the rise rule', () => {
+  const now = new Date(2026, 9, 23, 15, 0).getTime()
+  const running = (ref: string, startedAt: string, lastAt: string) =>
+    row(undefined, {
+      run_ref: ref,
+      state: 'running',
+      started_at: startedAt,
+      last_activity_at: lastAt,
+    })
+  const ids = (groups: ReturnType<typeof groupSessions>, id: string) =>
+    (groups.find((g) => g.id === id)?.sessions ?? []).map(
+      (s) => s.runs[0]?.run_ref,
+    )
+
+  it('leaves the Working rows out of the walk while the fold is shut', () => {
+    const w = running('w', '2026-10-23T09:00:00Z', '2026-10-23T09:05:00Z')
+    const asks = row(undefined, { run_ref: 'a', state: 'waiting_approval' })
+    const groups = groupSessions([w, asks], new Set(), now)
+    expect(railOrder(groups, false, false, false)).toEqual([asks])
+    expect(railOrder(groups, false, false, true)).toEqual([asks, w])
+    // The surface still opens on a working session when nothing asks: the default is
+    // the first row of the whole list, folded or not.
+    expect(railOrder(groups)).toEqual([asks, w])
+  })
+
+  it('keeps the Working rows in the order they started, whoever spoke last', () => {
+    // `a` started first and speaks last: by activity it would sit above `b`, and the row
+    // under the pointer would change with every event.
+    const a = running('a', '2026-10-23T09:00:00Z', '2026-10-23T09:50:00Z')
+    const b = running('b', '2026-10-23T09:10:00Z', '2026-10-23T09:20:00Z')
+    expect(ids(groupSessions([a, b], new Set(), now), 'active')).toEqual([
+      'b',
+      'a',
+    ])
+    const aSpokeAgain = running(
+      'a',
+      '2026-10-23T09:00:00Z',
+      '2026-10-23T09:55:00Z',
+    )
+    expect(
+      ids(groupSessions([aSpokeAgain, b], new Set(), now), 'active'),
+    ).toEqual(['b', 'a'])
+  })
+
+  it('lets a session out of the fold when it finishes: first in Done today', () => {
+    const older = row(undefined, {
+      run_ref: 'older',
+      state: 'idle',
+      last_activity_at: '2026-10-23T08:00:00Z',
+    })
+    const was = running('was', '2026-10-23T09:00:00Z', '2026-10-23T09:30:00Z')
+    const finished = row(undefined, {
+      run_ref: 'was',
+      state: 'idle',
+      started_at: '2026-10-23T09:00:00Z',
+      last_activity_at: '2026-10-23T09:40:00Z',
+    })
+    expect(ids(groupSessions([was, older], new Set(), now), 'active')).toEqual([
+      'was',
+    ])
+    const after = groupSessions([finished, older], new Set(), now)
+    expect(ids(after, 'active')).toEqual([])
+    expect(ids(after, 'today')).toEqual(['was', 'older'])
+  })
+
+  it('lets a session out of the fold when it needs an answer: first of all', () => {
+    const w = running('w', '2026-10-23T09:00:00Z', '2026-10-23T09:30:00Z')
+    const asks = row(undefined, {
+      run_ref: 'w2',
+      state: 'running',
+      pending_approval_ref: 'apr_1',
+    })
+    const groups = groupSessions([w, asks], new Set(), now)
+    expect(ids(groups, 'attention')).toEqual(['w2'])
+    expect(groups[1].id).toBe('attention')
+  })
+
+  it('lets a session out of the fold when the person pins it', () => {
+    const w = running('w', '2026-10-23T09:00:00Z', '2026-10-23T09:30:00Z')
+    const groups = groupSessions([w], new Set([w.key]), now)
+    expect(ids(groups, 'pinned')).toEqual(['w'])
+    expect(ids(groups, 'active')).toEqual([])
   })
 })

@@ -95,6 +95,7 @@ jobs:
           {
             echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
             echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
+            echo "GOFLAGS=${GOFLAGS:+$GOFLAGS }-modcacherw"
             echo "GOPATH=$RUNNER_TEMP/gopath"
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
@@ -118,15 +119,15 @@ jobs:
         run: |
           corto=""
           # ⛔ DISCO ANTES QUE /dev/shm, MEDIDO el 2026-09-16 (run 35076921214, `race-hot-manifest`
-          # p3 en ci-runner-3): `go build` murio con «vet.cfg: no space left on device» bajo
+          # p3 en build-host): `go build` murio con «vet.cfg: no space left on device» bajo
           # /dev/shm/olv…/go-build…, y `race-modules` p3/p4 y el paso proto de `control-plane`
           # cayeron por lo mismo mientras dos particiones hermanas pasaban en el MISMO host: quien
           # llega primero se lleva la RAM. /dev/shm es UN tmpfs compartido por los doce runners
-          # del host ci-runner-1, cada job con -race le mete gigas de arbol intermedio de Go, y
+          # del host build-host, cada job con -race le mete gigas de arbol intermedio de Go, y
           # nadie borraba /dev/shm/olv$$ al acabar, asi que cada job cancelado dejaba el suyo.
           # $HOME es disco y sigue siendo CORTO (/home/runner/olv1234567 = 23 <= 24). Y /var/tmp DETRAS,
           # porque en los runners Hetzner HOME NO ESTA DEFINIDA (medido: run 35081963451, race-hot p1 en
-          # ci-runner-8 salto el primer candidato y volvio a /dev/shm con 18187 MiB libres de 32039):
+          # build-host salto el primer candidato y volvio a /dev/shm con 18187 MiB libres de 32039):
           # /var/tmp es el disco del host que si existe, mide 8 y la sonda de abajo decide si ejecuta.
           # Barrido de huerfanos ANTES de elegir: un olv* mas viejo que el timeout-minutes mayor
           # de este fichero (320) no puede pertenecer a un job vivo. Mide mtime del directorio,

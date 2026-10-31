@@ -102,6 +102,176 @@ func TestTokenPrincipalCarriesNoGroups(t *testing.T) {
 	}
 }
 
+// Group-derived elevation follows the CURRENT roster on every token authentication;
+// the user's direct role is unchanged.
+func TestGroupDerivedTokenRoleTracksMembership(t *testing.T) {
+	for _, change := range []string{"remove", "child-remove", "delete", "downgrade"} {
+		t.Run(change, func(t *testing.T) {
+			ctx := context.Background()
+			st := testStore(t)
+			a := auth.NewAuthenticator(st, nil)
+			super := mustSuperadmin(t, ctx, a)
+			tenant := provisionTenant(t, st, "acme")
+			uid, _ := mustMember(t, ctx, a, super, tenant, "m@acme.com", auth.RoleViewer)
+			group, err := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{DisplayName: "Admins", ExternalID: "admins", Members: []model.ID{uid}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := a.ConfigureGroupRole(ctx, super, tenant, group.Group.ID, auth.RoleAdmin); err != nil {
+				t.Fatal(err)
+			}
+			if change != "remove" {
+				parent, err := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{DisplayName: "Parent", ExternalID: "parent"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := a.ConfigureGroupParent(ctx, super, tenant, group.Group.ID, parent.Group.ID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			tok, _, err := a.IssueToken(ctx, loginPrincipal(t, ctx, a, "m@acme.com"), auth.TokenSpec{Name: "ci", BoundTenant: tenant, Role: auth.RoleAdmin})
+			if err != nil {
+				t.Fatal(err)
+			}
+			principal, err := a.Authenticate(ctx, tok)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if role, ok := principal.RoleIn(tenant); !ok || role != auth.RoleAdmin {
+				t.Fatalf("initial group-derived role = %q, %v, want admin", role, ok)
+			}
+			switch change {
+			case "remove":
+				_, err = a.SCIMReplaceGroup(ctx, super, tenant, group.Group.ID, auth.SCIMGroupInput{DisplayName: "Admins", ExternalID: "admins"}, 0)
+			case "child-remove":
+				_, err = a.SCIMReplaceGroup(ctx, super, tenant, group.Group.ID, auth.SCIMGroupInput{DisplayName: "Admins", ExternalID: "admins"}, 0)
+			case "delete":
+				err = a.SCIMDeleteGroup(ctx, super, tenant, group.Group.ID)
+			case "downgrade":
+				_, err = a.ConfigureGroupRole(ctx, super, tenant, group.Group.ID, auth.RoleEditor)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			principal, err = a.Authenticate(ctx, tok)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantRole := auth.RoleViewer
+			if change == "downgrade" {
+				wantRole = auth.RoleEditor
+			}
+			if role, ok := principal.RoleIn(tenant); !ok || role != wantRole {
+				t.Fatalf("role after %s = %q, %v, want %s", change, role, ok, wantRole)
+			}
+		})
+	}
+}
+
+func TestGroupDerivedTokenWithoutDirectMembershipIsRefused(t *testing.T) {
+	ctx := context.Background()
+	st := testStore(t)
+	a := auth.NewAuthenticator(st, nil)
+	super := mustSuperadmin(t, ctx, a)
+	tenant := provisionTenant(t, st, "acme")
+	uid, _ := mustMember(t, ctx, a, super, tenant, "m@acme.com", auth.RoleViewer)
+	group, err := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{DisplayName: "Admins", ExternalID: "admins", Members: []model.ID{uid}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.ConfigureGroupRole(ctx, super, tenant, group.Group.ID, auth.RoleAdmin); err != nil {
+		t.Fatal(err)
+	}
+	tok, _, err := a.IssueToken(ctx, loginPrincipal(t, ctx, a, "m@acme.com"), auth.TokenSpec{Name: "ci", BoundTenant: tenant, Role: auth.RoleAdmin})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AuthMutate(ctx, func(as store.AuthScope) error {
+		rows, _, err := as.Memberships().List(ctx, model.Query{Limit: 1, Filters: []model.Filter{{Column: "user_id", Op: model.OpEq, Value: uid.String()}}})
+		if err != nil || len(rows) != 1 {
+			return err
+		}
+		return as.Memberships().Delete(ctx, rows[0].ID)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Authenticate(ctx, tok); !errors.Is(err, auth.ErrUnauthenticated) {
+		t.Fatalf("token without direct membership authenticated with %v, want ErrUnauthenticated", err)
+	}
+}
+
+// A direct token role is not a group-derived one: changing the membership's role does not
+// invalidate the token's own grant.
+func TestDirectTokenRoleSurvivesMembershipDowngrade(t *testing.T) {
+	ctx := context.Background()
+	st := testStore(t)
+	a := auth.NewAuthenticator(st, nil)
+	super := mustSuperadmin(t, ctx, a)
+	tenant := provisionTenant(t, st, "acme")
+	uid, member := mustMember(t, ctx, a, super, tenant, "m@acme.com", auth.RoleAdmin)
+	tok, _, err := a.IssueToken(ctx, member, auth.TokenSpec{Name: "ci", BoundTenant: tenant, Role: auth.RoleAdmin})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AuthMutate(ctx, func(as store.AuthScope) error {
+		rows, _, err := as.Memberships().List(ctx, model.Query{Limit: 1, Filters: []model.Filter{{Column: "user_id", Op: model.OpEq, Value: uid.String()}}})
+		if err != nil || len(rows) != 1 {
+			return err
+		}
+		rows[0].Role = auth.RoleViewer
+		_, err = as.Memberships().Update(ctx, rows[0])
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	principal, err := a.Authenticate(ctx, tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if role, ok := principal.RoleIn(tenant); !ok || role != auth.RoleAdmin {
+		t.Fatalf("direct role after a membership downgrade = %q, %v, want admin", role, ok)
+	}
+}
+
+// Provenance must not bypass the existing malformed-grant validation.
+func TestDirectTokenValidationRejectsMalformedGrant(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		withTenant bool
+		role       string
+	}{
+		{name: "missing tenant", role: auth.RoleViewer},
+		{name: "invalid role", withTenant: true, role: "not-a-role"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			st := testStore(t)
+			a := auth.NewAuthenticator(st, nil)
+			tenant := provisionTenant(t, st, "acme")
+			cred, err := auth.NewCredential(auth.PrefixToken)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var bound model.TenantID
+			if tc.withTenant {
+				bound = tenant
+			}
+			if err := st.AuthMutate(ctx, func(as store.AuthScope) error {
+				_, err := as.Tokens().Create(ctx, model.APIToken{
+					Name: "malformed", Selector: cred.Selector, SecretHash: cred.SecretHash,
+					BoundTenantID: bound, Role: tc.role,
+				})
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := a.Authenticate(ctx, cred.Token); !errors.Is(err, auth.ErrUnauthenticated) {
+				t.Fatalf("malformed direct token authenticated with %v, want ErrUnauthenticated", err)
+			}
+		})
+	}
+}
+
 // Group nesting (S256): a member of a child group is `in` every group the chain nests
 // under, so the principal carries the full ancestor closure as subjects.
 func TestGroupNestingClosureOnPrincipal(t *testing.T) {

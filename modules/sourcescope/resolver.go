@@ -9,6 +9,7 @@ import (
 	"errors"
 	"slices"
 	"sort"
+	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -212,6 +213,7 @@ type binding struct {
 	scopeRef    string
 	workspaceID model.ID
 	effect      string // effectAllow (default) | effectForbid
+	expiresAt   string
 	cred        *CredRef
 	// Set by scoped resolution, separately for each binding.
 	inheritanceFiltered bool
@@ -220,6 +222,18 @@ type binding struct {
 // isForbid reports whether this binding subtracts access. An empty/legacy effect
 // is an allow (back-compat), consistent with normalizeEffect.
 func (b binding) isForbid() bool { return b.effect == effectForbid }
+
+func (b binding) active(now time.Time) bool {
+	if b.expiresAt == "" {
+		return true
+	}
+	expires, err := time.Parse(time.RFC3339Nano, b.expiresAt)
+	if err != nil {
+		// An expiry nobody can read grants nothing, and never lifts a forbid.
+		return b.isForbid()
+	}
+	return now.Before(expires)
+}
 
 // resolve is the core decision. Store reads (bindings + actor scope + assignments)
 // run in ONE View; the ScopedAuthorizer is consulted AFTERWARD because it opens
@@ -263,7 +277,7 @@ func (r *Resolver) resolve(ctx context.Context, tenant model.TenantID, principal
 		// gate connector VISIBILITY for UNCONFINED sources — those
 		// with no enabled ALLOW binding (len==0 OR forbid-only). A confined source is
 		// governed by its allow bindings, the finer-grained control.
-		if !hasAllowBinding(bindings) && !isProfileSource(sourceType) {
+		if !hasAllowBinding(bindings) && !isAssignedSource(sourceType) {
 			allowed, cerr := ConnectorAssigned(ctx, sc, sourceRef, actor.workspaceSlug)
 			if cerr != nil {
 				return cerr
@@ -297,9 +311,13 @@ func (r *Resolver) resolve(ctx context.Context, tenant model.TenantID, principal
 	// forbid must be detected even when a later binding would allow, so the decision is two
 	// logical passes over the precomputed state, not a short-circuiting loop.
 	effects := make([]auth.Effect, len(bindings))
+	now := r.m.clock.Now().Time()
 	// An inheritance filter removes RBAC for its binding only. Unfiltered bindings remain
 	// independent routes to the source, including their own credential selection.
 	for i := range bindings {
+		if !bindings[i].active(now) {
+			continue
+		}
 		if r.m.scoped != nil && resourceAnchored(bindings[i].scopeTree) {
 			sd, err := r.m.scoped.Scoped(ctx, scopeRequest(principal, tenant, sourceType, bindings[i]))
 			if err != nil {
@@ -321,10 +339,15 @@ func (r *Resolver) resolve(ctx context.Context, tenant model.TenantID, principal
 	for i := range bindings {
 		b := &bindings[i]
 		if !b.isForbid() {
+			// Even an expired allow keeps the source confined. Treating it as absent
+			// would flip the last allow into the global/unbound state.
 			confined = true
-			if !b.inheritanceFiltered {
+			if b.active(now) && !b.inheritanceFiltered {
 				rbacAvailable = true
 			}
+		}
+		if !b.active(now) {
+			continue
 		}
 		contain := containsActor(identity, *b)
 		// A row-level forbid bites where it MATCHES the actor (containment / identity); a
@@ -364,7 +387,7 @@ func (r *Resolver) resolve(ctx context.Context, tenant model.TenantID, principal
 		return Decision{Allowed: true, Reason: containReason(*winner, winnerViaGrant), Bound: true, Cred: winner.cred}, nil
 	}
 	if rbac && rbacAvailable {
-		return Decision{Allowed: true, Reason: "tenant-wide rbac", Bound: true, Cred: mostSpecificAllowCred(bindings)}, nil
+		return Decision{Allowed: true, Reason: "tenant-wide rbac", Bound: true, Cred: mostSpecificAllowCred(bindings, now)}, nil
 	}
 	return Decision{Allowed: false, Reason: "actor is out of the source's scope (deny-closed)", Bound: true}, nil
 }
@@ -382,9 +405,9 @@ func hasAllowBinding(bs []binding) bool {
 // mostSpecificAllowCred returns the credential of the most-specific unfiltered ALLOW
 // binding (bs is pre-sorted most-specific-first), or nil — the credential of record for
 // a tenant-wide RBAC operator on a confined source.
-func mostSpecificAllowCred(bs []binding) *CredRef {
+func mostSpecificAllowCred(bs []binding, now time.Time) *CredRef {
 	for i := range bs {
-		if !bs[i].isForbid() && !bs[i].inheritanceFiltered {
+		if !bs[i].isForbid() && bs[i].active(now) && !bs[i].inheritanceFiltered {
 			return bs[i].cred
 		}
 	}
@@ -594,6 +617,7 @@ func loadEnabledBindings(ctx context.Context, sc store.Scope, sourceType, source
 			scopeRef:    rec.String(colScopeRef),
 			workspaceID: model.ID(rec.String(colWorkspaceID)),
 			effect:      normalizeEffect(rec.String(colEffect)),
+			expiresAt:   rec.String(colExpiresAt),
 		}
 		if name := rec.String(colCredName); name != "" {
 			b.cred = &CredRef{Name: name, RefKind: rec.String(colCredRefKind), Ref: rec.String(colCredRef), Hint: rec.String(colCredHint)}

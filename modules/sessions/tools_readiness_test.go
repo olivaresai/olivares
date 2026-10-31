@@ -91,8 +91,8 @@ func TestToolsReadiness_OneAnswerPerToolState(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			// The console's and the CLI's order (SESSION_TOOLS, sessionToolOrder), then Gemini CLI.
-			drivers := []string{"claude", "codex", "grok", "opencode", "gemini-cli"}
+			// The driver table's order (GET /v1/m/sessions/tools, sessionToolOrder).
+			drivers := []string{"claude", "codex", "grok", "opencode", "gemini-cli", "cursor"}
 			if len(all) != len(drivers) {
 				t.Fatalf("answers = %d, want one per session tool (%v)", len(all), drivers)
 			}

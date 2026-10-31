@@ -153,7 +153,7 @@ regexes = [
                                                                         # so there is nothing to rotate. generic-api-key fires on its
                                                                         # SHAPE (base64 after a known prefix) — the rule working
                                                                         # correctly on a decoy. Anchored to the EXACT value and not to
-                                                                        # an internal design note (not shipped), because that directory is precisely where a
+                                                                        # an internal audit, because that directory is precisely where a
                                                                         # real credential could be pasted by accident: any OTHER
                                                                         # whsec_ in that same file still blocks. Fixed here rather than
                                                                         # on its branch because the scan reads every ref in the clone,
@@ -223,7 +223,7 @@ regexes = [
                                                                         # generic-api-key fires: the keyword sits beside a long opaque token. It is
                                                                         # committed in history, so it recurs on EVERY history scan and cannot be
                                                                         # cleared by editing the file. Anchored to the exact witness rather than
-                                                                        # path-allowlisting an internal design note (not shipped) — the same reasoning as the entries above,
+                                                                        # path-allowlisting an internal audit — the same reasoning as the entries above,
                                                                         # and a real credential in either file still blocks.
   '''^whsec_probeSecret2026$''',                                        # the POLAR_WEBHOOK_SECRET of a LOCAL probe run, pasted verbatim with
                                                                         # its command line into a maintainer audit note (the run drove a
@@ -340,6 +340,13 @@ regexes = [
     # 2) connectors/grok/session/pep_test.go:44 — dentro de una cabecera curl en el cuerpo de
     #    prueba del PEP; su propio texto dice lo que es.
     '''^SECRETO-QUE-NO-DEBE-VIAJAR$''',
+    #
+    # 3) cmd/olivares/dr_erasure_replay_test.go:136 at 62cef8709fb4 (2026-10-28, "test(dr):
+    #    reproduce an erased person coming back with a restore"): the password of the replay
+    #    harness's test user, sent to the engine under test; it opens nothing outside it. The
+    #    tree builds it at run time since 41d85409e, but the scan reads HEAD history. Value
+    #    exact, as gitleaks captures it.
+    '''^subject-pw-123456$''',
   ]
 
 # ── credential_sha256: un DIGEST, no una credencial ────────────────────────────────────────

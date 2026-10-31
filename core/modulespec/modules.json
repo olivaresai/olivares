@@ -93,7 +93,7 @@
     "selectable": true,
     "published_26100": false,
     "config_defaults": {},
-    "console_entries": ["skills"]
+    "console_entries": []
   },
   {
     "namespace": "compliance",
@@ -614,7 +614,8 @@
       "providerBindings",
       "providerAccounts",
       "agent-tools",
-      "workspace-templates"
+      "workspace-templates",
+      "usage"
     ],
     "retirement_order": 4
   },
@@ -636,6 +637,21 @@
     "console_entries": [
       "voice"
     ]
+  },
+  {
+    "namespace": "aiterms",
+    "name": "olivares.aiterms",
+    "package": "aiterms",
+    "constructor": "aiterms.New()",
+    "edition": "community",
+    "kind": "kernel",
+    "standard": false,
+    "requires": [],
+    "selectable": false,
+    "published_26100": false,
+    "config_defaults": {},
+    "console_entries": [],
+    "edition_slot": true
   },
   {
     "namespace": "session-cockpit",

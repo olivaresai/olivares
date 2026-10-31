@@ -21,13 +21,13 @@ export const FIRST_HOUR_TOOLS: readonly ToolKey[] = ['claude', 'codex']
 /** The tools whose own login the engine relays: the first-hour tools, Grok Build, whose
  * release is installed from AI tools (HU-R15), and OpenCode, which signs in with its own
  * OpenCode key (Zen or Go) or with ChatGPT (#2567). */
-export type SignInTool = ToolKey | 'grok' | 'opencode' | 'gemini-cli'
-/** Every tool a session can start on: the engine's drivers (agentops/tool-names). */
+export type SignInTool = ToolKey | 'grok' | 'opencode' | 'gemini-cli' | 'cursor'
+/** The tools a session can start on, by the engine's own table (agentops/engine-tools). */
 export {
-  SESSION_TOOLS,
-  TOOL_NAMES,
+  sessionTools,
+  toolName,
   type SessionTool,
-} from '@/features/agentops/tool-names'
+} from '@/features/agentops/engine-tools'
 
 export interface SignInStatus {
   driver: SignInTool
@@ -69,9 +69,19 @@ export interface SignInFlow {
   message?: string
 }
 
+/** The tool still runs a login for this status: a pending flow that has neither signed
+ * in nor failed. While it runs, a second start would replace it (#3388). */
+export function isSigningIn(status: SignInStatus | undefined): boolean {
+  const state = status?.pending?.state
+  return !!state && state !== 'signed_in' && state !== 'failed'
+}
+
+/** While a login runs, its status is read again until the tool answers. */
+export const SIGNING_IN_POLL_MS = 5000
+
 const SIGN_IN = '/v1/m/agenttools/sign-in'
 
-/** A tool's own login is the ORGANIZATION's (FH 036): the engine keeps it in the
+/** A tool's own login is the ORGANIZATION's (first-hour check): the engine keeps it in the
  * tenant's own home, never the server user's. These are system routes, which
  * ignore the tenant selection, so the organization is named on every call. */
 export const signInApi = {

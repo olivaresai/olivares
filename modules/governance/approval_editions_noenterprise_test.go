@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/olivaresai/olivares/core/license"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -30,6 +31,30 @@ func TestCommunityRejectsTierLoweringPolicy(t *testing.T) {
 		if r.code != http.StatusNotImplemented {
 			t.Errorf("lowering policy for %q to %s = %d %s, want 501", tc.action, tc.tier, r.code, r.raw)
 		}
+	}
+}
+
+// The Business licence gate changes nothing in Community: a policy on the Community line is
+// authored without asking it, and one beyond the line is still the 501 Business refusal.
+func TestCommunityApprovalPoliciesIgnoreTheBusinessLicenceGate(t *testing.T) {
+	asked := 0
+	h := newHarnessWith(t, harnessOpts{businessApprovals: func() error {
+		asked++
+		return license.AddonRequired("approval-policies", "author-policy")
+	}})
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	policy := func(name string, spec map[string]any) resp {
+		return h.do("POST", govPath+"/policies", admin, map[string]any{"name": name, "kind": "approval", "enabled": true, "spec": spec}, tenantHdr(tenant))
+	}
+	if r := policy("review", map[string]any{"match": map[string]any{"action": "deploy.apply"}}); r.code != http.StatusCreated {
+		t.Fatalf("a Community-line policy = %d %s, want 201", r.code, r.raw)
+	}
+	if r := policy("lower", map[string]any{"risk_tier": "high", "match": map[string]any{"action": "deploy.apply"}}); r.code != http.StatusNotImplemented {
+		t.Fatalf("a tier-lowering policy = %d %s, want 501", r.code, r.raw)
+	}
+	if asked != 0 {
+		t.Fatalf("Community asked the Business licence gate %d times", asked)
 	}
 }
 

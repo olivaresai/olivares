@@ -3065,11 +3065,11 @@ SH
 		OLIVARES_SECRETS_SCOPE=all run_gate "$d" "$WORK/77e.all.out" >/dev/null
 	head_argv="$(cat "$WORK/77e.head.argv" 2>/dev/null || true)"
 	all_argv="$(cat "$WORK/77e.all.argv" 2>/dev/null || true)"
-	if ! printf '%s\n' "$head_argv" | grep -q -- '--log-opts=HEAD' ||
+	if ! printf '%s\n' "$head_argv" | grep -q -- '--log-opts=--text --remerge-diff HEAD' ||
 		printf '%s\n' "$head_argv" | grep -q -- '--all' ||
 		! printf '%s\n' "$all_argv" | grep -q -- '--all' ||
 		grep -q 'commit(s) that are NOT part of this ref' "$WORK/77e.head.out"; then
-		c77="e argv/census: HEAD argv=${head_argv:-empty}; all argv=${all_argv:-empty}; HEAD must use --log-opts=HEAD without --all and must not claim leftover-ref scan work"
+		c77="e argv/census: HEAD argv=${head_argv:-empty}; all argv=${all_argv:-empty}; HEAD must use --text --remerge-diff HEAD without --all and must not claim leftover-ref scan work"
 	fi
 fi
 if [ -z "$c77" ]; then

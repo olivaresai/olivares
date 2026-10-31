@@ -157,16 +157,9 @@ func findOne(ctx context.Context, repo store.GenericRepo, filters ...model.Filte
 // listCap per page), so a count/scan over a small owned set is complete.
 func listAll(ctx context.Context, repo store.GenericRepo, filters ...model.Filter) ([]model.Record, error) {
 	var out []model.Record
-	q := model.Query{Filters: filters, Limit: listCap}
-	for {
-		recs, page, err := repo.List(ctx, q)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, recs...)
-		if !page.HasMore || page.Cursor == "" {
-			return out, nil
-		}
-		q.Cursor = page.Cursor
-	}
+	err := store.WalkPages(ctx, repo.List, model.Query{Filters: filters, Limit: listCap}, store.UnboundedRows, func(rows []model.Record) error {
+		out = append(out, rows...)
+		return nil
+	})
+	return out, err
 }

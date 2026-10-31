@@ -57,7 +57,10 @@ func (m *Module) SweepDue(ctx context.Context, tenant model.TenantID) error {
 	var due []Intent
 	seen := map[model.ID]bool{}
 	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
-		now := txNow(ctx, sc, m.now())
+		now, err := txNow(ctx, sc)
+		if err != nil {
+			return err
+		}
 		for _, state := range []string{StateDispatching, StateUncertain} {
 			recs, err := listAll(ctx, sc, kindIntent, eq("state", state))
 			if err != nil {
@@ -102,10 +105,11 @@ func (m *Module) SweepDue(ctx context.Context, tenant model.TenantID) error {
 		return err
 	}
 	c := Caller{Tenant: tenant}
+	var errs []error
 	for _, in := range due {
 		if _, err := m.observe(ctx, c, in, "sweep", ""); err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }

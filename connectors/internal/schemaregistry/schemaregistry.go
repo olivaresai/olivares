@@ -18,13 +18,15 @@
 //     the payload. (HIGH-confidence, docs.confluent.io serdes.)
 //   - The newer HEADER-GUID form: the schema reference is a 16-byte GUID carried in
 //     a Kafka RECORD HEADER instead of the value prefix. IMPORTANT HONESTY
-//: the 16-byte GUID, its placement in record headers, and the
-//     header-first read path ARE documented; the exact header KEY NAME and whether
-//     a version byte precedes the GUID are NOT specified in primary Confluent docs
-//     as of 2026. This package therefore reads the GUID from an operator-configured
-//     header key when given, else recognizes a header value that is a 16-byte GUID
-//     (optionally preceded by one version/format byte) — and the contract documents
-//     this as a heuristic, not a fabricated spec constant.
+//
+// : the 16-byte GUID, its placement in record headers, and the
+//
+//	header-first read path ARE documented; the exact header KEY NAME and whether
+//	a version byte precedes the GUID are NOT specified in primary Confluent docs
+//	as of 2026. This package therefore reads the GUID from an operator-configured
+//	header key when given, else recognizes a header value that is a 16-byte GUID
+//	(optionally preceded by one version/format byte) — and the contract documents
+//	this as a heuristic, not a fabricated spec constant.
 //
 // It is stdlib-only and read-only; the registry credential is held in memory and
 // applied per request, never logged or emitted. It imports no engine package.

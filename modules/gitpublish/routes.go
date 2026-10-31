@@ -57,9 +57,16 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	door.HandleSealed("PUT", "/targets/{id}", permTargetAdmin, sealed(actionTarget, auth.AAL3), m.handleUpdateTarget)
 	door.HandleSealed("DELETE", "/targets/{id}", permTargetAdmin, sealed(actionTarget, auth.AAL3), m.handleDeleteTarget)
 	door.HandleSealed("POST", "/targets/{id}/pushes", permPush, sealed(actionPush, 0), m.publicationReply(m.handlePush))
+	// A ship is a push and a pull request in one decision: its door is the push's,
+	// and each effect is admitted again as the caller inside it.
+	door.HandleSealed("POST", "/targets/{id}/ships", permPush, sealed(actionPush, 0), m.holdReply(m.handleShip, m.shipBudget()))
 	door.HandleSealed("POST", "/targets/{id}/pull-requests", permPullRequest, sealed(actionPullRequest, 0), m.publicationReply(m.handlePullRequest))
 	door.HandleSealed("POST", "/targets/{id}/merges", permMerge, sealed(actionMerge, auth.AAL3), m.publicationReply(m.handleMerge))
-	door.HandleSealed("POST", "/intents/{id}/reconcile", permTargetRead, sealed(actionReconcile, 0), m.handleReconcile)
+	door.HandleSealed("POST", "/targets/{id}/issue-comments", permIssueComment, sealed(actionIssueComment, 0), m.publicationReply(m.handleIssueComment))
+	// Reconcile writes tenant state for an uncertain intent, so its door holds
+	// the publish floor every publishing role carries — never the read
+	// permission; admission then re-checks the intent's own effect permission.
+	door.HandleSealed("POST", "/intents/{id}/reconcile", permPush, sealed(actionReconcile, 0), m.handleReconcile)
 	door.HandleSealed("POST", "/intents/{id}/abandon", permTargetAdmin, sealed(actionAbandon, auth.AAL3), m.handleAbandon)
 }
 
@@ -67,8 +74,19 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 // reply needs more than the server's ordinary write budget; admission and
 // dispatch keep their existing deadlines, and streaming routes are untouched.
 func (m *Module) publicationReply(h api.ModuleHandler) api.ModuleHandler {
+	return m.holdReply(h, m.PublicationBudget())
+}
+
+// shipBudget is how long a ship may take until its reply is written: the read
+// of the commit, the push and the pull request each have a publication's budget.
+func (m *Module) shipBudget() time.Duration {
+	return m.opts.AdmissionTimeout + 2*m.PublicationBudget()
+}
+
+// holdReply keeps the writer open for budget from the moment the handler runs.
+func (m *Module) holdReply(h api.ModuleHandler, budget time.Duration) api.ModuleHandler {
 	return func(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-		if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(m.PublicationBudget())); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(budget)); err != nil && !errors.Is(err, http.ErrNotSupported) {
 			// Refuse before any effect when the transport cannot set its deadline.
 			writeErr(w, errUnavailable)
 			return
@@ -84,7 +102,7 @@ func (m *Module) publicationReply(h api.ModuleHandler) api.ModuleHandler {
 // written: admission, the host write, settling, release and the reply itself.
 // Every caller that answers a publication holds its writer open this long.
 func (m *Module) PublicationBudget() time.Duration {
-	return m.opts.AdmissionTimeout + m.opts.DispatchTimeout + 2*settleTimeout + releaseTimeout + replyTimeout
+	return m.opts.AdmissionTimeout + m.opts.DispatchTimeout + 3*settleTimeout + releaseTimeout + replyTimeout
 }
 
 func callerOf(mc api.ModuleContext) Caller { return Caller{Principal: mc.Principal, Tenant: mc.Tenant} }
@@ -173,16 +191,19 @@ func (m *Module) targetReadDTO(ctx context.Context, tenant model.TenantID, t Tar
 }
 
 type requestedDTO struct {
-	Ref          string `json:"ref,omitempty"`
-	ExpectedOld  string `json:"expected_old,omitempty"`
-	Commit       string `json:"commit,omitempty"`
-	Tree         string `json:"tree,omitempty"`
-	HeadRef      string `json:"head_ref,omitempty"`
-	Base         string `json:"base,omitempty"`
-	Number       int    `json:"number,omitempty"`
-	ExpectedHead string `json:"expected_head,omitempty"`
-	Method       string `json:"method,omitempty"`
-	Title        string `json:"title,omitempty"`
+	Ref            string `json:"ref,omitempty"`
+	ExpectedOld    string `json:"expected_old,omitempty"`
+	Commit         string `json:"commit,omitempty"`
+	Tree           string `json:"tree,omitempty"`
+	HeadRef        string `json:"head_ref,omitempty"`
+	Base           string `json:"base,omitempty"`
+	Number         int    `json:"number,omitempty"`
+	ExpectedHead   string `json:"expected_head,omitempty"`
+	Method         string `json:"method,omitempty"`
+	Title          string `json:"title,omitempty"`
+	State          string `json:"state,omitempty"`
+	PullRequestURL string `json:"pull_request_url,omitempty"`
+	CostMicroUSD   *int64 `json:"cost_micro_usd,omitempty"`
 }
 
 type observedDTO struct {
@@ -193,8 +214,12 @@ type observedDTO struct {
 	Merged         bool   `json:"merged"`
 	MergeCommitSHA string `json:"merge_commit_sha,omitempty"`
 	MergeTree      string `json:"merge_tree,omitempty"`
-	Source         string `json:"source,omitempty"`
-	At             string `json:"at,omitempty"`
+	CommentID      string `json:"comment_id,omitempty"`
+	CommentURL     string `json:"comment_url,omitempty"`
+	// URL is a pull request's page on the host, when the repository's address is known.
+	URL    string `json:"url,omitempty"`
+	Source string `json:"source,omitempty"`
+	At     string `json:"at,omitempty"`
 }
 
 type acknowledgedDTO struct {
@@ -237,9 +262,11 @@ func toIntentDTO(in Intent, answer string) intentDTO {
 	d := intentDTO{
 		ID: in.ID.String(), TargetID: in.Target.String(), TargetVersion: in.TargetVersion, Effect: in.Effect, OperationID: in.OperationID,
 		Attempt: in.Attempt, State: in.State, Reason: in.Reason, Receipt: in.Receipt,
-		Requested: requestedDTO{Ref: q.Ref, ExpectedOld: q.ExpectedOld, Commit: q.Commit, Tree: q.Tree, HeadRef: q.HeadRef, Base: q.Base, Number: q.Number, ExpectedHead: q.ExpectedHead, Method: q.Method, Title: q.Title},
+		Requested: requestedDTO{Ref: q.Ref, ExpectedOld: q.ExpectedOld, Commit: q.Commit, Tree: q.Tree, HeadRef: q.HeadRef, Base: q.Base, Number: q.Number, ExpectedHead: q.ExpectedHead, Method: q.Method, Title: q.Title,
+			State: q.CommentState, PullRequestURL: q.PullRequestURL, CostMicroUSD: q.CostMicroUSD},
 		Observed: observedDTO{Present: in.Observed.Present, SHA: in.Observed.SHA, HeadSHA: in.Observed.HeadSHA, Number: in.Observed.Number,
-			Merged: in.Observed.Merged, MergeCommitSHA: in.Observed.MergeCommitSHA, MergeTree: in.Observed.MergeTree, Source: in.Observed.Source, At: ts(in.Observed.At)},
+			Merged: in.Observed.Merged, MergeCommitSHA: in.Observed.MergeCommitSHA, MergeTree: in.Observed.MergeTree,
+			CommentID: in.Observed.CommentID, CommentURL: in.Observed.CommentURL, Source: in.Observed.Source, At: ts(in.Observed.At)},
 		Acknowledged:     acknowledgedDTO{Acknowledged: in.Acknowledged.Acknowledged, Status: in.Acknowledged.Status, RequestID: in.Acknowledged.RequestID, At: ts(in.Acknowledged.At)},
 		AuthorizedBy:     in.AuthorizedBy,
 		DispatchDeadline: ts(in.DispatchDeadline),
@@ -461,6 +488,25 @@ func (m *Module) handleMerge(w http.ResponseWriter, r *http.Request, mc api.Modu
 	WriteReceipt(w, rc, err)
 }
 
+type issueCommentBody struct {
+	OperationID       string `json:"operation_id"`
+	Number            int    `json:"number"`
+	State             string `json:"state"`
+	PullRequestURL    string `json:"pull_request_url"`
+	CostMicroUSD      *int64 `json:"cost_micro_usd"`
+	AcknowledgeIntent string `json:"acknowledge_intent"`
+}
+
+// handleIssueComment publishes one fixed run result to an issue.
+func (m *Module) handleIssueComment(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	var b issueCommentBody
+	if !decode(w, r, &b) {
+		return
+	}
+	rc, err := m.Comment(r.Context(), callerOf(mc), IssueCommentInput{Target: idParam(r), OperationID: b.OperationID, Number: b.Number, State: b.State, PullRequestURL: b.PullRequestURL, CostMicroUSD: b.CostMicroUSD, AcknowledgeIntent: model.ID(b.AcknowledgeIntent)})
+	WriteReceipt(w, rc, err)
+}
+
 // handleReconcile reads the host again for one publication intent and records
 // what it observed. It never dispatches, and only the requested effect, once
 // observed, ends an uncertain intent.
@@ -501,6 +547,7 @@ func (m *Module) handleListIntents(w http.ResponseWriter, r *http.Request, mc ap
 	for _, in := range list {
 		out = append(out, toIntentDTO(in, in.State))
 	}
+	m.withLinks(r.Context(), callerOf(mc), target, out)
 	writeResponse(w, http.StatusOK, map[string]any{"items": out})
 }
 
@@ -513,7 +560,9 @@ func (m *Module) handleGetIntent(w http.ResponseWriter, r *http.Request, mc api.
 		writeErr(w, e)
 		return
 	}
-	writeResponse(w, http.StatusOK, toIntentDTO(in, in.State))
+	one := []intentDTO{toIntentDTO(in, in.State)}
+	m.withLinks(r.Context(), callerOf(mc), in.Target, one)
+	writeResponse(w, http.StatusOK, one[0])
 }
 
 // handleObservations lists every observation recorded for one publication
@@ -562,7 +611,11 @@ func (m *Module) DeleteTarget(ctx context.Context, c Caller, id model.ID) error 
 		return e
 	}
 	err := m.data.Mutate(actx, c.Tenant, func(sc store.Scope) error {
-		if err := adm.Lock(actx, sc, txNow(actx, sc, m.now())); err != nil {
+		now, err := txNow(actx, sc)
+		if err != nil {
+			return err
+		}
+		if err := adm.Lock(actx, sc, now); err != nil {
 			return err
 		}
 		recs, err := listAll(actx, sc, kindIntent, eq("target_id", id.String()))

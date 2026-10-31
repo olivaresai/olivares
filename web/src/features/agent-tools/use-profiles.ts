@@ -17,6 +17,11 @@ import { useAuth } from '@/lib/auth/context'
 /** The most pages one read follows: 20 x 100 accounts is far past any real install. */
 const MAX_PAGES = 20
 
+/** How often the list is read again, so the usage each account carries follows its tool
+ * (a visible page only). The engine never waits for a tool on a list read: an account that
+ * had no usage yet shows it on a later read. */
+export const USAGE_REFRESH_MS = 30_000
+
 export interface ProfileList {
   /** Every active account: the set both AI tools and New session count. */
   accounts: ProviderAccountDTO[]
@@ -99,5 +104,6 @@ export function useProfileList(enabled = true) {
       }
     },
     enabled: enabled && can('sessions:account:read'),
+    refetchInterval: USAGE_REFRESH_MS,
   })
 }

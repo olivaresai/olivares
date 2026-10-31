@@ -88,8 +88,10 @@ type Module struct {
 	loginHome   LoginHomeFunc
 	signIns     map[model.ID]*SignIn
 	statusReads map[statusSelection]*statusRead
-	// providerEntries caches each tool instance's snapshot (providers.go).
+	// providerEntries caches each tool instance's snapshot (providers.go); probeSlots
+	// bounds how many instances are probed at once, however many readers ask.
 	providerEntries map[string]*providerEntry
+	probeSlots      chan struct{}
 	// signedIn is told the tenant of each sign-in the tool confirmed (OnSignedIn).
 	signedIn func(model.TenantID)
 	// ollama is the local model service this engine runs (ollama.go).
@@ -110,7 +112,7 @@ func New(ctx context.Context, engine *toolinstall.Engine, root string, readOnly 
 		return nil, errors.New("agent tools require an engine and absolute tools root")
 	}
 	ctx, cancel := context.WithCancel(ctx)
-	m := &Module{engine: engine, root: root, readOnly: readOnly, ctx: ctx, cancel: cancel, plans: map[string]*Plan{}, jobs: map[model.ID]*savedJob{}}
+	m := &Module{engine: engine, root: root, readOnly: readOnly, ctx: ctx, cancel: cancel, plans: map[string]*Plan{}, jobs: map[model.ID]*savedJob{}, probeSlots: make(chan struct{}, maxConcurrentProbes)}
 	dir := root + ".jobs"
 	if !readOnly {
 		if err := os.MkdirAll(dir, 0700); err != nil {
@@ -309,6 +311,14 @@ func (m *Module) inventory(w http.ResponseWriter, r *http.Request, mc api.Module
 	}
 	inv, err := m.engine.List(r.Context(), m.root)
 	if err != nil {
+		if errors.Is(r.Context().Err(), context.Canceled) {
+			fail(w, http.StatusRequestTimeout, "request_abandoned", "The inventory request was canceled.")
+			return
+		}
+		if errors.Is(r.Context().Err(), context.DeadlineExceeded) {
+			fail(w, http.StatusServiceUnavailable, "unavailable", "The inventory request timed out. Try again.")
+			return
+		}
 		installerError(w, err)
 		return
 	}

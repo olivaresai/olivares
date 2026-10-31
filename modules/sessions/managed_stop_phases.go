@@ -115,9 +115,9 @@ func (m *Module) authorizeManagedStop(
 		return out, refuseManagedStop(outcome, "the entry authorization was not answered with a permit"), nil
 	}
 	runQuestion := ManagedStopQuestion{
-		Permission: permRunWrite,
+		Permission: permRunStop,
 		Resource: auth.ResourceAttrs{
-			Kind:        permRunWrite.Resource(),
+			Kind:        permRunRead.Resource(),
 			ID:          facts.runID.String(),
 			WorkspaceID: out.workspace,
 		},

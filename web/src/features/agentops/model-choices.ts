@@ -11,7 +11,7 @@ import { useAuth } from '@/lib/auth/context'
 import { agentOpsApi, agentOpsKeys } from './api'
 import { useAuthBoundary } from './auth-boundary'
 import { effortChoices, startModel } from './model-catalog'
-import { toolName } from './tool-names'
+import { toolName } from './engine-tools'
 import type { ProfileModelCatalogDTO, ProfileModelDTO } from './types'
 import './i18n'
 

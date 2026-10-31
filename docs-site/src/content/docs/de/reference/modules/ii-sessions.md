@@ -14,7 +14,7 @@ Estate materialisiert, hält Modul II ein **Live-Betriebs-Overlay** pro Session
 über demselben Beobachtungsstrom — und zeigt nur, was dieser Strom ehrlich
 trägt.
 
-Olivares <!-- release -->0.4<!-- /release --> **startet** auch offizielle Anbieter-CLIs als eigene Kinder unter einem
+Olivares <!-- release -->0.5<!-- /release --> **startet** auch offizielle Anbieter-CLIs als eigene Kinder unter einem
 [Anbieterprofil](/how-to/operate-provider-sessions/). Dieser verwaltete Pfad
 ist dasselbe Modul. Er ersetzt das Overlay nicht und führt zwei Homes, die
 dieselbe Anbieter-Session-ID bekanntgeben, nicht zusammen
@@ -101,8 +101,10 @@ Sessions ist ein Kernmodul: Es läuft auch dann weiter, wenn es nicht in der ges
 Modulauswahl steht. Das Ausschalten eines optionalen Moduls setzt keine Sitzungsdaten zurück.
 
 Die Managed-Run-API unter `/v1/m/sessions/runs` und `olivares session` verwenden dieselbe
-Runtime. Das Lesen von Läufen erfordert `sessions:run:read`; Start, Eingabe, Stopp und Resume
-erfordern `sessions:run:write`. Ein Viewer kann einen Lauf lesen, ohne ihn stoppen zu dürfen.
+Runtime. Liste und Metadaten erfordern `sessions:run:read`; Inhalte erfordern
+`sessions:output:read`, das Editor und höhere Rollen standardmäßig besitzen. Start, Eingabe
+und Resume erfordern `sessions:run:write`, Stopp erfordert `sessions:stop:write`. Viewer
+behalten Liste und Metadaten, verlieren aber Inhalte ohne ausdrückliche Freigabe.
 Mandanten- und Workspace-Autorität gelten weiterhin für jeden Lauf.
 
 ```sh

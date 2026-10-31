@@ -26,29 +26,56 @@ export function canCapture(): boolean {
 
 /**
  * Start recording the microphone. The browser asks for permission here; a refusal rejects
- * with the browser's NotAllowedError.
+ * with the browser's NotAllowedError. `onInterrupt` runs when the browser ends the take by
+ * itself: with the recorder's error, or with none when the microphone went away.
  */
-export async function startCapture(): Promise<Capture> {
+export async function startCapture(
+  onInterrupt: (error?: Error) => void,
+): Promise<Capture> {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
   const release = () => stream.getTracks().forEach((track) => track.stop())
   const chunks: Blob[] = []
-  const recorder = new MediaRecorder(stream)
-  recorder.ondataavailable = (event) => chunks.push(event.data)
-  recorder.start()
+  let recorder: MediaRecorder
+  try {
+    recorder = new MediaRecorder(stream)
+    recorder.ondataavailable = (event) => chunks.push(event.data)
+    recorder.start()
+  } catch (error) {
+    // A recorder that cannot take the track must not leave the microphone open.
+    release()
+    throw error
+  }
+  let ended = false
+  recorder.onerror = (event) => {
+    if (ended) return
+    ended = true
+    release()
+    const { error } = event as ErrorEvent
+    onInterrupt(
+      error instanceof Error ? error : new Error('the recorder failed'),
+    )
+  }
+  recorder.onstop = () => {
+    if (ended) return
+    ended = true
+    release()
+    onInterrupt()
+  }
   return {
     stop: () =>
       new Promise<Float32Array>((resolve, reject) => {
+        ended = true
         const finish = () => {
           release()
           decode(new Blob(chunks)).then(resolve, reject)
         }
-        // A recorder the browser already ended (device unplugged, permission revoked)
-        // keeps what it heard.
+        // A recorder the browser already ended keeps what it heard.
         if (recorder.state === 'inactive') return finish()
         recorder.onstop = finish
         recorder.stop()
       }),
     cancel: () => {
+      ended = true
       recorder.onstop = null
       if (recorder.state !== 'inactive') recorder.stop()
       release()

@@ -43,6 +43,8 @@
     "empty": "No session folders yet. A folder appears here once a session starts in it.",
     "loading": "Reading session folders…",
     "unavailable": "Session folders are unavailable.",
-    "truncationHint": "Open Sessions to see every folder."
+    "truncationHint": "Open Sessions to see every folder.",
+    "filter": "Find a folder",
+    "noMatch": "No folder matches “{{query}}”."
   }
 }

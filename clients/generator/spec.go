@@ -217,10 +217,10 @@ func (o Operation) bodyRequiredInSignature() bool {
 	return o.HasBody && o.RequestBodyDisposition != "" && o.BodyRequired
 }
 
-// Cleanup was published without a body argument in Go, TypeScript and Java.
-// Its optional body must be additive: old callers keep their per-call options.
+// Cleanup and resume were published without body arguments in Go, TypeScript and Java.
+// Their optional bodies must be additive: old callers keep their per-call options.
 func (o Operation) hasLegacyBodylessSignature() bool {
-	return o.HasBody && o.Method == "POST" && o.Path == "/v1/m/sessions/runs/{ref}/cleanup"
+	return o.HasBody && o.Method == "POST" && (o.Path == "/v1/m/sessions/runs/{ref}/cleanup" || o.Path == "/v1/m/sessions/runs/{ref}/resume")
 }
 
 // methodOrder fixes the emission order inside one path (determinism).

@@ -153,13 +153,14 @@ func (g *GitLab) CommitTree(context.Context, Token, string) (string, error) {
 }
 
 type glMR struct {
-	IID            int       `json:"iid"`
-	State          string    `json:"state"`
-	SHA            string    `json:"sha"`
-	MergeCommitSHA string    `json:"merge_commit_sha"`
-	SourceBranch   string    `json:"source_branch"`
-	TargetBranch   string    `json:"target_branch"`
-	CreatedAt      time.Time `json:"created_at"`
+	IID             int       `json:"iid"`
+	State           string    `json:"state"`
+	SHA             string    `json:"sha"`
+	MergeCommitSHA  string    `json:"merge_commit_sha"`
+	SquashCommitSHA string    `json:"squash_commit_sha"`
+	SourceBranch    string    `json:"source_branch"`
+	TargetBranch    string    `json:"target_branch"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 func (m glMR) change() Change {
@@ -258,8 +259,82 @@ func (g *GitLab) MergeChange(ctx context.Context, t Token, number int, sha, meth
 		return MergeOutcome{}, res
 	}
 	var m glMR
-	_ = json.Unmarshal(c.body, &m)
-	return MergeOutcome{Merged: m.State == "merged", MergeCommitSHA: m.MergeCommitSHA}, res
+	if json.Unmarshal(c.body, &m) != nil || m.State != "merged" {
+		return MergeOutcome{}, Result{Class: Ambiguous, Reason: "malformed_response", Host: res.Host}
+	}
+	resultSHA := m.MergeCommitSHA
+	if resultSHA == "" && method == "merge" {
+		resultSHA = m.SHA
+	}
+	if resultSHA == "" && method == "squash" {
+		resultSHA = m.SquashCommitSHA
+	}
+	if resultSHA == "" {
+		return MergeOutcome{}, Result{Class: Ambiguous, Reason: "malformed_response", Host: res.Host}
+	}
+	return MergeOutcome{Merged: true, MergeCommitSHA: resultSHA}, res
+}
+
+type glComment struct {
+	ID        int64     `json:"id"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (g *GitLab) comment(c glComment, number int) Comment {
+	id := strconv.FormatInt(c.ID, 10)
+	return Comment{ID: id, URL: g.cfg.APIBase + "/" + g.cfg.ProjectPath + "/-/issues/" + strconv.Itoa(number) + "#note_" + id, Body: c.Body, CreatedAt: c.CreatedAt}
+}
+
+// CreateComment adds one note to an issue.
+func (g *GitLab) CreateComment(ctx context.Context, t Token, spec CommentSpec) (Comment, Result) {
+	c, err := do(ctx, g.d, http.MethodPost, g.projectURL("/issues/"+strconv.Itoa(spec.Number)+"/notes"), g.headers(t), map[string]string{"body": spec.Body})
+	if err != nil {
+		return Comment{}, Result{Class: Ambiguous, Reason: "transport", Host: hostError(c.status, c.header, nil)}
+	}
+	res := classifyWrite(c.status, c.header, http.StatusCreated, map[int]string{http.StatusBadRequest: "validation_failed", http.StatusUnprocessableEntity: "validation_failed"})
+	if res.Class != Applied {
+		return Comment{}, res
+	}
+	var out glComment
+	if json.Unmarshal(c.body, &out) != nil || out.ID == 0 {
+		return Comment{}, Result{Class: Ambiguous, Reason: "malformed_response", Host: res.Host}
+	}
+	return g.comment(out, spec.Number), res
+}
+
+// ListComments lists every note on an issue, up to the shared page bound.
+func (g *GitLab) ListComments(ctx context.Context, t Token, number int) ([]Comment, error) {
+	var out []Comment
+	page := "1"
+	for n := 0; page != ""; n++ {
+		if n == maxPages {
+			return nil, ErrLookupIncomplete
+		}
+		q := url.Values{"per_page": {"100"}, "page": {page}}
+		c, err := do(ctx, g.d, http.MethodGet, g.projectURL("/issues/"+strconv.Itoa(number)+"/notes?"+q.Encode()), g.headers(t), nil)
+		if err != nil || c.status != http.StatusOK {
+			he := hostError(c.status, c.header, ErrLookupIncomplete)
+			return nil, &he
+		}
+		var comments []glComment
+		if json.Unmarshal(c.body, &comments) != nil {
+			return nil, ErrLookupIncomplete
+		}
+		for _, comment := range comments {
+			if comment.ID == 0 {
+				return nil, ErrLookupIncomplete
+			}
+			out = append(out, g.comment(comment, number))
+		}
+		page = c.header.Get("X-Next-Page")
+		if page != "" {
+			if _, err := strconv.Atoi(page); err != nil {
+				return nil, ErrLookupIncomplete
+			}
+		}
+	}
+	return out, nil
 }
 
 // PushTarget returns the git URL of the project on the binding's host.

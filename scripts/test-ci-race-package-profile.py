@@ -539,11 +539,11 @@ class CorrectionTests(unittest.TestCase):
 
     def test_r4_workflow_runner_comments(self) -> None:
         for extra in (
-            '\n# ci-runner-3: go test -run=TestExample is only a comment\n',
-            '\n      - run: |\n          # ci-runner-1 and ci-runner-8\n          go test ./api\n',
-            '\n      - run: go test ./api # ci-runner-3; go test -run=TestExample\n',
-            '\n      - run: echo ci-runner-3\n',
-            '\n      - run: echo "# ci-runner-3"\n',
+            '\n# build-host: go test -run=TestExample is only a comment\n',
+            '\n      - run: |\n          # build-host and build-host\n          go test ./api\n',
+            '\n      - run: go test ./api # build-host; go test -run=TestExample\n',
+            '\n      - run: echo build-host\n',
+            '\n      - run: echo "# build-host"\n',
             '\n      - run: go test ./api # comment with an unmatched " quote\n',
         ):
             with self.subTest(extra=extra):
@@ -582,9 +582,9 @@ class CorrectionTests(unittest.TestCase):
     def test_r4_yaml_quoted_shell_comments(self) -> None:
         for scalar in (
             "'go test ./api # go test -run=TestExample'",
-            '"go test ./api # ci-runner-3; go test -run=TestExample"',
+            '"go test ./api # build-host; go test -run=TestExample"',
             "'go test ./api' # go test -run=TestExample",
-            '"go test ./api" # ci-runner-3; go test -run=TestExample',
+            '"go test ./api" # build-host; go test -run=TestExample',
         ):
             with self.subTest(scalar=scalar):
                 self.assertTrue(self.workflow_filter_check(f'\n      - run: {scalar}\n'))

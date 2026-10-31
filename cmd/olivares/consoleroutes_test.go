@@ -245,7 +245,7 @@ var consoleSiblingImportRe = regexp.MustCompile(`(?m)^[ \t]*import\s*\{([^}]+)\}
 // literal. Every call regex of this census reads single-quoted and template literals, which
 // is what web/.prettierrc.json (singleQuote) produces. The Business overlay is not formatted
 // by it, and its `http.get("/v1/system/residency")` was never read, so a console call that
-// exists counted as a route without surface (dev#2263).
+// exists counted as a route without surface.
 var consoleDoubleQuotedPathRe = regexp.MustCompile(`"(/v1/[^"'\x60\\\n]*)"`)
 
 // singleQuoteConsolePaths spells those literals with single quotes: the same length, so
@@ -1135,7 +1135,13 @@ func walkEveryRoute(t *testing.T) map[string]bool {
 // No ingest source is started and the engine's owned resources close with the test.
 func walkBoundRoutes(t *testing.T) map[string]bool {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	// The deadline only guards this census's own boot. One minute was a healthy
+	// runner's budget, not a product contract: on the 2026-10-27 scheduled
+	// main-suite a loaded self-hosted runner spent it all inside migration v26
+	// of a FRESH bootstrap (the same boot passes in ~5 s unloaded), and the
+	// census died before checking a single route. Five minutes keeps
+	// the guard real while costing nothing when the host is healthy.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	t.Cleanup(cancel)
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	dir := t.TempDir()
@@ -1968,7 +1974,9 @@ func TestEveryEngineRouteHasAConsoleSurface(t *testing.T) {
 // `apiFetch` que mandan cuerpos crudos (`memory/import` y `restore/upload`). Al reconocerlas, el
 // techo real baja de 39 a 37. Mutación testigo: retirar la llamada de importación lo devuelve a
 // 38 y este gate falla contra 37; por eso 37, y no el presupuesto anterior, es el trinquete.
-const consoleUncoveredBudget = 37
+// It then drops to 35: the three session routes with no console caller, which the CLI serves, are
+// declared in consoleDeferredOperatorSurface.
+const consoleUncoveredBudget = 35
 
 // consoleDeferredOperatorSurface is an exact, falsifiable inventory rather than a budget
 // increase or a namespace suppression. K3 messaging deliberately delivers the authenticated
@@ -1979,6 +1987,8 @@ const consoleUncoveredBudget = 37
 // Edition-specific dispositions are added to a clone at test execution, after
 // thisEdition has been initialized; this shared inventory stays immutable.
 var consoleDeferredOperatorSurface = map[string]string{
+	"POST /v1/m/gitpublish/targets/{}/issue-comments": "fixed run-result comments ship through the authenticated " +
+		"REST/SDK operation; the console shows publication intents but has no run-result submit control yet",
 	// The first console increment of K3 (I1, web/src/features/communications) delivered the
 	// EIGHT callers of the journey channel → notice → inbox → delivery/message → Ack; the second
 	// (I2, an internal design note (not shipped)) delivered the SEVEN of
@@ -2012,6 +2022,9 @@ var consoleDeferredOperatorSurface = map[string]string{
 		"has no decision-detail screen that would show a reconstruction yet",
 	"GET /v1/m/sessions/providers/{}": "the providers screen lists, adds, tests, rotates and revokes; " +
 		"list and get return the same record, and there is no detail route that would read one",
+	"GET /v1/m/sessions/provider-presets": "the vendor preset catalog is read by the engine and by " +
+		"`olivares provider add --preset` (tab completion lists the refs); the console's add-provider form " +
+		"does not pick a preset yet",
 	"PUT /v1/m/sessions/workspaces/{}/setup-command": "the folder setup command ships as API and " +
 		"`olivares agent workspace setup`; this increment is engine and CLI only, and no console screen stores it yet",
 	"POST /v1/m/sessions/workspaces/{}/setup-command/approve": "approval of the exact setup command text ships as " +
@@ -2036,6 +2049,21 @@ var consoleDeferredOperatorSurface = map[string]string{
 		"the server; the AI tools page has no llama.cpp or vLLM panel with a model field yet",
 	"POST /v1/m/agenttools/model-servers/{}/stop": "`olivares tool stop llama-cpp|vllm` stops the server; " +
 		"the AI tools page has no llama.cpp or vLLM panel yet",
+	// Governed connections are Business: Community answers 501 business_required, and the Business
+	// build is driven from the CLI (`olivares connection ls|add|rm|test|grant|revoke`). Neither build
+	// has a console caller in this increment; the console panel adds its callers and removes these.
+	"GET /v1/m/sessions/connections": "connections are read with `olivares connection ls`; " +
+		"no console panel yet, and Community answers 501 business_required",
+	"PUT /v1/m/sessions/connections/{}": "a connection is added or changed with `olivares connection add`; " +
+		"no console panel yet, and Community answers 501 business_required",
+	"DELETE /v1/m/sessions/connections/{}": "a connection is removed with `olivares connection rm`; " +
+		"no console panel yet, and Community answers 501 business_required",
+	"POST /v1/m/sessions/connections/{}/test": "a connection is tried with `olivares connection test`; " +
+		"no console panel yet, and Community answers 501 business_required",
+	"PUT /v1/m/sessions/connections/{}/grants/{}": "a department is granted a connection with `olivares connection grant`; " +
+		"no console panel yet, and Community answers 501 business_required",
+	"DELETE /v1/m/sessions/connections/{}/grants/{}": "a grant is withdrawn with `olivares connection revoke`; " +
+		"no console panel yet, and Community answers 501 business_required",
 	// The Roles tab reads complete records from the collection endpoints. Individual
 	// lookups remain REST/CLI surfaces until a console detail view needs them.
 	"GET /v1/m/governance/rbac/roles/{}": "`olivares governance rbac roles get` reads one role; " +
@@ -2080,15 +2108,42 @@ var consoleDeferredOperatorSurface = map[string]string{
 		"the deployment console reads GET /executor readiness and has no saved-setup form",
 	"PUT /v1/m/deploy/executor/config": "saved executor configuration is a documented administrator REST write; " +
 		"the deployment console has no socket and sealed-secret-reference setup form",
-	// The launch pickers read the profile catalog (GET /v1/m/sessions/provider-profiles/{ref}/models),
-	// which replaced this module's availability read as the list of models a session may pick.
-	// The availability route stays a documented REST/SDK read; no console screen calls it.
-	"GET /v1/m/models/availability": "the models module's availability read ships as REST and SDK; the " +
-		"launch pickers list models from the session profile's live catalog instead",
 	"POST /v1/m/deploy/executor/test": "the documented administrator REST probe tests saved Docker setup; " +
 		"the deployment console has no saved-setup connection-test control",
 	"GET /v1/m/orchestration/stream": "the orchestration SSE stream remains REST/SDK; " +
 		"the Business console reads graph, flows and schedules through typed queries",
+	// The work console lists and revokes decisions but has no decision-detail, decision-request
+	// answer or dead-letter replay control. The CLI serves each: `olivares work get decision`,
+	// `olivares message decision respond` and `olivares work replay event`.
+	"GET /v1/m/sessions/decisions/{}": "the work console lists and revokes decisions but has no " +
+		"decision-detail screen; `olivares work get decision <id>` reads one",
+	"POST /v1/m/sessions/decision-requests/{}/responses": "answering a decision request is the " +
+		"`olivares message decision respond` CLI and REST/SDK operation; the console has no answer control yet",
+	"POST /v1/m/sessions/work-events/{}/replay": "replaying a dead-lettered work event is the " +
+		"`olivares work replay event` CLI and REST/SDK operation; the console has no replay control yet",
+	// The access pump (cmd/olivares/accesspump.go) runs this same sweep on its schedule, so an
+	// operator only needs it for an immediate run. No CLI command or console control wraps it yet;
+	// the REST route and the generated SDKs publish it.
+	"POST /v1/m/sourcescope/expiry/sweep": "the access pump runs this sweep on its schedule; an " +
+		"immediate run is the REST/SDK operator call, with no CLI or console control yet",
+}
+
+// Keep the run-result write accounted for even when other console improvements
+// leave room under the route ratchet.
+func TestGitpublishIssueCommentHasConsoleDisposition(t *testing.T) {
+	const key = "POST /v1/m/gitpublish/targets/{}/issue-comments"
+	if !walkEveryRoute(t)[key] {
+		t.Fatal("the published issue-comment operation must remain registered")
+	}
+	calls, _, _ := parseConsoleClientCalls(t, filepath.Join("..", "..", "web", "src"))
+	for _, call := range calls {
+		if call.method+" "+call.path == key {
+			return // The census rejects a stale deferral beside this caller.
+		}
+	}
+	if strings.TrimSpace(consoleDeferredOperatorSurface[key]) == "" {
+		t.Fatal("the issue-comment operation must have a console caller or an exact deferral reason")
+	}
 }
 
 // Keep the console's pin edit and the CLI-only revision comparison accounted for
@@ -2145,6 +2200,24 @@ func TestDepartmentRoutesHaveEditionConsoleDisposition(t *testing.T) {
 				t.Fatal("the Business department control must have a caller and no stale Community deferral")
 			}
 		})
+	}
+}
+
+// The cost-per-change read is Business-only: Community answers 501 and has no console
+// control, while the assembled Business console calls it from its FinOps screen. Its
+// deferral therefore belongs to the Community block, never to the inventory every
+// edition reads, or the Business build fails on a stale deferral once its caller lands.
+func TestFinOpsChangeCostDeferralIsCommunityOnly(t *testing.T) {
+	const key = "GET /v1/m/finops/spend/changes"
+	if _, shared := consoleDeferredOperatorSurface[key]; shared {
+		t.Fatalf("%s is deferred in the inventory every edition reads; declare it in the Community block of withEditionConsoleSurfaces", key)
+	}
+	deferred := strings.TrimSpace(withEditionConsoleSurfaces(map[string]string{})[key]) != ""
+	if thisEdition.name == "community" && !deferred {
+		t.Fatalf("%s has no Community console caller and must keep its deferral reason", key)
+	}
+	if thisEdition.name != "community" && deferred {
+		t.Fatalf("%s is deferred in the %s build, whose console calls it", key, thisEdition.name)
 	}
 }
 
@@ -2211,7 +2284,6 @@ func TestCockpitRoutesHaveConsoleDisposition(t *testing.T) {
 			keys = append(keys, operation.method+" /v1/m/session-cockpit/"+collection+operation.suffix)
 		}
 	}
-	keys = append(keys, "POST /v1/m/session-cockpit/previews")
 	for _, key := range keys {
 		t.Run(key, func(t *testing.T) {
 			deferred := strings.TrimSpace(deferredSurfaces[key]) != ""
@@ -2677,8 +2749,6 @@ func withEditionConsoleSurfaces(surfaces map[string]string) map[string]string {
 				"(terminal.ts); imported scoped transport and factory base are not resolved by the census",
 			"GET /v1/m/session-cockpit/admin-shells/{}/stream": "admin-shell terminal pane reads streamTerminal " +
 				"(terminal.ts); raw fetch derives its path from the factory's base option",
-			"POST /v1/m/session-cockpit/previews": "deprecated host-port lease remains REST/SDK; " +
-				"the Preview tab uses the session-bound POST /v1/m/sessions/runs/{}/preview instead",
 		})
 	}
 
@@ -2715,6 +2785,9 @@ func withEditionConsoleSurfaces(surfaces map[string]string) map[string]string {
 
 			// Registered as a Business seam (38d3e1027): Community answers 501 business_required.
 			"GET /v1/m/governance/approvals/review-quality": "Business approval review quality: Community answers 501 business_required; its console control is private",
+
+			// Business FinOps: the Business console's changes tab calls it, so the shared inventory must not defer it.
+			"GET /v1/m/finops/spend/changes": "Business FinOps cost per merged change: Community answers 501; its console control is private",
 		})
 	}
 	return surfaces

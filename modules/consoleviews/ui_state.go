@@ -5,6 +5,7 @@
 package consoleviews
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -14,6 +15,51 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
+
+// SessionNotificationAllowed reads the launcher's current event choices in the
+// caller's tenant scope. Older preferences without event choices keep all events.
+func SessionNotificationAllowed(ctx context.Context, sc store.Scope, owner, kind string) (bool, error) {
+	event := map[string]string{"approval": "needsYou", "finished": "finished", "failed": "failed"}[kind]
+	if event == "" {
+		return false, nil
+	}
+	recs, err := drain(ctx, sc, eq(colOwner, "user:"+owner), eq(colFeature, uiStateFeature), eq(colName, uiStateName))
+	if err != nil {
+		return false, err
+	}
+	if len(recs) == 0 {
+		return true, nil
+	}
+	var body uiStateBody
+	if err := json.Unmarshal([]byte(recs[0].String(colParams)), &body); err != nil {
+		return false, err
+	}
+	raw := body.Preferences["olivares.settings"]
+	if raw == nil {
+		return true, nil
+	}
+	var settings struct {
+		State struct {
+			Events map[string]bool `json:"notificationEvents"`
+			Owner  json.RawMessage `json:"sessionNotificationsFor"`
+		} `json:"state"`
+	}
+	if err := json.Unmarshal([]byte(*raw), &settings); err != nil {
+		return false, err
+	}
+	if len(settings.State.Owner) > 0 {
+		var selected *string
+		if err := json.Unmarshal(settings.State.Owner, &selected); err != nil {
+			return false, err
+		}
+		expected, _ := json.Marshal([]string{owner, sc.Tenant().String()})
+		if selected == nil || *selected != string(expected) {
+			return false, nil
+		}
+	}
+	allowed, set := settings.State.Events[event]
+	return !set || allowed, nil
+}
 
 // A user's console interface state: sidebar width, edition badge visibility and panel widths,
 // kept on the server so it follows the user to another browser, as favorites do.
@@ -38,23 +84,41 @@ var errTooManyPanes = errors.New("too many panes")
 var paneIDRE = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
 
 type uiStateBody struct {
-	Sidebar          string         `json:"sidebar,omitempty"`
-	ShowEditionBadge *bool          `json:"show_edition_badge,omitempty"`
-	PaneWidths       map[string]int `json:"pane_widths,omitempty"`
+	Preferences      map[string]*string `json:"preferences,omitempty"`
+	Sidebar          string             `json:"sidebar,omitempty"`
+	ShowEditionBadge *bool              `json:"show_edition_badge,omitempty"`
+	PaneWidths       map[string]int     `json:"pane_widths,omitempty"`
 }
 
 type uiStateDTO struct {
-	Sidebar          string         `json:"sidebar,omitempty"`
-	ShowEditionBadge bool           `json:"show_edition_badge"`
-	PaneWidths       map[string]int `json:"pane_widths,omitempty"`
+	Preferences      map[string]*string `json:"preferences,omitempty"`
+	Sidebar          string             `json:"sidebar,omitempty"`
+	ShowEditionBadge bool               `json:"show_edition_badge"`
+	PaneWidths       map[string]int     `json:"pane_widths,omitempty"`
 	// Stored is false when the caller has no row yet (the console may then move what it
 	// kept locally to the server once).
 	Stored    bool   `json:"stored"`
 	UpdatedAt string `json:"updated_at,omitempty"`
 }
 
+var preferenceNames = map[string]bool{
+	"olivares.prefs": true, "olivares.settings": true, "olivares.workspace": true, "olivares.tenant": true,
+	"olivares:api-playground": true, "olivares.lang": true, "olivares.sessions.model-favorites": true,
+	"olivares.notifications.lastSeen": true, "olivares.onboarding.dismissed": true,
+	"olivares.compliance.opened": true, "olivares.sessions.sidePane": true,
+}
+
 func (b uiStateBody) validate() string {
-	if b.Sidebar == "" && b.ShowEditionBadge == nil && len(b.PaneWidths) == 0 {
+	for name, value := range b.Preferences {
+		if !preferenceNames[name] {
+			return "unknown preference key"
+		}
+		if value != nil && len(*value) > 16384 {
+			return "preference exceeds 16384 bytes"
+		}
+	}
+
+	if b.Sidebar == "" && b.ShowEditionBadge == nil && len(b.PaneWidths) == 0 && len(b.Preferences) == 0 {
 		return "at least one interface setting is required"
 	}
 	if b.Sidebar != "" && b.Sidebar != "full" && b.Sidebar != "rail" {
@@ -97,7 +161,7 @@ func uiStateOf(rec *model.Record) uiStateDTO {
 		// A row that no longer validates is read as nothing stored rather than failing the shell.
 		return uiStateDTO{ShowEditionBadge: true}
 	}
-	return uiStateDTO{Sidebar: body.Sidebar, ShowEditionBadge: body.ShowEditionBadge == nil || *body.ShowEditionBadge, PaneWidths: body.PaneWidths, Stored: true, UpdatedAt: rec.String(model.ColUpdatedAt)}
+	return uiStateDTO{Preferences: body.Preferences, Sidebar: body.Sidebar, ShowEditionBadge: body.ShowEditionBadge == nil || *body.ShowEditionBadge, PaneWidths: body.PaneWidths, Stored: true, UpdatedAt: rec.String(model.ColUpdatedAt)}
 }
 
 // handleUIStateGet returns the caller's own console interface state; stored is false when
@@ -145,6 +209,17 @@ func (m *Module) handleUIStatePut(w http.ResponseWriter, r *http.Request, mc api
 		// same transaction that writes the caller's private row.
 		previous := uiStateOf(rec)
 		state := in
+		state.Preferences = make(map[string]*string)
+		for key, value := range previous.Preferences {
+			state.Preferences[key] = value
+		}
+		for key, value := range in.Preferences {
+			if value == nil {
+				delete(state.Preferences, key)
+			} else {
+				state.Preferences[key] = value
+			}
+		}
 		if state.Sidebar == "" {
 			state.Sidebar = previous.Sidebar
 			if state.Sidebar == "" {

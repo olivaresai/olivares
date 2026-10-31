@@ -45,6 +45,8 @@ export const TYPE_SCALE_STEPS = [
   'overline',
   'mono',
   'mono-s',
+  'metadata',
+  'metadata-s',
 ] as const
 
 /** tailwind-merge, taught every step of the ladder so they resolve as FONT SIZES. */

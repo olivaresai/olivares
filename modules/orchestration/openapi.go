@@ -316,6 +316,8 @@ func orchestrationSessionLaunchConfigSchema() map[string]any {
 	properties["fence"] = orchestrationNullable(oas.Obj("type", "integer", "format", "int64", "minimum", 0, "description", "A positive literal fence is mutually exclusive with fence_step_ref."))
 	properties["fence_step_ref"] = orchestrationNullable(orchestrationStepRefSchema("Mutually exclusive with a positive literal fence."))
 	properties["runtime_profile_ref"] = orchestrationIDSchema("After trimming it must be non-empty and no longer than 512 bytes.")
+	properties["workspace_ref"] = orchestrationOptionalString("When non-empty, selects a registered sessions workspace by reference; trimmed and limited to 512 bytes. Omitted, null or empty preserves workspace-less launches.")
+	properties["isolation"] = orchestrationNullable(oas.Obj("type", "string", "enum", oas.Enum("", "native", "container", "sandbox"), "description", "Empty/null defaults to native; unavailable runners refuse rather than downgrade."))
 	properties["attempt_kind"] = orchestrationNullable(orchestrationStepRefSchema("Defaults to lease-bind when omitted or empty."))
 	schema := orchestrationClosedObject(properties, "runtime_profile_ref")
 	orchestrationApplyWorkSelector(schema)

@@ -38,6 +38,11 @@ export interface TodaysCost {
   costMicroUsd: number | null
   /** Sessions among them whose cost is unknown or only partly reported. */
   unpriced: number
+  /** The tokens they reported, in and out; `null` when none reported any. */
+  inputTokens: number | null
+  outputTokens: number | null
+  /** Sessions among them that reported no tokens: the token sum leaves them out. */
+  tokensUnreported: number
 }
 
 /** Local midnight `daysAgo` days before `now`'s day. */
@@ -52,7 +57,8 @@ function midnightOf(now: number, daysAgo: number): number {
  * The cost of the sessions whose last work fell on a day: today (`daysAgo` 0) or an
  * earlier one. A session's cost is its own total and it belongs to the day it last
  * worked, so one that began yesterday and worked today counts whole for today and not
- * for yesterday. A session that reported no cost is counted as unpriced, never as $0.
+ * for yesterday. A session that reported no cost is counted as unpriced, never as $0,
+ * and one that reported no tokens is counted apart, never as 0 tokens.
  */
 export function dayCost(
   sessions: readonly UnifiedSession[],
@@ -66,13 +72,27 @@ export function dayCost(
   )
   let costMicroUsd: number | null = null
   let unpriced = 0
+  let inputTokens: number | null = null
+  let outputTokens: number | null = null
+  let tokensUnreported = 0
   for (const s of day) {
     const usage = sessionUsage(s.runs, s.live)
     if (usage?.costMicroUsd != null)
       costMicroUsd = (costMicroUsd ?? 0) + usage.costMicroUsd
     if (usage?.costMicroUsd == null || usage.costPartial) unpriced++
+    if (usage?.input != null && usage.output != null) {
+      inputTokens = (inputTokens ?? 0) + usage.input
+      outputTokens = (outputTokens ?? 0) + usage.output
+    } else tokensUnreported++
   }
-  return { sessions: day.length, costMicroUsd, unpriced }
+  return {
+    sessions: day.length,
+    costMicroUsd,
+    unpriced,
+    inputTokens,
+    outputTokens,
+    tokensUnreported,
+  }
 }
 
 /**

@@ -58,7 +58,7 @@ func registerFreshBootstrapModule(reg store.ExtensionRegistry) error {
 func freshBootstrapRegistry(t *testing.T, register func(store.ExtensionRegistry) error) *registry {
 	t.Helper()
 	reg := newRegistry()
-	for _, d := range coreDescriptors() {
+	for _, d := range currentCoreDescriptors() {
 		if err := reg.registerCore(d); err != nil {
 			t.Fatal(err)
 		}

@@ -1,11 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { toolName } from '@/features/agentops/tool-names'
 import type { ProviderSnapshot, ToolInventory } from './api'
 
-export const toolLabel = (driver: string): string =>
-  driver === 'ollama' ? 'Ollama' : toolName(driver)
 /** "codex-cli 0.162.0" is the tool's own words; the list says "0.162.0". */
 const versionNumber = (raw?: string) =>
   raw?.match(/\d+(?:\.\d+)+\S*/)?.[0] ?? raw

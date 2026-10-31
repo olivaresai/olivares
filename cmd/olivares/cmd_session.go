@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
+	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/modules/sessions"
 )
 
@@ -42,10 +44,12 @@ import (
 //   - `follow` renders the stream the way the console does, and `-o json` keeps the
 //     raw frames.
 
-// sessionRunsPath and sessionWorkspacesPath are the endpoints this file speaks to.
+// sessionRunsPath, sessionSourceItemsPath and sessionWorkspacesPath are the endpoints this
+// file speaks to.
 const (
-	sessionRunsPath       = "/v1/m/sessions/runs"
-	sessionWorkspacesPath = "/v1/m/sessions/workspaces"
+	sessionRunsPath        = "/v1/m/sessions/runs"
+	sessionSourceItemsPath = "/v1/m/sessions/source-items"
+	sessionWorkspacesPath  = "/v1/m/sessions/workspaces"
 	// sessionListLimit bounds the one list read a name lookup makes. The API sorts
 	// runs newest first, so a name resolves to its newest session.
 	sessionListLimit = 500
@@ -75,6 +79,7 @@ func newSessionCmd() *cobra.Command {
 		newSessionListCmd(),
 		newSessionShowCmd(),
 		newSessionMessagesCmd(),
+		newSessionDiffCmd(),
 		newSessionPeersCmd(),
 		newSessionLifecycleCmd("stop", "Stop a session", "/stop", "Stopped"),
 		newSessionLifecycleCmd("resume", "Resume a stopped session", "/resume", "Resumed"),
@@ -83,10 +88,12 @@ func newSessionCmd() *cobra.Command {
 		newSessionSnoozeCmd(),
 		newSessionDoneCmd(),
 		newSessionRenameCmd(),
+		newSessionTitleCmd(),
 		newSessionArchiveCmd(),
 		newSessionMoveCmd(),
 		newSessionHandoffCmd(),
 		newSessionInterruptCmd(),
+		newSessionShipCmd(),
 		newSessionRemoveCmd(),
 		newSessionEventsCmd(),
 	)
@@ -105,9 +112,14 @@ func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string
 		account                       string
 		model, effort, permission     string
 		dlp                           string
+		credentials                   []string
 		detach, worktree, noSetup     bool
 		worktreeFrom                  string
 		isolation                     string
+		wait                          bool
+		repository, repositoryRef     string
+		from                          string
+		costCap                       int64
 	)
 	cmd := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "write"},
@@ -126,9 +138,18 @@ func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string
 			"must be the repository's top folder. --worktree-from <commit or branch> starts that\n" +
 			"worktree at a commit or a local branch of the repository instead of its current\n" +
 			"commit, which is how you open the work a handoff names (it implies --worktree).\n\n" +
+			"--from <GitHub issue or pull request page> starts in a worktree of the folder on a branch\n" +
+			"named after the item (issue-17 or pr-17) and sends its title and body as the first\n" +
+			"message; session show links back to the page. The engine reads the page with the\n" +
+			"repository credential an administrator registered for the folder, so it needs tenant\n" +
+			"administration, and a page of a repository no registered credential lists is refused.\n\n" +
 			"--isolation container runs the tool in a container of its own, with the folder and the\n" +
 			"tool's account home mounted, when this server has podman or Docker. A session bound to a\n" +
-			"provider's endpoint from Providers needs native isolation; the engine says so.\n\n" +
+			"provider from Providers keeps its network restricted to that endpoint.\n\n" +
+			"--permission picks what the agent may do: read-only, supervised, auto-accept-edits,\n" +
+			"edits-and-commands (the default), auto or full; the older names ask and edits-only still\n" +
+			"work. Auto is the tool's own reviewed automatic mode: a tool without one asks, as\n" +
+			"supervised does. The docs list what each tool receives for each.\n\n" +
 			"--permission full runs every tool without asking, as the console's full permissions do.\n" +
 			"Only an administrator can start it; the engine refuses anyone else with one sentence and\n" +
 			"no session is created. A saved template supplies its own mode, so full does not go with\n" +
@@ -137,30 +158,67 @@ func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string
 			"  olivares session start ~/code/my-app \"explain this repository\"\n" +
 			"  olivares session start . --tool codex --name review\n" +
 			"  olivares session start . --account work\n" +
+			"  olivares session start . --credential prod-db\n" +
 			"  olivares session start . --worktree --name feature\n" +
+			"  olivares session start . --from https://github.com/acme/widgets/issues/17\n" +
 			"  olivares session start . --isolation container\n" +
 			"  olivares session start . \"fix the failing test\" --permission full\n" +
 			"  olivares session start . --worktree-from 0123456789abcdef0123456789abcdef01234567 --name review",
 		Args: cobra.MaximumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			runTimeout := cfg.timeout
+			if wait && detach {
+				return sentence(exitcode.Usage, "--wait and --detach cannot be combined.")
+			}
+			if costCap < 0 || (wait && cmd.Flags().Changed("timeout") && (cfg.timeout <= 0 || cfg.timeout > 30*24*time.Hour)) {
+				return sentence(exitcode.Usage, "Use a non-negative cost cap and a positive timeout up to 720h.")
+			}
+			if repository == "" && repositoryRef != "" {
+				return sentence(exitcode.Usage, "--repository-ref needs --repository.")
+			}
+			if repository != "" && (len(args) > 1 || worktree || worktreeFrom != "" || registered != nil) {
+				return sentence(exitcode.Usage, "With --repository, pass only an optional prompt and no folder or worktree.")
+			}
+			if from != "" && repository != "" {
+				return sentence(exitcode.Usage, "--from starts in a worktree of a folder; it cannot be combined with --repository.")
+			}
 			folder := "."
 			if len(args) > 0 {
 				folder = args[0]
 			}
-			root, err := sessionFolder(folder)
-			if err != nil {
-				return err
+			root := ""
+			var err error
+			if repository == "" {
+				root, err = sessionFolder(folder)
+				if err != nil {
+					return err
+				}
+			}
+			prompt := ""
+			if repository != "" && len(args) > 0 {
+				prompt = args[0]
+			} else if len(args) > 1 {
+				prompt = args[1]
 			}
 			tool = strings.ToLower(strings.TrimSpace(tool))
 			if tool != "" && driverConfigHome(tool, "/") == "" {
-				return sentence(exitcode.Usage, "Unknown tool %q. Use claude, codex, grok, opencode or gemini-cli.", tool)
+				return sentence(exitcode.Usage, "Unknown tool %q. Use claude, codex, grok, opencode, gemini-cli or cursor.", tool)
 			}
 			templateID := strings.TrimSpace(template)
 			if templateID != "" && !cmd.Flags().Changed("permission") {
 				permission = "" // the selected template supplies its mode
 			}
+			// A name, or an older name, is the same permission: from here on only the name is used.
+			var permissionMode string
+			if permission != "" || templateID == "" {
+				named, ok := sessions.ResolvePermission(permission)
+				if !ok {
+					return sentence(exitcode.Usage, "Unknown permission %q. Use read-only, supervised, auto-accept-edits, edits-and-commands, auto or full (the older names ask and edits-only also work).", permission)
+				}
+				permission, permissionMode = named.Name, named.Mode
+			}
 			if templateID != "" && permission == "edits-and-commands" {
-				return sentence(exitcode.Usage, "A saved template cannot replace the edits-and-commands preset. Choose read-only, edits-only or ask, or omit --permission to use the template's mode.")
+				return sentence(exitcode.Usage, "A saved template cannot replace the edits-and-commands preset. Choose read-only, auto-accept-edits or supervised, or omit --permission to use the template's mode.")
 			}
 			// The engine lets a template's mode win over a narrower or equal named one, so full
 			// with a template could start narrower than asked, with no word about it.
@@ -170,8 +228,14 @@ func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string
 			if isolation != "native" && isolation != "container" {
 				return sentence(exitcode.Usage, "Unknown isolation %q. Use native or container.", isolation)
 			}
-			if _, ok := permissionModes[permission]; !ok && !(templateID != "" && permission == "") {
-				return sentence(exitcode.Usage, "Unknown permission %q. Use edits-and-commands, edits-only, read-only, ask or full.", permission)
+			// The engine owns every rule about the names; the count it states here too, so a
+			// start it would refuse registers no folder and resolves no profile.
+			if len(credentials) > sessions.CredentialMaxNames {
+				return sentence(exitcode.Usage, "A session may use at most %d managed credentials. Name fewer: --credential <name>.",
+					sessions.CredentialMaxNames)
+			}
+			if wait && cmd.Flags().Changed("timeout") {
+				cfg.timeout = 30 * time.Second
 			}
 			if err := cfg.resolve(); err != nil {
 				return err
@@ -192,26 +256,61 @@ func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string
 			if err != nil {
 				return err
 			}
+			// The folder next, read only: the permission it stores applies when the person
+			// named none, and a start the engine refuses still registers no folder.
+			var ws map[string]any
+			if registered != nil && str(*registered, "workspace_ref") != "" {
+				ws = *registered
+			} else if repository == "" {
+				ws, err = cfg.findFolder(ctx, root)
+				if err != nil {
+					return err
+				}
+			}
+			if !cmd.Flags().Changed("permission") && templateID == "" && ws != nil {
+				if named, ok := sessions.ResolvePermission(str(ws, "default_permission")); ok && (named.Name == "full" || named.Name == "auto") {
+					// A command line has no prompt to see Full or Auto on, so neither is taken
+					// from the folder: it takes the flag, and the line says what to type.
+					fmt.Fprintf(cmd.ErrOrStderr(), "This folder's default is %s; pass --permission %s to use it\n", named.Name, named.Name)
+				} else if ok {
+					permission, permissionMode = named.Name, named.Mode
+					fmt.Fprintf(cmd.ErrOrStderr(), "Using permission %s (this folder's default)\n", named.Name)
+				}
+			}
 			// The preset next, for the same reason: edits-and-commands is the engine's
 			// built-in template, and a start without it could run under the profile's
 			// stored mode instead of the one the person chose.
 			if permission == "edits-and-commands" {
-				if templateID, err = cfg.builtinTemplate(ctx, editsAndCommandsTemplate); err != nil {
+				if templateID, err = cfg.builtinTemplate(ctx, sessions.EditsAndCommandsTemplate); err != nil {
 					return err
 				}
 			}
-			var ws map[string]any
-			if registered != nil && str(*registered, "workspace_ref") != "" {
-				ws = *registered
-			} else {
-				ws, err = cfg.folderWorkspace(ctx, root, dlp)
+			if ws == nil && repository == "" {
+				if ws, err = cfg.registerFolder(ctx, root, dlp); err != nil {
+					return err
+				}
 			}
-			if err != nil {
-				return err
+			// An item is read before the session exists, so a page the engine cannot read
+			// leaves no session behind. Its title and body are the first message.
+			if from != "" {
+				item, err := cfg.sourceItem(ctx, str(ws, "workspace_ref"), from)
+				if err != nil {
+					return err
+				}
+				prompt = sourceItemPrompt(item, prompt)
 			}
 			base := strings.TrimSpace(name)
 			if base == "" {
 				base = filepath.Base(root)
+				if repository != "" {
+					u, _ := url.Parse(repository)
+					if u != nil {
+						base = strings.TrimSuffix(filepath.Base(u.Path), ".git")
+					}
+				}
+				if base == "" || base == "." || base == "/" {
+					base = "session"
+				}
 				// The engine refuses a name over 200 characters; room is left for -2, -3 ….
 				if r := []rune(base); len(r) > 190 {
 					base = string(r[:190])
@@ -226,10 +325,24 @@ func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string
 				"effort": effort, "model": model, "workspace_ref": str(ws, "workspace_ref"),
 				"isolation": isolation, "provider_profile_ref": profileRef,
 			}
+			if repository != "" {
+				body["repository_url"] = repository
+				body["repository_ref"] = repositoryRef
+			}
+			// Sent only when asked for: the engine works in a worktree named after the item.
+			if from != "" {
+				body["source_url"] = from
+			}
+			if costCap > 0 {
+				body["cost_cap_micro_usd"] = costCap
+			}
+			if wait && cmd.Flags().Changed("timeout") {
+				body["timeout_seconds"] = runTimeout.Seconds()
+			}
 			// The preset goes with every tool: the engine applies it in the tool's
 			// own settings, or refuses one the tool cannot honour with a sentence printed as
 			// is. Sent only for Claude Code, Codex, Grok and OpenCode ran with "default".
-			body["permission_mode"] = permissionModes[permission]
+			body["permission_mode"] = permissionMode
 			if templateID != "" {
 				body["template_id"] = templateID
 			}
@@ -243,6 +356,10 @@ func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string
 			if noSetup {
 				body["no_setup"] = true
 			}
+			// Sent only when asked for: a start without the flag is the request it always was.
+			if len(credentials) > 0 {
+				body["credentials"] = credentials
+			}
 			// 202: the launch needs a person's approval; the session exists and waits.
 			_, b, err := cfg.do(ctx, "POST", sessionRunsPath, body, http.StatusCreated, http.StatusAccepted)
 			if err != nil {
@@ -252,8 +369,15 @@ func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string
 			if err := json.Unmarshal(b, &run); err != nil {
 				return err
 			}
+			// A tool without an automatic mode asks instead; the engine stored that mode.
+			if stored := str(run, "permission_mode"); permissionMode == "auto" && stored != "" && stored != "auto" {
+				fmt.Fprintf(cmd.ErrOrStderr(), "%s has no automatic mode: it asks before each action instead (supervised)\n", sessionDriver(run))
+			}
+			if wait {
+				return cfg.waitPipeline(cmd, run, prompt, costCap)
+			}
 			if str(run, "state") == sessionWaitingApproval {
-				prompted := len(args) > 1 && strings.TrimSpace(args[1]) != ""
+				prompted := strings.TrimSpace(prompt) != ""
 				return renderOut(cmd, func(w io.Writer) error {
 					return printSessionWaitsForApproval(w, run, cfg.approvalsPage(), prompted)
 				}, run)
@@ -263,36 +387,49 @@ func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string
 			}, run); err != nil {
 				return err
 			}
-			if len(args) < 2 || strings.TrimSpace(args[1]) == "" {
+			if strings.TrimSpace(prompt) == "" {
 				return nil
 			}
 			if outputIsJSON(cmd) {
-				return cfg.postTurn(cmd.Context(), run, args[1], nil)
+				return cfg.postTurn(cmd.Context(), run, prompt, nil)
 			}
-			return cfg.sendTurn(cmd, run, args[1], nil, detach)
+			return cfg.sendTurn(cmd, run, prompt, nil, detach)
 		},
 	}
 	cfg.addFlags(cmd)
-	cmd.Flags().StringVar(&tool, "tool", "", "agent tool: claude, codex, grok, opencode or gemini-cli (default: the first one that is ready)")
+	addDeprecatedJSONFlag(cmd)
+	cmd.Flags().BoolVar(&wait, "wait", false, "wait for the turn or session to finish; return a pipeline outcome and stop a completed run")
+	cmd.Flags().StringVar(&repository, "repository", "", "HTTPS repository URL to check out on the engine instead of a folder; the optional argument is the prompt")
+	cmd.Flags().StringVar(&repositoryRef, "repository-ref", "", "repository branch, tag or commit (default HEAD)")
+	cmd.Flags().StringVar(&from, "from", "", "start from this GitHub issue or pull request page: a worktree on a branch named after it, its title and body as the first message")
+	cmd.Flags().Int64Var(&costCap, "cost-cap-micro-usd", 0, "per-run cost ceiling in millionths of a US dollar; enforced by the engine on reported usage")
+	cmd.Flags().Lookup("timeout").Hidden = false
+	cmd.Flags().Lookup("timeout").Usage = "request timeout; with --wait, an explicit value sets the run deadline instead (positive, up to 720h)"
+	cmd.Flags().StringVar(&tool, "tool", "", "agent tool: claude, codex, grok, opencode, gemini-cli or cursor (default: the first one that is ready)")
 	cmd.Flags().StringVar(&name, "name", "", "session name (default: the folder's name; -2, -3 … when taken)")
 	cmd.Flags().StringVar(&profile, "profile", "", "provider profile to launch under (default: the one the engine picks, as in the console)")
 	cmd.Flags().StringVar(&account, "account", "", "launch under this provider account (its name or profile reference; see olivares provider account ls)")
 	cmd.Flags().StringVar(&model, "model", "", "model alias or id (default: the tool's own; Claude Code launches an alias, or none, on its exact id)")
 	cmd.Flags().StringVar(&effort, "effort", "", "low|medium|high|xhigh|max")
 	cmd.Flags().StringVar(&template, "template", "", "saved session template ID; its terms apply at launch and resume")
-	cmd.Flags().StringVar(&permission, "permission", "edits-and-commands",
-		"what the agent may do without asking: edits-and-commands, edits-only, read-only, ask, or full (every tool, no prompts; administrators only)")
+	cmd.Flags().StringVar(&permission, "permission", sessions.DefaultPermission,
+		"what the agent may do: read-only, supervised, auto-accept-edits, edits-and-commands, auto (the tool decides each call; administrators only), or full (every tool, no prompts; administrators only)")
 	cmd.Flags().StringVar(&dlp, "dlp", "off", "DLP posture for a folder this command registers: off, label or deny")
 	cmd.Flags().StringVar(&isolation, "isolation", "native", "native (a process beside the engine) or container (podman or Docker on this server; see olivares doctor)")
 	cmd.Flags().BoolVar(&detach, "detach", false, "with a prompt, send it and return without showing the reply")
 	cmd.Flags().BoolVar(&noSetup, "no-setup", false, "skip the folder's setup command for this start")
 	cmd.Flags().BoolVar(&worktree, "worktree", false, "work in a git worktree of its own, on a new branch (the folder must be a git repository's top folder)")
 	cmd.Flags().StringVar(&worktreeFrom, "worktree-from", "", "start the worktree at this commit id or local branch instead of the current commit (implies --worktree)")
+	cmd.Flags().StringArrayVar(&credentials, "credential", nil, fmt.Sprintf("managed credential the session may use, by name, sealed for the tenant (Business; repeatable, at most %d)", sessions.CredentialMaxNames))
 	_ = cmd.RegisterFlagCompletionFunc("tool", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-		return []string{"claude", "codex", "grok", "opencode", "gemini-cli"}, cobra.ShellCompDirectiveNoFileComp
+		return []string{"claude", "codex", "grok", "opencode", "gemini-cli", "cursor"}, cobra.ShellCompDirectiveNoFileComp
 	})
 	_ = cmd.RegisterFlagCompletionFunc("permission", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-		return []string{"edits-and-commands", "edits-only", "read-only", "ask", "full"}, cobra.ShellCompDirectiveNoFileComp
+		var names []string
+		for _, n := range sessions.PermissionNames() {
+			names = append(append(names, n.Name), n.Aliases...)
+		}
+		return names, cobra.ShellCompDirectiveNoFileComp
 	})
 	_ = cmd.RegisterFlagCompletionFunc("dlp", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return []string{"off", "label", "deny"}, cobra.ShellCompDirectiveNoFileComp
@@ -332,6 +469,15 @@ func sessionFolder(arg string) (string, error) {
 // folderWorkspace returns the active workspace registered at root, registering it
 // when there is none.
 func (c *agentClientConfig) folderWorkspace(ctx context.Context, root, dlp string) (map[string]any, error) {
+	ws, err := c.findFolder(ctx, root)
+	if err != nil || ws != nil {
+		return ws, err
+	}
+	return c.registerFolder(ctx, root, dlp)
+}
+
+// findFolder returns the active workspace registered at root, or nil when there is none.
+func (c *agentClientConfig) findFolder(ctx context.Context, root string) (map[string]any, error) {
 	_, b, err := c.do(ctx, "GET", sessionWorkspacesPath, nil)
 	if err != nil {
 		return nil, err
@@ -347,11 +493,16 @@ func (c *agentClientConfig) folderWorkspace(ctx context.Context, root, dlp strin
 			return ws, nil
 		}
 	}
+	return nil, nil
+}
+
+// registerFolder registers root as a workspace for sessions.
+func (c *agentClientConfig) registerFolder(ctx context.Context, root, dlp string) (map[string]any, error) {
 	body := map[string]any{
 		"root_path": root, "name": filepath.Base(root), "mount_mode": "rw",
 		"container_target": "/workspace", "dlp_mode": dlp,
 	}
-	_, b, err = c.do(ctx, "POST", sessionWorkspacesPath, body, http.StatusCreated)
+	_, b, err := c.do(ctx, "POST", sessionWorkspacesPath, body, http.StatusCreated)
 	if err != nil {
 		return nil, err
 	}
@@ -359,9 +510,9 @@ func (c *agentClientConfig) folderWorkspace(ctx context.Context, root, dlp strin
 	return ws, json.Unmarshal(b, &ws)
 }
 
-// sessionToolOrder is the console's order of the tools a session runs
-// (SESSION_TOOLS in web/src/features/agentops/tool-names.ts).
-var sessionToolOrder = []string{"claude", "codex", "grok", "opencode", "gemini-cli"}
+// sessionToolOrder is the order of the tools a session runs: the driver table's, which the
+// console reads from GET /v1/m/sessions/tools.
+var sessionToolOrder = driverfacts.SessionKeys()
 
 // firstReadyTool is the first tool, in the console's order, that the engine's one
 // readiness answer (provider-profiles/readiness, the console's too) says can start a
@@ -425,7 +576,7 @@ func (c *agentClientConfig) toolProfile(ctx context.Context, stderr io.Writer, t
 		return ref, nil
 	}
 	if driverConfigHome(tool, "/") == "" {
-		return "", sentence(exitcode.Usage, "Unknown tool %q. Use claude, codex, grok, opencode or gemini-cli.", tool)
+		return "", sentence(exitcode.Usage, "Unknown tool %q. Use claude, codex, grok, opencode, gemini-cli or cursor.", tool)
 	}
 	status, b, err := c.resolveProfile(ctx, tool)
 	return profileRefOf(stderr, tool, status, b, err)
@@ -528,19 +679,6 @@ func profileRefOf(stderr io.Writer, tool string, status int, b []byte, err error
 	return ref, nil
 }
 
-// The permission choices of a session, as the console's New session
-// offers them: the default is the engine's built-in "Edits and
-// commands" template (an allowlist under dontAsk, so the agent can edit and run
-// commands and every other tool is refused); the others are plain modes. "full" is
-// bypassPermissions, as the console sends it: the engine refuses it to anyone who is
-// not a run administrator (sessions refuseUnrestrictedFor), and that stays the one gate.
-var permissionModes = map[string]string{
-	"edits-and-commands": "", "edits-only": "acceptEdits", "read-only": "plan", "ask": "default",
-	"full": "bypassPermissions",
-}
-
-const editsAndCommandsTemplate = "Edits and commands"
-
 // builtinTemplate returns the id of the engine's built-in session template with this
 // name. A list the engine refuses, or one without the template, is an error that names
 // the preset: the start must not go on without it.
@@ -568,7 +706,7 @@ func (c *agentClientConfig) builtinTemplate(ctx context.Context, name string) (s
 		}
 	}
 	return "", sentence(exitcode.NotFound, "--permission edits-and-commands needs the engine's built-in %q template, "+
-		"and this engine has none, so the session was not started. Choose --permission edits-only, read-only or ask.", name)
+		"and this engine has none, so the session was not started. Choose --permission auto-accept-edits, read-only or supervised.", name)
 }
 
 // freeSessionName returns base, or base-2, base-3 … when a session that is not
@@ -877,12 +1015,12 @@ func (c *agentClientConfig) sendTurn(cmd *cobra.Command, run map[string]any, tex
 
 // sessionShowsTurns reports whether this CLI can tell when a turn of this run ends:
 // a Claude stream-json run emits a `result` frame, a Codex run `turn/completed`, an
-// OpenCode, Grok Build or Gemini CLI run (ACP) the session/prompt result with its stopReason.
+// OpenCode, Grok Build, Gemini CLI or Cursor CLI run (ACP) the session/prompt result with its stopReason.
 // Another driver's frames are its own protocol, so send returns once the engine
 // accepts the message.
 func sessionShowsTurns(run map[string]any) bool {
 	switch d := strings.TrimSpace(str(run, "provider_driver")); d {
-	case "", "claude", "codex", "opencode", "grok", "gemini-cli":
+	case "", "claude", "codex", "opencode", "grok", "gemini-cli", "cursor":
 		return str(run, "transport") != "remote-control"
 	}
 	return false
@@ -1155,7 +1293,7 @@ func newSessionListCmd() *cobra.Command {
 			// console does (sharedNames in web/src/features/sessions/provenance.ts).
 			names := map[string]int{}
 			for _, r := range shown {
-				names[sessionLabel(r)]++
+				names[sessionDisplay(r)]++
 			}
 			now := time.Now()
 			waiting := 0
@@ -1170,7 +1308,7 @@ func newSessionListCmd() *cobra.Command {
 					// The engine made this folder for the session; its path is an id.
 					folder = "(its own folder)"
 				}
-				name := sessionLabel(r)
+				name := sessionDisplay(r)
 				if names[name] > 1 {
 					name += " " + termSafe(refTail(str(r, "run_ref")))
 				}
@@ -1246,8 +1384,13 @@ func printSessionFields(w io.Writer, run map[string]any) {
 	state := str(run, "state")
 	fields := []termrender.Field{
 		{Key: "name", Value: sessionLabel(run)},
-		{Key: "state", Value: state, Role: sessionStateRole(state)},
 	}
+	// The title the engine cut from the first message is shown beside the name and
+	// never in place of it: a session is addressed by its name or id.
+	if title := termSafe(str(run, "title")); title != "" {
+		fields = append(fields, termrender.Field{Key: "title", Value: title})
+	}
+	fields = append(fields, termrender.Field{Key: "state", Value: state, Role: sessionStateRole(state)})
 	// A failed session always says why; a stopped one says so when the engine gave a
 	// reason a person acts on ("Access changed for <user>; resume to continue ...").
 	if reason := termSafe(str(run, "reason")); state == "failed" || (state == "stopped" && strings.TrimSpace(reason) != "") {
@@ -1266,6 +1409,10 @@ func printSessionFields(w io.Writer, run map[string]any) {
 	// A session in its own git worktree says on which branch.
 	if branch := termSafe(str(run, "worktree_branch")); branch != "" {
 		fields = append(fields, termrender.Field{Key: "branch", Value: branch})
+	}
+	// A session started from a GitHub issue or pull request links back to it.
+	if item := termSafe(str(run, "source_url")); item != "" {
+		fields = append(fields, termrender.Field{Key: "from", Value: item})
 	}
 	fields = append(fields, termrender.Field{Key: "started", Value: str(run, "started_at")})
 	if stopped := str(run, "stopped_at"); stopped != "" {
@@ -1292,6 +1439,7 @@ var sessionLifecycleLong = map[string]string{
 }
 
 func newSessionLifecycleCmd(use, short, suffix, done string) *cobra.Command {
+	var atReset bool
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
 		Annotations:       map[string]string{"changes_data": "write"},
@@ -1309,7 +1457,11 @@ func newSessionLifecycleCmd(use, short, suffix, done string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, b, err := cfg.do(cmd.Context(), "POST", sessionRunsPath+"/"+url.PathEscape(str(run, "run_ref"))+suffix, nil, http.StatusOK)
+			var body any
+			if atReset {
+				body = map[string]any{"at_reset": true}
+			}
+			_, b, err := cfg.do(cmd.Context(), "POST", sessionRunsPath+"/"+url.PathEscape(str(run, "run_ref"))+suffix, body, http.StatusOK)
 			if err != nil {
 				return err
 			}
@@ -1318,10 +1470,17 @@ func newSessionLifecycleCmd(use, short, suffix, done string) *cobra.Command {
 				return err
 			}
 			return renderOut(cmd, func(w io.Writer) error {
+				if atReset {
+					_, err := fmt.Fprintf(w, "Resumes %s.\n", str(updated, "resume_at"))
+					return err
+				}
 				_, err := fmt.Fprintf(w, "%s %s.\n", done, sessionLabel(updated))
 				return err
 			}, updated)
 		},
+	}
+	if use == "resume" {
+		cmd.Flags().BoolVar(&atReset, "at-reset", false, "resume after the account usage reset")
 	}
 	cfg.addFlags(cmd)
 	return cmd
@@ -1556,6 +1715,62 @@ func newSessionRenameCmd() *cobra.Command {
 		},
 	}
 	cfg.addFlags(cmd)
+	return cmd
+}
+
+// sessionTitleStyles are the styles the engine cuts a title in (modules/sessions run_title.go).
+var sessionTitleStyles = []string{"short", "sentence", "long"}
+
+// newSessionTitleCmd is title: the engine cuts the session's title from its first message,
+// on its own host, and the session shows it where it has no name. One POST.
+func newSessionTitleCmd() *cobra.Command {
+	var cfg agentClientConfig
+	var style string
+	cmd := &cobra.Command{
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "title <session> [--style short|sentence|long]",
+		Short:       "Make a session's title from its first message",
+		Long: "title has the engine cut a short title from the first message you sent the session, and\n" +
+			"keeps it on the session: the list and the console show it where the session has no name. No\n" +
+			"model is asked, so nothing leaves the machine. The name stays yours: a title never replaces\n" +
+			"it, and `rename` is how you choose a name. Run it again, with another --style, to cut the\n" +
+			"title again: short keeps 28 characters, sentence 60 (the default), long 100. It needs the\n" +
+			"permission to write the session and to read its output.",
+		Example:           "  olivares session title my-app\n  olivares session title my-app --style short",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeSessions,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if style != "" && !slices.Contains(sessionTitleStyles, style) {
+				return sentence(exitcode.Usage, "--style is short, sentence or long, not %q.", style)
+			}
+			if err := cfg.resolve(); err != nil {
+				return err
+			}
+			run, err := cfg.findSession(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			body := map[string]any{}
+			if style != "" {
+				body["style"] = style
+			}
+			_, b, err := cfg.do(cmd.Context(), "POST", sessionRunsPath+"/"+url.PathEscape(str(run, "run_ref"))+"/title",
+				body, http.StatusOK)
+			if err != nil {
+				return err
+			}
+			updated := map[string]any{}
+			if err := json.Unmarshal(b, &updated); err != nil {
+				return err
+			}
+			return renderOut(cmd, func(w io.Writer) error {
+				_, err := fmt.Fprintf(w, "Titled %s: %s.\n", sessionLabel(updated), termSafe(str(updated, "title")))
+				return err
+			}, updated)
+		},
+	}
+	cfg.addFlags(cmd)
+	cmd.Flags().StringVar(&style, "style", "", "how much of the first message the title keeps: short, sentence (default) or long")
 	return cmd
 }
 
@@ -1924,6 +2139,18 @@ func sessionsMatching(runs []map[string]any, arg string) []map[string]any {
 // (refTail), which names the session wherever a name does.
 func sessionShortID(run map[string]any) string {
 	return strings.TrimPrefix(refTail(str(run, "run_ref")), "…")
+}
+
+// sessionDisplay is how a list names a session: its name, else the title the engine cut
+// from its first message, else its id. A title is shown only, never typed: it is not an
+// address, so the sentences that tell a person what to type keep using sessionLabel.
+func sessionDisplay(run map[string]any) string {
+	if strings.TrimSpace(str(run, "name")) == "" {
+		if title := strings.TrimSpace(str(run, "title")); title != "" {
+			return termSafe(title)
+		}
+	}
+	return sessionLabel(run)
 }
 
 // sessionLabel is how a session is named on screen: its name, else its id.

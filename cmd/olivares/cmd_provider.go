@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/spf13/cobra"
 
@@ -115,11 +116,10 @@ func addProviderKeyFlags(cmd *cobra.Command, keyEnv *string) {
 
 func newProviderAddCmd() *cobra.Command {
 	var (
-		cfg                                        agentClientConfig
-		kind, name, baseURL, defaultModel, service string
-		keyEnv                                     string
-		bindProfile                                string
-		noTest                                     bool
+		cfg                                       agentClientConfig
+		kind, name, baseURL, defaultModel, preset string
+		service, keyEnv, bindProfile              string
+		noTest                                    bool
 	)
 	cmd := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "write"},
@@ -127,21 +127,44 @@ func newProviderAddCmd() *cobra.Command {
 		Short:       "Register a provider credential with the engine",
 		Long: "add seals one provider credential in the engine and returns its reference and a\n" +
 			"four-character hint. The value is never returned, logged or printed again.\n\n" +
+			"With --preset <ref> the vendor's own row of the catalog sets the kind, the endpoint and the\n" +
+			"name, and the key's prefix decides nothing (tab completion lists the refs; the engine serves\n" +
+			"the same table at /v1/m/sessions/provider-presets).\n" +
 			"Without --kind the kind comes from the key (sk-ant-… Anthropic, xai-… xAI, sk-… OpenAI;\n" +
-			"with --service or --base-url, OpenAI-compatible); without --name the name is the kind's, as in the\n" +
+			"with --base-url, OpenAI-compatible); without --name the name is the kind's, as in the\n" +
 			"console. The new key is then tested like `olivares provider test` (one model-list call,\n" +
 			"nothing spent) and the result shown; --no-test skips that.\n\n" +
 			"With --profile the new provider is bound to that provider profile in the same run, so\n" +
 			"the next session launched under it uses this credential. Without it, bind later with\n" +
 			"`olivares provider bind`.",
 		Example: "  olivares provider add < key.txt\n" +
+			"  olivares provider add --preset deepseek-anthropic < key.txt\n" +
 			"  olivares provider add --kind anthropic --name \"Anthropic (prod)\" < key.txt\n" +
 			"  OPENAI_KEY=sk-... olivares provider add --kind openai --name Codex --key-env OPENAI_KEY\n" +
 			"  olivares provider add --kind openai_compatible --name Local --base-url https://llm.example.com < key.txt",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if service != "" && bindProfile != "" {
-				return exitcode.New(exitcode.Usage, fmt.Errorf("service providers use governed inference; native tool binding is not qualified"))
+			var row modelprovider.Preset
+			// A preset that was asked for and came out empty (an unset shell variable) is
+			// refused like an unknown one: falling back to the key's prefix would register
+			// a DeepSeek key as OpenAI's and send it to OpenAI. --service is the published
+			// older name and keeps its meaning: empty is no service, and its default name.
+			asked := cmd.Flags().Changed("preset")
+			viaService := service != ""
+			if viaService {
+				if asked {
+					return exitcode.New(exitcode.Usage, fmt.Errorf("--service is the older name of --preset: pass one of them"))
+				}
+				preset, asked = service, true
+			}
+			if preset = strings.TrimSpace(preset); preset != "" || asked {
+				var ok bool
+				if row, ok = modelprovider.LookupPreset(preset); !ok {
+					return exitcode.New(exitcode.Usage, fmt.Errorf("unknown preset %q; valid presets: %s", preset, strings.Join(modelprovider.PresetRefs(), ", ")))
+				}
+				if !modelprovider.NativeService(preset) && bindProfile != "" {
+					return exitcode.New(exitcode.Usage, fmt.Errorf("service providers use governed inference; native tool binding is not qualified"))
+				}
 			}
 			if err := cfg.resolve(); err != nil {
 				return err
@@ -151,17 +174,18 @@ func newProviderAddCmd() *cobra.Command {
 				return err
 			}
 			// The console needs neither; the kind is the key's, the name the kind's.
-			// A documented API service is OpenAI-compatible at its own endpoint (the engine
-			// takes no other kind for one), so --service decides before the key's prefix.
-			if kind = strings.TrimSpace(kind); kind == "" && service != "" {
-				kind = "openai_compatible"
+			// A preset's row says its kind, so it decides before the key's prefix.
+			if kind = strings.TrimSpace(kind); kind == "" && preset != "" {
+				kind = row.Kind
 			} else if kind == "" {
 				if kind = providerKindFromKey(key, baseURL); kind == "" {
 					return exitcode.New(exitcode.Usage, fmt.Errorf(
 						"the key does not say which provider it is for: pass --kind anthropic, openai, xai, gemini or openai_compatible"))
 				}
 			}
-			if strings.TrimSpace(name) == "" {
+			if strings.TrimSpace(name) == "" && preset != "" && !viaService {
+				name = row.Title
+			} else if strings.TrimSpace(name) == "" {
 				name = providerKindLabel(kind)
 			}
 			body := map[string]any{
@@ -170,8 +194,8 @@ func newProviderAddCmd() *cobra.Command {
 			if cmd.Flags().Changed("default-model") {
 				body["default_model"] = strings.TrimSpace(defaultModel)
 			}
-			if service != "" {
-				body["service"] = service
+			if preset != "" {
+				body["service"] = preset
 			}
 			rec, err := cfg.addProvider(cmd.Context(), body)
 			if err != nil {
@@ -195,14 +219,23 @@ func newProviderAddCmd() *cobra.Command {
 		},
 	}
 	cfg.addFlags(cmd)
-	cmd.Flags().StringVar(&kind, "kind", "", "anthropic | openai | xai | gemini | openai_compatible (default: openai_compatible with --service or --base-url, else from the key)")
+	cmd.Flags().StringVar(&kind, "kind", "", "anthropic | openai | xai | gemini | openai_compatible (default: the preset's, else openai_compatible with --base-url, else from the key)")
 	cmd.Flags().StringVar(&name, "name", "", "your own name for this credential; it is what a picker shows (default: the kind's name)")
 	cmd.Flags().BoolVar(&noTest, "no-test", false, "add the key without testing it")
 	cmd.Flags().StringVar(&defaultModel, "default-model", "", "model for new sessions (empty clears; omission lets the first successful test choose)")
 	cmd.Flags().StringVar(&baseURL, "base-url", "", "https endpoint override, or plain http at a loopback or private-network address for anthropic, xai and openai_compatible (required for openai_compatible)")
-	cmd.Flags().StringVar(&service, "service", "", "documented API service preset: deepseek")
+	cmd.Flags().StringVar(&preset, "preset", "", "vendor preset, a ref from the engine's catalog (tab completion lists them; sets kind, endpoint and name)")
+	cmd.Flags().StringVar(&service, "service", "", "older name of --preset (an empty value means no service)")
 	cmd.Flags().StringVar(&bindProfile, "profile", "", "provider profile reference to bind this credential to in the same run")
 	addProviderKeyFlags(cmd, &keyEnv)
+	_ = cmd.RegisterFlagCompletionFunc("preset", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		rows := modelprovider.Presets()
+		choices := make([]string, 0, len(rows))
+		for _, row := range rows {
+			choices = append(choices, row.Ref+"\t"+row.Title)
+		}
+		return choices, cobra.ShellCompDirectiveNoFileComp
+	})
 	_ = cmd.RegisterFlagCompletionFunc("kind", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return providerKindChoices, cobra.ShellCompDirectiveNoFileComp
 	})
@@ -521,7 +554,7 @@ func newProviderBindCmd() *cobra.Command {
 
 // bindProviderToProfile patches the profile's provider_record_ref. An empty ref
 // unbinds, which is why the caller and not this function decides what empty means.
-// The profile's auth_source moves with it (FH 025): bound, the engine injects the
+// The profile's auth_source moves with it (first-hour check): bound, the engine injects the
 // key (managed_injection); unbound, the tool's own login applies again. Setting only
 // the record left the profile on the own login, so the key was never opened.
 func bindProviderToProfile(cmd *cobra.Command, cfg *agentClientConfig, providerRef, profileRef string) (map[string]any, error) {
@@ -753,7 +786,7 @@ func printProviderRecord(w io.Writer, rec map[string]any, boundProfile string) e
 	default:
 		if boundProfile == "" {
 			r.Blank()
-			if str(rec, "service") != "" {
+			if !modelprovider.NativeService(str(rec, "service")) {
 				r.Next("Use this service with a governed text execution profile.")
 			} else {
 				r.Next("olivares provider bind " + ref + " --profile <provider-profile-ref>")

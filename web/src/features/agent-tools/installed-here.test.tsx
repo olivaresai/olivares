@@ -157,7 +157,7 @@ it('lists what a new session in the active workspace receives, each linked to it
   const skillRow = within(await row('Skills'))
   expect(
     await skillRow.findByRole('link', { name: 'research' }),
-  ).toHaveAttribute('href', '/skills?pack=p1')
+  ).toHaveAttribute('href', '/capabilities?tab=skills&pack=p1')
   expect(skills.selection).toHaveBeenCalledWith(
     'workspace',
     'ws-eng',
@@ -166,7 +166,7 @@ it('lists what a new session in the active workspace receives, each linked to it
   const servers = within(await row('MCP servers'))
   expect(await servers.findByRole('link', { name: 'github' })).toHaveAttribute(
     'href',
-    '/mcp-servers',
+    '/capabilities?tab=servers',
   )
   expect(servers.queryByText('paused')).toBeNull()
   expect(servers.queryByText('Olivares session tools')).toBeNull()
@@ -483,7 +483,7 @@ it('resolves workspace and profile skills together for each launchable tool', as
   const skillRow = within(await row('Skills'))
   expect(
     await skillRow.findByRole('link', { name: 'claude-review' }),
-  ).toHaveAttribute('href', '/skills?pack=pack-profile')
+  ).toHaveAttribute('href', '/capabilities?tab=skills&pack=pack-profile')
   expect(
     await skillRow.findByRole('link', { name: 'grok-review' }),
   ).toBeInTheDocument()

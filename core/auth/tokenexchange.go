@@ -135,6 +135,17 @@ type ExchangeResult struct {
 	Stored model.APIToken
 }
 
+// credentialRefusal reports a failed Authenticate as the caller's bad credential
+// (the sentinel, with err's text), except a store that could not be read: that
+// says nothing about the credential, so it keeps its own identity and the caller
+// is not told its token is invalid.
+func credentialRefusal(sentinel error, prefix string, err error) error {
+	if errors.Is(err, store.ErrStoreUnavailable) {
+		return err
+	}
+	return fmt.Errorf("%w: %s%v", sentinel, prefix, err)
+}
+
 // ExchangeToken performs an RFC 8693 token exchange. caller is the authenticated
 // API client invoking the endpoint (used only as the audit actor); authority to
 // exchange comes from possession of the subject token, which can only ever yield
@@ -173,7 +184,7 @@ func (a *Authenticator) ExchangeToken(ctx context.Context, caller Principal, req
 	// 3. Resolve the subject and its single tenant + role.
 	subject, err := a.Authenticate(ctx, req.SubjectToken)
 	if err != nil {
-		return ExchangeResult{}, fmt.Errorf("%w: %v", ErrInvalidSubjectToken, err)
+		return ExchangeResult{}, credentialRefusal(ErrInvalidSubjectToken, "", err)
 	}
 	if subject.Superadmin {
 		return ExchangeResult{}, fmt.Errorf("%w: cannot down-scope a system (superadmin) token; mint a tenant-bound token first", ErrInvalidExchange)
@@ -203,7 +214,7 @@ func (a *Authenticator) ExchangeToken(ctx context.Context, caller Principal, req
 	if req.ActorToken != "" {
 		actor, aerr := a.Authenticate(ctx, req.ActorToken)
 		if aerr != nil {
-			return ExchangeResult{}, fmt.Errorf("%w: actor: %v", ErrInvalidSubjectToken, aerr)
+			return ExchangeResult{}, credentialRefusal(ErrInvalidSubjectToken, "actor: ", aerr)
 		}
 		if actor.IsPurposeRestricted() {
 			return ExchangeResult{}, fmt.Errorf("%w: purpose-restricted credentials cannot be exchange actors", ErrInvalidExchange)

@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// TestSessionListTellsApartSessionsWithTheSameName is HU 036 on refresh 08b: two sessions
+// TestSessionListTellsApartSessionsWithTheSameName is acceptance on refresh 08b: two sessions
 // named "notes" were two identical rows in `session ls`. The console gives a row whose name
 // another row of the same list also carries the short tail of its reference; the CLI does
 // the same with the run's id, and a name nobody else carries stays as it is.

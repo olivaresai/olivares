@@ -498,8 +498,8 @@ func TestKillSwitchPostReviewSoDAndBackpressure(t *testing.T) {
 		t.Fatalf("approver2 = %d", d.code)
 	}
 	r = reenable(h, admin, tenant, stop2)
-	if r.code != http.StatusConflict || !strings.Contains(r.raw, "post-review") {
-		t.Fatalf("flip with unreviewed prior = %d %s, want post-review backpressure", r.code, r.raw)
+	if r.code != http.StatusConflict || !strings.Contains(r.raw, "post-review") || errCode(r) != "module_error" {
+		t.Fatalf("flip with unreviewed prior = %d %s, want post-review backpressure with the published error code", r.code, r.raw)
 	}
 	if rr := review(reviewer, stop1, "stop justified; agent rotated; policies tightened"); rr.code != http.StatusOK {
 		t.Fatalf("review = %d %s", rr.code, rr.raw)

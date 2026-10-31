@@ -65,6 +65,8 @@ func doctorFixture(t *testing.T) (*doctorOptions, doctorDeps) {
 		binary: binary, server: "https://127.0.0.1:8443", timeout: time.Second,
 	}
 	deps := defaultDoctorDeps()
+	// No exec seam on the test host: the image answer is not what these tests measure.
+	deps.containerImage = nil
 	deps.confinement = func() confine.State { return confine.State{Mode: confine.ModeLandlock, ABI: 3} }
 	deps.euid = os.Geteuid
 	deps.lookupUID = func(string) (int, error) { return os.Geteuid(), nil }
@@ -513,4 +515,24 @@ func doctorLaunchdFixture(t *testing.T, o *doctorOptions) {
 		t.Fatal(err)
 	}
 	o.init = "launchd"
+}
+
+func TestDoctorAuditEditionRefusalIsNotIntegrityFailure(t *testing.T) {
+	for _, tc := range []struct {
+		rc       int
+		status   string
+		required bool
+	}{
+		{exitcode.OK, "pass", true}, {exitcode.Edition, "not_applicable", false}, {exitcode.Err, "fail", true},
+	} {
+		t.Run(tc.status, func(t *testing.T) {
+			o, deps := doctorFixture(t)
+			o.auditTenant = "22222222-2222-7222-8222-222222222222"
+			deps.run = func(context.Context, string, ...string) (int, error) { return tc.rc, nil }
+			c := doctorAuditCheck(t.Context(), deps, *o)
+			if c.Status != tc.status || c.Required != tc.required {
+				t.Fatalf("audit check = %+v, want %s required=%v", c, tc.status, tc.required)
+			}
+		})
+	}
 }

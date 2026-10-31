@@ -893,7 +893,7 @@ func handoffRecognitionHTTPRows(t *testing.T, e incomingHandoffHTTPEstate) map[m
 // A commit nudges the outbox drain, which publishes in the background and
 // rewrites that commit's outbox row (state, attempts, version). The recognition
 // test compares two snapshots, so a drain that lands between them reads as the
-// request changing domain rows (dev#2624). Start the drain late, as a loaded
+// request changing domain rows. Start the drain late, as a loaded
 // host does: a snapshot taken before it must not exist.
 func TestCommunicationHandoffRecognitionRowsJoinNudgedDrain(t *testing.T) {
 	e := bootIncomingHandoffHTTPEstate(t, communicationHTTPTestSQLiteStore(t))

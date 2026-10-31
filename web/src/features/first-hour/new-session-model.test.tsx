@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// HU2-37: the ordinary New session dialog had no model. A tool on a key now shows the key's
+// acceptance: the ordinary New session dialog had no model. A tool on a key now shows the key's
 // saved default and the models its last test found, and sends a model only when the user
 // picks one; the engine resolves the default itself.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -50,6 +50,7 @@ import { ApiError } from '@/lib/api/errors'
 import { useTenantStore } from '@/stores/tenant'
 import { StartSessionForm } from './first-hour'
 import { readinessOf } from './readiness.fixture'
+import { useClientSettings } from '@/features/settings/preferences'
 
 function wrap(
   ui: ReactNode,
@@ -98,6 +99,7 @@ async function chooseCodex(user: ReturnType<typeof userEvent.setup>) {
 }
 
 beforeEach(() => {
+  useClientSettings.getState().restore()
   vi.restoreAllMocks()
   launch.launchSession.mockReset()
   launch.launchSession.mockResolvedValue({ run_ref: 'run_1' })
@@ -107,6 +109,26 @@ beforeEach(() => {
 })
 
 describe('the model in the New session dialog', () => {
+  it('starts on the saved usable tool and tested model with nothing chosen', async () => {
+    given(key())
+    useClientSettings.setState({
+      sessionDefaults: {
+        tool: 'codex',
+        account: '',
+        model: 'gpt-a',
+        folder: '',
+      },
+    })
+    wrap(<StartSessionForm />)
+    const start = await screen.findByRole('button', { name: 'Start' })
+    await waitFor(() => expect(start).toBeEnabled())
+    await userEvent.setup().click(start)
+    await waitFor(() => expect(launch.launchSession).toHaveBeenCalled())
+    expect(launch.launchSession.mock.calls[0][0].quick).toMatchObject({
+      driver: 'codex',
+      model: 'gpt-a',
+    })
+  })
   it.each([
     {
       driver: 'claude',
@@ -216,7 +238,7 @@ describe('the model in the New session dialog', () => {
     )
   })
 
-  // HU2 041: on a key never launched, the person had to fail once ("Choose a model…") before
+  // acceptance: on a key never launched, the person had to fail once ("Choose a model…") before
   // a Codex profile existed. The choice now shows at once and the first Start carries it.
   it('asks for a model at once on a never-launched key that needs one, and the first Start sends it', async () => {
     const user = userEvent.setup()
@@ -271,7 +293,7 @@ describe('the model in the New session dialog', () => {
     )
   })
 
-  // SR4C on 5f26d195: a forgotten pick made the Select uncontrolled, so it kept showing the
+  // review on 5f26d195: a forgotten pick made the Select uncontrolled, so it kept showing the
   // old model with Start disabled, and picking it again changed nothing.
   it('forgets a required pick across two tools on keys, and takes it again', async () => {
     const user = userEvent.setup()
@@ -314,7 +336,7 @@ describe('the model in the New session dialog', () => {
     )
   })
 
-  // SR4C on f50c84fc: with no tested model and no saved default, a key that needs a model
+  // review on f50c84fc: with no tested model and no saved default, a key that needs a model
   // could only fail. Start waits, and the way to test the key is offered.
   it('sends to Providers to test a key that needs a model and has none tested', async () => {
     const user = userEvent.setup()

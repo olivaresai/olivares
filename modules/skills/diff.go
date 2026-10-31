@@ -201,6 +201,15 @@ func textDiff(path string, oldBody, newBody []byte, hadOld, hasNew bool, budget 
 	return sb.String(), ""
 }
 
+// UnifiedTextDiff is the unified diff of one file between two texts, for a caller that
+// compares something other than two packs. hadOld and hasNew say which sides exist
+// (an absent side is /dev/null). The omitted reason is "binary", "too_large" or
+// "limit" when there is no text; budget is the bytes of diff text the caller still
+// accepts, spent as diffs are returned (start it at MaxDiffTotalBytes).
+func UnifiedTextDiff(path string, oldBody, newBody []byte, hadOld, hasNew bool, budget *int) (diff, omitted string) {
+	return textDiff(path, oldBody, newBody, hadOld, hasNew, budget)
+}
+
 func splitLines(body []byte) []string {
 	lines := strings.SplitAfter(string(body), "\n")
 	if len(lines) > 0 && lines[len(lines)-1] == "" {

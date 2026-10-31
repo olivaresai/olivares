@@ -220,7 +220,7 @@ func TestRecordingPeriodicAnchorLogsDegradeDrop(t *testing.T) {
 }
 
 // TestSemconvVersionPin pins the recording frame-schema semconv constants
-//. semconvVersion is a documentation pin behind a mapping layer (never
+// . semconvVersion is a documentation pin behind a mapping layer (never
 // live coupling) and an unexported MIRROR of connectors/claude genAISemconvVersion
 // and modules/observability otelGenAIVersion — all three must equal "1.41.1", the
 // last VERSIONED GenAI vocabulary label. semconvUpstreamRepo/Ref mirror the

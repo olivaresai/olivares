@@ -740,7 +740,7 @@ func (a *auditLog) Walk(ctx context.Context, fromSeq int64, fn func(model.AuditE
 // filter set applied in SQL over the (tenant_id, seq) walk, so a filtered list
 // decodes only matching rows — the AU2-05 measurement was 63.7 ms of decode for
 // a needle filter, and the model for the same answer in SQL is 4.5 ms.
-// Prefixes compare as substr equality with a CHARACTER count (SR5C: a byte
+// Prefixes compare as substr equality with a CHARACTER count (review: a byte
 // count would truncate multibyte prefixes mid-string; SQLite and PostgreSQL
 // substr both count characters), never LIKE — exactly strings.HasPrefix.
 // Q is applied IN GO after the structural predicates, with the handler's own
@@ -788,7 +788,7 @@ func (a *auditLog) WalkFiltered(ctx context.Context, fromSeq int64, f store.Audi
 		return err
 	}
 	defer rows.Close()
-	// Q keeps the handler's Unicode rules exactly (SR5C), so it runs in Go on
+	// Q keeps the handler's Unicode rules exactly (review), so it runs in Go on
 	// the structurally-narrowed rows — not in SQL, where lower() folds ASCII
 	// only on SQLite and instr does not exist on PostgreSQL.
 	var needle string

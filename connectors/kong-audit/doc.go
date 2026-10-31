@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package kongaudit is the Olivares AI connector for Kong Gateway audit logging
-//. It closes the gap "audit who changed the gateway config via
+// . It closes the gap "audit who changed the gateway config via
 // the Admin API": Kong's Admin API is the control plane for every route, service,
 // plugin, consumer and credential, and a change there silently reshapes what every
 // proxied request can reach. This connector makes those control-plane accesses and

@@ -44,6 +44,9 @@ export function stripComments(src: string): string {
     if (quote) {
       if (c === '\\') i++
       else if (c === quote) quote = null
+      // A '…' or "…" string ends at its line: an apostrophe in JSX text ("Don't") must not
+      // turn the rest of the file inside out. Only a template literal spans lines.
+      else if (c === '\n' && quote !== '`') quote = null
       continue
     }
     if (c === '"' || c === "'" || c === '`') {

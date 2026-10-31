@@ -41,6 +41,7 @@
     "noResultsHint": "현재 필터와 일치하는 행이 없습니다. 필터를 지우거나 검색 범위를 넓히면 행이 다시 표시됩니다.",
     "comingSoon": "곧 제공됩니다",
     "loaded": "불러옴",
+    "updatedReloaded": "업데이트하고 다시 불러왔어요",
     "yes": "예",
     "no": "아니요"
   },
@@ -291,8 +292,7 @@
     "group": {
       "general": "일반",
       "launcher": "세션 시작",
-      "surface": "작업 화면",
-      "navRail": "탐색 레일"
+      "surface": "작업 화면"
     },
     "command": {
       "palette": {
@@ -317,7 +317,8 @@
         "closeBeside": "옆 세션 닫기",
         "focusBeside": "세션 간 포커스 이동",
         "nextPane": "다음 창",
-        "previousPane": "이전 창"
+        "previousPane": "이전 창",
+        "approve": "대화의 요청을 한 번 승인"
       },
       "rail": {
         "next": "다음 세션",
@@ -327,15 +328,6 @@
         "open": "세션 열기",
         "pin": "고정 또는 고정 해제",
         "menu": "세션 작업 메뉴 열기"
-      },
-      "navRail": {
-        "next": "다음 모듈",
-        "previous": "이전 모듈",
-        "expand": "영역을 열거나 들어가기",
-        "fold": "영역을 접거나 그 영역으로 돌아가기",
-        "first": "첫 모듈",
-        "last": "마지막 모듈",
-        "pin": "이 모듈 고정 또는 고정 해제"
       },
       "session": {
         "new": "새 세션",
@@ -361,8 +353,7 @@
       "approvalQueue": "승인 대기열에서"
     },
     "precedence": "두 행이 같은 키를 사용하면 마지막으로 적용되는 행이 우선합니다.",
-    "problems_other": "{{count}}개의 바인딩을 읽을 수 없어 실행되지 않습니다: {{commands}}",
-    "navRailNote": "레일은 하나의 탭 정지점입니다. 이 키는 레일에 포커스가 있을 때 작동합니다."
+    "problems_other": "{{count}}개의 바인딩을 읽을 수 없어 실행되지 않습니다: {{commands}}"
   },
   "ui": {
     "status": {
@@ -409,11 +400,14 @@
       "copied": "복사됨",
       "copyFailed": "복사하지 못했습니다. 명령을 선택하여 복사하십시오."
     },
+    "quoteReply": "답변 인용",
     "copy": {
+      "markdown": "Markdown 블록 복사",
       "message": "메시지 복사",
       "code": "코드 복사",
       "copied": "복사했습니다",
-      "failed": "복사할 수 없습니다. 텍스트를 선택해 복사하세요."
+      "failed": "복사할 수 없습니다. 텍스트를 선택해 복사하세요.",
+      "value": "{{value}} 복사"
     }
   },
   "resize": {

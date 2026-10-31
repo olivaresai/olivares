@@ -4,7 +4,8 @@
     "codex": "Codex",
     "grok": "Grok Build",
     "opencode": "OpenCode",
-    "gemini-cli": "Gemini CLI"
+    "gemini-cli": "Gemini CLI",
+    "cursor": "Cursor CLI"
   },
   "status": {
     "installed": "インストール済み",
@@ -26,6 +27,7 @@
     "signInChatGPT": "ChatGPT でサインイン",
     "useApiKey": "代わりに APIキーを使う",
     "signInGrok": "xAI アカウントでサインイン",
+    "signInCursor": "Cursor アカウントでサインイン",
     "signInGoogle": "Google でログイン",
     "signIn": "サインイン"
   },
@@ -102,6 +104,12 @@
     "secretUse": "このセッションに {{name}} を渡す",
     "secretVariable": "{{name}} の変数",
     "secretsManage": "セッション用シークレットを管理",
+    "credentials": "管理されたクレデンシャル（Business）",
+    "credentialsHint": "セッションは選んだクレデンシャルを、エンジンが動かすヘルパーを通して使います。封印された値がセッションに渡ることはありません。Olivares Business が必要です。",
+    "credentialsNone": "管理されたクレデンシャルはまだありません。credential/ で始まる名前で追加してください。",
+    "credentialUse": "このセッションに {{name}} を与える",
+    "credentialsManage": "管理されたクレデンシャルを管理",
+    "listUnavailable": "エンジンがシークレット一覧に応答しませんでした。今は何も選択できません。",
     "openTools": "AI ツールを開く",
     "model": "モデル",
     "providerDefault": "既定 ({{model}})",
@@ -113,7 +121,9 @@
     "profile": "プロファイル",
     "profileNotSignedIn": "未サインイン",
     "profileNeedsKey": "キーが必要",
-    "foldersUnreadable": "登録済みのフォルダーを読み込めませんでした。このサーバー上のフォルダーのパスを入力してください。"
+    "foldersUnreadable": "登録済みのフォルダーを読み込めませんでした。このサーバー上のフォルダーのパスを入力してください。",
+    "folderPermission": "{{name}}で開始します（このフォルダーの既定）。",
+    "autoAsks": "{{tool}}には自動モードがないため、操作ごとに確認します。"
   },
   "lists": {
     "runsTruncated": "最近のセッション：{{count}} 件読み込み済み。ほかにもあります。",
@@ -122,10 +132,12 @@
     "foldersHint": "一部の登録済みフォルダーはこの一覧に含まれていません。"
   },
   "permission": {
-    "editsOnly": "ファイルの編集のみ",
+    "editsOnly": "編集を自動承認",
     "editsAndCommands": "ファイルの編集とコマンドの実行",
     "readOnly": "読み取り専用",
-    "ask": "操作ごとに確認する"
+    "ask": "監督あり",
+    "auto": "自動",
+    "full": "フルアクセス"
   },
   "next": {
     "title": "次のステップ (必要になったら)",
@@ -138,5 +150,13 @@
     "cliHint": "このサーバーには olivares コマンドがすでにインストールされています。別のコンピューターからは次のコマンドでインストールします:",
     "copy": "コピー",
     "copied": "コピーしました"
+  },
+  "permissionSummary": {
+    "readOnly": "読み取りと計画のみ。変更はすべて拒否されます。",
+    "ask": "読み取り以外の操作の前に毎回確認します。",
+    "editsOnly": "ファイルの読み取りと編集は確認なしで行います。それ以外は確認します。",
+    "editsAndCommands": "読み取り、ファイルの編集、コマンドの実行を確認なしで行います。ほかのツールは拒否されます。",
+    "auto": "ツール独自の審査付き自動モードが判断します。自動モードのないツールは「監督あり」と同じく確認します。実行管理の権限が必要です。",
+    "full": "何も確認しません。Olivares は引き続きセッションを制限し、すべての操作を記録します。実行管理の権限が必要です。"
   }
 }

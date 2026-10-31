@@ -18,6 +18,13 @@
           "src": "packaging/apparmor/olivares-engine.conf"
         },
         {
+          "dst": "/usr/libexec/olivares-container-hook",
+          "file_info": {
+            "mode": 493
+          },
+          "src": "bin/olivares"
+        },
+        {
           "dst": "/usr/share/doc/olivares/LICENSE",
           "src": "LICENSE"
         },
@@ -43,6 +50,10 @@
             "mode": 493
           },
           "src": "packaging/service/migrate-agentops-dropin.sh"
+        },
+        {
+          "dst": "/usr/share/olivares/session-image/Containerfile",
+          "src": "packaging/container/session/Containerfile"
         },
         {
           "dst": "/usr/lib/systemd/system/olivares.service",
@@ -195,6 +206,10 @@
         {
           "dst": "/usr/share/licenses/olivares/LICENSES",
           "src": "LICENSES"
+        },
+        {
+          "dst": "/usr/share/olivares/session-image/Containerfile",
+          "src": "packaging/container/session/Containerfile"
         },
         {
           "dst": "/usr/lib/systemd/system/olivares.service",

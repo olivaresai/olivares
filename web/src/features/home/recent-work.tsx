@@ -13,7 +13,7 @@
 //    it holds: the runs Olivares operates and the live sessions it observes
 //    (`mergeSessions`, the same join the Sessions page and the rail use). A launched
 //    session used to be missing here, or shown as "Untitled session <uuid>", because this
-//    list read the observed half only (HU-11).
+//    list read the observed half only.
 //
 // ⛔ WHAT IT WILL NOT DO IS INVENT THE SENTENCE. A row is named by what its operator
 //    typed, else by the degradation ladder in `work-line.ts`; nothing here composes prose
@@ -64,7 +64,7 @@ function WorkRow({
   // (mergeSessions), named by what its operator typed, else by what it did.
   const live = session.live
   const run = primaryRun(session.runs)
-  // Finished or stopped: the run's own ledger says which (dev#3120).
+  // Finished or stopped: the run's own ledger says which.
   const ledger = useRunLedger(run)
   const naming = sessionNaming(session, t('recent.untitled'), shared)
   const name = naming.name
@@ -165,7 +165,7 @@ function WorkRow({
             <span className="text-muted-foreground"> {shortId}</span>
           ) : null}
           {folder && !name.includes(folder) ? (
-            <span className="font-mono text-caption text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {' · '}
               {folder}
             </span>

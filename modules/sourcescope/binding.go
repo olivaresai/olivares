@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -28,7 +29,7 @@ const maxNoteLen = 512
 // validSourceTypes are the connected-source kinds a binding may target.
 var validSourceTypes = map[string]bool{
 	sourceMCP: true, sourceModel: true, sourceProvider: true, sourceKnowledge: true, sourceData: true,
-	sourceProfile: true, sourceTool: true,
+	sourceProfile: true, sourceTool: true, sourceInstructions: true, sourceTemplate: true,
 }
 
 // Binding effect, mirroring model-access vocabulary. An empty stored value
@@ -79,6 +80,8 @@ type bindingDTO struct {
 	ScopeRef   string `json:"scope_ref,omitempty"`
 	// Effect is "allow" (default) or "forbid". Omitted on input ⇒ allow.
 	Effect string `json:"effect,omitempty"`
+	// ExpiresAt is optional; empty preserves a legacy grant that never expires.
+	ExpiresAt string `json:"expires_at,omitempty"`
 	// FolderPath is OUTPUT-ONLY: the store-resolved Path of a folder binding's anchor
 	//, surfaced for readability. It is ignored on input — the anchor is scope_ref
 	// (the folder id) and the Path is always resolved server-side.
@@ -98,7 +101,7 @@ type bindingDTO struct {
 func (d *bindingDTO) validate() string {
 	d.SourceType = strings.TrimSpace(strings.ToLower(d.SourceType))
 	if !validSourceTypes[d.SourceType] {
-		return "source_type must be one of mcp, model, provider, knowledge, data, profile, tool"
+		return "source_type must be one of mcp, model, provider, knowledge, data, profile, tool, instructions, template"
 	}
 	d.SourceRef = strings.TrimSpace(d.SourceRef)
 	if d.SourceRef == "" {
@@ -107,11 +110,17 @@ func (d *bindingDTO) validate() string {
 	if msg := normalizeProfileSourceRef(d.SourceType, &d.SourceRef); msg != "" {
 		return msg
 	}
+	if msg := normalizeStandardsSourceRef(d.SourceType, d.SourceRef); msg != "" {
+		return msg
+	}
 	d.ScopeTree = strings.TrimSpace(strings.ToLower(d.ScopeTree))
 	if !validScopeTrees[d.ScopeTree] {
 		return "scope_tree must be one of workspace, agent_group, folder, session, agent, user, user_group, role"
 	}
 	d.ScopeRef = strings.TrimSpace(d.ScopeRef)
+	if msg := checkStandardsScope(d.SourceType, d.ScopeTree); msg != "" {
+		return msg
+	}
 	if d.ScopeTree == scopeAgentGroup && d.ScopeRef == "" {
 		return "scope_ref (agent-group slug) is required for an agent_group binding"
 	}
@@ -131,6 +140,12 @@ func (d *bindingDTO) validate() string {
 	}
 	if d.Effect != effectAllow && d.Effect != effectForbid {
 		return "effect must be allow or forbid"
+	}
+	d.ExpiresAt = strings.TrimSpace(d.ExpiresAt)
+	if d.ExpiresAt != "" {
+		if _, err := time.Parse(time.RFC3339Nano, d.ExpiresAt); err != nil {
+			return "expires_at must be an RFC3339 timestamp"
+		}
 	}
 	// Credential reference: all-or-nothing and value-free.
 	d.CredName = strings.TrimSpace(d.CredName)
@@ -188,7 +203,17 @@ func (d bindingDTO) fields(workspaceID model.ID, createdBy string) model.Record 
 		colCreatedBy:   createdBy,
 		colNote:        d.Note,
 		colEffect:      normalizeEffect(d.Effect), // concrete value (validate() sets it; defensive)
+		colExpiresAt:   d.ExpiresAt,
 	}
+}
+
+func resetBindingExpiryLifecycle(rec model.Record, old, updated bindingDTO) {
+	if old.ExpiresAt == updated.ExpiresAt {
+		return
+	}
+	rec[colExpiredAt] = ""
+	rec[colRemind14At] = ""
+	rec[colRemind1At] = ""
 }
 
 // toBindingDTO renders a stored binding record to the wire DTO (the credential
@@ -201,6 +226,7 @@ func toBindingDTO(rec model.Record) bindingDTO {
 		ScopeTree:   rec.String(colScopeTree),
 		ScopeRef:    rec.String(colScopeRef),
 		Effect:      normalizeEffect(rec.String(colEffect)),
+		ExpiresAt:   rec.String(colExpiresAt),
 		FolderPath:  rec.String(colFolderPath),
 		CredName:    rec.String(colCredName),
 		CredRefKind: rec.String(colCredRefKind),
@@ -408,7 +434,15 @@ func (m *Module) handleCreateBinding(w http.ResponseWriter, r *http.Request, mc 
 		writeJSON(w, http.StatusBadRequest, errorBody(msg))
 		return
 	}
-	if !m.mayWriteSource(in.SourceType) {
+	if err := m.mayWriteSource(in.SourceType); err != nil {
+		if errors.Is(err, errProfileAssignmentBusiness) {
+			writeProfileAssignmentBusiness(w)
+		} else {
+			writeStoreError(w, err) // the licence refusal: 403 addon_requires_license
+		}
+		return
+	}
+	if in.ExpiresAt != "" && m.profileAssignment == nil {
 		writeProfileAssignmentBusiness(w)
 		return
 	}
@@ -429,6 +463,10 @@ func (m *Module) handleCreateBinding(w http.ResponseWriter, r *http.Request, mc 
 			return err
 		}
 		in.FolderPath = folderPath
+		in.ExpiresAt, err = m.resolveBindingExpiry(r.Context(), sc, &in)
+		if err != nil {
+			return expiryFailure(err)
+		}
 
 		// F2: classified BEFORE the row exists, so the confinement count needs no
 		// exclusion. resolveScope has already canonicalised the ref, so the duplicate check
@@ -442,6 +480,9 @@ func (m *Module) handleCreateBinding(w http.ResponseWriter, r *http.Request, mc 
 		// on the APPROVER. The 409 this API has always returned stays a 409, for every effect.
 		if duplicate {
 			return store.ErrConflict
+		}
+		if err := refuseSecondDefaultTemplate(r.Context(), sc, in, ""); err != nil {
+			return err
 		}
 		if relaxing, reason := classifyCreate(in, otherAllows, assignRows); relaxing {
 			pr, perr := m.createPostureRequest(r.Context(), sc, mc, postureOpCreate, in.SourceType, in.SourceRef, "", reason, &in)
@@ -511,11 +552,20 @@ func (m *Module) handleUpdateBinding(w http.ResponseWriter, r *http.Request, mc 
 		// The source identity is the immutable natural key; force it to the stored row.
 		in.SourceType = rec.String(colSourceType)
 		in.SourceRef = rec.String(colSourceRef)
-		if !m.mayWriteSource(in.SourceType) {
-			return errProfileAssignmentBusiness
+		if err := m.mayWriteSource(in.SourceType); err != nil {
+			return err
 		}
 		if msg := in.validate(); msg != "" {
 			return validationError(msg)
+		}
+		if in.ExpiresAt != old.ExpiresAt {
+			if in.ExpiresAt != "" && m.profileAssignment == nil {
+				return errProfileAssignmentBusiness
+			}
+			in.ExpiresAt, err = m.resolveBindingExpiry(r.Context(), sc, &in)
+			if err != nil {
+				return expiryFailure(err)
+			}
 		}
 		// F2: a RELAXING change is never applied by one actor — record a pending
 		// dual-control request instead. Tightening/neutral changes apply now.
@@ -536,9 +586,13 @@ func (m *Module) handleUpdateBinding(w http.ResponseWriter, r *http.Request, mc 
 			return err
 		}
 		in.FolderPath = folderPath
+		if err := refuseSecondDefaultTemplate(r.Context(), sc, in, id.String()); err != nil {
+			return err
+		}
 		for k, v := range in.fields(wsID, rec.String(colCreatedBy)) {
 			rec[k] = v
 		}
+		resetBindingExpiryLifecycle(rec, old, in)
 		rec, err = repo.Update(r.Context(), rec)
 		if err != nil {
 			return err
@@ -669,6 +723,7 @@ func auditBinding(ctx context.Context, sc store.Scope, mc api.ModuleContext, ver
 			"effect":          normalizeEffect(b.Effect), // Posture delta (allow|forbid)
 			"folder_path":     b.FolderPath,              // advisory; "" for non-folder bindings
 			"has_scoped_cred": b.CredName != "",
+			"expires_at":      b.ExpiresAt,
 		},
 	})
 	return err

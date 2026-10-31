@@ -50,10 +50,14 @@ func gitpublishRequestBodyDeclarationFor(method, pattern string) (gitpublishRequ
 		return body(gitpublishTargetSchema(false))
 	case http.MethodPost + " /targets/{id}/pushes":
 		return body(gitpublishPushSchema())
+	case http.MethodPost + " /targets/{id}/ships":
+		return body(gitpublishShipSchema())
 	case http.MethodPost + " /targets/{id}/pull-requests":
 		return body(gitpublishPullRequestSchema())
 	case http.MethodPost + " /targets/{id}/merges":
 		return body(gitpublishMergeSchema())
+	case http.MethodPost + " /targets/{id}/issue-comments":
+		return body(gitpublishIssueCommentSchema())
 	case http.MethodPost + " /intents/{id}/abandon":
 		return body(oas.Obj("type", "object", "additionalProperties", false, "properties", oas.Obj("reason", oas.Obj("type", "string", "maxLength", 1024))))
 	case http.MethodDelete + " /targets/{id}", http.MethodPost + " /intents/{id}/reconcile":
@@ -121,6 +125,21 @@ func gitpublishPullRequestSchema() map[string]any {
 	)
 }
 
+func gitpublishShipSchema() map[string]any {
+	return oas.Obj("type", "object", "additionalProperties", false,
+		"properties", oas.Obj(
+			"operation_id", gitpublishString(gitpublishOp, "Client idempotency key of the whole ship, at most 100 characters; its push and pull request replay under it."),
+			"session_run", oas.Obj("type", "string", "format", "uuid", "description", "The session run in the target's workspace whose folder is shipped. Never a path."),
+			"message", oas.Obj("type", "string", "maxLength", 8192, "description", "The commit message, as the caller's profile commits it; needed only when the folder has changes."),
+			"title", oas.Obj("type", "string", "maxLength", 256, "description", "The pull request's title: one line."),
+			"body", oas.Obj("type", "string", "maxLength", 65536),
+			"base", gitpublishString(gitpublishBranch, "An allowed merge base; the target's first when absent."),
+			"draft", oas.Obj("type", "boolean"),
+		),
+		"required", oas.Enum("operation_id", "session_run", "title"),
+	)
+}
+
 func gitpublishMergeSchema() map[string]any {
 	return oas.Obj("type", "object", "additionalProperties", false,
 		"properties", oas.Obj(
@@ -133,6 +152,20 @@ func gitpublishMergeSchema() map[string]any {
 			"acknowledge_intent", oas.Obj("type", "string"),
 		),
 		"required", oas.Enum("operation_id", "number", "expected_head", "method"),
+	)
+}
+
+func gitpublishIssueCommentSchema() map[string]any {
+	return oas.Obj("type", "object", "additionalProperties", false,
+		"properties", oas.Obj(
+			"operation_id", gitpublishString(gitpublishOp, "Client idempotency key."),
+			"number", oas.Obj("type", "integer", "minimum", 1, "description", "The issue number on the approved repository."),
+			"state", oas.Obj("type", "string", "enum", []any{"completed", "failed", "stopped"}, "description", "The run result to publish."),
+			"pull_request_url", oas.Obj("type", "string", "format", "uri", "maxLength", 2048, "description", "An optional HTTPS pull-request URL on the approved repository."),
+			"cost_micro_usd", oas.Obj("type", "integer", "minimum", 0, "maximum", maxCommentCostMicroUSD, "description", "Optional run cost in micro-USD, as the caller reports it; absent means unknown."),
+			"acknowledge_intent", oas.Obj("type", "string"),
+		),
+		"required", oas.Enum("operation_id", "number", "state"),
 	)
 }
 

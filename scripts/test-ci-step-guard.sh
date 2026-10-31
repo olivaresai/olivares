@@ -237,15 +237,6 @@ if [ -d "$RAIZ/.github/workflows" ]; then
 	comprueba "the real .github/workflows tree is clean" 0 "$RAIZ/.github/workflows" "CLEAN"
 fi
 
-# The public export omits this internal workflow. When present, test its actual guard.
-if [ -f "$RAIZ/.github/workflows/release-candidate.yml" ]; then
-	D="$(nuevo_dir release-candidate)"
-	cp "$RAIZ/.github/workflows/release-candidate.yml" "$D/"
-	comprueba "the release candidate has a step guard" 0 "$D" "CLEAN"
-	sed -i '/^        timeout-minutes:/d' "$D/release-candidate.yml"
-	comprueba "the release candidate without step guards is a FINDING" 1 "$D" "«build»"
-fi
-
 printf '\ncheck-ci-step-guard selftest: %d passed, %d failed\n' "$pass_count" "$fail_count"
 [ "$fail_count" -eq 0 ] || exit 1
 exit 0

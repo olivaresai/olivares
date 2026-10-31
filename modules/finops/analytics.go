@@ -97,6 +97,14 @@ func scanSamples(ctx context.Context, sc store.Scope, filters []model.Filter, fn
 	if err != nil {
 		return false, err
 	}
+	return scanRepo(ctx, repo, filters, fn)
+}
+
+// scanRepo is the paging loop of scanSamples for any module entity, opened by a
+// caller that must tell an entity the scope does not have (sc.Ext) from a
+// failure while reading it: the same paging, the same page cap, the same
+// truncated signal.
+func scanRepo(ctx context.Context, repo store.GenericRepo, filters []model.Filter, fn func(model.Record)) (bool, error) {
 	q := model.Query{Filters: filters, Limit: listCap}
 	for pages := 0; ; pages++ {
 		recs, page, err := repo.List(ctx, q)

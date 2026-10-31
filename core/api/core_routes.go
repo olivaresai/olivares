@@ -160,7 +160,7 @@ func (s *Server) sessionRoute(w http.ResponseWriter, r *http.Request) (ModuleCon
 	return ModuleContext{Principal: p}, ok
 }
 
-func (s *Server) browserRoute(w http.ResponseWriter, r *http.Request) (ModuleContext, bool) {
+func (s *Server) humanSessionRoute(w http.ResponseWriter, r *http.Request) (ModuleContext, bool) {
 	p, ok := principalFrom(r.Context())
 	if !ok || p.Kind != auth.KindUser {
 		s.writeError(w, r, auth.ErrUnauthenticated)

@@ -15,7 +15,7 @@ import {
 } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import axe from 'axe-core'
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/auth/context', () => ({
@@ -175,6 +175,56 @@ function Host({
   )
 }
 
+/** A long conversation keeps only some rows in the page: `hidden` rows are left out until the navigator
+ * asks for them with `reveal`. */
+function PagedHost({
+  items,
+  hidden,
+  reveal,
+}: {
+  items: ConversationItem[]
+  hidden: string[]
+  reveal: (itemId: string) => void
+}) {
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const [left, setLeft] = useState(hidden)
+  const nav = useMessageNavigator({
+    runRef: 'run_1',
+    items,
+    scrollRef,
+    onJump: () => {},
+    reveal: async (itemId) => {
+      reveal(itemId)
+      setLeft((ids) => ids.filter((id) => id !== itemId))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    },
+  })
+  return (
+    <div>
+      <MessageBar nav={nav} />
+      <div className="relative">
+        <MessageRail nav={nav} />
+        <div ref={scrollRef} role="log" aria-label="Conversation">
+          <ol>
+            {items
+              .filter((item) => !left.includes(item.id))
+              .map((item) => (
+                <li key={item.id}>
+                  <button
+                    data-testid="conversation-item"
+                    data-item-id={item.id}
+                  >
+                    {item.text}
+                  </button>
+                </li>
+              ))}
+          </ol>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function show(
   all: Stored[] = transcript(12),
   items: ConversationItem[] = conversation(),
@@ -262,6 +312,34 @@ describe('MessageNavigator rail', () => {
     expect(document.querySelectorAll('.ring-2')).toHaveLength(1)
   })
 
+  it('brings a row the page does not hold into it before it jumps', async () => {
+    const user = userEvent.setup()
+    vi.mocked(agentOpsApi.messages).mockImplementation(engine(transcript(12)))
+    const items = conversation()
+    const target = items[2]!.id
+    const reveal = vi.fn()
+    render(
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        }
+      >
+        <PagedHost items={items} hidden={[target]} reveal={reveal} />
+      </QueryClientProvider>,
+    )
+    expect(
+      document.querySelector(`[data-item-id="${target}"]`),
+    ).not.toBeInTheDocument()
+    const marks = await screen.findAllByTestId('message-mark')
+    await user.click(marks[1]!)
+    await waitFor(() => expect(reveal).toHaveBeenCalledWith(target))
+    const row = document.querySelector<HTMLElement>(
+      `[data-item-id="${target}"]`,
+    )!
+    await waitFor(() => expect(row.closest('li')).toHaveClass('ring-2'))
+    expect(row.closest('li')).toHaveFocus()
+    expect(screen.queryByTestId('message-far')).not.toBeInTheDocument()
+  })
   it('is reachable and operable by keyboard alone', async () => {
     const user = userEvent.setup()
     show()
@@ -309,7 +387,7 @@ describe('MessageNavigator rail', () => {
     expect(screen.queryByTestId('message-problem')).not.toBeInTheDocument()
   })
 
-  it('counts no messages while the conversation shows none (dev#3120)', async () => {
+  it('counts no messages while the conversation shows none', async () => {
     // The 0.3 empty session read "Messages 2" beside "No turns yet": a count of rows
     // the person could not see. The control above shows the bar over shown rows.
     const empty = show(transcript(2), [])
@@ -319,7 +397,7 @@ describe('MessageNavigator rail', () => {
     expect(screen.queryByTestId('message-rail')).not.toBeInTheDocument()
   })
 
-  it('says nothing of a missing transcript while the conversation shows no message (dev#3120)', async () => {
+  it('says nothing of a missing transcript while the conversation shows no message', async () => {
     // A session stopped before its first turn has no transcript yet: over its empty
     // conversation "not in its account home" was a second, contradictory state.
     vi.mocked(agentOpsApi.messages).mockResolvedValue({

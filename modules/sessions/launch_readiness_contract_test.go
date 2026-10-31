@@ -181,7 +181,7 @@ func TestLaunchReadinessPublishedVocabularyIsClosedOverTheCode(t *testing.T) {
 	protocol, _ := capProps["protocol"].(map[string]any)
 	assertSameSet(t, "protocol", enumStrings(t, protocol), []string{
 		protocolClaudeStreamJSON, protocolClaudeRemoteControl, protocolCodexAppServer,
-		protocolGrokACP, protocolOpenCodeACP, protocolGeminiACP, protocolUnknown,
+		protocolGrokACP, protocolOpenCodeACP, protocolGeminiACP, protocolCursorACP, protocolUnknown,
 	})
 	io, _ := capProps["io"].(map[string]any)
 	assertSameSet(t, "io", enumStrings(t, io), []string{ioBidirectional, ioLifecycleOnly, ioUnknown})

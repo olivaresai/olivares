@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-# The administrator's shell, shared by both images (dev#2650): the Docker image sources this file as
+# The administrator's shell, shared by both images: the Docker image sources this file as
 # /etc/olivares-bashrc from Debian's /etc/bash.bashrc, and the appliance installs it unchanged as
 # /etc/profile.d/olivares-shell.sh, which AlmaLinux's /etc/profile sources for every login shell
 # (a non-login interactive shell reaches /etc/bashrc only through a ~/.bashrc, which a fresh appliance
@@ -17,7 +17,7 @@ if [ "$EUID" = 0 ]; then
     export HOME=/root
 fi
 
-# ll, l and la keep the Docker image's values since dev#2035. o, .., ..., cd.., md, rd, rehash,
+# ll, l and la keep the Docker image's values since the regression. o, .., ..., cd.., md, rd, rehash,
 # dir, ls-l and the coloured grep family are the conveniences of openSUSE/aaa_base's
 # files/usr/etc/profile.d/alias.bash and ls.bash, adopted for both images; alias.bash defines
 # the grep aliases unconditionally, and AlmaLinux's own /etc/profile.d/colorgrep.sh defines the

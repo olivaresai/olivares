@@ -18,13 +18,49 @@ class ContainerShellTests(unittest.TestCase):
         for name in ("Dockerfile", "Dockerfile.release"):
             with self.subTest(dockerfile=name):
                 runtime = (ROOT / name).read_text().rsplit("\nFROM ", 1)[1]
-                install = re.search(r"apt-get install (.*?)&&", runtime, re.S)[1]
-                for package in ("vim", "less", "procps", "curl", "jq", "iproute2", "tar", "gzip"):
+                install = " ".join(re.findall(r"apt-get install (.*?)&&", runtime, re.S))
+                for package in ("vim", "less", "procps", "curl", "jq", "iproute2", "tar", "gzip",
+                                "gh", "openssh-client", "netcat-openbsd"):
                     self.assertIn(package, install.split())
+                # A confined session's ssh reaches a declared host through the session
+                # proxy's CONNECT tunnel (modules/sessions/egress), and only then.
+                self.assertIn('Match exec "printenv HTTPS_PROXY | grep -q ."', runtime)
+                self.assertIn('ProxyCommand nc -X connect -x "$(echo "$HTTPS_PROXY" | cut -d/ -f3)" %h %p', runtime)
+                # The main file: ssh refuses an included file that the session's user namespace
+                # shows as owned by nobody.
+                self.assertIn(">> /etc/ssh/ssh_config\n", runtime)
+                # ssh percent-expands a ProxyCommand and refuses a token it does not know, so
+                # the only percent signs are its own %h and %p.
+                command = re.search(r"ProxyCommand (.*?)'", runtime)[1]
+                self.assertEqual(re.findall(r"%.", command), ["%h", "%p"])
+                self.assertNotIn("ssh_config.d", runtime)
                 self.assertIn("COPY packaging/container/bashrc.sh /etc/olivares-bashrc", runtime)
                 self.assertIn("1i . /etc/olivares-bashrc", runtime)
                 self.assertIn("USER 65532:65532", runtime)
                 self.assertIn("ENV HOME=/var/lib/olivares/home", runtime)
+
+    def test_gh_comes_from_githubs_signed_repository(self):
+        # Debian trixie's gh 2.46.0 is built with go1.23.4 and carries its Go advisories.
+        keyring = "/usr/share/keyrings/githubcli-archive-keyring.gpg"
+        for name in ("Dockerfile", "Dockerfile.release"):
+            with self.subTest(dockerfile=name):
+                # One logical line per shell command: the continuation backslashes joined.
+                runtime = re.sub(r"\s*\\\n\s*", " ", (ROOT / name).read_text().rsplit("\nFROM ", 1)[1])
+                installs = re.findall(r"apt-get install (.*?)&&", runtime, re.S)
+                self.assertEqual(len(installs), 2, "Debian packages first, then gh from GitHub's repository")
+                self.assertNotIn("gh", installs[0].split())
+                self.assertEqual(installs[1].split(), ["-y", "--no-install-recommends", "gh"])
+                github = runtime.split(installs[0], 1)[1].split(installs[1], 1)[0]
+                # Between the two installs: the keyring checked by content, then the source naming it.
+                self.assertIn("https://cli.github.com/packages/githubcli-archive-keyring.gpg", github)
+                self.assertIn(f'"$(sha256sum {keyring})" = '
+                              f'"6084d5d7bd8e288441e0e94fc6275570895da18e6751f70f057485dc2d1a811b  {keyring}"', github)
+                self.assertIn("'URIs: https://cli.github.com/packages'", github)
+                self.assertIn(f"'Signed-By: {keyring}'", github)
+                self.assertNotIn("trusted=yes", runtime)
+                # Without the source, apt would fall back to Debian's gh silently.
+                self.assertIn("dpkg-query -W -f='${Version}' gh", runtime)
+                self.assertIn('dpkg --compare-versions "$v" ge 2.103.3', runtime)
 
     def shell(self, term, interactive=True):
         self.assertTrue(RC.is_file(), "container shell defaults must be shipped")

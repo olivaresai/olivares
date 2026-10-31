@@ -58,11 +58,60 @@ func TestAttachHTTPConversationHistoryRequiresFreshOptIn(t *testing.T) {
 	}
 }
 
+// A run that never had input has no stored conversation to read: attaching to
+// it says nothing, rather than the read failure the issue reported. A run whose
+// input state is unknown (older rows) is still read, and still refused here
+// because its earlier launch values cannot be proven redacted.
+func TestAttachHTTPConversationOfAStoppedRunBeforeItsFirstInput(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		attempted any
+		warns     bool
+	}{
+		{"never had input", false, false},
+		{"input state unknown", nil, true},
+		{"had input", true, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			h, _, admin, tenant := attachHTTPHarness(t)
+			ref := launchHTTPRun(t, h, admin, tenant, map[string]any{"transport": "stream-json"})
+			if _, err := h.m.stopRun(t.Context(), tenant, ref, "user:u1", model.ActorUser); err != nil {
+				t.Fatal(err)
+			}
+			if err := h.st.Mutate(t.Context(), tenant, func(sc store.Scope) error {
+				repo, err := sc.Ext(runKind)
+				if err != nil {
+					return err
+				}
+				rec, err := findRunRec(t.Context(), repo, ref)
+				if err != nil {
+					return err
+				}
+				rec[colRunProfileDriver], rec[colClaudeSessionID] = providerDriverCodex, "root"
+				rec[colRunGitRead] = "approved-binding:owner/repository"
+				rec[colRunCodexInputAttempted] = test.attempted
+				_, err = repo.Update(t.Context(), rec)
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			res := h.do(http.MethodGet, "/v1/m/sessions/runs/"+ref+"/attach?from=0&history=1", admin, tenantHdr(tenant))
+			if res.code != http.StatusOK {
+				t.Fatalf("attach status=%d %s", res.code, res.raw)
+			}
+			if warned := strings.Contains(res.raw, "olivares_notice"); warned != test.warns {
+				t.Fatalf("history notice=%v; want %v: %s", warned, test.warns, res.raw)
+			}
+		})
+	}
+}
+
 type conversationPeer struct {
 	*fakeProc
-	t       *testing.T
-	thread  any
-	methods []string
+	t         *testing.T
+	thread    any
+	methods   []string
+	readError *rpcError
 }
 
 func (p *conversationPeer) Send(_ context.Context, line []byte) error {
@@ -86,6 +135,14 @@ func (p *conversationPeer) Send(_ context.Context, line []byte) error {
 	case "thread/read":
 		if request.Params.ThreadID != "root" || !request.Params.IncludeTurns {
 			p.t.Error("reader changed thread identity or omitted turns")
+		}
+		if request.Params.IncludeTurns && p.readError != nil {
+			data, err := json.Marshal(map[string]any{"id": request.ID, "error": p.readError})
+			if err != nil {
+				return err
+			}
+			p.out <- OutputFrame{Stream: streamStdout, Data: data}
+			return nil
 		}
 		result = map[string]any{"thread": p.thread}
 	default:
@@ -414,5 +471,149 @@ func TestConversationHistoryOfAThreadWithAnImageIsReadThroughTheRealPump(t *test
 	first := history.Turns[0].Items[0].Content
 	if first[0].Text != "what is in this picture" || first[1].URL != "data:image/png;base64," || history.Turns[1].Items[0].Text != "a cat on a sofa" || len(line) > 4096 {
 		t.Fatalf("history = %.400s (%d bytes)", line, len(line))
+	}
+}
+
+func TestConversationHistoryReadFailureUsesUserWords(t *testing.T) {
+	peer := &conversationPeer{fakeProc: &fakeProc{out: make(chan OutputFrame, 4), stopped: make(chan struct{})}, t: t, readError: &rpcError{Code: -32603, Message: "private read error"}}
+	m, _, _ := openProfiledRuntime(t, profileBackends(t)[0], WithRunner(&pinnedHistoryRunner{proc: peer}), WithProviderDriver(NewCodexDriver()))
+	tenant := model.TenantID(model.NewID())
+	profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "codex", ConfigHome: t.TempDir(), UserHome: t.TempDir(), AuthSource: AuthSourceAccountHome})
+	rec := model.Record{colRunProfileID: profile.Ref, colRunProfileDriver: profile.Driver, colRunProfileEnvRef: profile.EnvironmentRef, colRunProfileConfigHome: profile.ConfigHome, colRunProfileUserHome: profile.UserHome, colClaudeSessionID: "root"}
+	line, err := m.conversationHistory(t.Context(), tenant, rec)
+	if line != "" || err == nil || err.Error() != "the saved conversation could not be read; live output is still available while the session is running" {
+		t.Fatalf("line=%q error=%v", line, err)
+	}
+}
+
+func TestConversationHistoryRequiresProofBeforeTreatingMissingHistoryAsEmpty(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		value any
+		empty bool
+	}{
+		{"never attempted input", false, true},
+		{"attempted input", true, false},
+		{"legacy unknown", nil, false},
+		{"invalid proof", "false", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			m := New(WithRunner(&fakeRunner{}), WithProviderDriver(NewCodexDriver()))
+			rec := model.Record{colRunProfileDriver: providerDriverCodex, colClaudeSessionID: "root", colRunCodexInputAttempted: test.value}
+			line, err := m.conversationHistory(t.Context(), model.TenantID(model.NewID()), rec)
+			if line != "" || (err == nil) != test.empty {
+				t.Fatalf("line=%q error=%v; empty=%v", line, err, test.empty)
+			}
+		})
+	}
+}
+
+func TestCodexConversationInputAttemptIsDurable(t *testing.T) {
+	m, _, tenant, profile := codexHarness(t, AuthSourceAccountHome)
+	setCodexFixture(t, profile, codexFixture{ThreadID: "durable-input", Account: "apikey"})
+	run, err := codexLaunch(t, m, tenant, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := codexRunRecord(t, m, tenant, run.RunRef)
+	if value, ok := rec[colRunCodexInputAttempted].(bool); !ok || value {
+		t.Fatalf("new run input fact=%v", rec[colRunCodexInputAttempted])
+	}
+	if err := m.sendTextInput(t.Context(), tenant, run.RunRef, "first message"); err != nil {
+		t.Fatal(err)
+	}
+	if rec := codexRunRecord(t, m, tenant, run.RunRef); !rec.Bool(colRunCodexInputAttempted) {
+		t.Fatal("input attempt not persisted")
+	}
+}
+
+func TestCodexConversationInputRefusesFailedProofWrite(t *testing.T) {
+	m, _, tenant, profile := codexHarness(t, AuthSourceAccountHome)
+	fault := &failNthMutateData{inner: m.Data, err: errors.New("input proof persistence unavailable")}
+	m.UseData(fault)
+	path := setCodexFixture(t, profile, codexFixture{ThreadID: "failed-input-proof", Account: "apikey"})
+	run, err := codexLaunch(t, m, tenant, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	live, _ := m.rt.getLive(tenant, run.RunRef)
+	fault.mu.Lock()
+	fault.calls, fault.failAt = 0, 2
+	fault.mu.Unlock()
+	attempted, err := m.driverInputImages(t.Context(), live, "must not be sent", nil)
+
+	if attempted || err == nil {
+		t.Fatalf("attempted=%v error=%v", attempted, err)
+	}
+	for _, method := range readFixtureRecord(t, path).Methods {
+		if method == "turn/start" || method == "turn/steer" {
+			t.Fatal("input crossed a failed durable proof write")
+		}
+	}
+	if rec := codexRunRecord(t, m, tenant, run.RunRef); rec.Bool(colRunCodexInputAttempted) {
+		t.Fatal("failed write changed input proof")
+	}
+}
+
+type beforeCodexInputRegistry struct{ store.ExtensionRegistry }
+
+func (r beforeCodexInputRegistry) Register(d model.EntityDescriptor) error {
+	if d.Kind == runKind {
+		fields := make([]model.FieldSpec, 0, len(d.Fields))
+		for _, field := range d.Fields {
+			if field.Name != colRunCodexInputAttempted {
+				fields = append(fields, field)
+			}
+		}
+		d.Fields = fields
+	}
+	return r.ExtensionRegistry.Register(d)
+}
+
+func TestCodexInputAttemptNullableUpgradeBothBackends(t *testing.T) {
+	for _, backend := range profileBackends(t) {
+		t.Run(backend.name, func(t *testing.T) {
+			old := New()
+			m, st := openProfileModule(t, backend, func(reg store.ExtensionRegistry) error { return old.RegisterSchema(beforeCodexInputRegistry{reg}) })
+			tenant := ensureTenant(t, st, "codex-input-upgrade")
+			ref := model.NewID().String()
+			if err := m.Data.Mutate(t.Context(), tenant, func(sc store.Scope) error {
+				repo, err := sc.Ext(runKind)
+				if err != nil {
+					return err
+				}
+				_, err = repo.Create(t.Context(), model.Record{colRunRef: ref, colTransport: string(TransportStreamJSON), colPermissionMode: "default", colIsolation: string(IsolationNative), colState: stateStopped, colLastEventSeq: int64(0)})
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := st.Close(); err != nil {
+				t.Fatal(err)
+			}
+			m, st = openProfileModule(t, backend, nil)
+			defer st.Close()
+			if err := m.Data.Mutate(t.Context(), tenant, func(sc store.Scope) error {
+				repo, err := sc.Ext(runKind)
+				if err != nil {
+					return err
+				}
+				rec, err := findRunRec(t.Context(), repo, ref)
+				if err != nil {
+					return err
+				}
+				if !rec.IsNull(colRunCodexInputAttempted) {
+					t.Fatal("legacy input state was backfilled")
+				}
+				rec[colRunCodexInputAttempted] = true
+				_, err = repo.Update(t.Context(), rec)
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			rec, err := m.loadRun(t.Context(), tenant, ref)
+			if err != nil || !rec.Bool(colRunCodexInputAttempted) {
+				t.Fatalf("upgraded input fact did not persist: %v", err)
+			}
+		})
 	}
 }

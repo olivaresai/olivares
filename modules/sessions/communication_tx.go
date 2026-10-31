@@ -282,6 +282,9 @@ type communicationData interface {
 type tenantCommunicationData struct {
 	data   api.ModuleData
 	tenant model.TenantID
+	// module wakes its outbox pump once a mutation that inserted work-outbox rows has committed;
+	// nil (tests that build the data alone) wakes nothing.
+	module *Module
 }
 
 func (d tenantCommunicationData) View(
@@ -307,11 +310,14 @@ func (d tenantCommunicationData) Mutate(
 	if d.data == nil {
 		return store.ErrStoreUnavailable
 	}
-	return d.data.Mutate(ctx, d.tenant, fn)
+	mark := d.module.workOutboxMark()
+	err := d.data.Mutate(ctx, d.tenant, fn)
+	d.module.nudgeWorkOutboxSince(mark, err)
+	return err
 }
 
 func (m *Module) communicationData(tenant model.TenantID) communicationData {
-	return tenantCommunicationData{data: m.Data, tenant: tenant}
+	return tenantCommunicationData{data: m.Data, tenant: tenant, module: m}
 }
 
 // viewCommunication is the only WP2 entry point for an observational store
@@ -534,9 +540,11 @@ func (m *Module) mutateCommunicationTransaction(
 
 // SetWorkOutboxNudge registers the wake-up of this module's outbox pump (C2 item
 // 5): the composition root (boot) registers it once per engine, and nil withdraws
-// it. communicationTx.create calls it after a successful work-outbox insert so a
-// fresh event drains promptly instead of waiting out the safety cadence. A nudge
-// after a rolled-back transaction is harmless: the drain finds nothing and idles.
+// it. A mutation that inserted a work-outbox row calls it once that mutation has
+// committed (tenantCommunicationData.Mutate), so a fresh event drains promptly
+// instead of waiting out the safety cadence. It is never called at the insert:
+// the drain it wakes runs in its own transaction, cannot see an uncommitted row
+// under read committed isolation and would idle with the row left pending.
 // It belongs to the module, never to the process: with one process-wide slot, a
 // second engine in the same process (the cmd/olivares tests run many) took the
 // wake-up, and the first engine's rows waited for its 5 minute safety tick.
@@ -558,8 +566,32 @@ func (m *Module) nudgeWorkOutbox() {
 	}
 }
 
+// noteWorkOutboxInsert records that a communication transaction inserted a work-outbox row.
+func (m *Module) noteWorkOutboxInsert() { m.workOutboxInserts.Add(1) }
+
+// workOutboxMark is the insert count a mutation takes before it runs; nil-safe.
+func (m *Module) workOutboxMark() uint64 {
+	if m == nil {
+		return 0
+	}
+	return m.workOutboxInserts.Load()
+}
+
+// nudgeWorkOutboxSince wakes the pump when a work-outbox row was inserted since mark and the
+// mutation that returned err may have committed: it succeeded, or its COMMIT left the outcome
+// unknown. Another transaction's insert also moves the count; that only adds a wake-up, which
+// the drain answers with nothing to do.
+func (m *Module) nudgeWorkOutboxSince(mark uint64, err error) {
+	if m == nil || (err != nil && !errors.Is(err, store.ErrCommitOutcomeUnknown)) {
+		return
+	}
+	if m.workOutboxInserts.Load() != mark {
+		m.nudgeWorkOutbox()
+	}
+}
+
 // communicationTxWithAuthority is newCommunicationTxWithAuthority wired to this
-// module's outbox nudge: the constructor every production mutation uses.
+// module's outbox insert count: the constructor every production mutation uses.
 func (m *Module) communicationTxWithAuthority(
 	ctx context.Context,
 	sc store.Scope,
@@ -568,7 +600,7 @@ func (m *Module) communicationTxWithAuthority(
 ) (*communicationTx, error) {
 	tx, err := newCommunicationTxWithAuthority(ctx, sc, request, claims)
 	if err == nil {
-		tx.nudge = m.nudgeWorkOutbox
+		tx.onWorkOutboxInsert = m.noteWorkOutboxInsert
 	}
 	return tx, err
 }
@@ -579,9 +611,10 @@ func (m *Module) communicationTxWithAuthority(
 // locks. Callers use now rather than consulting a process clock.
 type communicationTx struct {
 	now model.Timestamp
-	// nudge wakes the owning module's outbox pump after a work-outbox insert;
-	// nil (module tests, the free constructors) inserts silently.
-	nudge func()
+	// onWorkOutboxInsert reports a work-outbox insert to the owning module, which
+	// wakes its outbox pump after the mutation commits; nil (module tests, the
+	// free constructors) inserts silently.
+	onWorkOutboxInsert func()
 
 	observeNowFn              func(context.Context) (model.Timestamp, error)
 	lockTransactionFn         func(context.Context, string) error
@@ -1404,10 +1437,18 @@ func (tx *communicationTx) create(
 		return nil, err
 	}
 	created, err := repo.CreateAtTransactionTime(ctx, record)
-	if err == nil && kind == workOutboxKind && tx.nudge != nil {
-		tx.nudge()
+	if err == nil && kind == workOutboxKind {
+		tx.noteWorkOutboxInsert()
 	}
 	return created, err
+}
+
+// noteWorkOutboxInsert reports a work-outbox row this transaction inserted, through create or
+// through a work-event writer, so the enclosing mutation wakes the pump after it commits.
+func (tx *communicationTx) noteWorkOutboxInsert() {
+	if tx.onWorkOutboxInsert != nil {
+		tx.onWorkOutboxInsert()
+	}
 }
 
 func (tx *communicationTx) createWithID(

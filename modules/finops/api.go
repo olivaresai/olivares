@@ -59,6 +59,7 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("GET", "/spend/reconciliation", permSpendRead, m.handleReconciliation)
 	reg.Handle("GET", "/spend/export", permSpendRead, m.handleExport)
 	reg.Handle("GET", "/spend/allocation", permSpendRead, m.handleAllocation)
+	reg.Handle("GET", "/spend/changes", permSpendRead, m.handleChangeCost)
 	reg.Handle("GET", "/forecast", permSpendRead, m.handleForecast)
 	reg.Handle("GET", "/recommendations", permSpendRead, m.handleRecommendations)
 	reg.Handle("GET", "/analytics/team-summary", permSpendRead, m.handleTeamSummary)
@@ -108,8 +109,7 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("GET", "/statements/{id}/export", permSpendRead, m.handleExportStatement)
 
 	// Budgets and their alerts.
-	reg.Handle("GET", "/budgets", permBudgetRead, m.handleListBudgets)
-	reg.Handle("POST", "/budgets", permBudgetWrite, m.handleCreateBudget)
+	m.budgetCollectionRoutes(reg)
 	reg.Handle("GET", "/budgets/{id}", permBudgetRead, m.handleGetBudget)
 	reg.Handle("PUT", "/budgets/{id}", permBudgetWrite, m.handleUpdateBudget)
 	reg.Handle("DELETE", "/budgets/{id}", permBudgetWrite, m.handleDeleteBudget)
@@ -122,6 +122,25 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("POST", "/admission/release", permBudgetWrite, m.handleAdmissionRelease)
 	reg.Handle("GET", "/admission/reconciliation", permBudgetRead, m.handleAdmissionReconciliation)
 	reg.Handle("POST", "/admission/reconcile", permBudgetWrite, m.handleAdmissionReconcile)
+}
+
+// budgetCollectionRoutes keeps both scoped registrations on a registrar parameter
+// so the route-description enumerator follows the same declarations as the router.
+func (m *Module) budgetCollectionRoutes(reg api.RouteRegistrar) {
+	scoped, capable := reg.(api.CollectionScopeRouteRegistrar)
+	if capable {
+		reg = scoped.WithCollectionScope(api.CollectionScopeRef{
+			WorkspaceQueryParam: "workspace_id", AllowTenantFallback: true,
+		})
+	}
+	reg.Handle("GET", "/budgets", permBudgetRead, m.handleListBudgets)
+	if capable {
+		reg = scoped.WithCollectionScope(api.CollectionScopeRef{
+			WorkspaceQueryParam: "workspace_id", WorkspaceBodyField: "key",
+			WorkspaceScopeField: "dimension", WorkspaceBySlug: true,
+		})
+	}
+	reg.Handle("POST", "/budgets", permBudgetWrite, m.handleCreateBudget)
 }
 
 // --- spend analytics ---------------------------------------------------------
@@ -181,12 +200,27 @@ func (m *Module) handleListBudgets(w http.ResponseWriter, r *http.Request, mc ap
 	q.Filters = append(q.Filters, eq("kind", policyKindBudget))
 	out := listResponse[budgetDTO]{Items: []budgetDTO{}}
 	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
+		var workspace model.Workspace
+		if !mc.Resource.WorkspaceID.IsZero() {
+			var err error
+			workspace, err = sc.Workspaces().Get(r.Context(), mc.Resource.WorkspaceID)
+			if err != nil {
+				return err
+			}
+		}
 		recs, page, err := sc.Policies().List(r.Context(), q)
 		if err != nil {
 			return err
 		}
 		for _, p := range recs {
-			out.Items = append(out.Items, toBudgetDTO(p))
+			budget := toBudgetDTO(p)
+			// Match the admitted department, never another budget dimension that
+			// happens to carry the same key. Preserve the store's page boundary.
+			if !workspace.ID.IsZero() && (budget.Dimension != "workspace" ||
+				(budget.Key != workspace.Slug && budget.Key != workspace.ID.String())) {
+				continue
+			}
+			out.Items = append(out.Items, budget)
 		}
 		out.Cursor, out.HasMore = page.Cursor, page.HasMore
 		return nil

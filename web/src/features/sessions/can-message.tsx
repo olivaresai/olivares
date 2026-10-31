@@ -26,6 +26,7 @@ import type { RunDTO } from '@/features/agentops/types'
 import {
   isLiveRun,
   operatorName,
+  runTitle,
   primaryRun,
   sessionShortId,
   type UnifiedSession,
@@ -50,7 +51,7 @@ export function peerCandidates(
     const sid = s.live?.canonical_sid
     if (!run || !sid || sid === ownSid || !isLiveRun(run)) return []
     if (run.authz_workspace_id !== workspace) return []
-    return [{ sid, name: operatorName(s) ?? sessionShortId(s) }]
+    return [{ sid, name: operatorName(s) ?? runTitle(s) ?? sessionShortId(s) }]
   })
 }
 

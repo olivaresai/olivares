@@ -23,7 +23,10 @@
     "signing": "Signature des rapports",
     "tracing": "Traces",
     "sessionIdle": "Mémoire des sessions",
-    "updates": "Mises à jour"
+    "updates": "Mises à jour",
+    "permissions": "Autorisations",
+    "newSessions": "Nouvelles sessions",
+    "notifications": "Notifications"
   },
   "general": {
     "title": "Général",
@@ -42,17 +45,26 @@
     "startPageHint": "Ce qui s’ouvre à la connexion. Valeur par défaut : Accueil.",
     "confirmStop": "Confirmer avant d’arrêter une session",
     "confirmStopHint": "Demander une fois avant qu’Arrêter ne termine une session encore au travail.",
+    "editor": "Éditeur pour les liens de fichier",
+    "editorHint": "L’éditeur que lancent les liens « Ouvrir dans » sur cet ordinateur. Par défaut : VS Code.",
+    "editorSsh": "Hôte SSH de l’éditeur",
+    "editorSshHint": "Comment l’éditeur atteint les dossiers de session d’une autre machine, sous la forme utilisateur@hôte ou utilisateur@hôte:port. Vide : l’adresse d’où cette console est servie ; sans SSH s’il s’agit de cet ordinateur.",
     "reduceMotion": "Réduire les animations",
     "reduceMotionHint": "Remplace le mouvement par des fondus. Activé quand le système le demande."
   },
   "sessionNotifications": {
     "title": "Notifications de session",
-    "hint": "Me prévenir quand une session a besoin de moi ou se termine pendant que cet onglet est en arrière-plan. S’applique à ce navigateur.",
+    "hint": "M’avertir des événements sélectionnés en arrière-plan. Vos choix vous suivent ; chaque navigateur nécessite une autorisation.",
     "notifyMe": "Me prévenir",
     "denied": "Les notifications sont bloquées dans ce navigateur.",
     "unavailable": "Les notifications du navigateur ne sont pas disponibles ici.",
     "needsYou": "Cette session a besoin de vous.",
-    "finished": "Le tour est terminé."
+    "finished": "Le tour est terminé.",
+    "ended": "La session est terminée.",
+    "failed": "La session s’est arrêtée sur une erreur.",
+    "pushOn": "Atteint aussi cet appareil lorsque l’onglet est fermé.",
+    "pushUnavailable": "Seulement tant qu’un onglet est ouvert : cet appareil n’a pas pu être enregistré pour le push.",
+    "installHint": "Les notifications demandent l’app sur l’écran d’accueil : touchez Partager, puis « Sur l’écran d’accueil »."
   },
   "keyboard": {
     "title": "Clavier",
@@ -350,5 +362,31 @@
     "switched": "Changement installé.",
     "terminal": "La même chose dans un terminal sur le serveur",
     "orTerminal": "Ou dans un terminal sur le serveur"
+  },
+  "permissions": {
+    "description": "Ce qu’un agent peut faire dans une session et ce que chaque outil reçoit pour cela. Les mêmes noms valent dans le formulaire de nouvelle session et dans olivares session start --permission.",
+    "caption": "Ce que chaque autorisation remet à chaque outil",
+    "permission": "Autorisation",
+    "what": "Ce qu’elle fait",
+    "default": "Par défaut",
+    "asksInstead": "Pas de mode automatique : demande, comme dans {{name}}",
+    "note": "Pour les outils autres que Claude Code, Olivares répond à chaque approbation demandée par l’outil selon l’autorisation. Un « ask » propre à l’outil dans une cellule ne veut pas dire qu’on vous demande."
+  },
+  "newSessions": {
+    "tool": "Outil par défaut",
+    "account": "Compte par défaut",
+    "model": "Modèle par défaut",
+    "folder": "Dossier par défaut",
+    "automatic": "Automatique",
+    "unavailable": "N’est plus disponible",
+    "reset": "Réinitialiser {{name}}",
+    "readFailed": "Impossible de lire vos choix. Rouvrez cette page pour réessayer.",
+    "fallback": "Un choix par défaut enregistré n’est plus disponible. Le premier choix utilisable est appliqué.",
+    "scope": "Vos valeurs pour une nouvelle session. Enregistrées pour votre compte sur ce serveur."
+  },
+  "notificationEvents": {
+    "needsYou": "A besoin de vous",
+    "finished": "Terminée",
+    "failed": "Échec"
   }
 }

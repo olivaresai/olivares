@@ -155,20 +155,19 @@ func TestTheHookAndTheProxyChainTheDecoyEngineIntoTheirInspector(t *testing.T) {
 			if !ok {
 				return true
 			}
-			if key, ok := kv.Key.(*ast.Ident); !ok || key.Name != "Inspector" {
+			if key, ok := kv.Key.(*ast.Ident); !ok || (key.Name != "Inspector" && key.Name != "InspectorLive") {
 				return true
 			}
 			sites++
-			call, ok := kv.Value.(*ast.CallExpr)
-			if !ok || len(call.Args) != 2 || !isIdent(call.Fun, "chainInspectors") {
-				t.Errorf("%s: an Inspector is not chainInspectors(<edition port>, eng.sessionDecoys)", file)
+			call := chainCallOf(kv.Value)
+			if call == nil || len(call.Args) != 2 || !(isIdent(call.Fun, "chainInspectors") || isIdent(call.Fun, "liveInspectorChain")) {
+				t.Errorf("%s: an Inspector is not a chain of <edition gate> and eng.sessionDecoys", file)
 				return true
 			}
 			if got := selectorPath(call.Args[1]); got != "eng.sessionDecoys" {
 				t.Errorf("%s: the chain's second inspector is %q, want eng.sessionDecoys", file, got)
 			}
-			first, ok := call.Args[0].(*ast.CallExpr)
-			if !ok || selectorPath(first.Fun) != "thisEdition."+port+".get" {
+			if !callsSelector(call.Args[0], "thisEdition."+port+".get") {
 				t.Errorf("%s: the chain's first inspector is not the %s edition port", file, port)
 			}
 			return true
@@ -182,6 +181,32 @@ func TestTheHookAndTheProxyChainTheDecoyEngineIntoTheirInspector(t *testing.T) {
 func isIdent(e ast.Expr, name string) bool {
 	id, ok := e.(*ast.Ident)
 	return ok && id.Name == name
+}
+
+// chainCallOf returns the call an Inspector value is built from: the value itself, or the
+// call inside the adapter a hook wraps around it (hookInspectorSource).
+func chainCallOf(e ast.Expr) *ast.CallExpr {
+	call, ok := e.(*ast.CallExpr)
+	if !ok {
+		return nil
+	}
+	if isIdent(call.Fun, "hookInspectorSource") && len(call.Args) == 1 {
+		return chainCallOf(call.Args[0])
+	}
+	return call
+}
+
+// callsSelector reports whether e calls the function a.b.c anywhere inside it, such as an
+// edition port's get inside the gate closure of a chain.
+func callsSelector(e ast.Expr, path string) bool {
+	found := false
+	ast.Inspect(e, func(n ast.Node) bool {
+		if call, ok := n.(*ast.CallExpr); ok && selectorPath(call.Fun) == path {
+			found = true
+		}
+		return !found
+	})
+	return found
 }
 
 // selectorPath renders a.b.c; anything else is "".

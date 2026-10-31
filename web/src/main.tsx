@@ -14,10 +14,14 @@ import { i18nReady } from '@/lib/i18n'
 import { Providers } from '@/app/providers'
 import { router } from '@/app/router'
 import { installTrustedTypes } from '@/security/trusted-types'
+import { registerServiceWorker } from '@/features/settings/web-push'
 
 // CSP L3 (ADM-CORE-05): register the Trusted Types policies before React mounts, so
 // any DOM sink is governed from the first paint under `require-trusted-types-for`.
 installTrustedTypes()
+
+// The service worker (public/sw.js) is what lets the console be installed and be pushed to.
+if (import.meta.env.PROD) registerServiceWorker()
 
 void i18nReady.then(() => {
   createRoot(document.getElementById('root')!).render(

@@ -91,10 +91,21 @@ func startUIJourneyAt(t *testing.T, serverURL, token, tenant string) (*uiJourney
 	return &uiJourney{t: t, master: master, pid: cmd.Process.Pid, home: home}, func() int { return waitCLI(t, cmd) }
 }
 
+// installWait is the budget for the screen an install reaches once the engine has written the
+// tool. The install verifies a signed release with gpg; on a loaded CI runner it outlasted
+// ptyWait (red main 5294e548: the screen still read Installing… after 10 s).
+const installWait = 60 * time.Second
+
 // see waits for the screen to show want.
 func (j *uiJourney) see(want string) {
 	j.t.Helper()
 	j.transcript.WriteString(readScreen(j.t, j.master, want))
+}
+
+// seeWithin is see with its own budget, for a step that waits on the engine's work.
+func (j *uiJourney) seeWithin(want string, wait time.Duration) {
+	j.t.Helper()
+	j.transcript.WriteString(readScreenWithin(j.t, j.master, want, wait))
 }
 
 func (j *uiJourney) press(keys string) {
@@ -140,9 +151,14 @@ func (j *uiJourney) sampleEngineArgv() {
 // no command line to appear in; this is what would show it if they did.
 func descendantArgv(t *testing.T, pid int) []string {
 	t.Helper()
-	root := "/proc/" + strconv.Itoa(pid) + "/task/" + strconv.Itoa(pid) + "/children"
-	if _, err := os.ReadFile(root); err != nil {
-		t.Fatalf("this kernel does not list a process's children: %v", err)
+	// Probe the live test process, not a child that may already have exited.
+	// Kernels without CONFIG_PROC_CHILDREN cannot support this leak check.
+	self := strconv.Itoa(os.Getpid())
+	root := "/proc/" + self + "/task/" + self + "/children"
+	if _, err := os.ReadFile(root); os.IsNotExist(err) {
+		t.Skipf("argv leak check needs proc task children on this kernel: %v", err)
+	} else if err != nil {
+		t.Fatalf("probe proc task children: %v", err)
 	}
 	var argv []string
 	files, _ := filepath.Glob("/proc/" + strconv.Itoa(pid) + "/task/*/children")
@@ -161,6 +177,17 @@ func descendantArgv(t *testing.T, pid int) []string {
 		}
 	}
 	return argv
+}
+
+// A tool can exit between being listed as a child and having its children read.
+func TestDescendantArgvIgnoresAnExitedChild(t *testing.T) {
+	child := exec.Command("sh", "-c", "exit 0")
+	if err := child.Run(); err != nil {
+		t.Fatalf("run a child: %v", err)
+	}
+	if got := descendantArgv(t, child.Process.Pid); len(got) != 0 {
+		t.Errorf("an exited child has arguments: %q", got)
+	}
 }
 
 // The check above can fail: a process that carries the key in its arguments is seen.

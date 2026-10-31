@@ -132,7 +132,7 @@ describe('RailGlyph', () => {
   it.each<[RailState, string]>([
     ['need', 'Needs you'],
     ['live', 'Working'],
-    ['ended', 'Ended'],
+    ['ended', 'Done'],
     ['idle', 'Idle'],
   ])('names the %s state by its word', (state, word) => {
     render(<RailGlyph state={state} />)

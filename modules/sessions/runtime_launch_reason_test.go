@@ -14,7 +14,7 @@ import (
 	"testing"
 )
 
-// HU-06: a failed launch must say why. A refusal this module wrote at a launch stage
+// acceptance: a failed launch must say why. A refusal this module wrote at a launch stage
 // (the Codex sandbox check's, for example) was replaced by "<stage> failed; the session
 // was not started"; it is now kept as written. The runner's own text stays hidden.
 func TestLaunchFailureKeepsTheRefusalTheStageWrote(t *testing.T) {
@@ -52,5 +52,13 @@ func TestCodexSandboxRefusalReachesTheLaunchReason(t *testing.T) {
 	got := launchFailedErr(stage, err).msg
 	if got != "Codex's native sandbox is unavailable and this server cannot enforce session confinement" {
 		t.Fatalf("launch reason = %q, want the sandbox check's own sentence", got)
+	}
+}
+
+func TestLaunchLogReasonOmitsWorktreeSetupOutput(t *testing.T) {
+	err := &worktreeSetupLaunchError{cause: worktreeRefusal("the setup command exited with status 7; the session was not started. Last output:\nfixture-output")}
+	got := launchLogReason("worktree setup command", err)
+	if strings.Contains(got, "fixture-output") || !strings.Contains(got, "exited with status 7") {
+		t.Fatalf("launch log reason = %q, want the failure without setup output", got)
 	}
 }

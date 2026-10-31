@@ -8,7 +8,7 @@ set +x
 set -euo pipefail
 cannot() { echo "release evidence: COULD NOT CHECK — $*" >&2; exit 2; }
 workflow=${1:-} sha=${2:-} tree_equal=${3:-}
-[[ $# == 2 || ( $# == 3 && $tree_equal == --tree-equal-ok && $workflow == release-first-hour.yml ) ]] || cannot 'invalid arguments'
+[[ $# == 2 || ( $# == 3 && $tree_equal == --tree-equal-ok && ( $workflow == release-first-hour.yml || $workflow == race-full.yml ) ) ]] || cannot 'invalid arguments'
 [[ $workflow =~ ^[A-Za-z0-9_-]+\.ya?ml$ && $sha =~ ^[0-9a-f]{40}$ ]] || cannot 'workflow and full candidate SHA required'
 [[ ${GITHUB_REPOSITORY:-} =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || cannot 'repository required'
 [[ ${GH_TOKEN:-} =~ ^[A-Za-z0-9_.-]+$ ]] || cannot 'GitHub token required'

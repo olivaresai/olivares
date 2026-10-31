@@ -112,9 +112,15 @@ export function collectSecretUsage(input: {
       addRef(value, use)
   }
   for (const run of input.runs ?? []) {
-    // A run records vault NAMES (env/…), not references.
+    // A run records vault NAMES (env/… and credential/…), not references.
     for (const ref of run.secret_env ?? [])
       add(store, ref.secret, {
+        kind: 'session',
+        label: run.name || run.run_ref,
+        id: run.run_ref,
+      })
+    for (const name of run.credentials ?? [])
+      add(store, `credential/${name}`, {
         kind: 'session',
         label: run.name || run.run_ref,
         id: run.run_ref,

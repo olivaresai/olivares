@@ -135,7 +135,9 @@ async function loginDemo(page: Page): Promise<BrowserSession> {
   // screen are the areas and the overview above them, not a leaf like Inventory. The
   // name is exact because neighbouring entries contain it.
   await expect(
-    page.getByLabel('Journeys').getByRole('link', { name: 'Now', exact: true }),
+    page
+      .getByLabel('Main navigation')
+      .getByRole('link', { name: 'Now', exact: true }),
   ).toBeVisible({ timeout: 20_000 })
   return body
 }

@@ -141,6 +141,9 @@ const (
 // Neither is audited: live updates are high-frequency automated ingestion, and
 // reads of the live operation are gated by RBAC at the API.
 func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
+	if err := registerCollaborationSchema(reg); err != nil {
+		return err
+	}
 	if err := reg.Register(model.EntityDescriptor{
 		Kind:  liveKind,
 		Table: liveTable,
@@ -240,6 +243,13 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 	if err := m.registerRunMarkSchema(reg); err != nil {
 		return err
 	}
+	if err := m.registerLimitResumeSettingsSchema(reg); err != nil {
+		return err
+	}
+	// The messages lined up while a session's tool is working.
+	if err := m.registerRunQueueSchema(reg); err != nil {
+		return err
+	}
 	// SG-00: the canonical session identity and its provider aliases.
 	if err := m.registerIdentitySchema(reg); err != nil {
 		return err
@@ -254,6 +264,14 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 	}
 	// the WORKSPACE registry (host filesystem root bound to sessions).
 	if err := m.registerWorkspaceSchema(reg); err != nil {
+		return err
+	}
+	// Share links of a registered folder: the table exists in every edition, only
+	// Business writes it.
+	if err := m.registerPushSubscriptionSchema(reg); err != nil {
+		return err
+	}
+	if err := m.registerWorkspaceShareSchema(reg); err != nil {
 		return err
 	}
 	// K1: durable work across session lifetimes. Keep this last so its single

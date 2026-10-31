@@ -161,7 +161,7 @@ func TestOllamaComesBackWithTheEngineUntilStopped(t *testing.T) {
 	}
 }
 
-// SR2C on 773059bd: the engine's own restart of a person's Ollama was not audited. It
+// review on 773059bd: the engine's own restart of a person's Ollama was not audited. It
 // is one system row per boot, written before the start, naming who started it and
 // when, the tenant and the endpoint; with no audit written, nothing is started.
 func TestOllamaRestartWritesItsAuditRow(t *testing.T) {

@@ -505,7 +505,7 @@ describe('SkillsView', () => {
   })
 
   it('opens the pack a ?pack= link names (AI tools > Installed here)', async () => {
-    window.history.pushState({}, '', '/skills?pack=pack-1')
+    window.history.pushState({}, '', '/capabilities?tab=skills&pack=pack-1')
     try {
       renderIntel(<SkillsView />)
       const sheet = await screen.findByRole('dialog')

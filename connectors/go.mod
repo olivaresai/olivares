@@ -10,21 +10,21 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/beevik/etree v1.8.1
 	github.com/cedar-policy/cedar-go v1.8.0
-	github.com/cilium/cilium v1.20.2
+	github.com/cilium/cilium v1.20.4
 	github.com/envoyproxy/go-control-plane/envoy v1.40.0
-	github.com/go-jose/go-jose/v4 v4.1.5
+	github.com/go-jose/go-jose/v4 v4.1.6
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/olivaresai/olivares/sdk v0.0.0
 	github.com/olivaresai/olivares/sdk/plugin v0.0.0
-	github.com/pydantic/genai-prices/packages/go v0.1.11
+	github.com/pydantic/genai-prices/packages/go v0.1.13
 	github.com/russellhaering/goxmldsig v1.6.1
 	github.com/spiffe/go-spiffe/v2 v2.9.0
 	github.com/stretchr/testify v1.12.1
 	github.com/twmb/franz-go v1.22.2
 	github.com/twmb/franz-go/pkg/kmsg v1.15.0
 	go.opentelemetry.io/proto/otlp v1.11.1
-	golang.org/x/net v0.61.0
+	golang.org/x/net v0.62.0
 	golang.org/x/sys v0.49.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260928230214-8a89bd6388cc
 	google.golang.org/grpc v1.84.0
@@ -65,6 +65,7 @@ require (
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
+	golang.org/x/tools v0.52.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260928230214-8a89bd6388cc // indirect
 )
 

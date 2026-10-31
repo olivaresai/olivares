@@ -94,6 +94,8 @@ type skillsPreparedTarget struct {
 	authority           auth.RouteMutationAuthorization
 	assignmentRequest   auth.Request
 	assignmentAuthority auth.RouteMutationAuthorization
+	folderRequest       auth.Request
+	folderAuthority     auth.RouteMutationAuthorization
 }
 
 func (p skillsPreparedTarget) authorityBundle(now time.Time) (store.AuthoritySnapshotBundle, error) {
@@ -112,6 +114,16 @@ func (p skillsPreparedTarget) authorityBundle(now time.Time) (store.AuthoritySna
 	native, err := p.authority.AuthorityFor(now, p.request)
 	if err != nil {
 		return store.AuthoritySnapshotBundle{}, err
+	}
+	if p.folderRequest.Permission != "" {
+		folder, err := p.folderAuthority.AuthorityFor(now, p.folderRequest)
+		if err != nil {
+			return store.AuthoritySnapshotBundle{}, err
+		}
+		native, err = auth.MergeAuthoritySnapshotBundles(native, folder)
+		if err != nil {
+			return store.AuthoritySnapshotBundle{}, err
+		}
 	}
 	assignment, err := p.assignmentAuthority.AuthorityFor(now, p.assignmentRequest)
 	if err != nil {
@@ -138,6 +150,15 @@ func (p skillsPreparedTarget) requestContext(ctx context.Context) (context.Conte
 		return ctx, func() {}, err
 	}
 	expiry := metadata.FreshUntil
+	if p.folderRequest.Permission != "" {
+		folder, err := p.folderAuthority.MetadataFor(time.Now(), p.folderRequest)
+		if err != nil {
+			return ctx, func() {}, err
+		}
+		if folder.FreshUntil.Before(expiry) {
+			expiry = folder.FreshUntil
+		}
+	}
 	if !p.orphan {
 		metadata, err = p.authority.MetadataFor(time.Now(), p.request)
 		if err != nil {
@@ -167,7 +188,7 @@ func (a skillsTargetAuthority) AssignmentTargetRefs() map[string]api.EntityRef {
 		"agent_group": {CoreKind: api.CoreKindAgentGroup, BodyIDField: "target_id", ResourceKind: "agent_group", ConcealDeniedAsNotFound: true, DeniedReadPermission: skillsAgentRead},
 		"agent":       {CoreKind: api.CoreKindAgent, BodyIDField: "target_id", ResourceKind: "agent", ConcealDeniedAsNotFound: true, DeniedReadPermission: skillsAgentRead},
 		"profile":     {Kind: "sessions.provider_profile", BodyIDField: "target_id", LookupColumn: "profile_ref", ConcealDeniedAsNotFound: true},
-		"folder":      {Kind: "sessions.workspace", BodyIDField: "target_id", LookupColumn: "workspace_ref", ConcealDeniedAsNotFound: true},
+		"folder":      {ResourceKind: "resource", Kind: "sessions.workspace", BodyIDField: "target_id", LookupColumn: "workspace_ref", ConcealDeniedAsNotFound: true},
 		"template":    {Kind: "sessions.template", BodyIDField: "target_id", ConcealDeniedAsNotFound: true},
 		"session":     {Kind: "sessions.run", BodyIDField: "target_id", LookupColumn: "run_ref", WorkspaceColumn: "authz_workspace_id", ConcealDeniedAsNotFound: true},
 	}
@@ -236,6 +257,9 @@ func (a skillsTargetAuthority) PrepareSkillsTarget(ctx context.Context, mc api.M
 	} else if !a.authz.Authorize(bounded, request).Allow {
 		return ctx, noop, auth.ErrRouteDenied
 	}
+	if err := a.requireAdminForAssignedTemplate(bounded, tenant, p, t, write); err != nil {
+		return ctx, noop, err
+	}
 	if !write {
 		if err := a.authorizeProfilePinsRead(bounded, request, t); err != nil {
 			return ctx, noop, err
@@ -243,6 +267,9 @@ func (a skillsTargetAuthority) PrepareSkillsTarget(ctx context.Context, mc api.M
 	}
 
 	prepared := skillsPreparedTarget{assignmentRequest: assignmentRequest, assignmentAuthority: assignmentAuthority, tenant: tenant, actor: p.Actor(), target: fact.stored, write: write, epoch: epoch, principal: p, request: request, authority: authority}
+	if err := a.checkPreparedFolder(bounded, t, &prepared); err != nil {
+		return ctx, noop, err
+	}
 	return prepared.requestContext(ctx)
 }
 
@@ -275,12 +302,30 @@ func (a skillsTargetAuthority) prepareSessionTarget(ctx, bounded context.Context
 	} else if err := refusedBy(a.authz.Authorize(bounded, request)); err != nil {
 		return ctx, noop, err
 	}
+	if err := a.requireAdminForAssignedTemplate(bounded, tenant, p, t, write); err != nil {
+		return ctx, noop, err
+	}
 	if !write {
 		if err := a.authorizeProfilePinsRead(bounded, request, t); err != nil {
 			return ctx, noop, err
 		}
 	}
+	if err := a.checkPreparedFolder(bounded, t, &prepared); err != nil {
+		return ctx, noop, err
+	}
 	return prepared.requestContext(ctx)
+}
+
+// requireAdminForAssignedTemplate holds a write of the skills pinned to a template to what the
+// template's own edit asks when a department or group is assigned it: those pins are delivered
+// to every launch the template governs, so the permission to write templates is not enough.
+// It asks sessions, the owner of the question, and has nothing to say about a read or any other
+// kind of target.
+func (a skillsTargetAuthority) requireAdminForAssignedTemplate(ctx context.Context, tenant model.TenantID, p auth.Principal, t skills.Target, write bool) error {
+	if !write || t.Kind != "template" {
+		return nil
+	}
+	return a.sessions.RequireAdminToChangeAssigned(ctx, tenant, p, model.ID(t.ID))
 }
 
 func (a skillsTargetAuthority) retainSessionDecision(ctx context.Context, p *skillsPreparedTarget, request auth.Request) error {
@@ -626,7 +671,7 @@ func (a skillsTargetAuthority) targetFact(ctx context.Context, sc store.Scope, t
 		}
 		permission, stored.Version, stored.WorkspaceID, resourceID = row.Permission, row.Version, row.WorkspaceID, row.ID.String()
 		if t.Kind == "folder" {
-			entity = "sessions.workspace"
+			entity = "resource"
 		}
 		if t.Kind == "profile" {
 			entity = "sessions.provider_profile"
@@ -638,4 +683,32 @@ func (a skillsTargetAuthority) targetFact(ctx context.Context, sc store.Scope, t
 	}
 	resource.ID, resource.WorkspaceID = resourceID, stored.WorkspaceID
 	return skillsTargetFact{stored: stored, permission: permission, resource: resource}, nil
+}
+
+func (a skillsTargetAuthority) checkPreparedFolder(bounded context.Context, t skills.Target, prepared *skillsPreparedTarget) error {
+	if t.Kind == "folder" {
+		right := auth.TrusteeRead
+		if prepared.write {
+			right = auth.TrusteeModify
+		}
+		err := sessions.CheckFolderRight(bounded, api.NewModuleData(a.st), prepared.request, right, func(q auth.Request) error {
+			if prepared.plain {
+				if prepared.write {
+					return a.retainSessionDecision(bounded, prepared, q)
+				}
+				return refusedBy(a.authz.Authorize(bounded, q))
+			}
+			if !prepared.write {
+				return refusedBy(a.authz.Authorize(bounded, q))
+			}
+			var err error
+			prepared.folderAuthority, err = a.authz.AuthorizeRouteMutation(bounded, q)
+			prepared.folderRequest = q
+			return err
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

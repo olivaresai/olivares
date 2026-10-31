@@ -7,16 +7,20 @@
 // tool reported them, agent stops only while one is active, and the version the release
 // gate reads at every width. Stop all leaves the permanent chrome: it shows here only while
 // a session runs, as a quiet control whose confirmation says how many sessions stop.
-import { within } from '@testing-library/react'
+import { act, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ComponentProps } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestQueryClient, renderIntel, screen } from '@/test/intel'
 
 const state = vi.hoisted(() => ({
   version: '1.0' as string | undefined,
   engineError: false,
+  usagePercent: 58,
+  refreshing: false,
   live: 0,
+  /** What the list shows; null: the same sessions as `live`. */
+  open: null as number | null,
   estate: false,
   agentStops: 0,
   denied: new Set<string>(),
@@ -61,7 +65,12 @@ vi.mock('@/lib/auth/context', () => ({
 }))
 vi.mock('./use-session-rail', () => ({
   useSessionRail: () => ({
-    sessionCounts: { needsYou: 0, live: state.live, running: state.live },
+    sessionCounts: {
+      needsYou: 0,
+      live: state.live,
+      running: state.live,
+      open: state.open ?? state.live,
+    },
   }),
 }))
 vi.mock('./use-killswitch-state', () => ({
@@ -91,6 +100,7 @@ vi.mock('@/features/agent-tools/api', () => ({
     providers: async (...args: unknown[]) => {
       providersRead(...args)
       return {
+        refreshing: state.refreshing,
         providers: [
           {
             instance: 'claude-default',
@@ -98,7 +108,7 @@ vi.mock('@/features/agent-tools/api', () => ({
             default: true,
             state: 'ready',
             limits: [
-              { label: '5-hour', percent: 58 },
+              { label: '5-hour', percent: state.usagePercent },
               { label: 'Weekly', percent: 41 },
               { label: 'Weekly (Opus)', percent: 12 },
             ],
@@ -117,14 +127,36 @@ vi.mock('@/features/agent-tools/api', () => ({
 }))
 
 import { toast } from '@/components/ui/toaster'
+import engineTools from '@/features/agentops/engine-tools.fixture.json'
+import { http } from '@/lib/api'
+import { ApiError } from '@/lib/api/errors'
 import { useTenantStore } from '@/stores/tenant'
 import { StatusBar } from './status-bar'
+
+// The engine's tool table, as the shell reads it (GET /v1/m/sessions/tools).
+const realGet = http.get.bind(http)
+const toolsRead = vi.hoisted(() => ({
+  answer: null as null | (() => Promise<unknown>),
+}))
+beforeEach(() => {
+  toolsRead.answer = () => Promise.resolve(engineTools)
+  vi.spyOn(http, 'get').mockImplementation(((
+    path: string,
+    ...rest: unknown[]
+  ) =>
+    path === '/v1/m/sessions/tools'
+      ? toolsRead.answer!()
+      : (realGet as (...a: unknown[]) => unknown)(path, ...rest)) as never)
+})
 
 afterEach(() => {
   Object.assign(state, {
     version: '1.0',
     engineError: false,
+    usagePercent: 58,
+    refreshing: false,
     live: 0,
+    open: null,
     estate: false,
     agentStops: 0,
     superadmin: false,
@@ -133,6 +165,7 @@ afterEach(() => {
   engage.mockReset()
   providersRead.mockReset()
   useTenantStore.setState({ activeTenant: null })
+  vi.restoreAllMocks()
 })
 
 const bar = () => screen.getByRole('contentinfo', { name: 'Status' })
@@ -170,6 +203,18 @@ describe('the status bar says how things stand', () => {
     // Open, not running: the count includes idle sessions, which are not working.
     expect(within(bar()).getByText('3 sessions open')).toBeVisible()
     expect(bar()).not.toHaveTextContent(/running/)
+  })
+
+  it('counts the sessions the list shows, while Stop all still stops an archived one that runs', () => {
+    // One session runs and the person archived it: the list and the total leave it out,
+    // and Stop all, which would end it, stays.
+    state.live = 1
+    state.open = 0
+    renderIntel(<StatusBar />)
+    expect(within(bar()).queryByText(/open/)).toBeNull()
+    expect(
+      within(bar()).getByRole('button', { name: 'Stop all' }),
+    ).toBeVisible()
   })
 
   it('shows agent stops only while there are any, and an estate stop above all', () => {
@@ -216,6 +261,83 @@ describe('the status bar asks nothing tenant-scoped before an organization is ch
     rerender(<StatusBar />)
     await vi.waitFor(() => expect(providersRead).toHaveBeenCalled())
   })
+})
+
+it('refreshes usage every minute while visible and stops polling after unmount', async () => {
+  vi.useFakeTimers()
+  const visible = vi
+    .spyOn(document, 'visibilityState', 'get')
+    .mockReturnValue('visible')
+  try {
+    state.superadmin = true
+    useTenantStore.setState({ activeTenant: 't1' })
+    const { unmount } = renderIntel(<StatusBar />)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+    expect(providersRead).toHaveBeenCalledTimes(1)
+    state.usagePercent = 73
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+    expect(
+      within(bar()).getByRole('group', { name: 'Claude Code usage' }),
+    ).toHaveTextContent('73% 5h')
+    expect(providersRead).toHaveBeenCalledTimes(2)
+    expect(providersRead).toHaveBeenLastCalledWith(
+      't1',
+      expect.any(AbortSignal),
+      true,
+    )
+    visible.mockReturnValue('hidden')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000)
+    })
+    expect(providersRead).toHaveBeenCalledTimes(2)
+    visible.mockReturnValue('visible')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000)
+    })
+    expect(providersRead).toHaveBeenCalledTimes(3)
+    unmount()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(providersRead).toHaveBeenCalledTimes(3)
+  } finally {
+    visible.mockRestore()
+    vi.useRealTimers()
+  }
+})
+
+it('polls pending usage after ten seconds, then returns to the minute interval', async () => {
+  vi.useFakeTimers()
+  try {
+    state.superadmin = true
+    state.refreshing = true
+    useTenantStore.setState({ activeTenant: 't1' })
+    renderIntel(<StatusBar />)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+    expect(providersRead).toHaveBeenCalledTimes(1)
+    state.refreshing = false
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000)
+    })
+    expect(providersRead).toHaveBeenCalledTimes(2)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000)
+    })
+    expect(providersRead).toHaveBeenCalledTimes(2)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50_000)
+    })
+    expect(providersRead).toHaveBeenCalledTimes(3)
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 describe('Stop all lives in the status bar while a session runs', () => {
@@ -289,5 +411,33 @@ describe('Stop all lives in the status bar while a session runs', () => {
     state.estate = true
     renderIntel(<StatusBar />)
     expect(within(bar()).queryByRole('button', { name: 'Stop all' })).toBeNull()
+  })
+})
+
+describe('the status bar says when the AI tools could not be read', () => {
+  it('names the failure with the engine reason, and Retry reads them again', async () => {
+    toolsRead.answer = () =>
+      Promise.reject(new ApiError(503, 'unavailable', 'The engine is busy.'))
+    const user = userEvent.setup()
+    renderIntel(<StatusBar />)
+    const retry = await within(bar()).findByRole('button', {
+      name: 'AI tools not read · Retry',
+    })
+    expect(retry).toHaveAttribute('title', 'The engine is busy.')
+    toolsRead.answer = () => Promise.resolve(engineTools)
+    await user.click(retry)
+    await vi.waitFor(() =>
+      expect(
+        within(bar()).queryByRole('button', {
+          name: 'AI tools not read · Retry',
+        }),
+      ).toBeNull(),
+    )
+  })
+
+  it('says nothing while the tools were read', async () => {
+    renderIntel(<StatusBar />)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(within(bar()).queryByText(/AI tools not read/)).toBeNull()
   })
 })

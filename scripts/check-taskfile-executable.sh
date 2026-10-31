@@ -59,19 +59,13 @@ command -v git >/dev/null 2>&1 || cannot_check "check-taskfile-executable: git i
 # depende de otras es legitima, y exigir `cmds:` a secas produce falsos y acaba con el gate apagado.
 # Esa mitad la aporto otro carril el 2026-08-20; sin ella yo lo habia dejado escrito como
 # limitacion en vez de comprobarlo.
-sin_ejecutable() {
-	awk '
-		/^  [A-Za-z][A-Za-z0-9:._-]*:$/ {
-			if (t != "") { vistas++; if (!ok) print t }
-			t = $0; sub(/^  /, "", t); sub(/:$/, "", t); ok = 0; next
-		}
-		/^[ \t]*(cmds|deps|cmd)[ \t]*:/ { ok = 1 }
-		END {
-			if (t != "") { vistas++; if (!ok) print t }
-			if (vistas == 0) exit 9
-		}
-	' "$1"
-}
+#
+# Only the keys under `tasks:` count: `includes:` (and any other top-level key) also holds
+# two-space entries without `cmds:`, and they are not tasks (#2711 measured the `appliance:`
+# include key as one).
+# The pending task is closed when `tasks:` ends, and `cmds:`/`deps:`/`cmd:` count only inside
+# it: a later `vars:` or include with a `cmd:` key cannot pass the last task as executable.
+. scripts/lib/taskfile-scan.sh || cannot_check "cannot load Taskfile scan"
 
 AHORA=$(sin_ejecutable Taskfile.yml | LC_ALL=C sort) ||
 	cannot_check "no tasks recognized in Taskfile.yml; the grammar does not match and an empty scan cannot pass"

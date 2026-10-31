@@ -43,6 +43,8 @@
     "empty": "Aún no hay carpetas de sesión. Una carpeta aparece aquí cuando una sesión empieza en ella.",
     "loading": "Leyendo las carpetas de sesión…",
     "unavailable": "Las carpetas de sesión no están disponibles.",
-    "truncationHint": "Abra Sesiones para ver todas las carpetas."
+    "truncationHint": "Abra Sesiones para ver todas las carpetas.",
+    "filter": "Buscar una carpeta",
+    "noMatch": "Ninguna carpeta coincide con «{{query}}»."
   }
 }

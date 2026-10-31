@@ -41,6 +41,7 @@
     "noResultsHint": "Ninguna fila coincide con el filtro actual. Quítalo, o amplía la búsqueda, para volver a ver las filas.",
     "comingSoon": "Próximamente",
     "loaded": "Cargado",
+    "updatedReloaded": "Actualizada y recargada",
     "yes": "Sí",
     "no": "No"
   },
@@ -291,8 +292,7 @@
     "group": {
       "general": "General",
       "launcher": "Iniciar una sesión",
-      "surface": "La superficie de trabajo",
-      "navRail": "Barra de navegación"
+      "surface": "La superficie de trabajo"
     },
     "command": {
       "palette": {
@@ -317,7 +317,8 @@
         "closeBeside": "Cerrar la sesión de al lado",
         "focusBeside": "Mover el foco entre sesiones",
         "nextPane": "Panel siguiente",
-        "previousPane": "Panel anterior"
+        "previousPane": "Panel anterior",
+        "approve": "Aprobar una vez la solicitud de la conversación"
       },
       "rail": {
         "next": "Sesión siguiente",
@@ -327,15 +328,6 @@
         "open": "Abrir la sesión",
         "pin": "Fijarla o dejar de fijarla",
         "menu": "Abrir el menú de acciones de la sesión"
-      },
-      "navRail": {
-        "next": "Módulo siguiente",
-        "previous": "Módulo anterior",
-        "expand": "Abrir el área o entrar en ella",
-        "fold": "Plegar el área o volver a ella",
-        "first": "Primer módulo",
-        "last": "Último módulo",
-        "pin": "Fijar o quitar este módulo de favoritos"
       },
       "session": {
         "new": "Nueva sesión",
@@ -363,8 +355,7 @@
     "precedence": "Cuando dos filas comparten teclas, gana la última que aplica.",
     "problems_one": "No se ha podido leer {{count}} atajo y no funciona: {{commands}}",
     "problems_other": "No se han podido leer {{count}} atajos y no funcionan: {{commands}}",
-    "problems_many": "No se han podido leer {{count}} atajos y no funcionan: {{commands}}",
-    "navRailNote": "La barra es una sola parada de tabulación. Estas teclas funcionan cuando tiene el foco."
+    "problems_many": "No se han podido leer {{count}} atajos y no funcionan: {{commands}}"
   },
   "ui": {
     "status": {
@@ -413,11 +404,14 @@
       "copied": "Copiado",
       "copyFailed": "No se pudo copiar. Selecciona el comando y cópialo."
     },
+    "quoteReply": "Citar respuesta",
     "copy": {
+      "markdown": "Copiar bloque Markdown",
       "message": "Copiar mensaje",
       "code": "Copiar código",
       "copied": "Copiado",
-      "failed": "No se pudo copiar. Selecciona el texto y cópialo."
+      "failed": "No se pudo copiar. Selecciona el texto y cópialo.",
+      "value": "Copiar {{value}}"
     }
   },
   "resize": {

@@ -566,7 +566,7 @@ describe('SessionContextPane — the scope this session ran under', () => {
     renderIntel(
       <SessionContextPane resolution={resolution({ runs: [run()] })} />,
     )
-    await user.click(screen.getByText('Details', { selector: 'summary' }))
+    await user.click(screen.getByText('References', { selector: 'summary' }))
     const identifiers = screen.getByTestId('context-identifiers')
     await user.click(
       within(identifiers).getByRole('button', { name: 'Copy ws-main' }),

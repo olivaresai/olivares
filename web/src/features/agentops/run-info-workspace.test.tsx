@@ -36,11 +36,15 @@ describe('RunInfo names the directory a session works in', () => {
         }}
       />,
     )
+    // The path is a PathText (whole value as its title); the label follows it in the same cell.
     expect(
-      screen.getByText(
-        '/var/lib/olivares/session-workspaces/run-1 (its own directory for this session)',
-      ),
+      screen.getByTitle('/var/lib/olivares/session-workspaces/run-1'),
     ).toBeInTheDocument()
+    expect(
+      screen.getByText(/its own directory for this session/),
+    ).toHaveTextContent(
+      '/var/lib/olivares/session-workspaces/run-1 (its own directory for this session)',
+    )
   })
 
   it('shows a registered workspace as the path it resolved to, without that label', () => {

@@ -17,6 +17,7 @@ import (
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/sessions"
 )
 
 // A provider instance is a tool plus its own configuration directory:
@@ -29,6 +30,10 @@ import (
 // is answered from the last snapshot.
 const providerRefresh = time.Minute
 
+// maxConcurrentProbes is how many instances are probed at once: a list of many accounts
+// starts one probe each, and every probe starts several tool processes.
+const maxConcurrentProbes = 4
+
 // Snapshot states.
 const (
 	stateReady        = "ready"
@@ -38,8 +43,12 @@ const (
 	stateError        = "error"
 )
 
-// ProviderLimit is one usage window the tool reports for a plan login.
+// ProviderLimit is one usage window the tool reports for a plan login. A window the tool
+// gave no percent for is not listed: absent is unknown, never 0. Window is the stable name
+// (five_hour, seven_day, seven_day:<model>) that an account's usage carries; this response
+// keeps its published shape, so it stays out of it.
 type ProviderLimit struct {
+	Window   string     `json:"-"`
 	Label    string     `json:"label"`
 	Percent  float64    `json:"percent"`
 	ResetsAt *time.Time `json:"resets_at,omitempty"`
@@ -56,24 +65,25 @@ type ProviderModel struct {
 // the tool's raw values; Email is masked. A stale snapshot is the last good one, with
 // Error naming the command that failed and what it said.
 type ProviderSnapshot struct {
-	Instance    string          `json:"instance"`
-	Driver      string          `json:"driver"`
-	Default     bool            `json:"default"`
-	ConfigDir   string          `json:"config_dir"`
-	State       string          `json:"state"`
-	Installed   bool            `json:"installed"`
-	Version     string          `json:"version,omitempty"`
-	AuthMethod  string          `json:"auth_method,omitempty"`
-	Plan        string          `json:"plan,omitempty"`
-	Email       string          `json:"email,omitempty"`
-	Limits      []ProviderLimit `json:"limits"`
-	Models      []ProviderModel `json:"models"`
-	Notes       []string        `json:"notes,omitempty"`
-	NextCommand string          `json:"next_command,omitempty"`
-	CheckedAt   time.Time       `json:"checked_at"`
-	Source      string          `json:"source"`
-	Stale       bool            `json:"stale,omitempty"`
-	Error       string          `json:"error,omitempty"`
+	Instance    string                  `json:"instance"`
+	Driver      string                  `json:"driver"`
+	Default     bool                    `json:"default"`
+	ConfigDir   string                  `json:"config_dir"`
+	State       string                  `json:"state"`
+	Installed   bool                    `json:"installed"`
+	Version     string                  `json:"version,omitempty"`
+	AuthMethod  string                  `json:"auth_method,omitempty"`
+	Plan        string                  `json:"plan,omitempty"`
+	Email       string                  `json:"email,omitempty"`
+	Limits      []ProviderLimit         `json:"limits"`
+	Credits     *sessions.AccountCredit `json:"credits,omitempty"`
+	Models      []ProviderModel         `json:"models"`
+	Notes       []string                `json:"notes,omitempty"`
+	NextCommand string                  `json:"next_command,omitempty"`
+	CheckedAt   time.Time               `json:"checked_at"`
+	Source      string                  `json:"source"`
+	Stale       bool                    `json:"stale,omitempty"`
+	Error       string                  `json:"error,omitempty"`
 }
 
 // providerInstance says where and how one instance is probed. err is why its
@@ -160,11 +170,16 @@ func (m *Module) handleProviders(w http.ResponseWriter, r *http.Request, mc api.
 			}
 			tenant = t
 		}
-		if err := audit(r.Context(), mc, "providers", "", nil); err != nil {
-			unavailable(w)
-			return
-		}
 		background := r.URL.Query().Get("background")
+		// A background read returns the shared snapshot and changes nothing, so a console
+		// polling it writes no ledger event. Every other read keeps its audit, including a
+		// read served from the cache and one whose option is rejected below.
+		if background != "true" {
+			if err := audit(r.Context(), mc, "providers", "", nil); err != nil {
+				unavailable(w)
+				return
+			}
+		}
 		if background != "" && background != "true" && background != "false" {
 			fail(w, 400, "bad_request", "background must be true or false.")
 			return
@@ -243,9 +258,18 @@ func (m *Module) providerInstances(ctx context.Context, tenant model.TenantID) (
 	return out, nil
 }
 
-// providerSnapshotRead starts at most one probe per instance per refresh window.
+// providerSnapshotRead starts at most one probe per directory per refresh window.
 // Synchronous callers wait for that probe; background callers get the last answer.
+// An entry is a probe of a directory, not of a reader: the account of a launch on the
+// organization's own login and its `<tool>/olivares` instance share one, so each caller's
+// snapshot is named for that caller (Instance, Default) on the way out, whoever refreshed it.
 func (m *Module) providerSnapshotRead(ctx context.Context, in providerInstance, background bool) (ProviderSnapshot, bool) {
+	named := func(s ProviderSnapshot) ProviderSnapshot {
+		if s.Instance != "" {
+			s.Instance, s.Default = in.id, in.own
+		}
+		return s
+	}
 	key := providerKey(in.driver, in.configDir)
 	m.mu.Lock()
 	if m.providerEntries == nil {
@@ -268,23 +292,30 @@ func (m *Module) providerSnapshotRead(ctx context.Context, in providerInstance, 
 	done, snap := e.done, e.snap
 	m.mu.Unlock()
 	if done == nil {
-		return snap, false
+		return named(snap), false
 	}
 	if background {
-		return snap, true
+		return named(snap), true
 	}
 	select {
 	case <-ctx.Done():
-		return snap, true
+		return named(snap), true
 	case <-done:
 		m.mu.Lock()
 		defer m.mu.Unlock()
-		return e.snap, false
+		return named(e.snap), false
 	}
 }
 
 func (m *Module) refreshProvider(in providerInstance, e *providerEntry) {
 	defer m.wg.Done()
+	if m.probeSlots != nil {
+		select {
+		case m.probeSlots <- struct{}{}:
+			defer func() { <-m.probeSlots }()
+		case <-m.ctx.Done():
+		}
+	}
 	ctx, cancel := context.WithTimeout(m.ctx, providerProbeTimeout)
 	defer cancel()
 	snap, err := m.probeProvider(ctx, in)
@@ -325,4 +356,33 @@ func (m *Module) LimitResetsAt(ctx context.Context, tenant model.TenantID, insta
 		}
 	}
 	return latest, !latest.IsZero()
+}
+
+// AccountUsage is the usage windows of one provider account's own home, as its tool last
+// reported them (the sessions module's account read). It shares the instance cache with the
+// tenant's login when both name one directory, so a read starts at most one probe per
+// refresh window. Without wait a cold account answers nothing now and a probe starts for
+// the next read. Only Claude Code and Codex report plan windows; any other tool, an
+// account not signed in, and an answer the tool did not give return nil: unknown.
+func (m *Module) AccountUsage(ctx context.Context, tenant model.TenantID, driver, accountRef string, wait bool) []sessions.AccountUsage {
+	if driver != "claude" && driver != "codex" {
+		return nil
+	}
+	env, configDir, err := m.toolEnv(ctx, tenant, driver, accountRef)
+	if err != nil {
+		return nil
+	}
+	snap, _ := m.providerSnapshotRead(ctx, providerInstance{id: accountRef, driver: driver, configDir: configDir, env: env}, !wait)
+	// A refresh that failed keeps the last answer with its error: that is no report, so unknown.
+	if snap.State != stateReady || snap.Error != "" {
+		return nil
+	}
+	out := make([]sessions.AccountUsage, 0, len(snap.Limits))
+	for _, l := range snap.Limits {
+		out = append(out, sessions.AccountUsage{Window: l.Window, Label: l.Label, Utilization: l.Percent, ResetsAt: l.ResetsAt, ObservedAt: snap.CheckedAt})
+	}
+	if snap.Credits != nil {
+		out = append(out, sessions.AccountUsage{Window: "credits", Label: "Credits", Credit: snap.Credits, ObservedAt: snap.CheckedAt})
+	}
+	return out
 }

@@ -15,13 +15,18 @@ import (
 type Effect string
 
 const (
-	EffectPush        Effect = "push"
-	EffectPullRequest Effect = "pull_request"
-	EffectMerge       Effect = "merge"
+	EffectPush         Effect = "push"
+	EffectPullRequest  Effect = "pull_request"
+	EffectMerge        Effect = "merge"
+	EffectIssueComment Effect = "issue_comment"
+	// EffectIssueCommentObserve is read-only comment reconciliation.
+	EffectIssueCommentObserve Effect = "issue_comment_observe"
 	// EffectObserve is read-only reconciliation and preflight.
 	EffectObserve Effect = "observe"
 	// EffectRead is a session's clone and fetch: contents:read only.
 	EffectRead Effect = "read"
+	// EffectItemRead reads one issue or pull request: issues and pull_requests, read only.
+	EffectItemRead Effect = "item_read"
 )
 
 // Class is the classification of one host WRITE.
@@ -68,6 +73,9 @@ var (
 	ErrEndpoint = errors.New("gitpublish: endpoint not allowed")
 	// ErrNotSupported: the host offers no such read.
 	ErrNotSupported = errors.New("gitpublish: not supported by this host")
+	// ErrItemNotFound: the repository has no such issue or pull request, or the
+	// credential cannot see it.
+	ErrItemNotFound = errors.New("gitpublish: issue or pull request not found")
 )
 
 // HostError carries ONLY bounded fields from a host response: the status, a
@@ -206,6 +214,20 @@ type Change struct {
 type ChangeSpec struct {
 	Head, Base, Title, Body string
 	Draft                   bool
+}
+
+// Comment is an issue comment (GitHub) or issue note (GitLab).
+type Comment struct {
+	ID        string
+	URL       string
+	Body      string
+	CreatedAt time.Time
+}
+
+// CommentSpec is one issue-comment create request.
+type CommentSpec struct {
+	Number int
+	Body   string
 }
 
 // MergeOutcome is what a successful merge reported.

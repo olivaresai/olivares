@@ -1,0 +1,33 @@
+{
+  "title": "Usage and cost, by account",
+  "subtitle": "Official 5-hour and weekly limits beside today's tokens and cost.",
+  "windows": {
+    "fiveHour": "5-hour",
+    "week": "weekly"
+  },
+  "accounts": {
+    "heading": "Accounts",
+    "loading": "Reading each tool's accounts…",
+    "error": "The accounts' limits could not be read.",
+    "empty": "No account has reported its limits yet.",
+    "resets": "resets {{when}}",
+    "stale": "last read {{at}}",
+    "details": "Details",
+    "detailsFor": "Details of {{account}}",
+    "adminOnly": "Account limits are shown to a system administrator."
+  },
+  "today": {
+    "heading": "Today",
+    "loading": "Reading today's sessions…",
+    "error": "Today's sessions could not be read.",
+    "sessions_one": "{{count}} session",
+    "sessions_other": "{{count}} sessions",
+    "tokens": "{{input}} input · {{output}} output",
+    "atLeast": "At least",
+    "unpriced_one": "{{count}} session reported no cost.",
+    "unpriced_other": "{{count}} sessions reported no cost.",
+    "untokened_one": "{{count}} session reported no tokens.",
+    "untokened_other": "{{count}} sessions reported no tokens.",
+    "viewSessions": "View sessions"
+  }
+}

@@ -91,7 +91,7 @@ func TestMain(m *testing.M) {
 // execCapableDir devuelve un directorio donde un binario REALMENTE se puede ejecutar, o salta
 // diciendo por que. No es lo mismo que un directorio donde se puede escribir.
 //
-// ⛔ MEDIDO EL 2026-08-19 EN ci-runner-8. Estos casos usaban t.TempDir(), que cae bajo TMPDIR,
+// ⛔ MEDIDO EL 2026-08-19 EN build-host. Estos casos usaban t.TempDir(), que cae bajo TMPDIR,
 // y el paso de CI habia tenido que caer a `_work/_temp` —su diagnostico por candidato lo dice:
 // «candidato /dev/shm: NO EJECUTA (rc=127)»—. Ahi el plugin no arranca, y el test fallo con
 //
@@ -160,7 +160,7 @@ func execCapableDir(t *testing.T) string {
 			// ⛔ Y ATRAVESABLE POR OTRO UID, que es la mitad que faltaba. La sonda de arriba
 			// responde por el usuario ACTUAL; el plugin lo lanza plugjail bajo un uid dedicado
 			// no-root cuando el motor es root, y eso es lo que ocurre en los runners, cuyo
-			// servicio corre con HOME=/root. Medido el 2026-08-19 en ci-runner-7: este helper
+			// servicio corre con HOME=/root. Medido el 2026-08-19 en build-host: este helper
 			// elegia t.TempDir(), que cuelga de /home/runner en 0700, la sonda pasaba —somos el
 			// dueno— y el plugin no arrancaba. Es el mismo hueco que scripts/lib/exec-workdir.sh
 			// ya tenia cerrado; lo cerre alli y no aqui.

@@ -84,7 +84,7 @@ func SessionPresetDecision(preset, mode string) (string, error) {
 		if mode != "read" && mode != "write" {
 			return claude.DecisionAsk, nil
 		}
-	case sessions.PresetCustom, sessions.PresetEditsAndCommands, sessions.PresetFull:
+	case sessions.PresetCustom, sessions.PresetEditsAndCommands, sessions.PresetAuto, sessions.PresetFull:
 	default:
 		return "", auth.ErrUnauthenticated
 	}

@@ -254,5 +254,8 @@ else
 fi
 
 echo ""
+python3 scripts/test-qemu-image-pin.py
+check "privileged QEMU image is pinned in every release path" "image digest" $?
+
 echo "release wiring battery: $pass passed, $fail failed"
 [ "$fail" -eq 0 ] || exit 1

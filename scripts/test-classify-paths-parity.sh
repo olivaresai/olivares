@@ -38,7 +38,7 @@ jobs:
     steps:
       - run: |
           case "$f" in
-          design/audits/* | docs/ai-context/* | ESTADO-PROYECTO.md) ;;
+          private/notes/* | docs/ai-context/* | ESTADO-PROYECTO.md) ;;
           *) journal_only=false; break ;;
           esac
   secrets:
@@ -80,6 +80,12 @@ check "(1) inspectable workflow without path filters -> 0" 0 "$(corre "$TMP/ok.y
 check "(1b) names coverage, not list equality" 0 \
 	"$(grep -q 'main-push eligible' "$TMP/out" && grep -q 'no path filter' "$TMP/out" && ! grep -q 'dicen lo mismo' "$TMP/out"; echo $?)"
 
+# Dispatch-only retains the classifier and secrets independence checks.
+sed '/^  push:$/,+1d' "$TMP/ok.yml" >"$TMP/manual.yml"
+check "manual-only workflow -> 0" 0 "$(corre "$TMP/manual.yml")"
+sed '/^  secrets:$/a\    needs: [classify]' "$TMP/manual.yml" >"$TMP/manual-coupled.yml"
+check "manual-only cannot couple secrets to classify" 1 "$(corre "$TMP/manual-coupled.yml")"
+
 # Harmless comments and blank lines must not change a supported verdict.
 python3 - "$TMP/ok.yml" "$TMP/comments.yml" <<'PY'
 import sys
@@ -103,7 +109,7 @@ jobs:
     steps:
       - run: |
           case "$f" in
-          design/audits/*) ;;
+          private/notes/*) ;;
           *) journal_only=false; break ;;
           esac
   secrets:
@@ -123,17 +129,23 @@ cls() {
 	python3 "$HELPER" classify "$REAL" "$@"
 	echo $?
 }
-check "(5) session-only main push is eligible" 0 \
+check "(5) session-only main push is ineligible" 0 \
 	"$(out=$(python3 "$HELPER" eligible "$REAL" main sessions/status/inbox/a.md); echo $?; printf '%s' "$out" >"$TMP/e")"
-check "(5b) session-only says yes" yes "$(cat "$TMP/e")"
-check "(6) code-only main push is eligible" yes \
+check "(5b) session-only says no" no "$(cat "$TMP/e")"
+check "(6) code-only main push is ineligible" no \
 	"$(python3 "$HELPER" eligible "$REAL" main core/internal/store/sqlstore/store.go)"
-check "(7) the former journal paths are eligible" yes \
-	"$(python3 "$HELPER" eligible "$REAL" main design/audits/x.md docs/ai-context/example.md ESTADO-PROYECTO.md)"
-# The classifier exempts no path any more: the journal exemptions held only while the pre-push
-# hook ran their readers on every push.
-check "(8) classifier: design/audits is code" code \
-	"$(python3 "$HELPER" classify "$REAL" design/audits/x.md)"
+# The real classifier must exempt no path, including any former journal tree.
+check "(7/8/13) classifier has no journal exemptions" '[]' \
+	"$(python3 - "$HELPER" "$REAL" <<'PYCODE'
+import runpy
+import sys
+helper = runpy.run_path(sys.argv[1])
+doc = helper['_load_path'](sys.argv[2])
+patterns = [helper['extract_journal_patterns'](text)
+            for text in helper['_job_run_texts'](doc['jobs']['classify'])]
+print(next((value for value in patterns if value is not None), None))
+PYCODE
+)"
 check "(9) classifier: docs/ai-context is code" code \
 	"$(python3 "$HELPER" classify "$REAL" docs/ai-context/example.md)"
 check "(10) classifier: ESTADO-PROYECTO.md is code" code \
@@ -142,8 +154,6 @@ check "(11) classifier: sessions are code" code \
 	"$(python3 "$HELPER" classify "$REAL" sessions/foo.md)"
 check "(12) classifier: product code is code" code \
 	"$(python3 "$HELPER" classify "$REAL" core/x.go)"
-check "(13) classifier: mixed journal+code is code" code \
-	"$(python3 "$HELPER" classify "$REAL" design/audits/x.md core/x.go)"
 
 # Reintroduced old filters and every path-filter form -> 1.
 python3 - "$TMP/ok.yml" "$TMP/old-ignore.yml" <<'PY'
@@ -153,7 +163,7 @@ text = open(src, encoding="utf-8").read()
 text = text.replace(
     "    branches: [main]\n",
     "    branches: [main]\n    paths-ignore:\n"
-    "      - 'design/audits/**'\n"
+    "      - 'private/notes/**'\n"
     "      - 'ESTADO-PROYECTO.md'\n"
     "      - 'docs/ai-context/**'\n",
     1,
@@ -163,7 +173,7 @@ PY
 check "(14) reintroduced old paths-ignore -> 1" 1 "$(corre "$TMP/old-ignore.yml")"
 check "(14b) names the filter" 0 "$(grep -q 'paths-ignore' "$TMP/out"; echo $?)"
 check "(14c) old filters skip a docs-only push" no \
-	"$(python3 "$HELPER" eligible "$TMP/old-ignore.yml" main design/audits/x.md)"
+	"$(python3 "$HELPER" eligible "$TMP/old-ignore.yml" main private/notes/x.md)"
 check "(14d) old filters still start a code push" yes \
 	"$(python3 "$HELPER" eligible "$TMP/old-ignore.yml" main core/x.go)"
 
@@ -180,7 +190,7 @@ open(dst, "w", encoding="utf-8").write(text)
 PY
 check "(15) push paths: filter -> 1" 1 "$(corre "$TMP/paths.yml")"
 check "(15b) docs-only would not start under paths:" no \
-	"$(python3 "$HELPER" eligible "$TMP/paths.yml" main design/audits/x.md)"
+	"$(python3 "$HELPER" eligible "$TMP/paths.yml" main private/notes/x.md)"
 
 cat >"$TMP/quoted-ignore.yml" <<'EOF'
 on:
@@ -194,7 +204,7 @@ jobs:
     steps:
       - run: |
           case "$f" in
-          design/audits/*) ;;
+          private/notes/*) ;;
           *) journal_only=false; break ;;
           esac
   secrets:
@@ -216,7 +226,7 @@ jobs:
     steps:
       - run: |
           case "$f" in
-          design/audits/*) ;;
+          private/notes/*) ;;
           *) journal_only=false; break ;;
           esac
   secrets:
@@ -234,7 +244,7 @@ jobs:
     steps:
       - run: |
           case "$f" in
-          design/audits/*) ;;
+          private/notes/*) ;;
           *) journal_only=false; break ;;
           esac
   secrets:
@@ -253,7 +263,7 @@ jobs:
     steps:
       - run: |
           case "$f" in
-          design/audits/*) ;;
+          private/notes/*) ;;
           *) journal_only=false; break ;;
           esac
   secrets:
@@ -542,7 +552,7 @@ text = text.replace(
 open(dst, "w", encoding="utf-8").write(text)
 PY
 NEG_PATHS_RC=0
-python3 "$HELPER" eligible "$TMP/neg-paths.yml" main design/audits/x.md >/dev/null 2>"$TMP/neg-paths.err" || NEG_PATHS_RC=$?
+python3 "$HELPER" eligible "$TMP/neg-paths.yml" main private/notes/x.md >/dev/null 2>"$TMP/neg-paths.err" || NEG_PATHS_RC=$?
 check "(41) eligible negated paths filter -> 2" 2 "$NEG_PATHS_RC"
 
 # A preceding positive match must not hide an unsupported later negation.

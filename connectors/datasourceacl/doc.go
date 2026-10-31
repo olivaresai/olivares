@@ -3,7 +3,7 @@
 
 // Package datasourceacl is the OPEN (Apache-2.0) seam for the enterprise
 // live-ACL-sync and Microsoft Purview sensitivity-label integration add-on
-//. It carries INTERFACES and TYPES only — no implementation.
+// . It carries INTERFACES and TYPES only — no implementation.
 //
 // The enterprise add-on (LicenseRef-Olivares-Commercial, //go:build enterprise,
 // private repo) was to implement LiveACLSyncer and PurviewClassifier against

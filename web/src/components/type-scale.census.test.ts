@@ -225,19 +225,24 @@ describe('the type ladder, across the directories carried to it', () => {
   })
 
   it('offers a step for every role a surface needs to name', () => {
-    // Eleven steps: the seven every surface already names, each at the design value of
-    // its role, plus the four the v26.10 design adds (hero, body-l, mono, mono-s). The
-    // census above is the evidence that they are enough: no exception row.
-    expect(TYPE_SCALE_STEPS).toHaveLength(11)
+    // Thirteen steps: the seven every surface already names, each at the design value of
+    // its role, the four the v26.10 design adds (hero, body-l, mono, mono-s) and the two
+    // metadata sizes below them (#3135; styles/metadata-step.test.ts says where they may
+    // go). The census above is the evidence that they are enough: no exception row.
+    expect(TYPE_SCALE_STEPS).toHaveLength(13)
     expect(DECLARED).toEqual([])
   })
 
-  it('shared state and count labels use the caption step', () => {
-    for (const file of ['status-chip.tsx', 'count-badge.tsx']) {
+  it('shared state labels use the caption step and counters the metadata step', () => {
+    const steps: Record<string, string> = {
+      'status-chip.tsx': 'text-caption',
+      'count-badge.tsx': 'text-metadata-s',
+    }
+    for (const [file, step] of Object.entries(steps)) {
       const source = stripComments(
         readFileSync(join(SRC, 'components/ui', file), 'utf8'),
       )
-      expect(source, file).toContain('text-caption')
+      expect(source, file).toContain(step)
       expect(source, file).not.toMatch(/text-\[\d+(?:px|rem|em)\]/)
     }
   })

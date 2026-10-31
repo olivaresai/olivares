@@ -34,6 +34,8 @@ func newUICmd() *cobra.Command {
 		Long: "Open the main menu: this installation's state, the next step, and the\n" +
 			"commands to start with. It needs a terminal of at least 80 x 24\n" +
 			"and honors NO_COLOR. Every row names the command that does the work.\n" +
+			"Under Security you can approve or reject a request, use Stop all (it asks\n" +
+			"for a reason and the word stop) and read and verify the audit ledger.\n" +
 			"Without a terminal, the frame refuses and names the commands to use.",
 		Example: "  olivares ui",
 		Args:    cobra.NoArgs,
@@ -45,6 +47,7 @@ func newUICmd() *cobra.Command {
 			report := rootStatus(cmd.Context())
 			frame := mainMenuFrame(report)
 			tools := wireToolScreens(&frame, report)
+			wireSecurityScreens(&frame, cmd, tools)
 			if tools != nil {
 				frame.AfterSignal = func() { tools.sayKept(cmd.ErrOrStderr()) }
 			}

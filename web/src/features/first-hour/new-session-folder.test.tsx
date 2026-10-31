@@ -44,6 +44,8 @@ import { providersApi } from '@/features/providers/api'
 import { http } from '@/lib/api'
 import { useTenantStore } from '@/stores/tenant'
 import { StartSessionForm } from './first-hour'
+import { useClientSettings } from '@/features/settings/preferences'
+import { SessionDefaultsSettings } from '@/features/settings/session-defaults-settings'
 
 function wrap(
   ui: ReactNode,
@@ -74,6 +76,7 @@ const REPO = {
 }
 
 beforeEach(() => {
+  useClientSettings.getState().restore()
   vi.restoreAllMocks()
   auth.canReadFolders = true
   workspaces([])
@@ -87,6 +90,65 @@ beforeEach(() => {
   vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(
     readinessOf({ claude: 'own_login' }),
   )
+})
+
+it.each([false, true])(
+  'declares partial default-folder choices only when has_more is %s',
+  async (hasMore) => {
+    vi.spyOn(agentOpsApi, 'listWorkspaces').mockResolvedValue({
+      items: [REPO],
+      has_more: hasMore,
+    } as Awaited<ReturnType<typeof agentOpsApi.listWorkspaces>>)
+    useClientSettings.setState({
+      sessionDefaults: { tool: '', account: '', model: '', folder: 'ws_1' },
+    })
+    wrap(<SessionDefaultsSettings />)
+    await waitFor(() =>
+      expect(
+        screen.getByRole('combobox', { name: 'Default folder' }),
+      ).toHaveTextContent('/srv/work/repo'),
+    )
+    const notice = screen.queryByText(
+      'Registered folders: 1 loaded; there are more.',
+    )
+    if (hasMore) expect(notice).toBeVisible()
+    else expect(notice).toBeNull()
+  },
+)
+
+it('starts in the saved registered folder without a typed path', async () => {
+  runs([])
+  workspaces([REPO])
+  useClientSettings.setState({
+    sessionDefaults: { tool: '', account: '', model: '', folder: 'ws_1' },
+  })
+  wrap(<StartSessionForm />)
+  const start = await screen.findByRole('button', { name: 'Start' })
+  await waitFor(() => expect(start).toBeEnabled())
+  await userEvent.setup().click(start)
+  await waitFor(() => expect(launch.launchSession).toHaveBeenCalled())
+  expect(launch.launchSession.mock.calls[0][0].quick).toMatchObject({
+    folder: REPO.root_path,
+    workspace_ref: 'ws_1',
+  })
+})
+
+it('explains a removed default folder and uses the first available folder', async () => {
+  runs([])
+  workspaces([REPO])
+  useClientSettings.setState({
+    sessionDefaults: { tool: '', account: '', model: '', folder: 'removed' },
+  })
+  wrap(<StartSessionForm />)
+  const start = await screen.findByRole('button', { name: 'Start' })
+  await waitFor(() => expect(start).toBeEnabled())
+  expect(screen.getByText(/saved default.*no longer available/i)).toBeVisible()
+  await userEvent.setup().click(start)
+  await waitFor(() => expect(launch.launchSession).toHaveBeenCalled())
+  expect(launch.launchSession.mock.calls[0][0].quick).toMatchObject({
+    folder: REPO.root_path,
+    workspace_ref: 'ws_1',
+  })
 })
 
 describe('the folder in the New session form', () => {
@@ -219,15 +281,22 @@ describe('the folder in the New session form', () => {
     expect(picker).toHaveFocus()
     expect(picker).toHaveTextContent('/srv/work/repo')
     await user.click(picker)
-    expect(
-      (await screen.findAllByRole('option')).map((o) => o.textContent),
-    ).toEqual([
+    const options = await screen.findAllByRole('option')
+    expect(options.map((o) => o.textContent)).toEqual([
       '/srv/work/repo',
       'payments-api (/srv/work/payments)',
       'A new folder for this session',
       'Another folder…',
     ])
-    await user.click(screen.getByRole('option', { name: /payments-api/ }))
+    for (const option of options.slice(0, 2)) {
+      expect(option.querySelector('[data-slot="path-text"]')).not.toBeNull()
+      // A select option cannot contain another interactive control.
+      expect(option.querySelector('button')).toBeNull()
+    }
+    expect(options[1].querySelector('[data-slot="path-text"]')).toHaveClass(
+      'flex-1',
+    )
+    await user.keyboard('payments-api{Enter}')
     expect(screen.queryByRole('textbox', { name: 'Folder' })).toBeNull()
     // What the list shows is what Start sends.
     expect(screen.getByRole('combobox', { name: 'Folder' })).toHaveTextContent(

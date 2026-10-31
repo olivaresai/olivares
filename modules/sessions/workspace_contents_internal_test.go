@@ -67,10 +67,11 @@ func TestFreshWorkspaceContentsListNoInternalKinds(t *testing.T) {
 	}
 }
 
-// The guard kinds are the module's own counters, epochs and replay tokens.
-// Dropping the flag from one would list its table name in every workspace
-// that has used it; marking any other kind hides its rows from the contents
-// read, so a new Internal kind must be reviewed and added here.
+// The guard kinds are the module's own counters, epochs and replay tokens;
+// the collaboration share and proposal kinds are audited storage no contents
+// read lists. Dropping the flag from one would list its table name in every
+// workspace that has used it; marking any other kind hides its rows from the
+// contents read, so a new Internal kind must be reviewed and added here.
 //
 // ponytail: reads the core and sessions census only, upgrade when another
 // module declares an Internal kind (pin it in that module's own test).
@@ -87,7 +88,10 @@ func TestOnlyGuardKindsAreInternal(t *testing.T) {
 			got[d.Kind] = true
 		}
 	}
-	want := map[model.Kind]bool{communicationGuardKind: true, workGuardKind: true, protocolReplayGuardKind: true}
+	want := map[model.Kind]bool{
+		communicationGuardKind: true, workGuardKind: true, protocolReplayGuardKind: true,
+		"sessions.share": true, "sessions.proposal": true,
+	}
 	if !maps.Equal(got, want) {
 		t.Errorf("internal kinds in the census = %v, want exactly %v", got, want)
 	}

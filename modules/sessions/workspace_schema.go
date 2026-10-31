@@ -37,8 +37,13 @@ const (
 	colWsAllowSubpaths   = "allow_subpaths"    // JSON array of relative subpaths (empty = whole root)
 	colWsReadOnlyFolders = "read_only_folders" // JSON array of additional host folders (empty = none)
 	colWsMaxReadBytes    = "max_read_bytes"
+	colWsBackup          = "backup"
+	colWsDataClass       = "data_class"
 	colWsDLPMode         = "dlp_mode" // label | deny | off
 	colWsState           = "state"    // active | disabled
+	// colWsDefaultPermission is the permission name (permission_modes.go) a session
+	// started in this folder is offered by default; empty means the folder has none.
+	colWsDefaultPermission = "default_permission"
 )
 
 // Mount modes (how the workspace root is bound / what the file API permits).
@@ -92,10 +97,13 @@ func (m *Module) registerWorkspaceSchema(reg store.ExtensionRegistry) error {
 			{Name: colWsContainerTgt, Kind: model.KindText, Nullable: true, Principal: model.None("an absolute in-container mount path: workspace.go:554-558, workspace_dto.go:31")},
 			{Name: colWsAllowSubpaths, Kind: model.KindJSON, Nullable: true, Principal: pdeclWorkspaceSubpaths},
 			{Name: colWsMaxReadBytes, Kind: model.KindInt, Nullable: true},
+			{Name: colWsBackup, Kind: model.KindBool, Nullable: true},
+			{Name: colWsDataClass, Kind: model.KindText, Nullable: true, Principal: model.None("operator-selected folder classification metadata, a closed enum: data_class.go:9-16")},
 			{Name: colWsDLPMode, Kind: model.KindText, Principal: model.None("a DLP read posture, a closed set: workspace.go:551, workspace_schema.go:47-49")},
 			{Name: colWsState, Kind: model.KindText, Indexed: true, Principal: model.None("a workspace state, a closed set: workspace_schema.go:54-55, workspace.go:199")},
 			{Name: colWsReadOnlyFolders, Kind: model.KindJSON, Nullable: true, Principal: model.Nested([]string{}, model.ClassEvidence,
 				model.Leaf("[]", model.None("an administrator-selected canonical host folder: workspace_read_only_folders.go:24-43")))},
+			{Name: colWsDefaultPermission, Kind: model.KindText, Nullable: true, Principal: model.None("a permission name, a closed set: permission_modes.go:84-93, workspace_dto.go:55")},
 			{Name: colWsProjectConfigHash, Kind: model.KindText, Nullable: true, Principal: model.None("SHA-256 of the approved project agent configuration: workspace_project_config.go:482-487")},
 			{Name: colWsProjectConfigActor, Kind: model.KindText, Nullable: true, Principal: pdeclActorRef},
 			{Name: colWsProjectConfigAt, Kind: model.KindText, Nullable: true, Principal: model.None("time the operator approved the project agent configuration: workspace_project_config.go:482-487")},

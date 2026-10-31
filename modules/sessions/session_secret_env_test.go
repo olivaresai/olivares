@@ -19,7 +19,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// 2026-10-01 (design FH 016, approved by Root): a session can use secrets
+// 2026-10-01 (design first-hour check, approved by Root): a session can use secrets
 // from the Olivares vault as environment variables. The person picks secrets by
 // NAME; the value reaches the child's environment and nothing else — not argv,
 // not the folder, not the run row, not the API, not the ledger, not the output
@@ -581,7 +581,7 @@ func TestSecretEnv_TheHookPortReturnsTheMarkerSpans(t *testing.T) {
 	}
 }
 
-// SR2 report159/160, Root's choice: a value (raw or JSON-escaped) that shares text
+// SR2 report159/160, the maintainer's choice: a value (raw or JSON-escaped) that shares text
 // with a marker the run's redactor can write ("[secret <name>]" for every bound name)
 // would reach the output whole, because one pass never scans a marker it wrote. The
 // launch, and a resume that reads a rotated value, refuse before any child starts,

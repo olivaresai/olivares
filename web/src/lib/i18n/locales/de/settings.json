@@ -23,7 +23,10 @@
     "signing": "Berichtssignierung",
     "tracing": "Tracing",
     "sessionIdle": "Sitzungsspeicher",
-    "updates": "Updates"
+    "updates": "Updates",
+    "permissions": "Berechtigungen",
+    "newSessions": "Neue Sitzungen",
+    "notifications": "Benachrichtigungen"
   },
   "general": {
     "title": "Allgemein",
@@ -42,17 +45,26 @@
     "startPageHint": "Was sich nach der Anmeldung öffnet. Standard: Start.",
     "confirmStop": "Vor dem Beenden einer Sitzung bestätigen",
     "confirmStopHint": "Einmal fragen, bevor Stopp eine noch laufende Sitzung beendet.",
+    "editor": "Editor für Dateilinks",
+    "editorHint": "Welchen Editor die Links „Öffnen in“ auf diesem Computer starten. Standard: VS Code.",
+    "editorSsh": "SSH-Host für den Editor",
+    "editorSshHint": "Wie der Editor Sitzungsordner auf einem anderen Rechner erreicht, als user@host oder user@host:port. Leer: die Adresse, unter der diese Konsole läuft; auf diesem Computer ohne SSH.",
     "reduceMotion": "Bewegung reduzieren",
     "reduceMotionHint": "Ersetzt Bewegung durch Überblendungen. An, wenn das System es verlangt."
   },
   "sessionNotifications": {
     "title": "Sitzungsbenachrichtigungen",
-    "hint": "Benachrichtigen, wenn eine Sitzung mich braucht oder fertig ist, während dieser Tab im Hintergrund ist. Gilt für diesen Browser.",
+    "hint": "Über ausgewählte Sitzungsereignisse im Hintergrund informieren. Ihre Auswahl folgt Ihnen; jeder Browser benötigt eine Erlaubnis.",
     "notifyMe": "Benachrichtigen",
     "denied": "Benachrichtigungen sind in diesem Browser blockiert.",
     "unavailable": "Browserbenachrichtigungen sind hier nicht verfügbar.",
     "needsYou": "Diese Sitzung braucht Ihre Entscheidung.",
-    "finished": "Der Durchgang ist abgeschlossen."
+    "finished": "Der Durchgang ist abgeschlossen.",
+    "ended": "Die Sitzung ist beendet.",
+    "failed": "Die Sitzung wurde mit einem Fehler beendet.",
+    "pushOn": "Erreicht dieses Gerät auch bei geschlossenem Tab.",
+    "pushUnavailable": "Nur solange ein Tab offen ist: Dieses Gerät konnte nicht für Push registriert werden.",
+    "installHint": "Benachrichtigungen setzen die App auf dem Home-Bildschirm voraus: „Teilen“ und dann „Zum Home-Bildschirm“ tippen."
   },
   "keyboard": {
     "title": "Tastatur",
@@ -345,5 +357,31 @@
     "switched": "Wechsel installiert.",
     "terminal": "Dasselbe im Terminal auf dem Server",
     "orTerminal": "Oder im Terminal auf dem Server"
+  },
+  "permissions": {
+    "description": "Was ein Agent in einer Sitzung tun darf und was jedes Werkzeug dafür erhält. Dieselben Namen gelten im Formular für neue Sitzungen und in olivares session start --permission.",
+    "caption": "Was jede Berechtigung an jedes Werkzeug übergibt",
+    "permission": "Berechtigung",
+    "what": "Was sie bewirkt",
+    "default": "Standard",
+    "asksInstead": "Kein Automatikmodus: fragt nach, wie bei „{{name}}“",
+    "note": "Bei Werkzeugen außer Claude Code beantwortet Olivares jede Genehmigung, die das Werkzeug anfordert, gemäß der Berechtigung. Ein „ask“ des Werkzeugs in einer Zelle heißt nicht, dass Sie gefragt werden."
+  },
+  "newSessions": {
+    "tool": "Standardwerkzeug",
+    "account": "Standardkonto",
+    "model": "Standardmodell",
+    "folder": "Standardordner",
+    "automatic": "Automatisch",
+    "unavailable": "Nicht mehr verfügbar",
+    "reset": "{{name}} zurücksetzen",
+    "readFailed": "Ihre Auswahl konnte nicht gelesen werden. Öffnen Sie diese Seite erneut.",
+    "fallback": "Eine gespeicherte Vorgabe ist nicht mehr verfügbar. Die erste nutzbare Auswahl wird verwendet.",
+    "scope": "Ihre Vorgaben für neue Sitzungen. Sie werden für Ihr Konto auf diesem Server gespeichert."
+  },
+  "notificationEvents": {
+    "needsYou": "Benötigt Ihre Aufmerksamkeit",
+    "finished": "Abgeschlossen",
+    "failed": "Fehlgeschlagen"
   }
 }

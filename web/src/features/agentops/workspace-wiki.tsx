@@ -24,7 +24,7 @@ import {
   type AuthBoundary,
 } from './auth-boundary'
 import { DEFAULT_PERMISSION, launchSession } from './session-launch'
-import { SESSION_TOOLS, TOOL_NAMES, type SessionTool } from './tool-names'
+import { sessionTools, toolName, type SessionTool } from './engine-tools'
 import { SensitivityBadges } from './workspace-browser'
 import type { WorkspaceDTO } from './types'
 import './i18n'
@@ -143,7 +143,7 @@ function WikiContents({
     enabled: exists && canStart,
     retry: false,
   })
-  const readyTools = SESSION_TOOLS.filter((tool) =>
+  const readyTools = sessionTools().filter((tool) =>
     tools.data?.tools.some((r) => r.driver === tool && r.ready),
   )
   const driver = chosenTool ?? readyTools[0]
@@ -420,13 +420,13 @@ function WikiContents({
                 }
               >
                 {!driver && <option value="">{t('wiki.chooseTool')}</option>}
-                {SESSION_TOOLS.map((tool) => (
+                {sessionTools().map((tool) => (
                   <option
                     key={tool}
                     value={tool}
                     disabled={!readyTools.includes(tool)}
                   >
-                    {TOOL_NAMES[tool]}
+                    {toolName(tool)}
                   </option>
                 ))}
               </select>

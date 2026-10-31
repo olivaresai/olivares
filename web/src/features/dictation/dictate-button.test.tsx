@@ -212,12 +212,56 @@ describe('DictateButton', () => {
     expect(button()).toBeInTheDocument()
   })
 
+  it('stops listening and says why when the recorder fails mid-take', async () => {
+    let interrupt: (error?: Error) => void = () => {}
+    mic.startCapture.mockImplementation(async (onInterrupt) => {
+      interrupt = onInterrupt
+      return capture
+    })
+    render(<DictateButton onText={vi.fn()} />)
+    await userEvent.click(button())
+    expect(status()).toHaveTextContent('Listening')
+    act(() => interrupt(new Error('encoder failed')))
+    expect(button()).toHaveAttribute('aria-pressed', 'false')
+    expect(toasts.error).toHaveBeenCalledWith('Dictation failed. Try again.', {
+      description: 'encoder failed',
+    })
+    expect(asr.transcribe).not.toHaveBeenCalled()
+  })
+
+  it('transcribes what was heard when the browser ends the take itself', async () => {
+    let interrupt: (error?: Error) => void = () => {}
+    mic.startCapture.mockImplementation(async (onInterrupt) => {
+      interrupt = onInterrupt
+      return capture
+    })
+    const onText = vi.fn()
+    render(<DictateButton onText={onText} />)
+    await userEvent.click(button())
+    act(() => interrupt())
+    await waitFor(() => expect(onText).toHaveBeenCalledWith('Hello there.'))
+    expect(capture.stop).toHaveBeenCalledOnce()
+  })
+
   it('frees the microphone when the composer goes away', async () => {
     const view = render(<DictateButton onText={vi.fn()} />)
     await userEvent.click(button())
     expect(status()).toHaveTextContent('Listening')
     view.unmount()
     expect(capture.cancel).toHaveBeenCalledOnce()
+  })
+
+  it('drops decoded audio if the composer leaves while the recorder stops', async () => {
+    const stopped = deferred<Float32Array>()
+    capture.stop.mockReturnValue(stopped.promise)
+    const onText = vi.fn()
+    const view = render(<DictateButton onText={onText} />)
+    await userEvent.click(button())
+    await userEvent.click(button())
+    view.unmount()
+    await act(async () => stopped.resolve(audio))
+    expect(asr.transcribe).not.toHaveBeenCalled()
+    expect(onText).not.toHaveBeenCalled()
   })
 
   it('never opens the microphone when the composer goes away while the model loads', async () => {

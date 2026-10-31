@@ -85,7 +85,13 @@
     "lastSeen": "Last seen",
     "yes": "Yes",
     "no": "No",
-    "minimalData": "Only metadata is shown. By design the engine never carries SQL, payloads or secrets here (minimal-data)."
+    "minimalData": "Only metadata is shown. By design the engine never carries SQL, payloads or secrets here (minimal-data).",
+    "open": {
+      "session": "Open session",
+      "agent": "Open agents",
+      "nhiRoster": "Open identities"
+    },
+    "expandLimit": "This map already shows {{n}} expanded nodes. Go Back or Refresh to start over."
   },
   "authority": {
     "title": "Authority & next step",
@@ -190,5 +196,12 @@
     },
     "analyse": "Analyse attack paths (audited)",
     "truncated": "The engine capped this analysis, so the paths shown are not the whole answer."
+  },
+  "expand": {
+    "partial": "Some expanded nodes could not be read, so the map is incomplete.",
+    "retry": "Retry"
+  },
+  "graph": {
+    "keyboardHint": "Focus a node, then use the arrow keys to move to a connected node and Enter to open it. The list below the graph does the same without the canvas."
   }
 }

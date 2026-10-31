@@ -17,6 +17,7 @@ import {
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { fakeRouter } from '@/test/fake-router'
+import { openWorkingFold } from '@/test/open-working-fold'
 import {
   createSessionRowLocator,
   sessAddress,
@@ -377,6 +378,7 @@ describe('a RETIRED address that comes back through Back', () => {
     renderView(makeClient(), false)
     let row: HTMLElement | null = null
     await waitFor(() => {
+      openWorkingFold()
       row = screen
         .getByTestId('work-rail')
         .querySelector('[data-address="sess:rev-a"]') as HTMLElement | null
@@ -393,6 +395,7 @@ describe('a RETIRED address that comes back through Back', () => {
     const railRow = async (address: string) => {
       let el: HTMLElement | null = null
       await waitFor(() => {
+        openWorkingFold()
         el = screen
           .getByTestId('work-rail')
           .querySelector(`[data-address="${address}"]`) as HTMLElement | null
@@ -455,11 +458,15 @@ describe('opening the session that is beside', () => {
     fakeRouter.reset(BESIDE_URL)
     renderView(undefined, false)
     await screen.findByRole('region', { name: 'Session beside' })
-    const option = document.querySelector(
-      `[role="option"][data-address="${B_ADDRESS}"]`,
-    ) as HTMLElement
-    expect(option).not.toBeNull()
-    await user.click(option)
+    let option: HTMLElement | null = null
+    await waitFor(() => {
+      openWorkingFold()
+      option = document.querySelector(
+        `[role="option"][data-address="${B_ADDRESS}"]`,
+      ) as HTMLElement | null
+      expect(option).not.toBeNull()
+    })
+    await user.click(option as unknown as HTMLElement)
     // The old URL kept `pane=beside` with no `beside`: the decoder refuses that pair,
     // so the person saw a "link partly ignored" notice for a click they made.
     await waitFor(() =>

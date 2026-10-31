@@ -331,7 +331,7 @@ func newHarnessWithBus(t *testing.T, bus eventbus.Bus, wrap func(api.SessionReco
 }
 
 // stepUp elevates a session token to AAL3 through the real elevation path
-//: the e2e operators act over step-up-verified sessions like a
+// : the e2e operators act over step-up-verified sessions like a
 // production human would after the WebAuthn/PIV ceremony.
 func (h *harness) stepUp(token string) {
 	h.t.Helper()
@@ -502,7 +502,7 @@ func (h *harness) waitForGraph(tenant string) {
 	h.t.Helper()
 	// Wait for delivery to finish instead of guessing how long it takes: the
 	// read-model polls below assert the end state the handlers produce, not the
-	// timing of the async pipeline (dev#2592: a fixed 10s grace period expired on
+	// timing of the async pipeline (the regression: a fixed 10s grace period expired on
 	// a loaded CI host while every event was still in flight or queued).
 	h.waitForBusDrain()
 	h.eventually("estate settled (access graph + inventory catalog)", 10*time.Second, func() error {

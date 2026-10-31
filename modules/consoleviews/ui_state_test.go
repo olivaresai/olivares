@@ -5,9 +5,52 @@
 package consoleviews_test
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"testing"
+
+	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/consoleviews"
 )
+
+func TestSessionNotificationChoicesBelongToTheUser(t *testing.T) {
+	h := newHarness(t)
+	root := h.rootLogin()
+	tenant := h.createOrg(root, "notification-choices")
+	owner := model.NewID().String()
+	ctx := context.Background()
+	settings, _ := json.Marshal(map[string]any{"state": map[string]any{"notificationEvents": map[string]bool{"needsYou": true, "finished": false, "failed": true}}})
+	params, _ := json.Marshal(map[string]any{"preferences": map[string]string{"olivares.settings": string(settings)}})
+	if err := h.st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(consoleviews.SavedViewKind)
+		if err != nil {
+			return err
+		}
+		_, err = repo.Create(ctx, model.Record{"owner": "user:" + owner, "feature_id": "ui-state", "name": "ui-state", "params": string(params), "shared": false})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		user, kind string
+		want       bool
+	}{
+		{owner, "approval", true}, {owner, "finished", false}, {owner, "failed", true}, {model.NewID().String(), "finished", true},
+	} {
+		err := h.st.View(ctx, tenant, func(sc store.Scope) error {
+			allowed, err := consoleviews.SessionNotificationAllowed(ctx, sc, tc.user, tc.kind)
+			if err == nil && allowed != tc.want {
+				t.Errorf("%s: allowed=%v want=%v", tc.kind, allowed, tc.want)
+			}
+			return err
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
 
 // TestUIStateFollowsTheUser: the console's interface state (today the sidebar width) is the
 // caller's own, kept beside their favorites; every signed-in role keeps its own, another user
@@ -234,5 +277,38 @@ func TestUIStatePaneWidthsLastResetAndMixedSave(t *testing.T) {
 	r = h.do("GET", path, alice, nil, ten)
 	if w, _ := r.body["pane_widths"].(map[string]any); r.body["sidebar"] != "rail" || w["side-panel"] != float64(500) {
 		t.Fatalf("mixed save read back: %s", r.raw)
+	}
+}
+
+func TestUIStatePreferences(t *testing.T) {
+	h := newHarness(t)
+	root := h.rootLogin()
+	ten := h.createOrg(root, "prefs")
+	alice := h.roleToken(root, ten, "alice@prefs.io", "viewer")
+	bob := h.roleToken(root, ten, "bob@prefs.io", "viewer")
+	path := "/v1/m/consoleviews/ui-state"
+	put := func(body map[string]any) {
+		t.Helper()
+		r := h.do("PUT", path, alice, body, ten)
+		if r.code != http.StatusOK {
+			t.Fatalf("save = %d %s", r.code, r.raw)
+		}
+	}
+	put(map[string]any{"preferences": map[string]any{"olivares.lang": "es", "olivares.settings": "clock"}})
+	put(map[string]any{"sidebar": "rail"})
+	put(map[string]any{"preferences": map[string]any{"olivares.lang": nil}})
+	r := h.do("GET", path, alice, nil, ten)
+	prefs, ok := r.body["preferences"].(map[string]any)
+	if !ok || prefs["olivares.settings"] != "clock" || prefs["olivares.lang"] != nil {
+		t.Fatalf("preferences = %s", r.raw)
+	}
+	if other := h.do("GET", path, bob, nil, ten); other.body["preferences"] != nil {
+		t.Fatalf("another user sees %s", other.raw)
+	}
+	for _, name := range []string{"olivares.session", "arbitrary"} {
+		r := h.do("PUT", path, alice, map[string]any{"preferences": map[string]any{name: "secret"}}, ten)
+		if r.code != http.StatusBadRequest {
+			t.Fatalf("unknown preference %s = %d", name, r.code)
+		}
 	}
 }

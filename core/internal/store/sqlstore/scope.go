@@ -471,13 +471,19 @@ func (sc *tenantScope) Org(ctx context.Context) (model.Org, error) {
 // updated row. It reads the org (id == tenant id), swaps Settings, and updates
 // through the same optimistic-concurrency path as any other row, so it cannot
 // reach another tenant and respects the single-writer discipline.
-func (sc *tenantScope) SetOrgSettings(ctx context.Context, settings map[string]any) (model.Org, error) {
+func (sc *tenantScope) SetOrgSettings(ctx context.Context, settings map[string]any, expectedVersion ...int64) (model.Org, error) {
 	if sc.readOnly {
 		return model.Org{}, store.ErrReadOnly
 	}
 	org, err := sc.Org(ctx)
 	if err != nil {
 		return model.Org{}, err
+	}
+	if len(expectedVersion) > 1 {
+		return model.Org{}, store.ErrConflict
+	}
+	if len(expectedVersion) == 1 && org.Version != expectedVersion[0] {
+		return model.Org{}, store.ErrConflict
 	}
 	org.Settings = settings
 	rec, err := orgCodec.Encode(org)

@@ -70,7 +70,7 @@ async function entrar(page: import('@playwright/test').Page) {
   // name is exact because neighbouring entries contain it.
   await expect(
     page
-      .getByRole('navigation', { name: 'Journeys', exact: true })
+      .getByRole('navigation', { name: 'Main navigation', exact: true })
       .getByRole('link', { name: 'Now', exact: true }),
   ).toBeVisible({
     timeout: 15_000,

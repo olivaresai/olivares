@@ -2,13 +2,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repo root.
 //
-// HU2-21: the read-only folders of a Sessions workspace, in the workspace's own sheet. The list
+// acceptance: the read-only folders of a Sessions workspace, in the workspace's own sheet. The list
 // is the engine's: read fresh, replaced whole by PATCH, then read again.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fakeRouter } from '@/test/fake-router'
 import type { WorkspaceDTO } from './types'
+
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 
 vi.mock('@/components/ui/toaster', () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
@@ -69,8 +74,9 @@ async function openWorkspace() {
   return { user, sheet }
 }
 
-describe('read-only folders of a workspace (HU2-21)', () => {
+describe('read-only folders of a workspace', () => {
   beforeEach(() => {
+    fakeRouter.reset('/workspaces')
     vi.clearAllMocks()
     auth.admin = true
     api.listWorkspaces.mockResolvedValue({

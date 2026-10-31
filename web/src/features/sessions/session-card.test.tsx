@@ -644,6 +644,11 @@ describe('SessionCard — control is what can be done, not what fits', () => {
       has_more: false,
     })
     vi.mocked(agentOpsApi.getRun).mockResolvedValue(neverStarted)
+    // The engine answers a release with the released run.
+    vi.mocked(agentOpsApi.cleanup).mockResolvedValue({
+      ...neverStarted,
+      state: 'cleaned',
+    })
     renderCard({ runRef: 'run-1' })
 
     expect(
@@ -745,7 +750,7 @@ describe('SessionCard — a scoped row is named by its live_ref', () => {
     expect(screen.getAllByText('Managed by Olivares').length).toBeGreaterThan(0)
     // Never by the provider's id, which two homes may share; only by the ids the plane
     // mints for this run, where its hook calls and turn usage are written (HU-R24),
-    // and through the filtered list, which answers 200 when there is no row yet (FH 057).
+    // and through the filtered list, which answers 200 when there is no row yet (first-hour check).
     expect(vi.mocked(sessionsApi.liveOne)).not.toHaveBeenCalled()
     await waitFor(() =>
       expect(
@@ -785,7 +790,7 @@ describe('SessionCard — a scoped row is named by its live_ref', () => {
     expect(await screen.findByText('Full control')).toBeInTheDocument()
     // Never by the provider's id, which two homes may share; only by the ids the plane
     // mints for this run, where its hook calls and turn usage are written (HU-R24),
-    // and through the filtered list, which answers 200 when there is no row yet (FH 057).
+    // and through the filtered list, which answers 200 when there is no row yet (first-hour check).
     expect(vi.mocked(sessionsApi.liveOne)).not.toHaveBeenCalled()
     await waitFor(() =>
       expect(

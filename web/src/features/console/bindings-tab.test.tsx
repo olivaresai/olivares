@@ -18,6 +18,7 @@ const { api, authState, navigate } = vi.hoisted(() => ({
     listPostureRequests: vi.fn(),
     listGuardPostures: vi.fn(),
     approvePostureRequest: vi.fn(),
+    approveAccessRequest: vi.fn(),
     rejectPostureRequest: vi.fn(),
     listWorkspaces: vi.fn(),
     listAgentGroups: vi.fn(),
@@ -219,6 +220,88 @@ describe('BindingsTab', () => {
     expect(screen.queryByText(/binding updated/i)).not.toBeInTheDocument()
   })
 
+  it('preserves the exact expiry when editing other binding fields', async () => {
+    const expiresAt = '2026-12-31T12:34:56.789Z'
+    api.listBindings.mockResolvedValue({
+      items: [
+        {
+          id: 'b1',
+          source_type: 'mcp',
+          source_ref: 'kb-prod',
+          scope_tree: 'session',
+          scope_ref: 'sess-1',
+          effect: 'allow',
+          enabled: true,
+          expires_at: expiresAt,
+        },
+      ],
+      has_more: false,
+    })
+    api.updateBinding.mockResolvedValue({
+      kind: 'binding',
+      status: 200,
+      binding: {
+        id: 'b1',
+        source_type: 'mcp',
+        source_ref: 'kb-prod',
+        scope_tree: 'session',
+        scope_ref: 'sess-1',
+        enabled: true,
+        expires_at: expiresAt,
+      },
+    })
+    const user = userEvent.setup()
+    wrap(<BindingsTab />)
+    await user.type(screen.getByLabelText(/source reference/i), 'kb-prod')
+    const row = (await screen.findAllByText('sess-1'))[0].closest('tr')!
+    await user.click(within(row).getByRole('button', { name: /edit/i }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(
+      within(dialog).getByRole('button', { name: /save binding/i }),
+    )
+
+    await waitFor(() =>
+      expect(api.updateBinding).toHaveBeenCalledWith(
+        'b1',
+        expect.objectContaining({ expires_at: expiresAt }),
+      ),
+    )
+  })
+
+  it('shows an existing expiry in the viewer local time', async () => {
+    const offset = vi
+      .spyOn(Date.prototype, 'getTimezoneOffset')
+      .mockReturnValue(-120)
+    try {
+      api.listBindings.mockResolvedValue({
+        items: [
+          {
+            id: 'b1',
+            source_type: 'mcp',
+            source_ref: 'kb-prod',
+            scope_tree: 'session',
+            scope_ref: 'sess-1',
+            effect: 'allow',
+            enabled: true,
+            expires_at: '2026-12-31T12:34:56Z',
+          },
+        ],
+        has_more: false,
+      })
+      const user = userEvent.setup()
+      wrap(<BindingsTab />)
+      await user.type(screen.getByLabelText(/source reference/i), 'kb-prod')
+      const row = (await screen.findAllByText('sess-1'))[0].closest('tr')!
+      await user.click(within(row).getByRole('button', { name: /edit/i }))
+      const dialog = await screen.findByRole('dialog')
+      expect(within(dialog).getByLabelText(/expires/i)).toHaveValue(
+        '2026-12-31T14:34',
+      )
+    } finally {
+      offset.mockRestore()
+    }
+  })
+
   it('deletes a binding through the delete wrapper', async () => {
     api.listBindings.mockResolvedValue({
       items: [
@@ -278,6 +361,41 @@ describe('BindingsTab', () => {
     await waitFor(() =>
       expect(api.approvePostureRequest).toHaveBeenCalledWith('pr1'),
     )
+  })
+
+  it('approves an access request through the department-safe route', async () => {
+    api.listPostureRequests.mockResolvedValue({
+      items: [
+        {
+          id: 'ar1',
+          source_type: 'profile',
+          source_ref: 'ppf_x',
+          op: 'access_request',
+          reason: 'self-service access request',
+          proposer: 'alice',
+          status: 'pending',
+        },
+      ],
+      has_more: false,
+    })
+    api.approveAccessRequest.mockResolvedValue({
+      id: 'ar1',
+      source_type: 'profile',
+      source_ref: 'ppf_x',
+      op: 'access_request',
+      status: 'approved',
+    })
+    const user = userEvent.setup()
+    wrap(<BindingsTab />)
+    await user.type(screen.getByLabelText(/source reference/i), 'ppf_x')
+    const queueRow = (
+      await screen.findByText(/self-service access request/i)
+    ).closest('tr')!
+    await user.click(within(queueRow).getByRole('button', { name: /approve/i }))
+    await waitFor(() =>
+      expect(api.approveAccessRequest).toHaveBeenCalledWith('ar1'),
+    )
+    expect(api.approvePostureRequest).not.toHaveBeenCalled()
   })
 })
 

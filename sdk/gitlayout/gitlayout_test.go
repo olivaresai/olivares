@@ -205,6 +205,36 @@ func TestReadRefusesWhatIsNotGitsOwn(t *testing.T) {
 			write(t, filepath.Join(f.wt, ".git"), "gitdir: "+fake+"\n")
 			return f.wt
 		},
+		// The folder sits at <common>/worktrees/<id> and names itself as its
+		// entry: every file git checks is one the session wrote, and the
+		// common directory it claims is the folder's grandparent.
+		"the folder named as its own entry": func(t *testing.T, f fixture) string {
+			folder := filepath.Join(f.root, "claimed", "worktrees", "wt")
+			write(t, filepath.Join(folder, ".git"), "gitdir: .\n")
+			write(t, filepath.Join(folder, "commondir"), "../..\n")
+			write(t, filepath.Join(folder, "gitdir"), filepath.Join(folder, ".git")+"\n")
+			return folder
+		},
+		// The entry sits in an ancestor of the folder: the folder is a child of
+		// the directory that plays the entry, so again every file is the
+		// session's own and the claimed common directory is not a repository.
+		"an entry in an ancestor of the folder": func(t *testing.T, f fixture) string {
+			entry := filepath.Join(f.root, "claimed", "worktrees", "wt")
+			folder := filepath.Join(entry, "sub")
+			write(t, filepath.Join(entry, "commondir"), "../..\n")
+			write(t, filepath.Join(entry, "gitdir"), filepath.Join(folder, ".git")+"\n")
+			write(t, filepath.Join(folder, ".git"), "gitdir: "+entry+"\n")
+			return folder
+		},
+		// A folder that is itself named worktrees names its child as the entry.
+		"an entry inside a folder named worktrees": func(t *testing.T, f fixture) string {
+			folder := filepath.Join(f.root, "claimed", "worktrees")
+			entry := filepath.Join(folder, "wt")
+			write(t, filepath.Join(entry, "commondir"), "../..\n")
+			write(t, filepath.Join(entry, "gitdir"), filepath.Join(folder, ".git")+"\n")
+			write(t, filepath.Join(folder, ".git"), "gitdir: "+entry+"\n")
+			return folder
+		},
 		"an entry without commondir": func(t *testing.T, f fixture) string {
 			if err := os.Remove(filepath.Join(f.entry, "commondir")); err != nil {
 				t.Fatal(err)

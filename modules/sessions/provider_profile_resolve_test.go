@@ -23,7 +23,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// Root, 2026-10-01 (HU 030, FH 025/026/028): "which profile does a new session use"
+// Root, 2026-10-01 (acceptance, first-hour check/026/028): "which profile does a new session use"
 // was web code in the console and a different rule in the CLI, so the CLI said
 // "Not logged in" where the console worked. It is ONE engine rule now:
 // POST /v1/m/sessions/provider-profiles/resolve.
@@ -128,7 +128,7 @@ func TestResolve_RefusalSentenceNamesTheToolAndItsKey(t *testing.T) {
 		err.Error() != "Install Codex first, under AI tools." {
 		t.Errorf("not installed: %v", err)
 	}
-	if _, err := m.ResolveProfile(context.Background(), tenant, "cursor"); statusOf(err) != http.StatusBadRequest {
+	if _, err := m.ResolveProfile(context.Background(), tenant, "nonesuch"); statusOf(err) != http.StatusBadRequest {
 		t.Errorf("unknown driver: %v, want 400", err)
 	}
 	t.Run("incompatible_key_is_not_a_missing_provider", func(t *testing.T) {
@@ -320,7 +320,7 @@ func TestResolve_ConcurrentResolvesLeaveOneProfile(t *testing.T) {
 	}
 }
 
-// The shape CLX's CLI reads (FH 026): the profile object, the reason, the provider
+// The shape CLX's CLI reads (first-hour check): the profile object, the reason, the provider
 // for a key, created; a refusal is 409 with the module's error body.
 func TestResolve_HTTPShape(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
@@ -427,7 +427,7 @@ func TestResolve_NeverLaunchedKeyPreviewsModelChoiceWithoutWritingOrProbing(t *t
 	}
 }
 
-// Root on FH 036: the own login is the tenant's, in the home the product made for it
+// Root on first-hour check: the own login is the tenant's, in the home the product made for it
 // (<tool-logins>/<tenant>/<driver>), never the engine user's ~/.claude. Two tenants
 // get two homes.
 func TestResolve_TheOwnLoginIsTheTenantsOwnHome(t *testing.T) {
@@ -454,7 +454,7 @@ func TestResolve_TheOwnLoginIsTheTenantsOwnHome(t *testing.T) {
 	}
 }
 
-// Root on FH 036: a profile made before (its configuration home is the engine user's
+// Root on first-hour check: a profile made before (its configuration home is the engine user's
 // own ~/.claude) is never the resolve's answer, is shown as such, and is not launched.
 func TestAProfileOnTheServerUserLoginIsShownAndNotUsed(t *testing.T) {
 	m, tenant, stub := resolveHarness(t)
@@ -480,6 +480,42 @@ func TestAProfileOnTheServerUserLoginIsShownAndNotUsed(t *testing.T) {
 	if err := m.resolveLaunchProfileInto(context.Background(), tenant, &p); statusOf(err) != http.StatusConflict ||
 		err.Error() != serverUserLoginSentence {
 		t.Fatalf("launch on it = %v, want 409 %q", err, serverUserLoginSentence)
+	}
+}
+
+// Cursor also stores its credential below HOME, so a profile whose UserHome is the
+// engine user's HOME is a server-user login even when CURSOR_CONFIG_DIR points elsewhere.
+func TestCursorProfileOnTheServerUsersHomeIsShownAndNotUsed(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		alias bool
+	}{{"direct", false}, {"symlink alias", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			home := t.TempDir()
+			if tc.alias {
+				alias := filepath.Join(t.TempDir(), "engine-home")
+				if err := os.Symlink(home, alias); err != nil {
+					t.Fatal(err)
+				}
+				home = alias
+			}
+			t.Setenv("HOME", home)
+			m, _, tenant, _ := newRuntimeHarness(t, WithProviderSecretVault(newFakeVault()), WithProviderDriver(NewCursorDriver()))
+			m.UseExecutionEnvironmentRef(testEnvRef)
+			old, err := m.CreateProfile(context.Background(), tenant, CreateProfileInput{
+				Driver: "cursor", AuthSource: AuthSourceAccountHome, ConfigHome: t.TempDir(), UserHome: home,
+			})
+			if err != nil {
+				t.Fatalf("the earlier profile: %v", err)
+			}
+			if !m.toProfileDTO(old).ServerUserLogin {
+				t.Fatal("the Cursor profile on the server user's HOME is not marked")
+			}
+			_, err = m.snapshotForLaunch(tenant, old, m.ExecutionEnvironmentRef())
+			if statusOf(err) != http.StatusConflict || err.Error() != serverUserLoginSentence {
+				t.Fatalf("launch on it = %v, want 409 %q", err, serverUserLoginSentence)
+			}
+		})
 	}
 }
 
@@ -618,5 +654,75 @@ func TestResolve_PreviewNamesTheProfileALaunchReuses(t *testing.T) {
 		if tool.Driver == "claude" && (!tool.Ready || tool.Reason != ResolveOwnLogin) {
 			t.Fatalf("claude readiness without an environment = %+v, want ready on its own login", tool)
 		}
+	}
+}
+
+// Cursor keeps its login under HOME (<HOME>/.config/cursor), not under CURSOR_CONFIG_DIR, so a
+// session on the tenant's own login must run with the login's HOME: with any other it finds no
+// login and the CLI answers that it must sign in (found running a Cursor session on a login made
+// through Olivares). OpenCode, whose login also lives under HOME, has the same rule.
+func TestResolve_CursorOwnLoginRunsInTheHomeTheSignInWrote(t *testing.T) {
+	m, tenant, stub := resolveHarness(t)
+	stub.installed["cursor"], stub.signedIn["cursor"] = true, true
+	got, err := m.ResolveProfile(context.Background(), tenant, "cursor")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	home, configDir, ok := ToolLoginHome(m.toolLoginsRoot, tenant, "cursor")
+	if !ok {
+		t.Fatal("cursor has no login home")
+	}
+	if got.Reason != ResolveOwnLogin || got.Profile.UserHome != home || got.Profile.ConfigHome != configDir {
+		t.Fatalf("profile homes = user %q config %q (reason %s), want the sign-in's HOME %q and %q", got.Profile.UserHome, got.Profile.ConfigHome, got.Reason, home, configDir)
+	}
+	// A tool whose login lives in its configuration directory keeps the profile's own HOME.
+	stub.signedIn["claude"] = true
+	claude, err := m.ResolveProfile(context.Background(), tenant, "claude")
+	if err != nil {
+		t.Fatalf("resolve claude: %v", err)
+	}
+	if claudeHome, _, _ := ToolLoginHome(m.toolLoginsRoot, tenant, "claude"); claude.Profile.UserHome == claudeHome {
+		t.Fatalf("claude's profile HOME became the login home %q", claudeHome)
+	}
+}
+
+func TestDefaultToolLoginHome_CursorUsesTheExistingProfilesUserHome(t *testing.T) {
+	m, _, tenant, _ := newRuntimeHarness(t, WithProviderSecretVault(newFakeVault()), WithProviderDriver(NewCursorDriver()))
+	m.UseExecutionEnvironmentRef(testEnvRef)
+	m.UseProfileHomesRoot(t.TempDir())
+	m.UseToolLoginsRoot(t.TempDir())
+	defaultHome, configDir, ok := ToolLoginHome(m.toolLoginsRoot, tenant, "cursor")
+	if !ok {
+		t.Fatal("cursor has no login home")
+	}
+	if err := os.MkdirAll(configDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	profileHome := t.TempDir()
+	profile, err := m.CreateProfile(context.Background(), tenant, CreateProfileInput{
+		Driver: "cursor", AuthSource: AuthSourceAccountHome, ConfigHome: configDir, UserHome: profileHome,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	home, gotConfig, err := m.DefaultToolLoginHome(context.Background(), tenant, "cursor")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if home != profileHome || gotConfig != profile.ConfigHome || home == defaultHome {
+		t.Fatalf("default login homes = user %q config %q, want the existing profile's %q and %q (not the fresh %q)", home, gotConfig, profileHome, profile.ConfigHome, defaultHome)
+	}
+}
+
+func TestResolve_CursorSignedOutNamesTheOfficialSignIn(t *testing.T) {
+	m, tenant, stub := resolveHarness(t)
+	stub.installed["cursor"] = true
+	_, err := m.ResolveProfile(context.Background(), tenant, "cursor")
+	coded, ok := err.(*codedRunErr)
+	if !ok || coded.code != resolveCodeNothingToRunOn {
+		t.Fatalf("signed-out resolve error = %T %v, want nothing_to_run_on", err, err)
+	}
+	if !strings.Contains(coded.msg, "Sign it in under AI tools") || strings.Contains(coded.msg, "--profile") {
+		t.Fatalf("signed-out message = %q, want Cursor's official sign-in, not a manual profile workaround", coded.msg)
 	}
 }

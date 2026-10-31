@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// The Community Retention page (dev#2485): retention schedules are a Community capability
+// The Community Retention page: retention schedules are a Community capability
 // (docs/editions.md, "Records"), and the Compliance page that used to hold their tab is Business.
 // The page must read only the retention routes, which a Community engine answers.
 import { beforeEach, describe, expect, it, vi } from 'vitest'

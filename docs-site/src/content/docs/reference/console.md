@@ -14,18 +14,18 @@ This page is the map of the console. It lists **every route the application moun
 not a selection, not the ones somebody remembered to write up — with the permission a
 principal needs to enter it and where to read more.
 
-The console has **one navigation structure: nine areas with sections**. Every screen
-sits in one area and one section of it, and every place that shows where a screen is
-names the same place: All areas (in the account menu and the command palette, and More
-on a phone), the area directory pages and the row of links above a
-screen, which lists the other screens of its section. The top bar names five places, the
-first job first (Now, Sessions, Tools, Rules, Ledger; Business adds Organization),
-and a place stays marked on the other screens of its section. All areas lists each area
-and its screens, two levels, without the places the bar already shows. A navigation filter
-replaces the grouped tree with a ranked list of authorized matches; the command palette
-uses the same index, ranking and permission projection. An area directory is a page of
-links — the entries your permissions allow — not a live reading of capability,
-availability or readiness.
+The console has **one navigation: the left sidebar**. It lists the places in four groups —
+**Work** (Now, Sessions, Files & workspaces, Work & communications), **Tools** (AI tools,
+Models, MCP & skills, Sources), **Control** (Rules & approvals, Usage & cost, Activity &
+audit, Access map) and **Admin** (People & groups, Security, Operations, License) — with
+Settings at the bottom. Every screen sits in one place, and the row of links above a screen
+lists the other screens of that place. A place appears only when your permissions allow at
+least one of its screens, and a Business screen only on the Business edition. The sidebar
+folds to its icons and opens again; on a narrow screen the same sidebar opens as a drawer
+from the menu button. The top bar holds the page title, search (⌘K or Ctrl+K), notifications
+and the account menu. The command palette searches the same screens with the same
+permissions. The former area directory addresses (`/areas/…`) open the place that now holds
+their screens, keeping the query and the fragment.
 
 A new installation lists the first job only: Now, Sessions, AI tools,
 Approvals, the setup wizard and Settings. Every other screen is a preview there: its
@@ -40,8 +40,8 @@ router, so a screen cannot be added, moved or lost without this page changing wi
 Each screen's name and one-line description are the **console's own strings**, taken from
 the same translation catalog the console renders, so what you read here is what you see in
 the product. The tables below group those rows by area, after Now (the overview) and
-before sign-in, setup and account. The nine area directory pages sit with the routes
-mounted outside the feature registry.
+before sign-in, setup and account. The nine former area directory addresses sit with the
+routes mounted outside the feature registry; each now redirects to its place.
 
 :::note[Permissions are enforced by the engine, not by this table]
 The `Requires` column names the permission the console checks before offering a route,
@@ -53,7 +53,7 @@ See [Roles and permissions](/reference/modules/vi-governance/).
 
 ## How to read this page
 
-- **Screen** — the name All areas, the area directories and the command palette use.
+- **Screen** — the name the row above a screen and the command palette use.
 - **Path** — the URL under your deployment's console origin. It is a published contract:
   a bookmark, a runbook deep link and a docs cross-reference are all this string.
 - **Requires** — the RBAC permission. `any signed-in user` means the route is open to
@@ -61,13 +61,13 @@ See [Roles and permissions](/reference/modules/vi-governance/).
   session at all.
 - **Reference** — the page the console's own help link opens for that screen.
 
-The headings below are the areas, in the order All areas lists them: Infrastructure,
-AI, Data & context, Work & communications, Automation, Security & identity,
+The headings below are the registry areas the screens are grouped by in the route census:
+Infrastructure, AI, Data & context, Work & communications, Automation, Security & identity,
 Delivery, Oversight, then System & settings.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-The console publishes **74 routes**. Every one of them is in the tables below, with the
+The console publishes **66 routes**. Every one of them is in the tables below, with the
 permission it requires and the reference page its in-product help link opens.
 
 ### Now
@@ -90,9 +90,8 @@ permission it requires and the reference page its in-product help link opens.
 |---|---|---|---|---|
 | AI tools | `/agent-tools` | See the accounts and API keys sessions run as; installing and signing in the tools is for deployment administrators | `sessions:account:read` | [how-to/add-a-provider](/how-to/add-a-provider/) |
 | Operate sessions | `/agentops` | Start sessions and follow what each one does, including the ones Olivares finds | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/how-to/run-claude-code-with-olivares/) |
-| MCP servers | `/mcp-servers` | Connect remote MCP servers to this organization, test them and choose which tools sessions may use | `tenant:admin` | [how-to/connectors/mcp-governance](/how-to/connectors/mcp-governance/) |
 | Model Operations | `/model-operations` | Owned models, admission and deployments | `models:registry:read` | [reference/modules/xxiii-model-operations](/reference/modules/xxiii-model-operations/) |
-| Models | `/models` | Models, routing and provider keys | `models:catalog:read` | [reference/modules/x-models](/reference/modules/x-models/) |
+| Models | `/models` | Models, routing and governance | `models:catalog:read` | [reference/modules/x-models](/reference/modules/x-models/) |
 | Platforms | `/platforms` | Provider platform surfaces, compliance matrix and per-platform model lifecycle — reference, not your servers | `models:platforms:read` | [reference/modules/x-models](/reference/modules/x-models/) |
 | Provider accounts | `/provider-accounts` | List named provider accounts and adopt an existing provider profile as an account | `sessions:account:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
 | Source bindings | `/provider-bindings` | Link configured sources to provider profiles | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
@@ -113,7 +112,6 @@ permission it requires and the reference page its in-product help link opens.
 | MCP & skills | `/capabilities` | Govern MCP servers, skills and tools | `capabilities:catalog:read` | [reference/modules/v-capabilities](/reference/modules/v-capabilities/) |
 | Catalog | `/catalog` | Curated, approved agents and capabilities | `catalog:entry:read` | [reference/modules/xiv-catalog](/reference/modules/xiv-catalog/) |
 | Knowledge | `/knowledge` | Knowledge bases, RAG and data lineage | `knowledge:kb:read` | [reference/modules/viii-knowledge](/reference/modules/viii-knowledge/) |
-| Skills catalog | `/skills` | Browse skill packs and assign them to departments, agent groups and agents | `skills:catalog:read` | [reference/console](/reference/console/) |
 
 ### Work & communications
 
@@ -168,6 +166,7 @@ permission it requires and the reference page its in-product help link opens.
 | Observability | `/observability` | Ingestion health by standard and trace drill-down | `health:status:read` | [reference/modules/observability](/reference/modules/observability/) |
 | Retention | `/retention` | How long each class of record is kept, the sweep that applies it and its sealed certificates | `compliance:retention:read` | [reference/modules/xiii-compliance](/reference/modules/xiii-compliance/) |
 | Budgets | `/stored-budgets` | Consumption against each stored limit. Reserved capacity counts toward the limit. | `finops:budget:read` | [reference/modules/xi-finops](/reference/modules/xi-finops/) |
+| Usage | `/usage` | Each account's official 5-hour and weekly limits, nearest first, and today's tokens and cost. | `sessions:run:read` | [reference/console](/reference/console/) |
 
 ### System & settings
 
@@ -179,6 +178,7 @@ permission it requires and the reference page its in-product help link opens.
 | Source diff | `/console/sources/diff` | Compare a base and a head revision of a connected Git repository, file by file | `system:admin` | [reference/console](/reference/console/) |
 | Logs | `/logs` | The live engine log stream, with level and module filters, search and pause | `system:admin` | [how-to/troubleshooting](/how-to/troubleshooting/) |
 | Setup wizard | `/onboarding` | Step-by-step deployment configuration | `system:admin` | [start/quickstart](/start/quickstart/) |
+| Updates | `/updates` | The version this engine runs, the newest signed release in its channel, and one action to install it | `system:admin` | [how-to/upgrade-and-rollback](/how-to/upgrade-and-rollback/) |
 
 ### Sign-in, setup and account
 
@@ -188,16 +188,8 @@ served before there is a session — they are the only console routes that are.
 | Screen | Path | What it is | Requires | Reference |
 |---|---|---|---|---|
 | Accept an invitation | `/accept-invite` | Where an emailed invitation link lands: the invitee sets a password and joins the workspace, with no prior session. | **no sign-in** | — |
-| AI | `/areas/ai` | Directory of the AI area: observe and operate sessions, provider profiles and environments, models, specialized execution and provider reference. Lists the entries your permissions allow. | any signed-in user | — |
-| Automation | `/areas/automation` | Directory of the Automation area: flows and orchestration, events and notifications. Lists the entries your permissions allow. | any signed-in user | — |
-| Data & context | `/areas/data-context` | Directory of the Data & context area: capabilities, knowledge and artifacts. Lists the entries your permissions allow. | any signed-in user | — |
-| Delivery | `/areas/deployment` | Directory of the Delivery area: how deployments are prepared and controlled. Lists the entries your permissions allow. | any signed-in user | — |
-| Infrastructure | `/areas/infrastructure` | Directory of the Infrastructure area: the inventory and workspaces of the estate. Lists the entries your permissions allow. | any signed-in user | — |
-| Oversight | `/areas/observation` | Directory of the Oversight area: status and activity, costs and adoption, audit, evaluation and evidence. Lists the entries your permissions allow. | any signed-in user | — |
-| Security & identity | `/areas/security-identity` | Directory of the Security & identity area: identity and access, policies and governance boundaries, protection and response. Lists the entries your permissions allow. | any signed-in user | — |
-| System & settings | `/areas/system` | Directory of the System & settings area: administration, installation and maintenance, developer tools and personal preferences. Lists the entries your permissions allow. | any signed-in user | — |
-| Work & communications | `/areas/work-communications` | Directory of the Work & communications area: the durable cross-session work backlog and governed communications. Lists the entries your permissions allow. | any signed-in user | — |
 | Sign in | `/login` | The credential and token sign-in page for an already provisioned account. | **no sign-in** | — |
+| Pair a device | `/pair` | Where a one-time device-pairing link lands: the new device signs in with no prior session. | **no sign-in** | — |
 | Settings | `/settings` | Workspace and account settings | any signed-in user | — |
 | First-run setup | `/setup` | The one-time page that turns a fresh deployment into a usable one: it consumes the setup token and creates the first owner account. | **no sign-in** | — |
 | Public status | `/status-page` | Component health for people who are not signed in, refreshed on its own while the page is open. | **no sign-in** | — |

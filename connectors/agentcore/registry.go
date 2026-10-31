@@ -34,7 +34,7 @@ const (
 //
 // Every edge is (observed=false, permitted=true): a registry record is a
 // DECLARED agent, not an observed access — it rides the SignalAgentCore path
-//.
+// .
 func (s *Source) gatherRegistry(ctx context.Context, sink sdk.Sink, c *client, at time.Time) error {
 	registries, err := s.listRegistries(ctx, c)
 	if err != nil {

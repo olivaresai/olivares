@@ -8,10 +8,10 @@ description: >-
 draft: false
 ---
 
-The next release is <!-- release -->`0.4`<!-- /release -->; its GitHub release is not published yet. The commands below describe the planned artifacts. Build from source until publication, then verify each artifact before use. See <!-- release -->`docs/releases/0.4-install-surfaces.json`<!-- /release --> for the observed publication state.
+The next release is <!-- release -->`0.5`<!-- /release -->; its GitHub release is not published yet. The commands below describe the planned artifacts. Build from source until publication, then verify each artifact before use. See <!-- release -->`docs/releases/0.5-install-surfaces.json`<!-- /release --> for the observed publication state.
 
 :::note[Published package names]
-The Olivares <!-- release -->0.4<!-- /release --> GitHub release publishes `.deb`, `.rpm` and `.apk` assets for both `amd64`
+The Olivares <!-- release -->0.5<!-- /release --> GitHub release publishes `.deb`, `.rpm` and `.apk` assets for both `amd64`
 and `arm64`, with `checksums.txt`, `checksums.txt.sig` and `checksums.txt.pem`. The
 commands below use the literal `amd64` names from that release; replace `amd64` with
 `arm64` on a 64-bit ARM host. Install from those verified release assets. Repository
@@ -82,13 +82,13 @@ survive an upgrade), the data directory `/var/lib/olivares`, and the licence tex
 <!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_0.4_linux_amd64.deb
+sudo dpkg -i olivares_0.5_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_0.4_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.5_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_0.4_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.5_linux_amd64.apk
 ```
 <!-- /release -->
 

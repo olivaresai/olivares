@@ -249,6 +249,22 @@ func TestProfileModelCatalogInvalidMetadataAndLoginChange(t *testing.T) {
 	}
 }
 
+func TestProfileModelCatalogKeepsConfinementRefusal(t *testing.T) {
+	peer := &catalogToolPeer{t: t, launchErr: &runErr{http.StatusBadGateway, "this server cannot confine sessions; enable Landlock on the engine host and run olivares doctor; the session was not started"}}
+	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(peer), WithProviderDriver(NewGrokDriver()))
+	m.UseExecutionEnvironmentRef(testEnvRef)
+	profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "grok", UserHome: t.TempDir(), ConfigHome: t.TempDir(), AuthSource: AuthSourceAccountHome})
+	out, err := m.ProfileModelCatalog(t.Context(), tenant, profile.Ref, false)
+	if err != nil || out.State != "failed" || !strings.Contains(out.Message, "Landlock") || !strings.Contains(out.Message, "olivares doctor") {
+		t.Fatalf("confinement refusal was hidden: %+v %v", out, err)
+	}
+	peer.launchErr = errors.New("exec failed")
+	out, err = m.ProfileModelCatalog(t.Context(), tenant, profile.Ref, true)
+	if err != nil || out.State != "failed" || out.Message != "Models could not be refreshed. Check the provider connection or sign in again." {
+		t.Fatalf("ordinary launch error changed: %+v %v", out, err)
+	}
+}
+
 func TestProfileModelCatalogReadAudit(t *testing.T) {
 	peer := &catalogToolPeer{t: t, signed: true}
 	m := New(WithRunner(peer))

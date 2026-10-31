@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/olivaresai/olivares/core/model"
 )
@@ -347,6 +348,52 @@ func TestScopeOfCanonicalisesTheDefaultWorkspace(t *testing.T) {
 	}
 }
 
+func TestClassifyUpdateExpiryDirection(t *testing.T) {
+	now := time.Now()
+	base := bindingDTO{SourceType: "tool", SourceRef: "claude", ScopeTree: "user", ScopeRef: "person", Effect: "allow", Enabled: true, ExpiresAt: now.Format(time.RFC3339)}
+	for _, tc := range []struct {
+		name     string
+		expires  string
+		wantGate bool
+	}{
+		{name: "later", expires: now.Add(time.Hour).Format(time.RFC3339), wantGate: true},
+		{name: "never", wantGate: true},
+		{name: "earlier", expires: now.Add(-time.Hour).Format(time.RFC3339)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			updated := base
+			updated.ExpiresAt = tc.expires
+			if got, _ := classifyUpdate(base, updated, 1); got != tc.wantGate {
+				t.Fatalf("relaxing = %v, want %v", got, tc.wantGate)
+			}
+		})
+	}
+}
+
+func TestClassifyUpdateExpiringForbidAndStandards(t *testing.T) {
+	at := time.Now().Add(time.Hour).Format(time.RFC3339)
+	later := time.Now().Add(2 * time.Hour).Format(time.RFC3339)
+	allow := bindingDTO{SourceType: "tool", SourceRef: "claude", ScopeTree: "user", ScopeRef: "person", Effect: "allow", Enabled: true, ExpiresAt: at}
+	forbid := allow
+	forbid.Effect = "forbid"
+	if got, _ := classifyUpdate(allow, forbid, 1); !got {
+		t.Error("an expiring allow turned into a forbid with the same expiry must need a second person: the restriction would lift itself")
+	}
+	standard := bindingDTO{SourceType: "instructions", SourceRef: "org", ScopeTree: "workspace", ScopeRef: "eng", Effect: "forbid", Enabled: true, ExpiresAt: at}
+	moved := standard
+	moved.ExpiresAt = later
+	if got, _ := classifyUpdate(standard, moved, 1); !got {
+		t.Error("changing the expiry of a standards forbid must need a second person")
+	}
+	imposed := standard
+	imposed.Effect = "allow"
+	extended := imposed
+	extended.ExpiresAt = later
+	if got, _ := classifyUpdate(imposed, extended, 1); !got {
+		t.Error("extending the expiry of an imposed standard must need a second person, as for any other source")
+	}
+}
+
 // --- the tripwire ---------------------------------------------------------------------
 
 // TestBindingDTOShapeIsPinned fails when bindingDTO grows, loses or renames a field, so a
@@ -360,7 +407,7 @@ func TestScopeOfCanonicalisesTheDefaultWorkspace(t *testing.T) {
 func TestBindingDTOShapeIsPinned(t *testing.T) {
 	want := []string{
 		"CredHint", "CredName", "CredRef", "CredRefKind", // access-neutral: locator, not a decision
-		"Effect", "Enabled", "ScopeRef", "ScopeTree", // ← the four classifyUpdate reads
+		"Effect", "Enabled", "ExpiresAt", "ScopeRef", "ScopeTree", // ← the five classifyUpdate reads
 		"FolderPath",              // output-only, resolved server-side
 		"ID",                      // identity
 		"Note",                    // access-neutral

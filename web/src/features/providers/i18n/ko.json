@@ -22,7 +22,8 @@
     "kind": "종류",
     "key": "키",
     "state": "상태",
-    "connection": "연결"
+    "connection": "연결",
+    "actions": "작업"
   },
   "kinds": {
     "anthropic": "Anthropic",

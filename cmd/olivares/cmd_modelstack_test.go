@@ -444,6 +444,7 @@ func TestDeclaredFiltersReachTheControlPlaneAsQueryParameters(t *testing.T) {
 		{[]string{"models", "owned", "ls", "--kind", "finetune", "--status", "active"}, "kind=finetune&status=active"},
 		{[]string{"models", "access", "ls", "--subject-kind", "role", "--subject-ref", "admin"}, "subject_kind=role&subject_ref=admin"},
 		{[]string{"finops", "spend", "summary", "--since", "2026-08-01T00:00:00Z"}, "since=2026-08-01T00%3A00%3A00Z"},
+		{[]string{"finops", "spend", "changes", "--since", "2026-08-01T00:00:00Z", "--until", "2026-09-01T00:00:00Z"}, "since=2026-08-01T00%3A00%3A00Z&until=2026-09-01T00%3A00%3A00Z"},
 		{[]string{"finops", "rates", "ls", "--provider", "anthropic", "--model", "claude-opus-4"}, "model=claude-opus-4&provider=anthropic"},
 		{[]string{"models", "aibom", "get", "om-1", "--format", "spdx"}, "format=spdx"},
 	} {
