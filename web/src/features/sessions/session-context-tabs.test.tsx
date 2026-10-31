@@ -35,6 +35,8 @@ const ops = vi.hoisted(() => ({
   listWorkspaces: vi.fn(),
   getWorkspace: vi.fn(),
   listProfiles: vi.fn(),
+  getProfile: vi.fn(),
+  getAccount: vi.fn(),
   runChanges: vi.fn(),
   gitStatus: vi.fn(),
   previewPorts: vi.fn(),
@@ -133,6 +135,13 @@ const RUN: RunDTO = {
   provider_profile_ref: 'ppf_team',
 }
 
+// The profile a quick start resolves for a key: not an account, so it has no name.
+const UNNAMED_PROFILE = {
+  profile_ref: 'ppf_team',
+  driver: 'claude-code',
+  state: 'active',
+}
+
 function resolution(runs: RunDTO[] = [RUN]): SessionResolution {
   return {
     target: { liveRef: 'lr-a' },
@@ -189,6 +198,8 @@ beforeEach(() => {
     state: 'active',
   })
   ops.listProfiles.mockResolvedValue({ items: [], has_more: false })
+  ops.getProfile.mockResolvedValue(UNNAMED_PROFILE)
+  ops.getAccount.mockResolvedValue({ usage: [] })
   vi.mocked(sessionsApi.timelineById).mockResolvedValue({
     items: [],
     has_more: false,
@@ -795,4 +806,56 @@ it('Files Retry recovers a failed original workspace refetch while a worktree sc
   expect(await screen.findByTestId('files-browser')).toHaveTextContent(
     'ws-worktree',
   )
+})
+
+// The account read is for a NAMED profile: an unnamed one is no account, and the engine
+// answers its ref 404, which the browser logs as a console error on the page.
+describe('the account usage read', () => {
+  const settle = () => act(() => new Promise((r) => setTimeout(r, 100)))
+
+  it('is not made for a new unnamed profile that a cached profile list does not hold yet', async () => {
+    // The list was read before this session's launch resolved its profile.
+    ops.listProfiles.mockResolvedValue({ items: [], has_more: false })
+    renderPane()
+    await screen.findByTestId('session-facts')
+    await settle()
+    expect(ops.getAccount).not.toHaveBeenCalled()
+  })
+
+  it('is made for a named profile', async () => {
+    ops.getProfile.mockResolvedValue({
+      ...UNNAMED_PROFILE,
+      account_name: 'team',
+    })
+    renderPane()
+    await waitFor(() =>
+      expect(ops.getAccount).toHaveBeenCalledWith(
+        'ppf_team',
+        expect.anything(),
+      ),
+    )
+  })
+
+  it('is still made when the profile cannot be read', async () => {
+    auth.can = (p) => p !== 'sessions:profile:read'
+    renderPane()
+    await waitFor(() =>
+      expect(ops.getAccount).toHaveBeenCalledWith(
+        'ppf_team',
+        expect.anything(),
+      ),
+    )
+    expect(ops.getProfile).not.toHaveBeenCalled()
+  })
+
+  it('is still made when the profile read fails', async () => {
+    ops.getProfile.mockRejectedValue(new Error('boom'))
+    renderPane()
+    await waitFor(() =>
+      expect(ops.getAccount).toHaveBeenCalledWith(
+        'ppf_team',
+        expect.anything(),
+      ),
+    )
+  })
 })

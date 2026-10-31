@@ -78,6 +78,15 @@ func newSecEngine(t *testing.T) *secEngine {
 	return e
 }
 
+// set changes what the engine answers. The server already runs, and an
+// `olivares ui` child reaches it over a socket, which gives the race detector
+// no order: every change after newSecEngine goes through the lock.
+func (e *secEngine) set(change func()) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	change()
+}
+
 func (e *secEngine) reply(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -250,12 +259,14 @@ func ledgerEngine(t *testing.T) *secEngine {
 	t.Helper()
 	e := newSecEngine(t)
 	base := time.Now().Add(-3 * time.Hour)
-	e.events = []map[string]any{
-		secEvent(1, base, "rehema@acme.example", "session.started", "session", "s-1"),
-		secEvent(2, base.Add(time.Hour), "johan@acme.example", "approval.requested", "approval", "apr-9"),
-		secEvent(3, base.Add(90*time.Minute), "system", "checkpoint.signed", "checkpoint", "48213"),
-		secEvent(4, base.Add(2*time.Hour), "rehema@acme.example", "tool.login", "tool", "codex"),
-		secEvent(5, base.Add(150*time.Minute), "system", "audit.read", "audit", ""),
-	}
+	e.set(func() {
+		e.events = []map[string]any{
+			secEvent(1, base, "rehema@acme.example", "session.started", "session", "s-1"),
+			secEvent(2, base.Add(time.Hour), "johan@acme.example", "approval.requested", "approval", "apr-9"),
+			secEvent(3, base.Add(90*time.Minute), "system", "checkpoint.signed", "checkpoint", "48213"),
+			secEvent(4, base.Add(2*time.Hour), "rehema@acme.example", "tool.login", "tool", "codex"),
+			secEvent(5, base.Add(150*time.Minute), "system", "audit.read", "audit", ""),
+		}
+	})
 	return e
 }

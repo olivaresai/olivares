@@ -38,7 +38,7 @@ vi.mock('./api', async (importOriginal) => ({
 const ops = vi.hoisted(() => ({
   listWorkspaces: vi.fn(),
   getWorkspace: vi.fn(),
-  listProfiles: vi.fn(),
+  getProfile: vi.fn(),
 }))
 vi.mock('@/features/agentops/api', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/features/agentops/api')>()
@@ -131,7 +131,7 @@ beforeEach(() => {
   api.timeline.mockResolvedValue(page([]))
   ops.listWorkspaces.mockResolvedValue({ items: [], has_more: false })
   ops.getWorkspace.mockRejectedValue(new Error('folder lookup failed'))
-  ops.listProfiles.mockResolvedValue({ items: [], has_more: false })
+  ops.getProfile.mockRejectedValue(new Error('not found'))
 })
 
 function renderNarrative(over: Partial<SessionResolution> = {}, props = {}) {
@@ -386,19 +386,14 @@ describe('SessionContextPane — the scope this session ran under', () => {
       dlp_mode: 'off',
       state: 'active',
     })
-    ops.listProfiles.mockResolvedValue({
-      items: [
-        {
-          profile_ref: 'ppf_team',
-          driver: 'claude',
-          environment_ref: 'env-prod',
-          display_name: 'Team Claude',
-          state: 'active',
-          local_environment: true,
-          operable: true,
-        },
-      ],
-      has_more: false,
+    ops.getProfile.mockResolvedValue({
+      profile_ref: 'ppf_team',
+      driver: 'claude',
+      environment_ref: 'env-prod',
+      display_name: 'Team Claude',
+      state: 'active',
+      local_environment: true,
+      operable: true,
     })
     renderIntel(
       <SessionContextPane resolution={resolution({ runs: [run()] })} />,
@@ -442,19 +437,14 @@ describe('SessionContextPane — the scope this session ran under', () => {
   })
 
   it('names a profile that is an account by its account name on the scope block', async () => {
-    ops.listProfiles.mockResolvedValue({
-      items: [
-        {
-          profile_ref: 'ppf_team',
-          driver: 'claude',
-          environment_ref: 'env-prod',
-          account_name: 'claude-b',
-          state: 'active',
-          local_environment: true,
-          operable: true,
-        },
-      ],
-      has_more: false,
+    ops.getProfile.mockResolvedValue({
+      profile_ref: 'ppf_team',
+      driver: 'claude',
+      environment_ref: 'env-prod',
+      account_name: 'claude-b',
+      state: 'active',
+      local_environment: true,
+      operable: true,
     })
     renderIntel(
       <SessionContextPane resolution={resolution({ runs: [run()] })} />,
@@ -481,22 +471,16 @@ describe('SessionContextPane — the scope this session ran under', () => {
     async (_case, mode) => {
       if (mode === 'denied')
         auth.can = (p: string) => p !== 'sessions:profile:read'
-      if (mode === 'failed')
-        ops.listProfiles.mockRejectedValue(new Error('boom'))
+      if (mode === 'failed') ops.getProfile.mockRejectedValue(new Error('boom'))
       if (mode === 'unnamed')
-        ops.listProfiles.mockResolvedValue({
-          items: [
-            {
-              profile_ref: 'ppf_team',
-              driver: 'claude',
-              environment_ref: 'env-prod',
-              display_name: '   ',
-              state: 'active',
-              local_environment: true,
-              operable: true,
-            },
-          ],
-          has_more: false,
+        ops.getProfile.mockResolvedValue({
+          profile_ref: 'ppf_team',
+          driver: 'claude',
+          environment_ref: 'env-prod',
+          display_name: '   ',
+          state: 'active',
+          local_environment: true,
+          operable: true,
         })
       renderIntel(
         <SessionContextPane resolution={resolution({ runs: [run()] })} />,

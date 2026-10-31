@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -102,6 +103,49 @@ func TestProjectConfigOpenCodeRefusesAbsoluteFileTokens(t *testing.T) {
 	}
 }
 
+// fileTokenReadSlack covers the reads that are not the folder's files: the bounded
+// parse read of opencode.json beside its hash, and the process's own small reads.
+const fileTokenReadSlack = 1 << 20
+
+// folderBytes is the size of every regular file in dir.
+func folderBytes(t *testing.T, dir string) int64 {
+	t.Helper()
+	var total int64
+	err := filepath.WalkDir(dir, func(_ string, d os.DirEntry, err error) error {
+		if err != nil || !d.Type().IsRegular() {
+			return err
+		}
+		info, err := d.Info()
+		total += info.Size()
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return total
+}
+
+// bytesReadByThisProcess is the kernel's count of bytes this process has read
+// (rchar in /proc/self/io, proc(5)).
+func bytesReadByThisProcess(t *testing.T) int64 {
+	t.Helper()
+	raw, err := os.ReadFile("/proc/self/io")
+	if err != nil {
+		t.Fatalf("the bytes this process read cannot be measured: %v", err)
+	}
+	for _, line := range strings.Split(string(raw), "\n") {
+		if v, ok := strings.CutPrefix(line, "rchar: "); ok {
+			n, err := strconv.ParseInt(v, 10, 64)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return n
+		}
+	}
+	t.Fatalf("/proc/self/io has no rchar line: %q", raw)
+	return 0
+}
+
 // The files that {file:} tokens name are read once each and under one budget, so a
 // folder cannot make every check read and hash a large file once per token, nor name
 // more files or bytes than a folder tree may hold; and exactly the limits still pass.
@@ -111,18 +155,21 @@ func TestProjectConfigOpenCodeFileTokenWorkIsBounded(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "opencode.json"), []byte(config), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		done := make(chan []projectConfigEntry, 1)
-		go func() {
-			entries, _, _ := readProjectConfig(dir)
-			done <- entries
-		}()
-		select {
-		case entries := <-done:
-			if len(entries) != 1 || (entries[0].Refused != "") != refused {
-				t.Fatalf("refused = %v, want %v: %+v", len(entries) == 1 && entries[0].Refused != "", refused, entries)
-			}
-		case <-time.After(3 * time.Second):
-			t.Fatal("the check is still reading the files its {file:} tokens name")
+		// The bound is the bytes the check reads, not how long a host takes to read
+		// them: a correct check reads each of the folder's files at most twice (to hash
+		// the tree and for {file:}) and never past the tree budget. One that re-read a
+		// file per token, or kept reading past the budget, reads far more.
+		folder := folderBytes(t, dir)
+		limit := 2*min(folder, maxProjectConfigTreeBytes) + fileTokenReadSlack
+		before := bytesReadByThisProcess(t)
+		entries, _, _ := readProjectConfig(dir)
+		read := bytesReadByThisProcess(t) - before
+		if len(entries) != 1 || (entries[0].Refused != "") != refused {
+			t.Fatalf("refused = %v, want %v: %+v", len(entries) == 1 && entries[0].Refused != "", refused, entries)
+		}
+		t.Logf("read %d bytes of a %d-byte folder (limit %d)", read, folder, limit)
+		if read > limit {
+			t.Fatalf("the check read %d bytes of a %d-byte folder, want at most %d", read, folder, limit)
 		}
 	}
 	t.Run("repeated content over the effective size limit is refused", func(t *testing.T) {

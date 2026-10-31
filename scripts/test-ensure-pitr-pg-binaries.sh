@@ -5,10 +5,10 @@
 #
 # test-ensure-pitr-pg-binaries.sh — offline selftest for scripts/ensure-pitr-pg-binaries.sh.
 #
-# The negative cases need no PostgreSQL packages: they feed the helper artifacts that must be
-# refused. The positive case needs the real pinned PGDG debs and a host with glibc >= 2.38
-# (the runners); it is run by hand against the same --artifact-dir and pasted into the PR.
+# The negative cases run offline. Pass --real on a runner with glibc >= 2.38 to
+# stage the real pinned packages and check PostgreSQL 18 uses the staged liburing.
 set -uo pipefail
+[[ $# -eq 0 || ( $# -eq 1 && "$1" == --real ) ]] || exit 2
 
 here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 script="$here/ensure-pitr-pg-binaries.sh"
@@ -42,6 +42,13 @@ expect_rc "refuses without --dest" 2 bash "$script"
 expect_rc "refuses a relative --dest" 2 bash "$script" --dest relative/dir
 expect_rc "refuses an unknown argument" 2 bash "$script" --dest "$work/d" --bogus
 
+# PostgreSQL 18 requires liburing; provisioning must not rely on a host install.
+if grep -q '^liburing2|' "$script"; then
+	pass "the manifest stages liburing2 for PostgreSQL 18"
+else
+	fail "the manifest stages liburing2 for PostgreSQL 18"
+fi
+
 # Every pinned artifact name, with the wrong bytes: size and digest checks must refuse it.
 mkdir -p "$work/wrong"
 for pkg in postgresql-15 postgresql-16 postgresql-17 postgresql-18 \
@@ -67,6 +74,20 @@ if grep -q 'ensure-pitr-pg-binaries.sh' "$workflow" && grep -q "runner.environme
 else
 	fail "drills-nightly pitr job provisions the binaries on self-hosted runners" \
 		"no ensure-pitr-pg-binaries.sh step guarded by runner.environment != 'github-hosted' in $workflow"
+fi
+
+if [[ "${1-}" == --real ]]; then
+	if bash "$script" --dest "$work/real" >"$work/env"; then
+		libpath="$work/real/root/usr/lib/x86_64-linux-gnu"
+		deps="$(env LD_LIBRARY_PATH="$libpath" ldd "$work/real/root/usr/lib/postgresql/18/bin/postgres")"
+		if [[ "$deps" == *"liburing.so.2 => $libpath/"* ]]; then
+			pass "PostgreSQL 18 loads the staged liburing without a host install"
+		else
+			fail "PostgreSQL 18 loads the staged liburing without a host install" "$deps"
+		fi
+	else
+		fail "real pinned packages provision successfully"
+	fi
 fi
 
 if ((fails)); then

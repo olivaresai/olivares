@@ -80,7 +80,9 @@ func quitUI(t *testing.T, master *os.File, cmd *exec.Cmd) {
 // the engine now holds.
 func TestUISecurityApprovesWithAReasonFromATerminal(t *testing.T) {
 	e := newSecEngine(t)
-	e.approvals = []map[string]any{secApproval("apr-1", "pending", "Launch claude in /srv/payroll (read-write)")}
+	e.set(func() {
+		e.approvals = []map[string]any{secApproval("apr-1", "pending", "Launch claude in /srv/payroll (read-write)")}
+	})
 	master, cmd, _ := startSecurity(t, e)
 
 	sendKeys(t, master, "\r") // Approvals
@@ -110,7 +112,9 @@ func TestUISecurityApprovesWithAReasonFromATerminal(t *testing.T) {
 
 func TestUISecurityRejectsFromATerminal(t *testing.T) {
 	e := newSecEngine(t)
-	e.approvals = []map[string]any{secApproval("apr-1", "pending", "Turn on the issue tracker MCP server")}
+	e.set(func() {
+		e.approvals = []map[string]any{secApproval("apr-1", "pending", "Turn on the issue tracker MCP server")}
+	})
 	master, cmd, _ := startSecurity(t, e)
 	sendKeys(t, master, "\r")
 	readScreen(t, master, "1 waiting")
@@ -130,15 +134,13 @@ func TestUISecurityRejectsFromATerminal(t *testing.T) {
 // come back, and the list behind the review is read again.
 func TestUISecuritySaysWhenSomeoneDecidedFirst(t *testing.T) {
 	e := newSecEngine(t)
-	e.approvals = []map[string]any{secApproval("apr-1", "pending", "Launch claude")}
+	e.set(func() { e.approvals = []map[string]any{secApproval("apr-1", "pending", "Launch claude")} })
 	master, cmd, _ := startSecurity(t, e)
 	sendKeys(t, master, "\r")
 	readScreen(t, master, "1 waiting")
 	sendKeys(t, master, "\r")
 	readScreen(t, master, "Decision")
-	e.mu.Lock()
-	e.approvals[0]["status"] = "approved"
-	e.mu.Unlock()
+	e.set(func() { e.approvals[0]["status"] = "approved" })
 	sendKeys(t, master, keyRight+"\r\r")
 	readScreen(t, master, "no decision can be recorded")
 	sendKeys(t, master, "\r") // back to the list, read again
@@ -194,7 +196,7 @@ func TestUISecurityPastedNewlinesDoNotStopAnything(t *testing.T) {
 // already stopped says so without offering it again.
 func TestUISecurityKillSwitchStates(t *testing.T) {
 	e := newSecEngine(t)
-	e.stateStatus = http.StatusForbidden
+	e.set(func() { e.stateStatus = http.StatusForbidden })
 	master, cmd, _ := startSecurity(t, e)
 	sendKeys(t, master, keyDown+"\r")
 	screen := plainScreen(readScreen(t, master, "Type stop"))
@@ -203,7 +205,7 @@ func TestUISecurityKillSwitchStates(t *testing.T) {
 
 	// An engine that says 200 with nothing is not a switch that is off.
 	silent := newSecEngine(t)
-	silent.emptyAnswers = true
+	silent.set(func() { silent.emptyAnswers = true })
 	master, cmd, _ = startSecurity(t, silent)
 	sendKeys(t, master, keyDown+"\r")
 	screen = plainScreen(readScreen(t, master, "Type stop"))
@@ -214,7 +216,7 @@ func TestUISecurityKillSwitchStates(t *testing.T) {
 	quitUI(t, master, cmd)
 
 	stopped := newSecEngine(t)
-	stopped.estateStopped = true
+	stopped.set(func() { stopped.estateStopped = true })
 	master, cmd, _ = startSecurity(t, stopped)
 	sendKeys(t, master, keyDown+"\r")
 	screen = plainScreen(readScreen(t, master, "Everything is stopped"))
@@ -287,7 +289,7 @@ func TestUISecurityReviewSaysWhenTheRequestIsCut(t *testing.T) {
 	for i := 1; i <= 40; i++ {
 		lines = append(lines, fmt.Sprintf("Line %d of a very long request", i))
 	}
-	e.approvals = []map[string]any{secApproval("apr-1", "pending", strings.Join(lines, "\n"))}
+	e.set(func() { e.approvals = []map[string]any{secApproval("apr-1", "pending", strings.Join(lines, "\n"))} })
 	master, cmd, _ := startSecurity(t, e)
 	sendKeys(t, master, "\r")
 	readScreen(t, master, "1 waiting")
@@ -307,9 +309,7 @@ func TestUISecurityReviewSaysWhenTheRequestIsCut(t *testing.T) {
 func TestUISecurityLeavingWhileAStopIsOnItsWaySaysSo(t *testing.T) {
 	e := newSecEngine(t)
 	gate := make(chan struct{})
-	e.mu.Lock()
-	e.gate = gate
-	e.mu.Unlock()
+	e.set(func() { e.gate = gate })
 	t.Cleanup(func() { close(gate) })
 	master, cmd, _ := startSecurity(t, e)
 	sendKeys(t, master, keyDown+"\r")
@@ -324,11 +324,9 @@ func TestUISecurityLeavingWhileAStopIsOnItsWaySaysSo(t *testing.T) {
 
 func TestUISecurityLeavingWhileAVoteIsOnItsWaySaysSo(t *testing.T) {
 	e := newSecEngine(t)
-	e.approvals = []map[string]any{secApproval("apr-1", "pending", "Launch claude")}
+	e.set(func() { e.approvals = []map[string]any{secApproval("apr-1", "pending", "Launch claude")} })
 	gate := make(chan struct{})
-	e.mu.Lock()
-	e.gate = gate
-	e.mu.Unlock()
+	e.set(func() { e.gate = gate })
 	t.Cleanup(func() { close(gate) })
 	master, cmd, _ := startSecurity(t, e)
 	sendKeys(t, master, "\r")

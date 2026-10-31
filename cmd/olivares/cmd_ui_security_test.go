@@ -74,11 +74,13 @@ func readQueue(t *testing.T, s *securityScreens) tui.Frame {
 
 func TestApprovalsFrameListsWaitingRequests(t *testing.T) {
 	e := newSecEngine(t)
-	e.approvals = []map[string]any{
-		secApproval("apr-1", "pending", "Launch claude in /srv/payroll (read-write)"),
-		secApproval("apr-2", "pending", "Turn on the issue tracker MCP server"),
-		secApproval("apr-3", "approved", "Already decided"),
-	}
+	e.set(func() {
+		e.approvals = []map[string]any{
+			secApproval("apr-1", "pending", "Launch claude in /srv/payroll (read-write)"),
+			secApproval("apr-2", "pending", "Turn on the issue tracker MCP server"),
+			secApproval("apr-3", "approved", "Already decided"),
+		}
+	})
 	f := readQueue(t, newTestScreens(t))
 	if f.Right != "2 waiting" {
 		t.Errorf("Right = %q, want \"2 waiting\"", f.Right)
@@ -112,7 +114,7 @@ func TestApprovalsFrameStripsTerminalControlsFromEngineText(t *testing.T) {
 	evil := "Launch \x1b[2J\x1b]0;owned\x07 here"
 	a := secApproval("apr-1", "pending", evil)
 	a["requested_by"] = "\x1b[31mjohan\x1b[0m"
-	e.approvals = []map[string]any{a}
+	e.set(func() { e.approvals = []map[string]any{a} })
 	f := readQueue(t, newTestScreens(t))
 	review := strings.Join(reviewLines(cliApproval{Reason: evil, RequestedBy: "\x1b[31mjohan\x1b[0m"}, time.Now()), "\n")
 	if all := f.Items[0].Label + f.Items[0].Detail + review; strings.ContainsAny(all, "\x1b\x07") {
@@ -122,8 +124,10 @@ func TestApprovalsFrameStripsTerminalControlsFromEngineText(t *testing.T) {
 
 func TestApprovalsFrameSaysWhenThereAreMoreWaitingThanItShows(t *testing.T) {
 	e := newSecEngine(t)
-	e.approvals = []map[string]any{secApproval("apr-1", "pending", "Launch claude")}
-	e.approvalsHasMore = true
+	e.set(func() {
+		e.approvals = []map[string]any{secApproval("apr-1", "pending", "Launch claude")}
+		e.approvalsHasMore = true
+	})
 	if f := readQueue(t, newTestScreens(t)); f.Right != "1+ waiting" {
 		t.Fatalf("Right = %q, want \"1+ waiting\"", f.Right)
 	}
@@ -132,7 +136,7 @@ func TestApprovalsFrameSaysWhenThereAreMoreWaitingThanItShows(t *testing.T) {
 // A queue that cannot be read says why, in the engine's words, and offers no rows.
 func TestApprovalsFrameSaysWhyTheQueueCouldNotBeRead(t *testing.T) {
 	e := newSecEngine(t)
-	e.queueStatus = http.StatusInternalServerError
+	e.set(func() { e.queueStatus = http.StatusInternalServerError })
 	s := newTestScreens(t)
 	list, err := s.readQueue()
 	if err == nil {
@@ -158,7 +162,7 @@ func TestReadQueueNeedsASignedInPersonAndSaysWhatToDo(t *testing.T) {
 // and a kill switch that is off: the screens say they could not read it.
 func TestAnEmptyAnswerIsNotAnEmptyQueueOrASwitchThatIsOff(t *testing.T) {
 	e := newSecEngine(t)
-	e.emptyAnswers = true
+	e.set(func() { e.emptyAnswers = true })
 	s := newTestScreens(t)
 	if _, err := s.readQueue(); !errors.Is(err, errNoAnswer) {
 		t.Errorf("readQueue on an empty answer = %v, want errNoAnswer", err)
@@ -180,7 +184,7 @@ func TestApprovalRowShowsVotesAndTimeBeforeALongRequester(t *testing.T) {
 	e := newSecEngine(t)
 	a := secApproval("apr-1", "pending", "Push cart-totals from storefront-web to origin")
 	a["requested_by"] = "token:" + strings.Repeat("machine-id-", 4)
-	e.approvals = []map[string]any{a}
+	e.set(func() { e.approvals = []map[string]any{a} })
 	f := readQueue(t, newTestScreens(t))
 	head := []rune(f.Items[0].Detail)
 	if len(head) > 20 {
@@ -194,7 +198,7 @@ func TestApprovalRowShowsVotesAndTimeBeforeALongRequester(t *testing.T) {
 // An ID that is not a plain name is the engine's text, not a command to paste.
 func TestApprovalRowNamesNoCommandForAnIDThatIsNotAPlainName(t *testing.T) {
 	e := newSecEngine(t)
-	e.approvals = []map[string]any{secApproval("apr 1; rm", "pending", "Launch claude")}
+	e.set(func() { e.approvals = []map[string]any{secApproval("apr 1; rm", "pending", "Launch claude")} })
 	f := readQueue(t, newTestScreens(t))
 	if f.Items[0].Command != "olivares governance approvals ls" {
 		t.Fatalf("the row's command is %q", f.Items[0].Command)
@@ -252,7 +256,7 @@ func TestApproveAndRejectSendWhatTheCommandsSend(t *testing.T) {
 	} {
 		t.Run(tc.decision+"/"+tc.note, func(t *testing.T) {
 			viaCommand := newSecEngine(t)
-			viaCommand.approvals = []map[string]any{secApproval("apr-1", "pending", "Launch claude")}
+			viaCommand.set(func() { viaCommand.approvals = []map[string]any{secApproval("apr-1", "pending", "Launch claude")} })
 			args := observeArgs(viaCommand.URL, "governance", "approvals", tc.decision, "apr-1", "--yes", "-o", "text")
 			if tc.note != "" {
 				args = append(args, "--note", tc.note)
@@ -263,7 +267,7 @@ func TestApproveAndRejectSendWhatTheCommandsSend(t *testing.T) {
 			}
 
 			viaScreen := newSecEngine(t)
-			viaScreen.approvals = []map[string]any{secApproval("apr-1", "pending", "Launch claude")}
+			viaScreen.set(func() { viaScreen.approvals = []map[string]any{secApproval("apr-1", "pending", "Launch claude")} })
 			s := newTestScreens(t)
 			a, err := governancePendingApproval(s.cmd, s.flags, "apr-1")
 			if err != nil {
@@ -289,7 +293,7 @@ func TestApproveAndRejectSendWhatTheCommandsSend(t *testing.T) {
 
 func TestReviewRefusesARequestThatIsNoLongerWaiting(t *testing.T) {
 	e := newSecEngine(t)
-	e.approvals = []map[string]any{secApproval("apr-1", "approved", "Launch claude")}
+	e.set(func() { e.approvals = []map[string]any{secApproval("apr-1", "approved", "Launch claude")} })
 	s := newTestScreens(t)
 	_, err := governancePendingApproval(s.cmd, s.flags, "apr-1")
 	if err == nil || err.Error() != "Approval apr-1 is already approved; there is nothing to decide." {
@@ -305,9 +309,9 @@ func TestReviewRefusesARequestThatIsNoLongerWaiting(t *testing.T) {
 
 func TestApproveSaysWhatTheEngineAnswersWhenSomeoneDecidedFirst(t *testing.T) {
 	e := newSecEngine(t)
-	e.approvals = []map[string]any{secApproval("apr-1", "pending", "Launch claude")}
+	e.set(func() { e.approvals = []map[string]any{secApproval("apr-1", "pending", "Launch claude")} })
 	s := newTestScreens(t)
-	e.approvals[0]["status"] = "approved" // another person voted while the review was open
+	e.set(func() { e.approvals[0]["status"] = "approved" }) // another person voted while the review was open
 	_, _, err := governanceApprovalDecide(s.cmd, s.flags, "apr-1", "approve", "")
 	if err == nil || !strings.Contains(err.Error(), "no decision can be recorded") {
 		t.Fatalf("err = %v, want the engine's words", err)
@@ -532,11 +536,13 @@ func TestParseSinceAcceptsDurationsDaysDatesAndRFC3339(t *testing.T) {
 
 func TestLedgerFollowsPagesAndKeepsTheNewestEvents(t *testing.T) {
 	e := newSecEngine(t)
-	e.pageCap = 100
-	base := time.Now().Add(-5 * time.Hour)
-	for i := 1; i <= 250; i++ {
-		e.events = append(e.events, secEvent(i, base.Add(time.Duration(i)*time.Minute), "rehema@acme.example", fmt.Sprintf("tool.login.%03d", i), "tool", "codex"))
-	}
+	e.set(func() {
+		e.pageCap = 100
+		base := time.Now().Add(-5 * time.Hour)
+		for i := 1; i <= 250; i++ {
+			e.events = append(e.events, secEvent(i, base.Add(time.Duration(i)*time.Minute), "rehema@acme.example", fmt.Sprintf("tool.login.%03d", i), "tool", "codex"))
+		}
+	})
 	f, _ := readLedgerFrame(t, newTestScreens(t), ledgerFilter{person: "rehema@acme.example"}, "")
 	rows := eventRows(f)
 	if len(rows) != ledgerRows || !strings.HasPrefix(rows[0].Detail, "tool.login.250") || !strings.HasPrefix(rows[len(rows)-1].Detail, "tool.login.151") {
@@ -552,11 +558,13 @@ func TestLedgerFollowsPagesAndKeepsTheNewestEvents(t *testing.T) {
 
 func TestLedgerSaysWhenTheScanStoppedBeforeTheNewestEvents(t *testing.T) {
 	e := newSecEngine(t)
-	e.pageCap = 1
-	base := time.Now().Add(-5 * time.Hour)
-	for i := 1; i <= auditFilterPages+10; i++ {
-		e.events = append(e.events, secEvent(i, base.Add(time.Duration(i)*time.Minute), "rehema@acme.example", "tool.login", "tool", "codex"))
-	}
+	e.set(func() {
+		e.pageCap = 1
+		base := time.Now().Add(-5 * time.Hour)
+		for i := 1; i <= auditFilterPages+10; i++ {
+			e.events = append(e.events, secEvent(i, base.Add(time.Duration(i)*time.Minute), "rehema@acme.example", "tool.login", "tool", "codex"))
+		}
+	})
 	f, _ := readLedgerFrame(t, newTestScreens(t), ledgerFilter{person: "rehema@acme.example"}, "")
 	if !strings.Contains(f.Footer, "Scan stopped early") {
 		t.Fatalf("footer = %q; a list that may miss the newest events must say so", f.Footer)

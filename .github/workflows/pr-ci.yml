@@ -671,7 +671,7 @@ jobs:
         # refuses it (SECURITY.md, Requirements), in every shard: modules/sessions reproduces
         # the boundary and cmd/olivares starts own-login sessions. On a hosted runner this
         # clears the AppArmor switch that refuses it, and it prints the kernel's answer before
-        # the tests run. It never fails the job: the tests are the arbiter, and they are unchanged.
+        # the tests run. A refused or unavailable namespace probe fails the job.
         run: bash scripts/ci-session-boundary.sh
       - name: one shard of the Go suite, without the race detector
         timeout-minutes: 55

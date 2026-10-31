@@ -188,7 +188,7 @@
     },
     {
       "name": "modules-sessions",
-      "measured": "EXHAUSTED the 35 min of the Go `-timeout` inside modules-rest: 2,100 s measured. Its own job for the SAME measurement as finops and governance — not for size, but because it consumes the whole clock of its shard and drags along everything that shares the job. ⇒ CURE: `-parallel 8`. The package did not hang: it did not fit. 799 tests, 730 with t.Parallel(), and only TWO slots on the runner (GOMAXPROCS = the cgroup quota). 403 queued × ~6.5 s ÷ 2 = ~22 min, which are the 23 of the dump. The two tests seen running had been in for 1 s and 25 s: they were FINE. — RE-MEASURED 2026-09-16 (hosted 4 vCPU, race-full 35136307725, 80/70): BOTH halves exhausted the 70 min of Go (a: 379 of 631 top-level tests done, 225 min of test time in 70 of wall clock; b: 421 of 614, 266 min). It did not hang: it did not fit. Eight shards by prefix families, assigned by the model wall = sequential + parallel/P with P=7.4 calibrated on those two halves (-parallel 8): ~27 min estimated per shard, 2.6x below the -timeout. The planner that assigns these shards stays outside the published tree.",
+      "measured": "EXHAUSTED the 35 min of the Go `-timeout` inside modules-rest: 2,100 s measured. Its own job for the SAME measurement as finops and governance — not for size, but because it consumes the whole clock of its shard and drags along everything that shares the job. ⇒ CURE: `-parallel 8`. The package did not hang: it did not fit. 799 tests, 730 with t.Parallel(), and only TWO slots on the runner (GOMAXPROCS = the cgroup quota). 403 queued × ~6.5 s ÷ 2 = ~22 min, which are the 23 of the dump. The two tests seen running had been in for 1 s and 25 s: they were FINE. — RE-MEASURED 2026-09-16 (hosted 4 vCPU, race-full 35136307725, 80/70): BOTH halves exhausted the 70 min of Go (a: 379 of 631 top-level tests done, 225 min of test time in 70 of wall clock; b: 421 of 614, 266 min). It did not hang: it did not fit. Eight shards by prefix families, assigned by the model wall = sequential + parallel/P with P=7.4 calibrated on those two halves (-parallel 8): ~27 min estimated per shard, 2.6x below the -timeout. The planner that assigns these shards stays outside the published tree. — RE-MEASURED 2026-10-31 (hosted 4 vCPU, race-full of the 0.5 candidate export, -parallel 8): shards a, c and d were cut at the 70 min -timeout and b and f took 68-70 min of Go time; the package grew since 0.4 (slowest shard 69 min then). Per-test costs of that run fit wall = sequential + parallel/7.4 within 1.5 min on the seven complete shards (3342 top-level tests; cut tests at their elapsed lower bound, never-started ones at the parallel p90). 19 shards keep every predicted job, including 3.4 min of measured start-up, at or under 45 min (slowest 44.8).",
       "patterns": [
         "github.com/olivaresai/olivares/modules/sessions/..."
       ],
@@ -196,43 +196,79 @@
       "shards": [
         {
           "name": "a",
-          "minutes_est": 26.9
+          "minutes_est": 34.8
         },
         {
           "name": "b",
-          "minutes_est": 26.9
+          "minutes_est": 34.1
         },
         {
           "name": "c",
-          "minutes_est": 43.4
+          "minutes_est": 33.4
         },
         {
           "name": "d",
-          "minutes_est": 43.6
+          "minutes_est": 32.6
         },
         {
           "name": "e",
-          "minutes_est": 43.4
+          "minutes_est": 28.2
         },
         {
           "name": "f",
-          "minutes_est": 40.9
+          "minutes_est": 39.2
         },
         {
           "name": "g",
-          "minutes_est": 42.0
+          "minutes_est": 28.6
         },
         {
           "name": "h",
-          "minutes_est": 44.7
+          "minutes_est": 38.5
         },
         {
           "name": "i",
-          "minutes_est": 40.6
+          "minutes_est": 35.9
         },
         {
           "name": "j",
-          "minutes_est": 43.8
+          "minutes_est": 39.5
+        },
+        {
+          "name": "k",
+          "minutes_est": 30.2
+        },
+        {
+          "name": "l",
+          "minutes_est": 40.8
+        },
+        {
+          "name": "m",
+          "minutes_est": 34.2
+        },
+        {
+          "name": "n",
+          "minutes_est": 38.6
+        },
+        {
+          "name": "o",
+          "minutes_est": 30.9
+        },
+        {
+          "name": "p",
+          "minutes_est": 39.2
+        },
+        {
+          "name": "q",
+          "minutes_est": 44.8
+        },
+        {
+          "name": "r",
+          "minutes_est": 33.6
+        },
+        {
+          "name": "s",
+          "minutes_est": 43.3
         }
       ],
       "shards_why": "Test names are assigned across these shards by SHA-256 of the group domain and full test name. Adding a test needs no list edit and moves no existing test. Shard clocks and parallelism remain declared here.",
@@ -250,111 +286,219 @@
   "root_package": "github.com/olivaresai/olivares/cmd/olivares",
   "root_step_ceiling_minutes": 80,
   "root_go_timeout_minutes": 70,
-  "root_shards_why": "Root test names are assigned across these shards by SHA-256 of the root package and full test name. Adding a test needs no list edit and moves no existing test. Shard clocks and parallelism remain declared here. Historical measurements can justify changing the shard count, not a hand-written assignment.",
+  "root_shards_why": "Root test names are assigned across these shards by SHA-256 of the root package and full test name. Adding a test needs no list edit and moves no existing test. Shard clocks and parallelism remain declared here. Historical measurements can justify changing the shard count, not a hand-written assignment. RE-MEASURED 2026-10-31 (hosted 4 vCPU, race-full of the 0.5 candidate export): root-o was cut at the 70 min -timeout and root-b and root-y took 66-69 min; the 26 shards totaled 1166 min of Go time for 4060 tests, and the measured per-test costs predict every shard within 0.3 min. Hash assignment leaves the slowest shard well above the mean, so 53 shards are needed to keep every predicted job, including 3.4 min of measured start-up, at or under 45 min (slowest 44.6).",
   "root_shards": [
     {
       "name": "root-a",
-      "minutes_est": 41.9
+      "minutes_est": 26.8
     },
     {
       "name": "root-b",
-      "minutes_est": 43.2
+      "minutes_est": 34.4
     },
     {
       "name": "root-c",
-      "minutes_est": 43.5
+      "minutes_est": 22.6
     },
     {
       "name": "root-d",
-      "minutes_est": 43.1
+      "minutes_est": 23.0
     },
     {
       "name": "root-e-communication",
-      "minutes_est": 43.1
+      "minutes_est": 23.4
     },
     {
       "name": "root-e-rest",
-      "minutes_est": 43.4
+      "minutes_est": 27.0
     },
     {
       "name": "root-f",
-      "minutes_est": 43.4
+      "minutes_est": 25.6
     },
     {
       "name": "root-g",
-      "minutes_est": 43.6
+      "minutes_est": 26.9
     },
     {
       "name": "root-h",
-      "minutes_est": 41.5
+      "minutes_est": 25.4
     },
     {
       "name": "root-i",
-      "minutes_est": 41.8
+      "minutes_est": 32.0
     },
     {
       "name": "root-j",
-      "minutes_est": 43.4
+      "minutes_est": 34.7
     },
     {
       "name": "root-k",
-      "minutes_est": 43.4
+      "minutes_est": 30.7
     },
     {
       "name": "root-l",
-      "minutes_est": 43.9
+      "minutes_est": 24.4
     },
     {
       "name": "root-m",
-      "minutes_est": 44.2
+      "minutes_est": 24.3
     },
     {
       "name": "root-n",
-      "minutes_est": 39.9
+      "minutes_est": 39.6
     },
     {
       "name": "root-o",
-      "minutes_est": 43.4
+      "minutes_est": 20.5
     },
     {
       "name": "root-p",
-      "minutes_est": 41.1
+      "minutes_est": 18.2
     },
     {
       "name": "root-q",
-      "minutes_est": 44.1
+      "minutes_est": 26.0
     },
     {
       "name": "root-r",
-      "minutes_est": 41.0
+      "minutes_est": 23.1
     },
     {
       "name": "root-s",
-      "minutes_est": 41.3
+      "minutes_est": 22.2
     },
     {
       "name": "root-t",
-      "minutes_est": 41.9
+      "minutes_est": 40.4
     },
     {
       "name": "root-u",
-      "minutes_est": 37.5
+      "minutes_est": 16.2
     },
     {
       "name": "root-v",
-      "minutes_est": 41.8
+      "minutes_est": 25.0
     },
     {
       "name": "root-w",
-      "minutes_est": 41.0
+      "minutes_est": 21.8
     },
     {
       "name": "root-x",
-      "minutes_est": 41.0
+      "minutes_est": 21.4
     },
     {
       "name": "root-y",
+      "minutes_est": 30.8
+    },
+    {
+      "name": "root-z",
+      "minutes_est": 22.9
+    },
+    {
+      "name": "root-aa",
+      "minutes_est": 13.5
+    },
+    {
+      "name": "root-ab",
+      "minutes_est": 23.6
+    },
+    {
+      "name": "root-ac",
+      "minutes_est": 23.1
+    },
+    {
+      "name": "root-ad",
+      "minutes_est": 31.9
+    },
+    {
+      "name": "root-ae",
+      "minutes_est": 19.7
+    },
+    {
+      "name": "root-af",
+      "minutes_est": 43.7
+    },
+    {
+      "name": "root-ag",
+      "minutes_est": 18.5
+    },
+    {
+      "name": "root-ah",
+      "minutes_est": 29.6
+    },
+    {
+      "name": "root-ai",
+      "minutes_est": 23.3
+    },
+    {
+      "name": "root-aj",
+      "minutes_est": 18.2
+    },
+    {
+      "name": "root-ak",
+      "minutes_est": 28.8
+    },
+    {
+      "name": "root-al",
+      "minutes_est": 19.7
+    },
+    {
+      "name": "root-am",
+      "minutes_est": 31.1
+    },
+    {
+      "name": "root-an",
+      "minutes_est": 44.6
+    },
+    {
+      "name": "root-ao",
+      "minutes_est": 23.7
+    },
+    {
+      "name": "root-ap",
+      "minutes_est": 16.3
+    },
+    {
+      "name": "root-aq",
+      "minutes_est": 25.8
+    },
+    {
+      "name": "root-ar",
+      "minutes_est": 20.5
+    },
+    {
+      "name": "root-as",
+      "minutes_est": 19.8
+    },
+    {
+      "name": "root-at",
       "minutes_est": 33.7
+    },
+    {
+      "name": "root-au",
+      "minutes_est": 24.2
+    },
+    {
+      "name": "root-av",
+      "minutes_est": 24.8
+    },
+    {
+      "name": "root-aw",
+      "minutes_est": 23.8
+    },
+    {
+      "name": "root-ax",
+      "minutes_est": 12.8
+    },
+    {
+      "name": "root-ay",
+      "minutes_est": 21.5
+    },
+    {
+      "name": "root-az",
+      "minutes_est": 20.4
     }
   ],
   "max_shard_share": 0.3,

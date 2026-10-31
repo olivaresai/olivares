@@ -141,17 +141,18 @@ export function SessionContextPane({
     enabled: canReadWorkspace && !!activeTenant && !!workspaceId,
   })
   const profileRef = live?.provider_profile_ref || run?.provider_profile_ref
-  const profilesQuery = useQuery({
-    queryKey: agentOpsKeys.profiles(activeTenant, boundary.epoch, {
-      limit: 200,
-    }),
-    queryFn: ({ signal }) =>
-      agentOpsApi.listProfiles({ limit: 200 }, { signal }),
+  // The session's own profile, by its ref: a list cached before this session's launch
+  // resolved a new profile would not hold it.
+  const profileQuery = useQuery({
+    queryKey: agentOpsKeys.profile(
+      activeTenant,
+      boundary.epoch,
+      profileRef ?? '',
+    ),
+    queryFn: ({ signal }) => agentOpsApi.getProfile(profileRef!, { signal }),
     enabled: canReadProfiles && !!activeTenant && !!profileRef,
   })
-  const profile = profilesQuery.data?.items.find(
-    (p) => p.profile_ref === profileRef,
-  )
+  const profile = profileQuery.data
   const profileLabel =
     (profile && profileName(profile)) ||
     profile?.driver ||
@@ -224,7 +225,7 @@ export function SessionContextPane({
             ? profile.account_name
               ? profile.profile_ref
               : undefined
-            : !canReadProfiles || !profilesQuery.isPending
+            : !canReadProfiles || profileQuery.isError
               ? profileRef
               : undefined
         }

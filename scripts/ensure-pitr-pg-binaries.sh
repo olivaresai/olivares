@@ -13,7 +13,7 @@
 # this helper follows the mainline-ci bsdtar pattern instead: fixed packages, digest-checked, unpacked
 # with dpkg-deb -x into the job's own scratch. No apt, no sudo, no dpkg database, no maintainer script.
 #
-# PROVENANCE. Rows below were read on 2026-10-30 from https://apt.postgresql.org/pub/repos/apt/dists/
+# PROVENANCE. PGDG rows below were read on 2026-10-30 from https://apt.postgresql.org/pub/repos/apt/dists/
 # noble-pgdg/main/binary-amd64/Packages.gz, whose InRelease was verified with gpgv against the
 # PostgreSQL Debian Repository key B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8 (downloaded from
 # https://www.postgresql.org/media/keys/ACCC4CF8.asc). Each .deb's size and SHA-256 match the index.
@@ -22,11 +22,14 @@
 # (libicu74, libssl3t64, libxml2, libldap, libgssapi-krb5, libpam, libsystemd, libzstd, liblz4) come
 # from the runner image; a missing one is a refusal here, not a late failure in the drill. The JIT
 # provider (llvmjit.so, needs libllvm19) is not pinned: PITR does not enable JIT.
+# PostgreSQL 18 also needs liburing2, staged here because it is absent on some runners.
+# Its pin is from https://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.gz
+# (2026-10-31); the downloaded deb matches that index's size, SHA-256 and control fields.
 #
 # USAGE:  ensure-pitr-pg-binaries.sh --dest ABSOLUTE_DIR [--artifact-dir ABSOLUTE_DIR]
 #   On success prints exactly two lines, for the workflow to append to $GITHUB_ENV:
 #     OLIVARES_TEST_PITR_BINDIRS=15=<dir>,16=<dir>,17=<dir>,18=<dir>
-#     LD_LIBRARY_PATH=<dir>            (libpq.so.5, which the pinned binaries need and do not RUNPATH)
+#     LD_LIBRARY_PATH=<dir>            (libpq.so.5 and liburing.so.2, needed by the pinned binaries)
 #   exit 0  the root satisfies the manifest and every major's binaries run and report their version
 #   exit 2  could not provide one: bad argument, missing tool, absent or wrong artifact, network
 #           error, unexpected control field, a binary that does not run, or an unresolved library.
@@ -43,18 +46,18 @@ refuse() {
 }
 
 # >>> PINS
-# One block, one row per package: name|version|pool path|bytes|sha256
-BASE_URL=https://apt.postgresql.org/pub/repos/apt
+# One block, one row per package: name|version|URL|bytes|sha256
 ROWS='
-libpq5|18.6-1.pgdg24.04+2|pool/main/p/postgresql-18/libpq5_18.6-1.pgdg24.04+2_amd64.deb|264072|b487c5ed2ceb9244c6a9d6ae65818ed6707c3c44a2e14488394ae4194c52c53b
-postgresql-15|15.19-1.pgdg24.04+2|pool/main/p/postgresql-15/postgresql-15_15.19-1.pgdg24.04+2_amd64.deb|15337096|c3753999a186bd7b03a4083373a7d94e79f2d3b0e71a4a3acceec4bbb36e82fa
-postgresql-16|16.15-1.pgdg24.04+2|pool/main/p/postgresql-16/postgresql-16_16.15-1.pgdg24.04+2_amd64.deb|16424836|abe560fc574383f520753dfaef79ab24081cda488293d5c991a9f77ac98ef18f
-postgresql-17|17.11-1.pgdg24.04+2|pool/main/p/postgresql-17/postgresql-17_17.11-1.pgdg24.04+2_amd64.deb|16949784|d5b58058a82a3f344f832aea2cc54badc4f6265c25c960752cb1f5df5d2180ee
-postgresql-18|18.6-1.pgdg24.04+2|pool/main/p/postgresql-18/postgresql-18_18.6-1.pgdg24.04+2_amd64.deb|7576708|c0773357df8769abb70e92722196d9b53422d71c0f29a4f39c834b94276cfa3d
-postgresql-client-15|15.19-1.pgdg24.04+2|pool/main/p/postgresql-15/postgresql-client-15_15.19-1.pgdg24.04+2_amd64.deb|1745356|7f6b149a8163e7538d600afcf0eef08b9596fc5a8ad0910f6e48cf016b88de8b
-postgresql-client-16|16.15-1.pgdg24.04+2|pool/main/p/postgresql-16/postgresql-client-16_16.15-1.pgdg24.04+2_amd64.deb|1948516|d7258aaa5c4ea092d98730b7d27e54dbcc5493d3b56b4f526c9ddec4b71135e6
-postgresql-client-17|17.11-1.pgdg24.04+2|pool/main/p/postgresql-17/postgresql-client-17_17.11-1.pgdg24.04+2_amd64.deb|2052656|b3b071b67a814a382516d6f6241b529c52f909672457e2f48083acce047b634f
-postgresql-client-18|18.6-1.pgdg24.04+2|pool/main/p/postgresql-18/postgresql-client-18_18.6-1.pgdg24.04+2_amd64.deb|2114236|b9d10d99a73bf7aa375be2fe36626c40499cfdf553d0ad174674a88a1b256b43
+liburing2|2.5-1build1|https://archive.ubuntu.com/ubuntu/pool/main/libu/liburing/liburing2_2.5-1build1_amd64.deb|21092|c2aef62accee92a06263c3ad4ef46132c13e409b54296c44792a20491830a7b0
+libpq5|18.6-1.pgdg24.04+2|https://apt.postgresql.org/pub/repos/apt/pool/main/p/postgresql-18/libpq5_18.6-1.pgdg24.04+2_amd64.deb|264072|b487c5ed2ceb9244c6a9d6ae65818ed6707c3c44a2e14488394ae4194c52c53b
+postgresql-15|15.19-1.pgdg24.04+2|https://apt.postgresql.org/pub/repos/apt/pool/main/p/postgresql-15/postgresql-15_15.19-1.pgdg24.04+2_amd64.deb|15337096|c3753999a186bd7b03a4083373a7d94e79f2d3b0e71a4a3acceec4bbb36e82fa
+postgresql-16|16.15-1.pgdg24.04+2|https://apt.postgresql.org/pub/repos/apt/pool/main/p/postgresql-16/postgresql-16_16.15-1.pgdg24.04+2_amd64.deb|16424836|abe560fc574383f520753dfaef79ab24081cda488293d5c991a9f77ac98ef18f
+postgresql-17|17.11-1.pgdg24.04+2|https://apt.postgresql.org/pub/repos/apt/pool/main/p/postgresql-17/postgresql-17_17.11-1.pgdg24.04+2_amd64.deb|16949784|d5b58058a82a3f344f832aea2cc54badc4f6265c25c960752cb1f5df5d2180ee
+postgresql-18|18.6-1.pgdg24.04+2|https://apt.postgresql.org/pub/repos/apt/pool/main/p/postgresql-18/postgresql-18_18.6-1.pgdg24.04+2_amd64.deb|7576708|c0773357df8769abb70e92722196d9b53422d71c0f29a4f39c834b94276cfa3d
+postgresql-client-15|15.19-1.pgdg24.04+2|https://apt.postgresql.org/pub/repos/apt/pool/main/p/postgresql-15/postgresql-client-15_15.19-1.pgdg24.04+2_amd64.deb|1745356|7f6b149a8163e7538d600afcf0eef08b9596fc5a8ad0910f6e48cf016b88de8b
+postgresql-client-16|16.15-1.pgdg24.04+2|https://apt.postgresql.org/pub/repos/apt/pool/main/p/postgresql-16/postgresql-client-16_16.15-1.pgdg24.04+2_amd64.deb|1948516|d7258aaa5c4ea092d98730b7d27e54dbcc5493d3b56b4f526c9ddec4b71135e6
+postgresql-client-17|17.11-1.pgdg24.04+2|https://apt.postgresql.org/pub/repos/apt/pool/main/p/postgresql-17/postgresql-client-17_17.11-1.pgdg24.04+2_amd64.deb|2052656|b3b071b67a814a382516d6f6241b529c52f909672457e2f48083acce047b634f
+postgresql-client-18|18.6-1.pgdg24.04+2|https://apt.postgresql.org/pub/repos/apt/pool/main/p/postgresql-18/postgresql-client-18_18.6-1.pgdg24.04+2_amd64.deb|2114236|b9d10d99a73bf7aa375be2fe36626c40499cfdf553d0ad174674a88a1b256b43
 '
 # <<< PINS
 
@@ -130,9 +133,9 @@ stage="$(command mktemp -d "$dest/.ensure-pitr-pg.XXXXXX")" ||
 trap 'rm -rf -- "$stage"' EXIT
 command mkdir -p -- "$stage/debs" "$stage/root"
 
-while IFS='|' read -r p_pkg p_ver p_path p_size p_sha; do
+while IFS='|' read -r p_pkg p_ver p_url p_size p_sha; do
 	[[ -n "$p_pkg" ]] || continue
-	base="${p_path##*/}"
+	base="${p_url##*/}"
 	deb="$stage/debs/$base"
 	if [[ -n "$artifact_dir" ]]; then
 		src="$artifact_dir/$base"
@@ -141,7 +144,7 @@ while IFS='|' read -r p_pkg p_ver p_path p_size p_sha; do
 	else
 		command curl -sS --proto '=https' --proto-redir '=https' --tlsv1.2 \
 			--location --max-redirs 3 --connect-timeout 20 --max-time 600 --retry 2 --retry-delay 2 \
-			--max-filesize "$p_size" -o "$deb" "$BASE_URL/$p_path" ||
+			--max-filesize "$p_size" -o "$deb" "$p_url" ||
 			refuse "could not download $base"
 	fi
 	got_size="$(command stat -c '%s' -- "$deb" 2>/dev/null || printf 'unknown')"

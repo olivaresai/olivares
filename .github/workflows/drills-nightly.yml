@@ -171,7 +171,10 @@ jobs:
           # An engine that exits (a busy port, the regression) ends the wait at once, and a missing
           # token reaches the report below with the engine's own error instead of ending the
           # step under bash -e and pipefail.
-          for _ in $(seq 1 60); do
+          # Fresh SQLite initialization took almost 120 s on the nightly runner.
+          # Allow five minutes for startup within the existing 20-minute step;
+          # readiness still requires a token, and a dead engine ends the wait at once.
+          for _ in $(seq 1 150); do
             grep -qoE 'olst_[A-Z0-9]+' "$RUNNER_TEMP/walk-engine.log" && break
             kill -0 "$engine_pid" 2>/dev/null || break
             sleep 2
