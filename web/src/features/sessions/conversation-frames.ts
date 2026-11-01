@@ -1679,11 +1679,13 @@ export function mapConversationFrames(
   times?: readonly (string | undefined)[],
   /** Each line's attach `seq`, where it has one; same order as `lines`. */
   seqs?: readonly (number | undefined)[],
+  /** The items the lines continue (the stored conversation they follow). */
+  from: ConversationItem[] = [],
 ): ConversationItem[] {
   return lines.reduce<ConversationItem[]>(
     (items, line, i) =>
       foldConversationLine(items, line, times?.[i], seqs?.[i]),
-    [],
+    from,
   )
 }
 

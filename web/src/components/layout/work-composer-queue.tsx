@@ -92,7 +92,7 @@ export function WorkComposerQueue({
                       save(item.id, item.text)
                     }
                   }}
-                  className="w-full resize-none rounded-md border border-line bg-raised px-2 py-1 text-body text-text outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                  className="w-full resize-none rounded-md border border-ctl-border bg-raised px-2 py-1 text-body text-text outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
                 />
                 <div className="flex gap-1">
                   <Button

@@ -28,6 +28,7 @@ import (
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/sessions"
 )
 
 const (
@@ -1300,7 +1301,7 @@ type workSSEFrame struct {
 
 func consumeWorkSSE(ctx context.Context, src io.Reader, out io.Writer, format string) error {
 	scanner := bufio.NewScanner(src)
-	scanner.Buffer(make([]byte, 0, 64*1024), 4<<20)
+	scanner.Buffer(make([]byte, 0, 64*1024), sessions.MaxAttachEvent)
 	frame := workSSEFrame{}
 	dispatch := func() error {
 		if len(frame.data) == 0 {

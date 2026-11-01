@@ -643,6 +643,17 @@ func (m *Module) startOllama(program string, actor auth.Principal, tenant model.
 				cancel()
 				return
 			}
+		} else if verr := ollamaListenerHeldBy(pid, cfg.Addr); verr != nil {
+			// The same for the installed program: the answer must come from the child this
+			// start ran, not from another process that bound the address after the probe.
+			m.mu.Lock()
+			if m.ollama.done == done && m.ollama.state == ollamaStarting && !m.ollama.stopping {
+				m.ollama.state, m.ollama.runtime = ollamaFailed, ""
+				m.ollama.message = appendNote(m.ollama.message, "Ollama answered, but the engine could not confirm that the Ollama it started holds "+cfg.Addr+": "+verr.Error())
+			}
+			m.mu.Unlock()
+			cancel()
+			return
 		}
 		m.mu.Lock()
 		if m.ollama.done != done || m.ollama.state != ollamaStarting {

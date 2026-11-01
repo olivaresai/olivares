@@ -41,14 +41,14 @@ const onFrameRef = vi.hoisted(() => ({
     | null,
 }))
 const onHistoryRef = vi.hoisted(() => ({
-  current: null as ((line: string) => void) | null,
+  current: null as ((lines: string[]) => void) | null,
 }))
 const messageRights = vi.hoisted(() => ({ writable: true }))
 
 vi.mock('@/features/agentops/attach', () => ({
   useRunAttach: (opts: {
     onFrame: (f: { seq: number; stream: string; line: string }) => void
-    onHistory?: (line: string) => void
+    onHistory?: (lines: string[]) => void
   }) => {
     onFrameRef.current = opts.onFrame
     onHistoryRef.current = opts.onHistory ?? null
@@ -312,18 +312,65 @@ describe('SessionConversation', () => {
         'the session was not started because its network boundary could not be set up: the host or container must allow unprivileged user and network namespaces and Landlock: operation not permitted',
     })
     expect(screen.queryByText('No messages yet.')).not.toBeInTheDocument()
-    act(() => onHistoryRef.current?.(JSON.stringify(nativeHistory)))
+    act(() => onHistoryRef.current?.([JSON.stringify(nativeHistory)]))
     expect(screen.getByText('initial CLI prompt')).toBeInTheDocument()
+  })
+  it('shows every turn of a Claude session from its transcript before the frames the ring still holds', () => {
+    wrap({ state: 'running' })
+    const user = (n: number) =>
+      JSON.stringify({
+        type: 'user',
+        uuid: `u-${n}`,
+        message: { role: 'user', content: `question ${n}` },
+      })
+    const reply = (n: number) =>
+      JSON.stringify({
+        type: 'assistant',
+        uuid: `a-${n}`,
+        message: {
+          id: `msg_${n}`,
+          role: 'assistant',
+          content: [{ type: 'text', text: `answer ${n}` }],
+        },
+      })
+    // The transcript gives turns 1-3, the ring the turn after them.
+    act(() =>
+      onHistoryRef.current?.([
+        user(1),
+        reply(1),
+        user(2),
+        reply(2),
+        user(3),
+        reply(3),
+      ]),
+    )
+    act(() => {
+      push(user(4), 9001)
+      push(reply(4), 9002)
+    })
+    const shown = screen
+      .getAllByText(/^(question|answer) \d$/)
+      .map((node) => node.textContent)
+    expect(shown).toEqual([
+      'question 1',
+      'answer 1',
+      'question 2',
+      'answer 2',
+      'question 3',
+      'answer 3',
+      'question 4',
+      'answer 4',
+    ])
   })
   it('shows native stored earlier turns on a fresh view and clears words on tenant or sign-in change', async () => {
     wrap({ state: 'stopped' })
-    act(() => onHistoryRef.current?.(JSON.stringify(nativeHistory)))
+    act(() => onHistoryRef.current?.([JSON.stringify(nativeHistory)]))
     expect(await screen.findByText('initial CLI prompt')).toBeInTheDocument()
     expect(screen.getByText('earlier console prompt')).toBeInTheDocument()
     expect(screen.getAllByText('fixture answer')).toHaveLength(2)
     act(() => useTenantStore.setState({ activeTenant: 'another-tenant' }))
     expect(screen.queryByText('initial CLI prompt')).not.toBeInTheDocument()
-    act(() => onHistoryRef.current?.(JSON.stringify(nativeHistory)))
+    act(() => onHistoryRef.current?.([JSON.stringify(nativeHistory)]))
     expect(screen.getByText('initial CLI prompt')).toBeInTheDocument()
     act(() =>
       useSessionStore.getState().setSession({
@@ -332,7 +379,7 @@ describe('SessionConversation', () => {
         expiresAt: '2099-01-01T00:00:00Z',
       }),
     )
-    act(() => onHistoryRef.current?.(JSON.stringify(nativeHistory)))
+    act(() => onHistoryRef.current?.([JSON.stringify(nativeHistory)]))
     expect(screen.getByText('initial CLI prompt')).toBeInTheDocument()
     act(() => useSessionStore.getState().clear())
     expect(screen.queryByText('initial CLI prompt')).not.toBeInTheDocument()
@@ -1977,7 +2024,7 @@ describe('SessionConversation — a sent message', () => {
     sentAfterFirstTurn('earlier console prompt')
     wrap()
     act(() => {
-      onHistoryRef.current?.(JSON.stringify(nativeHistory))
+      onHistoryRef.current?.([JSON.stringify(nativeHistory)])
       codexFrames.forEach((line, i) => push(line, i + 1))
     })
     expect(screen.queryByTestId('conversation-sent')).toBeNull()
@@ -1988,7 +2035,7 @@ describe('SessionConversation — a sent message', () => {
     wrap()
     // The ring no longer holds frames 4-4099: the echo was one of them.
     act(() => {
-      onHistoryRef.current?.(JSON.stringify(nativeHistory))
+      onHistoryRef.current?.([JSON.stringify(nativeHistory)])
       push(codexFrames[5]!, 4100)
     })
     expect(screen.queryByTestId('conversation-sent')).toBeNull()
@@ -1998,7 +2045,7 @@ describe('SessionConversation — a sent message', () => {
     sentAfterFirstTurn('earlier console prompt')
     // The run left this node: the stored thread comes, and no frame.
     wrap({ state: 'stopped' })
-    act(() => onHistoryRef.current?.(JSON.stringify(nativeHistory)))
+    act(() => onHistoryRef.current?.([JSON.stringify(nativeHistory)]))
     expect(screen.queryByTestId('conversation-sent')).toBeNull()
   })
 
@@ -2006,7 +2053,7 @@ describe('SessionConversation — a sent message', () => {
     sentAfterFirstTurn('initial CLI prompt')
     wrap({ state: 'stopped' })
     // The stored thread first, then the frames after the send (4-6): none is its echo.
-    act(() => onHistoryRef.current?.(JSON.stringify(nativeHistory)))
+    act(() => onHistoryRef.current?.([JSON.stringify(nativeHistory)]))
     expect(screen.getByTestId('conversation-sent')).toHaveTextContent(
       'The session ended before the tool took it.',
     )
@@ -2020,7 +2067,7 @@ describe('SessionConversation — a sent message', () => {
     sentAfterFirstTurn('initial CLI prompt')
     wrap()
     act(() => {
-      onHistoryRef.current?.(JSON.stringify(nativeHistory))
+      onHistoryRef.current?.([JSON.stringify(nativeHistory)])
       push(codexFrames[5]!, 4100)
     })
     expect(screen.getByTestId('conversation-sent')).toHaveTextContent(
@@ -2051,7 +2098,7 @@ describe('SessionConversation — a sent message', () => {
     sentAfterFirstTurn('earlier console prompt')
     wrap()
     act(() => {
-      onHistoryRef.current?.(JSON.stringify(nativeHistory))
+      onHistoryRef.current?.([JSON.stringify(nativeHistory)])
       push(codexFrames[5]!, 4100)
     })
     expect(screen.getAllByTestId('conversation-sent')).toHaveLength(1)
@@ -2485,7 +2532,7 @@ describe('SessionConversation — Codex keeps its rows', () => {
   it('folds a command between two answers, and keeps the stored real history', async () => {
     wrap()
     await screen.findByTestId('session-conversation')
-    act(() => onHistoryRef.current?.(JSON.stringify(nativeHistory)))
+    act(() => onHistoryRef.current?.([JSON.stringify(nativeHistory)]))
     const item = (type: string, id: string, extra: object) =>
       JSON.stringify({
         method: 'item/completed',

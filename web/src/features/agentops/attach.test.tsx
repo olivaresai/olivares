@@ -47,6 +47,76 @@ afterEach(() => {
 })
 
 describe('useRunAttach', () => {
+  it('delivers a stored conversation of many records once, whole, before the first frame', async () => {
+    const onHistory = vi.fn()
+    const frames: AttachFrame[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        body: streamFrom(
+          sse('history', { line: 'record-1' }),
+          sse('history', { line: 'record-2' }),
+          sse('history', { line: 'record-3' }),
+          sse('output', { seq: 7, stream: 'stdout', line: 'live' }),
+          sse('end', { type: 'end' }),
+        ),
+      } as Response),
+    )
+    const { result } = renderHook(() =>
+      useRunAttach({
+        runRef: 'run-x',
+        onHistory,
+        onFrame: (frame) => {
+          // The history is in the view before the frame that follows it.
+          expect(onHistory).toHaveBeenCalledTimes(1)
+          frames.push(frame)
+        },
+      }),
+    )
+    await waitFor(() => expect(result.current.ended).toBe(true))
+    expect(onHistory).toHaveBeenCalledExactlyOnceWith([
+      'record-1',
+      'record-2',
+      'record-3',
+    ])
+    expect(frames.map((frame) => frame.seq)).toEqual([7])
+  })
+
+  it('reads a history cut short by a dropped stream again whole, never as a part', async () => {
+    const onHistory = vi.fn()
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        body: new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode(sse('history', { line: 'record-1' })),
+            )
+            controller.error(new Error('connection reset'))
+          },
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        body: streamFrom(
+          sse('history', { line: 'record-1' }),
+          sse('history', { line: 'record-2' }),
+          sse('end', { type: 'end' }),
+        ),
+      } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const { result } = renderHook(() =>
+      useRunAttach({ runRef: 'run-x', onHistory, onFrame: () => {} }),
+    )
+    await waitFor(() => expect(result.current.ended).toBe(true), {
+      timeout: 4000,
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(onHistory).toHaveBeenCalledExactlyOnceWith(['record-1', 'record-2'])
+  })
+
   it('delivers stored history without advancing the output cursor or ending unavailable I/O', async () => {
     const onHistory = vi.fn()
     const frames: AttachFrame[] = []
@@ -70,7 +140,7 @@ describe('useRunAttach', () => {
     await waitFor(() =>
       expect(result.current.ioUnavailable).toBe('not_live_on_node'),
     )
-    expect(onHistory).toHaveBeenCalledExactlyOnceWith('native-history')
+    expect(onHistory).toHaveBeenCalledExactlyOnceWith(['native-history'])
     expect(
       new URL(fetchMock.mock.calls[0][0], 'http://localhost').searchParams.get(
         'history',

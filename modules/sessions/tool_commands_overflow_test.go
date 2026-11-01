@@ -52,7 +52,7 @@ printf '"}}}\n'
 esac
 done
 `
-			m, _, tenant, _ := newRuntimeHarness(t, WithRunner(NewProcRunner()), WithProgram(writeOwnedChild(t, script)),
+			m, _, tenant, _ := newRuntimeHarness(t, WithRunner(&procRunner{lineCap: overflowLineCap}), WithProgram(writeOwnedChild(t, script)),
 				WithCredentialSource(staticCred()), WithStopWaitDelay(100*time.Millisecond))
 			ctx := context.Background()
 			dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
@@ -116,9 +116,14 @@ done
 }
 
 // launchCodexWithSkills starts the real runtime on a real child that answers skills/list as fixture says.
+// overflowLineCap is the line limit of the runners in these tests: the replacements
+// do not depend on its size, and the product's limit (maxOutputLine) is too big to
+// write past here.
+const overflowLineCap = 1 << 20
+
 func launchCodexWithSkills(t *testing.T, fixture codexFixture) (*Module, model.TenantID, runDTO, *liveRun) {
 	t.Helper()
-	m, _, tenant, prof := codexHarness(t, AuthSourceAccountHome)
+	m, _, tenant, prof := codexHarness(t, AuthSourceAccountHome, WithRunner(&procRunner{lineCap: overflowLineCap}))
 	fixture.ThreadID, fixture.Account = "thread-skills", "apikey"
 	setCodexFixture(t, prof, fixture)
 	dto, err := codexLaunch(t, m, tenant, prof)
@@ -145,7 +150,7 @@ func assertNoSkillsInAttach(t *testing.T, lr *liveRun) {
 // runtime and a real child prove that a reply over the one-line limit fails the
 // read, not the session.
 func TestToolCommands_OversizedCodexSkillsKeepNativeSessionAlive(t *testing.T) {
-	m, tenant, dto, lr := launchCodexWithSkills(t, codexFixture{SkillsPadBytes: maxOutputLine + 100_000})
+	m, tenant, dto, lr := launchCodexWithSkills(t, codexFixture{SkillsPadBytes: overflowLineCap + 100_000})
 	ctx := context.Background()
 	pid := int(*dto.PID)
 	got, err := m.runToolCommands(ctx, tenant, dto.RunRef)
@@ -165,7 +170,7 @@ func TestToolCommands_OversizedCodexSkillsKeepNativeSessionAlive(t *testing.T) {
 
 // A catalog read before is served, marked stale, when the next answer is over the limit.
 func TestToolCommands_OversizedCodexSkillsServeTheLastCatalogStale(t *testing.T) {
-	m, tenant, dto, lr := launchCodexWithSkills(t, codexFixture{SkillsPadBytes: maxOutputLine + 100_000, SkillsPadRequest: 2})
+	m, tenant, dto, lr := launchCodexWithSkills(t, codexFixture{SkillsPadBytes: overflowLineCap + 100_000, SkillsPadRequest: 2})
 	ctx := context.Background()
 	if got, err := m.runToolCommands(ctx, tenant, dto.RunRef); err != nil || !got.Reported || got.Stale || len(got.Commands) != 1 {
 		t.Fatalf("first catalog = %+v, %v", got, err)
@@ -182,13 +187,16 @@ func TestToolCommands_OversizedCodexSkillsServeTheLastCatalogStale(t *testing.T)
 }
 
 // Recovery is for answers to the engine's own request only: a line over the limit
-// under an id nobody issued still ends the session.
-func TestToolCommands_OversizedCodexLineOfAnotherIDStillEndsTheSession(t *testing.T) {
-	m, tenant, dto, lr := launchCodexWithSkills(t, codexFixture{SkillsPadBytes: maxOutputLine + 100_000, SkillsPadForeignID: true})
+// under an id nobody issued is the generic compact frame, its payload is not kept,
+// and the session goes on.
+func TestToolCommands_OversizedCodexLineOfAnotherIDLeavesTheSessionRunning(t *testing.T) {
+	m, tenant, dto, lr := launchCodexWithSkills(t, codexFixture{SkillsPadBytes: overflowLineCap + 100_000, SkillsPadForeignID: true})
 	pid := int(*dto.PID)
-	// The read ends with the session; what it returns is not the point here.
+	// The engine's own request gets no answer; what the read returns is not the point here.
 	_, _ = m.runToolCommands(context.Background(), tenant, dto.RunRef)
-	waitFor(t, "the over-long unissued line ended the session", func() bool { return !processRunning(pid) })
+	if lr.toolEnded() || !processRunning(pid) {
+		t.Fatal("an over-long line under an unissued id ended the session")
+	}
 	assertNoSkillsInAttach(t, lr)
 }
 
@@ -234,7 +242,7 @@ head -c 1100000 /dev/zero | tr '\000' x
 printf '%s\n' 'overflow written' >&2
 exec sleep 300
 `
-	proc, err := NewProcRunner().Launch(context.Background(), LaunchSpec{Program: writeOwnedChild(t, script), WaitDelay: 50 * time.Millisecond})
+	proc, err := (&procRunner{lineCap: overflowLineCap}).Launch(context.Background(), LaunchSpec{Program: writeOwnedChild(t, script), WaitDelay: 50 * time.Millisecond})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +324,8 @@ func TestToolCommands_CodexOverflowRecoveryOnlyForIssuedAnswers(t *testing.T) {
 	}
 }
 
-// Installing catalog recovery must not relax the shared stdout cap.
+// Catalog recovery claims only its own answer: any other over-long line is left to
+// the pump's other replacements.
 func TestToolCommands_OverflowRecoveryPreservesOtherLineLimits(t *testing.T) {
 	c := &toolCommandCache{}
 	c.expect("olv-commands-owned")
@@ -324,8 +333,8 @@ func TestToolCommands_OverflowRecoveryPreservesOtherLineLimits(t *testing.T) {
 		`{"type":"assistant","response":{"request_id":"olv-commands-owned","text":"`,
 		`{"type":"control_response","response":{"request_id":"olv-commands-forged","text":"`,
 	} {
-		input := prefix + strings.Repeat("x", maxOutputLine) + `"}}` + "\n"
-		line, err := readBoundedLineWithOverflow(bufio.NewReader(strings.NewReader(input)), maxOutputLine, c.oversizedResponse)
+		input := prefix + strings.Repeat("x", overflowLineCap) + `"}}` + "\n"
+		line, err := readBoundedLineWithOverflow(bufio.NewReader(strings.NewReader(input)), overflowLineCap, func(prefix []byte, _ int, _ []byte) []byte { return c.oversizedResponse(prefix) })
 		if len(line) != 0 || !errors.Is(err, ErrOutputLineTooLong) {
 			t.Fatalf("unrelated oversized output = %d bytes, %v", len(line), err)
 		}

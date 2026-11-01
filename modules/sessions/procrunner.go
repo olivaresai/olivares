@@ -6,7 +6,9 @@ package sessions
 
 import (
 	"bufio"
+	"cmp"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -37,8 +39,19 @@ type procRunner struct {
 	// lineCap bounds a single output line so a pathological frame cannot exhaust
 	// memory before the ring buffer's own bound applies.
 	lineCap int
-	usePTY  bool
+	// queueBytes bounds the frames waiting for the consumer (0: outputQueueBytes).
+	queueBytes int
+	usePTY     bool
 }
+
+// outputQueueFrames and outputQueueBytes bound the frames a pump hands over before
+// the consumer takes them; past either, the pump waits and the tool waits on its
+// pipe. The bytes are what 0.5 held at most: 256 frames of its 1 MiB line. One
+// frame always goes into an empty queue, so a line up to maxOutputLine still passes.
+const (
+	outputQueueFrames = 256
+	outputQueueBytes  = 256 << 20
+)
 
 // NewProcRunner returns the native streaming runner (stdio pipes). It is
 // constructed in cmd/olivares (the only layer that wires concrete runtimes
@@ -74,15 +87,25 @@ func networkBoundaryErr(err error) error {
 	return boundaryErr{&runErr{http.StatusBadGateway, "the session was not started because its network boundary could not be set up: " + err.Error()}, err}
 }
 
-// maxOutputLine bounds one bridged output line (1 MiB) — a stream-json frame is
-// far smaller; this guards against a runaway line, never a normal one.
-const maxOutputLine = 1 << 20
+// maxOutputLine is the longest output line the pump carries whole. One line is one
+// message of the tool, and a message carries at most what one request to its
+// provider may: a tool_result with a file or a screenshot is sent on as it is. The
+// limit is the largest request a provider of a driver documents (2026-11-01):
+//   - OpenAI (Codex): "Up to 512 MB total payload per request"
+//     (https://developers.openai.com/api/docs/guides/images-vision);
+//   - Claude API (Claude Code): Messages "128 MB"
+//     (https://platform.claude.com/docs/en/api/overview#request-size-limits);
+//   - Gemini API (Gemini CLI): "100 MB per request or payload"
+//     (https://ai.google.dev/gemini-api/docs/file-input-methods).
+//
+// The Codex app-server, ACP, OpenCode, Cursor and Grok CLIs document no message size.
+// A longer line is no message any provider would take: the pump replaces it with a
+// compact frame (oversize_frame.go) and reads on.
+const maxOutputLine = 512 << 20
 
-// maxOverflowDrain is the most a line may total when the pump discards it in favour of
-// a recognized replacement (an image echo, a command catalog): four 3.75 MiB images as
-// base64 with the message around them. A longer line is a runaway and ends the process
-// as any other over-long line does.
-const maxOverflowDrain = 24 << 20
+// maxDiagnosticLine bounds one stderr line kept for diagnostics: a log line, never a
+// protocol message.
+const maxDiagnosticLine = 1 << 20
 
 // Launch spawns the process with explicit env, a dedicated process group, and
 // stdin/stdout/stderr pipes, then starts the output pumps. The ctx is the
@@ -226,7 +249,8 @@ func (pr *procRunner) watch(cmd *exec.Cmd, stdin io.WriteCloser, stdout, stderr 
 		// keeps a writer open after the direct child exits.
 		stdout:       stdout,
 		stderr:       stderr,
-		out:          make(chan OutputFrame, 256),
+		out:          make(chan OutputFrame, outputQueueFrames),
+		queueBudget:  pr.queueBytes,
 		waitDone:     make(chan struct{}),
 		abandon:      make(chan struct{}),
 		waitDelay:    waitDelay,
@@ -290,7 +314,7 @@ func (pr *procRunner) watch(cmd *exec.Cmd, stdin io.WriteCloser, stdout, stderr 
 				p.waitErr = errors.Join(ErrChildNotReaped, p.waitErr)
 			}
 		}
-		p.waitErr = errors.Join(p.waitErr, p.outputErr, drainErr)
+		p.waitErr = errors.Join(p.waitErr, drainErr)
 		release()
 		close(p.out)
 		close(p.waitDone)
@@ -310,7 +334,7 @@ func (pr *procRunner) pump(wg *sync.WaitGroup, p *procProcess, r io.Reader, stre
 	}
 	br := bufio.NewReaderSize(r, 64*1024)
 	for {
-		line, err := readBoundedLineWithOverflow(br, pr.lineCap, func(prefix []byte) []byte {
+		line, err := readBoundedLineWithOverflow(br, pr.lineCap, func(prefix []byte, size int, sum []byte) []byte {
 			if c := p.commandResponses.Load(); c != nil {
 				if replacement := c.oversizedResponse(prefix); replacement != nil {
 					return replacement
@@ -322,18 +346,12 @@ func (pr *procRunner) pump(wg *sync.WaitGroup, p *procProcess, r io.Reader, stre
 				}
 			}
 			// The echo of a message with an image (image_echo.go).
-			return oversizedImageEcho(prefix)
+			if replacement := oversizedImageEcho(prefix); replacement != nil {
+				return replacement
+			}
+			// Any other record: one compact frame, and the session goes on (oversize_frame.go).
+			return oversizeFrame(prefix, size, sum)
 		})
-		if errors.Is(err, ErrOutputLineTooLong) {
-			p.outputFailure.Do(func() {
-				p.outputErr = errors.Join(ErrOutputLineTooLong, ErrOutputAbandoned)
-				p.closeStdin()
-				p.endSessionTree()
-				p.abandonOutput()
-				p.closeOutputPipes()
-			})
-			return
-		}
 		if len(line) > 0 {
 			if !p.deliver(OutputFrame{Stream: stream, Data: line}) {
 				return // a forced teardown gave up on delivery; it reports the loss
@@ -354,9 +372,9 @@ const diagnosticTruncatedMark = " [diagnostic truncated]"
 // an unterminated discard during Stop or an expired natural-exit drain. Diagnostic
 // prefixes never enter the stdout protocol parser.
 func (pr *procRunner) pumpDiagnostics(p *procProcess, r io.Reader) {
-	limit := pr.lineCap
-	if limit <= 0 {
-		limit = maxOutputLine
+	limit := maxDiagnosticLine
+	if pr.lineCap > 0 {
+		limit = min(pr.lineCap, maxDiagnosticLine)
 	}
 	br := bufio.NewReaderSize(r, min(64*1024, limit+2))
 	var prefix []byte
@@ -403,14 +421,30 @@ func (pr *procRunner) pumpDiagnostics(p *procProcess, r io.Reader) {
 // free slot and a closed `abandon` ready, a single select would drop, at random,
 // frames the consumer was perfectly able to take. Trying delivery on its own means
 // a teardown can only ever abandon a frame that is genuinely stuck.
+//
+// Past the byte budget it waits for the consumer the same way, polling what is
+// queued: the consumer takes frames from the channel and tells nobody.
 func (p *procProcess) deliver(frame OutputFrame) bool {
+	p.deliverMu.Lock()
+	defer p.deliverMu.Unlock()
+	budget := cmp.Or(p.queueBudget, outputQueueBytes)
+	for len(p.out) > 0 && p.queuedBytes()+len(frame.Data) > budget {
+		select {
+		case <-p.abandon:
+			p.abandonedFrames.Add(1)
+			return false
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
 	select {
 	case p.out <- frame:
+		p.noteSent(len(frame.Data))
 		return true
 	default:
 	}
 	select {
 	case p.out <- frame:
+		p.noteSent(len(frame.Data))
 		return true
 	case <-p.abandon:
 		p.abandonedFrames.Add(1)
@@ -418,18 +452,30 @@ func (p *procProcess) deliver(frame OutputFrame) bool {
 	}
 }
 
+// queuedBytes is the size of the frames still in the channel (deliverMu held).
+func (p *procProcess) queuedBytes() int {
+	total := 0
+	for i := 1; i <= len(p.out); i++ {
+		total += p.sent[(p.sentNext-i+len(p.sent))%len(p.sent)]
+	}
+	return total
+}
+
+func (p *procProcess) noteSent(n int) {
+	p.sent[p.sentNext] = n
+	p.sentNext = (p.sentNext + 1) % len(p.sent)
+}
+
 // procProcess is a live native process and its bridged streams.
 type procProcess struct {
-	cmd           *exec.Cmd
-	stdin         io.WriteCloser
-	stdout        io.ReadCloser
-	stderr        io.ReadCloser
-	out           chan OutputFrame
-	waitDone      chan struct{}
-	waitDelay     time.Duration
-	outputFailure sync.Once
-	outputErr     error // written once by a pump, read after both pumps join
-	stopping      atomic.Bool
+	cmd       *exec.Cmd
+	stdin     io.WriteCloser
+	stdout    io.ReadCloser
+	stderr    io.ReadCloser
+	out       chan OutputFrame
+	waitDone  chan struct{}
+	waitDelay time.Duration
+	stopping  atomic.Bool
 	// The catalog's existing waiter map is also the authority for recovering an
 	// oversized initialize answer. Set before its request reaches stdin.
 	commandResponses atomic.Pointer[toolCommandCache]
@@ -480,6 +526,13 @@ type procProcess struct {
 	abandon         chan struct{}
 	abandonOnce     sync.Once
 	abandonedFrames atomic.Int64
+
+	// The two pumps deliver one at a time, so out holds the last len(out) frames sent,
+	// in order, and their sizes are the last len(out) entries of sent.
+	deliverMu   sync.Mutex
+	queueBudget int // 0: outputQueueBytes
+	sent        [outputQueueFrames]int
+	sentNext    int
 }
 
 // ErrOutputAbandoned classifies a Wait or Stop that DID reap the child but had to give up
@@ -828,7 +881,7 @@ func (e *reapedWaitError) Unwrap() error { return e.cause }
 // when explicit Stop keeps the existing successful-collection Wait result.
 func (p *procProcess) OutputIncomplete() bool {
 	<-p.waitDone
-	return p.drainAbandoned.Load() || p.abandonedFrames.Load() > 0 || errors.Is(p.outputErr, ErrOutputAbandoned)
+	return p.drainAbandoned.Load() || p.abandonedFrames.Load() > 0
 }
 
 // abandonOutput releases blocked deliveries after a forced output drain.
@@ -847,9 +900,6 @@ func (p *procProcess) abandonOutput() {
 func (p *procProcess) forcedTeardownReport() error {
 	if dropped := p.abandonedFrames.Load(); dropped > 0 {
 		return fmt.Errorf("sessions: the child was reaped, but %d output frame(s) could not be delivered and were abandoned, and the output pipes were closed, to finish the teardown: %w", dropped, errors.Join(ErrOutputAbandoned, p.waitErr))
-	}
-	if errors.Is(p.waitErr, ErrOutputLineTooLong) {
-		return fmt.Errorf("sessions: the child was reaped after an oversized protocol record was refused; output was abandoned: %w", p.waitErr)
 	}
 	return fmt.Errorf("sessions: the child was reaped, but output did not finish within the drain bound; its pipes were closed and further output is not bridged: %w", ErrOutputAbandoned)
 }
@@ -922,11 +972,16 @@ func readBoundedLine(br *bufio.Reader, limit int) ([]byte, error) {
 	return readBoundedLineWithOverflow(br, limit, nil)
 }
 
-// readBoundedLineWithOverflow may replace an identified oversized control answer
-// with a fixed error frame. It discards the rest without retaining it; Stop and
-// the natural-exit drain bound close the owned reader even without a newline.
-// Every other oversized line remains terminal and no truncated prefix is output.
-func readBoundedLineWithOverflow(br *bufio.Reader, limit int, overflow func([]byte) []byte) ([]byte, error) {
+// overflowHead is how much of an over-long line its replacement is chosen from.
+const overflowHead = 64 << 10
+
+// readBoundedLineWithOverflow lets overflow replace an over-long line. The rest of
+// the line is read and discarded without being retained, however long it is, and
+// overflow gets the line's first overflowHead bytes, its size and its SHA-256 (both
+// without the line ending). A nil replacement is ErrOutputLineTooLong, and no
+// truncated prefix is output. Stop and the natural-exit drain bound close the owned
+// reader even without a newline.
+func readBoundedLineWithOverflow(br *bufio.Reader, limit int, overflow func(prefix []byte, size int, sum []byte) []byte) ([]byte, error) {
 	if limit <= 0 {
 		limit = maxOutputLine
 	}
@@ -935,27 +990,38 @@ func readBoundedLineWithOverflow(br *bufio.Reader, limit int, overflow func([]by
 		fragment, err := br.ReadSlice('\n')
 		size := len(line) + len(fragment)
 		if size > limit+2 {
-			if overflow != nil {
-				keep := min(len(fragment), limit+2-len(line))
-				prefix := make([]byte, len(line)+keep)
-				copy(prefix, line)
-				copy(prefix[len(line):], fragment[:keep])
-				if replacement := overflow(prefix); replacement != nil {
-					// The rest of the line is discarded, to a ceiling: a recognized
-					// replacement shortens a line, it does not make one endless.
-					drained := size
-					for errors.Is(err, bufio.ErrBufferFull) {
-						var more []byte
-						more, err = br.ReadSlice('\n')
-						if drained += len(more); drained > maxOverflowDrain {
-							return nil, ErrOutputLineTooLong
-						}
-					}
-					if err == nil || errors.Is(err, io.EOF) {
-						return replacement, err
-					}
-					return nil, err
+			if overflow == nil {
+				return nil, ErrOutputLineTooLong
+			}
+			// The replacements read the head of the line only: what the record is.
+			prefix := make([]byte, 0, overflowHead)
+			prefix = append(prefix, line[:min(len(line), overflowHead)]...)
+			prefix = append(prefix, fragment[:min(len(fragment), overflowHead-len(prefix))]...)
+			hash := sha256.New()
+			var held []byte // CR/LF read last: the line ending, unless more of the line follows
+			size = 0
+			add := func(b []byte) {
+				if body := trimCRLF(b); len(body) > 0 {
+					hash.Write(held)
+					hash.Write(body)
+					size += len(held) + len(body)
+					held, b = held[:0], b[len(body):]
 				}
+				held = append(held, b...)
+			}
+			add(line)
+			for {
+				add(fragment)
+				if !errors.Is(err, bufio.ErrBufferFull) {
+					break
+				}
+				fragment, err = br.ReadSlice('\n')
+			}
+			if err != nil && !errors.Is(err, io.EOF) {
+				return nil, err
+			}
+			if replacement := overflow(prefix, size, hash.Sum(nil)); replacement != nil {
+				return replacement, err
 			}
 			return nil, ErrOutputLineTooLong
 		}
@@ -974,7 +1040,8 @@ func readBoundedLineWithOverflow(br *bufio.Reader, limit int, overflow func([]by
 		line = trimCRLF(line)
 		if len(line) > limit {
 			if overflow != nil {
-				if replacement := overflow(line); replacement != nil {
+				sum := sha256.Sum256(line)
+				if replacement := overflow(line, len(line), sum[:]); replacement != nil {
 					return replacement, err
 				}
 			}

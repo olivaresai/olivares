@@ -30,11 +30,13 @@ import (
 // and is the same for the console, the API and the CLI.
 
 const (
-	// A read repeats whenever the session writes, so its bounds are tighter than the
-	// handoff's one-off read; a real session is far below all of them. Large tool
+	// A read repeats whenever the session writes, so its file bound is tighter than
+	// the handoff's one-off read; a real session is far below all of them. Large tool
 	// output is stored by the tool beside the transcript, not in it.
-	activityFileMax   = 64 << 20
-	activityLineMax   = 8 << 20
+	activityFileMax = 64 << 20
+	// One record is one message of the tool, as long as a provider request
+	// (maxOutputLine, procrunner.go), and never longer than the file read.
+	activityLineMax   = activityFileMax
 	activityAgentsMax = 256
 	// One summary is a line on a panel, not the agent's report.
 	activitySummaryMax = 300

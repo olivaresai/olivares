@@ -1,14 +1,14 @@
 # Changelog
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Releases use `MAJOR.MINOR`, with no patch number or `v` prefix. The next release is <!-- release -->`0.5`<!-- /release -->.
+Releases use `MAJOR.MINOR`, with no patch number or `v` prefix. The next release is <!-- release -->`0.6`<!-- /release -->.
 See [versioning](INSTALL.md#versioning) for the release policy.
 
-> **Draft: Community <!-- release -->`0.5`<!-- /release --> is unreleased.** Dated sections remain unchanged;
+> **Draft: Community <!-- release -->`0.6`<!-- /release --> is unreleased.** Dated sections remain unchanged;
 > the release-preparation section awaits publication. Other dated sections record published releases. [GitHub releases](https://github.com/olivaresai/olivares/releases)
 > lists their notes and artifacts. Published CLI commands and flags, API routes and
 > fields, configuration keys, defaults, paths and stored data follow the compatibility policy.
-> The <!-- release -->0.5<!-- /release --> edition changes are described in [Editions](docs/editions.md).
+> The <!-- release -->0.6<!-- /release --> edition changes are described in [Editions](docs/editions.md).
 > Announce deprecations in an earlier release and provide an automatic migration
 > before removal. A release never permits a regression. Any breaking change must
 > be explicit under **Changed** or **Removed**.
@@ -27,6 +27,30 @@ See [versioning](INSTALL.md#versioning) for the release policy.
   fix and keep private reports undisclosed.
 
 ## [Unreleased]
+
+## [0.6] - 2026-11-01
+
+### Changed
+
+- Release battery evidence can combine fresh successful legs from equivalent dispatches only when the tested base proof holds; missing legs never pass.
+- Console route census resolves exported path constants, sibling stream constants and transport wrappers, so valid console paths are not reported missing.
+- Shared audit boot fixtures carry an explicit format version, and SCIM absent-delete snapshot failures name the mismatch without changing the SCIM contract.
+
+### Fixed
+
+- Quickstart allows five minutes for fresh SQLite migrations and the HTTP listener on a loaded host, while still failing immediately when the engine exits.
+- A managed Ollama endpoint is registered only after the engine confirms that the child it started owns the listener. Another local process cannot be mistaken for it, and unreadable Ollama descriptors are named in the failure.
+- A session no longer ends with 'protocol output limit exceeded' when a tool prints one line over 1 MiB; the line is replaced by a short notice and the session continues.
+
+### Security
+
+- The appliance's SELinux policy lets the engine verify the managed Ollama listener's owner, while tool and command domains cannot bind the console, gRPC, portal or general web ports.
+### Fixed
+
+- The deb and apk packages carry the engine once again. 0.5 put a second full copy of it in
+  every deb, rpm and apk for the SELinux container hook, which doubled the deb to 306 MB and
+  the apk to 335 MB; they are back to 153 MB and 167 MB. Only the rpm keeps that copy,
+  because only its SELinux policy labels it; a host without SELinux enforcing never used it.
 
 ## [0.5] - 2026-10-31
 

@@ -27,6 +27,7 @@ vi.mock('./api', async (orig) => ({
   agentOpsApi: { profileModels: vi.fn() },
 }))
 
+import { preferenceStorage } from '@/lib/preference-storage'
 import { agentOpsApi } from './api'
 import { ModelEffortFields } from './model-effort-picker'
 import type { ProfileModelCatalogDTO, ProfileModelDTO } from './types'
@@ -115,7 +116,7 @@ async function openModels(user: ReturnType<typeof userEvent.setup>) {
 beforeEach(() => {
   vi.clearAllMocks()
   last = { model: '', effort: '' }
-  window.localStorage.clear()
+  preferenceStorage.clear()
   auth.can = () => true
   auth.principal = { kind: 'user', user_id: 'u1' }
   vi.mocked(agentOpsApi.profileModels).mockResolvedValue(catalog(MODELS))
@@ -225,7 +226,7 @@ describe('the model list', () => {
 
   it('forgets a favorite when its star is pressed again', async () => {
     const user = userEvent.setup()
-    wrap()
+    const first = wrap()
     await openModels(user)
     await user.click(
       await screen.findByRole('button', {
@@ -238,15 +239,15 @@ describe('the model list', () => {
       }),
     )
     expect(screen.queryByText('Favorites')).toBeNull()
+    first.unmount()
+    wrap()
+    await openModels(user)
     expect(
-      JSON.parse(
-        window.localStorage.getItem(
-          Object.keys(window.localStorage).find((k) =>
-            k.startsWith('olivares.sessions.model-favorites'),
-          )!,
-        )!,
-      ).favorites,
-    ).toEqual([])
+      await screen.findByRole('button', {
+        name: 'Add Claude Haiku 5.5 to favorites',
+      }),
+    ).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.queryByText('Favorites')).toBeNull()
   })
 })
 

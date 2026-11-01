@@ -216,12 +216,21 @@ export function ThreadHeader({
         </span>
       ) : null}
       {run ? <LimitNotice run={run} caps={caps} /> : null}
+      {/* WHOLE FIGURES OR NONE. On the one line the usage takes the room left; a figure
+          that does not fit wraps to a second line the header clips, so "701.2K in" never
+          shows as "701.2". The zero-width lead lets even the first figure wrap. The Context
+          pane says the usage in full (SessionMeter where="context"). */}
       <span
         className={cn(
-          'min-w-0 items-center gap-2 truncate',
-          stackedFacts ? 'flex' : 'hidden flex-1 @min-[48rem]/thread:flex',
+          'min-w-0 flex-wrap items-center gap-x-2 [&>*]:shrink-0',
+          stackedFacts
+            ? 'flex gap-y-1'
+            : 'hidden h-5 flex-1 content-start overflow-hidden @min-[48rem]/thread:flex',
         )}
       >
+        {stackedFacts ? null : (
+          <span aria-hidden="true" className="-mr-2 h-5 w-0" />
+        )}
         <SessionMeter run={run} usage={usage} />
       </span>
     </>

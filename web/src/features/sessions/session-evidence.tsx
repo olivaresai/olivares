@@ -51,6 +51,15 @@ import { EVIDENCE_BLOCKS, type EvidenceBlock } from './session-address'
 import type { TimelineDTO } from './types'
 import './i18n'
 
+/** How long one evidence read may take. The engine's API server cuts any response at
+ * 60 s (its WriteTimeout), so a read still unanswered then never answers: past it the
+ * pane says the read failed instead of keeping its placeholders (an ended session's
+ * Details sat on them for good). */
+const EVIDENCE_READ_MS = 60_000
+const bounded = (signal: AbortSignal) => ({
+  signal: AbortSignal.any([signal, AbortSignal.timeout(EVIDENCE_READ_MS)]),
+})
+
 const KIND_ICON = {
   tool: Wrench,
   mcp: Plug,
@@ -290,10 +299,14 @@ export function SessionEvidence({
         : sessionsKeys.timeline(activeTenant, ref, { limit: EVIDENCE_PAGE })),
       'evidence',
     ],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       liveRef
-        ? sessionsApi.timelineById(liveRef, { limit: EVIDENCE_PAGE })
-        : sessionsApi.timeline(ref, { limit: EVIDENCE_PAGE }),
+        ? sessionsApi.timelineById(
+            liveRef,
+            { limit: EVIDENCE_PAGE },
+            bounded(signal),
+          )
+        : sessionsApi.timeline(ref, { limit: EVIDENCE_PAGE }, bounded(signal)),
     enabled: !!ref && canRead,
     retry: false,
   })
@@ -306,7 +319,12 @@ export function SessionEvidence({
         }),
         'evidence',
       ],
-      queryFn: () => sessionsApi.timelineById(echo, { limit: EVIDENCE_PAGE }),
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        sessionsApi.timelineById(
+          echo,
+          { limit: EVIDENCE_PAGE },
+          bounded(signal),
+        ),
       enabled: canRead,
       retry: false,
     })),

@@ -376,6 +376,26 @@ func TestSCIMMembershipGuardAbsentDelete(t *testing.T) {
 						t.Fatal(err)
 					}
 					if after := f.state(t, u.ID); !reflect.DeepEqual(before, after) {
+						for _, field := range []struct {
+							name      string
+							want, got any
+						}{
+							{"user", before.user, after.user},
+							{"members", before.members, after.members},
+							{"groups", before.groups, after.groups},
+							{"sessions", before.sessions, after.sessions},
+							{"tokens", before.tokens, after.tokens},
+							{"credentials", before.credentials, after.credentials},
+							{"audit", before.audit, after.audit},
+							{"auditPresent", before.auditPresent, after.auditPresent},
+							{"authority", before.authority, after.authority},
+							{"epoch", before.epoch, after.epoch},
+							{"otherEpoch", before.otherEpoch, after.otherEpoch},
+						} {
+							if !reflect.DeepEqual(field.want, field.got) {
+								t.Logf("%s changed:\nexpected: %#v\ngot:      %#v", field.name, field.want, field.got)
+							}
+						}
 						t.Fatal("absent DELETE changed account, credentials, groups, versions or audit")
 					}
 					if err := a.SCIMDeprovisionUser(f.ctx, f.actor, f.tenant, model.NewID()); err != nil {

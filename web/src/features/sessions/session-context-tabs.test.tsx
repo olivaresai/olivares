@@ -623,6 +623,69 @@ describe('the side pane tabs', () => {
   })
 })
 
+// The pane is 280 to 640 px wide (surface-resize.ts). At its default width the five tabs
+// ran into one line of text, each cut under the next. jsdom lays nothing out, so the
+// widths a browser measures are given here: a tab is 8 px a letter plus 16 px of padding,
+// More is 28 px.
+describe('the side pane tabs at the pane’s own width', () => {
+  function layout(room: number) {
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(
+      function (this: HTMLElement) {
+        if (this.getAttribute('role') === 'radio')
+          return 8 * (this.textContent ?? '').length + 16
+        if (this.getAttribute('aria-label') === 'More panels') return 28
+        return 0
+      },
+    )
+    vi.spyOn(Element.prototype, 'clientWidth', 'get').mockImplementation(
+      function (this: Element) {
+        return this.getAttribute('data-slot') === 'pane-tabs' ? room : 0
+      },
+    )
+  }
+
+  it('shows the tabs that fit and puts the rest under More, never squeezed', async () => {
+    layout(272)
+    try {
+      const user = userEvent.setup()
+      renderPane()
+      await screen.findByTestId('session-context')
+      // 72 + 72 + 56 px of tabs and 28 px of More fit in 272; Preview would not.
+      expect(tabs()).toEqual(['Details', 'Changes', 'Files'])
+      await user.click(screen.getByRole('button', { name: 'More panels' }))
+      const hidden = screen.getAllByRole('menuitemradio')
+      expect(hidden.map((i) => i.textContent)).toEqual(['Preview', 'Terminal'])
+      await user.click(hidden[1]!)
+      // The tab in front always shows, in the strip.
+      expect(await screen.findByTestId('terminal-tab')).toHaveTextContent(
+        'ws-main',
+      )
+      expect(tabs()).toContain('Terminal')
+      expect(screen.getByRole('radio', { name: 'Terminal' })).toBeChecked()
+    } finally {
+      vi.restoreAllMocks()
+    }
+  })
+
+  it('shows every tab and no More where they all fit', async () => {
+    layout(640)
+    try {
+      renderPane()
+      await screen.findByTestId('session-context')
+      expect(tabs()).toEqual([
+        'Details',
+        'Changes',
+        'Files',
+        'Preview',
+        'Terminal',
+      ])
+      expect(screen.queryByRole('button', { name: 'More panels' })).toBeNull()
+    } finally {
+      vi.restoreAllMocks()
+    }
+  })
+})
+
 describe('Files scope and panel navigation regressions', () => {
   it('resolves the reference directly even when it is absent from the first workspace page', async () => {
     ops.listWorkspaces.mockResolvedValue({
@@ -657,7 +720,7 @@ describe('Files scope and panel navigation regressions', () => {
 
   it('shows no link for a session started any other way, or for a page that is not GitHub’s', async () => {
     const view = renderPane()
-    await screen.findByText('Details')
+    await screen.findByRole('radio', { name: 'Details' })
     expect(screen.queryByRole('link', { name: /#\d+$/ })).toBeNull()
     view.unmount()
     renderPane({
@@ -665,7 +728,7 @@ describe('Files scope and panel navigation regressions', () => {
         { ...RUN, source_url: 'javascript:alert(document.cookie)' },
       ]),
     })
-    await screen.findByText('Details')
+    await screen.findByRole('radio', { name: 'Details' })
     expect(
       screen
         .queryAllByRole('link')

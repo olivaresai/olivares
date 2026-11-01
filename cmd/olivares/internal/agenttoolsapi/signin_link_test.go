@@ -98,3 +98,40 @@ func TestTheSignInLinkIsNeverAProxyWithItsCredential(t *testing.T) {
 		}
 	}
 }
+
+// A tool may print more than the reader's old 64 KiB before its link (an update
+// notice, a progress bar redrawn on one line): the sign-in still relays the link
+// and the code. A line longer than any URL a browser opens is read in parts, the
+// engine log says so, and the sign-in carries on with the next line.
+func TestSignInFindsTheLinkAfterLongToolOutput(t *testing.T) {
+	for _, tc := range []struct{ name, noise, warning string }{
+		{"128 KiB of lines", `i=0; while [ $i -lt 2048 ]; do echo 'checking for updates ......................................... 64'; i=$((i+1)); done`, ""},
+		{"one 128 KiB line", `head -c 131072 /dev/zero | tr '\0' '='; echo`, ""},
+		{"one line over the line maximum", `head -c 2101248 /dev/zero | tr '\0' '='; echo`, "tool sign-in line read in parts"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			logs := captureLog(t)
+			stub := "#!/bin/sh\n" +
+				"[ \"$1 $2\" = 'login status' ] && { [ -f \"$CODEX_HOME/auth.json\" ] && echo 'Logged in using ChatGPT' && exit 0; exit 1; }\n" +
+				tc.noise + "\n" +
+				"printf '" + codexPrompt + "'\n" +
+				"sleep 1; mkdir -p \"$CODEX_HOME\"; echo '{}' > \"$CODEX_HOME/auth.json\"\n"
+			call, _ := newSignInServer(t, func(_ *Module, bin string) {
+				if err := os.WriteFile(filepath.Join(bin, "codex"), []byte(stub), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			})
+			code, s := call("POST", "/v1/m/agenttools/sign-in", map[string]string{"driver": "codex"})
+			if code != 202 || s["state"] != "waiting" || s["url"] != "https://auth.openai.com/codex/device" || s["user_code"] != "ABCD-12345" {
+				t.Fatalf("start = %d %v, want the device link and code", code, s)
+			}
+			pollSignIn(t, call, s["id"].(string), "signed_in")
+			if got := strings.Contains(logs.String(), tc.warning); tc.warning != "" && !got {
+				t.Errorf("engine log lacks %q:\n%s", tc.warning, logs.String())
+			}
+			if tc.warning == "" && strings.Contains(logs.String(), "read in parts") {
+				t.Errorf("engine log reports a long line for %s:\n%s", tc.name, logs.String())
+			}
+		})
+	}
+}

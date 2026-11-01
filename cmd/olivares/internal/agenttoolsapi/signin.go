@@ -64,8 +64,13 @@ import (
 const (
 	signInTimeout   = 15 * time.Minute
 	maxSignInOutput = 64 << 10
-	maxPastedCode   = 2048
-	maxReason       = 240
+	// maxSignInLine is the longest sign-in output line read whole: the longest URL
+	// Chrome opens, 2 MiB (url::kMaxURLChars;
+	// https://chromium.googlesource.com/chromium/src/+/main/docs/security/url_display_guidelines/url_display_guidelines.md).
+	// A longer line is read in parts and the reading goes on.
+	maxSignInLine = 2 << 20
+	maxPastedCode = 2048
+	maxReason     = 240
 )
 
 // statusTimeout bounds one native status process. A variable so a test can shorten it.
@@ -1031,6 +1036,23 @@ func (m *Module) handleSignInCancel(w http.ResponseWriter, r *http.Request, mc a
 	})(w, r, mc)
 }
 
+// signInLineParts hands a line longer than maxSignInLine to the reader in parts
+// instead of stopping it (bufio.ErrTooLong), and says so in the engine log once.
+func signInLineParts(split bufio.SplitFunc, driver string) bufio.SplitFunc {
+	logged := false
+	return func(data []byte, atEOF bool) (int, []byte, error) {
+		advance, token, err := split(data, atEOF)
+		if advance == 0 && token == nil && err == nil && len(data) >= maxSignInLine {
+			if !logged {
+				logged = true
+				slog.Warn("tool sign-in line read in parts", "driver", driver, "max_bytes", maxSignInLine)
+			}
+			return maxSignInLine, data[:maxSignInLine], nil
+		}
+		return advance, token, err
+	}
+}
+
 // startSignIn starts the tool's login. A new start replaces a pending login in
 // the same tenant, driver and configuration home; other accounts keep theirs.
 func (m *Module) startSignIn(tenant model.TenantID, driver, accountRef, configDir, program string, args, env []string, method string) (*SignIn, error) {
@@ -1101,10 +1123,15 @@ func (m *Module) startSignIn(tenant model.TenantID, driver, accountRef, configDi
 	go func() { // read the tool's output: the link, and Codex's one-time code
 		defer m.wg.Done()
 		defer close(read)
-		scanner := bufio.NewScanner(io.LimitReader(pr, maxSignInOutput))
+		// The whole output is read until the login ends: the link, the code or
+		// the tool's refusal may come after any amount of other output.
+		scanner := bufio.NewScanner(pr)
+		scanner.Buffer(nil, maxSignInLine)
+		split := bufio.ScanLines
 		if driver == "gemini-cli" {
-			scanner.Split(geminiSignInSplit)
+			split = geminiSignInSplit
 		}
+		scanner.Split(signInLineParts(split, driver))
 		for scanner.Scan() {
 			line := ansiEscape.ReplaceAllString(scanner.Text(), "")
 			if driver == "gemini-cli" && m.geminiSignInResponse(s, line) {

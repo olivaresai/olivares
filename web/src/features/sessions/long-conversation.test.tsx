@@ -133,6 +133,30 @@ describe('a long conversation', () => {
     expect(rows.length).toBeLessThanOrEqual(120)
   })
 
+  it('keeps the first turn of a view that stays open past MAX_FRAMES frames', () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <SessionConversation run={run} composerId="composer" />
+      </QueryClientProvider>,
+    )
+    // The first turn, then more frames than the view folds again on every frame (5000): the tool's
+    // thinking-token reports, which are no row, keep the thread short enough to be on the page whole.
+    act(() => {
+      push(0)
+      push(1)
+      for (let i = 0; i < 5500; i++)
+        onFrameRef.current?.({
+          seq: 3 + i,
+          stream: 'stdout',
+          line: JSON.stringify({ type: 'system', subtype: 'thinking_tokens' }),
+        })
+      onFrameRef.current?.({ seq: 6000, stream: 'stdout', line: frame(2) })
+    })
+    expect(screen.getByText('question 0')).toBeInTheDocument()
+    expect(screen.getByText('answer 1')).toBeInTheDocument()
+    expect(screen.getByText('question 2')).toBeInTheDocument()
+  })
+
   it('opens on the last frames and reads earlier ones a page at a time', async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>

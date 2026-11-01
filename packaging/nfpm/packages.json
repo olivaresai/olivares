@@ -22,6 +22,7 @@
           "file_info": {
             "mode": 493
           },
+          "packager": "rpm",
           "src": "bin/olivares"
         },
         {

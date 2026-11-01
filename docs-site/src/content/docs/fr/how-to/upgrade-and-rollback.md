@@ -53,7 +53,7 @@ actives :
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.5
+olivares upgrade --check --current-version 0.6
 ```
 <!-- /release -->
 

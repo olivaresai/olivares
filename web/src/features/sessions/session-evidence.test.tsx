@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel, screen, userEvent, waitFor, within } from '@/test/intel'
 import './i18n'
 
@@ -56,7 +56,9 @@ describe('SessionEvidence reads the rows the session wrote on other channels', (
     expect(screen.getByTestId('evidence-toggle-resources')).toHaveTextContent(
       /1$/,
     )
-    expect(timelineById).toHaveBeenCalledWith('lr-hook', expect.anything())
+    expect(timelineById).toHaveBeenCalledWith('lr-hook', expect.anything(), {
+      signal: expect.any(AbortSignal),
+    })
   })
 
   it('a block with nothing to show is not shown, and no evidence at all when every block is empty (Root review, 09)', async () => {
@@ -98,7 +100,9 @@ describe('SessionEvidence reads the rows the session wrote on other channels', (
       />,
     )
     await waitFor(() =>
-      expect(timelineById).toHaveBeenCalledWith('lr-empty', expect.anything()),
+      expect(timelineById).toHaveBeenCalledWith('lr-empty', expect.anything(), {
+        signal: expect.any(AbortSignal),
+      }),
     )
     await waitFor(() =>
       expect(screen.queryByTestId('evidence-loading')).toBeNull(),
@@ -371,7 +375,9 @@ describe("SessionEvidence puts the session's work on screen (#2267)", () => {
       />,
     )
     await waitFor(() =>
-      expect(timelineById).toHaveBeenCalledWith('lr-echo', expect.anything()),
+      expect(timelineById).toHaveBeenCalledWith('lr-echo', expect.anything(), {
+        signal: expect.any(AbortSignal),
+      }),
     )
     // The primary read has answered with a check; the pane must not open on it yet.
     await new Promise((r) => setTimeout(r, 50))
@@ -471,5 +477,78 @@ describe('SessionEvidence keeps its tool rows on one line (#2796)', () => {
     expect(read).toHaveClass('truncate')
     expect(read).not.toHaveClass('break-words')
     expect(within(turns).getByTitle('docs/notes.md')).toHaveClass('truncate')
+  })
+})
+
+describe('SessionEvidence settles when a read never answers', () => {
+  // The bound is the standard library's `AbortSignal.timeout`; the test fires it at once
+  // instead of waiting it out. A read that never answers is one that only an abort ends.
+  const neverAnswers = (
+    _ref: string,
+    _params: unknown,
+    scope?: { signal?: AbortSignal },
+  ) =>
+    new Promise((_resolve, reject) =>
+      scope?.signal?.addEventListener('abort', () =>
+        reject(scope.signal?.reason),
+      ),
+    )
+  function boundElapses() {
+    const bound = new AbortController()
+    vi.spyOn(AbortSignal, 'timeout').mockReturnValue(bound.signal)
+    return () =>
+      bound.abort(new DOMException('The read timed out.', 'TimeoutError'))
+  }
+  afterEach(() => vi.restoreAllMocks())
+
+  it('turns the placeholders into the error that names the read', async () => {
+    const elapse = boundElapses()
+    timelineById.mockImplementation(neverAnswers)
+    renderIntel(
+      <SessionEvidence
+        liveRef="lr-failed"
+        sessionRef="claude-sid"
+        onExpand={() => {}}
+      />,
+    )
+    expect(screen.getByTestId('evidence-loading')).toBeInTheDocument()
+    elapse()
+    expect(
+      await screen.findByText('The evidence could not be read'),
+    ).toBeInTheDocument()
+    expect(screen.queryByTestId('evidence-loading')).not.toBeInTheDocument()
+  })
+
+  it('shows the session’s own evidence when only a read of another channel never answers', async () => {
+    const elapse = boundElapses()
+    timelineById.mockImplementation(
+      async (ref: string, params: unknown, scope?: { signal?: AbortSignal }) =>
+        ref === 'lr-hook'
+          ? neverAnswers(ref, params, scope)
+          : {
+              items: [
+                {
+                  at: '2026-11-01T14:20:00Z',
+                  kind: 'tool',
+                  tool_ref: 'Read',
+                  resource_ref: 'shot.png',
+                },
+              ],
+              has_more: false,
+            },
+    )
+    renderIntel(
+      <SessionEvidence
+        liveRef="lr-failed"
+        sessionRef="claude-sid"
+        echoRefs={['lr-hook']}
+        onExpand={() => {}}
+      />,
+    )
+    elapse()
+    expect(
+      await screen.findByTestId('evidence-toggle-activity'),
+    ).toHaveTextContent(/1$/)
+    expect(screen.queryByTestId('evidence-loading')).not.toBeInTheDocument()
   })
 })

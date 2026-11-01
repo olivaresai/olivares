@@ -592,9 +592,6 @@ func (m *Module) finalize(lr *liveRun, exit int, waitErr error) {
 		if outputWasIncomplete(lr.proc, waitErr) {
 			detail += "; output incomplete"
 		}
-		if errors.Is(waitErr, ErrOutputLineTooLong) {
-			detail += "; protocol output limit exceeded"
-		}
 		if !requested && exit != 0 {
 			m.warnf("sessions: the session's tool exited on its own",
 				"run_ref", lr.runRef, "exit", exit, "reason", detail)

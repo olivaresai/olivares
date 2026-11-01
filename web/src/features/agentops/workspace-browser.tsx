@@ -167,126 +167,136 @@ function Browser({
     onError: errToast(t),
   })
 
+  // TWO COLUMNS BY ITS OWN WIDTH, NOT THE WINDOW'S (a container query): in the session's
+  // side pane (280 to 640 px) the list and the file stack in one column; on the Workspaces
+  // page they stand side by side. The file's column never grows past the space it has, so
+  // a long line wraps or scrolls inside the editor instead of pushing the pane sideways.
   return (
-    <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(16rem,22rem)_1fr]">
-      {/* Left: breadcrumb + toolbar + list */}
-      <div className="flex min-w-0 flex-col gap-2 rounded-md border border-border">
-        <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-1.5 text-caption">
-          <button
-            type="button"
-            onClick={() => onLocation({ path: undefined, file: undefined })}
-            className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <Home className="size-3" />
-            {t('browser.root')}
-          </button>
-          {crumbs.map((c, i) => {
-            const target = crumbs.slice(0, i + 1).join('/')
-            return (
-              <span key={target} className="inline-flex items-center gap-1">
-                <ChevronRight className="size-3 text-muted-foreground" />
-                <button
-                  type="button"
-                  onClick={() => onLocation({ path: target, file: undefined })}
-                  className="rounded px-1 py-0.5 font-mono text-foreground hover:bg-muted"
-                >
-                  {c}
-                </button>
-              </span>
-            )
-          })}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1 px-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => void filesQuery.refetch()}
-          >
-            <RefreshCw
-              className={cn(
-                'size-3.5',
-                filesQuery.isFetching && 'animate-spin',
-              )}
-            />
-            {t('browser.refresh')}
-          </Button>
-          {writable && (
-            <BrowserCreateActions
-              wref={wref}
-              dir={dir}
-              onDone={invalidateDir}
-            />
-          )}
-        </div>
-
-        <FileList
-          entries={entries}
-          loading={filesQuery.isLoading}
-          error={filesQuery.error}
-          onRetry={() => void filesQuery.refetch()}
-          selected={selected}
-          onOpen={openEntry}
-          hasMore={!!filesQuery.hasNextPage}
-          onLoadMore={() => void filesQuery.fetchNextPage()}
-          loadingMore={filesQuery.isFetchingNextPage}
-        />
-      </div>
-
-      {/* Right: viewer / editor */}
-      <div className="flex min-w-0 flex-col gap-2 rounded-md border border-border p-3">
-        {!selected ? (
-          <p className="p-6 text-center text-body text-muted-foreground">
-            {t('browser.pickFile')}
-          </p>
-        ) : fileQuery.isLoading ? (
-          <div className="flex items-center justify-center p-8">
-            <Spinner />
-          </div>
-        ) : fileQuery.error ? (
-          <div role="alert" className="p-4">
-            <p className="text-body text-danger">
-              {fileQuery.error instanceof ApiError
-                ? fileQuery.error.message
-                : String(fileQuery.error)}
-            </p>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="mt-2"
-              onClick={() => void fileQuery.refetch()}
+    <div className="@container/files">
+      <div className="grid grid-cols-1 gap-3 @min-[40rem]/files:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]">
+        {/* Left: breadcrumb + toolbar + list */}
+        <div className="flex min-w-0 flex-col gap-2 rounded-md border border-border">
+          <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-1.5 text-caption">
+            <button
+              type="button"
+              onClick={() => onLocation({ path: undefined, file: undefined })}
+              className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
             >
-              {t('common:actions.retry')}
-            </Button>
+              <Home className="size-3" />
+              {t('browser.root')}
+            </button>
+            {crumbs.map((c, i) => {
+              const target = crumbs.slice(0, i + 1).join('/')
+              return (
+                <span key={target} className="inline-flex items-center gap-1">
+                  <ChevronRight className="size-3 text-muted-foreground" />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onLocation({ path: target, file: undefined })
+                    }
+                    className="rounded px-1 py-0.5 font-mono text-foreground hover:bg-muted"
+                  >
+                    {c}
+                  </button>
+                </span>
+              )
+            })}
           </div>
-        ) : file ? (
-          <FileViewer
-            key={selected}
-            workspace={workspace}
-            path={selected}
-            file={file}
-            writable={writable}
-            editing={editing}
-            editValue={editValue}
-            onEdit={() => setDraft({ path: selected, value: file.content })}
-            onCancel={() => setDraft(null)}
-            onChange={(value) =>
-              setDraft((current) => (current ? { ...current, value } : current))
-            }
-            onSave={() => {
-              if (draft) save.mutate(draft)
-            }}
-            saving={save.isPending}
-            onDeleted={() => {
-              onLocation({ file: undefined })
-              void invalidateDir()
-            }}
-            onMoved={(to) => {
-              onLocation({ file: to })
-              void invalidateDir()
-            }}
+
+          <div className="flex flex-wrap items-center gap-1 px-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void filesQuery.refetch()}
+            >
+              <RefreshCw
+                className={cn(
+                  'size-3.5',
+                  filesQuery.isFetching && 'animate-spin',
+                )}
+              />
+              {t('browser.refresh')}
+            </Button>
+            {writable && (
+              <BrowserCreateActions
+                wref={wref}
+                dir={dir}
+                onDone={invalidateDir}
+              />
+            )}
+          </div>
+
+          <FileList
+            entries={entries}
+            loading={filesQuery.isLoading}
+            error={filesQuery.error}
+            onRetry={() => void filesQuery.refetch()}
+            selected={selected}
+            onOpen={openEntry}
+            hasMore={!!filesQuery.hasNextPage}
+            onLoadMore={() => void filesQuery.fetchNextPage()}
+            loadingMore={filesQuery.isFetchingNextPage}
           />
-        ) : null}
+        </div>
+
+        {/* Right: viewer / editor. Its toolbar keeps one row by its width (workspace-file-viewer). */}
+        <div className="@container/viewer flex min-w-0 flex-col gap-2 rounded-md border border-border p-3">
+          {!selected ? (
+            <p className="p-6 text-center text-body text-muted-foreground">
+              {t('browser.pickFile')}
+            </p>
+          ) : fileQuery.isLoading ? (
+            <div className="flex items-center justify-center p-8">
+              <Spinner />
+            </div>
+          ) : fileQuery.error ? (
+            <div role="alert" className="p-4">
+              <p className="text-body text-danger">
+                {fileQuery.error instanceof ApiError
+                  ? fileQuery.error.message
+                  : String(fileQuery.error)}
+              </p>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="mt-2"
+                onClick={() => void fileQuery.refetch()}
+              >
+                {t('common:actions.retry')}
+              </Button>
+            </div>
+          ) : file ? (
+            <FileViewer
+              key={selected}
+              workspace={workspace}
+              path={selected}
+              file={file}
+              writable={writable}
+              editing={editing}
+              editValue={editValue}
+              onEdit={() => setDraft({ path: selected, value: file.content })}
+              onCancel={() => setDraft(null)}
+              onChange={(value) =>
+                setDraft((current) =>
+                  current ? { ...current, value } : current,
+                )
+              }
+              onSave={() => {
+                if (draft) save.mutate(draft)
+              }}
+              saving={save.isPending}
+              onDeleted={() => {
+                onLocation({ file: undefined })
+                void invalidateDir()
+              }}
+              onMoved={(to) => {
+                onLocation({ file: to })
+                void invalidateDir()
+              }}
+            />
+          ) : null}
+        </div>
       </div>
     </div>
   )

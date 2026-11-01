@@ -9,8 +9,8 @@
 # a random phase of the boot (key generation one day, store migrations the next), which the same
 # binary does in about 7 s on one pinned CPU. The numbers the drill asserts were never wrong.
 #
-# Two stand-in engines, driven through OLIVARES_BIN, so no Go build or real engine is needed:
-#   slow  accepts /healthz only after SLOW_BOOT_S (longer than the old 20 s budget): the drill
+# Three stand-in engines, driven through OLIVARES_BIN, so no Go build or real engine is needed:
+#   slow  accepts /healthz only after SLOW_BOOT_S (longer than the old 120 s budget): the drill
 #         must go on past the wait instead of reporting an engine that never came up.
 #   dead  exits at once: the drill must say the engine EXITED, and not burn the whole wait on it.
 #   hang  stays up and never answers: the drill gives up by its budget (SMOKE_HEALTH_POLLS=4 here).
@@ -31,7 +31,7 @@ WORK="$(olivares_pick_exec_workdir quickstart-boot-tests)" || {
 }
 trap 'rm -rf "$WORK"' EXIT
 
-SLOW_BOOT_S=25  # above the 20 s the wait used to allow
+SLOW_BOOT_S=125 # above the 120 s budget exhausted during fresh SQLite migrations
 DEAD_BOUND_S=15 # a dead engine must end the wait well before the old 20 s
 PORT=$((21000 + ($$ % 900) * 2))
 PASS=0
@@ -75,7 +75,7 @@ drive() {
 	shift
 	stand_in "$mode"
 	t0="$(date +%s)"
-	OUT="$(env "$@" OLIVARES_BIN="$WORK/$mode/olivares" SMOKE_PORT="$PORT" timeout 120 bash "$ROOT/scripts/quickstart-smoke.sh" 2>&1)"
+	OUT="$(env "$@" OLIVARES_BIN="$WORK/$mode/olivares" SMOKE_PORT="$PORT" timeout 180 bash "$ROOT/scripts/quickstart-smoke.sh" 2>&1)"
 	RC=$?
 	SECS=$(($(date +%s) - t0))
 }
