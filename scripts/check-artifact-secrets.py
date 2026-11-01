@@ -95,6 +95,8 @@ def member_role(origin):
     # Only the measured executable paths share a role. The outer archive name
     # and its release version never participate in an exemption lookup.
     member = origin.rsplit('!', 1)[-1].removeprefix('./').lstrip('/')
+    if member in ('olivares-container-hook', 'usr/libexec/olivares-container-hook'):
+        return 'engine binary olivares'
     for name in ('olivares', 'olivares-fips'):
         if member in (name, 'usr/bin/' + name, 'usr/local/bin/' + name):
             return 'engine binary ' + name

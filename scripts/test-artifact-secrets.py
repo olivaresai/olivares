@@ -118,6 +118,17 @@ class ArtifactSecrets(unittest.TestCase):
                 # require a populated Go cache before release modules download.
                 self.assertTrue(rows[0]['sources'])
 
+    def test_container_hook_has_the_engine_binary_role(self):
+        spec = importlib.util.spec_from_file_location('artifact_gate', CHECK)
+        gate = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gate)
+        for origin in ('package!usr/libexec/olivares-container-hook',
+                       'package!data.tar.gz!./usr/libexec/olivares-container-hook'):
+            with self.subTest(origin=origin):
+                self.assertEqual(gate.member_role(origin), 'engine binary olivares')
+        self.assertEqual(gate.member_role('package!usr/libexec/other-hook'),
+                         'artifact member usr/libexec/other-hook')
+
     def test_no_exemption_pins_a_file_the_export_rewrites(self):
         # The public export drops private modules from go.work, so a dev pin of it can never
         # hold in the released tree: the release-0.1 rehearsal blocked six Go literal findings
