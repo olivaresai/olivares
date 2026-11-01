@@ -29,8 +29,13 @@ import {
   useState,
 } from 'react'
 import { useTranslation } from 'react-i18next'
-import { agentToolsApi, agentToolsKeys } from '@/features/agent-tools/api'
-import { toolName } from '@/features/agentops/tool-names'
+import {
+  USAGE_WINDOWS,
+  useBackgroundProviders,
+  windowTone,
+} from '@/features/agent-tools/use-background-providers'
+import { engineToolsQuery } from '@/features/agentops/api'
+import { toolName } from '@/features/agentops/engine-tools'
 import type * as EngageCard from '@/features/killswitch/engage-card'
 import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { useOfferedPanels } from '@/features/panels'
@@ -43,20 +48,13 @@ import { viewById } from '@/features/navigation/model'
 import { useAuth } from '@/lib/auth/context'
 import { useServerInfo } from '@/lib/hooks/use-server-info'
 import { cn } from '@/lib/utils'
-import { useTenantStore } from '@/stores/tenant'
 import { EngineStatus } from './engine-status'
 import { KillSwitchStatus } from './killswitch-status'
 import { useKillSwitchState } from './use-killswitch-state'
 import { useSessionRail } from './use-session-rail'
 
 /** The metadata step (#3135): counters and secondary facts, never content. */
-const META = 'text-[11px] leading-4'
-
-/** The usage windows the bar names, by the label the engine gives them. */
-const WINDOWS = { '5-hour': 'fiveHour', Weekly: 'week' } as const
-
-/** While the engine is still asking a tool, how soon to ask the engine again. */
-const REFRESHING_POLL_MS = 10_000
+const META = 'text-metadata'
 
 const loadConfirm = () => import('@/features/killswitch/engage-card')
 
@@ -85,30 +83,13 @@ function OpenKillSwitch() {
  * reported nothing shows nothing: unknown is never 0%. */
 function ProviderUsage() {
   const { t } = useTranslation('nav')
-  const { isSuperadmin } = useAuth()
-  const tenant = useTenantStore((s) => s.activeTenant)
-  // ⛔ EVERY READ OF THE PROVIDERS IS AUDITED (agenttoolsapi handleProviders), so the bar
-  //    reads once per page load, asks again only while the engine says a tool is still
-  //    answering, and never on a timer or a focus: a status bar must not write the
-  //    signed ledger every few minutes for every open tab.
-  const providers = useQuery({
-    queryKey: [...agentToolsKeys.all, 'providers', tenant, 'background'],
-    // The last answer the engine has: the bar never waits on a tool.
-    queryFn: ({ signal }) => agentToolsApi.providers(tenant, signal, true),
-    // A tenant-scoped read: none before an organization is chosen (the shell sits
-    // outside TenantGate, and the engine answers "tenant required").
-    enabled: !!isSuperadmin && !!tenant,
-    staleTime: Infinity,
-    refetchOnWindowFocus: false,
-    refetchInterval: (query) =>
-      query.state.data?.refreshing ? REFRESHING_POLL_MS : false,
-  })
+  const providers = useBackgroundProviders()
   const tools = (providers.data?.providers ?? [])
     .filter((p) => p.default && p.state === 'ready')
     .map((p) => ({
       driver: p.driver,
       windows: p.limits.flatMap((limit) => {
-        const key = WINDOWS[limit.label as keyof typeof WINDOWS]
+        const key = USAGE_WINDOWS[limit.label as keyof typeof USAGE_WINDOWS]
         return key ? [{ key, percent: Math.round(limit.percent) }] : []
       }),
     }))
@@ -126,16 +107,7 @@ function ProviderUsage() {
         >
           <span className="text-text-3">{toolName(tool.driver)}</span>
           {tool.windows.map((w, i) => (
-            <span
-              key={w.key}
-              className={cn(
-                w.percent >= 100
-                  ? 'text-bad'
-                  : w.percent >= 80
-                    ? 'text-warn'
-                    : undefined,
-              )}
-            >
+            <span key={w.key} className={windowTone(w.percent)}>
               {i > 0 ? (
                 <span aria-hidden className="mr-1.5 text-text-3">
                   ·
@@ -147,6 +119,28 @@ function ProviderUsage() {
         </span>
       ))}
     </>
+  )
+}
+
+/** The engine's tool table could not be read (engine-tools.ts): tools are named by their
+ * keys and none is offered until it is. Says so, with the engine's reason on the hover,
+ * and asks again. */
+function ToolsUnreadable() {
+  const { t } = useTranslation('nav')
+  const { status, activeTenant } = useAuth()
+  const tools = useQuery(
+    engineToolsQuery(status === 'authenticated' ? activeTenant : null),
+  )
+  if (!tools.isError) return null
+  return (
+    <button
+      type="button"
+      title={tools.error.message}
+      onClick={() => void tools.refetch()}
+      className="shrink-0 rounded-ctl text-bad outline-none hover:text-text focus-visible:ring-2 focus-visible:ring-focus"
+    >
+      {t('shell.status.toolsUnreadable')}
+    </button>
   )
 }
 
@@ -208,7 +202,8 @@ function StopAll({ running }: { running: number }) {
 export function StatusBar() {
   const { t } = useTranslation('nav')
   const version = useServerInfo().data?.version
-  const { running } = useSessionRail().sessionCounts
+  // The total the list shows; Stop all counts every session it would end, archived too.
+  const { running, open } = useSessionRail().sessionCounts
   const additions = useOfferedPanels(PANEL_EXTENSIONS.statusBarItems ?? [])
   return (
     <footer
@@ -225,14 +220,15 @@ export function StatusBar() {
         <EngineStatus
           className={cn(META, 'flex-none gap-1.5 rounded-none p-0')}
         />
-        {running ? (
+        {open ? (
           <Link
             to={'/sessions' as never}
             className="shrink-0 rounded-ctl tabular-nums outline-none hover:text-text focus-visible:ring-2 focus-visible:ring-focus"
           >
-            {t('shell.status.running', { count: running })}
+            {t('shell.status.running', { count: open })}
           </Link>
         ) : null}
+        <ToolsUnreadable />
         <ProviderUsage />
         <KillSwitchStatus />
         {additions.map(({ id, Component }) => (

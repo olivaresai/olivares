@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# osv-scanner reads this file for the pnpm-lock.yaml next to it (OpenSSF Scorecard's
+# Vulnerabilities check runs osv-scanner). Each entry is one advisory that does not affect the
+# console, with the measured reason.
+
+[[IgnoredVulns]]
+id = "GHSA-gcqx-w48m-w2h4"
+# No fixed deepmerge exists; the date makes Scorecard raise it again for a fresh look.
+ignoreUntil = 2027-04-30
+reason = "Not affected: deepmerge 4.3.1 arrives only through the devDependency style-dictionary (@bundled-es-modules/deepmerge), which runs at build time in tokens/build.mjs (pnpm tokens) over the committed tokens/console/*.tokens.json. No untrusted object reaches mergeObject, and nothing of it ships in the console bundle."

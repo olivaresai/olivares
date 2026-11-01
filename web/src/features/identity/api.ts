@@ -12,6 +12,7 @@ import { ApiError } from '@/lib/api/errors'
 import type { ListResponse, LoginResponse } from '@/lib/api/types'
 import type {
   AuditEntry,
+  AuthSessionItem,
   ExternalKeyRef,
   IdentityDTO,
   IdentityFinding,
@@ -187,7 +188,18 @@ export const identityApi = {
       `${IDENTITY}/residency`,
     ),
 
-  // --- DECLARED: privileged-login ceremony --------------------
+  // --- REAL: privileged-login ceremony --------------------
+  /** List the operator's live browser and bearer sign-ins. */
+  authSessions: () =>
+    http.get<{ items: AuthSessionItem[] }>(`${AUTH}/sessions`),
+  pairSession: (name: string) =>
+    http.post<{ token: string; expires_at: string }>(
+      `${AUTH}/sessions/pairing`,
+      { name },
+    ),
+  /** End another sign-in belonging to the operator. */
+  authSessionDelete: (id: string) =>
+    http.delete<void>(`${AUTH}/sessions/${encodeURIComponent(id)}`),
   /** List the operator's registered WebAuthn credentials. */
   webauthnCredentials: () =>
     http.get<{ items: WebAuthnCredentialItem[] }>(
@@ -339,6 +351,7 @@ export const identityKeys = {
   externalKeys: (t: string | null) => ['identity', t, 'external-keys'] as const,
   residency: (t: string | null) => ['identity', t, 'residency'] as const,
   piv: (t: string | null) => ['identity', t, 'piv'] as const,
+  authSessions: () => ['identity', 'auth', 'sessions'] as const,
   webauthnCredentials: (t: string | null) =>
     ['identity', t, 'webauthn', 'credentials'] as const,
   totp: (t: string | null) => ['identity', t, 'totp'] as const,

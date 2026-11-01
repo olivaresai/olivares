@@ -225,9 +225,8 @@ func (s *Server) handleUserTOTPStatus(w http.ResponseWriter, r *http.Request, mc
 }
 
 // handleUserTOTPReset is the administrator's factor reset: deletes the account's
-// factor and recovery codes. Tenant-scoped membership write + AAL3, exactly the
-// onboarding gates — the same population that can issue an invite may clear a
-// lost factor.
+// factor and recovery codes. Tenant-scoped authenticator:write and AAL3 are
+// required; this authority does not confer onboarding or membership writes.
 func (s *Server) handleUserTOTPReset(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	p := mc.Principal
 	tenant := mc.Tenant

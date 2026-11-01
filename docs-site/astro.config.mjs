@@ -425,6 +425,7 @@ export default defineConfig({
               items: [apiSidebarGroup],
             },
             { label: 'API stability & deprecation policy', slug: 'reference/api-stability' },
+            { label: 'Session permissions', slug: 'reference/permission-modes' },
             //the console had no section here at all — 57 published routes and no
             // way into any of them from the sidebar. Both pages are generated.
             { label: 'Console screens & permissions', slug: 'reference/console' },

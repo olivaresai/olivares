@@ -44,6 +44,9 @@ EOF
 {"Action":"pass","Package":"github.com/olivaresai/olivares/pkg/alpha","Test":"TestOne"}
 {"Action":"pass","Package":"github.com/olivaresai/olivares/pkg/alpha","Test":"TestTwo"}
 {"Action":"pass","Package":"github.com/olivaresai/olivares/pkg/beta","Test":"TestB"}
+{"Action":"pass","Package":"github.com/olivaresai/olivares/pkg/alpha"}
+{"Action":"pass","Package":"github.com/olivaresai/olivares/pkg/beta"}
+{"Action":"output","Package":"github.com/olivaresai/olivares/pkg/alpha","Output":"    pgtest.go:220: PG_MAJOR_ASSERTED|expected=$m|connected=$m|server_version_num=${m}0000\n"}
 EOF
 		echo "$m 0" >>"$d/pg-majors-exits.txt"
 		echo "PG_MAJOR_DSN_VERIFIED|major=$m|port=4000$m|server_version_num=${m}0000" >>"$d/pg-majors-receipts.txt"
@@ -133,6 +136,38 @@ sed -i 's/"pkg\/beta": 1/"pkg\/beta": 0/' "$WORK/m-zerofloor/ci/pg-majors-expect
 run_case m-zerofloor
 [ "$rc" -ne 0 ] && grep -q "every floor must be > 0" "$WORK/m-zerofloor/out.log"
 check "a zero floor is RED" "test-less package trap" "$?"
+
+# A cut pass leaves a prefix that still clears every floor. The stream itself
+# has to say it was never finished: a torn write and a package that never
+# reached its terminal event are both evidence of a pass that did not complete.
+setup "$WORK/m-torn"
+printf '{"Action":"pass","Package":"github.com/olivaresai/olivares/pkg/beta"' >>"$WORK/m-torn/gotest-17.json"
+run_case m-torn
+[ "$rc" -ne 0 ] && grep -q "stream is torn" "$WORK/m-torn/out.log"
+check "a torn stream line is RED" "truncated write" "$?"
+
+setup "$WORK/m-terminal"
+grep -v '"Package":"github.com/olivaresai/olivares/pkg/alpha"}$' \
+	"$WORK/m-terminal/gotest-16.json" >"$WORK/m-terminal/stream.tmp"
+mv "$WORK/m-terminal/stream.tmp" "$WORK/m-terminal/gotest-16.json"
+run_case m-terminal
+[ "$rc" -ne 0 ] && grep -q "no terminal package event" "$WORK/m-terminal/out.log"
+check "a stream without its package event is RED" "truncated stream" "$?"
+
+# The spec's closing condition is four PG_MAJOR_ASSERTED receipts (§5.4): the
+# harness proving, on its own connection, that it measured the declared major.
+setup "$WORK/m-no-assert"
+grep -v 'PG_MAJOR_ASSERTED' "$WORK/m-no-assert/gotest-15.json" >"$WORK/m-no-assert/stream.tmp"
+mv "$WORK/m-no-assert/stream.tmp" "$WORK/m-no-assert/gotest-15.json"
+run_case m-no-assert
+[ "$rc" -ne 0 ] && grep -q "no PG_MAJOR_ASSERTED receipt" "$WORK/m-no-assert/out.log"
+check "a pass with no major assertion is RED" "closing condition" "$?"
+
+setup "$WORK/m-wrong-assert"
+sed -i 's/expected=17|connected=17/expected=17|connected=16/' "$WORK/m-wrong-assert/gotest-17.json"
+run_case m-wrong-assert
+[ "$rc" -ne 0 ] && grep -q "PG_MAJOR_ASSERTED expected=17 connected=16" "$WORK/m-wrong-assert/out.log"
+check "a pass that measured another server is RED" "assertion mismatch" "$?"
 
 echo
 echo "pg-majors-evaluate: ${pass} passed, ${fail} failed"

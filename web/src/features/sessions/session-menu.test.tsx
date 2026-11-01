@@ -4,7 +4,7 @@
 //
 // A SESSION ROW'S ACTIONS (#2795): what each item does, against the engine's routes.
 // How the menu opens (right-click, `⋯`, Shift+F10) is `work-rail.test.tsx`'s.
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import type { RunDTO } from '@/features/agentops/types'
+import { usePreferencesStore } from '@/stores/preferences'
 import { renderIntel } from '@/test/intel'
 import { mergeSessions, type Grants, type UnifiedSession } from './provenance'
 import { useSessionMenu } from './session-menu'
@@ -35,6 +36,7 @@ vi.mock('@/components/ui/toaster', () => ({ toast: toasts }))
 
 const ops = vi.hoisted(() => ({
   rename: vi.fn(),
+  generateTitle: vi.fn(),
   archive: vi.fn(),
   unarchive: vi.fn(),
   messages: vi.fn(),
@@ -133,8 +135,23 @@ async function openMenu(props: Parameters<typeof Harness>[0]) {
 const item = (menu: HTMLElement, name: string | RegExp) =>
   within(menu).getByRole('menuitem', { name })
 
+/** Chooses a title style from the open Regenerate title submenu by the keyboard: jsdom reports
+ * every pointer at (0, 0), which reads to a submenu as the pointer leaving it before it reaches
+ * an item, and closes it. */
+async function chooseTitleStyle(
+  user: ReturnType<typeof userEvent.setup>,
+  style: string,
+) {
+  const radio = await screen.findByRole('menuitemradio', { name: style })
+  act(() => radio.focus())
+  await user.keyboard('{Enter}')
+}
+
 beforeEach(() => {
   vi.resetAllMocks()
+  auth.activeTenant = 'tnt-demo'
+  auth.can = () => true
+  usePreferencesStore.setState({ titleStyle: 'sentence' })
 })
 
 // `userEvent.setup()` puts its own clipboard on `navigator`: what was copied is read there.
@@ -152,6 +169,7 @@ describe('the session menu — what a row can do', () => {
         .map((el) => el.textContent?.replace(/p$/, '')),
     ).toEqual([
       'Rename…',
+      'Regenerate title',
       'Pin',
       'Archive',
       'Copy link',
@@ -235,6 +253,74 @@ describe('the session menu — rename', () => {
   })
 })
 
+describe('the session menu — regenerate title', () => {
+  it('cuts the title again in the style chosen, and remembers the style', async () => {
+    ops.generateTitle.mockResolvedValue(run({ title: 'Refactor the auth…' }))
+    const { user, menu } = await openMenu({ session: launched() })
+    await user.click(item(menu, 'Regenerate title'))
+    // The style already kept is the one marked.
+    expect(
+      await screen.findByRole('menuitemradio', { name: 'Normal' }),
+    ).toBeChecked()
+    await chooseTitleStyle(user, 'Short')
+    await waitFor(() =>
+      expect(ops.generateTitle).toHaveBeenCalledWith('run-a', {
+        style: 'short',
+      }),
+    )
+    expect(usePreferencesStore.getState().titleStyle).toBe('short')
+  })
+
+  it('asks again when the style that is already kept is chosen again', async () => {
+    ops.generateTitle.mockResolvedValue(run({ title: 'Plan' }))
+    usePreferencesStore.setState({ titleStyle: 'long' })
+    const { user, menu } = await openMenu({ session: launched() })
+    await user.click(item(menu, 'Regenerate title'))
+    await chooseTitleStyle(user, 'Long')
+    await waitFor(() =>
+      expect(ops.generateTitle).toHaveBeenCalledWith('run-a', {
+        style: 'long',
+      }),
+    )
+  })
+
+  it('says why the engine declined, in the engine’s words', async () => {
+    const { ApiError } = await import('@/lib/api/errors')
+    ops.generateTitle.mockRejectedValue(
+      new ApiError(409, 'conflict', 'this session has no message with words'),
+    )
+    const { user, menu } = await openMenu({ session: launched() })
+    await user.click(item(menu, 'Regenerate title'))
+    await chooseTitleStyle(user, 'Short')
+    await waitFor(() =>
+      expect(toasts.error).toHaveBeenCalledWith(
+        'this session has no message with words',
+      ),
+    )
+  })
+
+  it('is left out without the write permission or without the output permission', async () => {
+    const readOnly = await openMenu({
+      session: launched(),
+      grants: { ...ALL, runWrite: false },
+    })
+    expect(
+      within(readOnly.menu).queryByRole('menuitem', {
+        name: 'Regenerate title',
+      }),
+    ).toBeNull()
+    readOnly.unmount()
+    // The title is cut from the conversation: the engine asks for output read as well.
+    auth.can = (permission) => permission !== 'sessions:output:read'
+    const noOutput = await openMenu({ session: launched() })
+    expect(
+      within(noOutput.menu).queryByRole('menuitem', {
+        name: 'Regenerate title',
+      }),
+    ).toBeNull()
+  })
+})
+
 describe('the session menu — pin and archive', () => {
   it('pins and unpins through the caller', async () => {
     const onTogglePin = vi.fn()
@@ -251,10 +337,13 @@ describe('the session menu — pin and archive', () => {
     ops.archive.mockResolvedValue(run({ archived_at: '2026-10-21T12:00:00Z' }))
     const first = await openMenu({ session: launched() })
     await first.user.click(item(first.menu, 'Archive'))
-    await waitFor(() => expect(ops.archive).toHaveBeenCalledWith('run-a'))
+    await waitFor(() =>
+      expect(ops.archive).toHaveBeenCalledWith('run-a', 'tnt-demo'),
+    )
     await waitFor(() =>
       expect(toasts.success).toHaveBeenCalledWith(
         'Archived. It is under Archived at the end of the list.',
+        expect.objectContaining({ duration: Infinity }),
       ),
     )
     first.unmount()
@@ -264,7 +353,31 @@ describe('the session menu — pin and archive', () => {
       session: launched({ archived_at: '2026-10-21T12:00:00Z' }),
     })
     await second.user.click(item(second.menu, 'Unarchive'))
-    await waitFor(() => expect(ops.unarchive).toHaveBeenCalledWith('run-a'))
+    await waitFor(() =>
+      expect(ops.unarchive).toHaveBeenCalledWith('run-a', 'tnt-demo'),
+    )
+  })
+
+  it('offers Undo on the archive until the person dismisses it, and Undo brings it back', async () => {
+    ops.archive.mockResolvedValue(run({ archived_at: '2026-10-21T12:00:00Z' }))
+    ops.unarchive.mockResolvedValue(run())
+    const { user, menu } = await openMenu({ session: launched() })
+    await user.click(item(menu, 'Archive'))
+    await waitFor(() => expect(toasts.success).toHaveBeenCalled())
+    const [, options] = toasts.success.mock.calls.at(-1) as [
+      string,
+      { duration: number; action: { label: string; onClick: () => void } },
+    ]
+    // No timer takes Undo away: the toast stays until it is closed.
+    expect(options.duration).toBe(Infinity)
+    expect(options.action.label).toBe('Undo')
+    // The notice outlives a switch of organization: Undo still brings back the session it
+    // archived, in the organization it lives in.
+    auth.activeTenant = 'tnt-other'
+    options.action.onClick()
+    await waitFor(() =>
+      expect(ops.unarchive).toHaveBeenCalledWith('run-a', 'tnt-demo'),
+    )
   })
 
   it('gives focus back to the list once an archived row has left it', async () => {

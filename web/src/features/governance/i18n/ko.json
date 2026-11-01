@@ -141,6 +141,7 @@
     "actorHint": "감사 행위자 핸들 — 이메일 주소는 절대 아닙니다. ID는 디렉터리에서 해석되며 여기에 표시되지 않습니다.",
     "expiredAt": "{{time}}에 만료됨",
     "approveOnce": "이번만 승인",
+    "approveForSession": "이 세션 동안 승인",
     "approving": "승인 중…",
     "deny": "거부",
     "noMatch": "검색과 일치하는 요청이 없습니다",
@@ -218,6 +219,7 @@
     "trailEmpty": "아직 기록된 결정 없음",
     "trailEmptyHint": "이 승인에 대한 모든 결정 — 누가, 언제, 왜 — 이 여기에 기록됩니다. 아직 아무도 결정하지 않았습니다.",
     "decisionApprove": "승인됨",
+    "decisionApproveForSession": "이 세션 동안 승인됨",
     "decisionReject": "거부됨",
     "reenableNeedsAdmins": "다른 관리자 계정 두 개가 이를 승인해야 합니다. ID 및 접근에서 만들거나 `olivares users create`로 만드십시오.",
     "openIdentity": "ID 및 접근 열기",
@@ -681,14 +683,19 @@
     "matched": "적용된 규칙: {{rule}}",
     "matchedDefault": "적용된 규칙: 없음(기본값 적용)",
     "matchedUnreadable": "적용된 규칙: 읽을 권한이 없는 규칙",
-    "reaches": "접근 대상: {{list}}",
+    "reaches": "접근 대상:",
     "reachFolder": {
-      "write": "{{path}} (쓰기)",
-      "read": "{{path}} (읽기 전용)",
-      "unknown": "{{path}} (접근 수준 알 수 없음)"
+      "write": "<path /> (쓰기)",
+      "read": "<path /> (읽기 전용)",
+      "unknown": "<path /> (접근 수준 알 수 없음)"
     },
     "matchedUnknown": "적용된 규칙: 읽을 수 없었던 규칙",
-    "reachIncomplete": "읽을 수 없었던 항목 있음"
+    "reachIncomplete": "읽을 수 없었던 항목 있음",
+    "rule": {
+      "default": "규칙 없음, 기본값 적용",
+      "unreadable": "읽을 수 없는 규칙",
+      "unknown": "읽지 못한 규칙"
+    }
   },
   "list": {
     "loadedOnly": "검색은 지금까지 로드된 행만 대상으로 합니다; 더 읽으려면 더 불러오십시오."

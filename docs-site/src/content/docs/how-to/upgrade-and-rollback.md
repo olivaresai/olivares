@@ -52,7 +52,7 @@ version you know is there and the guards stay armed:
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.4
+olivares upgrade --check --current-version 0.5
 ```
 <!-- /release -->
 
@@ -171,7 +171,7 @@ appliance `systemctl start olivares-appliance-update.service`. With `--enterpris
 `olivares license connect refresh`. The check is by path, so a binary that `install.sh --bindir /usr/bin`
 placed there is refused too.
 
-The console has the read-only half of the same information: **Settings → update status**
+The console has the read-only half of the same information: **Operations → Updates** (`/updates`)
 calls `POST /v1/console/update-check`, which runs a check against the configured channel on
 demand. A deployment that is air-gapped or has no channel configured answers `501` and says
 so, rather than reporting that there is no update.

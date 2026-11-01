@@ -1,13 +1,15 @@
 {
-  "title": "Modelle & Anbieter",
-  "description": "Der gesteuerte Modellbestand — deklarierte Fähigkeiten und Preise, Routing-Richtlinie und Anbieter-Schlüsselreferenzen. Geheimnisse werden niemals angezeigt; nur maskierte Referenzen.",
+  "title": "Modelle",
+  "description": "Modelle, die Ihre Werkzeuge und Anbieter jetzt ausführen können, die Sitzungen, die sie nutzen, und Modell-Governance.",
   "tabs": {
+    "available": "Verfügbar",
     "catalog": "Katalog",
     "estate": "Bestand",
     "routing": "Routing",
     "keys": "Anbieterschlüssel",
     "gpai": "GPAI-Status",
-    "access": "Access"
+    "access": "Access",
+    "governance": "Governance"
   },
   "catalog": {
     "title": "Fähigkeitsmatrix",
@@ -271,5 +273,59 @@
     "truncatedHint": "Es gibt mehr Zugriffsregeln als angezeigt; diese Seite nimmt Zeilen nach ID. Die Markierungen dieser Zeilen spiegeln NUR die geladenen Regeln: Allows, die eine Einschränkung einführen oder erlaubte Ziele ergänzen, können fehlen, und Forbids, die Zugriff abziehen, ebenfalls — die Seite kann also weiter ODER enger wirken als die Wirklichkeit, und ein Subjekt ohne geladene Regel erscheint gar nicht. Leiten Sie hieraus keinen effektiven Zugriff ab: die Engine liest alle Seiten, bevor sie entscheidet, und löst ein Principal über Nutzer, Rolle und Gruppe zugleich auf, was eine Zeile nicht zeigen kann.",
     "groupsTruncated": "{{n}} Gruppen geladen; es gibt mehr",
     "groupsTruncatedHint": "Es gibt mehr Modellgruppen als angezeigt; diese Seite nimmt Zeilen nach ID. Eine hier fehlende Gruppe belegt nicht, dass sie nicht existiert — eine Regel kann sie weiterhin adressieren."
+  },
+  "available": {
+    "title": "Jetzt verfügbar",
+    "description": "Die Modelle, die Ihre Werkzeuge und Anbieter jetzt ausführen können, und die Sitzungen, die sie nutzen.",
+    "columns": {
+      "model": "Modell",
+      "runsOn": "Werkzeug oder Anbieter",
+      "source": "Quelle",
+      "state": "Status",
+      "sessions": "Sitzungen"
+    },
+    "source": {
+      "tool": "Live-Liste des Werkzeugs",
+      "ollama": "In Ollama installiert",
+      "providerList": "Modellliste des Anbieters",
+      "provider": "API-Anbieter",
+      "session": "Live-Sitzung"
+    },
+    "state": {
+      "ready": "Bereit",
+      "checkingModels": "Modelle werden geprüft",
+      "stopped": "Ollama gestoppt",
+      "unlisted": "Listet seine Modelle nicht auf",
+      "listsNone": "Listet keine Modelle",
+      "failed": "Liste nicht verfügbar",
+      "starting": "Ollama startet",
+      "ollamaFailed": "Ollama fehlgeschlagen"
+    },
+    "ownDefault": "Sein Standardmodell",
+    "providerModels": "Modellliste",
+    "ollamaModels": "Installierte Modelle",
+    "openAiTools": "KI-Werkzeuge öffnen",
+    "sessions_one": "{{count}} Sitzung",
+    "sessions_other": "{{count}} Sitzungen",
+    "openSessions": "Sitzungen mit {{model}}",
+    "empty": "Noch kein Modell verfügbar",
+    "emptyHint": "Installieren Sie ein Modell in Ollama oder fügen Sie einen Anbieter hinzu, dann erscheint es hier.",
+    "noAccess": "Kein Zugriff auf Modelllisten",
+    "noAccessHint": "Ihre Rolle darf die Modelllisten der Werkzeuge, Anbieter, von Ollama und der Sitzungen nicht lesen. Bitten Sie eine Administratorin oder einen Administrator um Zugriff.",
+    "installModel": "Modell installieren",
+    "addProvider": "Anbieter hinzufügen",
+    "sourceFailed": "{{source}} konnte nicht gelesen werden. Die anderen Quellen werden weiterhin angezeigt.",
+    "sources": {
+      "tools": "Die Modelllisten der Werkzeuge",
+      "ollama": "Ollama",
+      "availability": "Die Modelle der Anbieter",
+      "runs": "Die laufenden Sitzungen"
+    },
+    "profilesTruncated": "Die ersten {{n}} Werkzeugprofile werden angezeigt; es gibt weitere.",
+    "runsTruncated": "Die Zahlen umfassen die {{n}} neuesten Sitzungen je Status; es gibt weitere.",
+    "runsFailed": "Die laufenden Sitzungen konnten nicht gelesen werden; die Zahlen fehlen.",
+    "sessionsUnknown": "Die Sitzungszahlen sind nicht verfügbar.",
+    "unmatched_one": "{{count}} laufende Sitzung nutzt ein Modell, das hier nicht aufgeführt ist.",
+    "unmatched_other": "{{count}} laufende Sitzungen nutzen Modelle, die hier nicht aufgeführt sind."
   }
 }

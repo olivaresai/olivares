@@ -19,10 +19,14 @@ import { useQuery } from '@tanstack/react-query'
 import { Trans, useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { agentToolsApi, agentToolsKeys } from '@/features/agent-tools/api'
-import { EDITS_AND_COMMANDS_TEMPLATE } from '@/features/agentops/session-launch'
+import {
+  EDITS_AND_COMMANDS_TEMPLATE,
+  PERMISSION_CHOICES,
+  PERMISSION_MODE,
+} from '@/features/agentops/session-launch'
 import type { PermissionChoice } from '@/features/agentops/session-launch'
 import type { RunDTO } from '@/features/agentops/types'
-import { toolName } from '@/features/agentops/tool-names'
+import { toolName } from '@/features/agentops/engine-tools'
 import { useAuth } from '@/lib/auth/context'
 import { COST_VIEW } from '@/features/registry'
 import { useViewAccess } from '@/features/navigation/authorization'
@@ -44,22 +48,21 @@ import './i18n'
  * under (agentops/session-launch.ts: "Edit files and run commands" is the built-in
  * allowlist template, which runs under dontAsk; a custom template may run under it too,
  * so that wording needs the template read, see SessionMode). */
-const PERMISSION_WORDS: Record<string, PermissionChoice> = {
-  dontAsk: 'editsAndCommands',
-  acceptEdits: 'editsOnly',
-  plan: 'readOnly',
-  default: 'ask',
-}
+const PERMISSION_WORDS = Object.fromEntries(
+  PERMISSION_CHOICES.map((choice) => [
+    PERMISSION_MODE[choice] || 'dontAsk',
+    choice,
+  ]),
+) as Record<string, PermissionChoice>
 
 /** Codex joins its approval policy and sandbox with this ("on-request · workspaceWrite"). */
 const CODEX_MODE_JOINER = ' · '
 
-/** The tool's own words a person is told in plain words (sessions meter.toolWord): Claude
- * Code's bypassPermissions and Codex's approval policies (driver_codex.go toolMode). Codex's
- * sandbox word is never said: Olivares confines the session from outside, so that sandbox
- * is not the session's boundary. */
+/** The tool's own words a person is told in plain words (sessions meter.toolWord): Codex's
+ * approval policies (driver_codex.go toolMode). Codex's sandbox word is never said:
+ * Olivares confines the session from outside, so that sandbox is not the session's
+ * boundary. */
 const TOOL_WORDS: Record<string, string> = {
-  bypassPermissions: 'unasked',
   untrusted: 'untrusted',
   'on-failure': 'onFailure',
   'on-request': 'onRequest',
@@ -114,7 +117,7 @@ function useLaunchTemplate(run: RunDTO | null | undefined) {
 }
 
 /**
- * The session's access in a few words, for the composer's access picker (dev#3162), as
+ * The session's access in a few words, for the composer's access picker, as
  * SessionMode words it: the permission New session offers, the run's template read first;
  * a template a person wrote, by its name; else the tool's word said plainly; else the
  * tool's word as it said it. A run that reports no mode says so.
@@ -155,9 +158,18 @@ export function SessionMode({ run }: { run: RunDTO | null | undefined }) {
     choice && (choice !== 'editsAndCommands' || builtin) ? choice : undefined
   const plain = worded ? undefined : toolWord(toolMode)
   // A tool that never asks still runs inside Olivares' confinement and policy: the words
-  // say what the person gets, not an alarm (dev#3120), and name the policy that holds it.
+  // say what the person gets, not an alarm, and name the policy that holds it.
   const policyView =
     run.provider_driver === 'claude' ? viewById('claudePolicy') : undefined
+  const policy =
+    policyView && access.navigable(policyView) ? (
+      <a
+        href={policyView.path}
+        className="rounded-sm underline decoration-text-3 underline-offset-2 hover:decoration-current focus-visible:outline-2 focus-visible:outline-ring"
+      />
+    ) : (
+      <span />
+    )
   return (
     <Badge
       variant="outline"
@@ -170,24 +182,17 @@ export function SessionMode({ run }: { run: RunDTO | null | undefined }) {
       })}
       data-testid="narrative-mode"
     >
-      {worded ? (
-        t(`firstHour:permission.${worded}`)
+      {worded === 'full' ? (
+        // the regression: Full says what the person gets and the boundary that holds it.
+        <Trans t={t} i18nKey="sessions:meter.full" components={{ policy }} />
+      ) : worded ? (
+        // The name the person chose it by, then what it does (the same words Settings lists).
+        t('sessions:meter.permission', {
+          name: t(`firstHour:permission.${worded}`),
+          what: t(`firstHour:permissionSummary.${worded}`),
+        })
       ) : plain === 'unasked' ? (
-        <Trans
-          t={t}
-          i18nKey="sessions:meter.unasked"
-          components={{
-            policy:
-              policyView && access.navigable(policyView) ? (
-                <a
-                  href={policyView.path}
-                  className="rounded-sm underline decoration-text-3 underline-offset-2 hover:decoration-current focus-visible:outline-2 focus-visible:outline-ring"
-                />
-              ) : (
-                <span />
-              ),
-          }}
-        />
+        <Trans t={t} i18nKey="sessions:meter.unasked" components={{ policy }} />
       ) : (
         t('sessions:meter.mode', {
           mode: plain ? t(`sessions:meter.toolWord.${plain}`) : toolMode,
@@ -237,11 +242,15 @@ export function SessionMeter({
           aria-label={t('meter.usageLabel')}
           data-testid={where === 'header' ? 'narrative-usage' : 'context-usage'}
         >
-          {t('meter.tokens', {
-            input: formatTokens(usage.input, lang),
-            output: formatTokens(usage.output, lang),
-          })}
-          {' · '}
+          {usage.input != null && usage.output != null ? (
+            <>
+              {t('meter.tokens', {
+                input: formatTokens(usage.input, lang),
+                output: formatTokens(usage.output, lang),
+              })}
+              {' · '}
+            </>
+          ) : null}
           {access.navigable(COST_VIEW) ? (
             <a
               href={COST_VIEW.path}

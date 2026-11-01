@@ -240,7 +240,9 @@ describe('SecretsTab', () => {
         name: /vault:kv\/warehouse#token/,
       }),
     ).toBeInTheDocument()
-    expect(within(external).getByText(/read-only/i)).toBeInTheDocument()
+    expect(
+      within(external).getByRole('cell', { name: /read-only/i }),
+    ).toBeInTheDocument()
     expect(within(external).getByText('vault:')).toBeInTheDocument()
     // Read-only: nothing to rotate or delete there.
     expect(
@@ -319,6 +321,24 @@ describe('SecretsTab', () => {
     wrap(<SecretsTab scope="tenant" namespace="env/" />)
     expect(await screen.findByText(/^no session$/i)).toBeInTheDocument()
     expect(screen.queryByText(/500 most recent/i)).toBeNull()
+  })
+
+  it('serves the credential/ namespace a session launch names', async () => {
+    authState.isSuperadmin = false
+    api.listSecrets.mockResolvedValue({
+      secrets: [
+        { name: 'credential/prod-db', hint: 'p1' },
+        { name: 'env/nightly', hint: 'n1' },
+      ],
+      sealer_available: true,
+    })
+    wrap(<SecretsTab scope="tenant" namespace="credential/" />)
+    const ns = await screen.findByRole('rowgroup', { name: 'credential/' })
+    expect(within(ns).getByText('prod-db')).toBeInTheDocument()
+    expect(within(ns).queryByText('nightly')).toBeNull()
+    expect(
+      screen.getByText(/names begin with credential\//i),
+    ).toBeInTheDocument()
   })
 
   it('lists the MCP servers that use a credential handle', async () => {

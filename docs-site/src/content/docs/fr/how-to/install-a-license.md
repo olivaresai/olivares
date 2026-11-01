@@ -12,12 +12,14 @@ le fichier, comment l'appliquer à un moteur en cours d'exécution, comment lire
 installé et — si vous avez acheté une offre Business — comment remplacer le binaire
 Community par le binaire commercial sans rien réinstaller.
 
-:::note[Une licence est une attestation, pas un interrupteur à l'exécution]
-**Elle ne verrouille aucune fonctionnalité du logiciel que vous exécutez.** Une licence expirée
-ou absente ne désactive aucune fonctionnalité, et aucune licence ne plafonne les comptes
-utilisateur — les utilisateurs auto-hébergés sont illimités dans chaque niveau. C'est une
-déclaration signée de ce à quoi vous avez droit, pas une clé qui déverrouille du code déjà
-présent sur votre disque.
+:::note[La licence, et non le binaire, active les fonctionnalités commerciales]
+**Le build Business n'exécute une fonctionnalité commerciale que tant qu'une licence valide
+dont les droits l'incluent est installée.** Il vérifie la licence hors ligne, sur la machine, à
+chaque utilisation. Sans licence, ou avec une licence expirée ou révoquée, le nouveau travail de
+cette fonctionnalité répond `addon_requires_license` ; lire, vérifier et exporter vos données
+continuent de fonctionner, et aucune licence ne plafonne les comptes utilisateur — les
+utilisateurs auto-hébergés sont illimités dans chaque niveau. Le binaire Community ne lit jamais
+de licence pour activer ou désactiver quoi que ce soit.
 
 **Une licence active donne accès aux artefacts commerciaux.** L’installation hors ligne (`olivares upgrade --bundle`) nécessite le binaire Enterprise. Enterprise installe un paquet Community signé sans licence ; un paquet commercial exige une licence active, vérifiée hors ligne. Community et Business prennent en charge `--bundle --check` sans lire de licence ni installer le paquet.
 :::

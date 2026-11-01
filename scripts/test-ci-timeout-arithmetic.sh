@@ -620,7 +620,7 @@ else
 	mal "M9 step count" "rc=$rc and the diagnostic does not report '+2 unguarded step(s)': $(printf '%s' "$output" | command grep 'job limit' | tail -1)"
 fi
 
-# --- the plain reader REFUSES the shapes it would otherwise guess (dev#2637) ---------------------
+# --- the plain reader REFUSES the shapes it would otherwise guess ---------------------
 # Forced plain path, one fixture per shape, exact verdict AND reason: rc 2 through the guard that
 # names the shape, never a row (a row is a guess: shapes 1-4 used to print one, 5 a traceback).
 # plana_v <workflow> -> "<rc>/<first line of the gate output>", built on the plana helper above
@@ -665,7 +665,7 @@ $GUARDAS
     timeout-minutes: 100"
 # An explicit `? env` key is not the plain `key:` this reader knows: it used to stay inside job
 # `a`, and the cap of `env` replaced a's own (100 against 40 instead of 30). A column-0 line that
-# is not a plain mapping key is refused now (dev#2645 review).
+# is not a plain mapping key is refused now (the regression review).
 rehusa "a column-0 explicit key after jobs" "unsupported top-level line" "jobs:
   a:
     timeout-minutes: 30
@@ -673,7 +673,7 @@ $GUARDAS
 ? env
 :
     timeout-minutes: 100"
-# A top-level key that does not start with a letter ends `jobs:` too (dev#2645): `1:`, `0x:` and `.x:`
+# A top-level key that does not start with a letter ends `jobs:` too: `1:`, `0x:` and `.x:`
 # are plain keys for YAML, and the cap under each one is not job a's (PyYAML reads 30 against 40).
 for clave in '1' '0x' '.x'; do
 	rehusa "a column-0 key '$clave:' after jobs" "4 mention(s) of timeout-minutes and only 3 attributed" "jobs:
@@ -1048,7 +1048,7 @@ abierta 'k: [a-"b, "c' 'x"]'
 abierta '?? "a: '"'"'b"c' "x'"
 # A flow collection that spans lines is refused at its own first line, before its continuation
 # lines are read at all: the quote reading of a continuation that starts with a quote is never
-# reached (dev#2645). This is a stronger guard than the quoted-scalar one, and the reason names it.
+# reached. This is a stronger guard than the quoted-scalar one, and the reason names it.
 rehusa "a flow mapping left open at 'k: {ab, then a continuation line" "multi-line flow collection" 'jobs:
   j:
     timeout-minutes: 30
@@ -1088,7 +1088,7 @@ abierta 'k: {"b":!!str "a' 'x"}'
 # Control: text that only LOOKS like the shapes above is still read, so the refusals do not eat
 # real workflows (`&&`, `*` globs and a quoted `&` are everyday shell and expression syntax, and
 # a `run: |` block is script text: a `*pattern)` case arm or a `, *args` splat there is not an
-# alias; measured on release.yml and public-generation.yml).
+# alias; measured on release.yml).
 got="$(plana_v 'jobs:
   ok:
     timeout-minutes: 50
@@ -1176,7 +1176,7 @@ case "$got" in
 	*) mal "over-refusal control (dash-line block)" "got $got, expected 0/..." ;;
 esac
 
-# --- a multi-line flow collection, a block scalar body and a very long line (dev#2645) ------------
+# --- a multi-line flow collection, a block scalar body and a very long line ------------
 # A flow collection may span lines, and a `#` after a space hides its closing bracket. Read line by
 # line, `env: { # }` left the reader in job a with its `}` three lines below, so the cap inside the
 # collection replaced the job's own (1000 against 10), and a header-looking line inside one (`>`
@@ -1280,7 +1280,7 @@ abierto 'x: [a, # ]' ']'
 abierto 'x:   {   # }' '}'
 # Inside a flow collection the colon may touch the opener (`{x:[a]}`, JSON style); at block level
 # `x:[a]` is a plain scalar, so the space is only required there. Missing the adjacent form closed
-# the collection early and printed a row for a file PyYAML rejects (dev#2645 review).
+# the collection early and printed a row for a file PyYAML rejects (the regression review).
 rehusa "a flow sequence opened after a colon with no space" "multi-line flow collection" 'jobs:
   a:
     timeout-minutes: 10
@@ -1307,7 +1307,7 @@ cierra 'env: }'
 cierra 'env: ,'
 cierra 'env: [x]]'
 # Text after a closed collection is not YAML: the value ended at the closer. Reading the rest as a
-# plain scalar printed a row PyYAML rejects (dev#2645 review).
+# plain scalar printed a row PyYAML rejects (the regression review).
 rehusa "text after a closed flow sequence" "multi-line flow collection" 'jobs:
   a:
     timeout-minutes: 10
@@ -1362,7 +1362,7 @@ rehusa "a stray ',' at the line start" "multi-line flow collection" 'jobs:
         timeout-minutes: 50'
 # A lone `}` at the line start has nothing to close. Only the doubled `}}` of a `${{ ... }}`
 # expression that continues on the next line is excused; excusing any `}` let a lone one close
-# nothing and the cap after it became the job's own (PyYAML rejects the file) (dev#2645 review).
+# nothing and the cap after it became the job's own (PyYAML rejects the file) (the regression review).
 rehusa "a lone '}' at the line start" "multi-line flow collection" 'jobs:
   a:
     timeout-minutes: 10
@@ -1373,7 +1373,7 @@ rehusa "a lone '}' at the line start" "multi-line flow collection" 'jobs:
       - run: x
         timeout-minutes: 50'
 # A quote where a separator would be, after a collection that already closed, cannot start a
-# scalar: `env: [x] ""` ended the value at the closer (dev#2645 review).
+# scalar: `env: [x] ""` ended the value at the closer (the regression review).
 rehusa "a quoted scalar with nothing after it" "multi-line flow collection" 'jobs:
   a:
     timeout-minutes: 10
@@ -1383,7 +1383,7 @@ rehusa "a quoted scalar with nothing after it" "multi-line flow collection" 'job
       - run: x
         timeout-minutes: 50'
 # An explicit-key indicator stands alone: the opener after it is a node start, and the collection
-# is still open at the end of the line (PyYAML rejects the explicit key here) (dev#2645 review).
+# is still open at the end of the line (PyYAML rejects the explicit key here) (the regression review).
 rehusa "a flow after an explicit key indicator" "multi-line flow collection" 'jobs:
   a:
     timeout-minutes: 10
@@ -1394,7 +1394,7 @@ rehusa "a flow after an explicit key indicator" "multi-line flow collection" 'jo
         timeout-minutes: 50'
 # A flow collection may also start at the line start (a value on the line below its key). The
 # opener must be read there; a mutation that only kept the after-dash case stayed green
-# (dev#2645 review).
+# (the regression review).
 rehusa "a flow collection opened at the line start" "multi-line flow collection" 'jobs:
   a:
     timeout-minutes: 10
@@ -1406,7 +1406,7 @@ rehusa "a flow collection opened at the line start" "multi-line flow collection"
         timeout-minutes: 50'
 # The quote scanner's escape rules are load-bearing: without them a `\"` or `''` closes the
 # string early, the collection looks closed, and the cap after it is read as the job's own
-# (PyYAML reads the collection over the next line) (dev#2645 review).
+# (PyYAML reads the collection over the next line) (the regression review).
 rehusa "a flow mapping whose quoted value escapes the closing quote" "multi-line flow collection" 'jobs:
   a:
     timeout-minutes: 10
@@ -1542,7 +1542,7 @@ rehusa "a key nested under a column-1 job read as a job" "jobs indented by one s
         timeout-minutes: 5'
 # The text of a block scalar is script text: a `timeout-minutes` written there is neither a cap nor
 # a guard. It is still counted as a mention, so the reader refuses the file instead of printing a
-# row PyYAML would not (dev#2645, shape 3).
+# row PyYAML would not (the regression, shape 3).
 rehusa "a timeout-minutes written in a block scalar body" "mention(s) of timeout-minutes" 'jobs:
   a:
     timeout-minutes: 30
@@ -1580,7 +1580,7 @@ rehusa "a block scalar indicator on its own line" "indicator on its own line" 'j
       |
       text'
 # A block header's key cannot hold an unquoted `: `: PyYAML rejects `if: echo a: |`, but RE_BLOQUE
-# took the whole text as the key and skipped the next line, which could hide a cap (dev#2645
+# took the whole text as the key and skipped the next line, which could hide a cap (the regression
 # review).
 rehusa "a block scalar key holding an unquoted colon" "unquoted colon" 'jobs:
   a:
@@ -1592,7 +1592,7 @@ rehusa "a block scalar key holding an unquoted colon" "unquoted colon" 'jobs:
       - run: x
         timeout-minutes: 50'
 # A quoted key is refused the same way: the guard cannot tell a quoted `: ` from a plain one
-# (PyYAML reads this key; refusing more is the allowed direction) (dev#2645 review).
+# (PyYAML reads this key; refusing more is the allowed direction) (the regression review).
 rehusa "a quoted block scalar key holding a colon" "unquoted colon" 'jobs:
   a:
     timeout-minutes: 10
@@ -1603,7 +1603,7 @@ rehusa "a quoted block scalar key holding a colon" "unquoted colon" 'jobs:
       - run: x
         timeout-minutes: 50'
 # A block indicator whose suffix is not a YAML header is not a header: PyYAML rejects all four,
-# but the reader took the next cap as the job's own (dev#2645 review). `|0` is an invalid indent
+# but the reader took the next cap as the job's own (the regression review). `|0` is an invalid indent
 # indicator, `|#c` needs a space before the comment, and text after the indicator is not a
 # chomping/indent suffix. The keyless form is the same shape at the dash's node.
 bloque_malo() {
@@ -1622,13 +1622,13 @@ bloque_malo "a block header whose comment has no space" 'run: |#c'
 bloque_malo "a block header whose suffix is text" 'run: >good'
 # An explicit indentation indicator (`|2`) is valid YAML, but it says where the body starts, and
 # the reader does not place it: ignoring it read the body as structure. The strict header accepts
-# only the chomping signs, so the loose detector refuses every other suffix (dev#2645 review).
+# only the chomping signs, so the loose detector refuses every other suffix (the regression review).
 bloque_malo "a block header with an explicit indent indicator" 'run: |2'
 bloque_malo "a block header with an indent indicator and chomping" 'run: |2+'
 bloque_malo "a block header with chomping and an indent indicator" 'run: |-2'
 # A `#` inside a plain key is the key's text when no space precedes it, so `run: a#b: |` is a
 # block header spelling the strict key pattern cannot hold. PyYAML rejects the line; missing it
-# read the next cap as the job's own (dev#2645 review).
+# read the next cap as the job's own (the regression review).
 bloque_malo "a block header whose key holds a hash" 'run: a#b: |'
 rehusa "a keyless block header with text after the indicator" "block scalar indicator" 'jobs:
   a:
@@ -1695,13 +1695,13 @@ case "$got" in
 esac
 # A `jobs:` with a value is not a mapping. The global body tracker used to take `jobs: |` for a
 # block header, skip its body and print no row; a readable sibling file then turned the missing
-# rows into CLEAN. The header itself is refused now (dev#2645 review).
+# rows into CLEAN. The header itself is refused now (the regression review).
 rehusa "a jobs: scalar instead of a mapping" "jobs with a value" 'jobs: |
   timeout-minutes: 1000'
 # YAML needs whitespace between a key's colon and its value: `#` without a space before it is not
 # a comment (`jobs:#c` is a plain scalar), and NBSP is not a separation character. The structural
 # patterns accepted zero spaces via `\s*`, so these read as the bare forms and a file PyYAML
-# rejects printed rows (dev#2645 review).
+# rejects printed rows (the regression review).
 rehusa "a jobs: header whose comment has no space" "jobs with a value" 'jobs:#comment
   a:
     timeout-minutes: 30
@@ -1728,7 +1728,7 @@ rehusa "a timeout-minutes value with no space" "mention(s) of timeout-minutes" '
       - run: x
         timeout-minutes: 20'
 # The same no-space rule on the other three structural patterns: ` +` that drifts back to `\s+`
-# would read these as the bare forms and approve a file PyYAML rejects (dev#2645 review).
+# would read these as the bare forms and approve a file PyYAML rejects (the regression review).
 rehusa "a job id whose colon has a non-breaking space" "unsupported job line" "$(printf 'jobs:\n  a:\302\240#c\n    timeout-minutes: 30\n    steps:\n      - run: x\n        timeout-minutes: 20')"
 rehusa "a steps: key with a non-breaking space" "steps with a value" "$(printf 'jobs:\n  a:\n    timeout-minutes: 30\n    steps:\302\240#c\n      - run: x\n        timeout-minutes: 20')"
 rehusa "a timeout-minutes key whose space is a non-breaking space" "mention(s) of timeout-minutes" "$(printf 'jobs:\n  a:\n    timeout-minutes:\302\24030\n    steps:\n      - run: x\n        timeout-minutes: 20')"
@@ -1742,7 +1742,7 @@ case "$got" in
 esac
 # A second YAML document is not something `safe_load` reads: it raises ("expected a single
 # document"), so the gate refuses, while reading only the first and printing a row approved a
-# file PyYAML rejects (dev#2645 review). A directive is the same class: `%TAG` can change what a
+# file PyYAML rejects (the regression review). A directive is the same class: `%TAG` can change what a
 # tag means, which the plain reader cannot follow, so it refuses too — over-refusal is the
 # allowed direction of the one-way rule.
 rehusa "a second YAML document" "document marker" 'jobs:
@@ -1763,7 +1763,7 @@ jobs:
         timeout-minutes: 20'
 # A marker or directive is refused wherever it is structural, not only at column 0 and not only in
 # its exact spelling. PyYAML raises on every one of these (`mapping values are not allowed here`,
-# `while scanning a directive`), and skipping the line printed the rows below it (dev#2645 review).
+# `while scanning a directive`), and skipping the line printed the rows below it (the regression review).
 rehusa "an indented document marker" "document marker" ' ---
 jobs:
   a:
@@ -1828,7 +1828,7 @@ jobs:
 done
 # A column-0 line that is not a mapping key is block structure this reader cannot attribute.
 # PyYAML rejects a sequence root, the malformed marker and plain junk; it reads a flow root as a
-# mapping with `jobs`, which makes the plain reader's refusal the allowed direction (dev#2645
+# mapping with `jobs`, which makes the plain reader's refusal the allowed direction (the regression
 # review).
 rehusa "a malformed document marker" "unsupported top-level line" '----
 jobs:
@@ -1853,7 +1853,7 @@ jobs:
       - run: x
         timeout-minutes: 20'
 # GitHub reads a positive number of minutes; zero and negative values were literals to the plain
-# path. Both are refused now, on both paths (dev#2645 review).
+# path. Both are refused now, on both paths (the regression review).
 rehusa "a zero timeout" "timeout-minutes is not a literal" 'jobs:
   a:
     timeout-minutes: 0
@@ -1889,7 +1889,7 @@ plana_dos() {
 }
 # A job with no lines under it is a null value, not a job without a cap: the PyYAML path refuses
 # it as a non-mapping, while the plain reader printed nothing for it and CLEANed the tree when a
-# readable sibling had rows (dev#2645 review).
+# readable sibling had rows (the regression review).
 rehusa "a null job" "job 'a' is not a mapping" 'jobs:
   a:
   b:
@@ -1899,7 +1899,7 @@ rehusa "a null job" "job 'a' is not a mapping" 'jobs:
         timeout-minutes: 20'
 # An empty or comment-only workflow is not a document with jobs: `safe_load` returns None and the
 # PyYAML path refuses it. The plain reader printed no rows and a readable sibling turned that
-# silence into CLEAN (dev#2645 review).
+# silence into CLEAN (the regression review).
 for vacio in '' '# only a comment'; do
 	etiqueta="an empty document"
 	[ -n "$vacio" ] && etiqueta="a comment-only document"
@@ -1913,7 +1913,7 @@ done
 # A plain scalar cannot hold an unquoted `: `: PyYAML rejects `env: FOO: bar` with "mapping
 # values are not allowed here", while the reader ignored the line and printed a row. A quote in
 # the middle of a plain scalar is text for YAML, so `run: echo "a: b"` is refused too; only a
-# quote that certainly opens a string (`name: "a: b"`) hides the colon (dev#2645 review).
+# quote that certainly opens a string (`name: "a: b"`) hides the colon (the regression review).
 rehusa "an unquoted colon in a step value" "unquoted colon in a value" 'jobs:
   a:
     runs-on: ubuntu: latest
@@ -1961,7 +1961,7 @@ esac
 # A `jobs` key written as a quoted string (or with a space before the colon) is the same mapping
 # for YAML, but the plain reader only knows `jobs:` at column 0: it ignored the key, and a valid
 # sibling turned the missing rows into CLEAN. PyYAML reads the key and refuses a non-mapping
-# value, so approving the tree was the wrong direction (dev#2645 review).
+# value, so approving the tree was the wrong direction (the regression review).
 got="$(plana_dos '"jobs": [a, b]')"
 case "$got" in
 	2/*"quoted key or a space before the colon"*) ok "plain reader refuses a quoted jobs key beside a valid file (2)" ;;
@@ -1978,7 +1978,7 @@ case "$got" in
 esac
 # The two top-level structure branches that carry a colon are pinned on their own: a sequence
 # entry and an explicit key that hold a mapping. PyYAML refuses both, and deleting either
-# alternative of RE_TOP_ESTRUCTURA made the reader print a JOB row (dev#2645 review).
+# alternative of RE_TOP_ESTRUCTURA made the reader print a JOB row (the regression review).
 rehusa "a top-level sequence entry holding a mapping" "unsupported top-level line" '- a: b
 jobs:
   a:
@@ -1995,7 +1995,7 @@ jobs:
         timeout-minutes: 20'
 # A bare `...` is an end marker wherever it is structural: indented inside a job, PyYAML fails
 # scanning a simple key, and without the `\.\.\.` branch the reader printed the cap that follows
-# it (dev#2645 review).
+# it (the regression review).
 rehusa "an end marker inside a job" "document marker" 'jobs:
   a:
     timeout-minutes: 10
@@ -2018,7 +2018,7 @@ case "$got" in
 	*) mal "valid + chomping" "got ${got:0:200}, expected 0/1 of 1 job(s)" ;;
 esac
 # MAX_LINEA applies to every line, not only to lines inside jobs: a 100 KB top-level value is the
-# same unbounded work as one inside a step (dev#2645 review, shape 4).
+# same unbounded work as one inside a step (the regression review, shape 4).
 largo="$(printf 'a%.0s' $(seq 1 100000))"
 rehusa "a 100 KB top-level line" "characters in a line" "name: $largo
 jobs:
@@ -2053,7 +2053,7 @@ if python3 -c 'import yaml' >/dev/null 2>&1; then
 	}
 	# A value PyYAML reads as a string, a float or a bool is not the integer GitHub accepts.
 	# `int(techo)` raised ValueError, `sum(...)` raised TypeError, the helper exited 1 and the gate
-	# said "helper failed": a crash where the contract promises NOPUEDO (dev#2645 review).
+	# said "helper failed": a crash where the contract promises NOPUEDO (the regression review).
 	rehusa_yaml "a non-numeric cap" "timeout-minutes is not an integer" 'jobs:
   a:
     timeout-minutes: abc
@@ -2110,7 +2110,7 @@ if python3 -c 'import yaml' >/dev/null 2>&1; then
         timeout-minutes: 2'
 	# A document or job the walk skipped is not a file it read: `- a` has no jobs mapping, and a
 	# scalar job has no key whose cap could be attributed. Both were dropped silently while the
-	# plain reader refuses them (dev#2645 review).
+	# plain reader refuses them (the regression review).
 	rehusa_yaml "a document that is not a mapping" "document is not a mapping" '- a
 - b'
 	rehusa_yaml "a job that is not a mapping" "job 'b' is not a mapping" 'jobs:
@@ -2121,7 +2121,7 @@ if python3 -c 'import yaml' >/dev/null 2>&1; then
         timeout-minutes: 20
   b: literal'
 	# A job with no lines under it parses as None; the walk refuses it as a non-mapping, and the
-	# plain reader must not print CLEAN for the same file (dev#2645 review).
+	# plain reader must not print CLEAN for the same file (the regression review).
 	rehusa_yaml "a null job" "job 'a' is not a mapping" 'jobs:
   a:
   b:
@@ -2132,11 +2132,11 @@ if python3 -c 'import yaml' >/dev/null 2>&1; then
 	# `safe_load` of an empty or comment-only stream is None, not a mapping.
 	rehusa_yaml "an empty document" "document is not a mapping" ''
 	# A quoted `jobs` key is still the jobs mapping for YAML; a sequence value is refused by the
-	# walk. The plain reader must refuse the key it cannot read (dev#2645 review).
+	# walk. The plain reader must refuse the key it cannot read (the regression review).
 	rehusa_yaml "a quoted jobs key with a sequence" "jobs is not a mapping" '"jobs": [a, b]'
 	# A declared-null step guard is present with value None: filtering by truthiness dropped it
 	# from the count. Zero is present too, and GitHub reads a positive number of minutes; a
-	# `guarda < 0` mutant would stay green on both (dev#2645 review).
+	# `guarda < 0` mutant would stay green on both (the regression review).
 	rehusa_yaml "a declared-null step guard" "a step timeout-minutes is not an integer" 'jobs:
   a:
     timeout-minutes: 30
@@ -2158,7 +2158,7 @@ if python3 -c 'import yaml' >/dev/null 2>&1; then
       - run: x
         timeout-minutes: 20"
 	# A declared null cap is present, and a present value this reader cannot attribute is not a
-	# job to skip: `.get()` returned None and the whole job disappeared (dev#2645 review).
+	# job to skip: `.get()` returned None and the whole job disappeared (the regression review).
 	rehusa_yaml "a declared-null cap" "timeout-minutes is not an integer" 'jobs:
   a:
     timeout-minutes:
@@ -2166,7 +2166,7 @@ if python3 -c 'import yaml' >/dev/null 2>&1; then
       - run: x
         timeout-minutes: 20'
 	# GitHub reads a positive number of minutes. A negative guard made the sum smaller and could
-	# approve a job whose real guards exceed its cap (dev#2645 review).
+	# approve a job whose real guards exceed its cap (the regression review).
 	rehusa_yaml "a zero cap" "timeout-minutes is not a positive integer" 'jobs:
   a:
     timeout-minutes: 0
@@ -2187,7 +2187,7 @@ if python3 -c 'import yaml' >/dev/null 2>&1; then
         timeout-minutes: -20'
 	# A scalar step carries no guard, so filtering it out of the count does not change the
 	# verdict, but it printed a different row than the plain reader. Both count list items now
-	# (dev#2645 review).
+	# (the regression review).
 	caja="$(mktemp -d)"
 	mkdir -p "$caja/scripts" "$caja/.github/workflows"
 	cp "$GATE" "$AYUDA" "$caja/scripts/"
@@ -2210,7 +2210,7 @@ if python3 -c 'import yaml' >/dev/null 2>&1; then
 	esac
 	# A bare `-` is a null step. PyYAML counts it as an item; the plain reader did not, so the
 	# same file printed `2 1` and `1 1`. Both list styles are read, so both are pinned
-	# (dev#2645 review).
+	# (the regression review).
 	for pasos_nulos in '      -
       - name: x
         timeout-minutes: 20' '    -
@@ -2286,10 +2286,10 @@ jobs:
 	[ "$rc" = "0" ] && ok "PyYAML reads a 100000-character scalar: cap 30 above sum 20 (0)" \
 		|| mal "PyYAML parity: long line" "rc=$rc, expected 0"
 	# The real tree both ways: the same rows, byte for byte. The gate case above only checks rc 0,
-	# so a row silently lost would stay green; this is the case that notices (dev#2645 review).
+	# so a row silently lost would stay green; this is the case that notices (the regression review).
 	# A `jobs:` that PyYAML reads as a sequence or a scalar is not the mapping the helper walks:
 	# `.items()` raised AttributeError, the helper exited 1, and the gate reported a helper crash
-	# instead of the documented NOPUEDO (dev#2645 review).
+	# instead of the documented NOPUEDO (the regression review).
 	caja="$(mktemp -d)"
 	mkdir -p "$caja/scripts" "$caja/.github/workflows"
 	cp "$GATE" "$AYUDA" "$caja/scripts/"
@@ -2304,7 +2304,7 @@ jobs:
 	esac
 	yaml_tree="$(python3 "$AYUDA" "$RAIZ/.github/workflows")"
 	plain_tree="$(OLIVARES_CI_TIMEOUTS_NO_YAML=1 python3 "$AYUDA" "$RAIZ/.github/workflows")"
-	# Two empty outputs compare equal too: require the comparison to hold real rows (dev#2645
+	# Two empty outputs compare equal too: require the comparison to hold real rows (the regression
 	# review).
 	case "$yaml_tree" in
 		JOB*) [ "$yaml_tree" = "$plain_tree" ] \
@@ -2338,7 +2338,7 @@ else:
 		}
 		rehusa "a line of $((MAXL + 1)) characters" "characters in a line" "$(larga $((MAXL + 1)))"
 		# The cap must run BEFORE the patterns: with the cap moved after RE_ANCLA, the same
-		# fixture still refuses with the same reason but takes about a minute (dev#2645).
+		# fixture still refuses with the same reason but takes about a minute.
 		SECONDS=0
 		rehusa "a line of 100000 characters" "characters in a line" "$(larga 100000)"
 		[ "$SECONDS" -lt 10 ] && ok "the 100000-character line is refused in $SECONDS s, under 10" \

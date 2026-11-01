@@ -34,7 +34,7 @@ import (
 // configuration, and bounds time and output. None of these runs a filter, a textconv or
 // an external diff.
 //
-// The authority is the run's own read (permRunRead, concealed as a 404 for another
+// The authority is the run's own read (permRunOutput, concealed as a 404 for another
 // workspace), and the text is the repository's history, so it also keeps the workspace's
 // own file rules: only the allowed subpaths are listed or read, a DLP posture that
 // denies denies, and a read is audited like a workspace file read (workspace.go
@@ -240,13 +240,21 @@ func worktreeBlobAt(ctx context.Context, repo, commit, file string, maxReadBytes
 	return body, true, false, truncated, nil
 }
 
+// isRepoRelativePath says whether file names a path inside the repository: not empty, not
+// absolute, already clean (no "..", "." or doubled slashes) and without a NUL. The diff
+// route reads only such a path, and a review comment names only such a path.
+func isRepoRelativePath(file string) bool {
+	clean := path.Clean(file)
+	return file != "" && clean == file && !path.IsAbs(file) && clean != "." &&
+		clean != ".." && !strings.HasPrefix(clean, "../") && !strings.ContainsRune(file, 0)
+}
+
 // handleRunWorktreeDiffFile returns one path of the run's worktree branch at the base and
 // at the branch tip (?path=, relative to the repository's top folder; each side keeps
 // the workspace's read limit and the 64 KiB Git output cap).
 func (m *Module) handleRunWorktreeDiffFile(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	file := r.URL.Query().Get("path")
-	if clean := path.Clean(file); file == "" || clean != file || path.IsAbs(file) || clean == "." ||
-		clean == ".." || strings.HasPrefix(clean, "../") || strings.ContainsRune(file, 0) {
+	if !isRepoRelativePath(file) {
 		writeJSON(w, http.StatusBadRequest, errorBody("path must name a file inside the repository"))
 		return
 	}

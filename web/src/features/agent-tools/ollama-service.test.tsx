@@ -41,6 +41,7 @@ vi.mock('@/components/ui/toaster', () => ({
 import { useTenantStore } from '@/stores/tenant'
 import { firstHourKeys } from '@/features/first-hour/api'
 import { providerKeys } from '@/features/providers/api'
+import { OLLAMA_AVAILABLE_KEY } from './api'
 import { OllamaService } from './ollama-service'
 
 const running = {
@@ -86,7 +87,7 @@ it('starts Ollama on this server and says where it answers', async () => {
   expect(await screen.findByText('Not running')).toBeInTheDocument()
   api.ollama.mockResolvedValue(running)
   await userEvent.click(screen.getByRole('button', { name: 'Start' }))
-  // Only the organization the person works in gets the endpoint (Root on FH 033).
+  // Only the organization the person works in gets the endpoint (Root on first-hour check).
   expect(api.ollamaStart).toHaveBeenCalledWith('tenant-a', expect.anything())
   expect(
     await screen.findByText(/Running at http:\/\/127\.0\.0\.1:11434/),
@@ -181,7 +182,7 @@ it('downloads a model by name and shows its progress until it is there', async (
     })
   mount()
   await screen.findByText(/Running at/)
-  // The field starts on the recommended model (HU2-07); a name typed instead replaces it.
+  // The field starts on the recommended model; a name typed instead replaces it.
   await userEvent.clear(screen.getByLabelText('Pull a model'))
   await userEvent.type(screen.getByLabelText('Pull a model'), 'qwen2.5:0.5b')
   api.ollama.mockResolvedValue({ ...running, models: ['qwen2.5:0.5b'] })
@@ -228,7 +229,7 @@ it('pulls a public Hugging Face GGUF reference without changing its quantization
   expect(await screen.findByText(`Downloaded ${model}.`)).toBeInTheDocument()
 })
 
-// HU2-07: the model field was empty and Download disabled until the person typed a name they
+// acceptance: the model field was empty and Download disabled until the person typed a name they
 // had to know already.
 it('offers a small recommended model, ready to download', async () => {
   api.ollama.mockResolvedValue(running)
@@ -239,4 +240,28 @@ it('offers a small recommended model, ready to download', async () => {
   expect(download).toBeEnabled()
   await userEvent.click(download)
   expect(api.ollamaPull).toHaveBeenCalledWith('qwen2.5:0.5b', expect.anything())
+})
+
+it('refreshes the Ollama status Models > Available keeps, so that tab follows Start without a remount', async () => {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const read = vi.fn(async () => (await api.ollama()) as { state: string })
+  function Tab() {
+    const q = useQuery({
+      queryKey: ['agentops', 't1', 'b', 1, OLLAMA_AVAILABLE_KEY],
+      queryFn: read,
+    })
+    return <p>tab:{q.data?.state ?? 'loading'}</p>
+  }
+  render(
+    <QueryClientProvider client={qc}>
+      <Tab />
+      <OllamaService />
+    </QueryClientProvider>,
+  )
+  expect(await screen.findByText('tab:stopped')).toBeInTheDocument()
+  api.ollama.mockResolvedValue(running)
+  await userEvent.click(await screen.findByRole('button', { name: 'Start' }))
+  await waitFor(() =>
+    expect(screen.getByText('tab:running')).toBeInTheDocument(),
+  )
 })

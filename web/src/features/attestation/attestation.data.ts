@@ -236,7 +236,7 @@ export const SCORECARD_CHECKS: ScorecardCheck[] = [
   {
     name: 'Pinned-Dependencies',
     what: 'every GitHub Action pinned by 40-char SHA',
-    evidence: 'all workflows + .github/dependabot.yml',
+    evidence: 'all workflows',
   },
   {
     name: 'Signed-Releases',

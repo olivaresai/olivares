@@ -267,7 +267,7 @@ export function SessionEvidence({
   sessionRef?: string
   /** Rows the plane wrote for this session on other channels (its PEP hook's tool calls,
    * its turns' usage): read with it, or a finished session shows "Last turns 0" and
-   * "Resources touched 0" (HU 029). */
+   * "Resources touched 0". */
   echoRefs?: readonly string[]
   /** Which block is open — it lives in the URL, so a shared link opens the same one.
    * Absent, the turns open (the session's work), else the first block there is. */

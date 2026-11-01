@@ -93,6 +93,10 @@ var classifiedWriters = map[string]string{
 // belong in classifiedWriters.
 const approvedWriter = "applyPosture"
 
+// expiryMetadataWriter only persists one-shot notification/audit markers. It never
+// changes enabled, effect, scope or expires_at, so it cannot relax enforcement.
+const expiryMetadataWriter = "sweepBindings"
+
 // writeMethods are the repository calls that mutate rows. List/Get are reads and are what
 // keeps the list/get handlers out of this check.
 var writeMethods = map[string]bool{"Create": true, "Update": true, "Delete": true}
@@ -135,7 +139,7 @@ func TestEveryGovernedWriteIsClassified(t *testing.T) {
 			}
 			name := fn.Name.Name
 			seen[name] = true
-			if name == approvedWriter {
+			if name == approvedWriter || name == expiryMetadataWriter {
 				continue
 			}
 			classifier, allowed := classifiedWriters[name]

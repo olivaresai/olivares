@@ -8,7 +8,7 @@ import { ApiError } from '@/lib/api/errors'
 import { useModulesStore } from '@/stores/modules'
 import { gitpublishApi } from './api'
 import { SessionPublish } from './session-publish'
-import type { PublicationIntent, PublicationTarget } from './types'
+import type { PublicationIntent, PublicationTarget, ShipResult } from './types'
 
 const auth = vi.hoisted(() => ({
   can: (_permission: string): boolean => true,
@@ -61,6 +61,7 @@ beforeEach(() => {
   auth.can = () => true
   useModulesStore.getState().setOff([])
   vi.spyOn(gitpublishApi, 'targets').mockResolvedValue({ items: [target] })
+  vi.spyOn(gitpublishApi, 'intents').mockResolvedValue({ items: [] })
 })
 
 async function paste(field: HTMLElement, value: string) {
@@ -275,5 +276,175 @@ describe('when there is nothing to publish to', () => {
     expect(
       await screen.findByRole('button', { name: /retry/i }),
     ).toBeInTheDocument()
+  })
+})
+
+const PR_URL = 'https://github.com/acme/widgets/pull/7'
+
+function shipped(over: Partial<ShipResult> = {}): ShipResult {
+  return {
+    state: 'shipped',
+    branch: BRANCH,
+    commit: SHA,
+    committed: true,
+    pull_request_url: PR_URL,
+    push: applied(),
+    pull_request: applied({
+      id: 'in-2',
+      effect: 'pull_request',
+      requested: { head_ref: BRANCH, base: 'main', commit: SHA },
+      observed: { present: true, number: 7, head_sha: SHA, merged: false },
+    }),
+    ...over,
+  }
+}
+
+/** Opens the session's Ship dialog and ships it with the given title. */
+async function ship(title = 'Add the export') {
+  renderIntel(<SessionPublish run={{ ...run, name: 'export button' }} />)
+  await userEvent.click(await screen.findByRole('button', { name: 'Ship' }))
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Ship this session',
+  })
+  const field = within(dialog).getByLabelText(/^Title/)
+  await userEvent.clear(field)
+  await paste(field, title)
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Ship' }))
+  return dialog
+}
+
+describe('shipping a session', () => {
+  it('commits, pushes and opens the pull request in one request, and links it', async () => {
+    const send = vi.spyOn(gitpublishApi, 'ship').mockResolvedValue(shipped())
+    const dialog = await ship()
+
+    const link = await within(dialog).findByRole('link', {
+      name: 'Pull request #7',
+    })
+    expect(link).toHaveAttribute('href', PR_URL)
+    expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'))
+    expect(send).toHaveBeenCalledTimes(1)
+    const [targetId, body, request] = send.mock.calls[0]!
+    expect(targetId).toBe('tg-1')
+    // The commit message is the title until it is changed; the run, never a path.
+    expect(body).toMatchObject({
+      session_run: RUN,
+      title: 'Add the export',
+      message: 'Add the export',
+      base: 'main',
+      draft: false,
+    })
+    expect(body.operation_id).toMatch(/^console:/)
+    expect(request).toEqual({ tenant: 'tenant-1' })
+  })
+
+  it('starts with the session’s name as the title', async () => {
+    renderIntel(<SessionPublish run={{ ...run, name: 'export button' }} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Ship' }))
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Ship this session',
+    })
+    expect(within(dialog).getByLabelText(/^Title/)).toHaveValue('export button')
+  })
+
+  it('never renders a pull request link that is not https', async () => {
+    vi.spyOn(gitpublishApi, 'ship').mockResolvedValue(
+      shipped({ pull_request_url: 'javascript:alert(1)' }),
+    )
+    const dialog = await ship()
+    await within(dialog).findByText(`Shipped: ${BRANCH} is pushed.`)
+    expect(within(dialog).queryByRole('link')).not.toBeInTheDocument()
+    expect(within(dialog).getByText('Pull request #7')).toBeInTheDocument()
+  })
+
+  it('says the push waits for another person and offers to ship again', async () => {
+    const send = vi
+      .spyOn(gitpublishApi, 'ship')
+      .mockResolvedValueOnce({
+        state: 'awaiting_approval',
+        branch: BRANCH,
+        commit: SHA,
+        committed: true,
+        approval_id: 'appr-1',
+      })
+      .mockResolvedValueOnce(shipped())
+    const dialog = await ship()
+    expect(
+      await within(dialog).findByText('Waiting for another person’s approval'),
+    ).toBeInTheDocument()
+    expect(within(dialog).getByText(/approval appr-1/)).toBeInTheDocument()
+
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Ship again' }),
+    )
+    expect(
+      await within(dialog).findByRole('link', { name: 'Pull request #7' }),
+    ).toBeInTheDocument()
+    // The same decision: the engine replays what landed and goes on after the approval.
+    expect(send.mock.calls[1]![1].operation_id).toBe(
+      send.mock.calls[0]![1].operation_id,
+    )
+  })
+
+  it('says a pull request that was not opened after the push landed', async () => {
+    vi.spyOn(gitpublishApi, 'ship').mockResolvedValue({
+      state: 'incomplete',
+      branch: BRANCH,
+      commit: SHA,
+      committed: true,
+      push: applied(),
+      pull_request_error: 'base_not_allowed',
+    })
+    const dialog = await ship()
+    expect(
+      await within(dialog).findByText(
+        /is pushed, but the pull request was not opened \(base_not_allowed\)/,
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('names the engine’s refusal, such as a folder on no branch', async () => {
+    vi.spyOn(gitpublishApi, 'ship').mockRejectedValue(
+      new ApiError(409, 'no_branch', 'no_branch'),
+    )
+    const dialog = await ship()
+    const alert = await within(dialog).findByRole('alert')
+    expect(alert).toHaveTextContent('no_branch')
+    expect(alert).toHaveTextContent('on no branch')
+  })
+
+  it('links the session’s pull request again after the dialog is closed', async () => {
+    vi.spyOn(gitpublishApi, 'intents').mockResolvedValue({
+      items: [
+        applied({
+          id: 'in-2',
+          effect: 'pull_request',
+          requested: { head_ref: BRANCH, base: 'main', commit: SHA },
+          observed: {
+            present: true,
+            number: 7,
+            merged: false,
+            url: PR_URL,
+          },
+        }),
+        applied({
+          id: 'in-3',
+          effect: 'pull_request',
+          requested: { head_ref: 'agent/other', base: 'main', commit: SHA },
+          observed: {
+            present: true,
+            number: 9,
+            merged: false,
+            url: 'https://github.com/acme/widgets/pull/9',
+          },
+        }),
+      ],
+    })
+    renderIntel(<SessionPublish run={run} />)
+    const link = await screen.findByRole('link', { name: 'Pull request #7' })
+    expect(link).toHaveAttribute('href', PR_URL)
+    expect(
+      screen.queryByRole('link', { name: 'Pull request #9' }),
+    ).not.toBeInTheDocument()
   })
 })

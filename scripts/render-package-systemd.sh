@@ -7,7 +7,7 @@ set -eu
 
 root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
 # The package owns /var/lib/olivares through StateDirectory=. systemd applies StateDirectoryMode= at every start, and
-# 0755 when none is set, so the mode is the service account's 0750 (dev#2993). The installer and AUR paths drop the
+# 0755 when none is set, so the mode is the service account's 0750. The installer and AUR paths drop the
 # marker and give the directory 0750 themselves.
 unit="$(sed \
   -e 's|@USER_LINE@|User=olivares|g' \

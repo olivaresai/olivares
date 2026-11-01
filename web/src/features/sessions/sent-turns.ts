@@ -8,7 +8,7 @@ import { useTenantStore } from '@/stores/tenant'
 import type { ConversationItem } from './conversation-frames'
 
 /** A message the console sent to a session: the first one of a launch, or one from the
- * message bar (dev#2787). */
+ * message bar. */
 export interface SentTurn {
   text: string
   /** The attach `seq` of the newest frame the session had shown when this one was sent:
@@ -23,7 +23,7 @@ export interface SentTurn {
   shown?: number
   /** Why the engine did not take it; absent when it did. */
   refused?: string
-  /** Held until its launch is approved and the session runs (#500); absent once sent. */
+  /** Held until its launch is approved (#500) or its worktree setup ends, and the session runs; absent once sent. */
   waiting?: boolean
 }
 
@@ -34,7 +34,7 @@ interface OwnedTurn extends SentTurn {
 
 /** The sign-in and organization a note belongs to. Any credential change (a sign-out, a
  * sign-in, another person) moves the generation, so a note is never shown to anyone but
- * the session that started the run, in the organization it started in (SR4C on
+ * the session that started the run, in the organization it started in (review on
  * 3cf9f18a). */
 export function sentTurnsPartition(): string {
   const generation = useSessionStore.getState().credentialGeneration
@@ -42,7 +42,7 @@ export function sentTurnsPartition(): string {
   return `${generation}\n${tenant}`
 }
 
-/** The first messages this console sent, by run, each with its owner (HU2-27). A tool
+/** The first messages this console sent, by run, each with its owner. A tool
  * shows the person's message only once it takes the turn (Codex when the turn starts),
  * and a message the engine refused never reaches it: the session showed no trace of
  * what was asked. Kept in memory only; after a reload the tool's own record is what the
@@ -188,7 +188,7 @@ export function wordsShown(
 }
 
 /** Where a message sent now goes in its run's conversation: read at the send, because
- * the tool's echo can render before the engine's answer (dev#2787). */
+ * the tool's echo can render before the engine's answer. */
 export function sentPlace(
   runRef: string,
   text: string,

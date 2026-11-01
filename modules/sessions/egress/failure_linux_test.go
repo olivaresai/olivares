@@ -31,6 +31,15 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == "__container_dumpable" {
+		runContainerHelper("{}")
+		value, err := unix.PrctlRetInt(unix.PR_GET_DUMPABLE, 0, 0, 0, 0)
+		if err != nil || value != 0 {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	if len(os.Args) > 1 && os.Args[1] == confine.HelperArg {
 		// The reexec stages sessions.RunConfinementHelper dispatches in the engine.
 		if args := os.Args[2:]; Handles(args) {

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { preferenceStorage } from '@/lib/preference-storage'
 import {
   cleanup,
   fireEvent,
@@ -11,6 +12,7 @@ import {
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
+import { stubViewportWidth } from '@/test/viewport'
 import { mergeSessions } from './provenance'
 import type { RunDTO } from '@/features/agentops/types'
 import type { LiveDTO } from './types'
@@ -89,7 +91,7 @@ const resolution: SessionResolution = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  window.localStorage.clear()
+  preferenceStorage.clear()
   api.timelineById.mockResolvedValue({ items: [], has_more: false, cursor: '' })
 })
 
@@ -113,6 +115,36 @@ function renderSurface(over: Partial<Parameters<typeof WorkSurface>[0]> = {}) {
   )
   return { onPane, onOpen, unmount: rendered.unmount }
 }
+
+/** The surface rendered once, then again with other props, as a navigation does. */
+function renderIntelSurface(first: Partial<Parameters<typeof WorkSurface>[0]>) {
+  const base: Parameters<typeof WorkSurface>[0] = {
+    sessions,
+    loading: false,
+    address: { address: 'live:lr-a', pane: 'rail', evidence: 'checks' },
+    resolution,
+    pinned: new Set(),
+    onTogglePin: vi.fn(),
+    onOpen: vi.fn(),
+    onPane: vi.fn(),
+    onEvidence: vi.fn(),
+    onOpenDetail: vi.fn(),
+  }
+  const rendered = renderIntel(<WorkSurface {...base} {...first} />)
+  return {
+    rerender: (next: Partial<Parameters<typeof WorkSurface>[0]>) =>
+      rendered.rerender(<WorkSurface {...base} {...next} />),
+  }
+}
+
+const realMatchMedia = window.matchMedia
+afterEach(() => {
+  Object.defineProperty(window, 'matchMedia', {
+    value: realMatchMedia,
+    configurable: true,
+    writable: true,
+  })
+})
 
 const pane = (id: string) => document.getElementById(`work-pane-${id}`)
 
@@ -352,35 +384,44 @@ describe('WorkSurface', () => {
     })
     expect(screen.getByTestId('work-composer')).toBeInTheDocument()
   })
-  it('mounts all three panes whatever is in front', async () => {
+  it('mounts all three panes on a desktop whatever is in front', async () => {
+    stubViewportWidth(1440)
     renderSurface()
     await screen.findByTestId('work-rail')
     for (const id of ['rail', 'narrative', 'context'])
       expect(pane(id)).not.toBeNull()
   })
 
-  it('hides the panes that are not in front with a CLASS, never by unmounting', async () => {
+  it('keeps the conversation in front while Details sits beside it from 1120 px', async () => {
+    stubViewportWidth(1440)
     renderSurface({
       address: { address: 'live:lr-a', pane: 'context', evidence: 'checks' },
     })
     await screen.findByTestId('session-context')
-    expect(pane('context')?.className).not.toContain('hidden')
-    // The pane sits beside the work only where the work keeps 760 px (dev#3162).
-    expect(pane('narrative')?.className).toContain('hidden min-[1441px]:flex')
+    expect(pane('context')?.className.split(/\s+/)).not.toContain('hidden')
+    expect(pane('context')?.closest('[role="dialog"]')).toBeNull()
+    expect(pane('narrative')?.className.split(/\s+/)).not.toContain('hidden')
   })
 
-  it("keeps the list beside the open side pane from 761 px: the pane takes only the thread's place", async () => {
-    renderSurface({
+  it('opens Details as a sheet below 1120 px, over the list and the conversation it leaves in place', async () => {
+    const user = userEvent.setup()
+    stubViewportWidth(1024)
+    const { onPane } = renderSurface({
       address: { address: 'live:lr-a', pane: 'context', evidence: 'checks' },
     })
-    await screen.findByTestId('session-context')
+    const sheet = await screen.findByRole('dialog', { name: 'Session details' })
+    expect(within(sheet).getByTestId('session-context')).toBeInTheDocument()
+    // One Details at a time: the grid holds no second copy of it.
+    expect(document.querySelectorAll('#work-pane-context')).toHaveLength(1)
+    expect(sheet).toHaveAttribute('id', 'work-pane-context')
     expect(pane('rail')?.className).toContain('hidden min-[761px]:flex')
-    const context = pane('context')!.className.split(/\s+/)
-    expect(context).toContain('max-[760px]:col-span-full')
-    expect(context).not.toContain('max-[1440px]:col-span-full')
+    expect(pane('narrative')?.className.split(/\s+/)).not.toContain('hidden')
+    await user.click(within(sheet).getByRole('button', { name: 'Close' }))
+    expect(onPane).toHaveBeenCalledWith('narrative')
   })
 
-  it('keeps the list beside the open side pane with two threads too', async () => {
+  it('opens Details as a sheet with two threads below 2201 px too', async () => {
+    stubViewportWidth(1920)
     renderSplit({
       address: {
         address: pairedA.key,
@@ -389,11 +430,9 @@ describe('WorkSurface', () => {
         evidence: 'checks',
       },
     })
-    await screen.findByTestId('session-context')
-    expect(pane('rail')?.className).toContain('hidden min-[761px]:flex')
-    const context = pane('context')!.className.split(/\s+/)
-    expect(context).toContain('max-[760px]:col-span-full')
-    expect(context).not.toContain('max-[2200px]:col-span-full')
+    expect(
+      await screen.findByRole('dialog', { name: 'Session details' }),
+    ).toBeInTheDocument()
   })
 
   it('shows the list and the thread side by side from 761 px, and one at a time below it', async () => {
@@ -406,16 +445,19 @@ describe('WorkSurface', () => {
     expect(pane('narrative')?.className.split(/\s+/)).not.toContain('hidden')
   })
 
-  it('lays the list out at 360 px, 280 px at 1360 px and below, with no card chrome', async () => {
+  it('lays the list out at 292 px and Details at 304 px, 264 and 280 px at 1350 px and below, with no card chrome', async () => {
+    stubViewportWidth(1440)
     renderSurface()
     await screen.findByTestId('work-rail')
     const grid = document.querySelector('[data-context]') as HTMLElement
     const cls = grid.className
-    expect(cls).toContain('[--list-w:360px]')
-    expect(cls).toContain('max-[1360px]:[--list-w:280px]')
-    expect(cls).toContain(
-      'min-[761px]:grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)]',
-    )
+    expect(cls).toContain('[--list-w:292px]')
+    expect(cls).toContain('max-[1350px]:[--list-w:264px]')
+    expect(cls).toContain('[--ctx-w:304px]')
+    expect(cls).toContain('max-[1350px]:[--ctx-w:280px]')
+    expect(cls.split(/\s+/).filter((c) => c.includes('grid-cols-'))).toEqual([
+      'grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)_min(var(--ctx-w),35%)]',
+    ])
     for (const id of ['rail', 'narrative', 'context'])
       expect(pane(id)?.className).not.toMatch(
         /rounded-lg|border-border|bg-surface/,
@@ -438,117 +480,127 @@ describe('WorkSurface', () => {
     const { onPane } = renderSurface({
       address: { address: 'live:lr-a', pane: 'narrative', evidence: 'checks' },
     })
-    await user.click(screen.getByTestId('pane-button-context'))
+    await user.click(screen.getByTestId('context-toggle'))
     expect(onPane).toHaveBeenCalledWith('context')
     await user.click(screen.getByTestId('pane-button-rail'))
     expect(onPane).toHaveBeenCalledWith('rail')
   })
 
-  it('gives a narrow screen one way back from the thread, one way to its context and one back again', async () => {
+  it('gives a narrow screen the conversation first, Back to the real list and Details as a sheet', async () => {
+    stubViewportWidth(390)
     renderSurface({
       address: { address: 'live:lr-a', pane: 'narrative', evidence: 'checks' },
     })
     // The thread's header carries the back arrow to the list (below 761 px) and the
-    // Context icon that brings the pane forward (between 761 px and `xl`); the context
-    // pane carries its own way back to the thread.
+    // Details button that opens the sheet; nothing else navigates.
     expect(await screen.findByTestId('pane-button-rail')).toHaveAttribute(
       'aria-controls',
       'work-pane-rail',
     )
-    expect(screen.getByTestId('pane-button-context')).toHaveAttribute(
-      'aria-controls',
-      'work-pane-context',
-    )
-    expect(screen.getByTestId('pane-button-narrative')).toHaveAttribute(
-      'aria-controls',
-      'work-pane-narrative',
-    )
-    expect(pane('context')).not.toBeNull()
-    for (const id of ['pane-button-rail', 'pane-button-context'])
-      expect(screen.getByTestId(id)).toHaveAccessibleName(/.+/)
+    const details = screen.getByTestId('context-toggle')
+    expect(details).toHaveAttribute('aria-haspopup', 'dialog')
+    expect(details).toHaveAttribute('aria-expanded', 'false')
+    expect(details).toHaveAccessibleName('Session details')
+    expect(details.className.split(/\s+/)).not.toContain('hidden')
+    expect(pane('context')).toBeNull()
+    expect(pane('narrative')?.className.split(/\s+/)).not.toContain('hidden')
+    expect(screen.getByTestId('pane-button-rail')).toHaveAccessibleName(/.+/)
     expect(screen.getByTestId('pane-button-rail').className).toContain(
       'min-[761px]:hidden',
     )
   })
 
-  it('opens the context pane on demand beside the work, and closes it again', async () => {
+  it('gives focus back to Details when its sheet closes', async () => {
     const user = userEvent.setup()
+    stubViewportWidth(390)
+    const props = {
+      address: {
+        address: 'live:lr-a',
+        pane: 'narrative' as const,
+        evidence: 'checks' as const,
+      },
+    }
+    const { rerender } = renderIntelSurface(props)
+    const details = await screen.findByTestId('context-toggle')
+    details.focus()
+    rerender({ address: { ...props.address, pane: 'context' } })
+    const sheet = await screen.findByRole('dialog', { name: 'Session details' })
+    await user.keyboard('{Escape}')
+    rerender(props)
+    await waitFor(() => expect(sheet).not.toBeInTheDocument())
+    expect(screen.getByTestId('context-toggle')).toHaveFocus()
+  })
+
+  it('shows Details beside the work by default on a desktop, and closes and opens it again', async () => {
+    const user = userEvent.setup()
+    stubViewportWidth(1440)
     renderSurface({
       address: { address: 'live:lr-a', pane: 'narrative', evidence: 'checks' },
     })
     const grid = () => document.querySelector('[data-context]') as HTMLElement
-    expect(grid().dataset.context).toBe('closed')
-    expect(pane('context')?.className).toContain('min-[1441px]:hidden')
-    expect(pane('context')).not.toBeNull()
-    const toggle = screen.getByTestId('context-toggle')
-    expect(toggle).toHaveAttribute('aria-pressed', 'false')
-    expect(toggle).toHaveAttribute('aria-controls', 'work-pane-context')
-    await user.click(toggle)
     expect(grid().dataset.context).toBe('open')
-    expect(pane('context')?.className).toContain('min-[1441px]:block')
+    expect(await screen.findByTestId('session-context')).toBeInTheDocument()
+    const toggle = screen.getByTestId('context-toggle')
     expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    expect(toggle).toHaveAttribute('aria-controls', 'work-pane-context')
     await user.click(screen.getByTestId('context-close'))
     expect(grid().dataset.context).toBe('closed')
+    expect(pane('context')).toBeNull()
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
     await user.click(toggle)
+    expect(grid().dataset.context).toBe('open')
     await user.keyboard('{Escape}')
     expect(grid().dataset.context).toBe('closed')
   })
 
   describe('the side pane remembers its state in this browser', () => {
     const grid = () => document.querySelector('[data-context]') as HTMLElement
-    const setWidth = (px: number) =>
-      Object.defineProperty(window, 'innerWidth', {
-        value: px,
-        configurable: true,
-        writable: true,
-      })
-    afterEach(() => setWidth(1024))
 
-    // The side pane opens on demand: the conversation is the page (dev#3162).
-    it('is closed by default at every width', () => {
-      for (const width of [1280, 1440, 1920, 2560]) {
-        setWidth(width)
+    it('is open by default at every desktop width', () => {
+      for (const width of [1120, 1280, 1440, 1920, 2560]) {
+        stubViewportWidth(width)
         const surface = renderSurface()
-        expect(grid().dataset.context).toBe('closed')
+        expect(grid().dataset.context).toBe('open')
         surface.unmount()
       }
     })
 
     it('keeps what this person chose, closed or open, whatever the width', async () => {
       const user = userEvent.setup()
-      setWidth(1920)
+      stubViewportWidth(1920)
       const first = renderSurface()
-      expect(grid().dataset.context).toBe('closed')
-      await user.click(screen.getByTestId('context-toggle'))
       expect(grid().dataset.context).toBe('open')
+      await user.click(screen.getByTestId('context-toggle'))
+      expect(grid().dataset.context).toBe('closed')
       first.unmount()
+      stubViewportWidth(1280)
       renderSurface()
-      expect(grid().dataset.context).toBe('open')
-      await user.click(screen.getByTestId('context-toggle'))
       expect(grid().dataset.context).toBe('closed')
+      await user.click(screen.getByTestId('context-toggle'))
+      expect(grid().dataset.context).toBe('open')
     })
 
-    it('keeps the choice per person: another person starts closed', async () => {
+    it('keeps the choice per person: another person starts open', async () => {
       const user = userEvent.setup()
-      setWidth(1920)
+      stubViewportWidth(1920)
       const first = renderSurface()
-      // Lena leaves it open.
-      if (grid().dataset.context === 'closed')
-        await user.click(screen.getByTestId('context-toggle'))
-      expect(grid().dataset.context).toBe('open')
+      // Lena closes it.
+      await user.click(screen.getByTestId('context-toggle'))
+      expect(grid().dataset.context).toBe('closed')
       first.unmount()
       auth.principal = { kind: 'user', user_id: 'u-sam' }
       try {
         renderSurface()
-        expect(grid().dataset.context).toBe('closed')
+        expect(grid().dataset.context).toBe('open')
       } finally {
         auth.principal = { kind: 'user', user_id: 'u-lena' }
       }
     })
 
     it("lets a person's own choice win over the one the browser saved for everyone", () => {
-      window.localStorage.setItem('olivares.sessions.sidePane', 'open')
-      window.localStorage.setItem(
+      stubViewportWidth(1440)
+      preferenceStorage.setItem('olivares.sessions.sidePane', 'open')
+      preferenceStorage.setItem(
         `olivares.sessions.sidePane:${JSON.stringify([window.location.origin, 'user', 'u-lena', 'tnt-demo'])}`,
         'closed',
       )
@@ -558,45 +610,60 @@ describe('WorkSurface', () => {
 
     it('neither reads nor writes a choice for a principal that is not a person', async () => {
       const user = userEvent.setup()
-      window.localStorage.setItem('olivares.sessions.sidePane', 'open')
+      stubViewportWidth(1440)
+      preferenceStorage.setItem('olivares.sessions.sidePane', 'closed')
       auth.principal = null
       try {
         renderSurface()
-        expect(grid().dataset.context).toBe('closed')
-        await user.click(screen.getByTestId('context-toggle'))
         expect(grid().dataset.context).toBe('open')
-        expect(window.localStorage.length).toBe(1)
+        await user.click(screen.getByTestId('context-toggle'))
+        expect(grid().dataset.context).toBe('closed')
+        expect(preferenceStorage.length).toBe(1)
       } finally {
         auth.principal = { kind: 'user', user_id: 'u-lena' }
       }
     })
 
     it('keeps the choice this browser saved before it was kept per person', () => {
-      window.localStorage.setItem('olivares.sessions.sidePane', 'open')
+      stubViewportWidth(1440)
+      preferenceStorage.setItem('olivares.sessions.sidePane', 'closed')
       renderSurface()
-      expect(grid().dataset.context).toBe('open')
+      expect(grid().dataset.context).toBe('closed')
     })
 
-    it('sits beside the conversation only where the conversation keeps 760 px', async () => {
-      const user = userEvent.setup()
-      setWidth(1920)
-      renderSurface()
-      await user.click(screen.getByTestId('context-toggle'))
-      // 360 px list + 760 px conversation + 320 px pane: from 1441 px.
+    it('sits beside the conversation from 1120 px, and is a sheet below it', () => {
+      stubViewportWidth(1120)
+      const wide = renderSurface()
+      // 264 px list + 576 px conversation + 280 px Details at 1120 px.
       expect(grid().className).toContain(
-        'min-[1441px]:grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)_min(var(--ctx-w),35%)]',
+        'grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)_min(var(--ctx-w),35%)]',
       )
-      expect(grid().className).not.toMatch(/(^|\s)xl:grid-cols/)
+      expect(pane('context')).not.toBeNull()
+      wide.unmount()
+      stubViewportWidth(1119)
+      renderSurface()
+      expect(grid().className).not.toContain('_min(var(--ctx-w),35%)]')
+      expect(pane('context')).toBeNull()
     })
   })
 
-  it('opens the context pane when the address names it', () => {
-    renderSurface({
+  it('opens Details when the address names it, beside the work or as a sheet', async () => {
+    stubViewportWidth(1440)
+    preferenceStorage.setItem('olivares.sessions.sidePane', 'closed')
+    const wide = renderSurface({
       address: { address: 'live:lr-a', pane: 'context', evidence: 'checks' },
     })
     expect(
       (document.querySelector('[data-context]') as HTMLElement).dataset.context,
     ).toBe('open')
+    wide.unmount()
+    stubViewportWidth(390)
+    renderSurface({
+      address: { address: 'live:lr-a', pane: 'context', evidence: 'checks' },
+    })
+    expect(
+      await screen.findByRole('dialog', { name: 'Session details' }),
+    ).toBeInTheDocument()
   })
 
   it('passes the open session to the rail as the selected row', async () => {
@@ -862,6 +929,8 @@ describe('WorkSurface — the filter field', () => {
 
 describe('WorkSurface — Escape and the side pane', () => {
   const grid = () => document.querySelector('[data-context]') as HTMLElement
+  // Escape closes the pane where it sits beside the work; a sheet closes as a dialog.
+  beforeEach(() => stubViewportWidth(1440))
 
   it('closes the pane, and does not make that a choice to remember', async () => {
     const user = userEvent.setup()
@@ -871,8 +940,8 @@ describe('WorkSurface — Escape and the side pane', () => {
     expect(grid().dataset.context).toBe('open')
     await user.keyboard('{Escape}')
     expect(grid().dataset.context).toBe('closed')
-    const kept = Array.from({ length: window.localStorage.length }, (_, i) =>
-      window.localStorage.key(i),
+    const kept = Array.from({ length: preferenceStorage.length }, (_, i) =>
+      preferenceStorage.key(i),
     ).filter((k) => k?.startsWith('olivares.sessions.sidePane'))
     expect(kept).toEqual([])
   })

@@ -156,9 +156,14 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("GET", "/live/{ref}/timeline", permLiveRead, m.handleTimeline)
 	reg.Handle("GET", "/stream", permLiveRead, m.handleStream)
 	m.runtimeRoutes(reg)
+	// The caller's own Web Push devices (push.go).
+	m.pushRoutes(reg)
 	// Tool version rings: a candidate release tried on one agent group first.
 	// Business implementation; Community keeps the published 501 routes.
 	m.registerToolRingRoutes(reg)
+	// Governed connections: a database, an SSH host or a service a session reaches
+	// through the engine. Business implementation; Community keeps the 501 routes.
+	m.registerConnectionRoutes(reg)
 	m.workspaceRoutes(reg)
 	m.templateRoutes(reg)
 	m.providerProfileRoutes(reg)

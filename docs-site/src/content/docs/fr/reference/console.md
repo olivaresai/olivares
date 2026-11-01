@@ -15,18 +15,20 @@ Cette page est la carte de la console. Elle répertorie **toutes les routes mont
 l'application** — pas une sélection, ni celles que quelqu'un a pensé à documenter — avec la
 permission nécessaire à un principal pour y accéder et l'endroit où en savoir plus.
 
-La console a **une seule structure de navigation : neuf domaines avec des sections**.
-Chaque écran se trouve dans un domaine et dans l’une de ses sections, et tout ce qui indique
-où se trouve un écran nomme le même endroit : Tous les domaines (dans le menu du compte et
-dans la palette de commandes, et Plus sur un téléphone), les pages d’annuaire de domaine, la
-palette de commandes et la rangée de liens au-dessus d’un écran, qui liste les autres écrans
-de sa section. La barre supérieure nomme cinq lieux, le
-premier travail d’abord (Accueil, Sessions, Outils, Règles, Registre ; Business ajoute
-Organisation), et un lieu reste marqué sur les autres écrans de sa section. Tous les domaines liste chaque domaine et ses écrans, sur deux niveaux, sans les lieux que la barre montre déjà. Un filtre de navigation remplace
-l’arbre groupé par une liste classée des correspondances autorisées ; la palette de
-commandes utilise le même index, le même classement et la même projection de permissions.
-Un annuaire de domaine est une page de liens — les entrées que vos permissions autorisent —
-et non une lecture en direct de capacité, de disponibilité ou d’état de préparation.
+La console a **une seule navigation : la barre latérale gauche**. Elle liste les lieux en
+quatre groupes — **Travail** (Accueil, Sessions, Fichiers et espaces, Travail et
+communications), **Outils** (Outils d’IA, Modèles, MCP et compétences, Sources),
+**Contrôle** (Règles et approbations, Usage et coût, Activité et audit, Carte des accès)
+et **Administration** (Personnes et groupes, Sécurité, Exploitation, Licence) — avec
+Paramètres en bas. Chaque écran appartient à un lieu, et la rangée de liens au-dessus d’un
+écran liste les autres écrans de ce lieu. Un lieu n’apparaît que si vos permissions
+autorisent au moins un de ses écrans, et un écran Business uniquement dans l’édition
+Business. La barre latérale se replie sur ses icônes et se rouvre ; sur un écran étroit,
+la même barre s’ouvre en tiroir depuis le bouton de menu. La barre supérieure contient le
+titre de la page, la recherche (⌘K ou Ctrl+K), les notifications et le menu du compte. La
+palette de commandes cherche les mêmes écrans avec les mêmes permissions. Les anciennes
+adresses d’annuaire de domaine (`/areas/…`) ouvrent le lieu qui contient désormais leurs
+écrans, en conservant la requête et le fragment.
 
 Une nouvelle installation n’affiche que le premier travail : Accueil, Sessions, Outils d’IA,
 Approbations, l’assistant de configuration et Paramètres. Tout autre
@@ -42,8 +44,9 @@ un écran ne peut donc être ajouté, déplacé ou perdu sans que cette page cha
 nom et la description en une ligne de chaque écran sont **les propres chaînes de la console**,
 tirées du même catalogue de traduction que la console : ce que vous lisez ici est ce
 que vous voyez dans le produit. Les tableaux ci-dessous regroupent ces lignes par domaine, après Accueil (la vue d’ensemble)
-et avant connexion, configuration et compte. Les neuf pages d’annuaire de domaine figurent
-parmi les routes montées hors du registre de fonctionnalités.
+et avant connexion, configuration et compte. Les neuf anciennes adresses d’annuaire de domaine figurent
+parmi les routes montées hors du registre de fonctionnalités ; chacune redirige désormais vers
+son lieu.
 
 :::note[Les permissions sont appliquées par le moteur, pas par ce tableau]
 La colonne `Requis` indique la permission vérifiée par la console avant de proposer une
@@ -55,7 +58,7 @@ Consultez [Rôles et permissions](/fr/reference/modules/vi-governance/).
 
 ## Comment lire cette page
 
-- **Écran** — le nom employé par Tous les domaines, les annuaires de domaine et la palette
+- **Écran** — le nom employé par la rangée de liens au-dessus d’un écran et par la palette
   de commandes.
 - **Chemin** — l'URL sous l'origine de la console de votre déploiement. C'est un contrat
   publié : un favori, un lien profond de runbook et une référence croisée de la documentation
@@ -65,13 +68,14 @@ Consultez [Rôles et permissions](/fr/reference/modules/vi-governance/).
   avant même l'existence d'une session.
 - **Référence** — la page qu'ouvre le propre lien d'aide de la console pour cet écran.
 
-Les titres suivants sont les domaines, dans l’ordre où Tous les domaines les liste :
+Les titres suivants sont les domaines du registre selon lesquels le recensement des routes
+regroupe les écrans :
 Infrastructure, IA, Données & contexte, Travail & communications, Automatisation,
 Sécurité & identité, Livraison, Supervision, puis Système & paramètres.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-La console publie **74 routes**. Elles figurent toutes dans les tableaux ci-dessous, avec la
+La console publie **66 routes**. Elles figurent toutes dans les tableaux ci-dessous, avec la
 permission requise et la page de référence ouverte par leur lien d'aide dans le produit.
 
 ### Accueil
@@ -94,9 +98,8 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 |---|---|---|---|---|
 | Outils des agents | `/agent-tools` | Voir les comptes et clés d’API avec lesquels les sessions s’exécutent ; installer et connecter les outils revient aux administrateurs du déploiement | `sessions:account:read` | [how-to/add-a-provider](/fr/how-to/add-a-provider/) |
 | Opérer les sessions | `/agentops` | Lancer des sessions et suivre ce que fait chacune, y compris celles qu’Olivares trouve | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/fr/how-to/run-claude-code-with-olivares/) |
-| Serveurs MCP | `/mcp-servers` | Connectez des serveurs MCP distants à cette organisation, testez-les et choisissez les outils que les sessions peuvent utiliser | `tenant:admin` | [how-to/connectors/mcp-governance](/fr/how-to/connectors/mcp-governance/) |
 | Opérations sur les modèles | `/model-operations` | Modèles détenus, admission et déploiements | `models:registry:read` | [reference/modules/xxiii-model-operations](/fr/reference/modules/xxiii-model-operations/) |
-| Modèles | `/models` | Modèles, routage et clés de fournisseur | `models:catalog:read` | [reference/modules/x-models](/fr/reference/modules/x-models/) |
+| Modèles | `/models` | Modèles, routage et gouvernance | `models:catalog:read` | [reference/modules/x-models](/fr/reference/modules/x-models/) |
 | Plateformes | `/platforms` | Surfaces de déploiement, matrice de conformité et cycle de vie des modèles par plateforme | `models:platforms:read` | [reference/modules/x-models](/fr/reference/modules/x-models/) |
 | Comptes de fournisseur | `/provider-accounts` | Lister les comptes de fournisseur nommés et adopter un profil de fournisseur existant comme compte | `sessions:account:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Liaisons de sources | `/provider-bindings` | Lier des sources configurées à des profils de fournisseur | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
@@ -117,7 +120,6 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | MCP et compétences | `/capabilities` | Gouvernez les serveurs MCP, les compétences et les outils | `capabilities:catalog:read` | [reference/modules/v-capabilities](/fr/reference/modules/v-capabilities/) |
 | Catalogue | `/catalog` | Agents et capacités curés et approuvés | `catalog:entry:read` | [reference/modules/xiv-catalog](/fr/reference/modules/xiv-catalog/) |
 | Connaissances | `/knowledge` | Bases de connaissances, RAG et lignage des données | `knowledge:kb:read` | [reference/modules/viii-knowledge](/fr/reference/modules/viii-knowledge/) |
-| Catalogue de skills | `/skills` | Parcourir les packs de skills et les assigner aux départements, groupes d’agents et agents | `skills:catalog:read` | [reference/console](/fr/reference/console/) |
 
 ### Travail & communications
 
@@ -172,6 +174,7 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Observabilité | `/observability` | Santé de l'ingestion par standard et exploration des traces | `health:status:read` | [reference/modules/observability](/fr/reference/modules/observability/) |
 | Conservation | `/retention` | Durée de conservation de chaque classe d’enregistrements, balayage qui l’applique et ses certificats scellés | `compliance:retention:read` | [reference/modules/xiii-compliance](/fr/reference/modules/xiii-compliance/) |
 | Budgets | `/stored-budgets` | Consommation par rapport à chaque limite enregistrée. La capacité réservée compte dans la limite. | `finops:budget:read` | [reference/modules/xi-finops](/fr/reference/modules/xi-finops/) |
+| Usage | `/usage` | Les limites officielles sur 5 heures et à la semaine de chaque compte, la plus proche d'abord, et les jetons et le coût du jour. | `sessions:run:read` | [reference/console](/fr/reference/console/) |
 
 ### Système & paramètres
 
@@ -183,6 +186,7 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Comparaison de source | `/console/sources/diff` | Comparez une révision de base et une révision head d'un dépôt Git connecté, fichier par fichier | `system:admin` | [reference/console](/fr/reference/console/) |
 | Journaux | `/logs` | Flux en direct du journal du moteur, filtré par niveau et module, avec recherche et pause. | `system:admin` | [how-to/troubleshooting](/fr/how-to/troubleshooting/) |
 | Assistant de configuration | `/onboarding` | Configuration du déploiement étape par étape | `system:admin` | [start/quickstart](/fr/start/quickstart/) |
+| Mises à jour | `/updates` | La version que ce moteur exécute, la version signée la plus récente de son canal et une action pour l'installer | `system:admin` | [how-to/upgrade-and-rollback](/fr/how-to/upgrade-and-rollback/) |
 
 ### Connexion, configuration et compte
 
@@ -193,16 +197,8 @@ console dans ce cas.
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
 | Accepter une invitation | `/accept-invite` | Destination d'un lien d'invitation envoyé par e-mail : l'invité définit un mot de passe et rejoint l'espace de travail, sans session préalable. | **sans connexion** | — |
-| IA | `/areas/ai` | Répertoire du domaine IA : observation et gestion des sessions, profils et environnements des fournisseurs, modèles, exécution spécialisée et référence des fournisseurs. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
-| Automatisation | `/areas/automation` | Répertoire du domaine Automatisation : flux et orchestration, événements et notifications. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
-| Données & contexte | `/areas/data-context` | Répertoire du domaine Données & contexte : capacités, connaissances et artefacts. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
-| Livraison | `/areas/deployment` | Répertoire du domaine Livraison : préparation et contrôle des déploiements. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
-| Infrastructure | `/areas/infrastructure` | Répertoire du domaine Infrastructure : inventaire et espaces de travail de l’environnement. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
-| Supervision | `/areas/observation` | Répertoire du domaine Supervision : état et activité, coûts et adoption, audit, évaluation et preuves. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
-| Sécurité & identité | `/areas/security-identity` | Répertoire du domaine Sécurité & identité : identité et accès, politiques et frontières de gouvernance, protection et réponse. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
-| Système & paramètres | `/areas/system` | Répertoire du domaine Système & paramètres : administration, installation et maintenance, outils de développement et préférences personnelles. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
-| Travail & communications | `/areas/work-communications` | Répertoire du domaine Travail & communications : travail persistant entre sessions et communications gouvernées. Liste les entrées autorisées par vos permissions. | tout utilisateur connecté | — |
 | Se connecter | `/login` | Page de connexion par identifiants et token pour un compte déjà provisionné. | **sans connexion** | — |
+| Associer un appareil | `/pair` | Destination d’un lien d’association d’appareil à usage unique : le nouvel appareil se connecte sans session préalable. | **sans connexion** | — |
 | Paramètres | `/settings` | Paramètres d'espace de travail et de compte | tout utilisateur connecté | — |
 | Configuration initiale | `/setup` | Page unique qui transforme un nouveau déploiement en système utilisable : elle consomme le token de configuration et crée le premier compte owner. | **sans connexion** | — |
 | État public | `/status-page` | Santé des composants pour les personnes non connectées, actualisée automatiquement tant que la page reste ouverte. | **sans connexion** | — |

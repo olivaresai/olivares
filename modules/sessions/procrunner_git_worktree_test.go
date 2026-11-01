@@ -19,11 +19,15 @@ import (
 
 func worktreeFixture(t *testing.T) (repo, folder, data, outside string) {
 	t.Helper()
+	return worktreeFixtureLayout(t, t.TempDir(), "repository", "session")
+}
+
+func worktreeFixtureLayout(t *testing.T, root, repoName, folderName string) (repo, folder, data, outside string) {
+	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is unavailable: " + err.Error())
 	}
-	root := t.TempDir()
-	repo, folder, data = filepath.Join(root, "repository"), filepath.Join(root, "session"), filepath.Join(root, "data")
+	repo, folder, data = filepath.Join(root, repoName), filepath.Join(root, folderName), filepath.Join(root, "data")
 	outside = filepath.Join(root, "outside.txt")
 	if err := os.MkdirAll(data, 0o700); err != nil {
 		t.Fatal(err)
@@ -107,6 +111,31 @@ echo outside-denied`, outside, filepath.Join(filepath.Dir(outside), "escaped.txt
 		t.Fatalf("git did not complete with confinement controls: %s", out)
 	}
 	if got := worktreeGit(t, folder, "log", "-1", "--format=%s"); got != "confined worktree commit" {
+		t.Fatalf("durable commit subject=%q", got)
+	}
+}
+
+// The Server and a package install keep the registered workspaces and the
+// session worktrees beneath the engine's data directory, which is protected.
+func TestConfinedSessionCommitsInAGitWorktreeBeneathProtectedData(t *testing.T) {
+	_, folder, data, _ := worktreeFixtureLayout(t, t.TempDir(), filepath.Join("data", "workspaces", "repository"), filepath.Join("data", "session-worktrees", "session"))
+	engineFile := filepath.Join(data, "engine.db")
+	if err := os.WriteFile(engineFile, []byte("engine data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out := runWorktreeSession(t, folder, data, PresetAsk, `set -e
+git status --porcelain
+printf 'confined edit\n' >> README
+git add README
+git -c user.name='N1C fixture' -c user.email=n1c@example.invalid -c commit.gpgsign=false commit -qm 'commit beneath protected data'
+git log -1 --format=%s
+if cat "$1" 2>/dev/null; then exit 8; fi
+if printf escaped >> "$1" 2>/dev/null; then exit 9; fi
+echo engine-data-denied`, engineFile)
+	if !strings.Contains(out, "commit beneath protected data") || !strings.Contains(out, "engine-data-denied") {
+		t.Fatalf("git did not complete beneath protected data with the engine's files denied: %s", out)
+	}
+	if got := worktreeGit(t, folder, "log", "-1", "--format=%s"); got != "commit beneath protected data" {
 		t.Fatalf("durable commit subject=%q", got)
 	}
 }

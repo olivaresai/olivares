@@ -463,7 +463,12 @@ function ProvenanceBlock({
           {session.runs.map((r) => {
             const active = r.run_ref === activeRun
             const many = session.runs.length > 1
-            const naming = sessionNameLadder(r.name, null, t('untitled'))
+            const naming = sessionNameLadder(
+              r.name,
+              null,
+              t('untitled'),
+              r.title,
+            )
             return (
               <li key={r.run_ref}>
                 <button

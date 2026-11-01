@@ -32,7 +32,7 @@ beforeEach(() => {
   api.webauthnCredentials.mockResolvedValue({ items: [] })
 })
 // Root 19:15Z: the section said a hardware step-up and AAL3 were required whatever this
-// deployment asked for; the administrative step-up is off by default (FH 33f41d5e).
+// deployment asked for; the administrative step-up is off by default (first-hour check).
 describe('what this deployment asks for before administrative actions', () => {
   const signedIn = (policy: string, satisfied: boolean) => ({
     aal: 1,

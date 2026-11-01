@@ -33,13 +33,13 @@ Application existante sur les routes du module :
 
 | Permission | Routes |
 |---|---|
-| `sessions:run:read` | `GET /runs`, `GET /runs/{ref}`, `GET /runs/{ref}/events`, `GET /runs/{ref}/attach`, `GET /runs/{ref}/handoff`, `GET /runs/{ref}/activity`, `GET /runs/{ref}/activity/agents/{agent}`, `GET /runs/{ref}/messages`, `POST /runs/{ref}/pin`, `DELETE /runs/{ref}/pin` |
-| `sessions:run:write` | `POST /runs`, `POST /runs/{ref}/input`, `POST /runs/{ref}/interrupt`, `POST /runs/{ref}/stop`, `POST /runs/{ref}/resume`, `POST /runs/{ref}/move`, `POST /runs/{ref}/handoff`, `PUT /runs/{ref}/name`, `POST /runs/{ref}/archive`, `DELETE /runs/{ref}/archive` |
+| `sessions:run:read` | `GET /runs`, `GET /runs/{ref}`, `POST /runs/{ref}/pin`, `DELETE /runs/{ref}/pin` |
+| `sessions:output:read` | `GET /runs/{ref}/events`, `GET /runs/{ref}/attach`, `GET /runs/{ref}/changes`, `GET /runs/{ref}/changes/file`, `GET /runs/{ref}/git`, `GET /runs/{ref}/diff`, `GET /runs/{ref}/diff/file`, `GET /runs/{ref}/handoff`, `GET /runs/{ref}/activity`, `GET /runs/{ref}/activity/agents/{agent}`, `GET /runs/{ref}/messages`, `GET /runs/{ref}/attachments/{id}` |
+| `sessions:run:write` | `POST /runs`, `POST /runs/{ref}/input`, `POST /runs/{ref}/interrupt`, `POST /runs/{ref}/resume`, `POST /runs/{ref}/move`, `POST /runs/{ref}/handoff`, `PUT /runs/{ref}/name`, `POST /runs/{ref}/archive`, `DELETE /runs/{ref}/archive` |
+| `sessions:stop:write` | `POST /runs/{ref}/stop` |
 | `sessions:run:admin` | `POST /runs/{ref}/cleanup`, `DELETE /runs/{ref}` |
 
-Un viewer peut lister et épingler les sessions pour lui-même. Create, input et
-stop exigent write. L’authorizer de la route est le point d’application ; une
-permission manquante est 403.
+Un viewer peut lister les sessions et les épingler pour lui-même. La création et la saisie exigent `sessions:run:write` ; l’arrêt exige `sessions:stop:write`. La sortie, les transcriptions et le contenu des fichiers ou de Git exigent désormais `sessions:output:read`, accordé par défaut aux rôles editor et supérieurs. Viewer conserve les métadonnées et ses marques personnelles, mais perd l’accès à ces contenus sans autorisation explicite. Une permission manquante renvoie 403.
 
 ## Routes lues par la console
 
@@ -58,6 +58,9 @@ Base : `/v1/m/sessions`. Authentifier. Envoyer `X-Olivares-Tenant`.
 | `POST`, `DELETE` | `/runs/{ref}/pin` | Épingle la session pour l’appelant, ou la désépingle. L’épingle est celle de l’appelant et le suit sur un autre navigateur ou une autre machine ; elle ne modifie jamais la liste d’une autre personne. Les deux appels sont idempotents et répondent 200 `{run_ref, pinned, pinned_at}`. Une personne garde au plus 20 épingles : la plus ancienne sort lorsqu’une 21e est épinglée. Libérer ou supprimer une session supprime toutes les épingles qui la concernent. `GET /runs` et `GET /runs/{ref}` portent les champs `pinned` et `pinned_at` de l’appelant, et `GET /runs` renvoie aussi les sessions épinglées de l’appelant qui tombent hors de sa page (au plus 20 lignes en plus de `limit` ; `pagination=cursor` n’en ajoute aucune, puisqu’il atteint chaque session une seule fois). Une épingle appartient à l’identifiant qui l’a créée : les sessions de la console d’une personne et celles de `olivares login` partagent leurs épingles, un jeton d’API garde les siennes. Une session libérée répond 409 |
 | `POST`, `DELETE` | `/runs/{ref}/snooze` | Reporte la session pour l’appelant jusqu’à un moment, ou met fin au report. `POST` prend `{until}`, un instant RFC 3339 dans le futur (400 sinon) ; un second `POST` le déplace. Le report appartient à l’appelant, comme l’épingle : la console retire la session de la liste de cette personne jusqu’à `until`, et la liste des autres personnes ne change pas. Les deux répondent 200 `{run_ref, snoozed_until?, done}`. `GET /runs` et `GET /runs/{ref}` portent `snoozed_until` de l’appelant seulement tant que le report dure. Libérer ou supprimer une session supprime tous les reports qui la concernent. Une session libérée répond 409 |
 | `POST`, `DELETE` | `/runs/{ref}/done` | Marque la session comme terminée pour l’appelant, ou retire la marque. La console classe une session terminée sous Plus tôt dans la liste de cette personne. Les deux sont idempotents et répondent 200 `{run_ref, snoozed_until?, done}`. `GET /runs` et `GET /runs/{ref}` portent `done` de l’appelant. Libérer ou supprimer une session supprime toutes les marques qui la concernent. Une session libérée répond 409 |
+| `GET`, `POST`, `PUT` | `/runs/{ref}/queue` | Les messages mis en attente pour la session pendant que son outil travaille. `GET` répond `{run_ref, items, hold?, can_steer}` : les messages en file dans l'ordre d'envoi (`id`, `text`, `queued_by`, `queued_at`), pourquoi le premier n'est pas parti (`hold` : `turn`, `approval`, `limit` ou `stopped` ; absent quand il part tout de suite) et si l'outil accepte un message dans un tour en cours (`can_steer`). `POST` prend `{text}` et répond 201 avec le message ; si la session n'est pas occupée, il part aussitôt. `PUT` prend `{ids}`, chaque id en file une fois dans le nouvel ordre (400 sinon), et répond avec la file. La file est enregistrée sur le serveur : elle survit à un rechargement et se voit sur chaque appareil. Quand un tour se termine, le premier message est envoyé une seule fois par l'entrée de la session ; une session arrêtée, interrompue ou limitée, et une session qui attend une approbation, gardent la file. Même permission d'écriture et même règle d'édition que `/input` ; une session démarrée par un élément de travail et une session libérée répondent 409. Libérer une session supprime sa file, et la réponse de `POST /runs/{ref}/cleanup` liste les messages supprimés dans `discarded_queue` |
+| `PATCH`, `DELETE` | `/runs/{ref}/queue/{id}` | Modifie le texte d'un message en file (`{text}`, 200 avec le message) ou le retire de la file sans l'envoyer (200 avec la file). Un id absent de la file répond 404 |
+| `POST` | `/runs/{ref}/queue/{id}/steer` | Envoie maintenant un message en file par l'entrée de la session : dans le tour en cours quand l'outil l'accepte (`can_steer`), sinon comme message suivant. Le message quitte d'abord la file, donc il part une seule fois ; un refus avant toute écriture le remet à sa place. Répond 202 `{accepted}`. Un outil qui n'accepte pas de message dans un tour en cours répond 409 tant que le tour dure |
 | `PUT` | `/runs/{ref}/name` | Corps `{name}`. Renomme la session. Le nom est rogné ; un nom vide l’efface et les clients reviennent à leur propre façon de la nommer. Plus de 200 caractères, un caractère de contrôle ou invisible (format, séparateur de ligne ou de paragraphe : espaces sans chasse, forçages de direction) ou un `name` absent répondent 400. 200 run. Le nom appartient à la session, donc chaque lecteur le voit. Consigné dans le ledger d’audit comme `sessions.run.renamed` avec la référence de l’exécution, pas le nom ; un nom qui est déjà celui de la session ne change rien et ne consigne rien |
 | `POST`, `DELETE` | `/runs/{ref}/archive` | Archive la session, ou la désarchive. Sans corps. 200 run, avec `archived_at` tant qu’elle est archivée. Archiver n’arrête ni ne supprime la session. La marque appartient à la session, pas à l’appelant : elle est archivée pour tous. `GET /runs` n’en est pas restreint ; chaque client laisse les sessions archivées hors de sa liste. Les deux appels sont idempotents : archiver une session archivée conserve son `archived_at` et ne consigne rien. Consigné dans le ledger d’audit comme `sessions.run.archived` et `sessions.run.unarchived` |
 | `POST` | `/runs/{ref}/move` | Corps `{provider_profile_ref}`. Rattache une session Claude Code arrêtée ou en échec à un autre profil du même outil et emporte sa conversation. Ne démarre rien. 200 run |
@@ -188,8 +191,8 @@ branche.
 ### Approuver la commande de préparation d’un dossier
 
 Une commande de préparation appartient au dossier enregistré, dans le stockage du moteur. Les
-fichiers du dépôt et les variables d’environnement ne peuvent pas la modifier. Rien n’exécute
-encore la commande dans ces opérations ni pendant le démarrage d’une session.
+fichiers du dépôt et les variables d’environnement ne peuvent pas la modifier. Enregistrer et
+approuver la commande ne l’exécute pas ; un démarrage avec worktree l’exécute, comme décrit ci-dessous.
 
 - `PUT /workspaces/{ref}/setup-command` prend `{"command":"npm ci"}`. Le texte UTF-8 exact
   est conservé, espaces compris ; au plus 8192 octets, sans NUL. Une chaîne vide efface la
@@ -213,8 +216,45 @@ applique de nouveau cette approbation. Quiconque peut lire le dossier peut lire 
 n’y mettez donc aucun secret.
 `POST /runs` avec `"no_setup":true` ignore la préparation pour ce seul démarrage. Un handoff
 d’une session qui a un worktree démarre un nouveau worktree et exige la même approbation ; il
-n’a pas d’option pour l’ignorer. Les autres démarrages et reprises conservent leur
+n’a pas d’option pour l’ignorer. Les démarrages sans worktree conservent leur
 comportement existant.
+
+Lorsque le nouveau worktree existe et avant le premier tour de la session, la commande
+approuvée est exécutée une fois avec `/bin/sh -c`, dans le dossier du worktree. Elle
+s’exécute sous le confinement du dossier (le worktree et ses métadonnées git) et la
+politique réseau de la session. La même liste d’autorisation s’applique aux téléchargements :
+une session liée à une clé de fournisseur atteint seulement son fournisseur et les hôtes
+explicitement autorisés ; autorisez donc le registre de paquets avant de lancer un
+installateur. Elle ne reçoit ni l’environnement, ni les identifiants, ni les répertoires
+personnels du compte fournisseur, ni les fichiers d’identification de la session ; son `PATH`
+est celui de la session, donc les programmes de son profil sont trouvés. Un code de sortie
+non nul ou un arrêt à la limite de temps arrête le démarrage, et le ledger de l’exécution
+enregistre un événement `worktree_setup` avec la dernière sortie de la commande. La requête
+attend la commande jusqu’à 20 secondes. Une commande qui se termine dans ce délai répond
+comme toujours : si elle échoue, la réponse est 422 avec la dernière sortie. Une commande
+encore en cours appartient alors à la session : la réponse est 201 avec `state` `pending`,
+la commande continue sous le confinement de la session, et une demande d’arrêt la termine.
+Sa limite de temps est de 10 minutes. La première entrée de la session attend jusqu’à 30
+secondes la fin de la commande ; ensuite elle est refusée avec 409 (`session is not running`,
+`state=pending`) et l’appelant la renvoie. La console retient le premier message jusqu’à ce
+que la session soit prête et l’envoie alors ; un message envoyé pendant qu’un installeur
+tourne arrive donc après lui, jamais dans un dossier à moitié préparé. Une commande qui échoue, atteint la limite ou est arrêtée laisse
+l’exécution en `failed` (`stopped` pour une demande d’arrêt) avec le même événement et la
+dernière sortie ; aucune entrée n’atteint l’outil. Une reprise attend la fin de sa commande
+et garde la limite de 20 secondes. Sous Linux, tout processus que la commande laisse actif est arrêté lorsqu’elle se termine. Sur les autres plateformes, le démarrage est refusé pour éviter de laisser des processus détachés. Les fichiers qu’elle écrit sont vérifiés comme ceux déjà présents :
+une configuration d’agent du projet capable d’exécuter des programmes ou de rediriger le
+trafic arrête le démarrage.
+
+La commande s’exécute au premier démarrage d’une session avec worktree. Un démarrage qui
+attend une approbation l’exécute lorsque l’approbation le permet. Après une préparation
+échouée, la reprise l’exécute à nouveau avant la session ; si elle ne peut pas être approuvée
+ou terminée, la session ne démarre pas. Après une préparation réussie, la reprise ne l’exécute
+jamais à nouveau, même si une étape ultérieure du lancement échoue. Si le nettoyage
+des processus n’est pas confirmé, la reprise est refusée ; arrêtez les processus
+restants et créez une nouvelle worktree. `no_setup` ignore la
+préparation pour ce démarrage et les reprises suivantes. Une exécution worktree d’une
+version antérieure, avant l’enregistrement de l’état de préparation, exécute à la place
+une préparation approuvée une fois si elle n’a jamais démarré.
 
 Avec la CLI, utilisez `olivares agent workspace setup <ref> --command 'npm ci'`,
 lisez-la avec `olivares agent workspace setup <ref>`, et approuvez le hash affiché avec
@@ -249,6 +289,8 @@ disparue ou sans historique commun avec le workspace répond 409.
 `worktree_from` répond aussi 422 pour un identifiant de commit qu’aucune branche, étiquette ou
 branche distante du dépôt ne retient.
 
+Un commentaire sur une ligne de ce diff retourne à l’agent comme son prochain message, par `POST /runs/{ref}/input` comme toute autre entrée. Ajoutez `review_comment` (`path`, une `line` à partir de 1 et le `side` : `original` pour le fichier à `base`, `modified` pour le fichier à `head`) pour nommer l’endroit. Un endroit mal formé, ou envoyé avec `attachments`, répond 400 et n’envoie rien. Une fois l’entrée acceptée, le ledger enregistre `sessions.run.review_comment` avec l’exécution, le chemin, la ligne et le côté ; le commentaire lui-même est le message reçu par l’outil et n’est pas copié dans le ledger. `olivares session diff <session>` affiche le même diff sous forme de diff unifié.
+
 Reconnecter après un attach coupé est `GET …/attach?from={last+1}` sur le
 **même** processus vivant. Après perte de processus, attach indique que la session
 n’est pas vivante. Resume démarre une nouvelle génération. Reconnect n’invente
@@ -269,7 +311,11 @@ signalée.
 | Codex | `.codex/config.toml` | `hooks`, `notify`, `mcp_servers`, `model_providers`, `otel`, tout `*_base_url` de premier niveau, et les entrées `shell_environment_policy.set` dont le nom figure dans la dernière ligne ; les mêmes clés sous `profiles.<name>` |
 | Gemini CLI | `.gemini/settings.json` | `hooks`, `mcpServers`, `toolDiscoveryCommand`, `toolCallCommand`, `proxy`, `tools.discoveryCommand`, `tools.callCommand`, `mcp.serverCommand`, `telemetry.otlpEndpoint` |
 | Gemini CLI | `.gemini/.env`, `.env` | les entrées dont le nom figure dans la dernière ligne |
+| OpenCode | `opencode.json`, `opencode.jsonc` | toute clé de premier niveau sauf `$schema`, `theme`, `keybinds`, `logLevel`, `model`, `small_model`, `username`, `share`, `autoupdate`, `snapshot`, `layout` ; tout jeton `{file:…}` et `{env:…}` n’importe où dans le texte, chaque `{file:}` étant lié au sha256 du fichier qu’il nomme |
+| OpenCode | `.opencode/` | le dossier entier : chaque fichier par son sha256 (un lien à l’intérieur du dossier par sa cible), sauf son propre `.gitignore` ; ses `opencode.json` et `opencode.jsonc` comme à la ligne précédente, les `{file:}` étant lus depuis `.opencode/` |
 | Noms d’environnement | | `NODE_OPTIONS`, `NODE_EXTRA_CA_CERTS`, `NODE_TLS_REJECT_UNAUTHORIZED`, `LD_PRELOAD`, `LD_LIBRARY_PATH`, `LD_AUDIT`, `DYLD_INSERT_LIBRARIES`, `BASH_ENV`, `PATH`, `PYTHONPATH`, `GIT_SSH_COMMAND`, `GIT_EXTERNAL_DIFF`, `SSL_CERT_FILE`, `CLAUDE_CODE_SHELL_PREFIX`, `ANTHROPIC_CUSTOM_HEADERS`, `AWS_ENDPOINT_URL*`, et tout nom se terminant par `_BASE_URL`, `_API_BASE`, `_ENDPOINT` ou `_PROXY` (`NO_PROXY` ne fait que restreindre un proxy et n’est pas signalé) |
+
+Avant d’approuver `.opencode/`, examinez son `package.json` et exécutez dans ce dossier `OpenCode=1.19.4; npm install --ignore-scripts --save-exact @opencode-ai/plugin@"$OpenCode"`. La version du paquet correspond à OpenCode 1.19.4 ; les scripts d’installation restent désactivés. La vérification exige `node_modules/` et un `package-lock.json` dont la racine contient `@opencode-ai/plugin` et toutes les dépendances déclarées. Sinon, la session est refusée avec une instruction d’installation. L’arbre installé fait partie du hash approuvé ; toute modification exige une nouvelle approbation.
 
 Un fichier qui existe mais ne peut pas être lu dans son format (JSON ou TOML invalide, plus de
 1 MiB, imbriqué sur plus de 64 niveaux, pas un fichier ordinaire) compte comme signalé, car on
@@ -278,11 +324,11 @@ de table compte pour un niveau, comme dans le document analysé, et s’ajoute a
 l’entourent : un en-tête de 30 segments sur 35 tables en ligne imbriquées fait 65 niveaux.
 Dès qu’un fichier a un en-tête `[[array]]`, les segments d’en-tête comptent double, car chacun
 peut nommer un tableau et son élément. Un fichier trop volumineux est haché en entier à chaque
-contrôle. Un dossier sans rien de signalé démarre comme avant.
+contrôle, sauf un fichier OpenCode, qui est refusé après la lecture bornée destinée à son analyse. Un dossier sans rien de signalé démarre comme avant.
 
 - `GET /workspaces/{ref}/project-config` liste les clés signalées par fichier avec leurs
   valeurs (un mot de passe dans une URL est masqué) et le `sha256` de cette seule partie
-  signalée, sur les fichiers des trois outils, plus `approved` et la dernière `approval`.
+  signalée, sur les fichiers de tous les outils ci-dessus, plus `approved` et la dernière `approval`.
   Il lit le dossier lui-même ; un worktree démarré depuis un autre commit peut porter
   d’autres fichiers suivis, et son refus nomme son propre hash.
 - `POST /workspaces/{ref}/project-config/approve` prend `{"sha256":"<reviewed hash>"}`,
@@ -294,6 +340,16 @@ Un démarrage ou une reprise d’un outil qui lit un fichier signalé renvoie 40
 l’approbation stockée est égale au hash actuel. Modifier un seul caractère d’une valeur
 signalée, ou ajouter ou retirer une clé signalée, exige une nouvelle approbation ; modifier
 des clés non signalées n’en exige pas. Il n’existe aucune option pour ignorer le contrôle.
+
+Certaines configurations ne peuvent pas être liées par un hash, et aucune approbation ne
+permet donc à une session de les utiliser. Leur entrée porte un motif `refused`, et tout
+démarrage ou toute reprise de cet outil renvoie 409 tant que la configuration n’est pas
+modifiée ou retirée, quelle que soit l’approbation : un fichier OpenCode avec un jeton
+`{env:…}` ; un fichier OpenCode qui n’est pas du JSONC valide ; un `{file:…}` qui nomme un fichier hors du dossier, sous `~`, à un chemin absolu ou avec des espaces
+autour de son chemin, ou qui n’est pas un fichier ordinaire d’au plus 1 MiB ; des jetons `{file:…}` qui nomment ensemble plus de 8192 fichiers ou 64 MiB ; un contenu de substitution expansé de plus de 64 MiB ; une clé `plugin` ou `instructions` non vide ; un fichier OpenCode de plus de 1 MiB ou qui n’est pas un fichier ordinaire ; un `opencode.json(c)` ou un `.opencode` qui est un lien hors du
+dossier ; un `.opencode` qui n’est pas un dossier ; et un dossier `.opencode/` de plus de 8192 entrées, 64 MiB ou 1024 dossiers, ou
+contenant un lien vers l’extérieur, une boucle de liens, une entrée non ordinaire, ou un dossier ou un fichier que le
+contrôle ne peut pas lire.
 
 Une session Claude Code qui porte les hooks du moteur est lancée avec `--setting-sources ""` ;
 sur Claude Code 2.1.299, cette session ne charge aucun fichier de réglages de projet ou local

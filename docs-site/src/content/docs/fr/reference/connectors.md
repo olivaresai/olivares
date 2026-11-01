@@ -8,7 +8,7 @@ description: >-
 ---
 
 :::note[Business]
-L’export d’audit (`GET /v1/audit/export`, `olivares audit export`), les archives en répertoire et la vérification d’archives externes nécessitent Business. Community conserve le registre signé, `olivares audit verify` et `olivares dr backup` ; les routes et commandes d’export renvoient HTTP 501 ou le code de sortie 9. Le transfert d’audit et le transfert DDIL entre sites isolés nécessitent aussi Business.
+L’export d’audit (`GET /v1/audit/export`, `olivares audit export`), la vérification du registre (`GET /v1/audit/verify`, `olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`), les archives en répertoire et la vérification d’archives externes nécessitent Business. Community conserve le registre signé, sa lecture et `olivares dr backup` ; les routes et commandes de preuve renvoient HTTP 501 ou le code de sortie 9. Le transfert d’audit et les transferts DDIL contenant des segments d’audit nécessitent aussi Business.
 :::
 
 Cette page est le **catalogue** des connecteurs first-party et, pour chacun, le

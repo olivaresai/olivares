@@ -153,13 +153,16 @@ test('first hour: the setup wizard asks only for what the first session needs', 
     fullPage: true,
   })
 
-  const nav = page.getByRole('navigation')
+  const nav = page.getByRole('navigation', {
+    name: 'Main navigation',
+    exact: true,
+  })
 
   // APPROVALS: a session started to ask before each action asks for the shell command
   // the model wants, and waits in the queue the Rules place opens until a person approves.
   visited.splice(0)
   await start.getByRole('button', { name: 'More options' }).click()
-  await start.getByRole('radio', { name: 'Ask before each action' }).check()
+  await start.getByRole('radio', { name: 'Supervised' }).check()
   await start
     .getByLabel('First message (optional)')
     .fill(`Please run: ${ollama.toolCommand}`)
@@ -204,10 +207,10 @@ test('first hour: the setup wizard asks only for what the first session needs', 
 
   // PROVIDER KEYS: the key the wizard added, the profile sessions launch with, and the
   // accounts a tool signs in with instead. The API key, profile and account pages are
-  // doors into Tools (#2552): the Tools place shows the key, the row of its section offers
+  // doors into AI tools (#2552): the AI tools place shows the key, the row of its place offers
   // none of the doors, and each door still opens Tools at its own address.
   visited.splice(0)
-  await nav.getByRole('link', { name: 'Tools', exact: true }).click()
+  await nav.getByRole('link', { name: 'AI tools', exact: true }).click()
   await expect(page.getByRole('main')).toContainText(ollama.endpoint)
   const areas = page.locator('[data-slot="destination-sections"]')
   for (const name of ['Providers', 'Provider profiles', 'Provider accounts'])

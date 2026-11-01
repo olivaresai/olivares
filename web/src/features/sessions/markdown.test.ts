@@ -26,6 +26,23 @@ it('lets a governed wiki resolve relative links throughout Markdown without wide
 })
 
 describe('parseMarkdown — blocks (#1784)', () => {
+  it('retains the source of each top-level block for copying without rebuilding Markdown', () => {
+    const source = [
+      '## **Heading**',
+      '- one\n  - `nested`',
+      '> quoted\n> **words**',
+      '| A | B |\n| --- | --- |\n| 1 | 2 |',
+      '---',
+      '```sh\n\tmake test\n```',
+      'A [link](https://example.com).',
+    ]
+    const copied: string[] = []
+    parseMarkdown(source.join('\n\n'), undefined, (_block, markdown) =>
+      copied.push(markdown),
+    )
+    expect(copied).toEqual(source)
+  })
+
   it('reads the reply that was shown raw: bold lead-ins, nested items, ordered steps and code', () => {
     const blocks = parseMarkdown(
       [
@@ -455,7 +472,7 @@ describe('parseMarkdown — a hostile or runaway reply stays bounded (#1784)', (
   })
 })
 
-// dev#2788: a reply is copied as the person reads it, without the markers it was written
+// the regression: a reply is copied as the person reads it, without the markers it was written
 // in; a code block keeps its content exactly.
 describe('plainText', () => {
   it('reads a reply as shown: no markers, lists and code kept', () => {

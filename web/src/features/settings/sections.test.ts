@@ -1,21 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { createRouter } from '@tanstack/react-router'
 import i18n from 'i18next'
 import { beforeAll, describe, expect, it } from 'vitest'
+import { routeTree } from '@/app/routes'
 import { BUSINESS_ONLY_VIEW_IDS, FEATURE_VIEWS } from '@/features/registry'
+import census from '@/features/route-census.json'
 import {
+  MOVED_SECTIONS,
   SETTINGS_SECTIONS,
   settingsSearchEntries,
   settingsSections,
 } from './sections'
 
 // The sections that host another page of the console (#2905), and the page each hosts.
-const HOSTED = [
-  ['aiTools', 'providers'],
-  ['workspaces', 'workspaceDashboard'],
-  ['setup', 'onboarding'],
-] as const
+const HOSTED = [['setup', 'onboarding']] as const
 
 describe('settings sections that host a page', () => {
   beforeAll(async () => {
@@ -52,12 +52,7 @@ describe('settings sections that host a page', () => {
   it('hosts only pages that declare no capability question and no continuity boundary', () => {
     const entries: readonly { id: string; view?: string }[] = SETTINGS_SECTIONS
     const hosted = entries.filter((s) => s.view)
-    expect(hosted.map((s) => s.id)).toEqual([
-      'aiTools',
-      'workspaces',
-      'deploy',
-      'setup',
-    ])
+    expect(hosted.map((s) => s.id)).toEqual(['setup'])
     for (const { id, view } of hosted) {
       // Deployment is a Business page: a Community registry does not hold it.
       const page = FEATURE_VIEWS.find((v) => v.id === view)
@@ -74,10 +69,78 @@ describe('settings sections that host a page', () => {
     const none = () => false
     expect(settingsSections(false, none).map((s) => s.id)).toEqual([
       'general',
+      'newSessions',
+      'notifications',
       'keyboard',
+      'permissions',
       'signIn',
       'edition',
       'about',
     ])
+  })
+})
+
+// 0.5 one navigation: a section that repeated a place of the sidebar (AI tools, Files &
+// workspaces, Operations) left Settings; its old address lands on that place's page.
+const MOVED = [
+  ['aiTools', '/providers'],
+  ['workspaces', '/workspace'],
+  ['deploy', '/deploy'],
+  ['updates', '/updates'],
+] as const
+
+describe('sections another place holds', () => {
+  it.each(MOVED)('offers no %s section, in the list or the palette', (id) => {
+    const gate = () => true
+    expect(SETTINGS_SECTIONS.map((s) => s.id)).not.toContain(id)
+    expect(settingsSections(true, gate).map((s) => s.id)).not.toContain(id)
+    expect(
+      settingsSearchEntries(i18n.t, true, gate).map((e) => e.sectionId),
+    ).not.toContain(id)
+  })
+
+  it('names exactly these moves, each to a page the console serves or answers for Business', () => {
+    expect(Object.entries(MOVED_SECTIONS)).toEqual(MOVED)
+    for (const [, path] of MOVED)
+      expect(
+        FEATURE_VIEWS.some((v) => v.path === path) ||
+          census.business_paths.includes(path),
+        path,
+      ).toBe(true)
+  })
+
+  it.each(MOVED)(
+    'redirects /settings?section=%s to %s, keeping the rest of the query and the hash',
+    (section, to) => {
+      const router = createRouter({ routeTree })
+      const route = router.routesById['/app/settings']
+      const beforeLoad = route.options.beforeLoad as (ctx: {
+        search: Record<string, unknown>
+      }) => void
+      try {
+        beforeLoad({
+          search: { section, add: 'anthropic', returnTo: '/onboarding' },
+        })
+        throw new Error(`section=${section} did not redirect`)
+      } catch (redirect) {
+        expect(redirect).toMatchObject({
+          options: {
+            to,
+            search: { add: 'anthropic', returnTo: '/onboarding' },
+            hash: true,
+            replace: true,
+          },
+        })
+      }
+    },
+  )
+
+  it('leaves every other section in Settings', () => {
+    const router = createRouter({ routeTree })
+    const beforeLoad = router.routesById['/app/settings'].options
+      .beforeLoad as (ctx: { search: Record<string, unknown> }) => void
+    for (const { id } of SETTINGS_SECTIONS)
+      expect(() => beforeLoad({ search: { section: id } })).not.toThrow()
+    expect(() => beforeLoad({ search: {} })).not.toThrow()
   })
 })

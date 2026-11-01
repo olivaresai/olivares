@@ -1,26 +1,8 @@
 {
   "title": "Audit-Hauptbuch",
-  "subtitle": "Die manipulationssichere Nachweiskette. Verifizieren und in Ihr WORM/SIEM exportieren.",
+  "subtitle": "Lesen Sie das signierte Protokoll der KI-Aktivitäten.",
   "subtitleSystem": "Die Kette des System-Mandanten mit den mandantenübergreifenden Verwaltungsvorgängen (schreibgeschützt).",
   "searchLoaded": "Nur geladene Zeilen filtern (clientseitig)…",
-  "filters": {
-    "open": "Filter",
-    "title": "Serverseitige Hauptbuch-Filter",
-    "q": "Hauptbuch durchsuchen",
-    "qPlaceholder": "Aktion, Akteur, Zielart oder ID",
-    "actor": "Akteur",
-    "actorPlaceholder": "Exakter Akteur",
-    "action": "Aktionspräfix",
-    "actionPlaceholder": "z. B. agent.",
-    "targetKind": "Zielart",
-    "targetKindPlaceholder": "Exakte Zielart",
-    "targetId": "Ziel-ID",
-    "targetIdPlaceholder": "Exakte Ziel-ID",
-    "since": "Seit",
-    "until": "Bis",
-    "clearOne": "{{filter}}-Filter zurücksetzen",
-    "clearAll": "Alle Filter zurücksetzen"
-  },
   "scan": {
     "incomplete": "Durchsucht bis seq {{seq}} — nicht das gesamte Hauptbuch; „Mehr laden“ setzt den Scan fort."
   },
@@ -29,14 +11,6 @@
     "tenant": "Mandanten-Hauptbuch",
     "system": "System-Hauptbuch",
     "systemHint": "Die Kette des System-Mandanten zeichnet mandantenübergreifende Verwaltungsvorgänge auf und ist hier schreibgeschützt. Verifizierung und Export beziehen sich auf Mandanten-Hauptbücher."
-  },
-  "cols": {
-    "seq": "Nr.",
-    "occurred": "Wann",
-    "action": "Aktion",
-    "actor": "Akteur",
-    "target": "Ziel",
-    "hash": "Hash"
   },
   "actorKind": {
     "user": "Benutzer",
@@ -55,7 +29,6 @@
     "checkpointBreak": "Prüfpunkt-Signatur fehlgeschlagen bei Nr. {{seq}}"
   },
   "pubkey": {
-    "action": "Verifizierungsschlüssel",
     "label": "Signaturschlüssel des Ledgers",
     "key": "Schlüssel",
     "hint": "Geben Sie diesen öffentlichen Ed25519-Schlüssel weiter, damit Dritte exportierte Ereignisse UND Prüfpunkte offline verifizieren können – derselbe Schlüssel signiert beide.",
@@ -63,7 +36,6 @@
   },
   "export": {
     "action": "Exportieren",
-    "options": "Exportoptionen",
     "formatLabel": "Exportformat",
     "fromSeq": "Von seq",
     "toSeq": "Bis seq",
@@ -80,7 +52,8 @@
     },
     "done": "Export heruntergeladen.",
     "failed": "Export fehlgeschlagen.",
-    "forbidden": "Sie sind nicht berechtigt, das Hauptbuch zu exportieren."
+    "forbidden": "Sie sind nicht berechtigt, das Hauptbuch zu exportieren.",
+    "download": "Herunterladen"
   },
   "detail": {
     "title": "Nachweisereignis",
@@ -93,15 +66,12 @@
     "actorSystem": "System",
     "target": "Ziel",
     "id": "Ereignis-ID",
-    "chainTitle": "Ketten-Integrität",
     "prevHash": "Vorheriger Hash",
     "prev": "vorh.",
     "hash": "Ereignis-Hash",
     "this": "dieser",
     "sig": "Ereignis-Signatur",
     "checkpoint": "Sig.",
-    "chainHint": "Der Hash jedes Ereignisses ist mit dem vorherigen verkettet. Hinter einem Fingerabdruck steckt keine Nutzlast — der Hash ist der Nachweis (Datensparsamkeit by Design).",
-    "details": "Details",
     "actorMember": "Ein Mitglied"
   },
   "empty": {
@@ -144,5 +114,59 @@
     "show": "Interne Datensätze anzeigen",
     "hide": "Interne Datensätze ausblenden",
     "allHidden": "Alles bisher Geladene sind interne Datensätze."
+  },
+  "ledger": {
+    "query": "Hauptbuch-Abfrage",
+    "placeholder": "person:  action:  since:7d  oder Wörter",
+    "addFilter": "Filter hinzufügen",
+    "remove": "{{token}} entfernen",
+    "add": "{{token}} zur Abfrage hinzufügen",
+    "commands": "Suche und Befehle",
+    "problem": {
+      "key": "{{token}} ist kein Hauptbuch-Filter. Verwenden Sie person:, action:, kind:, target:, since:, until: oder Wörter.",
+      "time": "{{token}} ist keine Zeitangabe. Verwenden Sie 90m, 24h, 7d, 2w oder ein Datum wie 2026-10-20.",
+      "person": "Niemand passt zu {{token}}. Verwenden Sie einen Namen, eine E-Mail oder user:<id>.",
+      "several": "{{token}} passt zu mehreren Personen. Verwenden Sie den vollständigen Namen, eine E-Mail oder user:<id>.",
+      "names": "{{token}} lässt sich hier nicht nachschlagen. Verwenden Sie user:<id>."
+    },
+    "entries": "Hauptbuch-Einträge",
+    "group": {
+      "label": "Anzeigen",
+      "session": "Nach Sitzung",
+      "events": "Jeder Eintrag"
+    },
+    "needsYou": "Braucht Sie",
+    "outside": "Außerhalb einer Sitzung",
+    "session": "Sitzung {{ref}}",
+    "count_one": "{{count}} Eintrag",
+    "count_other": "{{count}} Einträge",
+    "sentence": "{{what}} von {{who}}",
+    "signed": "Signiert",
+    "histogram": {
+      "hour": "Einträge pro Stunde",
+      "day": "Einträge pro Tag",
+      "week": "Einträge pro Woche",
+      "bar_one": "{{at}}, {{count}} Eintrag",
+      "bar_other": "{{at}}, {{count}} Einträge",
+      "loaded_one": "{{count}} Eintrag geladen",
+      "loaded_other": "{{count}} Einträge geladen",
+      "sessions_one": "{{count}} Sitzung",
+      "sessions_other": "{{count}} Sitzungen",
+      "people_one": "{{count}} Person",
+      "people_other": "{{count}} Personen",
+      "more": "weitere ladbar",
+      "now": "Jetzt"
+    },
+    "entry": {
+      "title": "Eintrag {{seq}}",
+      "chain": "Position in der Kette",
+      "previous": "Vorheriger · {{seq}}",
+      "this": "Dieser Eintrag · {{seq}}",
+      "next": "Nächster · {{seq}}",
+      "newest": "Neuester Eintrag",
+      "nextUnread": "Nächster nicht gelesen",
+      "chainHint": "Jeder Eintrag trägt den Hash des vorherigen. Ändert man einen, bricht jeder spätere Hash.",
+      "signedEntry": "Der signierte Eintrag"
+    }
   }
 }

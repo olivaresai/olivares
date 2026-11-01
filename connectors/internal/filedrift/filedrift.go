@@ -5,7 +5,8 @@
 // host reports, for the tools whose managed layer is a plain JSON or TOML file
 // (OpenCode, Gemini CLI, Grok Build). Every key the authored document sets must
 // be set to the same value on the host; keys the host adds are the host's own
-// (the tools merge a managed layer over user config), so they are not drift.
+// (the tools merge a managed layer over user config), so they are not drift,
+// except inside the allowlist tables a Spec names.
 // Arrays compare in order, because most are an argv or a sequence, except at the key
 // paths a Spec names as allowlists, which compare as sets.
 //
@@ -41,13 +42,20 @@ const MaxFindings = 100
 // Spec names the tool a comparison is for: Origin is the finding's subject kind
 // and Tool the label that starts every title. ExactTables lists key paths whose
 // entries are an allowlist: there a host entry the authored document lacks is
-// drift too, because it widens the list. SetArrays lists key paths whose array is
+// drift too, because it widens the list. A last segment "*" names every table
+// directly under that path in the authored document ("permission.*" is each tool
+// table OpenCode's permission block publishes). An exact table the authored
+// document does not publish is not enforced: publish it empty ("mcp": {}) to close
+// it. PatternTables lists key paths, in the same form, whose keys are the tool's own
+// pattern text (a command line, a path, a URL) and can carry a credential, so a
+// title names such a key by a short hash. SetArrays lists key paths whose array is
 // an allowlist, where the same entries in another order are not drift.
 type Spec struct {
-	Origin      string
-	Tool        string
-	ExactTables []string
-	SetArrays   []string
+	Origin        string
+	Tool          string
+	ExactTables   []string
+	PatternTables []string
+	SetArrays     []string
 }
 
 // JSON compares two JSON documents. The observed file may be JSONC (comments and
@@ -112,10 +120,11 @@ func compare(sp Spec, scope string, want map[string]any, observed []byte, at tim
 	if err != nil || got == nil { // JSON null decodes to nothing: not a managed file
 		return []model.FindingReport{finding("", "managed config is present but invalid (the host is ungoverned)")}
 	}
+	patterns := tablePaths(want, sp.PatternTables)
 	var out []model.FindingReport
-	for _, table := range sp.ExactTables {
-		w, wok := lookup(want, strings.Split(table, "."))
-		h, hok := lookup(got, strings.Split(table, "."))
+	for _, table := range tablePaths(want, sp.ExactTables) {
+		w, wok := lookup(want, table)
+		h, hok := lookup(got, table)
 		wm, wmap := w.(map[string]any)
 		hm, hmap := h.(map[string]any)
 		if !wok || !hok || !wmap || !hmap {
@@ -123,24 +132,25 @@ func compare(sp Spec, scope string, want map[string]any, observed []byte, at tim
 		}
 		for _, k := range sortedKeys(hm) {
 			if _, ok := wm[k]; !ok {
-				path := table + "." + k
-				out = append(out, finding(path, path+" is on the host but not in the published policy"))
+				// The key is the host's own text, so its title is scrubbed like any host string.
+				path := append(slices.Clone(table), k)
+				out = append(out, finding(strings.Join(path, "."), redact.Clean(titlePath(path, patterns))+" is on the host but not in the published policy"))
 			}
 		}
 	}
 	for _, leaf := range leaves(nil, want) {
-		path := strings.Join(leaf.path, ".")
+		path, title := strings.Join(leaf.path, "."), titlePath(leaf.path, patterns)
 		have, ok := lookup(got, leaf.path)
 		_, wantEmptyTable := leaf.value.(map[string]any)
 		_, haveTable := have.(map[string]any)
 		switch {
 		case !ok:
-			out = append(out, finding(path, path+" is NOT set on the host"))
+			out = append(out, finding(path, title+" is NOT set on the host"))
 		case wantEmptyTable && haveTable:
 			// A published empty table only has to exist; its entries are the
 			// host's own unless the path is an ExactTables allowlist (above).
 		case !same(leaf.value, have, slices.Contains(sp.SetArrays, path)):
-			out = append(out, finding(path, path+" differs from the published policy"))
+			out = append(out, finding(path, title+" differs from the published policy"))
 		}
 	}
 	if len(out) > MaxFindings {
@@ -148,6 +158,39 @@ func compare(sp Spec, scope string, want map[string]any, observed []byte, at tim
 		out = append(out[:MaxFindings], finding("", fmt.Sprintf("%d more differences are not listed", more)))
 	}
 	return out
+}
+
+// tablePaths resolves ExactTables or PatternTables paths against the authored document,
+// expanding a last "*" segment into each key of the authored table at its parent path. A
+// path stays a list of keys, so a key that contains a dot is one segment.
+func tablePaths(want map[string]any, tables []string) [][]string {
+	var out [][]string
+	for _, table := range tables {
+		path := strings.Split(table, ".")
+		parent := path[:len(path)-1]
+		if path[len(path)-1] != "*" {
+			out = append(out, path)
+			continue
+		}
+		m, _ := lookup(want, parent)
+		sub, _ := m.(map[string]any)
+		for _, k := range sortedKeys(sub) {
+			out = append(out, append(slices.Clone(parent), k))
+		}
+	}
+	return out
+}
+
+// titlePath renders a key path for a finding title. The key under a pattern table is named
+// by a short hash, never by its text; the finding's DetailHash still keys on the raw path,
+// so each entry stays its own finding.
+func titlePath(path []string, patterns [][]string) string {
+	for _, t := range patterns {
+		if len(path) > len(t) && slices.Equal(path[:len(t)], t) {
+			return strings.Join(t, ".") + " entry " + redact.Hash(strings.Join(path[len(t):], "."))[:12]
+		}
+	}
+	return strings.Join(path, ".")
 }
 
 func sortedKeys(m map[string]any) []string {

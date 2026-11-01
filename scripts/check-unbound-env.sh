@@ -8,7 +8,7 @@
 # POR QUE EXISTE, y no es hipotetico: ha mordido CUATRO veces con la misma forma exacta.
 #   · check-ci-ports.sh y census-blind-verdict.sh — «los runners sin $HOME, seis de nueve»,
 #     segun sus propios comentarios ya corregidos.
-#   · check-cosign-pins.sh — murio con «HOME: unbound variable» en ci-runner-9 el 2026-08-18.
+#   · check-cosign-pins.sh — murio con «HOME: unbound variable» en build-host el 2026-08-18.
 #   · test-gates-failclosed.sh — el 2026-08-19 tumbo el job `control-plane` ENTERO en main,
 #     y lo hizo del peor modo posible: la comprobacion de frontera de licencia habia dicho
 #     «Boundary check OK across 259 package graphs», o sea que el rojo aparecia bajo el

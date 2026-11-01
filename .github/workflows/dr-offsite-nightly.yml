@@ -1,0 +1,83 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+name: dr-offsite-nightly
+
+on:
+  schedule:
+    - cron: "30 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dr-offsite-nightly
+  cancel-in-progress: false
+
+jobs:
+  offsite:
+    if: github.event_name == 'workflow_dispatch' || vars.CI_NIGHTLIES == 'true'
+    runs-on: ${{ vars.CI_RUNNER_DB || vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+      - name: qualify disposable offsite buckets
+        timeout-minutes: 45
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          TMPDIR: ${{ runner.temp }}
+        run: bash scripts/dr-offsite-targets.sh "$RUNNER_TEMP/offsite-targets.md" "$SOURCE_SHA"
+      - name: publish tested-target table
+        if: always()
+        run: |
+          if [[ -f "$RUNNER_TEMP/offsite-targets.md" ]]; then
+            cat "$RUNNER_TEMP/offsite-targets.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      # Evidence, not a deliverable: the job summary above keeps the table with the run. The
+      # runner copy is made first so a full artifact quota cannot lose it or fail the job.
+      - name: preserve tested-target table on the runner
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/ci-evidence
+        with:
+          name: offsite-targets
+          path: ${{ runner.temp }}/offsite-targets.md
+      - name: retain tested-target table
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: offsite-targets
+          path: ${{ runner.temp }}/offsite-targets.md
+          if-no-files-found: error
+          retention-days: 1
+      - name: open or update qualification incident
+        if: failure()
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          body="$RUNNER_TEMP/offsite-incident.md"
+          # shellcheck disable=SC2016 # Literal Markdown backticks.
+          printf 'Offsite bucket qualification failed.\n\nRun: %s\nSource: `%s`\n\nSee the job log and offsite-targets artifact.\n' \
+            "$RUN_URL" "$SOURCE_SHA" > "$body"
+          title='dr-offsite-nightly: qualification failed'
+          existing="$(gh issue list --state open --search "\"$title\" in:title" --json number,title \
+            --jq '.[] | select(.title == "dr-offsite-nightly: qualification failed") | .number' | head -1)"
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" --body-file "$body"
+          else
+            gh issue create --title "$title" --body-file "$body"
+          fi

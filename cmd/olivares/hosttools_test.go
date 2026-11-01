@@ -10,13 +10,16 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/toolinstall"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/toolinstall/toolinstalltest"
+	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/modules/sessions"
 )
 
@@ -46,7 +49,13 @@ func TestHostToolObserverRecognizesEveryInstallableDriver(t *testing.T) {
 	installer := toolInstallEngine(context.Background())
 	for _, driver := range installer.DriverKeys() {
 		t.Run(driver, func(t *testing.T) {
-			program := filepath.Join(pathDir, driver)
+			// A vendor install lands on PATH under the tool's own program name, which is
+			// not the driver key for Cursor (`agent`) or Gemini CLI (`gemini`).
+			facts, ok := driverfacts.Lookup(driver)
+			if !ok || facts.Program == "" {
+				t.Fatalf("installable driver %s declares no host program name", driver)
+			}
+			program := filepath.Join(pathDir, facts.Program)
 			writeHostToolCanary(t, program, marker)
 			observer := newHostToolObserverAt(filepath.Join(dir, "tools"), nil, home, pathDir)
 			got, err := observer.ObserveHostTools(context.Background(), driver, program)
@@ -55,7 +64,7 @@ func TestHostToolObserverRecognizesEveryInstallableDriver(t *testing.T) {
 			}
 			want := hostToolTuple{"path", "unregistered-observed", true, "same"}
 			if tallyHostTools(got)[want] != 1 {
-				t.Fatalf("installed PATH tool not observed: %+v", got)
+				t.Fatalf("installed PATH tool not observed at %s: %+v, want %+v", program, got, want)
 			}
 			if n := observer.network.attempts.Load(); n != 0 {
 				t.Fatalf("observation attempted %d network requests", n)
@@ -64,6 +73,51 @@ func TestHostToolObserverRecognizesEveryInstallableDriver(t *testing.T) {
 	}
 	if n := hostToolCanaryRuns(marker); n != 0 {
 		t.Fatalf("observation executed a tool %d times", n)
+	}
+}
+
+// The scope check must examine the PATH name Detect searched, the driver's
+// program, not its key. Each PATH entry is sized so that <dir>/<program> is a
+// legal path that does not exist while <dir>/<key> exceeds PATH_MAX: Lstat then
+// fails on the key entry alone, which shows which name was examined.
+func TestHostToolScopeExaminesTheProgramDetectSearches(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the fixture relies on Linux's PATH_MAX of 4096 bytes")
+	}
+	const pathMax = 4096 // including the terminating NUL
+	base := t.TempDir()
+	installer := toolInstallEngine(context.Background())
+	tested := 0
+	for _, driver := range installer.DriverKeys() {
+		facts, ok := driverfacts.Lookup(driver)
+		if !ok || len(facts.Program) >= len(driver) {
+			continue
+		}
+		tested++
+		t.Run(driver, func(t *testing.T) {
+			dir := filepath.Join(base, driver)
+			for want := pathMax - 1 - len("/"+facts.Program); len(dir) < want; {
+				n := min(200, want-len(dir)-1)
+				if want-len(dir)-1-n == 1 {
+					n-- // a lone "/" left for last would be cleaned away
+				}
+				dir += "/" + strings.Repeat("d", n)
+			}
+			if _, err := os.Lstat(filepath.Join(dir, facts.Program)); !errors.Is(err, fs.ErrNotExist) {
+				t.Fatalf("fixture: Lstat of the program entry = %v, want not exist", err)
+			}
+			if _, err := os.Lstat(filepath.Join(dir, driver)); !errors.Is(err, syscall.ENAMETOOLONG) {
+				t.Fatalf("fixture: Lstat of the key entry = %v, want ENAMETOOLONG", err)
+			}
+			observer := newHostToolObserverAt(filepath.Join(base, "tools"), nil, filepath.Join(base, "home"), dir)
+			got, err := observer.ObserveHostTools(context.Background(), driver, "")
+			if err != nil || len(got.Candidates) != 0 {
+				t.Fatalf("scope check examined a name Detect never searched: %+v, %v", got, err)
+			}
+		})
+	}
+	if tested == 0 {
+		t.Fatal("no installable driver names a program shorter than its key; the fixture shows nothing")
 	}
 }
 
@@ -92,10 +146,10 @@ func TestSessionRuntimeHostToolObserverExecutesVerifiesAndDialsNothing(t *testin
 		t.Fatalf("install: %d\n%s\n%s", code, stdout, stderr)
 	}
 	ranAfterInstall := f.ran()
-	// The observer must never reach the CLI engine seam, which wires gpg.
+	// The observer must never reach the CLI engine seam, which verifies signatures.
 	cliEngine := toolInstallEngine
 	toolInstallEngine = func(context.Context) *toolinstall.Engine {
-		t.Error("host-tool observation built the CLI engine, which wires the GPG verifier")
+		t.Error("host-tool observation built the CLI engine, which verifies signatures")
 		return cliEngine(context.Background())
 	}
 	t.Cleanup(func() { toolInstallEngine = cliEngine })

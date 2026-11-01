@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package awskms is the Olivares AI connector for AWS KMS and AWS Secrets Manager
-//. It OBSERVES the audit trail those services already emit to
+// . It OBSERVES the audit trail those services already emit to
 // AWS CloudTrail — it never calls KMS or Secrets Manager itself, never decrypts,
 // and never reads a secret value or key material.
 //

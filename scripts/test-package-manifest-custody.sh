@@ -131,6 +131,14 @@ STUB
 	cat >"$box/usr/bin/olivares" <<'STUB'
 #!/bin/sh
 printf 'olivares %s\n' "$*" >>"$OLIVARES_TEST_BOX/calls"
+# __place-install-manifest STAGE TARGET: the model of the product's placement helper, which writes a
+# temporary file inside TARGET's directory and renames it there, then prints the placed inode and
+# mtime as the script records them.
+if [ "$1" = __place-install-manifest ]; then
+  /usr/bin/cp "$2" "$3.olv-place" && /usr/bin/mv -T "$3.olv-place" "$3" || exit 1
+  printf '%s %s\n' "$(/usr/bin/stat -c %i "$3")" "$(/usr/bin/stat -c %y "$3" | tr ' ' '_')"
+  exit 0
+fi
 [ "$1" = uninstall ] || exit 0
 m="$OLIVARES_TEST_BOX/var/lib/olivares/install-manifest.json"
 if [ -L "$m" ] || [ ! -f "$m" ] || [ -f "$OLIVARES_TEST_BOX/state/record-untrusted" ]; then
@@ -294,13 +302,17 @@ for how in link writable file parent; do
 	else ok "$case_id"; fi
 done
 
-case_id="W7 the staging directory on another filesystem refuses by name"
+case_id="W7 the staging directory on another filesystem: the product's helper places the record, root renames nothing across"
+# The appliance keeps /var/lib/olivares on its own volume: root hands the stage to the product's
+# placement helper, which writes and renames inside the data directory.
 new_box w7; installed
 : >"$box/state/stage-other-fs"
 run postinstall.sh configure ''
-if [[ "$last_rc" -eq 0 ]] || ! grep -Fq 'refused: manifest-staging-cross-filesystem' "$last_out.stderr"; then not_ok "$case_id: rc=$last_rc $(err)"
-elif [[ -e "$box/$M" ]]; then not_ok "$case_id: a record was put in place anyway"
-else ok "$case_id: refused; nothing renamed across filesystems"; fi
+if [[ "$last_rc" -ne 0 ]]; then not_ok "$case_id: rc=$last_rc $(err)"
+elif ! grep -q '^olivares __place-install-manifest ' "$box/calls"; then not_ok "$case_id: the placement helper was not called"
+elif [[ ! -f "$box/$M" || -L "$box/$M" ]]; then not_ok "$case_id: no record in place"
+elif grep -qE "^mv .*install-manifest.json.new .*$M\$" "$box/calls"; then not_ok "$case_id: root renamed the stage across filesystems"
+else ok "$case_id: placed by the helper; nothing renamed across filesystems by root"; fi
 
 case_id="W8 an mv without -T refuses by name before any rename"
 new_box w8; installed

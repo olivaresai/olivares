@@ -5,11 +5,12 @@
 // THE RAIL FROM A KEYBOARD, which is the half a snapshot cannot show.
 import {
   fireEvent,
-  render,
+  render as renderRaw,
   screen,
   waitFor,
   within,
 } from '@testing-library/react'
+import axe from 'axe-core'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { RunDTO } from '@/features/agentops/types'
@@ -85,6 +86,18 @@ function launchedRow(ref: string): UnifiedSession {
   )[0]
 }
 
+/**
+ * The rail as it is once the Working fold is open. The rows this file asserts on are
+ * mostly running sessions, so each render opens the fold first; the fold's own behavior,
+ * shut by default, is the last describe, which renders with `renderRaw`.
+ */
+function render(ui: Parameters<typeof renderRaw>[0]) {
+  const utils = renderRaw(ui)
+  const toggle = screen.queryByRole('button', { name: /^Working\s*\d+$/ })
+  if (toggle?.getAttribute('aria-expanded') === 'false') fireEvent.click(toggle)
+  return utils
+}
+
 function renderRail(over: Partial<Parameters<typeof WorkRail>[0]> = {}) {
   const onOpen = vi.fn()
   const onTogglePin = vi.fn()
@@ -102,6 +115,13 @@ function renderRail(over: Partial<Parameters<typeof WorkRail>[0]> = {}) {
 }
 
 const rows = () => screen.getAllByRole('option')
+
+/** Tab into the rail's rows. The Working fold's button is a control of its own and, when
+ * no row precedes it, the first stop: the walk goes on to the row the keyboard starts on. */
+async function tabIntoRows(user: ReturnType<typeof userEvent.setup>) {
+  await user.tab()
+  if (document.activeElement?.id === 'rail-group-active') await user.tab()
+}
 
 describe('WorkRail — what a row says', () => {
   it('keeps a long name on one line, whole on the hover, with its reference', () => {
@@ -149,7 +169,7 @@ describe('WorkRail — what a row says', () => {
     expect(nameEl.className.split(/\s+/)).toEqual(
       expect.arrayContaining(['truncate', 'min-w-0']),
     )
-    // Two short lines (dev#3162): the place and the state above, the name below.
+    // Two short lines: the place and the state above, the name below.
     expect(rowEl.className.split(/\s+/)).toEqual(
       expect.arrayContaining(['h-14', 'min-[761px]:h-12']),
     )
@@ -310,7 +330,7 @@ describe('WorkRail — what a row says', () => {
       try {
         renderRail()
         for (const r of rows()) {
-          // Two short lines (dev#3162): a step taller than the shell's one-line row.
+          // Two short lines: a step taller than the shell's one-line row.
           expect(r.className.split(/\s+/)).toEqual(
             expect.arrayContaining([
               'h-14',
@@ -538,17 +558,17 @@ describe('WorkRail — arrows move, Enter opens', () => {
   it('is ONE tab stop, and lands on the first row', async () => {
     const user = userEvent.setup()
     renderRail()
-    await user.tab()
+    await tabIntoRows(user)
     // A rail of two hundred sessions must not be two hundred tab stops.
     expect(document.activeElement).toBe(rows()[0])
-    await user.tab()
+    await tabIntoRows(user)
     expect(rows()).not.toContain(document.activeElement)
   })
 
   it('moves focus without opening anything', async () => {
     const user = userEvent.setup()
     const { onOpen } = renderRail()
-    await user.tab()
+    await tabIntoRows(user)
     await user.keyboard('{ArrowDown}')
     expect(document.activeElement).toBe(rows()[1])
     // THE POINT: walking the rail must not fire a navigation — and on this screen a
@@ -559,7 +579,7 @@ describe('WorkRail — arrows move, Enter opens', () => {
   it('opens the focused row on Enter', async () => {
     const user = userEvent.setup()
     const { onOpen } = renderRail()
-    await user.tab()
+    await tabIntoRows(user)
     await user.keyboard('{ArrowDown}{Enter}')
     expect(onOpen).toHaveBeenCalledTimes(1)
     expect(onOpen.mock.calls[0][0].sessionRef).toBe('sess-a')
@@ -568,7 +588,7 @@ describe('WorkRail — arrows move, Enter opens', () => {
   it('does not wrap at either end', async () => {
     const user = userEvent.setup()
     renderRail()
-    await user.tab()
+    await tabIntoRows(user)
     await user.keyboard('{ArrowUp}')
     expect(document.activeElement).toBe(rows()[0])
     await user.keyboard('{End}{ArrowDown}')
@@ -578,7 +598,7 @@ describe('WorkRail — arrows move, Enter opens', () => {
   it('starts on the OPEN session, so a deep link can be walked away from', async () => {
     const user = userEvent.setup()
     renderRail({ selected: 'live:lr-c' })
-    await user.tab()
+    await tabIntoRows(user)
     expect(document.activeElement).toBe(
       screen
         .getByTestId('work-rail')
@@ -589,7 +609,7 @@ describe('WorkRail — arrows move, Enter opens', () => {
   it('marks the open session as selected, which focus alone does not', async () => {
     const user = userEvent.setup()
     renderRail({ selected: 'live:lr-a' })
-    await user.tab()
+    await tabIntoRows(user)
     await user.keyboard('{ArrowDown}')
     expect(rows()[1]).toHaveAttribute('aria-selected', 'true')
     expect(rows()[2]).toHaveAttribute('aria-selected', 'false')
@@ -602,7 +622,7 @@ describe('WorkRail — no gesture without a keyboard path', () => {
     const { onTogglePin } = renderRail({
       sessions: [launchedRow('run-a'), launchedRow('run-b')],
     })
-    await user.tab()
+    await tabIntoRows(user)
     await user.keyboard('p')
     expect(onTogglePin).toHaveBeenCalledWith('run:run-a')
   })
@@ -613,7 +633,7 @@ describe('WorkRail — no gesture without a keyboard path', () => {
       sessions: [launchedRow('run-a'), launchedRow('run-b')],
       selected: 'run:run-a',
     })
-    await user.tab()
+    await tabIntoRows(user)
     await user.keyboard('{ArrowDown}p')
     expect(onTogglePin).toHaveBeenCalledWith('run:run-b')
   })
@@ -623,7 +643,7 @@ describe('WorkRail — no gesture without a keyboard path', () => {
     // not bound here rather than bound to a no-op.
     const user = userEvent.setup()
     const { onTogglePin } = renderRail()
-    await user.tab()
+    await tabIntoRows(user)
     await user.keyboard('p')
     expect(onTogglePin).not.toHaveBeenCalled()
   })
@@ -633,7 +653,7 @@ describe('WorkRail — no gesture without a keyboard path', () => {
     // one that is not bound, so the rail does not bind it either.
     const user = userEvent.setup()
     const { onOpen } = renderRail({ onTogglePin: null })
-    await user.tab()
+    await tabIntoRows(user)
     await user.keyboard('p')
     expect(onOpen).not.toHaveBeenCalled()
   })
@@ -647,7 +667,7 @@ describe('WorkRail — no gesture without a keyboard path', () => {
     renderRail({ selected: 'live:lr-c' })
     for (const option of rows())
       expect(option.querySelector('button')).toBeNull()
-    await user.tab()
+    await tabIntoRows(user)
     expect(document.activeElement).toBe(
       screen
         .getByTestId('work-rail')
@@ -744,7 +764,7 @@ describe('WorkRail — every row has one actions menu (#2795)', () => {
     async (keys) => {
       const user = userEvent.setup()
       renderMenuRail()
-      await user.tab()
+      await tabIntoRows(user)
       await user.keyboard('{ArrowDown}')
       await user.keyboard(keys)
       const menu = screen.getByRole('menu')
@@ -779,7 +799,7 @@ describe('WorkRail — every row has one actions menu (#2795)', () => {
     // session, nor `p` (typeahead) pin it, nor an arrow move the rail.
     const user = userEvent.setup()
     const { onOpen, onTogglePin } = renderMenuRail()
-    await user.tab()
+    await tabIntoRows(user)
     await user.keyboard('{Shift>}{F10}{/Shift}')
     const item = within(screen.getByRole('menu')).getByRole('menuitem', {
       name: 'Rename run:run-a',
@@ -801,8 +821,8 @@ describe('WorkRail — every row has one actions menu (#2795)', () => {
 })
 
 // The list says what each session is doing in a word with its time, the place above
-// the title, and the tool by its own mark, not one glyph for every row (dev#3162).
-describe('WorkRail — a row says its state in words, its place and its tool (dev#3162)', () => {
+// the title, and the tool by its own mark, not one glyph for every row.
+describe('WorkRail — a row says its state in words, its place and its tool', () => {
   const launched = (over: Partial<RunDTO>) =>
     mergeSessions(
       [],
@@ -909,6 +929,9 @@ describe('WorkRail — a row says its state in words, its place and its tool (de
     }
     const view = render(<WorkRail sessions={[at('idle')]} {...props} />)
     view.rerender(<WorkRail sessions={[at('running')]} {...props} />)
+    // The row is in the shut Working fold when the turn starts: the rail noted the
+    // moment, and the row opened later reads it.
+    fireEvent.click(screen.getByRole('button', { name: /^Working\s*1$/ }))
     await waitFor(() => expect(state()).toHaveTextContent(/^Working [0-9]s$/))
     // The person leaves the list; back later, the session may be in another turn: the
     // list never times it from the turn it saw before.
@@ -953,5 +976,100 @@ describe('WorkRail — a row says its state in words, its place and its tool (de
     )
     rail(ended!)
     expect(state()).toHaveTextContent(/^Done$/)
+  })
+})
+
+// Working sessions fold into one shut group, so a running session never moves a row under
+// the pointer.
+/** The rail exactly as it arrives: the Working fold shut. */
+function renderShut(over: Partial<Parameters<typeof WorkRail>[0]> = {}) {
+  return renderRaw(
+    <WorkRail
+      sessions={[working, asking, done]}
+      selected={null}
+      onOpen={vi.fn()}
+      pinned={new Set()}
+      onTogglePin={vi.fn()}
+      {...over}
+    />,
+  )
+}
+
+describe('WorkRail — the Working fold', () => {
+  const addresses = () => rows().map((r) => r.getAttribute('data-address'))
+  const toggle = () => screen.getByRole('button', { name: /^Working\s*1$/ })
+
+  it('folds the working sessions behind one toggle, shut, with its count', () => {
+    renderShut()
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false')
+    expect(addresses()).toEqual(['live:lr-b', 'live:lr-c'])
+  })
+
+  it('opens in place, between Needs you and Earlier, and shuts again', async () => {
+    const user = userEvent.setup()
+    renderShut()
+    await user.click(toggle())
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true')
+    expect(addresses()).toEqual(['live:lr-b', 'live:lr-a', 'live:lr-c'])
+    await user.click(toggle())
+    expect(addresses()).toEqual(['live:lr-b', 'live:lr-c'])
+  })
+
+  it('arrives open when the session on screen is working', () => {
+    renderShut({ selected: 'live:lr-a' })
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true')
+    expect(addresses()).toContain('live:lr-a')
+  })
+
+  it('does not walk the folded rows with the arrow keys', async () => {
+    const user = userEvent.setup()
+    renderShut()
+    rows()[0].focus()
+    await user.keyboard('{ArrowDown}')
+    expect(rows()[1]).toHaveFocus()
+    expect(rows()[1].getAttribute('data-address')).toBe('live:lr-c')
+  })
+
+  it('draws a rail whose every session is working as the toggle alone', async () => {
+    const user = userEvent.setup()
+    renderShut({ sessions: [working] })
+    expect(screen.queryAllByRole('option')).toHaveLength(0)
+    await user.click(toggle())
+    expect(addresses()).toEqual(['live:lr-a'])
+  })
+
+  it('names the state in the row, with its mark, whatever its group', async () => {
+    const user = userEvent.setup()
+    renderShut()
+    await user.click(toggle())
+    const byAddress = (a: string) =>
+      rows().find((r) => r.getAttribute('data-address') === a)!
+    for (const [address, status, word] of [
+      ['live:lr-b', 'needs-you', 'Needs you'],
+      ['live:lr-a', 'working', 'Working'],
+      ['live:lr-c', 'done', 'Done'],
+    ] as const) {
+      const state = within(byAddress(address)).getByTestId('rail-row-state')
+      expect(state).toHaveAttribute('data-status', status)
+      expect(state).toHaveTextContent(new RegExp(`^${word}`))
+      expect(byAddress(address)).toHaveAccessibleName(new RegExp(word))
+    }
+  })
+
+  it('has no aria-required-children violation, open, shut or all working', async () => {
+    const user = userEvent.setup()
+    const violations = async () =>
+      (
+        await axe.run(document.body, {
+          runOnly: { type: 'rule', values: ['aria-required-children'] },
+        })
+      ).violations
+    const { unmount } = renderShut()
+    expect(await violations()).toEqual([])
+    await user.click(toggle())
+    expect(await violations()).toEqual([])
+    unmount()
+    renderShut({ sessions: [working] })
+    expect(await violations()).toEqual([])
   })
 })

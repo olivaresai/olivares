@@ -11,7 +11,7 @@
 // sits outside that package and must not import it. UNIFICATION DEBT, named on
 // purpose: once the C4 lane releases the core/internal/store frontier, sqlstore
 // imports THIS package and its private twins are deleted — two implementations do
-// not live on indefinitely (an internal design note (not shipped)
+// not live on indefinitely (an internal audit
 // pinning-design.md §B).
 //
 // Why two hooks, restated from the proven original:

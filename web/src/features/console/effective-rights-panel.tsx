@@ -38,6 +38,23 @@ const STATE_VARIANT: Record<EffectiveRightState, BadgeProps['variant']> = {
   not_applicable: 'outline',
 }
 
+type EffectiveRightsGrant = NonNullable<
+  EffectiveRightsResponse['rights'][number]['because']
+>[number]
+
+function formatNode(node: EffectiveRightsResponse['path'][number]) {
+  return `${node.kind} ${node.ref}`
+}
+
+function formatGrantID(grant: EffectiveRightsGrant) {
+  return grant.grant_id ?? grant.policy_id ?? ''
+}
+
+function formatChain(subject: EffectiveRightsGrant['subject']) {
+  const chain = subject.chain ?? [{ kind: subject.kind, ref: subject.ref }]
+  return chain.map(formatNode).join(' > ')
+}
+
 export function EffectiveRightsPanel() {
   const { t } = useTranslation('console')
   const [subjectType, setSubjectType] =
@@ -231,12 +248,21 @@ function EffectiveRightsAnswer({
         </ol>
       </div>
 
+      {answer.membership_as_of && (
+        <p className="text-caption text-muted-foreground">
+          {t('granular.accessReview.why.membershipAsOf', {
+            at: answer.membership_as_of,
+          })}
+        </p>
+      )}
+
       <div className="overflow-hidden rounded-lg border border-border">
         <StaticTable>
           <thead>
             <tr>
               <th>{t('granular.accessReview.why.right')}</th>
               <th>{t('granular.accessReview.why.state')}</th>
+              <th>{t('granular.accessReview.why.reason')}</th>
             </tr>
           </thead>
           <tbody>
@@ -249,6 +275,45 @@ function EffectiveRightsAnswer({
                       defaultValue: r.state,
                     })}
                   </Badge>
+                </td>
+                <td>
+                  <ul className="m-0 list-none space-y-1 p-0 text-caption">
+                    {r.because?.map((grant) => {
+                      const id = formatGrantID(grant)
+                      if (!id) return null
+                      return (
+                        <li key={`${id}:${formatNode(grant.node)}`}>
+                          {t('granular.accessReview.why.grantAt', {
+                            id,
+                            node: formatNode(grant.node),
+                            chain: formatChain(grant.subject),
+                          })}
+                        </li>
+                      )
+                    })}
+                    {r.removed_by?.map((removal) => {
+                      if (!removal.id) return null
+                      const kind = t(
+                        `granular.accessReview.why.removalKinds.${removal.kind}`,
+                        { defaultValue: removal.kind },
+                      )
+                      const key = `${removal.kind}:${removal.id}:${removal.node ? formatNode(removal.node) : ''}`
+                      return (
+                        <li key={key}>
+                          {removal.node
+                            ? t('granular.accessReview.why.removedByAt', {
+                                kind,
+                                id: removal.id,
+                                node: formatNode(removal.node),
+                              })
+                            : t('granular.accessReview.why.removedBy', {
+                                kind,
+                                id: removal.id,
+                              })}
+                        </li>
+                      )
+                    })}
+                  </ul>
                 </td>
               </tr>
             ))}

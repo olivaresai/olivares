@@ -63,7 +63,11 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { usePreferencesStore, type Density } from '@/stores/preferences'
 import { IconTip } from './icon-tip'
-import { StateWord, useForgetTurnsOnLeave } from './session-state-word'
+import {
+  StateWord,
+  useForgetTurnsOnLeave,
+  useSeenTurns,
+} from './session-state-word'
 import { ToolMark } from './tool-mark'
 import {
   primaryRun,
@@ -76,7 +80,12 @@ import {
 } from './provenance'
 import { addressOf } from './session-address'
 import { isPinnable } from './session-pins'
-import { groupSessions, railOrder, WORK_GROUPS } from './session-groups'
+import {
+  groupSessions,
+  railOrder,
+  WORK_GROUPS,
+  type WorkGroup,
+} from './session-groups'
 
 export interface WorkRailProps {
   sessions: readonly UnifiedSession[]
@@ -107,7 +116,7 @@ const ROW_HEIGHT: Record<Density, string> = {
 }
 
 /**
- * A ROW (dev#3162): the tool's mark; the folder small above what
+ * A ROW: the tool's mark; the folder small above what
  * the session is called; at the right what it is doing in a word with its time. The full
  * path and what it is doing now are on the row's hover and in the thread it opens.
  */
@@ -203,7 +212,7 @@ function RailRow({
               }
             : undefined
         }
-        /* ⛔ TWO SHORT LINES, BOTH WITH WORDS (dev#3162): the folder and the state above,
+        /* ⛔ TWO SHORT LINES, BOTH WITH WORDS: the folder and the state above,
          the name below. The old second line was blank for every observed session
          (#2266); this one carries the place and what the session is doing, which is what
          a person picks a row BY. The name is cut with an ellipsis and its whole text
@@ -355,6 +364,7 @@ export function WorkRail({
 }: WorkRailProps) {
   const { t } = useTranslation('sessions')
   useForgetTurnsOnLeave()
+  useSeenTurns(sessions)
   const groups = groupSessions(sessions, pinned)
   // THE SNOOZED SECTION IS FOLDED (#2480): a snooze takes the session out of the list
   // until its moment, and one toggle under the list keeps it reachable, so a snooze is
@@ -367,7 +377,15 @@ export function WorkRail({
   const [showArchived, setShowArchived] = useState(false)
   const archivedCount =
     groups.find((group) => group.id === 'archived')?.sessions.length ?? 0
-  const order = railOrder(groups, showSnoozed, showArchived)
+  // THE WORKING SECTION IS FOLDED TOO: a running session never moves a row
+  // under the pointer, so the rows stay shut until asked. It arrives open when the session
+  // on screen is one of them, so the open session is never hidden by its own list.
+  const workingRows =
+    groups.find((group) => group.id === 'active')?.sessions ?? []
+  const [showWorking, setShowWorking] = useState(() =>
+    workingRows.some((s) => addressOf(s) === selected),
+  )
+  const order = railOrder(groups, showSnoozed, showArchived, showWorking)
   const shared = sharedNames(sessions, t('untitled'))
   const rowRefs = useRef(new Map<string, HTMLDivElement>())
 
@@ -464,75 +482,138 @@ export function WorkRail({
     )
   }
 
+  // The sections drawn: a folded one only while it is open (Working has its own control).
+  const visible = groups.filter(
+    (group) =>
+      group.sessions.length > 0 &&
+      (group.id !== 'snoozed' || showSnoozed) &&
+      (group.id !== 'archived' || showArchived),
+  )
+  const fold = visible.find((group) => group.id === 'active')
+  const above = visible.filter(
+    (group) => group.id === 'pinned' || group.id === 'attention',
+  )
+  const below = visible.filter(
+    (group) => group !== fold && !above.includes(group),
+  )
+  const rowsOf = (list: readonly UnifiedSession[]) =>
+    list.map((s) => (
+      <RailRow
+        key={s.key}
+        session={s}
+        selected={addressOf(s) === selected}
+        focused={addressOf(s) === focused}
+        pinned={pinned.has(s.key)}
+        onOpen={onOpen}
+        onOpenBeside={addressOf(s) !== selected ? onOpenBeside : undefined}
+        registerRef={registerRef}
+        shared={shared}
+        menu={rowMenu}
+        menuOpen={menuAddress === addressOf(s)}
+        onMenuOpenChange={(open) => {
+          if (open) setFocusedAddress(addressOf(s))
+          setMenuAddress(open ? addressOf(s) : null)
+        }}
+        onMenuClosed={() => moveTo(addressOf(s))}
+        // THE KEYBOARD'S ROW IS THE ONE THAT HAS FOCUS, however it got there:
+        // a click on a row moves it too, so `p` and Shift+F10 act on that row.
+        onFocused={() => setFocusedAddress(addressOf(s))}
+      />
+    ))
+  const sections = (list: WorkGroup[]) =>
+    list.map((group) => (
+      <div
+        key={group.id}
+        role="group"
+        aria-labelledby={`rail-group-${group.id}`}
+      >
+        <p
+          className="sticky top-0 z-10 bg-canvas px-3 pt-4 pb-1 text-overline font-medium text-text-3"
+          id={`rail-group-${group.id}`}
+        >
+          {/* THE SPACE IS NOT DECORATION. This paragraph is the group's accessible
+          name (`aria-labelledby`), and without it the name is the two run
+          together: "Working1". A group with no rows is not drawn, and no
+          sentence stands in for it. */}
+          {t(`list.group.${group.id}`)}{' '}
+          <span className="tabular-nums">{group.sessions.length}</span>
+        </p>
+        {rowsOf(group.sessions)}
+      </div>
+    ))
+
   return (
     <>
       {/* Roles, not tags: the ARIA tree a listbox must have is `listbox > group >
         option`, and a group HEADING is a child of its group, never of the listbox.
         Wrapping each section in a presentational <li> put that heading directly under
         the listbox, where it is not an allowed child — a structure axe reads as broken
-        and a screen reader reads as a stray line of text. With every session
-        snoozed or archived and folded there is no option to own, and no listbox is drawn. */}
-      {loading || order.length > 0 ? (
+        and a screen reader reads as a stray line of text.
+
+        ⛔ THE WORKING FOLD'S BUTTON IS NOT A CHILD OF A LISTBOX EITHER (axe,
+        aria-required-children: a button under a listbox is unallowed, group or no
+        group). It sits where the Working section belongs, between the listbox that holds
+        Pinned and Needs you and the one that holds the rest, so the order a person reads
+        is kept and each listbox owns options only. One wrapper owns the keys, so the
+        arrow keys walk across all of them. With every session folded there is no option
+        to own, and no listbox is drawn. */}
+      {loading || visible.length > 0 ? (
         <div
-          role="listbox"
-          aria-label={t('rail.label')}
-          // A listbox with no option yet is only a valid tree while it says it is busy.
-          aria-busy={loading ? true : undefined}
           data-testid="work-rail"
           onKeyDown={onKeyDown}
           className="flex flex-col"
         >
-          {groups
-            .filter(
-              (group) =>
-                group.sessions.length > 0 &&
-                (group.id !== 'snoozed' || showSnoozed) &&
-                (group.id !== 'archived' || showArchived),
-            )
-            .map((group) => (
-              <div
-                key={group.id}
-                role="group"
-                aria-labelledby={`rail-group-${group.id}`}
+          {above.length > 0 ? (
+            <div
+              role="listbox"
+              aria-label={t('rail.label')}
+              aria-busy={loading ? true : undefined}
+            >
+              {sections(above)}
+            </div>
+          ) : null}
+          {fold ? (
+            <div>
+              <button
+                type="button"
+                id="rail-group-active"
+                aria-expanded={showWorking}
+                onClick={() => setShowWorking((shown) => !shown)}
+                className="sticky top-0 z-10 flex w-full items-center gap-1 bg-canvas px-3 pt-4 pb-1 text-left text-overline font-medium text-text-3 outline-none hover:text-text-2 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset"
               >
-                <p
-                  className="sticky top-0 z-10 bg-canvas px-3 pt-4 pb-1 text-overline font-medium text-text-3"
-                  id={`rail-group-${group.id}`}
+                <ChevronDown
+                  aria-hidden="true"
+                  className={cn(
+                    'size-3 transition-transform',
+                    !showWorking && '-rotate-90',
+                  )}
+                />
+                {t('list.group.active')}{' '}
+                <span className="tabular-nums">{fold.sessions.length}</span>
+              </button>
+              {showWorking ? (
+                <div
+                  role="listbox"
+                  aria-labelledby="rail-group-active"
+                  aria-busy={loading ? true : undefined}
                 >
-                  {/* THE SPACE IS NOT DECORATION. This paragraph is the group's accessible
-                  name (`aria-labelledby`), and without it the name is the two run
-                  together: "Working1". A group with no rows is not drawn, and no
-                  sentence stands in for it. */}
-                  {t(`list.group.${group.id}`)}{' '}
-                  <span className="tabular-nums">{group.sessions.length}</span>
-                </p>
-                {group.sessions.map((s) => (
-                  <RailRow
-                    key={s.key}
-                    session={s}
-                    selected={addressOf(s) === selected}
-                    focused={addressOf(s) === focused}
-                    pinned={pinned.has(s.key)}
-                    onOpen={onOpen}
-                    onOpenBeside={
-                      addressOf(s) !== selected ? onOpenBeside : undefined
-                    }
-                    registerRef={registerRef}
-                    shared={shared}
-                    menu={rowMenu}
-                    menuOpen={menuAddress === addressOf(s)}
-                    onMenuOpenChange={(open) => {
-                      if (open) setFocusedAddress(addressOf(s))
-                      setMenuAddress(open ? addressOf(s) : null)
-                    }}
-                    onMenuClosed={() => moveTo(addressOf(s))}
-                    // THE KEYBOARD'S ROW IS THE ONE THAT HAS FOCUS, however it got there:
-                    // a click on a row moves it too, so `p` and Shift+F10 act on that row.
-                    onFocused={() => setFocusedAddress(addressOf(s))}
-                  />
-                ))}
-              </div>
-            ))}
+                  <div role="group" aria-labelledby="rail-group-active">
+                    {rowsOf(fold.sessions)}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {below.length > 0 || (loading && above.length === 0 && !fold) ? (
+            // A listbox with no option yet is only a valid tree while it says it is busy.
+            <div
+              role="listbox"
+              aria-label={t('rail.label')}
+              aria-busy={loading ? true : undefined}
+            >
+              {sections(below)}
+            </div>
+          ) : null}
         </div>
       ) : null}
       {/* OUTSIDE the listbox: a listbox owns options, and a button in it would be a

@@ -379,6 +379,10 @@ type Decider struct {
 	// WITH a config it runs DLP + structural detection over the tool arguments as a
 	// further-restrict overlay (claudehookfirewall.go).
 	Inspector ContentInspector
+	// InspectorLive says what is in force NOW, for an edition whose administrator can change
+	// the firewall while the engine runs. When set it replaces Inspector, and a nil answer means
+	// not configured, exactly as a nil Inspector does.
+	InspectorLive func() ContentInspector
 	// Bus carries the firewall's posture findings + per-inspection metering (nil ⇒ no-op).
 	Bus   eventbus.Bus
 	Clock func() time.Time

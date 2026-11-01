@@ -66,8 +66,8 @@ def check(release, ci):
             if script.removeprefix('./').startswith('scripts/test-'):
                 errors.append('offline release battery belongs in CI: ' + script)
     gates = release['jobs']['goreleaser']['steps']
-    for workflow, flag in (('race-full.yml', []), ('release-first-hour.yml', ['--tree-equal-ok'])):
-        expected = f'bash scripts/require-green-run.sh {workflow} "$GITHUB_SHA"' + ''.join(' ' + arg for arg in flag)
+    for workflow in ('race-full.yml', 'release-first-hour.yml'):
+        expected = f'bash scripts/require-green-run.sh {workflow} "$GITHUB_SHA" --tree-equal-ok'
         matching = [step for step in gates if step.get('run', '').strip() == expected]
         if (len(matching) != 1 or matching[0].get('continue-on-error', False)
                 or 'if' in matching[0] or release['jobs']['goreleaser'].get('continue-on-error', False)):

@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# The image container sessions (isolation=container) run in: a shell, git and the small
+# tools a coding agent shells out to, on Debian 13 like the engine's own image.
+#
+#   podman build -f packaging/container/session/Containerfile -t localhost/olivares-session:latest packaging/container/session
+#   docker build -f packaging/container/session/Containerfile -t localhost/olivares-session:latest packaging/container/session
+#
+# (-f is for Docker, which reads only a file named Dockerfile unless told; podman takes it too.)
+#
+# localhost/olivares-session:latest is the name the engine looks for when
+# OLIVARES_SESSION_CONTAINER_IMAGE is not set, and `olivares doctor` and the session launch
+# readiness say so when it is missing. The packages install this directory at
+# /usr/share/olivares/session-image; a Server image is meant to run the command above from there
+# when it is built. Build it as the user the engine runs as: image stores belong to a user.
+# It is a base for the runner, which sets the user and the program, not an image to run alone.
+#
+# What is NOT in it, on purpose: the tool itself and its settings. The engine mounts the
+# host's tool program read-only at its own path and the host's managed policy at
+# /etc/claude-code, so the tool, its version and its policy stay where the host chose them.
+# No USER and no ENTRYPOINT either: the runner sets the user, the home and the program.
+# Need more (Node, a compiler)? Build your own image FROM this one and name it in
+# OLIVARES_SESSION_CONTAINER_IMAGE.
+#
+# Debian 13 (trixie), pinned by digest. Dependabot does not read a Containerfile, so the
+# digest is bumped by hand; `apt-get upgrade` picks up package fixes in between.
+FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
+
+# hadolint ignore=DL3008
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
+       ca-certificates curl git jq less openssh-client procps ripgrep \
+    && rm -rf /var/lib/apt/lists/*
+
+LABEL org.opencontainers.image.title="olivares-session" \
+      org.opencontainers.image.description="The image Olivares container sessions run in" \
+      org.opencontainers.image.licenses="AGPL-3.0-only" \
+      org.opencontainers.image.source="https://github.com/olivaresai/olivares" \
+      org.opencontainers.image.vendor="Olivares.AI"

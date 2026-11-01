@@ -17,8 +17,9 @@ import { useAuth } from '@/lib/auth/context'
 import { useModuleOn } from '@/stores/modules'
 import { gitpublishApi, gitpublishKeys } from './api'
 import { IntentSheet } from './intent-sheet'
-import { actionAuthority } from './model'
+import { actionAuthority, safePullRequestUrl } from './model'
 import { PublishDialog, type Draft } from './publish-dialog'
+import { ShipDialog } from './ship-dialog'
 import type { PublicationEffect, PublicationTarget } from './types'
 import './i18n'
 
@@ -45,6 +46,7 @@ export function SessionPublish({ run }: { run: RunDTO }) {
     initial: Draft
   } | null>(null)
   const [intentId, setIntentId] = useState<string | null>(null)
+  const [shipping, setShipping] = useState<PublicationTarget | null>(null)
 
   // The engine reads the run in the TARGET's workspace, so only those targets can take it.
   const bound =
@@ -74,28 +76,52 @@ export function SessionPublish({ run }: { run: RunDTO }) {
       </div>
       <ul className="flex flex-col gap-1">
         {bound.map((tg) => (
-          <li key={tg.id} className="flex items-center justify-between gap-2">
+          <li
+            key={tg.id}
+            className="flex flex-wrap items-center justify-between gap-2"
+          >
             <code className="font-mono text-caption">{tg.push_prefix}</code>
-            <Button
-              size="sm"
-              variant="outline"
-              aria-label={
-                bound.length > 1
-                  ? t('session.publishTo', { prefix: tg.push_prefix })
-                  : undefined
-              }
-              onClick={() =>
-                setOpen({
-                  target: tg,
-                  effect: 'push',
-                  initial: {
-                    ref: startRef(tg.push_prefix, run.worktree_branch),
-                  },
-                })
-              }
-            >
-              {t('session.publish')}
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant="primary"
+                aria-label={
+                  bound.length > 1
+                    ? t('ship.shipTo', { prefix: tg.push_prefix })
+                    : undefined
+                }
+                onClick={() => setShipping(tg)}
+              >
+                {t('ship.button')}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                aria-label={
+                  bound.length > 1
+                    ? t('session.publishTo', { prefix: tg.push_prefix })
+                    : undefined
+                }
+                onClick={() =>
+                  setOpen({
+                    target: tg,
+                    effect: 'push',
+                    initial: {
+                      ref: startRef(tg.push_prefix, run.worktree_branch),
+                    },
+                  })
+                }
+              >
+                {t('session.publish')}
+              </Button>
+            </div>
+            <ShippedPullRequests
+              target={tg}
+              headRef={startRef(tg.push_prefix, run.worktree_branch).replace(
+                /^refs\/heads\//,
+                '',
+              )}
+            />
           </li>
         ))}
       </ul>
@@ -115,6 +141,17 @@ export function SessionPublish({ run }: { run: RunDTO }) {
           }
         />
       ) : null}
+      {shipping ? (
+        <ShipDialog
+          // A new target is a new decision: a fresh dialog and operation id.
+          key={shipping.id}
+          target={shipping}
+          sessionRun={run.run_ref}
+          initialTitle={run.name ?? ''}
+          onClose={() => setShipping(null)}
+          onOpenIntent={setIntentId}
+        />
+      ) : null}
       {intentId ? (
         <IntentSheet
           intentId={intentId}
@@ -123,6 +160,57 @@ export function SessionPublish({ run }: { run: RunDTO }) {
         />
       ) : null}
     </section>
+  )
+}
+
+/** The pull requests this session's branch already has on the target, from the target's own
+ * intents: a landed one with its page on the host links there, so the Session screen finds it
+ * again after the ship dialog is closed. */
+function ShippedPullRequests({
+  target,
+  headRef,
+}: {
+  target: PublicationTarget
+  headRef: string
+}) {
+  const { t } = useTranslation('gitpublish')
+  const { activeTenant } = useAuth()
+  const intents = useQuery({
+    queryKey: gitpublishKeys.intents(activeTenant, target.id),
+    queryFn: () => gitpublishApi.intents(target.id),
+  })
+  // One link per pull request: the same one is adopted by every later ship.
+  const links = new Map<number, string>()
+  for (const intent of intents.data?.items ?? []) {
+    const url = safePullRequestUrl(intent.observed.url)
+    if (
+      intent.effect === 'pull_request' &&
+      intent.requested.head_ref === headRef &&
+      ['applied', 'adopted'].includes(intent.state) &&
+      intent.observed.number &&
+      url
+    )
+      links.set(intent.observed.number, url)
+  }
+  if (links.size === 0) return null
+  return (
+    <ul
+      aria-label={t('ship.pullRequests')}
+      className="flex basis-full flex-wrap gap-2"
+    >
+      {[...links].map(([number, url]) => (
+        <li key={number}>
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-caption font-medium text-primary underline"
+          >
+            {t('ship.pullRequest', { number })}
+          </a>
+        </li>
+      ))}
+    </ul>
   )
 }
 

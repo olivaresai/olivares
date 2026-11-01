@@ -1,13 +1,15 @@
 {
-  "title": "模型与提供商",
-  "description": "受治理的模型资产域——已声明的能力与定价、路由策略以及提供商密钥引用。从不展示密钥，仅展示经掩码处理的引用。",
+  "title": "模型",
+  "description": "您的工具和提供商现在可以运行的模型、正在使用这些模型的会话，以及模型治理。",
   "tabs": {
+    "available": "可用",
     "catalog": "目录",
     "estate": "资产域",
     "routing": "路由",
     "keys": "提供商密钥",
     "gpai": "GPAI 态势",
-    "access": "Access"
+    "access": "Access",
+    "governance": "治理"
   },
   "catalog": {
     "title": "能力矩阵",
@@ -271,5 +273,57 @@
     "truncatedHint": "访问规则多于此处所示；本页按行 id 取数。这些行上的标记仅反映已加载的规则：可能缺少引入限定或增加允许目标的 allow，也可能缺少扣减访问的 forbid——因此本页可能看起来比实际更宽，也可能更窄，而没有任何已加载规则的主体根本不会出现。请勿据此推断有效访问：引擎在决策前会读取全部页面，并跨用户、角色与分组解析主体，这是一行无法呈现的。",
     "groupsTruncated": "已加载 {{n}} 个分组；还有更多",
     "groupsTruncatedHint": "模型分组多于此处所示；本页按行 id 取数。分组未列在此处，并不能证明它不存在——规则仍可能指向它。"
+  },
+  "available": {
+    "title": "当前可用",
+    "description": "您的工具和提供商现在可以运行的模型，以及正在使用它们的会话。",
+    "columns": {
+      "model": "模型",
+      "runsOn": "工具或提供商",
+      "source": "来源",
+      "state": "状态",
+      "sessions": "会话"
+    },
+    "source": {
+      "tool": "工具的实时列表",
+      "ollama": "已安装在 Ollama",
+      "providerList": "提供商的模型列表",
+      "provider": "API 提供商",
+      "session": "实时会话"
+    },
+    "state": {
+      "ready": "就绪",
+      "checkingModels": "正在检查模型",
+      "stopped": "Ollama 已停止",
+      "unlisted": "不列出其模型",
+      "listsNone": "未列出任何模型",
+      "failed": "列表不可用",
+      "starting": "Ollama 启动中",
+      "ollamaFailed": "Ollama 失败"
+    },
+    "ownDefault": "其默认模型",
+    "providerModels": "模型列表",
+    "ollamaModels": "已安装的模型",
+    "openAiTools": "打开 AI 工具",
+    "sessions_other": "{{count}} 个会话",
+    "openSessions": "使用 {{model}} 的会话",
+    "empty": "暂无可用模型",
+    "emptyHint": "在 Ollama 中安装模型或添加提供商后，它会显示在这里。",
+    "noAccess": "无权访问模型列表",
+    "noAccessHint": "您的角色无法读取工具、提供商、Ollama 或会话的模型列表。请向管理员申请访问权限。",
+    "installModel": "安装模型",
+    "addProvider": "添加提供商",
+    "sourceFailed": "无法读取{{source}}。其他来源仍会显示。",
+    "sources": {
+      "tools": "工具的模型列表",
+      "ollama": "Ollama",
+      "availability": "提供商的模型",
+      "runs": "正在运行的会话"
+    },
+    "profilesTruncated": "仅显示前 {{n}} 个工具配置文件；还有更多。",
+    "runsTruncated": "统计涵盖每种状态最近的 {{n}} 个会话；还有更多。",
+    "runsFailed": "无法读取正在运行的会话；缺少计数。",
+    "sessionsUnknown": "会话数不可用。",
+    "unmatched_other": "{{count}} 个运行中的会话使用了此处未列出的模型。"
   }
 }

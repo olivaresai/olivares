@@ -1,11 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { preferenceStorage } from '@/lib/preference-storage'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useWorkspaceStore } from './workspace'
 
 beforeEach(() => {
-  localStorage.clear()
+  preferenceStorage.clear()
   useWorkspaceStore.setState({
     activeWorkspace: null,
     activeWorkspaceName: null,
@@ -44,7 +45,7 @@ describe('workspace store', () => {
 
   it('persists to localStorage under olivares.workspace', () => {
     useWorkspaceStore.getState().setActiveWorkspace('ws-789', 'Ops')
-    const stored = localStorage.getItem('olivares.workspace')
+    const stored = preferenceStorage.getItem('olivares.workspace')
     expect(stored).toBeTruthy()
     const parsed = JSON.parse(stored!)
     expect(parsed.state.activeWorkspace).toBe('ws-789')

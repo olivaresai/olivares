@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/connectors/managedsettings"
 	"github.com/olivaresai/olivares/modules/sessions"
 )
 
@@ -87,7 +88,7 @@ func TestManagedSettingsKeepsExplicitCustomHookCommands(t *testing.T) {
 			}
 			for _, event := range []string{"PreToolUse", "PostToolUse"} {
 				entries := policy.Hooks[event]
-				if len(entries) != 1 || len(entries[0].Hooks) != 1 || entries[0].Hooks[0].Command != custom || entries[0].Hooks[0].Timeout != wantTimeout {
+				if len(entries) != 1 || len(entries[0].Hooks) != 1 || entries[0].Hooks[0].Command != managedsettings.DenyClosed(custom) || entries[0].Hooks[0].Timeout != wantTimeout {
 					t.Fatal("custom PEP command or timeout was altered", event)
 				}
 			}
@@ -136,6 +137,47 @@ func TestManagedSettingsDefaultHookRefusesOuterDeadlineInsideClient(t *testing.T
 			}
 			if hook.Timeout != seconds || deadline <= 0 || deadline >= outer {
 				t.Fatal("default Olivares hook emitted a timeout that can discard its refusal", seconds, deadline)
+			}
+		}
+	}
+}
+
+// The pinned event goes before the deny-closed suffix, so the hook client reads it and a
+// hook that cannot run still exits 2.
+func TestManagedSettingsPinnedHookBlocksWhenItCannotRun(t *testing.T) {
+	for _, pin := range []bool{false, true} {
+		cmd := newAgentManagedSettingsCmd()
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		args := []string{}
+		if pin {
+			args = append(args, "--pin-hook-events")
+		}
+		cmd.SetArgs(args)
+		if err := cmd.Execute(); err != nil {
+			t.Fatal(err)
+		}
+		var policy struct {
+			Hooks map[string][]struct {
+				Hooks []struct {
+					Command string `json:"command"`
+				} `json:"hooks"`
+			} `json:"hooks"`
+		}
+		if json.Unmarshal(out.Bytes(), &policy) != nil {
+			t.Fatal("invalid static hook settings")
+		}
+		for event, entries := range policy.Hooks {
+			for _, entry := range entries {
+				for _, hook := range entry.Hooks {
+					want := "olivares claude-hook || exit 2"
+					if pin {
+						want = "olivares claude-hook --hook-event " + event + " || exit 2"
+					}
+					if hook.Command != want {
+						t.Fatalf("pin=%v %s: command %q, want %q", pin, event, hook.Command, want)
+					}
+				}
 			}
 		}
 	}

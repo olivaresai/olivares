@@ -22,11 +22,9 @@ import { cn } from '@/lib/utils'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 import { useRunAttach } from './attach'
-import { agentOpsApi } from './api'
-import { sendBlockedReason, sessionTurnBody } from './session-turn'
+import { sendBlockedReason, sendTurn } from './session-turn'
 import { useTurnInterrupt } from './turn-interrupt'
 import type { AttachFrame, RunDTO } from './types'
-import { currentControlFence } from './work-fence'
 import {
   isQuiet,
   mapConversationFrames,
@@ -35,6 +33,7 @@ import {
 } from '@/features/sessions/conversation-frames'
 import { systemFailed, systemText } from '@/features/sessions/conversation-text'
 import { MarkdownText } from '@/features/sessions/markdown-text'
+import { ToolTarget } from '@/features/sessions/tool-target'
 import './i18n'
 import '@/features/sessions/i18n'
 
@@ -132,14 +131,7 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
   const turn = useTurnInterrupt(run)
   const inputMutation = useMutation({
     mutationFn: async (payload: { value: string; asWire: boolean }) => {
-      const body = sessionTurnBody(run, payload.value, payload.asWire)
-      // The SAME fence the interrupt above presents. A work-bound run has one
-      // control plane, and a turn is a control on it: sent unfenced it is refused
-      // with 409 before the child sees a byte. Once its lease has ended, nothing.
-      const fence = await currentControlFence(run)
-      return 'text' in body
-        ? agentOpsApi.inputText(run.run_ref, body.text, fence)
-        : agentOpsApi.input(run.run_ref, body.line, fence)
+      return sendTurn(run, payload.value, payload.asWire)
     },
     // Cleared ONLY on an accepted response: a refused turn (400, 409, 503 UNKNOWN)
     // leaves the operator's text in the box, because losing it would make a retry a
@@ -353,15 +345,15 @@ function LiveConversationLine({ item }: { item: ConversationItem }) {
           <span className="text-danger">{t('conversation.toolFailed')}</span>
         ) : null}
         {item.toolArgsSummary ? (
-          <span className="truncate text-muted-foreground">
-            {item.toolArgsSummary}
+          <span className="flex min-w-0 items-center text-muted-foreground">
+            <ToolTarget item={item} wrap />
           </span>
         ) : null}
       </div>
     )
   }
   // A tool's own output in the terminal view: every line, as it came, without escape
-  // codes. The conversation folds these lines into one quiet line (HU2-23); a terminal
+  // codes. The conversation folds these lines into one quiet line; a terminal
   // shows what the tool printed.
   if (item.kind === 'system' && item.systemKind === 'output') {
     return (

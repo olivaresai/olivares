@@ -180,9 +180,10 @@ func (r *directNoticeReadDirectoryResolver) ResolvePrincipal(
 		Principal: principal, ObservedAt: now, FreshUntil: now.Add(freshFor),
 	}
 	if outcome == PrincipalResolved {
+		recipient, _ := CanonicalPrincipalRecipient(principal)
 		result.Recipient = &RecipientSnapshot{
 			Scope:          scope,
-			Recipient:      RecipientRef{Kind: RecipientUser, Ref: principal.UserID.String()},
+			Recipient:      recipient,
 			RecipientEpoch: 1, DirectoryEpoch: r.epoch, Eligible: true,
 		}
 	}
@@ -220,10 +221,14 @@ func (r *directNoticeReadClosureResolver) ResolveChannelGrantSubjects(
 	if outcome == "" {
 		outcome = ReadAllow
 	}
+	subject := CommunicationSubjectRef{Kind: SubjectUser, Ref: principal.UserID.String()}
+	if principal.System {
+		subject = CommunicationSubjectRef{Kind: SubjectAgent, Ref: principal.SystemGrantAgentID.String()}
+	}
 	return ChannelGrantSubjectClosure{
 		Scope: scope, Principal: principal, DirectoryEpoch: r.epoch,
 		Outcome: outcome, Code: "closure_decision",
-		Subjects:   []CommunicationSubjectRef{{Kind: SubjectUser, Ref: principal.UserID.String()}},
+		Subjects:   []CommunicationSubjectRef{subject},
 		ObservedAt: now, FreshUntil: now.Add(freshFor),
 		EvidenceRef: "direct_notice_read_closure",
 	}, nil

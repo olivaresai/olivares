@@ -109,6 +109,16 @@ type RenderInspector interface {
 	InspectRender(ctx context.Context, in RenderInspectionInput) RenderInspectionDecision
 }
 
+// renderInspectorNow is the inspector in force for the render that asks: the host's live
+// source when it gave one, else the configured inspector. The caller keeps the answer for
+// the whole render, so a settings change cannot swap it between the nil check and the call.
+func (rs *ResourceServer) renderInspectorNow() RenderInspector {
+	if rs.renderLive != nil {
+		return rs.renderLive()
+	}
+	return rs.renderInspector
+}
+
 // uiReadResultReservedMembers / uiContentReservedMembers are the ReadResourceResult
 // members the render gate interprets (MCP 2026-07-28 RC,
 // an internal design note (not shipped):1229-1231 and :1501-1527).

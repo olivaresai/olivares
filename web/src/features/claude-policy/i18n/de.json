@@ -116,9 +116,9 @@
   "ref": {
     "ms": {
       "paths": "managed-settings.json-Pfade",
-      "legacyPath": "Der veraltete Windows-Pfad C:\\ProgramData\\ClaudeCode wird nicht mehr unterstützt (entfernt in {{since}}).",
+      "legacyPath": "Der veraltete Windows-Pfad <path /> wird nicht mehr unterstützt (entfernt in {{since}}).",
       "precedence": "Vorrangstellung der Einstellungen (höchste zuerst)",
-      "dropIn": "Drop-in-Verzeichnis: {{dir}}",
+      "dropIn": "Drop-in-Verzeichnis: <path />",
       "serverManaged": "Server-verwaltete Stufe",
       "failClosed": "Fail-closed",
       "noMerge": "Keine Zusammenführung",

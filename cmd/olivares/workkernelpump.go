@@ -25,8 +25,9 @@ const (
 	// outbox nudge live, fresh rows drain on insert and this tick only proves
 	// the durable fallback (a stopped nudge, a crash between insert and nudge).
 	defaultWorkOutboxInterval = 5 * time.Minute
-	// workOutboxHeldRetryMin is the first retry after a drain that held K3 work back;
-	// each further held drain doubles it, up to the safety cadence.
+	// workOutboxHeldRetryMin is the first retry after a drain that did not complete
+	// (an error, or work left behind); each further incomplete drain doubles it, up
+	// to the safety cadence.
 	workOutboxHeldRetryMin = time.Second
 )
 
@@ -51,7 +52,7 @@ const (
 // and no constant witness anywhere on this path.
 type workOutboxPump struct {
 	// nudgeCh carries outbox-insert wake-ups to the drain goroutine (C2 item 5).
-	// Its custody is immutable (SR2C P2): created once in register, never
+	// Its custody is immutable (review P2): created once in register, never
 	// reassigned and never closed (a late nudge just lands in the buffer). stop
 	// OWNS cancellation (nudgeCancel) and JOINS the goroutine (nudgeExited)
 	// before returning, so no drain can race the store close.
@@ -76,8 +77,10 @@ type workOutboxPump struct {
 
 	mu         sync.Mutex
 	lastReason string
-	// heldBack is whether the last drain held K3 work back. A held row gets no second insert
-	// to wake it, so the nudge goroutine drains again with a backoff.
+	// heldBack is whether the last drain left work behind: K3 work the authority held
+	// back, K3 rows the caller restriction held when no authority is bound, or every
+	// row when this node was not leading. A held row gets no second insert to wake it,
+	// so the nudge goroutine drains again with a backoff.
 	heldBack atomic.Bool
 }
 
@@ -136,7 +139,7 @@ func (p *workOutboxPump) register(rt periodicScheduler) error {
 	}
 	// C2 item 5: drain promptly on every outbox insert (the safety tick stays
 	// as the durable fallback). The goroutine's context is the pump's OWN: stop
-	// cancels it, so a drain never outlives the pump (SR2C P2).
+	// cancels it, so a drain never outlives the pump (review P2).
 	p.nudgeCh = make(chan struct{}, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	p.nudgeCancel = cancel
@@ -157,10 +160,11 @@ func (p *workOutboxPump) register(rt periodicScheduler) error {
 	}
 	go func() {
 		defer close(p.nudgeExited)
-		// After a drain that held K3 work back, drain again in backoff: 1 s, doubling up to
-		// the safety cadence, so a lane that stays refused (a standby, readiness off) falls
-		// back to the tick's rhythm. A drain that held nothing resets it. retry is nil, and
-		// so never ready, while nothing is held.
+		// After a drain that did not complete (it failed, or it left work behind), drain
+		// again in backoff: 1 s, doubling up to the safety cadence, so a lane that stays
+		// refused (a standby, readiness off) falls back to the tick's rhythm. A drain
+		// that completed and held nothing resets it. retry is nil, and so never ready,
+		// while nothing is outstanding.
 		var retry <-chan time.Time
 		backoff := workOutboxHeldRetryMin
 		for {
@@ -170,11 +174,12 @@ func (p *workOutboxPump) register(rt periodicScheduler) error {
 			case <-p.nudgeCh:
 			case <-retry:
 			}
-			if err := p.run(ctx); err != nil {
+			err := p.run(ctx)
+			if err != nil {
 				p.log.Warn("sessions-work-outbox: nudged drain failed", "err", err)
 			}
 			retry = nil
-			if !p.heldBack.Load() {
+			if err == nil && !p.heldBack.Load() {
 				backoff = workOutboxHeldRetryMin
 				continue
 			}
@@ -208,7 +213,7 @@ func (p *workOutboxPump) stop() {
 	if p.sessions != nil {
 		p.sessions.SetWorkOutboxNudge(nil)
 	}
-	// Owned cancellation + join (SR2C P2): cancel the drain's context and wait
+	// Owned cancellation + join (review P2): cancel the drain's context and wait
 	// for the goroutine to exit, so a nudged drain never runs against a closing
 	// store. Idempotent — a double stop neither panics nor wedges.
 	p.nudgeStop.Do(func() {
@@ -221,6 +226,9 @@ func (p *workOutboxPump) stop() {
 
 func (p *workOutboxPump) runOnce(ctx context.Context) error {
 	if !p.st.Leader().Active() {
+		// This drain ran nothing: every row it would have claimed stays pending.
+		// Ask the nudge goroutine to try again after the leadership changes.
+		p.heldBack.Store(true)
 		return nil
 	}
 	// The tenants every install can enumerate (servedWorkTenants): on the default
@@ -234,13 +242,25 @@ func (p *workOutboxPump) runOnce(ctx context.Context) error {
 
 	// The K3 authority is the module-bound one and applies inside the drain.
 	// This caller restriction only guarantees the pump's own promise when no
-	// composition ever bound an authority: such a pump never claims K3.
+	// composition ever bound an authority: such a pump never claims K3. The
+	// refused count feeds reportLane so those rows get the same retry as an
+	// authority's own hold; it is an atomic because the policy closure can
+	// outlive this drain through the deferred protocol-replay collector.
+	var heldByCaller atomic.Int64
 	restriction := sessions.WorkOutboxClaimPolicyFunc(func(_ context.Context, candidate sessions.WorkOutboxCandidate) (bool, error) {
 		switch candidate.Family {
 		case sessions.WorkEventFamilyWork, sessions.WorkEventFamilyProtocol:
 			return true, nil
 		default:
-			return p.authority != nil, nil
+			if p.authority != nil {
+				return true, nil
+			}
+			// Unknown families are deny-closed and, like the authority's own
+			// unknown count, do not ask for a retry.
+			if candidate.Family == sessions.WorkEventFamilyCommunication {
+				heldByCaller.Add(1)
+			}
+			return false, nil
 		}
 	})
 
@@ -259,7 +279,7 @@ func (p *workOutboxPump) runOnce(ctx context.Context) error {
 			failures = append(failures, fmt.Errorf("tenant %s: %w", tenant, err))
 		}
 	}
-	p.reportLane(ctx)
+	p.reportLane(ctx, int(heldByCaller.Load()))
 	return errors.Join(failures...)
 }
 
@@ -267,13 +287,17 @@ func (p *workOutboxPump) runOnce(ctx context.Context) error {
 // back, so an operator sees WHY K3 events stay pending without log spam on
 // every quiet tick. The counts come from the authority's own decisions during
 // this tick; when no K3 candidate was seen, the verdict is a fresh sample.
-func (p *workOutboxPump) reportLane(ctx context.Context) {
+// heldByCaller counts the K3 rows this pump's own restriction refused when no
+// authority is bound.
+func (p *workOutboxPump) reportLane(ctx context.Context, heldByCaller int) {
 	var (
 		held, fenced, unknown int
 		unknownTypes          []string
 		reason                string
 	)
 	if p.authority == nil {
+		held = heldByCaller
+		p.heldBack.Store(held > 0)
 		reason = "authority_unbound"
 	} else {
 		var report communicationAuthorityReport

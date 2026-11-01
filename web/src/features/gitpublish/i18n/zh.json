@@ -67,7 +67,8 @@
   "effects": {
     "push": "推送",
     "pull_request": "拉取请求",
-    "merge": "合并"
+    "merge": "合并",
+    "issue_comment": "Issue 评论"
   },
   "authority": {
     "requires": "需要 {{permission}}",
@@ -174,6 +175,7 @@
     "field_not_accepted": "请求包含此路由不接受的字段。",
     "forbidden": "您当前的权限不允许对此目标执行此操作。",
     "head_mismatch": "拉取请求的 head 已不再是已审查的提交。",
+    "link_not_allowed": "链接必须指向已批准仓库的拉取请求。",
     "host_credential_refused": "Git 主机拒绝了该绑定的凭据或其作用域。未派发任何内容。",
     "host_unavailable": "无法连接到 Git 主机。未派发任何内容。",
     "intent_settled": "该意图的结果已确定，因此无法放弃。",
@@ -201,7 +203,13 @@
     "unsupported_requirement": "主机无法满足此要求，例如在 GitLab 上进行变基合并。",
     "version_conflict": "自您打开以来，目标已发生变化。请重新打开以查看当前版本。",
     "workflow_change_refused": "该提交修改了 CI 工作流文件，此目标拒绝发布此类提交。",
-    "unknown": "引擎以本控制台无法描述的代码拒绝了请求。"
+    "unknown": "引擎以本控制台无法描述的代码拒绝了请求。",
+    "no_branch": "会话文件夹不在任何分支上。请切换到某个分支后再交付。",
+    "no_commit": "会话的分支还没有任何提交。",
+    "nothing_to_ship": "会话的提交没有给将要合并的分支带来任何内容。",
+    "commit_refused": "会话文件夹拒绝了提交：它是只读的、仍在工作，或您的资料没有姓名和邮箱。",
+    "approval_denied": "有人未批准此次推送，或其批准已失效。请再次交付以重新申请审核。",
+    "approval_unavailable": "审批服务无法响应。请稍后再次交付。"
   },
   "intents": {
     "title": "意图",
@@ -254,5 +262,24 @@
     "abandonTitle": "放弃意图 {{id}}？",
     "abandonDescription": "放弃会记录由您为这个未解决的意图承担责任。它不会更改或读取主机，并且在新的请求承认此意图之前，作用域将一直被占用。",
     "abandonReason": "原因（最多 256 个字符）"
+  },
+  "ship": {
+    "button": "交付",
+    "shipTo": "交付到 {{prefix}}",
+    "title": "交付此会话",
+    "description": "以您的身份提交会话的更改，推送到 {{prefix}} 下的分支，并一次性创建拉取请求。",
+    "submit": "交付",
+    "message": "提交说明",
+    "messageHint": "仅在会话文件夹有更改时使用。默认为标题。",
+    "shipped": "已交付：{{branch}} 已推送。",
+    "pullRequest": "拉取请求 #{{number}}",
+    "pullRequestOpen": "打开拉取请求",
+    "awaitingTitle": "等待另一位成员批准",
+    "awaitingBody": "您的更改已提交。推送发出前需要另一位成员批准（审批 {{id}}）。批准后请再次交付。",
+    "again": "再次交付",
+    "incompleteTitle": "交付未完成",
+    "incompletePush": "{{branch}} 的推送未生效（{{state}}）。请查看此目标的意图，然后再次交付。",
+    "incompletePullRequest": "{{branch}} 已推送，但未能创建拉取请求（{{code}}）。请再次交付以重试。",
+    "pullRequests": "拉取请求"
   }
 }

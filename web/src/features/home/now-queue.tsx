@@ -22,16 +22,11 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  ArrowRightLeft,
-  Check,
-  CircleAlert,
-  Loader2,
-  ShieldCheck,
-} from 'lucide-react'
+import { ArrowRightLeft, Check, Loader2, ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { Button } from '@/components/ui/button'
+import { PathText } from '@/components/ui/path-text'
 import { Skeleton } from '@/components/ui/skeleton'
 import { readableAction } from '@/components/layout/bell-events'
 import {
@@ -39,6 +34,7 @@ import {
   type RailRow,
 } from '@/components/layout/session-rail-model'
 import {
+  useCanOpenApprovals,
   useMinuteClock,
   useOfferedHandoffs,
 } from '@/components/layout/use-session-rail'
@@ -60,7 +56,12 @@ import {
 } from '@/features/governance/types'
 import { useAuth } from '@/lib/auth/context'
 import '@/features/governance/i18n'
+import {
+  SessionStatusMark,
+  useStatusWord,
+} from '@/features/sessions/session-status'
 import type { LiveDTO } from '@/features/sessions/types'
+import type { RunDTO } from '@/features/agentops/types'
 import type { TileState } from './view-state'
 import './i18n'
 
@@ -74,6 +75,7 @@ function age(row: RailRow, t: TFunction<readonly ['home', 'nav']>): string {
 
 function QueueRow({ row }: { row: RailRow }) {
   const { t } = useTranslation(['home', 'nav'])
+  const statusWord = useStatusWord()
   const handoff = row.kind === 'handoff'
   const title = handoff
     ? t('nav:shell.rail.handoffFrom', { from: row.from ?? '' })
@@ -81,7 +83,6 @@ function QueueRow({ row }: { row: RailRow }) {
   const meta = handoff
     ? `${t('nav:shell.rail.workItem')} ${row.reference}`
     : row.meta
-  const Icon = handoff ? ArrowRightLeft : CircleAlert
   return (
     <li className="border-b border-line last:border-b-0">
       <Link
@@ -91,7 +92,11 @@ function QueueRow({ row }: { row: RailRow }) {
         className="flex min-h-[52px] min-w-0 items-center gap-3 px-1.5 py-2 outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset"
       >
         <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-warning-soft text-warning">
-          <Icon aria-hidden className="size-4" />
+          {handoff ? (
+            <ArrowRightLeft aria-hidden className="size-4" />
+          ) : (
+            <SessionStatusMark status={row.status} decorative />
+          )}
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate font-medium text-text">{title}</span>
@@ -99,8 +104,13 @@ function QueueRow({ row }: { row: RailRow }) {
             <span className="truncate text-caption text-text-2">{meta}</span>
           ) : null}
         </span>
-        <span className="shrink-0 text-caption text-text-3 tabular-nums">
-          {age(row, t)}
+        {/* The state as the Sessions list says it: its word and how long ago. */}
+        <span
+          data-testid="now-needs-row-status"
+          data-status={row.status}
+          className="shrink-0 text-caption text-text-3 tabular-nums"
+        >
+          {statusWord(row.status)} {age(row, t)}
         </span>
       </Link>
     </li>
@@ -250,12 +260,7 @@ function FlaggedCard({
           {head}
         </h3>
         {session.folder ? (
-          <span
-            className="truncate font-mono text-caption text-text-2"
-            title={session.folder}
-          >
-            {session.folder}
-          </span>
+          <PathText value={session.folder} tone="muted" />
         ) : null}
       </div>
       <ApprovalWhatRuns approval={approval} />
@@ -282,7 +287,7 @@ function FlaggedCard({
               disabled={approve.isPending}
               onClick={onApprove}
             >
-              {/* Disabled only while its decision is sent, and it says so (dev#3268). */}
+              {/* Disabled only while its decision is sent, and it says so. */}
               {approve.isPending ? (
                 <Loader2 aria-hidden className="animate-spin" />
               ) : (
@@ -355,16 +360,32 @@ function ApprovalRow({ approval }: { approval: ApprovalDTO }) {
 export function useNeedsYouRows(
   sessions: LiveDTO[] | undefined,
   sessionsReadable = true,
+  runs?: readonly RunDTO[],
+  approvals: readonly ApprovalDTO[] = [],
 ) {
   const now = useMinuteClock()
   const { readHandoffs, handoffs } = useOfferedHandoffs()
+  const canOpenApprovals = useCanOpenApprovals()
+  const listedApprovals = new Set(approvals.map((a) => a.id))
   const rows =
     railGroups(
       {
         live: sessionsReadable ? (sessions ?? []) : [],
         handoffs: handoffs.data?.items ?? [],
+        runs: runs ?? [],
       },
       now,
+      {
+        canOpenApprovals,
+        // Keep the live page's sessions, including echoes folded into a run.
+        // A listed approval already has its own row; filter before the cap.
+        keepNeeds: (row, session) =>
+          (!!session.live || !!session.echoes?.length) &&
+          !(
+            row.to === '/permissions' &&
+            listedApprovals.has(row.search.approval)
+          ),
+      },
     ).find((g) => g.id === 'needsYou')?.rows ?? []
   return { rows, readHandoffs, handoffs }
 }
@@ -375,10 +396,13 @@ export function NowQueue({
   sessionsReadable = true,
   approvals = [],
   approvalsState = 'ready',
+  runs,
   flag,
 }: {
   /** The live page Estate already fetched (its sentence reads the same page). */
   sessions: LiveDTO[] | undefined
+  /** The runs Estate already read carry the archived, snoozed and done marks. */
+  runs?: readonly RunDTO[]
   state: TileState
   /** False for a principal who may not read live sessions: the queue then holds what it
    * may read (approvals, offered handoffs) and says nothing about sessions. */
@@ -394,6 +418,8 @@ export function NowQueue({
   const { rows, readHandoffs, handoffs } = useNeedsYouRows(
     sessions,
     sessionsReadable,
+    runs,
+    approvals,
   )
   const flagged = flag.approval
   const quiet = approvals.filter((a) => a.id !== flagged?.id)
@@ -427,7 +453,7 @@ export function NowQueue({
           {t('nav:shell.rail.groups.needsYou')}
         </h2>
         {status === 'ready' && approvalsState !== 'unavailable' ? (
-          <span className="font-mono text-mono-s text-text-3 tabular-nums">
+          <span className="text-metadata-s text-text-3 tabular-nums">
             {rows.length + approvals.length}
           </span>
         ) : null}

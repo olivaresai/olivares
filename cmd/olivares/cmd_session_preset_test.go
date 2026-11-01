@@ -16,16 +16,19 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 )
 
-// TestSessionStartSendsThePresetForEveryTool is HU 043: `session start --tool grok
+// TestSessionStartSendsThePresetForEveryTool is acceptance: `session start --tool grok
 // --permission read-only` was accepted and the preset dropped; the CLI wrote the mode only
 // for Claude Code, so Codex, Grok and OpenCode sessions carried an empty mode and the engine
 // stored "default". Every tool now gets the chosen preset; the engine applies it in the
 // tool's own settings (or refuses it, TestSessionStartPrintsTheEnginesPresetRefusal).
 func TestSessionStartSendsThePresetForEveryTool(t *testing.T) {
-	for _, tool := range []string{"claude", "codex", "grok", "opencode", "gemini-cli"} {
+	for _, tool := range []string{"claude", "codex", "grok", "opencode", "gemini-cli", "cursor"} {
 		for _, tc := range []struct{ permission, mode, template string }{
 			{"edits-and-commands", "", "tpl-edit-run"}, {"edits-only", "acceptEdits", ""},
 			{"read-only", "plan", ""}, {"ask", "default", ""},
+			// the regression: the named modes are a view over the same values.
+			{"supervised", "default", ""}, {"auto-accept-edits", "acceptEdits", ""},
+			{"auto", "auto", ""},
 		} {
 			f := newFakeSessionEngine(t)
 			_, errb, err := execSessionCLI(t, nil, append([]string{"session", "start", t.TempDir(), "--tool", tool,
@@ -99,7 +102,7 @@ func TestSessionTemplateKeepsTheEditsAndCommandsContract(t *testing.T) {
 // engine's run-administrator check is the one gate (modules/sessions refuseUnrestrictedFor).
 // noTemplates proves the start does not depend on the Edits and commands template.
 func TestSessionStartFullSendsBypassPermissions(t *testing.T) {
-	for _, tool := range []string{"claude", "codex", "grok", "opencode", "gemini-cli"} {
+	for _, tool := range []string{"claude", "codex", "grok", "opencode", "gemini-cli", "cursor"} {
 		f := newFakeSessionEngine(t)
 		f.noTemplates = true
 		_, errb, err := execSessionCLI(t, nil, append([]string{"session", "start", t.TempDir(), "do the task",
@@ -127,7 +130,7 @@ func TestSessionStartFullSendsBypassPermissions(t *testing.T) {
 // status around it; the engine's words stay in it whole.
 func TestSessionStartFullPrintsTheEnginesRefusal(t *testing.T) {
 	f := newFakeSessionEngine(t)
-	f.launchRefusal = "only an administrator can run a session with full permissions; you can choose ask, read only, edits only, or edits and commands"
+	f.launchRefusal = "only an administrator can run a session with full permissions; you can choose supervised, read only, auto-accept edits, or edits and commands"
 	f.launchRefusalStatus = http.StatusForbidden
 	_, _, err := execSessionCLI(t, nil, append([]string{"session", "start", t.TempDir(), "do the task",
 		"--permission", "full"}, sessionCreds(f.URL)...)...)
@@ -148,12 +151,15 @@ func TestSessionStartFullPrintsTheEnginesRefusal(t *testing.T) {
 	}
 }
 
-// The unknown-value sentence lists every value, full included.
+// The unknown-value sentence lists every name, full included, and says the older
+// names still work.
 func TestSessionStartUnknownPermissionNamesFull(t *testing.T) {
 	f := newFakeSessionEngine(t)
 	_, _, err := execSessionCLI(t, nil, append([]string{"session", "start", t.TempDir(), "--permission", "everything"}, sessionCreds(f.URL)...)...)
-	if err == nil || !strings.Contains(err.Error(), "edits-and-commands, edits-only, read-only, ask or full") {
-		t.Fatalf("err = %v, want the sentence to list full", err)
+	if err == nil || !strings.Contains(err.Error(),
+		"read-only, supervised, auto-accept-edits, edits-and-commands, auto or full") ||
+		!strings.Contains(err.Error(), "ask and edits-only also work") {
+		t.Fatalf("err = %v, want the sentence to list the names, full included, and the older names", err)
 	}
 }
 

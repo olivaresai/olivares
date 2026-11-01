@@ -103,8 +103,8 @@ func (s ContentInspectionService) Inspect(
 // names the Anthropic inference subject, this proxy's configured surface and the existing
 // approval callback, and delegates. It is still the single entry point both Authorize
 // (request) and Finalize (response) call.
-func (d *Decider) runContentInspector(ctx context.Context, tenant model.TenantID, actor, direction, modelRef string, collected claudeapi.CollectedContent, actorRef string, unbindableAgent bool) claudeapi.ContentInspectionDecision {
-	return d.contentInspection().Inspect(ctx,
+func (d *Decider) runContentInspector(ctx context.Context, inspector ContentInspector, tenant model.TenantID, actor, direction, modelRef string, collected claudeapi.CollectedContent, actorRef string, unbindableAgent bool) claudeapi.ContentInspectionDecision {
+	return d.contentInspection(inspector).Inspect(ctx,
 		InspectionSubject{Kind: "anthropic.inference", ProviderRef: "anthropic", Surface: d.Surface},
 		tenant, actor, actorRef, unbindableAgent, direction, modelRef, collected)
 }
@@ -112,9 +112,9 @@ func (d *Decider) runContentInspector(ctx context.Context, tenant model.TenantID
 // contentInspection binds this decider's inspector, bus and approval bridge into the
 // shared service. The method values are the decider's own, so a nil bus still no-ops
 // exactly as it did and the approval bridge is the same instance.
-func (d *Decider) contentInspection() ContentInspectionService {
+func (d *Decider) contentInspection(inspector ContentInspector) ContentInspectionService {
 	return ContentInspectionService{
-		Inspector: d.Inspector, Publish: d.publish,
+		Inspector: inspector, Publish: d.publish,
 		Approve: d.openInspectionApproval, Clock: d.Clock,
 	}
 }

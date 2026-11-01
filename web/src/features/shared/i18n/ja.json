@@ -45,6 +45,7 @@
     "unknownUser": "不明なユーザー",
     "unknownWorkspace": "不明なワークスペース"
   },
+  "openInEditor": "{{editor}} で開く",
   "headDiff": {
     "file": "ファイル",
     "changes": "HEAD からの変更",

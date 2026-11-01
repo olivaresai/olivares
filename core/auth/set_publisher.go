@@ -133,7 +133,7 @@ func (a *Authenticator) ConfigurePublisher(ctx context.Context, actor Principal,
 			reg.Publishers = append(reg.Publishers, pub)
 		}
 		settings[orgSettingPublishers] = encodeRegistry(reg)
-		if _, err := sc.SetOrgSettings(ctx, settings); err != nil {
+		if _, err := sc.SetOrgSettings(ctx, settings, org.Version); err != nil {
 			return err
 		}
 		_, err = sc.Audit().Append(ctx, model.AuditDraft{
@@ -205,7 +205,7 @@ func (a *Authenticator) RemovePublisher(ctx context.Context, actor Principal, te
 		}
 		reg.Publishers = append(reg.Publishers[:idx], reg.Publishers[idx+1:]...)
 		settings[orgSettingPublishers] = encodeRegistry(reg)
-		if _, err := sc.SetOrgSettings(ctx, settings); err != nil {
+		if _, err := sc.SetOrgSettings(ctx, settings, org.Version); err != nil {
 			return err
 		}
 		_, err = sc.Audit().Append(ctx, model.AuditDraft{

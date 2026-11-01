@@ -12,7 +12,8 @@ export interface CountBadgeProps extends Omit<
   attention?: boolean
 }
 
-/** A quiet 18 px count pill; amber when it asks for a person, absent at zero. */
+/** A quiet 18 px count pill in the counter size (10 px); amber when it asks for a person,
+ * absent at zero. */
 export function CountBadge({
   count,
   attention = false,
@@ -29,7 +30,7 @@ export function CountBadge({
     <span
       data-slot="count-badge"
       className={cn(
-        'inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-1.5 text-caption font-medium tabular-nums',
+        'inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-1.5 text-metadata-s font-medium tabular-nums',
         attention ? 'bg-warn-soft text-warn' : 'bg-hover text-text-2',
         className,
       )}

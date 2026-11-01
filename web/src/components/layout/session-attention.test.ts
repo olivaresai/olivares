@@ -35,6 +35,27 @@ const run: RunDTO = {
 }
 
 describe('session attention', () => {
+  it('notifies when a working session fails', () => {
+    expect(
+      attentionEvent(working, { ...working, state: 'failed' }, context),
+    ).toBe('failed')
+  })
+  it('notifies when a running session completes without notifying a requested stop', () => {
+    const before = attentionSnapshots(
+      { live: [], handoffs: [], runs: [run] },
+      NOW,
+    )[0]
+    const completed = attentionSnapshots(
+      { live: [], handoffs: [], runs: [{ ...run, state: 'completed' }] },
+      NOW,
+    )[0]
+    expect(attentionEvent(before, completed, context)).toBe('finished')
+    const stopped = attentionSnapshots(
+      { live: [], handoffs: [], runs: [{ ...run, state: 'stopped' }] },
+      NOW,
+    )[0]
+    expect(attentionEvent(before, stopped, context)).toBeNull()
+  })
   it('admits a session that now needs an approval or person', () => {
     expect(
       attentionEvent(working, { ...working, state: 'needs-you' }, context),
@@ -267,6 +288,26 @@ describe('session attention', () => {
     expect(silent.state).toBe('needs-you')
     expect(attentionEvent(active, silent, context)).toBe('needsYou')
     expect(liveOnly({ cc_state: 'ended', unclaimed: true }).state).toBe('ended')
+  })
+  it('never names a notification by the title cut from the first prompt: the OS paints it outside the console', () => {
+    const prompt = 'rotate the password in the deploy script'
+    const named = (over: Partial<RunDTO>) =>
+      attentionSnapshots(
+        {
+          live: [],
+          handoffs: [],
+          runs: [{ ...run, pending_approval_ref: 'approval', ...over }],
+        },
+        NOW,
+      )[0]
+    // A session with no name is called by what the notification already calls it, and a
+    // title made from the person's own prompt does not change that.
+    const untitled = named({ name: undefined })
+    const titled = named({ name: undefined, title: prompt })
+    expect(titled.name).toBe(untitled.name)
+    expect(titled.name).not.toContain('password')
+    // A name the person chose is theirs to show.
+    expect(named({ name: 'deploy-api', title: prompt }).name).toBe('deploy-api')
   })
   it('names an unnamed session by its tool, never by its raw key or its prompt (#2266)', () => {
     const seen = (over: Partial<LiveDTO>): AttentionSnapshot =>

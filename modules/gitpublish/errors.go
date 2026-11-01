@@ -20,11 +20,19 @@ type Error struct {
 	Status int
 	// Intent names the intent the refusal concerns, when one exists.
 	Intent model.ID
+	// cause is why a host lookup failed (lookup_incomplete), for the operator's log
+	// only (OnLookupFailure); it never reaches the answer.
+	cause error
 }
 
 func (e *Error) Error() string { return "gitpublish: " + e.Code }
 
 func refuse(code string, status int) *Error { return &Error{Code: code, Status: status} }
+
+// incomplete refuses a request whose host lookup failed, keeping the cause for the log.
+func incomplete(cause error) *Error {
+	return &Error{Code: "lookup_incomplete", Status: http.StatusServiceUnavailable, cause: cause}
+}
 
 var (
 	errNotFound          = refuse("not_found", http.StatusNotFound)

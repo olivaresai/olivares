@@ -8,7 +8,7 @@ import type {
   ResolveProviderSource,
   ToolReadinessDTO,
 } from '@/features/agentops/types'
-import { SESSION_TOOLS, TOOL_NAMES, type SessionTool } from './api'
+import { sessionTools, toolName, type SessionTool } from './api'
 
 export type ToolAnswer =
   | 'own_login'
@@ -24,10 +24,10 @@ export function readinessOf(
   answers: Partial<Record<SessionTool, ToolAnswer>>,
 ): { tools: ToolReadinessDTO[] } {
   return {
-    tools: SESSION_TOOLS.map((driver): ToolReadinessDTO => {
+    tools: sessionTools().map((driver): ToolReadinessDTO => {
       const a = answers[driver] ?? {
         code: 'nothing_to_run_on',
-        message: `${TOOL_NAMES[driver]} has nothing to run on yet.`,
+        message: `${toolName(driver)} has nothing to run on yet.`,
       }
       if (a === 'own_login') return { driver, ready: true, reason: 'own_login' }
       if ('code' in a) return { driver, ready: false, ...a }
@@ -40,7 +40,7 @@ export function readinessOf(
         ...(a.refused
           ? {
               code: 'key_refused',
-              message: `${TOOL_NAMES[driver]} would run on a refused key.`,
+              message: `${toolName(driver)} would run on a refused key.`,
             }
           : {}),
       }

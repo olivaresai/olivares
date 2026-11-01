@@ -3,10 +3,13 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // The console offers only what the engine accepts (Root 22:12Z, 26.10.1 privacy): this
-// table is recordServesDriver in modules/sessions/provider_record.go at FH d4af6c7a. A
-// change to either side without the other fails here.
+// table is recordServesDriver in modules/sessions/provider_record.go (driverfacts CanBind),
+// answered from the engine's own tool table (engine-tools.fixture.json, which
+// modules/sessions/tools_api_test.go holds to the engine's answer).
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import engineTools from '@/features/agentops/engine-tools.fixture.json'
+import { setEngineTools } from '@/features/agentops/engine-tools'
 import { LOCAL_HTTP_KINDS, recordServesDriver } from './kinds'
 
 const KINDS = [
@@ -81,6 +84,37 @@ describe("the engine's rule for which records a tool runs on", () => {
     expect(recordServesDriver('openai_compatible', baseURL, 'opencode')).toBe(
       expected,
     )
+  })
+
+  it('serves a tool the engine adds on the kinds it lists, with no console change', () => {
+    setEngineTools([
+      ...engineTools.tools,
+      {
+        key: 'hermes',
+        name: 'Hermes Agent',
+        name_stem: 'hermes',
+        session: true,
+        bindings: [{ kind: 'gemini', egress: 'vendor-default-only' }],
+      },
+    ])
+    expect(recordServesDriver('gemini', undefined, 'hermes')).toBe(true)
+    expect(
+      recordServesDriver('gemini', 'https://gateway.example/v1', 'hermes'),
+    ).toBe(false)
+    expect(recordServesDriver('openai', undefined, 'hermes')).toBe(false)
+  })
+
+  it('serves nothing on an endpoint rule it does not know', () => {
+    setEngineTools([
+      {
+        key: 'claude',
+        name: 'Claude Code',
+        name_stem: 'claude',
+        session: true,
+        bindings: [{ kind: 'anthropic', egress: 'some-future-rule' }],
+      },
+    ])
+    expect(recordServesDriver('anthropic', undefined, 'claude')).toBe(false)
   })
 
   it('never holds Gemini CLI to a local OpenAI-compatible server', () => {

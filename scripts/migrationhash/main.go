@@ -15,6 +15,7 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"io"
 	"os"
 	"path"
@@ -40,6 +41,9 @@ type inventory struct {
 	fset     *token.FileSet
 	packages map[string]map[string][]*declaration
 	files    map[string]*sourceFile
+	// keep limits selector-matched methods in historical hashes to those present
+	// in the baseline. Extracted helpers and builtin shadows are still hashed.
+	keep map[string]bool
 }
 
 func (in *inventory) load(dir string) error {
@@ -208,6 +212,14 @@ func (in *inventory) version(file *sourceFile, expr ast.Expr, seen map[string]bo
 	return 0, fmt.Errorf("%s: cannot resolve migration version %s", file.path, rendered(in.fset, expr))
 }
 
+func builtinShadow(d *declaration) bool {
+	if d.method {
+		return false
+	}
+	name := d.key[strings.LastIndex(d.key, "#")+1:]
+	return types.Universe.Lookup(name) != nil
+}
+
 // sourceHash includes named callback/generator helpers, including dialect methods.
 // This is deliberately conservative: changing a shared migration helper requires
 // keeping the historical helper and using a new one in a forward migration.
@@ -217,6 +229,9 @@ func (in *inventory) sourceHash(file *sourceFile, roots []ast.Node, separate ...
 	var walk func(*sourceFile, ast.Node) error
 	var add func(*declaration) error
 	add = func(d *declaration) error {
+		if d.method && in.keep != nil && !in.keep[d.key] {
+			return nil
+		}
 		if visited[d.key] {
 			return nil
 		}
@@ -294,6 +309,30 @@ func (in *inventory) sourceHash(file *sourceFile, roots []ast.Node, separate ...
 		chunks[fmt.Sprintf("root/%d", i)] = rendered(in.fset, root)
 		if err := walk(file, root); err != nil {
 			return "", err
+		}
+	}
+	// A new helper or builtin shadow can change dispatch without editing old
+	// text. Helpers stay in the identifier walk; predeclared-identifier shadows
+	// are also included. Only selector-matched methods are additive false positives.
+	for {
+		var extras []*declaration
+		for _, declarations := range in.packages {
+			for _, list := range declarations {
+				extras = append(extras, list...)
+			}
+		}
+		added := false
+		for _, d := range extras {
+			if !builtinShadow(d) || visited[d.key] {
+				continue
+			}
+			added = true
+			if err := add(d); err != nil {
+				return "", err
+			}
+		}
+		if !added {
+			break
 		}
 	}
 	keys := make([]string, 0, len(chunks))
@@ -538,8 +577,26 @@ func (in *inventory) runnerFingerprints(out map[string]string) error {
 	return nil
 }
 
-func fingerprints(sources map[string]string) (map[string]string, error) {
+func declarationKeys(sources map[string]string) (map[string]bool, error) {
 	in := &inventory{sources: sources, fset: token.NewFileSet(), packages: map[string]map[string][]*declaration{}, files: map[string]*sourceFile{}}
+	for filename := range sources {
+		if err := in.load(path.Dir(filename)); err != nil {
+			return nil, err
+		}
+	}
+	keys := map[string]bool{}
+	for _, declarations := range in.packages {
+		for _, list := range declarations {
+			for _, d := range list {
+				keys[d.key] = true
+			}
+		}
+	}
+	return keys, nil
+}
+
+func fingerprints(sources map[string]string, keep map[string]bool) (map[string]string, error) {
+	in := &inventory{sources: sources, fset: token.NewFileSet(), packages: map[string]map[string][]*declaration{}, files: map[string]*sourceFile{}, keep: keep}
 	const core = "core/internal/store/sqlstore"
 	if err := in.load(core); err != nil {
 		return nil, err
@@ -820,9 +877,21 @@ func run(input io.Reader, output io.Writer) error {
 	if err := json.NewDecoder(input).Decode(&sources); err != nil {
 		return err
 	}
+	var baseline map[string]bool
+	if len(sources) > 1 {
+		var err error
+		baseline, err = declarationKeys(sources[0])
+		if err != nil {
+			return err
+		}
+	}
 	result := make([]map[string]string, 0, len(sources))
-	for _, source := range sources {
-		hashes, err := fingerprints(source)
+	for i, source := range sources {
+		var keep map[string]bool
+		if i > 0 {
+			keep = baseline
+		}
+		hashes, err := fingerprints(source, keep)
 		if err != nil {
 			return err
 		}

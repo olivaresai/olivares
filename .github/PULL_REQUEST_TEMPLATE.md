@@ -31,6 +31,7 @@ Closes #
 - [ ] **SPDX header** correct for the directory each new source file lives in (AGPL / Apache / commercial — see `CONTRIBUTING.md` and `LICENSING.md`). Non-code files are annotated centrally in `REUSE.toml`, not inline.
 - [ ] **License boundary respected:** a connector/SDK change imports **only** from `sdk/`, never from `core/` (`scripts/check-boundary.sh`).
 - [ ] **`CHANGELOG.md`** `[Unreleased]` updated under the right heading (Added/Changed/Deprecated/Removed/Fixed/**Security**) if this is a user-visible `feat:`/`fix:`/breaking change.
+- [ ] **Reads change nothing:** a status, health, usage or sign-in read I add or change starts no session, runs none of the user's hooks or plugins, starts none of their MCP servers and opens no login (`CONTRIBUTING.md`, "Reading a tool's state never changes it").
 - [ ] **No secrets, credentials, or personal data** added to the repo, tests, or fixtures.
 - [ ] This PR is **not** a security fix being disclosed early — security issues follow `SECURITY.md` (private), and the public advisory/CHANGELOG entry comes after a coordinated fix.
 

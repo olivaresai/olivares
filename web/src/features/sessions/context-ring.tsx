@@ -5,7 +5,7 @@
 // How full a session's context is, as a ring beside send. The figures
 // are the side pane's Activity: the same query, so an open pane asks once. A tool that
 // reports no window draws nothing.
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { readsNativeRecord } from '@/features/agentops/provider-contract'
@@ -23,18 +23,23 @@ const NEARLY_FULL = 80
 export function ContextRing({ run }: { run: RunDTO }) {
   const { t } = useTranslation('sessions')
   const { activeTenant } = useAuth()
-  const { data } = useQuery({
+  const { data, isError } = useQuery({
     queryKey: [
       ...agentOpsKeys.runActivity(activeTenant, run.run_ref),
       run.state,
     ],
     queryFn: ({ signal }) => agentOpsApi.activity(run.run_ref, { signal }),
     // Asked only where the Activity tab is shown: the engine refuses the read of any
-    // other record, so that session draws no ring (dev#3267).
+    // other record, so that session draws no ring.
     enabled: readsNativeRecord(run),
-    placeholderData: keepPreviousData,
+    // Never borrow usage from another session or organization.
+    refetchInterval: (query) =>
+      !query.state.error && (run.state === 'running' || run.state === 'idle')
+        ? 5000
+        : false,
   })
-  if (!data?.context_window || data.context_percent == null) return null
+  if (isError || !data?.context_window || data.context_percent == null)
+    return null
   const percent = Math.min(100, Math.max(0, data.context_percent))
   const label = t('activity.contextUsage', {
     tokens: formatInt(data.context_tokens),
@@ -48,7 +53,7 @@ export function ContextRing({ run }: { run: RunDTO }) {
       title={label}
       data-testid="composer-context"
       className={cn(
-        'inline-flex size-8 shrink-0 items-center justify-center',
+        'inline-flex h-8 shrink-0 items-center justify-center gap-1 text-caption tabular-nums',
         percent >= NEARLY_FULL ? 'text-warning' : 'text-muted-foreground',
       )}
     >
@@ -74,6 +79,7 @@ export function ContextRing({ run }: { run: RunDTO }) {
           strokeDashoffset={CIRCUMFERENCE * (1 - percent / 100)}
         />
       </svg>
+      <span aria-hidden>{formatPercent(percent, { digits: 0 })}</span>
     </span>
   )
 }

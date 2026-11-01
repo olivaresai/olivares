@@ -1,6 +1,6 @@
 {
   "title": "Administration",
-  "subtitle": "Configurez qui accède et ce qu'il peut administrer : intégrez des utilisateurs, connectez le SSO et façonnez les espaces de travail et les groupes d'agents.",
+  "subtitle": "Les agents, espaces de travail, liaisons de source, secrets et connecteurs de cette organisation. Les personnes, la connexion et les rôles sont dans Personnes et groupes.",
   "tabs": {
     "people": "Utilisateurs et groupes",
     "agents": "Agents",
@@ -12,8 +12,7 @@
     "apiKeys": "Clés d’API",
     "license": "Édition et licence",
     "bindings": "Liaisons de source",
-    "wsConnectors": "Connecteurs d’espace de travail",
-    "mcpGateway": "Passerelle MCP"
+    "wsConnectors": "Connecteurs d’espace de travail"
   },
   "stepUpAction": "configurer",
   "apiKeys": {
@@ -167,9 +166,13 @@
       "owner": "Propriétaire"
     },
     "totpReset": "Réinitialiser TOTP",
-    "totpResetLabel": "Réinitialiser le facteur TOTP de {{email}}",
+    "totpResetLabel": "Réinitialiser TOTP pour {{email}}",
     "totpResetTitle": "Réinitialiser le facteur TOTP de ce membre ?",
     "totpResetBody": "Le facteur et tous les codes de récupération de {{email}} sont supprimés. Le compte enregistre un nouveau facteur à la prochaine connexion — la politique d'obligation l'y conduit, jamais vers un verrouillage.",
+    "endSessions": "Terminer les connexions",
+    "endSessionsFor": "Terminer les connexions pour {{email}} ?",
+    "endSessionsBody": "Toutes les connexions actives de {{email}} cesseront de fonctionner dans cette organisation. Ses connexions à d'autres organisations, les jetons API et le compte ne sont pas modifiés.",
+    "sessionsEnded": "L’accès à cette organisation a pris fin",
     "totpResetDone": "Facteur TOTP réinitialisé."
   },
   "superadmins": {
@@ -313,6 +316,7 @@
       "sessions": "Le secret est retiré du coffre. Une session qui le reçoit continue de s’exécuter, mais elle ne pourra pas être reprise, et un modèle de session qui le nomme ne pourra pas se lancer, jusqu’à ce que vous le recréiez."
     },
     "sessionCaption": "Secrets qu’une session peut recevoir en variables d’environnement. Les noms commencent par env/. Une valeur n’est plus jamais affichée.",
+    "credentialCaption": "Identifiants gérés qu'une session peut utiliser via les assistants du moteur (Business). Les noms commencent par credential/. Une valeur n'est jamais affichée à nouveau.",
     "colValue": "Valeur",
     "colChanged": "Dernière modification",
     "colReference": "Référence",
@@ -644,6 +648,7 @@
       "scopeRefPlaceholder": "Sélectionner…",
       "scopeClass": "Type de ressource",
       "scopeClassAny": "Toute ressource",
+      "expiresAt": "Expire (facultatif)",
       "scopeClassHint": "Facultatif. Restreint l'octroi à un seul type de ressource (p. ex. uniquement les modèles).",
       "note": "Note",
       "noteHint": "Contexte facultatif enregistré avec l'octroi.",
@@ -906,7 +911,16 @@
           "unknown": "Inconnu",
           "not_applicable": "Sans objet"
         },
-        "unknownHint": "Inconnu signifie que le moteur n'a pas pu trancher ce droit ; la cause est dans le journal du moteur. Ce n'est pas un refus."
+        "unknownHint": "Inconnu signifie que le moteur n'a pas pu trancher ce droit ; la cause est dans le journal du moteur. Ce n'est pas un refus.",
+        "reason": "Justification",
+        "membershipAsOf": "Appartenance au répertoire au {{at}}",
+        "grantAt": "Droit {{id}} sur {{node}} via {{chain}}",
+        "removedByAt": "Supprimé par {{kind}} {{id}} sur {{node}}",
+        "removedBy": "Supprimé par {{kind}} {{id}}",
+        "removalKinds": {
+          "irf": "IRF",
+          "forbid": "interdiction"
+        }
       }
     }
   },
@@ -986,6 +1000,7 @@
     },
     "defaultWorkspace": "espace de travail par défaut",
     "enabledYes": "Activé",
+    "expiresAt": "Expire (facultatif)",
     "enabledNo": "Désactivé",
     "noCredential": "Aucun",
     "edit": "Modifier",

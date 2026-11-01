@@ -3,14 +3,6 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import {
-  createMemoryHistory,
-  createRootRoute,
-  createRoute,
-  createRouter,
-  Outlet,
-  RouterProvider,
-} from '@tanstack/react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel, createTestQueryClient } from '@/test/intel'
 import {
@@ -43,6 +35,15 @@ const api = vi.hoisted(() => ({
 vi.mock('@/features/agentops/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/agentops/api')>()),
   agentOpsApi: api,
+}))
+const approvals = vi.hoisted(() => ({
+  getApproval: vi.fn(),
+  listDecisions: vi.fn(),
+  decide: vi.fn(),
+}))
+vi.mock('@/features/governance/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/governance/api')>()),
+  governanceApi: approvals,
 }))
 const templates = vi.hoisted(() => ({ get: vi.fn() }))
 vi.mock('@/features/workspace-templates/api', async (importOriginal) => ({
@@ -97,6 +98,8 @@ const ACTIVITY = {
 beforeEach(() => {
   vi.clearAllMocks()
   clearSessionDrafts()
+  approvals.getApproval.mockRejectedValue(new Error('request unreadable'))
+  approvals.listDecisions.mockResolvedValue({ items: [] })
   sessionStorage.clear()
   auth.principal = { kind: 'user', actor: 'user:alice', user_id: 'alice' }
   auth.activeTenant = 'tnt-demo'
@@ -158,7 +161,7 @@ describe('WorkComposer tab drafts', () => {
       key.startsWith('olivares.draft.'),
     )
 
-  // dev#2787: the message the person sent appeared only when the tool took the turn,
+  // the regression: the message the person sent appeared only when the tool took the turn,
   // seconds later, so they could not tell it had been sent.
   it('hands the conversation the message as soon as the engine takes it', async () => {
     useSentTurns.setState({ byRun: {}, seen: {}, said: {} })
@@ -496,74 +499,53 @@ describe('WorkComposer tab drafts', () => {
   })
 })
 
+describe('WorkComposer — the pickers keep their words on a narrow screen', () => {
+  // Measured on the built console at 390 px: the footer was one row, so the model and
+  // access pickers shrank to "Cla…" and "d…" (320 px: a bare chevron) before the
+  // attach and send buttons gave way. The row wraps instead: the buttons move below.
+  it('lets the footer wrap rather than cut the pickers', async () => {
+    renderIntel(<WorkComposer attached={{ run: RUNNING, group: 'active' }} />)
+    const footer = (await screen.findByTestId('composer-tool-model'))
+      .parentElement as HTMLElement
+    expect(footer.className.split(/\s+/)).toContain('flex-wrap')
+  })
+})
+
 describe('WorkComposer permissions', () => {
-  it('opens the pending approval from Needs you', async () => {
-    const user = userEvent.setup()
-    const root = createRootRoute({ component: Outlet })
-    const session = createRoute({
-      getParentRoute: () => root,
-      path: '/',
-      component: () => (
-        <WorkComposer
-          attached={{
-            run: { ...RUNNING, pending_approval_ref: 'apr_7' },
-            group: 'attention',
-          }}
-        />
-      ),
-    })
-    const approvals = createRoute({
-      getParentRoute: () => root,
-      path: '/permissions',
-      component: () => <p>Approval details</p>,
-    })
-    const router = createRouter({
-      routeTree: root.addChildren([session, approvals]),
-      history: createMemoryHistory({ initialEntries: ['/'] }),
-    })
-    renderIntel(<RouterProvider router={router} />)
-    const link = await screen.findByRole('link', { name: 'Needs you' })
-    expect(link).toHaveAttribute(
-      'href',
-      '/permissions?tab=approvals&approval=apr_7',
+  it('leaves a waiting request to the conversation, and keeps the field for a reply', async () => {
+    renderIntel(
+      <WorkComposer
+        attached={{
+          run: { ...RUNNING, pending_approval_ref: 'apr_7' },
+          group: 'attention',
+        }}
+      />,
     )
-    await user.click(link)
-    expect(await screen.findByText('Approval details')).toBeInTheDocument()
-    expect(router.state.location.search).toEqual({
-      tab: 'approvals',
-      approval: 'apr_7',
-    })
+    // The request is answered in the conversation above (the regression design): the composer
+    // sends nobody out of Sessions, and a typed reply can still redirect the agent.
+    expect(
+      await screen.findByRole('textbox', { name: 'Session turn' }),
+    ).toBeEnabled()
+    expect(screen.queryByRole('link', { name: 'Needs you' })).toBeNull()
+    expect(screen.queryByTestId('composer-approval')).toBeNull()
   })
 
-  it('a launch held for its approval says so and opens that approval', async () => {
-    const root = createRootRoute({ component: Outlet })
-    const session = createRoute({
-      getParentRoute: () => root,
-      path: '/',
-      component: () => (
-        <WorkComposer
-          attached={{
-            run: {
-              ...RUNNING,
-              state: 'waiting_approval',
-              critical: true,
-              approval_ref: 'apr_launch',
-            },
-            group: 'attention',
-          }}
-        />
-      ),
-    })
-    const router = createRouter({
-      routeTree: root.addChildren([session]),
-      history: createMemoryHistory({ initialEntries: ['/'] }),
-    })
-    renderIntel(<RouterProvider router={router} />)
-    const link = await screen.findByRole('link', { name: 'Needs you' })
-    expect(link).toHaveAttribute(
-      'href',
-      '/permissions?tab=approvals&approval=apr_launch',
+  it('a launch held for its approval says so in the field and links nowhere', async () => {
+    renderIntel(
+      <WorkComposer
+        attached={{
+          run: {
+            ...RUNNING,
+            state: 'waiting_approval',
+            critical: true,
+            approval_ref: 'apr_launch',
+          },
+          group: 'attention',
+        }}
+      />,
     )
+    await screen.findByTestId('composer-send')
+    expect(screen.queryByRole('link', { name: 'Needs you' })).toBeNull()
     const send = screen.getByTestId('composer-send')
     expect(send).toBeDisabled()
     expect(send).toHaveAccessibleDescription(
@@ -784,14 +766,14 @@ describe('WorkComposer layout and disclosure', () => {
       />,
     )
     const chip = await screen.findByTestId('composer-tool-model')
-    // Three pickers (dev#3162): the model on its own, the effort on the next.
+    // Three pickers: the model on its own, the effort on the next.
     expect(chip).toHaveTextContent(/^Stub Model$/)
     expect(screen.getByTestId('composer-effort')).toHaveTextContent(/^High$/)
     expect(chip.tagName).toBe('BUTTON')
     expect(chip).toHaveAccessibleName('Model: Stub Model')
   })
 
-  // dev#3120: "claude-opus-5-5" was cut to "clau…" in the composer. It now says
+  // the regression: "claude-opus-5-5" was cut to "clau…" in the composer. It now says
   // "Claude Opus 5.5", and the id stays one hover away.
   it('says the model and the effort in words, with the id on the hover', async () => {
     renderIntel(
@@ -1317,7 +1299,7 @@ describe('WorkComposer — model and effort', () => {
     )
   })
 
-  // dev#2786: a session records the exact id its catalog selector launched on, which
+  // the regression: a session records the exact id its catalog selector launched on, which
   // the catalog does not list. Its own speed is the one the engine checked at launch.
   it('keeps the Fast On of a session recorded under its exact model id', async () => {
     const user = userEvent.setup()
@@ -1614,8 +1596,8 @@ describe('WorkComposer — model and effort', () => {
 })
 
 // The composer: model, effort and access are three pickers, and the field teaches
-// what can be typed (dev#3162).
-describe('WorkComposer — three pickers and a field that teaches (dev#3162)', () => {
+// what can be typed.
+describe('WorkComposer — three pickers and a field that teaches', () => {
   const attached = {
     run: {
       ...RUNNING,
@@ -1636,7 +1618,7 @@ describe('WorkComposer — three pickers and a field that teaches (dev#3162)', (
     )
     expect(screen.getByTestId('composer-effort')).toHaveTextContent(/^High$/)
     expect(screen.getByTestId('composer-access')).toHaveTextContent(
-      /^Ask before each action$/,
+      /^Supervised$/,
     )
     for (const id of [
       'composer-tool-model',
@@ -1657,8 +1639,9 @@ describe('WorkComposer — three pickers and a field that teaches (dev#3162)', (
     ],
     [
       { tool_mode: 'bypassPermissions', permission_mode: 'bypassPermissions' },
-      'Runs without asking',
+      'Full',
     ],
+    [{ tool_mode: 'auto', permission_mode: 'auto' }, 'Auto'],
   ])('words the access %o as New session does: %s', async (over, words) => {
     templates.get.mockResolvedValue({
       id: 'tpl_ec',
@@ -1749,7 +1732,7 @@ describe('WorkComposer — three pickers and a field that teaches (dev#3162)', (
     expect(screen.queryByTestId('composer-context')).toBeNull()
   })
 
-  // dev#3267: the engine reads activity only from Claude Code and Codex records. For
+  // the regression: the engine reads activity only from Claude Code and Codex records. For
   // another tool, and for a legacy session with no provider, it answers 422 or 409,
   // and the browser logs that answer as an error.
   it.each([['opencode'], [undefined]])(
@@ -1776,5 +1759,83 @@ describe('WorkComposer — three pickers and a field that teaches (dev#3162)', (
       'placeholder',
       'Ask anything, / for commands and skills',
     )
+  })
+})
+
+describe('typed approval feedback', () => {
+  beforeEach(() => {
+    useSentTurns.setState({ byRun: {}, seen: {}, said: {} })
+    approvals.getApproval.mockResolvedValue({
+      id: 'apr-feedback',
+      status: 'pending',
+      subject_kind: 'claude.tool',
+      requested_by: 'session:osn-a',
+    })
+    approvals.listDecisions.mockResolvedValue({ items: [] })
+    approvals.decide.mockResolvedValue({ status: 'rejected' })
+  })
+  it('declines the exact pending tool call with the typed reason, without sending another turn', async () => {
+    const user = userEvent.setup()
+    renderIntel(
+      <WorkComposer
+        attached={{
+          run: { ...RUNNING, pending_approval_ref: 'apr-feedback' },
+          group: 'active',
+        }}
+      />,
+    )
+    const send = await screen.findByRole('button', {
+      name: 'Decline and send this',
+    })
+    await user.type(
+      screen.getByTestId('launcher-input'),
+      'use pnpm instead{Enter}',
+    )
+    await waitFor(() =>
+      expect(approvals.decide).toHaveBeenCalledWith('apr-feedback', {
+        decision: 'reject',
+        note: 'use pnpm instead',
+      }),
+    )
+    expect(api.input).not.toHaveBeenCalled()
+    expect(api.inputText).not.toHaveBeenCalled()
+    expect(sentTurnsOf(RUNNING.run_ref)).toBeUndefined()
+    expect(send).toBeDefined()
+  })
+  it('keeps the draft when the decision fails', async () => {
+    approvals.decide.mockRejectedValue(new Error('unavailable'))
+    const user = userEvent.setup()
+    renderIntel(
+      <WorkComposer
+        attached={{
+          run: { ...RUNNING, pending_approval_ref: 'apr-feedback' },
+          group: 'active',
+        }}
+      />,
+    )
+    await screen.findByRole('button', { name: 'Decline and send this' })
+    await user.type(
+      screen.getByTestId('launcher-input'),
+      'use pnpm instead{Enter}',
+    )
+    await waitFor(() => expect(approvals.decide).toHaveBeenCalled())
+    expect(screen.getByTestId('launcher-input')).toHaveValue('use pnpm instead')
+  })
+  it('offers no typed decline to someone who cannot decide', async () => {
+    auth.can = (p) => p !== 'governance:approval:admin'
+    renderIntel(
+      <WorkComposer
+        attached={{
+          run: { ...RUNNING, pending_approval_ref: 'apr-feedback' },
+          group: 'active',
+        }}
+      />,
+    )
+    await waitFor(() => expect(approvals.getApproval).toHaveBeenCalled())
+    expect(
+      screen.queryByRole('button', { name: 'Decline and send this' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByTestId('composer-send')).toBeDisabled()
+    expect(screen.getByTestId('launcher-input')).toBeEnabled()
   })
 })

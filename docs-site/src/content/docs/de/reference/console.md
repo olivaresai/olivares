@@ -16,17 +16,20 @@ Route** — keine Auswahl und nicht nur die Routen, an deren Dokumentation sich 
 erinnert hat — samt der Berechtigung, die ein Principal zum Öffnen benötigt, und der
 weiterführenden Dokumentation.
 
-Die Konsole hat **eine einzige Navigationsstruktur: neun Bereiche mit Abschnitten**. Jeder
-Bildschirm liegt in einem Bereich und einem seiner Abschnitte, und alles, was zeigt, wo ein
-Bildschirm liegt, nennt denselben Ort: Alle Bereiche (im Kontomenü und in der Befehlspalette, und Mehr auf
-dem Telefon), die Bereichsverzeichnisse, die Befehlspalette und die Linkzeile über einem
-Bildschirm, die die anderen Bildschirme seines Abschnitts auflistet. Die obere Leiste nennt fünf Orte, die erste Aufgabe zuerst (Start,
-Sitzungen, Werkzeuge, Regeln, Hauptbuch; Business ergänzt Organisation), und ein Ort bleibt
-auf den anderen Bildschirmen seines Abschnitts markiert. Alle Bereiche listet jeden Bereich mit seinen Bildschirmen, in zwei Ebenen, ohne die Orte, die die Leiste schon zeigt. Ein Navigationsfilter ersetzt den gruppierten Baum durch eine rangierte Liste
-autorisierter Treffer; die Befehlspalette nutzt denselben Index, dieselbe Rangfolge und
-dieselbe Berechtigungsprojektion. Ein Bereichsverzeichnis ist eine Seite mit Links — den
-Einträgen, die Ihre Berechtigungen zulassen — keine Live-Ablesung von Fähigkeit,
-Verfügbarkeit oder Bereitschaft.
+Die Konsole hat **eine Navigation: die linke Seitenleiste**. Sie listet die Orte in vier
+Gruppen — **Arbeit** (Start, Sitzungen, Dateien & Arbeitsbereiche, Arbeit &
+Kommunikation), **Werkzeuge** (KI-Werkzeuge, Modelle, MCP & Skills, Quellen),
+**Kontrolle** (Regeln & Genehmigungen, Nutzung & Kosten, Aktivität & Audit, Zugriffskarte) und
+**Verwaltung** (Personen & Gruppen, Sicherheit, Betrieb, Lizenz) — und Einstellungen ganz
+unten. Jeder Bildschirm gehört zu einem Ort, und die Linkzeile über einem Bildschirm
+listet die anderen Bildschirme dieses Orts. Ein Ort erscheint nur, wenn Ihre
+Berechtigungen mindestens einen seiner Bildschirme erlauben, und ein Business-Bildschirm
+nur in der Business-Edition. Die Seitenleiste lässt sich auf ihre Symbole einklappen und
+wieder öffnen; auf einem schmalen Bildschirm öffnet sie sich als Schublade über die
+Menütaste. Die obere Leiste enthält den Seitentitel, die Suche (⌘K oder Strg+K), die
+Benachrichtigungen und das Kontomenü. Die Befehlspalette durchsucht dieselben Bildschirme
+mit denselben Berechtigungen. Die früheren Bereichsverzeichnis-Adressen (`/areas/…`)
+öffnen den Ort, der ihre Bildschirme jetzt enthält, und behalten Abfrage und Fragment.
 
 Eine neue Installation listet nur die erste Aufgabe: Start, Sitzungen, KI-Werkzeuge,
 Genehmigungen, den Einrichtungsassistenten und Einstellungen. Jeder andere
@@ -43,8 +46,8 @@ kann daher nicht hinzugefügt, verschoben oder verloren werden, ohne dass sich d
 Seite mitändert. Name und Kurzbeschreibung jedes Bildschirms sind die **eigenen Strings
 der Konsole** aus demselben Übersetzungskatalog, den die Konsole rendert. Was Sie
 hier lesen, sehen Sie auch im Produkt. Die Tabellen darunter gruppieren diese Zeilen nach Bereichen, nach Start (der Übersicht)
-und vor Anmeldung, Einrichtung und Konto. Die neun Bereichsverzeichnisse stehen bei den
-Routen, die außerhalb der Feature-Registry gemountet sind.
+und vor Anmeldung, Einrichtung und Konto. Die neun früheren Bereichsverzeichnis-Adressen stehen bei den
+Routen, die außerhalb der Feature-Registry gemountet sind; jede leitet jetzt zu ihrem Ort weiter.
 
 :::note[Berechtigungen erzwingt die Engine, nicht diese Tabelle]
 Die Spalte `Erforderlich` nennt die Berechtigung, die die Konsole vor dem Anbieten einer
@@ -56,7 +59,7 @@ Siehe [Rollen und Berechtigungen](/de/reference/modules/vi-governance/).
 
 ## So lesen Sie diese Seite
 
-- **Bildschirm** — der Name in Alle Bereiche, Bereichsverzeichnissen und Befehlspalette.
+- **Bildschirm** — der Name in der Linkzeile über einem Bildschirm und in der Befehlspalette.
 - **Pfad** — die URL unter dem Origin Ihrer Konsole. Sie ist ein veröffentlichter
   Contract: Bookmark, Deep-Link im Runbook und Querverweis aus der Dokumentation
   verwenden alle genau diesen String.
@@ -66,14 +69,14 @@ Siehe [Rollen und Berechtigungen](/de/reference/modules/vi-governance/).
 - **Referenz** — die Seite, die der eigene Hilfe-Link der Konsole für diesen Bildschirm
   öffnet.
 
-Die folgenden Überschriften sind die Bereiche in der Reihenfolge, in der Alle Bereiche sie
-auflistet: Infrastruktur, KI, Daten & Kontext, Arbeit & Kommunikation, Automatisierung,
+Die folgenden Überschriften sind die Registry-Bereiche, nach denen der Routenzensus die
+Bildschirme gruppiert: Infrastruktur, KI, Daten & Kontext, Arbeit & Kommunikation, Automatisierung,
 Sicherheit & Identität, Auslieferung, Aufsicht, dann System &
 Einstellungen.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-Die Konsole veröffentlicht **74 Routen**. Jede steht mit der erforderlichen
+Die Konsole veröffentlicht **66 Routen**. Jede steht mit der erforderlichen
 Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen unten.
 
 ### Start
@@ -96,9 +99,8 @@ Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen un
 |---|---|---|---|---|
 | Agentenwerkzeuge | `/agent-tools` | Die Konten und API-Schlüssel sehen, mit denen Sitzungen laufen; Werkzeuge installieren und anmelden nur Bereitstellungsadministratoren | `sessions:account:read` | [how-to/add-a-provider](/de/how-to/add-a-provider/) |
 | Sitzungen betreiben | `/agentops` | Sitzungen starten und verfolgen, was jede tut, auch die, die Olivares findet | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/de/how-to/run-claude-code-with-olivares/) |
-| MCP-Server | `/mcp-servers` | Entfernte MCP-Server mit dieser Organisation verbinden, testen und festlegen, welche Tools Sitzungen nutzen dürfen | `tenant:admin` | [how-to/connectors/mcp-governance](/de/how-to/connectors/mcp-governance/) |
 | Modellbetrieb | `/model-operations` | Eigene Modelle, Zulassung und Deployments | `models:registry:read` | [reference/modules/xxiii-model-operations](/de/reference/modules/xxiii-model-operations/) |
-| Modelle | `/models` | Modelle, Routing und Provider-Schlüssel | `models:catalog:read` | [reference/modules/x-models](/de/reference/modules/x-models/) |
+| Modelle | `/models` | Modelle, Routing und Governance | `models:catalog:read` | [reference/modules/x-models](/de/reference/modules/x-models/) |
 | Plattformen | `/platforms` | Deployment-Oberflächen, Compliance-Matrix und Modell-Lifecycle pro Plattform | `models:platforms:read` | [reference/modules/x-models](/de/reference/modules/x-models/) |
 | Anbieterkonten | `/provider-accounts` | Benannte Anbieterkonten auflisten und ein vorhandenes Anbieterprofil als Konto übernehmen | `sessions:account:read` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
 | Quellenbindungen | `/provider-bindings` | Konfigurierte Quellen mit Anbieterprofilen verknüpfen | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
@@ -119,7 +121,6 @@ Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen un
 | MCP & Skills | `/capabilities` | MCP-Server, Skills und Tools regeln | `capabilities:catalog:read` | [reference/modules/v-capabilities](/de/reference/modules/v-capabilities/) |
 | Katalog | `/catalog` | Kuratierte und genehmigte Agenten und Capabilities | `catalog:entry:read` | [reference/modules/xiv-catalog](/de/reference/modules/xiv-catalog/) |
 | Wissen | `/knowledge` | Wissensbasen, RAG und Data Lineage | `knowledge:kb:read` | [reference/modules/viii-knowledge](/de/reference/modules/viii-knowledge/) |
-| Skills-Katalog | `/skills` | Skill-Packs durchsuchen und Abteilungen, Agentengruppen und Agenten zuweisen | `skills:catalog:read` | [reference/console](/de/reference/console/) |
 
 ### Arbeit & Kommunikation
 
@@ -174,6 +175,7 @@ Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen un
 | Observability | `/observability` | Ingestion-Zustand nach Standard und Trace-Drilldown | `health:status:read` | [reference/modules/observability](/de/reference/modules/observability/) |
 | Aufbewahrung | `/retention` | Wie lange jede Datenklasse aufbewahrt wird, der Lauf, der das umsetzt, und seine versiegelten Zertifikate | `compliance:retention:read` | [reference/modules/xiii-compliance](/de/reference/modules/xiii-compliance/) |
 | Budgets | `/stored-budgets` | Verbrauch gegenüber jedem gespeicherten Limit. Reservierte Kapazität wird auf das Limit angerechnet. | `finops:budget:read` | [reference/modules/xi-finops](/de/reference/modules/xi-finops/) |
+| Nutzung | `/usage` | Die offiziellen 5-Stunden- und Wochenlimits jedes Kontos, das nächste zuerst, und die Tokens und Kosten von heute. | `sessions:run:read` | [reference/console](/de/reference/console/) |
 
 ### System & Einstellungen
 
@@ -185,6 +187,7 @@ Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen un
 | Quellvergleich | `/console/sources/diff` | Vergleichen Sie eine Basis- und eine Head-Revision eines verbundenen Git-Repositorys, Datei für Datei | `system:admin` | [reference/console](/de/reference/console/) |
 | Logs | `/logs` | Live-Log-Stream der Engine, nach Level und Modul filterbar, mit Suche und Pause. | `system:admin` | [how-to/troubleshooting](/de/how-to/troubleshooting/) |
 | Einrichtungsassistent | `/onboarding` | Schrittweise Konfiguration der Bereitstellung | `system:admin` | [start/quickstart](/de/start/quickstart/) |
+| Updates | `/updates` | Die Version, die diese Engine ausführt, das neueste signierte Release ihres Kanals und eine Aktion zum Installieren | `system:admin` | [how-to/upgrade-and-rollback](/de/how-to/upgrade-and-rollback/) |
 
 ### Anmeldung, Einrichtung und Konto
 
@@ -195,16 +198,8 @@ bereitgestellt — nur diese Konsolenrouten verhalten sich so.
 | Bildschirm | Pfad | Funktion | Erforderlich | Referenz |
 |---|---|---|---|---|
 | Einladung annehmen | `/accept-invite` | Ziel eines per E-Mail versendeten Einladungslinks: Der Eingeladene legt ohne vorherige Session ein Passwort fest und tritt dem Workspace bei. | **no sign-in** | — |
-| KI | `/areas/ai` | Verzeichnis des Bereichs KI: Beobachtung und Betrieb von Sitzungen, Anbieterprofilen und Umgebungen, Modelle, spezialisierte Ausführung und Anbieterreferenz. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
-| Automatisierung | `/areas/automation` | Verzeichnis des Bereichs Automatisierung: Abläufe und Orchestrierung, Ereignisse und Benachrichtigungen. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
-| Daten & Kontext | `/areas/data-context` | Verzeichnis des Bereichs Daten & Kontext: Fähigkeiten, Wissen und Artefakte. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
-| Auslieferung | `/areas/deployment` | Verzeichnis des Bereichs Auslieferung: Vorbereitung und Steuerung von Bereitstellungen. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
-| Infrastruktur | `/areas/infrastructure` | Verzeichnis des Bereichs Infrastruktur: Inventar und Arbeitsbereiche der Umgebung. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
-| Aufsicht | `/areas/observation` | Verzeichnis des Bereichs Aufsicht: Status und Aktivität, Kosten und Einführung, Audit, Bewertung und Nachweise. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
-| Sicherheit & Identität | `/areas/security-identity` | Verzeichnis des Bereichs Sicherheit & Identität: Identität und Zugriff, Richtlinien und Governance-Grenzen, Schutz und Reaktion. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
-| System & Einstellungen | `/areas/system` | Verzeichnis des Bereichs System & Einstellungen: Administration, Installation und Wartung, Entwicklerwerkzeuge und persönliche Einstellungen. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
-| Arbeit & Kommunikation | `/areas/work-communications` | Verzeichnis des Bereichs Arbeit & Kommunikation: dauerhaft erfasste sitzungsübergreifende Arbeit und geregelte Kommunikation. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
 | Anmelden | `/login` | Seite zur Anmeldung mit Zugangsdaten oder Token für ein bereits bereitgestelltes Konto. | **no sign-in** | — |
+| Gerät koppeln | `/pair` | Ziel eines einmaligen Links zur Gerätekopplung: Das neue Gerät meldet sich ohne vorherige Sitzung an. | **no sign-in** | — |
 | Einstellungen | `/settings` | Workspace- und Kontoeinstellungen | any signed-in user | — |
 | Ersteinrichtung | `/setup` | Einmalige Seite, die eine frische Bereitstellung nutzbar macht: Sie verbraucht das Setup-Token und erstellt das erste Owner-Konto. | **no sign-in** | — |
 | Öffentlicher Status | `/status-page` | Komponentenzustand für nicht angemeldete Personen; wird bei geöffneter Seite selbstständig aktualisiert. | **no sign-in** | — |

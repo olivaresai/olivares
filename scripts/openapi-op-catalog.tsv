@@ -107,6 +107,7 @@ GET	/v1/m/finops/recommendations	Returns HTTP 501 because FinOps is a Business f
 GET	/v1/m/finops/seats/utilization	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
 GET	/v1/m/finops/spend	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
 GET	/v1/m/finops/spend/allocation	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/finops/spend/changes	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
 GET	/v1/m/finops/spend/reconciliation	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
 GET	/v1/m/finops/spend/summary	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
 GET	/v1/m/finops/spend/trend	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
@@ -223,6 +224,7 @@ PATCH	/v1/m/orchestration/schedules/{id}	Returns HTTP 501 with orchestration_una
 PATCH	/v1/m/orchestration/workflows/{id}	Returns HTTP 501 with orchestration_unavailable because orchestration is a Business capability; no orchestration action is performed.
 PATCH	/v1/m/sessions/work-items/{id}	Updates one work item as a validate, plan or apply command.
 PATCH	/v1/m/sessions/work-items/{id}/acceptance/{criterion_id}	Updates or evaluates one acceptance criterion of a work item as a validate, plan or apply command.
+POST	/v1/console/appliance/storage/authorize	Asks the current product authorizer about one storage act, disk identity and confirmation digest, including current deny rules. It changes no disk and accepts no caller-asserted identity or permission.
 POST	/v1/m/capabilities/toolpins/approve	Approves one tool pin; the call requires an Idempotency-Key header and the version the caller expects, and answers 501 when no pin verifier is wired.
 POST	/v1/m/capabilities/toolpins/unpin	Removes one tool pin; the call requires an Idempotency-Key header and the version the caller expects, and answers 501 when no pin verifier is wired.
 POST	/v1/m/catalog/entries/{id}/admit	Runs the admission decision for one catalog entry, dispatching on the entry kind; an entry of any other kind is refused.
@@ -238,9 +240,11 @@ POST	/v1/m/finops/model-rates	Returns HTTP 501 because FinOps is a Business feat
 POST	/v1/m/finops/outcomes	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
 POST	/v1/m/finops/seats	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
 POST	/v1/m/finops/statements/generate	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+POST	/v1/m/gitpublish/targets/{id}/issue-comments	Publishes one fixed run result (state, optional pull-request link and cost) as an issue comment, and returns the publication intent with its receipt.
 POST	/v1/m/gitpublish/targets/{id}/merges	Merges one pull request only while its head is still the reviewed expected_head, and returns the publication intent with the merge commit and tree it recorded.
 POST	/v1/m/gitpublish/targets/{id}/pull-requests	Opens a pull request from a branch under the target's push prefix into an allowed merge base, or adopts the matching open one, and returns the publication intent with its receipt.
 POST	/v1/m/gitpublish/targets/{id}/pushes	Pushes one exact commit to a branch under the target's push prefix, leased on the branch's expected current value, and returns the publication intent with its receipt.
+POST	/v1/m/gitpublish/targets/{id}/ships	Ships a session run's folder as one decision: commits its changes as the caller, pushes the commit to a branch under the target's push prefix and opens the pull request, each admitted again as the caller, and stops before the push while an approval policy's review is pending.
 POST	/v1/m/governance/agentcore-export/apply	Applies a previously planned AgentCore export; the plan hash is required and must still reproduce.
 POST	/v1/m/governance/agentcore-export/plan	Plans an AgentCore export for the requested enforcement mode, without applying it.
 POST	/v1/m/governance/approvals/{id}/consume	Consumes one single-use approval on behalf of a named consumer; the consumer id is required and rides the immutable audit trail.
@@ -313,7 +317,7 @@ POST	/v1/m/sessions/runs/{ref}/git/unstage	Removes the selected paths from the s
 POST	/v1/m/sessions/runs/{ref}/handoff	Starts a new session in the chosen provider profile, linked to one Claude Code, Codex, Gemini CLI or OpenCode session, from a reviewed summary and the attached transcript; a running session is stopped first and the answer says whether the first turn arrived.
 POST	/v1/m/sessions/runs/{ref}/input	Sends one input line or message to a live session run.
 POST	/v1/m/sessions/runs/{ref}/move	Moves one stopped or failed Claude Code session to another profile of the same tool, carrying that conversation's own files, without starting a process.
-POST	/v1/m/sessions/runs/{ref}/resume	Resumes one suspended session run.
+POST	/v1/m/sessions/runs/{ref}/resume	Resumes one suspended session run. An optional at_reset choice schedules continuation after its usage reset; cancel_reset cancels that schedule. The choices are mutually exclusive.
 POST	/v1/m/sessions/runs/{ref}/stop	Stops one session run; a fenced stop carries the lease fence, and a reason without a fence is refused.
 POST	/v1/m/sessions/templates	Creates one session template; an unknown key in the body is refused rather than dropped, so a misspelled policy key cannot silently govern nothing.
 POST	/v1/m/sessions/templates/{id}/apply	Resolves one session template into the run parameters it would produce, without starting a run.
@@ -334,7 +338,6 @@ POST	/v1/m/sessions/workspaces	Creates one session workspace from the posted par
 POST	/v1/m/sessions/workspaces/{ref}/files/dir	Creates one directory in a workspace at the path query parameter.
 POST	/v1/m/sessions/workspaces/{ref}/files/move	Moves one workspace entry from the posted source path to the posted destination path.
 POST	/v1/m/sessions/workspaces/{ref}/wiki	Initializes the wiki layout and assigns wiki skills to the workspace, creating missing files while preserving existing content.
-POST	/v1/m/sourcescope/posture-requests/{id}/approve	Approves one pending posture relaxation and applies it.
 POST	/v1/m/voice/sessions/open	Opens one voice session; session, agent, model and provider references are all required, and an engaged stop freezes the call.
 PUT	/v1/m/compliance/nis2/incidents/{id}	Updates one NIS2 incident, moving it to one of the early_warning, notification, intermediate or final phases.
 PUT	/v1/m/finops/budgets/{id}	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
@@ -432,7 +435,7 @@ GET	/v1/users/superadmins	Lists the superadmin accounts with the active or inact
 POST	/v1/users/{id}/disable	Disables one superadmin account. The action is non-destructive and reversible.
 POST	/v1/users/{id}/enable	Enables one previously disabled superadmin account.
 GET	/v1/workspaces	Lists the workspaces of the resolved tenant.
-POST	/v1/workspaces	Creates one workspace. Beyond the tenant admin permission the caller must be the tenant owner or a superadmin, because a workspace admin administers within a workspace and does not mint them.
+POST	/v1/workspaces	Creates one workspace. Without parent_id it creates a root: beyond the tenant admin permission the caller must be the tenant owner or a superadmin, because a workspace admin administers within a workspace and does not mint roots. With parent_id it creates a department under that parent in one write: the owner may name any parent, and anyone else needs governance:rbac:admin and must administer the parent (tenant administration or an admin-capable scoped grant that contains it); a caller confined to a workspace is refused. Both need the administrative step-up. Creating under a parent is the Business edition: a Community build answers 501 departments_unavailable.
 GET	/v1/workspaces/{id}	Returns one workspace of the resolved tenant by id.
 PATCH	/v1/workspaces/{id}	Renames a workspace, edits its settings or archives it. The slug is immutable, and the default workspace cannot be archived because it is the resolution target for an unset workspace.
 PATCH	/v1/agent-groups/{id}	Partially updates one agent group: only fields present in the request are touched, so an omitted description or metadata is never wiped. The slug is immutable; a set workspace_id re-scopes the group and an explicit empty string clears the scope to tenant-wide.
@@ -504,7 +507,7 @@ GET	/v1/console/dr/backups/{id}/download	Streams one backup bundle's verbatim en
 GET	/v1/console/dr/jobs	Lists the in-memory DR jobs (backup and restore) with kind, status, phase and progress.
 GET	/v1/console/dr/jobs/{id}/stream	A Server-Sent Events stream of one DR job's progress: event: job frames carrying the DR job payload, comment heartbeats, ending when the job completes or fails.
 GET	/v1/console/dr/restore/pending	Lists restore requests awaiting a second approver under the dual-control gate, newest first, so a distinct administrator can find and approve one.
-GET	/v1/console/dr/schedule	Returns the scheduled-backup configuration: enabled, cron, retention, the last scheduled run's outcome, and the effective dual-control restore gate with any pending disarm instant.
+GET	/v1/console/dr/schedule	Returns backup and verification schedules, reference-only offsite settings, run outcomes, backup age against the recovery point target, target free space and the effective dual-control restore gate.
 GET	/v1/console/logs/buffer	Returns the engine log's ring-buffer snapshot, newest last, filtered by module and level. total is the number of ring entries that matched the filter (not the page size) and truncated says older matches were left out.
 GET	/v1/console/logs/stream	A Server-Sent Events stream of the engine log: event: log frames carrying one entry's payload and comment heartbeats, filtered by the same parameters as the buffer.
 GET	/v1/console/modules	Returns the module catalog with, for each module, whether it is selected, running, always-on, holds data in this installation, and which modules require it, keep it on, or activate it.
@@ -521,7 +524,7 @@ GET	/v1/workspaces/{id}/contents	Counts every kind that declares workspace linea
 GET	/v1/workspaces/{id}/summary	Returns a workspace with counts of its scoped entities (agents, sessions, resources, groups). Counts come from one contents read through the caller's scope; a *_capped count is a floor ("at least N"), never a total.
 PUT	/v1/system/tracing	Saves tracing choices in the deployment settings and applies them on the running node without restarting sessions. Requires system administration and configured step-up. Existing environment inputs override saved choices.
 PUT	/v1/agent-groups/{id}/members/{agentID}	Adds an agent to a group. Idempotent by an exact (group, agent) lookup: an already-member returns the existing row with 200, a fresh add returns 201; an unknown agent is a 404, not a dangling membership.
-PUT	/v1/console/dr/schedule	Saves the schedule's operator-owned fields (enabled, cron in the runner's grammar, retention days). The dual-control gate's armed state is preserved; server-owned bookkeeping fields in a read-modify-write round trip are ignored.
+PUT	/v1/console/dr/schedule	Saves backup cadence, retention, verification cadence, recovery point target and reference-only offsite settings. Omitted protection fields preserve their current values; server-owned bookkeeping is ignored. Arming the restore gate is immediate and disarming is delayed.
 PUT	/v1/console/modules	Sets which optional modules the engine runs, by name. The selection is recorded in the deployment settings and the engine restarts itself to apply it (the reply says so); an unknown module is rejected.
 PUT	/v1/console/sso/idps/{alias}	Creates or updates one additional IdP by alias within the global scope. Step-up required; secrets are sealed at rest and never returned.
 PUT	/v1/console/sso/tenants/{tenant}	Creates or updates the tenant's primary IdP configuration. Step-up required; secrets are sealed at rest and never returned.
@@ -532,3 +535,8 @@ PUT	/v1/groups/{id}/workspace	Places or moves a user group in a workspace of the
 PUT	/v1/workspaces/{id}/parent	Places a workspace (a department) under another workspace of the same tenant, or with an empty parent_id makes it a root; the whole subtree moves with it. Requires the tenant owner and the administrative step-up, because a grant on a department reaches its sub-departments. A cycle is a 409 workspace_cycle and the default workspace stays a root. Business edition: a Community build answers 501 departments_unavailable.
 GET	/v1/system/session-idle	Returns the saved instance idle-stop window in minutes; zero means off. Requires system administration.
 PUT	/v1/system/session-idle	Saves the instance idle-stop window: zero turns it off, and 6 to 10080 minutes enables it after the five-minute idle projection. Requires system administration and configured step-up; the change is audited before it applies.
+GET	/v1/auth/sessions	Lists the calling person's live sign-ins: when each was created and last used, whether it is a browser or a token, and which one is the caller's own. Own sign-ins only, for session principals.
+DELETE	/v1/auth/sessions/{id}	Ends one of the calling person's other sign-ins and records it in the ledger. The current sign-in is refused with 400: sign out ends it. An id that is not the caller's is 404.
+DELETE	/v1/users/{id}/sessions	Ends a selected tenant member's sign-ins in this organization: scoped sessions are revoked and account sessions are excluded from the tenant, never from another organization. Requires membership write authority and AAL3, and refuses the caller themself, a member above the caller's role, and a workspace-confined caller.
+POST	/v1/auth/sessions/pairing	Creates a ten-minute one-time pairing link for an owner-named device; only the signed-in person can grant it.
+POST	/v1/auth/sessions/pairing/accept	Consumes a pairing link once and returns a new independently revocable session; browser callers receive a protected cookie.

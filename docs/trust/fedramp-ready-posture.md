@@ -7,7 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 SIEM/ITSM push and external telemetry/posture export require Business. Implementation paths below describe the private assembled Business tree; Community retains its local views, stored data and backup export.
 
-Audit SIEM export, directory archives and external archive verification require Business. Community retains the signed ledger and `olivares audit verify`; `olivares dr backup` remains available. See [edition placement](../editions.md).
+Audit SIEM export, ledger verification (`olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`), directory archives and external archive verification require Business. Community retains the signed ledger and its reads; `olivares dr backup` remains available. See [edition placement](../editions.md).
 
 > **Status: no FedRAMP authorization exists, none is pending, and — decisive fact first — for
 > the product as actually sold today (self-hosted), FedRAMP does not apply at all.** The FedRAMP

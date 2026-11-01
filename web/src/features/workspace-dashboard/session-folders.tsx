@@ -1,13 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { XScroll } from '@/components/data/scroll-edges'
 import { StaticTable } from '@/components/data/static-table'
 import { Button } from '@/components/ui/button'
+import { PathText } from '@/components/ui/path-text'
 import {
   Sheet,
   SheetContent,
@@ -21,7 +22,7 @@ import { ListTruncationBadge } from '@/features/_intel'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import { useViewAccess } from '@/features/navigation/authorization'
-import { viewById } from '@/features/navigation/model'
+import { fold, viewById } from '@/features/navigation/model'
 import { TAB_PARAM } from '@/features/sessions/session-address'
 import { useAuth } from '@/lib/auth/context'
 import { useModuleOn } from '@/stores/modules'
@@ -81,7 +82,20 @@ function SessionFoldersList({
       agentOpsApi.listWorkspaces(params, { tenant, signal }),
     staleTime: 30_000,
   })
-  const rows = query.data?.items ?? []
+  const all = query.data?.items ?? []
+  // Find a folder by its name or path. Focused on entry, so opening Files and typing is the
+  // whole search: one click to arrive, one to open the folder's wiki.
+  const [find, setFind] = useState('')
+  const filterRef = useRef<HTMLInputElement>(null)
+  useEffect(() => filterRef.current?.focus(), [])
+  const needle = fold(find.trim())
+  const rows = needle
+    ? all.filter(
+        (w) =>
+          fold(folderName(w)).includes(needle) ||
+          fold(w.root_path).includes(needle),
+      )
+    : all
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-2">
@@ -104,10 +118,19 @@ function SessionFoldersList({
         )}
       </div>
       <p className="text-body text-text-2">{t('sessionFolders.intro')}</p>
+      <input
+        ref={filterRef}
+        type="search"
+        value={find}
+        onChange={(e) => setFind(e.target.value)}
+        aria-label={t('sessionFolders.filter')}
+        placeholder={t('sessionFolders.filter')}
+        className="h-9 w-full max-w-sm rounded-ctl border border-ctl-border bg-background px-3 text-body outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-focus"
+      />
       <ListTruncationBadge
         query={query}
-        filas={rows.length}
-        label={t('truncation.label', { n: rows.length })}
+        filas={all.length}
+        label={t('truncation.label', { n: all.length })}
         hint={t('sessionFolders.truncationHint')}
         className="px-0 pt-0 pb-1"
       />
@@ -119,9 +142,13 @@ function SessionFoldersList({
         <p role="status" className="text-body text-text-2">
           {t('sessionFolders.loading')}
         </p>
-      ) : rows.length === 0 ? (
+      ) : all.length === 0 ? (
         <p role="status" className="text-body text-text-2">
           {t('sessionFolders.empty')}
+        </p>
+      ) : rows.length === 0 ? (
+        <p role="status" className="text-body text-text-2">
+          {t('sessionFolders.noMatch', { query: find.trim() })}
         </p>
       ) : (
         <XScroll contentKey={rows.length}>
@@ -136,11 +163,15 @@ function SessionFoldersList({
               {rows.map((w) => (
                 <tr key={w.workspace_ref}>
                   <td className="font-medium">{folderName(w)}</td>
-                  <td>
+                  {/* w-full max-w-0: the column takes the width that is left (max-w-0 alone
+                      gives it none), so a long folder is cut in its middle at any viewport
+                      instead of widening the table. */}
+                  <td className="w-full max-w-0">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="font-mono text-caption">
-                        {w.root_path}
-                      </span>
+                      {/* No copy action here: its 24 px (32 px under a finger) is the room the
+                          path needs at 390 px, and the Name column already says which folder
+                          it is. The whole path is the hover, and a selection copies it. */}
+                      <PathText value={w.root_path} copy={false} />
                       <Button
                         variant="ghost"
                         size="sm"
@@ -168,8 +199,8 @@ function SessionFoldersList({
             <>
               <SheetHeader>
                 <SheetTitle>{folderName(wiki)}</SheetTitle>
-                <SheetDescription className="break-all">
-                  {wiki.root_path}
+                <SheetDescription>
+                  <PathText value={wiki.root_path} copy={false} wrap />
                 </SheetDescription>
               </SheetHeader>
               <WorkspaceWiki workspace={wiki} />

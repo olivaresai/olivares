@@ -148,9 +148,9 @@ func resultFrameUsage(line []byte) (resultUsage, bool) {
 			out.Reported = true
 		}
 	}
-	if raw.TotalCost != nil && *raw.TotalCost > 0 {
+	if raw.TotalCost != nil && *raw.TotalCost >= 0 && *raw.TotalCost < float64(math.MaxInt64)/microUSDPerUSD {
 		out.CostMicroUSD = int64(math.Round(*raw.TotalCost * microUSDPerUSD))
-		out.Reported = true
+		out.Reported, out.CostReported = true, true
 	}
 	if raw.Usage != nil {
 		if u := raw.Usage.usage(); !u.empty() {
@@ -202,7 +202,7 @@ func (u usageJSON) usage() modelUsage {
 		CacheCreationTokens: pick(u.CacheCreation, u.CacheCreationCamel),
 	}
 	for _, cost := range []*float64{u.CostUSD, u.CostUSDSnake} {
-		if cost != nil && *cost > 0 {
+		if cost != nil && *cost > 0 && *cost < float64(math.MaxInt64)/microUSDPerUSD {
 			out.CostMicroUSD = int64(math.Round(*cost * microUSDPerUSD))
 			break
 		}
@@ -374,7 +374,10 @@ func primaryModel(in map[string]modelUsage) string {
 // recordTurnUsage is the bridge's entry point: it credits the frame, advances the
 // run's counters in one row write, and posts the spend-ledger rows.
 //
-// It is best-effort on purpose, like every other bridge-side write: a ledger that
+// Unbounded runs keep the best-effort writer below. A capped run requires a
+// confirmed counter commit and stops when it cannot obtain one.
+//
+// It is best-effort on purpose for unbounded runs: a ledger that
 // cannot be reached must not kill a running session. A row write this plane can
 // SEE fail leaves the account uncredited, so the next cumulative frame re-offers
 // the same delta and it is recovered.
@@ -395,6 +398,9 @@ func (m *Module) recordTurnUsage(ctx context.Context, lr *liveRun, line []byte, 
 		m.recordContextWindows(ctx, lr, r.ContextWindows)
 	}
 	if !ok {
+		if lr.costCapMicroUSD > 0 {
+			m.stopPipelineRun(lr, "run cost unavailable")
+		}
 		return false
 	}
 	return m.creditUsage(ctx, lr, r, at)
@@ -435,22 +441,75 @@ func (m *Module) creditUsage(ctx context.Context, lr *liveRun, r resultUsage, at
 	deltas := lr.usage.credit(r)
 	lr.mu.Unlock()
 	if len(deltas) == 0 {
+		if r.CostReported && r.CostMicroUSD == 0 {
+			err := m.mutateRun(ctx, lr, func(rec model.Record) {
+				if rec.IsNull(colRunCostMicroUSD) {
+					rec[colRunCostMicroUSD] = int64(0)
+				}
+				rec[colLastActivityAt] = model.NewTimestamp(at).String()
+			})
+			if err != nil && lr.costCapMicroUSD > 0 {
+				m.stopPipelineRun(lr, "run cost unavailable")
+			}
+			return err == nil
+		}
+		lr.mu.Lock()
+		unknown := lr.costCapMicroUSD > 0 && lr.costSpent == 0 && !r.CostReported
+		lr.mu.Unlock()
+		if unknown {
+			m.stopPipelineRun(lr, "run cost unavailable")
+		}
 		return false
 	}
 	if !r.CostReported {
 		m.priceUnpriced(r.Provider, deltas)
 	}
 	var input, output, cost int64
+	unpriced := false
+	overflow := false
 	primary, primaryOut := "", int64(-1)
 	for _, d := range deltas {
 		input += d.Usage.totalInputTokens()
 		output += d.Usage.OutputTokens
-		cost += d.Usage.CostMicroUSD + d.PricedMicroUSD
+		for _, price := range []int64{d.Usage.CostMicroUSD, d.PricedMicroUSD} {
+			if lr.costCapMicroUSD > 0 && price > 0 && cost > math.MaxInt64-price {
+				overflow = true
+			} else if !overflow {
+				cost += price
+			}
+		}
+		if d.Usage.CostMicroUSD == 0 && d.PricedMicroUSD == 0 && (d.Usage.totalInputTokens() > 0 || d.Usage.OutputTokens > 0) {
+			unpriced = true
+		}
 		if d.ModelRef != "" && d.Usage.OutputTokens > primaryOut {
 			primary, primaryOut = d.ModelRef, d.Usage.OutputTokens
 		}
 	}
+	lr.mu.Lock()
+	capReached := false
+	if lr.costCapMicroUSD > 0 {
+		lr.costOverflowed = lr.costOverflowed || overflow
+		if overflow || cost >= lr.costCapMicroUSD-lr.costSpent {
+			capReached = true
+			lr.costSpent = lr.costCapMicroUSD
+		} else {
+			lr.costSpent += cost
+		}
+	}
+	lr.mu.Unlock()
+	if capReached {
+		defer func() { m.stopPipelineRun(lr, "run cost cap reached") }()
+	}
+	if !capReached && lr.costCapMicroUSD > 0 && (cost == 0 || unpriced) && !r.CostReported {
+		defer func() { m.stopPipelineRun(lr, "run cost unavailable") }()
+	}
 	if !m.advanceRunUsage(ctx, lr, input, output, cost, r.CostReported, primary, at) {
+		if lr.costCapMicroUSD > 0 {
+			// The capped process is being stopped. Keep this credit and its spend row:
+			// rolling it back would bill buffered duplicate reports again.
+			m.postSpendRows(ctx, lr, deltas, r.CostReported, at)
+			return false
+		}
 		lr.mu.Lock()
 		// Roll the credit back so the next cumulative frame re-offers it.
 		for _, d := range deltas {
@@ -500,7 +559,7 @@ func (m *Module) advanceRunUsage(
 	ctx context.Context, lr *liveRun, input, output, cost int64, costReported bool, modelRef string, at time.Time,
 ) bool {
 	written := false
-	m.mutateRunBest(ctx, lr, func(rec model.Record) {
+	update := func(rec model.Record) {
 		rec[colRunInputTokens] = rec.Int(colRunInputTokens) + input
 		rec[colRunOutputTokens] = rec.Int(colRunOutputTokens) + output
 		// ⛔ ONLY WHEN MONEY WAS REPORTED. A token delta must not TOUCH this column:
@@ -511,7 +570,18 @@ func (m *Module) advanceRunUsage(
 		// guard costs a priced session nothing.
 		// A cost the tool itself reported is written even when it is 0: that is the
 		// tool's claim of a free turn, not one this plane makes.
-		if cost > 0 || costReported {
+		unknown := false
+		if lr.costCapMicroUSD > 0 {
+			lr.mu.Lock()
+			// Once the sum exceeds the stored integer range, buffered reports
+			// cannot make it a known smaller total. Individual ledger rows remain.
+			lr.costOverflowed = lr.costOverflowed || (cost > 0 && rec.Int(colRunCostMicroUSD) > math.MaxInt64-cost)
+			unknown = lr.costOverflowed
+			lr.mu.Unlock()
+		}
+		if unknown {
+			rec[colRunCostMicroUSD] = nil
+		} else if cost > 0 || costReported {
 			rec[colRunCostMicroUSD] = rec.Int(colRunCostMicroUSD) + cost
 		}
 		if modelRef != "" {
@@ -519,7 +589,15 @@ func (m *Module) advanceRunUsage(
 		}
 		rec[colLastActivityAt] = model.NewTimestamp(at).String()
 		written = true
-	})
+	}
+	if lr.costCapMicroUSD > 0 {
+		if err := m.mutateRun(ctx, lr, update); err != nil {
+			m.stopPipelineRun(lr, "run cost unavailable")
+			return false
+		}
+	} else {
+		m.mutateRunBest(ctx, lr, update)
+	}
 	return written
 }
 

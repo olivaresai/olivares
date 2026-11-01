@@ -52,7 +52,7 @@ func (r *auditReader) ListOrgs(ctx context.Context) ([]model.Org, error) {
 	}
 	tx, err := r.db.BeginTx(ctx, viewTxOptions(r.dia.Name()))
 	if err != nil {
-		return nil, err
+		return nil, viewBeginErr(ctx, err)
 	}
 	defer tx.Rollback() //nolint:errcheck // read-only snapshot never commits
 	s := &sqlStore{engine: r.dia.Name(), db: r.db, dia: r.dia, clock: model.SystemClock{}}
@@ -81,7 +81,7 @@ func openOfflineReader(ctx context.Context, cfg store.Config) (*auditReader, err
 		// Rebuild from the resolved identity so caller pragmas cannot enable writes
 		// or replace the existing file. Do not set journal mode or chmod its files.
 		u := url.URL{Scheme: "file", Path: target.CanonicalPath()}
-		q := url.Values{"mode": {"ro"}, "_pragma": {"query_only(1)", "busy_timeout(5000)"}}
+		q := url.Values{"mode": {"ro"}, "_pragma": {"query_only(1)", "busy_timeout(5000)", opgate.SQLiteTempStoreMemory}}
 		u.RawQuery = q.Encode()
 		db, err = sql.Open("sqlite", u.String())
 		if err == nil {
@@ -182,12 +182,12 @@ func (r *auditReader) ViewAudit(ctx context.Context, tenant model.TenantID, fn f
 	}
 	tx, err := r.db.BeginTx(ctx, viewTxOptions(r.dia.Name()))
 	if err != nil {
-		return err
+		return viewBeginErr(ctx, err)
 	}
 	defer tx.Rollback() //nolint:errcheck // read snapshot never commits
 	if r.dia.Name() == store.EnginePostgres {
 		if err := r.dia.BindTenant(ctx, tx, tenant); err != nil {
-			return err
+			return viewBeginErr(ctx, err)
 		}
 	}
 	// SQLite audit reads have explicit tenant predicates and need no scope-table write.

@@ -19,7 +19,7 @@
 //
 // # Why the hook channel and not the rollout
 //
-// Measured on codex-cli 0.145.0 (an internal design note (not shipped)),
+// Measured on codex-cli 0.145.0 (an internal audit),
 // with a control run in both directions:
 //
 //   - --ephemeral turns the rollout JSONL off entirely (control: +1 file without the flag,

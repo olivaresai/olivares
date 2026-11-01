@@ -70,7 +70,7 @@ func TestScopeTreeWalkCedarAncestors(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			em, resUID, _, _, err := r.resolve(context.Background(), tc.req)
+			em, resUID, _, _, _, err := r.resolve(context.Background(), tc.req)
 			if err != nil {
 				t.Fatalf("resolve: %v", err)
 			}
@@ -122,7 +122,7 @@ func TestScopeTreeWalkCedarAttributes(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			em, resUID, _, _, err := r.resolve(context.Background(), tc.req)
+			em, resUID, _, _, _, err := r.resolve(context.Background(), tc.req)
 			if err != nil {
 				t.Fatalf("resolve: %v", err)
 			}

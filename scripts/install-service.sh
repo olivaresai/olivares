@@ -817,8 +817,8 @@ fi
 # returns instantly; the two request limits bound a single request and are
 # clipped to whatever is left of the deadline. FIRST_BOOT_DIAGNOSIS_TIMEOUT is a
 # separate bound on the one optional probe run after the wait has already ended.
-FIRST_BOOT_DEADLINE=60
-FIRST_BOOT_MAX_ATTEMPTS=60
+FIRST_BOOT_DEADLINE=180
+FIRST_BOOT_MAX_ATTEMPTS=180
 FIRST_BOOT_CONNECT_TIMEOUT=2
 FIRST_BOOT_REQUEST_TIMEOUT=5
 FIRST_BOOT_DIAGNOSIS_TIMEOUT=5
@@ -949,6 +949,8 @@ if [ "$start" -eq 1 ]; then
     first_boot_diagnosis
     err "service started but /livez and /readyz were not both healthy: gave up after $attempts attempt(s) over ${probe_elapsed}s, bounded at $FIRST_BOOT_MAX_ATTEMPTS attempts and ${FIRST_BOOT_DEADLINE}s; the service, its configuration and its data were left exactly as installed and nothing was rolled back"
   fi
+  # A slow first boot shows here, not only when it outlasts the wait.
+  say "first boot: /livez and /readyz healthy after ${probe_elapsed}s ($attempts attempt(s), bounded at $FIRST_BOOT_MAX_ATTEMPTS attempts and ${FIRST_BOOT_DEADLINE}s)"
 fi
 
 say "service installation complete; manifest: $manifest_logical"

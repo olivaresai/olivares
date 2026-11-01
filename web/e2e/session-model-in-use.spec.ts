@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE MODEL IN USE (dev#2786), against a live seeded engine whose child is the fixture
+// THE MODEL IN USE, against a live seeded engine whose child is the fixture
 // driver. The seeded session was launched with no model: the engine hands the tool the
 // exact id of its Claude Code default, and the driver reports the model it was launched
 // with.

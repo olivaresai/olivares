@@ -40,6 +40,7 @@
 // No secret is captured. The setup token and both passwords are typed before any capture,
 // and traces stay off because a trace records request headers, including the disposable
 // session cookie and CSRF token. The receipt holds references, names and counts only.
+import { consoleTenant } from './console-preferences'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -88,15 +89,9 @@ async function authed<T>(
   method = 'GET',
   body?: unknown,
 ): Promise<Answer<T>> {
+  const tenant = await consoleTenant(page)
   return (await page.evaluate(
-    async ({ path, method, body }) => {
-      const state = (key: string) =>
-        (
-          JSON.parse(localStorage.getItem(key) ?? '{}') as {
-            state?: Record<string, unknown>
-          }
-        ).state ?? {}
-      const tenant = String(state('olivares.tenant').activeTenant ?? '')
+    async ({ path, method, body, tenant }) => {
       const session = await fetch('/v1/auth/browser-session', {
         credentials: 'same-origin',
       })
@@ -118,7 +113,7 @@ async function authed<T>(
       const text = await res.text()
       return { status: res.status, body: text ? JSON.parse(text) : null }
     },
-    { path, method, body },
+    { path, method, body, tenant },
   )) as Answer<T>
 }
 
@@ -128,10 +123,10 @@ function content(page: Page) {
   return page.getByRole('main')
 }
 
-/** The Now place in the top bar's Journeys navigation, outside recent pages. */
+/** The Now place in the left navigation. */
 function nowLink(page: Page) {
   return page
-    .getByRole('navigation', { name: 'Journeys', exact: true })
+    .getByRole('navigation', { name: 'Main navigation', exact: true })
     .getByRole('link', { name: 'Now', exact: true })
 }
 
@@ -257,15 +252,7 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
           exact: true,
         }),
       ).toBeVisible()
-      tenant = await page.evaluate(() =>
-        String(
-          (
-            JSON.parse(localStorage.getItem('olivares.tenant') ?? '{}') as {
-              state?: { activeTenant?: string }
-            }
-          ).state?.activeTenant ?? '',
-        ),
-      )
+      tenant = await consoleTenant(page)
       expect(tenant, 'the administrator has an active tenant').not.toBe('')
     })
 
@@ -643,7 +630,7 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
       // Leave the accounts and come back (they are on Tools, #2552): the parked
       // creation survives the list unmounting, as it did a tab switch.
       await nowLink(member).click()
-      await member.locator('[data-place="agent-tools"]').click()
+      await member.locator('[data-place="ai-tools"]').click()
       await content(member)
         .getByRole('button', { name: 'Retry creation', exact: true })
         .click()

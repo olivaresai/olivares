@@ -4,14 +4,14 @@
 // This file models the AGENTIC RUNTIME request parameters the InferenceClient
 // previously omitted because the judge/embedder (observe) never needed them, but a run
 // Olivares CONDUCTS does (FASE W; consumed by FASE V and the inference PEP
-//): the thinking config, tool_choice, stop_sequences and the top_p/top_k sampling
+// ): the thinking config, tool_choice, stop_sequences and the top_p/top_k sampling
 // params. It carries the model-aware deprecation handling — top_p/top_k are withheld on
 // the models that reject them (Opus 4.7+/Fable 5/Mythos 5, RejectsSamplingParams) just
 // like temperature, and the thinking config is normalized to the shape the target model
 // accepts so a foreseeable 400 never fails a conducted run (the legacy fixed budget is
 // rewritten to adaptive on those same models; an explicit disabled is dropped on the
 // always-on Fable 5/Mythos 5). It is Anthropic's deprecation, not a product bug
-//: withheld/normalized, never silently wrong, never a fabricated capability.
+// : withheld/normalized, never silently wrong, never a fabricated capability.
 //
 // Authority (verbatim, jun-2026): …/build-with-claude/{extended-thinking,adaptive-
 // thinking}; …/agents-and-tools/tool-use/overview (tool_choice); …/about-claude/models/

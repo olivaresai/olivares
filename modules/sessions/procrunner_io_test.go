@@ -89,9 +89,8 @@ exec sleep 300
 `
 
 // escapedGrandchildScript spawns a holder of the stdout pipe that LEAVES the
-// process group (its own session), so a group kill cannot reach it. It is the
-// only shape that can still wedge teardown, and the test that uses it kills the
-// escapee itself.
+// process group (its own session), so a group kill cannot reach it. The session
+// guard still can: it is the holder's parent by the subreaper.
 const escapedGrandchildScript = `#!/bin/sh
 trap '' TERM
 %s sh -c 'trap "" TERM ; printf "escaped %%s\n" "$$" ; exec sleep 300' &
@@ -501,9 +500,10 @@ func TestProcProcessStopReapsAChildAndItsGrandchild(t *testing.T) {
 
 // The remaining lifecycle edge, made explicit rather than left as a hang: a
 // holder of the output pipe that LEFT the process group cannot be signalled, the
-// pumps therefore never see EOF and cmd.Wait is never reached. Stop closes the
-// parent read ends as its last rung, reaps the child, and REPORTS the tail it had
-// to drop — it never returns nil for a child it did not reap.
+// pumps therefore never see EOF and cmd.Wait is never reached. With no session
+// guard in front (the short-lived children) Stop closes the parent read ends as
+// its last rung, reaps the child, and REPORTS the tail it had to drop — it never
+// returns nil for a child it did not reap.
 func TestProcProcessStopClosesTheOutputPipesWhenAHolderEscapedTheGroup(t *testing.T) {
 	t.Parallel()
 
@@ -511,7 +511,7 @@ func TestProcProcessStopClosesTheOutputPipesWhenAHolderEscapedTheGroup(t *testin
 	if err != nil {
 		t.Skip("setsid is not installed: this control needs a holder that can leave the process group")
 	}
-	p := launchOwnedChild(t, fmt.Sprintf(escapedGrandchildScript, setsid), 300*time.Millisecond)
+	p := launchUnguardedChild(t, fmt.Sprintf(escapedGrandchildScript, setsid), 300*time.Millisecond)
 	sink := drainOutput(p)
 	var escaped int
 	waitFor(t, "the escaped holder to announce its pid", func() bool {
@@ -545,6 +545,47 @@ func TestProcProcessStopClosesTheOutputPipesWhenAHolderEscapedTheGroup(t *testin
 		t.Fatalf("killing the escaped holder: %v", err)
 	}
 	waitFor(t, "the escaped holder to be gone", func() bool { return processGoneOrZombie(escaped) })
+}
+
+// launchUnguardedChild starts script as a procProcess with no session guard in
+// front, as the short-lived children run: the process group is all a stop can
+// signal, so a holder that left the group is out of its reach.
+func launchUnguardedChild(t *testing.T, script string, waitDelay time.Duration) *procProcess {
+	t.Helper()
+	stdinRead, stdin, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, wout, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stderr, werr, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.CommandContext(t.Context(), writeOwnedChild(t, script))
+	cmd.Dir, cmd.Env, cmd.WaitDelay = t.TempDir(), []string{"PATH=/usr/bin:/bin"}, waitDelay
+	configureProcGroup(cmd)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdinRead, wout, werr
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	_ = stdinRead.Close()
+	_ = wout.Close()
+	_ = werr.Close()
+	p := (&procRunner{lineCap: maxOutputLine}).watch(cmd, stdin, stdout, stderr, waitDelay, func() {}, nil)
+	t.Cleanup(func() {
+		done := make(chan struct{})
+		go func() { defer close(done); _ = p.Stop(context.Background()) }()
+		select {
+		case <-done:
+		case <-time.After(20 * time.Second):
+			_ = procGroupKill(p.cmd)
+			t.Errorf("Stop did not finish within 20s in cleanup; the process group was killed directly")
+		}
+	})
+	return p
 }
 
 // ---------------------------------------------------------------------------

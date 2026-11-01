@@ -10,11 +10,13 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/store"
 )
 
@@ -121,6 +123,32 @@ func TestWriteError_CommitOutcomeUnknownForbidsAutomaticRetry(t *testing.T) {
 	}
 	if want := honestSeamMessage["commit_outcome_unknown"]; msg != want {
 		t.Fatalf("message = %q, want the curated sentence %q", msg, want)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", got)
+	}
+}
+
+// A sign-in withdrawn because its asserted groups could not be stored is a retryable 503
+// with a fixed sentence: a 2xx would read as a success, and the store's own error text
+// must not reach the person signing in even when something wraps it into the error.
+func TestWriteError_SSOGroupReconcileFailureIsAFixedRetryable503(t *testing.T) {
+	s := &Server{log: slog.Default()}
+	rec := httptest.NewRecorder()
+	cause := fmt.Errorf("%w: store detail that must stay in the log", auth.ErrSSOGroupReconcile)
+	s.writeError(rec, httptest.NewRequest(http.MethodGet, "/v1/auth/federation/callback", nil), cause)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+	}
+	code, msg := decodeErrorBody(t, rec)
+	if code != "sso_group_reconcile_failed" {
+		t.Fatalf("code = %q, want sso_group_reconcile_failed", code)
+	}
+	if want := honestSeamMessage["sso_group_reconcile_failed"]; msg != want {
+		t.Fatalf("message = %q, want the curated sentence %q", msg, want)
+	}
+	if strings.Contains(msg, "store detail") || !strings.Contains(msg, "Try again") {
+		t.Fatalf("message = %q, want the fixed retry sentence without the wrapped cause", msg)
 	}
 	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
 		t.Fatalf("Cache-Control = %q, want no-store", got)

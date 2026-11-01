@@ -272,6 +272,43 @@
       "lastCredential": "No puedes eliminar tu única passkey. Registra otra primero."
     }
   },
+  "sessions": {
+    "title": "Tus inicios de sesión",
+    "description": "Navegadores y clientes donde has iniciado sesión. Cierra los que ya no uses o reconozcas.",
+    "endAll": "Cerrar todas las demás",
+    "none": "No hay sesiones activas",
+    "noneHint": "Aquí aparecen tus sesiones actuales y recientes.",
+    "client": "Cliente",
+    "lastUsed": "Último uso",
+    "created": "Creada",
+    "expires": "Caduca",
+    "actionsColumn": "Acciones",
+    "current": "Esta sesión",
+    "end": "Cerrar",
+    "endLabel": "Cerrar sesión de {{kind}} del {{created}}",
+    "endTitle": "¿Cerrar la sesión?",
+    "endBody": "Esta sesión dejará de funcionar en ese navegador o cliente. Puedes volver a iniciarla allí más tarde.",
+    "endAllTitle": "¿Cerrar todas las demás sesiones?",
+    "endAllBody": "Se cerrarán las demás sesiones de la lista. Esta sesión seguirá activa.",
+    "endAllFailed_one": "{{count}} sesión no se pudo cerrar. Revisa la lista e inténtalo de nuevo.",
+    "endAllFailed_many": "{{count}} sesiones no se pudieron cerrar. Revisa la lista e inténtalo de nuevo.",
+    "endAllFailed_other": "{{count}} sesiones no se pudieron cerrar. Revisa la lista e inténtalo de nuevo.",
+    "ended": "Sesión cerrada.",
+    "kinds": {
+      "browser": "Navegador",
+      "token": "Token",
+      "unknown": "Desconocido",
+      "pairing": "Pendiente de vinculación"
+    },
+    "deviceName": "Nombre del dispositivo",
+    "pair": "Vincular un dispositivo",
+    "pairLink": "Enlace de un solo uso",
+    "pairHint": "Copia este enlace privado al dispositivo. Caduca en 10 minutos y solo funciona una vez.",
+    "pairTitle": "Vincular este dispositivo",
+    "acceptHint": "Continúa solo si solicitaste este enlace desde tu propia cuenta. Este dispositivo tendrá acceso a esa cuenta.",
+    "pairInvalid": "Falta el enlace, ha caducado o ya se ha usado. Crea otro en los ajustes de inicio de sesión.",
+    "accept": "Vincular este dispositivo"
+  },
   "totp": {
     "title": "Segundo factor TOTP",
     "description": "Una contraseña de un solo uso basada en tiempo (RFC 6238) como factor adicional de tu cuenta local. Añade a tus passkeys; nunca los sustituye.",

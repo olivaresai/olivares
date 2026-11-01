@@ -498,6 +498,9 @@ func TestRuntimeInputTextUsesOwnedDriverAndRefusesRaw(t *testing.T) {
 			if !slices.Equal(peer.Methods, wantMethods) || !slices.Equal(peer.Inputs, []string{request.Text}) {
 				t.Fatalf("unsupported raw frame reached driver: methods=%v inputs=%v", peer.Methods, peer.Inputs)
 			}
+			if fact, err := f.m.loadRun(context.Background(), f.tenant, target.RunRef); err != nil || !fact.Bool(colRunCodexInputAttempted) {
+				t.Fatalf("delivered text did not mark the Codex conversation as having had input: %v", err)
+			}
 		})
 	}
 }

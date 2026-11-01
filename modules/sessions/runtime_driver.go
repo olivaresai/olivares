@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/sessions/cliruntime"
 )
@@ -495,7 +496,9 @@ func termSupportOf(carried bool) TermSupport {
 
 // driverProgram is the executable a driver is spawned as: the operator's explicit
 // override when configured, otherwise the installed program the resolver finds,
-// otherwise the driver's own official program name.
+// otherwise the driver's own official program name. A tool whose facts say
+// NoPATHFallback (Cursor's generic `agent`) has no last fallback: it must come from a
+// managed install or an explicit pin.
 func (m *Module) driverProgram(d ProviderDriver) string {
 	if p := m.rt.driverPrograms[d.Key()]; p != "" {
 		return p
@@ -504,6 +507,9 @@ func (m *Module) driverProgram(d ProviderDriver) string {
 		if p := m.rt.ProgramResolver(d.Key()); p != "" {
 			return p
 		}
+	}
+	if facts, ok := driverfacts.Lookup(d.Key()); ok && facts.NoPATHFallback {
+		return ""
 	}
 	return d.DefaultProgram()
 }
@@ -1164,10 +1170,17 @@ func (m *Module) driverInputImages(ctx context.Context, lr *liveRun, text string
 	if err := m.assertRunAuthority(ctx, lr); err != nil {
 		return false, err
 	}
+	if lr.driver.Key() == providerDriverCodex {
+		// Commit before the I/O boundary, including uncertain or failed sends.
+		// A stored false must never hide a conversation that may have input.
+		if err := m.mutateRun(ctx, lr, func(rec model.Record) { rec[colRunCodexInputAttempted] = true }); err != nil {
+			return false, err
+		}
+	}
 	return m.driverInputAdmittedImages(ctx, lr, text, images, lr.launchID, lr.claim.SID)
 }
 
-// driverInputAdmitted is the I/O half after known authority commit under the run
+// driverInputAdmitted is the I/O half after known authority and input-fact commit under the run
 // lock. Existing callers enter through driverInput; checked delivery establishes
 // the same authority in its final transaction and must not open another one here.
 func (m *Module) driverInputAdmitted(ctx context.Context, lr *liveRun, text string, launch model.ID, sid string) (bool, error) {
@@ -1205,6 +1218,10 @@ func (m *Module) driverInputAdmittedImages(ctx context.Context, lr *liveRun, tex
 	}
 	// The input starts the next turn before the provider names it, so the run is not
 	// waiting any more; an input refused before any byte moved leaves it waiting.
+	lr.mu.Lock()
+	inputStarted := lr.driverInputStarted
+	lr.driverInputStarted = true
+	lr.mu.Unlock()
 	waiting := lr.setDriverTurnEnded(false)
 	interrupted := lr.setTurnInterrupted(false)
 	lr.noteIdleActivity(m.now())
@@ -1222,6 +1239,9 @@ func (m *Module) driverInputAdmittedImages(ctx context.Context, lr *liveRun, tex
 		attempted, err = lr.session.Input(ctx, text)
 	}
 	if !attempted {
+		lr.mu.Lock()
+		lr.driverInputStarted = inputStarted
+		lr.mu.Unlock()
 		lr.setDriverTurnEnded(waiting)
 		lr.setTurnInterrupted(interrupted)
 	}

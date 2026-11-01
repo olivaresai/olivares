@@ -129,6 +129,8 @@ func TestTrusteeQuestionRefusesWhatItCannotAsk(t *testing.T) {
 		{"colon on a read", TrusteeBrowse, ResourceAttrs{Kind: "session-cockpit:transcript"}},
 		{"IAM kind is not a tree kind", TrusteeSupervisor, ResourceAttrs{Kind: "user", ID: "n"}},
 		{"entity right without a node", TrusteeWrite, ResourceAttrs{Kind: "agent"}},
+		{"audit write is not grantable", TrusteeWrite, ResourceAttrs{Kind: "audit", ID: "n"}},
+		{"authenticator read is not grantable", TrusteeRead, ResourceAttrs{Kind: "authenticator", ID: "n"}},
 		{"zero right", TrusteeRight{}, ResourceAttrs{Kind: "agent", ID: "n"}},
 	}
 	for _, c := range cases {

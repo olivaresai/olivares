@@ -20,17 +20,25 @@ const (
 	GrokConfigHomeEnv     = "GROK_HOME"
 	OpenCodeConfigHomeEnv = "OPENCODE_CONFIG_DIR"
 	GeminiConfigHomeEnv   = "GEMINI_CLI_HOME"
+	CursorConfigHomeEnv   = "CURSOR_CONFIG_DIR"
 	ClaudeRuntimeBinEnv   = "OLIVARES_SESSION_RUNTIME_CLAUDE_BIN"
 	CodexRuntimeBinEnv    = "OLIVARES_SESSION_RUNTIME_CODEX_BIN"
 	GrokRuntimeBinEnv     = "OLIVARES_SESSION_RUNTIME_GROK_BIN"
 	OpenCodeRuntimeBinEnv = "OLIVARES_SESSION_RUNTIME_OPENCODE_BIN"
 	GeminiRuntimeBinEnv   = "OLIVARES_SESSION_RUNTIME_GEMINI_BIN"
+	CursorRuntimeBinEnv   = "OLIVARES_SESSION_RUNTIME_CURSOR_BIN"
 
 	InstallManifest = "signed-manifest"
 	InstallPackage  = "origin-package"
 	InstallRelease  = "release-archive"
-	SignInPaste     = "paste-code"
-	SignInDevice    = "device-code"
+	// InstallOriginTarball: the vendor publishes a tarball on its own origin and no
+	// checksum or signature (Cursor CLI); the install is origin-verified only.
+	InstallOriginTarball = "origin-tarball"
+	SignInPaste          = "paste-code"
+	SignInDevice         = "device-code"
+	// SignInLink: the tool prints one link, the person approves in a browser, and the tool
+	// ends on its own; there is no code to type or to paste back (Cursor CLI).
+	SignInLink = "link"
 
 	// Egress describes the endpoint a binding can configure, not an OS network
 	// boundary. Native confinement and protocol enforcement remain launch work.
@@ -130,6 +138,9 @@ type Facts struct {
 	// to its record's endpoint only, measured behind the session proxy. Only then
 	// is that boundary enforced; other tools keep the host network.
 	EgressMeasured bool
+	// NoPATHFallback: the program name is too generic to resolve by name (`agent`), so the
+	// tool runs only from a managed install or an executable the administrator pinned.
+	NoPATHFallback bool
 }
 
 // openCodeHeadlessLogin is OpenCode's default login: its built-in ChatGPT device
@@ -226,6 +237,25 @@ var rows = []Facts{
 		BindingDescription: "Gemini CLI runs on a Gemini API key at Google's own address",
 		Bindings:           []Binding{{"gemini", EgressVendor}},
 		EgressMeasured:     true,
+	},
+	// Cursor CLI (cursor.com/docs/cli): `agent login` prints one link and waits for the
+	// browser; its credential is the account, so no provider kind binds it. CURSOR_CONFIG_DIR
+	// moves cli-config.json; the rest of its state follows HOME, which a login home sets.
+	// The vendor bundle's src/utils/service-urls.ts names its fixed production service URLs;
+	// child_launch holds account sessions to them (api2.cursor.sh, api3.cursor.sh, cursor.com).
+	// ponytail: the three hosts are read from that bundle; no signed-in turn has run behind the
+	// session proxy yet, so EgressMeasured here means enforced, not measured with an account.
+	// Upgrade trigger: the first account run, which may name another host.
+	{
+		Key: "cursor", Name: "Cursor CLI", Program: "agent", Session: true,
+		// No SkillsDir: Cursor documents ~/.agents/skills for its skills, not that the CLI
+		// reads it, and delivering skills replaces HOME, which holds this tool's login.
+		EnvPrefixes: []string{"CURSOR_"},
+		ConfigDir:   ".cursor", ConfigHomeEnv: CursorConfigHomeEnv, RuntimeBinEnv: CursorRuntimeBinEnv,
+		Installer: InstallOriginTarball, SignIn: SignInLink,
+		LoginArgs: []string{"login"}, StatusArgs: []string{"status", "--format", "json"},
+		AuthFailures:   []string{"authentication required", "not logged in", "agent login", "unauthenticated"},
+		EgressMeasured: true, NoPATHFallback: true,
 	},
 	// Ollama is the local model service used by session drivers.
 	{Key: "ollama", Name: "Ollama", Program: "ollama", Installer: InstallRelease},

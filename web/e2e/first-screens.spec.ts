@@ -285,8 +285,8 @@ test.describe('the first screens', () => {
       await page.waitForLoadState('networkidle').catch(() => {})
       if (lang === 'ko') {
         // After auth the shell must be Korean too: a raw-key probe passes on the
-        // English fallback, so name the top bar places the catalogs supply.
-        const bar = page.locator('header[data-slot="topbar"]')
+        // English fallback, so name the left navigation's places the catalogs supply.
+        const bar = page.locator('[data-slot="sidebar"]')
         await expect(bar).toBeVisible()
         // The place's name is its label, then its live count and "needs you" when the
         // estate has sessions to show ("세션 , 2 , 확인 필요"), so it is matched from its start.

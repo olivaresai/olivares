@@ -4,7 +4,10 @@
 
 package auth
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 // Permission is a "<resource>:<verb>" string for a core resource (e.g.
 // "agent:read") or a "<namespace>:<resource>:<verb>" string for a module
@@ -123,6 +126,9 @@ const PermAuthzRead Permission = "authz:read"
 // and the HTTP route additionally requires an AAL3 step-up.
 const PermAuthzAdmin Permission = "authz:admin"
 
+// PermAuthenticatorWrite grants only authenticator reset, subject to AAL3 and custody checks.
+const PermAuthenticatorWrite Permission = "authenticator:write"
+
 // coreResources are the engine resources gated by a permission, granted by the
 // generic read/write/admin tiers below. The ledger is gated as "audit"; tenant
 // IAM as user/membership/token; tenant settings as "tenant". The access graph is
@@ -187,6 +193,7 @@ func IsAccessGraphReconPerm(perm Permission) bool {
 }
 
 var privilegedReadPerms = map[Permission]struct{}{
+	"sessions:output:read":   {},
 	"accessgraph:read":       {},
 	"accessmap:graph:read":   {},
 	"accessmap:drift:read":   {},
@@ -261,6 +268,7 @@ func buildCoreRolePerms() map[string]map[Permission]struct{} {
 	// route also requires an AAL3 step-up. (authz:read — the query surface — is a
 	// privileged read granted to editor and up via privilegedReadPerms.)
 	admin[PermAuthzAdmin] = struct{}{}
+	admin[PermAuthenticatorWrite] = struct{}{}
 
 	owner := cloneSet(admin)
 	// Owner additionally holds admin verb on every read/write resource.
@@ -391,22 +399,37 @@ func IsTreeScopeableKind(kind string) bool {
 	return ok
 }
 
-// ScopeableKinds returns every kind a custom role or scoped grant may confer permissions
-// on: the tree kinds (TreeScopeableKinds) plus the module permission kinds a mounted
-// module registered (module_catalog.go). Sorted, tree kinds first in their canonical
-// order so an existing console rendering is unchanged at the head of the list.
+var tenantGrantableKindSet = func() map[string]struct{} {
+	kinds := make(map[string]struct{}, len(tenantGrantablePerms))
+	for permission := range tenantGrantablePerms {
+		kind, _, _ := SplitPermission(permission)
+		kinds[kind] = struct{}{}
+	}
+	return kinds
+}()
+
+// ScopeableKinds returns kinds carrying at least one grantable permission:
+// tree kinds, tenant-only core kinds and registered module kinds. A kind does not
+// imply every verb; use IsGrantablePermission for exact capabilities. Sorted, with
+// tree kinds first in their canonical order to preserve existing console rendering.
 func ScopeableKinds() []string {
 	mod := ModuleScopeableKinds()
+	for kind := range tenantGrantableKindSet {
+		mod = append(mod, kind)
+	}
+	sort.Strings(mod)
 	out := make([]string, 0, len(coreReadWriteResources)+len(mod))
 	out = append(out, coreReadWriteResources...)
 	return append(out, mod...)
 }
 
-// IsScopeableKind reports whether kind may appear in a granted permission: an tree
-// kind, or a module kind ("<ns>:<res>") a mounted module registered. It is deny-closed on
-// an empty registry — an engine that registers no module keeps exactly the tree catalog.
+// IsScopeableKind reports whether a kind carries at least one grantable permission.
+// Non-tree kinds confer only the exact verbs IsGrantablePermission accepts.
 func IsScopeableKind(kind string) bool {
 	if _, ok := scopeableKindSet[kind]; ok {
+		return true
+	}
+	if _, ok := tenantGrantableKindSet[kind]; ok {
 		return true
 	}
 	return isRegisteredModuleKind(kind)
@@ -417,7 +440,8 @@ func IsScopeableKind(kind string) bool {
 // built-in role within a workspace/agent-group/resource-class, and the set the
 // delegation ceiling treats as a tenant admin/owner's grantable domain. It is
 // coreRolePerms[role] filtered to the tree kinds (so the IAM and tenant/audit
-// permissions are dropped) PLUS every registered module permission the role grants.
+// permissions are dropped unless explicitly tenant-grantable) PLUS every registered
+// module permission the role grants.
 //
 // The module half is what makes a module surface delegable at all. Without it
 // the ceiling's permSubset test could never be satisfied for a module permission — an
@@ -435,6 +459,11 @@ func RoleResourcePerms(role string) []Permission {
 	out := make([]Permission, 0, len(set))
 	for p := range set {
 		if IsTreeScopeableKind(p.Resource()) {
+			out = append(out, p)
+		}
+	}
+	for p := range tenantGrantablePerms {
+		if RoleGrants(role, p) {
 			out = append(out, p)
 		}
 	}

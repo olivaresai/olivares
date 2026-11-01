@@ -49,7 +49,7 @@ func auditTestSeed(t testing.TB, st store.Store, clk *tickClock, tenant model.Te
 			if i%7 == 6 {
 				action = "session_100%.restarted" // the LIKE-metacharacter prefix
 			}
-			// SR5C: non-ASCII rows — the contract's filters are Go rules, and
+			// review: non-ASCII rows — the contract's filters are Go rules, and
 			// audit fields are NOT ASCII by construction.
 			if i%11 == 10 {
 				action = multibyteAction // a multibyte prefix family
@@ -138,7 +138,7 @@ func TestAuditFilteredWalkMatchesTheGoFilter(t *testing.T) {
 	auditFilteredEqualitySuite(t, st, clk)
 }
 
-// SR5C: the same equality on PostgreSQL 16 — a SQLite-only green hid the instr
+// review: the same equality on PostgreSQL 16 — a SQLite-only green hid the instr
 // call (no such function on PG) and the ASCII-only lower() fold.
 func TestAuditFilteredWalkMatchesTheGoFilterPostgres(t *testing.T) {
 	clk := &tickClock{t: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)}

@@ -65,7 +65,7 @@
 // has nothing with the family signature, and this gate cannot see it.
 //
 // ⛔ WHAT IT CANNOT DO, and it is written here because the first version of this comment
-// claimed the opposite. An external contrast (an internal design note (not shipped))
+// claimed the opposite. An external contrast (an internal audit)
 // refuted "cannot be fooled" with six working evasions. Five are now RED cases in the
 // self-test — a build-tag variant that does not delegate, a call whose results are all
 // discarded, a call inside `if false`, a local shadowing the api package, and an aliased

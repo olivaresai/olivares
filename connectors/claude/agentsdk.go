@@ -502,7 +502,7 @@ func parseAgentSDKConfig(s string) (AgentSDKConfig, bool, error) {
 }
 
 // gatherAgentSDK emits the declared Agent SDK program's governance posture once at start
-//: the dangerous-knob findings, the subagent bypass-inheritance finding and the
+// : the dangerous-knob findings, the subagent bypass-inheritance finding and the
 // effective-cap drift. A no-op when no agent_sdk_config is declared. Read-only modeling —
 // it never launches or configures an agent.
 func (s *Source) gatherAgentSDK(at time.Time, dispatch func(model.Observation)) {

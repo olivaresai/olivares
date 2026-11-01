@@ -53,6 +53,7 @@ type Dependencies struct {
 	ManagedStopAuthority             *ManagedStopAuthority
 	CursorKeyring                    *CursorTokenKeys
 	Runner                           Runner
+	RunPlacement                     RunPlacement
 	SessionMCP                       SessionMCPLaunchSource
 	SessionDecoys                    SessionDecoySource
 	GitRead                          SessionGitReadSource
@@ -60,6 +61,7 @@ type Dependencies struct {
 	CredentialBroker                 SessionCredentialBroker
 	Creds                            CredentialSource
 	LaunchGate                       LaunchGate
+	CancelSessionApprovals           func(context.Context, model.TenantID, []string, string, string) error
 	StopGate                         StopGate
 	PreviewGate                      PreviewGate
 	Recorder                         Recorder
@@ -68,6 +70,7 @@ type Dependencies struct {
 	ListPricer                       ListPricer
 	LimitResets                      LimitResetSource
 	SessionFacts                     SessionFactsSource
+	AccountUsage                     AccountUsageSource
 	WorkSessionCreds                 WorkSessionCredentialSource
 	CommunicationSessionCreds        CommunicationSessionCredentialSource
 	// The enabled bit distinguishes an intentional K3 OFF posture from a lost
@@ -78,9 +81,14 @@ type Dependencies struct {
 	ProgramResolver                   func(driver string) string
 	VersionProgramResolver            func(context.Context, string, string) (string, error)
 	ApprovalGate                      ProviderApprovalGate
-	ProviderVault                     ProviderSecretVault
-	ProviderProbe                     ProviderProbe
-	HostTools                         HostToolObserver
+	// PushSender tells a person's browsers, tab closed, that a session needs them or has
+	// ended (push.go). Nil is a server without Web Push: the routes answer 503, nothing is sent.
+	PushSender PushSender
+	// NotificationAllowed reads the launcher's event choices immediately before delivery.
+	NotificationAllowed func(context.Context, model.TenantID, string, string) (bool, error)
+	ProviderVault       ProviderSecretVault
+	ProviderProbe       ProviderProbe
+	HostTools           HostToolObserver
 	// SessionAccessCheck terminates runs whose current owner loses access.
 	SessionAccessCheck        func(context.Context, model.TenantID, string) (auth.SessionScope, string, error)
 	Tracer                    *obstrace.Provider
@@ -91,15 +99,26 @@ type Dependencies struct {
 	QueuedLaunchAuthorization func(context.Context, model.TenantID, auth.QueuedCredential, string, model.ID) (auth.Principal, error)
 
 	// SteerOthers is the Business edition's: it lets a caller with sessions:run:write steer
-	// (input, resume, peers) a session another person started. Community leaves it false and
-	// answers 501 business_required (steering_edition.go).
-	SteerOthers bool
+	// (input, resume, peers) a session another person started, asked on each call; its error
+	// (a licence that does not cover it) answers 403 addon_requires_license. Community leaves
+	// it nil and answers 501 business_required (steering_edition.go).
+	SteerOthers func() error
 
 	// ProfileAccess decides who may use which provider profile and AI tool
 	// (provider_profile_access.go). The engine requires it (dependencyChecks); a module built
 	// without one, as the sessions tests build it, leaves every profile and tool open to
 	// whoever holds the route's permission.
 	ProfileAccess ProfileAccess
+
+	// Standards answers which department a caller belongs to and which session templates are
+	// assigned to a department as its instructions and its default template
+	// (department_standards.go). Optional: a build without it launches every session exactly
+	// as before.
+	Standards DepartmentAssignments
+	// ConnectionSecrets opens one connection/<name> entry of the deployment's secret store
+	// (cmd/olivares/connectionsecrets.go) and no other: the door the Business connections
+	// broker reads a connection's credential through. nil leaves a credential unreadable.
+	ConnectionSecrets func(context.Context, string) ([]byte, error)
 }
 
 // normalize canonicalizes absent interface ports, including typed nils. It does
@@ -218,6 +237,7 @@ func (m *Module) dependencyChecks() []dependencyCheck {
 		{"CostSink", d.CostSink, "session spend attribution", true},
 		{"ListPricer", d.ListPricer, "token-only usage pricing", true},
 		{"LimitResets", d.LimitResets, "reset times of a usage limit the tool did not name", false},
+		{"AccountUsage", d.AccountUsage, "usage windows of a provider account", false},
 		{"WorkSessionCreds", d.WorkSessionCreds, "session work credentials", true},
 		{"CommunicationSessionCreds", d.CommunicationSessionCreds, "communication session credentials", true},
 		{"RecoveryWorkSessionCreds", d.RecoveryWorkSessionCreds, "work credential withdrawal during recovery", true},
@@ -236,6 +256,7 @@ func (m *Module) dependencyChecks() []dependencyCheck {
 		{"ProviderApprovalPrincipal", d.ProviderApprovalPrincipal, "provider approval identity", true},
 		{"QueuedLaunchAuthorization", d.QueuedLaunchAuthorization, "queued-launch authorization", true},
 		{"ProfileAccess", d.ProfileAccess, "provider profile and tool assignments", true},
+		{"Standards", d.Standards, "department instructions and default templates", false},
 	}
 	if d.ManagedStopAuthority != nil {
 		checks = append(checks,

@@ -120,14 +120,8 @@ func governanceKillSwitchStateCmd(flags *authClientFlags) *cobra.Command {
 		Example: "  olivares governance killswitch state\n  olivares governance killswitch state -o json",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			res, err := observeCall{
-				flags: flags, ns: governanceNS, method: http.MethodGet, path: "/killswitch/state",
-			}.do(cmd)
+			res, st, err := governanceKillSwitchStatus(cmd, flags)
 			if err != nil {
-				return err
-			}
-			var st cliKillSwitchState
-			if err := res.decode(&st); err != nil {
 				return err
 			}
 			return renderOut(cmd, func(out io.Writer) error {
@@ -293,19 +287,9 @@ func governanceApprovalsDecideCmd(flags *authClientFlags, decision string) *cobr
 		Example: "  olivares governance approvals " + decision + " 01890000-0000-7000-8000-000000000001 --note \"checked the folder\"",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			path := "/approvals/" + url.PathEscape(args[0])
-			res, err := observeCall{flags: flags, ns: governanceNS, method: http.MethodGet, path: path}.do(cmd)
+			a, err := governancePendingApproval(cmd, flags, args[0])
 			if err != nil {
 				return err
-			}
-			var a cliApproval
-			if err := res.decode(&a); err != nil {
-				return err
-			}
-			if a.Status != "" && a.Status != "pending" {
-				// Nothing to decide: say so before showing the request or asking (refresh 06).
-				return sentence(exitcode.Conflict, "Approval %s is already %s; there is nothing to decide.",
-					termSafe(args[0]), termSafe(a.Status))
 			}
 			if !outputIsJSON(cmd) {
 				out := cmd.OutOrStdout()
@@ -321,24 +305,14 @@ func governanceApprovalsDecideCmd(flags *authClientFlags, decision string) *cobr
 			if err := confirmDestructive(cmd, yes, what); err != nil {
 				return err
 			}
-			res, err = observeCall{flags: flags, ns: governanceNS, method: http.MethodPost, path: path + "/decisions",
-				body: map[string]any{"decision": decision, "note": note}}.do(cmd)
+			res, after, err := governanceApprovalDecide(cmd, flags, args[0], decision, note)
 			if err != nil {
-				return err
-			}
-			var after cliApproval
-			if err := res.decode(&after); err != nil {
 				return err
 			}
 			return renderOut(cmd, func(out io.Writer) error {
 				r := renderTo(out)
 				r.Blank()
-				standing := "The request is " + termSafe(after.Status) + "."
-				if after.Status == "pending" {
-					more := after.RequiredApprovals - after.ApproveCount
-					standing = fmt.Sprintf("It needs %d more approval(s).", more)
-				}
-				r.Line(fmt.Sprintf("%s %s. %s", done, termSafe(after.ID), standing))
+				r.Line(approvalOutcome(done, after))
 				return nil
 			}, observeJSON(res.raw))
 		},
@@ -348,12 +322,89 @@ func governanceApprovalsDecideCmd(flags *authClientFlags, decision string) *cobr
 	return cmd
 }
 
+// The calls below are the client of the approval queue and the kill switch. The
+// commands and the `olivares ui` Security screens both use them, so a screen
+// sends the same request as the command it replaces and the ledger records the
+// same event.
+
+// governancePendingApproval reads one approval and refuses, in one sentence,
+// one that is no longer waiting for a person (refresh 06).
+func governancePendingApproval(cmd *cobra.Command, flags *authClientFlags, id string) (cliApproval, error) {
+	res, err := observeCall{flags: flags, ns: governanceNS, method: http.MethodGet,
+		path: "/approvals/" + url.PathEscape(id)}.do(cmd)
+	if err != nil {
+		return cliApproval{}, err
+	}
+	var a cliApproval
+	if err := res.decode(&a); err != nil {
+		return cliApproval{}, err
+	}
+	if a.Status != "" && a.Status != "pending" {
+		// Nothing to decide: say so before showing the request or asking.
+		return cliApproval{}, sentence(exitcode.Conflict, "Approval %s is already %s; there is nothing to decide.",
+			termSafe(id), termSafe(a.Status))
+	}
+	return a, nil
+}
+
+// governanceApprovalDecide records one vote ("approve" or "reject") with its note.
+func governanceApprovalDecide(cmd *cobra.Command, flags *authClientFlags, id, decision, note string) (observeResult, cliApproval, error) {
+	res, err := observeCall{flags: flags, ns: governanceNS, method: http.MethodPost,
+		path: "/approvals/" + url.PathEscape(id) + "/decisions",
+		body: map[string]any{"decision": decision, "note": note}}.do(cmd)
+	if err != nil {
+		return res, cliApproval{}, err
+	}
+	var after cliApproval
+	return res, after, res.decode(&after)
+}
+
+// approvalOutcome is the sentence that says where a request stands after a vote.
+func approvalOutcome(done string, after cliApproval) string {
+	standing := "The request is " + termSafe(after.Status) + "."
+	if after.Status == "pending" {
+		standing = fmt.Sprintf("It needs %d more approval(s).", after.RequiredApprovals-after.ApproveCount)
+	}
+	return fmt.Sprintf("%s %s. %s", done, termSafe(after.ID), standing)
+}
+
+// governanceApprovals reads the approval queue with the filters in q.
+func governanceApprovals(cmd *cobra.Command, flags *authClientFlags, q url.Values) (observeResult, cliApprovalList, error) {
+	res, err := observeCall{flags: flags, ns: governanceNS, method: http.MethodGet, path: "/approvals", query: q}.do(cmd)
+	if err != nil {
+		return res, cliApprovalList{}, err
+	}
+	var list cliApprovalList
+	return res, list, res.decode(&list)
+}
+
+// governanceKillSwitchStatus reads whether the estate is stopped and what is active.
+func governanceKillSwitchStatus(cmd *cobra.Command, flags *authClientFlags) (observeResult, cliKillSwitchState, error) {
+	res, err := observeCall{flags: flags, ns: governanceNS, method: http.MethodGet, path: "/killswitch/state"}.do(cmd)
+	if err != nil {
+		return res, cliKillSwitchState{}, err
+	}
+	var st cliKillSwitchState
+	return res, st, res.decode(&st)
+}
+
+// governanceKillSwitchStopEstate engages the estate-wide stop. The engine
+// requires the reason and records it with the person who asked; a stop that is
+// already active is a conflict the engine answers in its own words. The answer
+// body is not read: once the engine accepts the stop, nothing in it can undo it.
+func governanceKillSwitchStopEstate(cmd *cobra.Command, flags *authClientFlags, reason string) error {
+	_, err := observeCall{flags: flags, ns: governanceNS, method: http.MethodPost, path: "/killswitch",
+		body: map[string]any{"scope_kind": "estate", "reason": reason}}.do(cmd)
+	return err
+}
+
 // cliApproval mirrors modules/governance/approvals.go approvalDTO.
 type cliApproval struct {
 	ID                string `json:"id"`
 	SubjectKind       string `json:"subject_kind,omitempty"`
 	SubjectRef        string `json:"subject_ref,omitempty"`
 	Action            string `json:"action,omitempty"`
+	PolicyRef         string `json:"policy_ref,omitempty"`
 	RequestedBy       string `json:"requested_by,omitempty"`
 	Status            string `json:"status"`
 	RiskTier          string `json:"risk_tier"`
@@ -411,14 +462,8 @@ func governanceApprovalsListCmd(flags *authClientFlags) *cobra.Command {
 			if err := page.apply(q); err != nil {
 				return err
 			}
-			res, err := observeCall{
-				flags: flags, ns: governanceNS, method: http.MethodGet, path: "/approvals", query: q,
-			}.do(cmd)
+			res, list, err := governanceApprovals(cmd, flags, q)
 			if err != nil {
-				return err
-			}
-			var list cliApprovalList
-			if err := res.decode(&list); err != nil {
 				return err
 			}
 			return renderOut(cmd, func(out io.Writer) error {

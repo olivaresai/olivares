@@ -60,7 +60,7 @@ function renderRow() {
   }
 }
 
-describe('a rail row is two short lines (dev#3162)', () => {
+describe('a rail row is two short lines', () => {
   it('the title is cut to one line and its whole text stays on the hover', () => {
     const { name, nameEl, rowEl } = renderRow()
     expect(nameEl).toHaveTextContent(name)
@@ -84,7 +84,7 @@ describe('a rail row is two short lines (dev#3162)', () => {
     expect(classes(time)).not.toContain('truncate')
   })
 
-  // The order (dev#3162): the place, the state and its time on the first line, the
+  // The order: the place, the state and its time on the first line, the
   // name under them.
   it('reads the state, then its time, then the name under them', () => {
     const { rowEl, nameEl, state, time } = renderRow()

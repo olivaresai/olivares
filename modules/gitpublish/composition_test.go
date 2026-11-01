@@ -12,9 +12,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	gp "github.com/olivaresai/olivares/connectors/gitpublish"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/auth"
@@ -52,6 +54,7 @@ func TestProductionIntentAdmissionWithoutRequestDeadline(t *testing.T) {
 	s.stepUp(root)
 	s.tenant = s.seedOrg("acme")
 	admin, viewer := s.member(root, "admin"), s.member(root, "viewer")
+	editor := s.member(root, "editor")
 	s.stepUp(admin)
 	code, out, raw := s.do("POST", "/v1/m/gitpublish/targets", admin, map[string]any{
 		"workspace_id": model.NewID().String(), "credential_binding_id": "cb1", "repository_binding_id": "rb1", "push_prefix": "olivares/", "merge_bases": []string{"main"},
@@ -61,6 +64,23 @@ func TestProductionIntentAdmissionWithoutRequestDeadline(t *testing.T) {
 	}
 	target := out["id"].(string)
 	base := "/v1/m/gitpublish/"
+	t.Run("issue comment authority", func(t *testing.T) {
+		body := map[string]any{"operation_id": "comment-production", "number": 17, "state": "completed", "pull_request_url": "https://github.com/acme/widgets/pull/42", "cost_micro_usd": 1234567}
+		path := base + "targets/" + target + "/issue-comments"
+		if code, _, raw := s.do("POST", path, viewer, body, s.tenant); code != http.StatusForbidden && code != http.StatusNotFound {
+			t.Fatalf("viewer comment = %d %s", code, raw)
+		}
+		if s.host.commentCreates != 0 {
+			t.Fatal("viewer dispatched a comment")
+		}
+		code, out, raw := s.do("POST", path, editor, body, s.tenant)
+		if code != http.StatusOK || out["state"] != StateApplied {
+			t.Fatalf("editor comment = %d %s", code, raw)
+		}
+		if s.host.commentCreates != 1 || len(s.host.commentBodies) != 1 || !strings.Contains(s.host.commentBodies[0], "Pull request: https://github.com/acme/widgets/pull/42\n") || !strings.Contains(s.host.commentBodies[0], "Cost: USD 1.234567\n") {
+			t.Fatalf("comment effects = %d %v", s.host.commentCreates, s.host.commentBodies)
+		}
+	})
 	push := func(op string) string {
 		t.Helper()
 		code, out, raw := s.do("POST", base+"targets/"+target+"/pushes", admin, map[string]any{
@@ -123,10 +143,12 @@ func TestProductionIntentAdmissionWithoutRequestDeadline(t *testing.T) {
 		}
 	})
 	t.Run("viewer cannot reconcile or abandon", func(t *testing.T) {
+		// Both doors hold publish-floor permissions a viewer lacks, so both
+		// refuse with 403 before any intent work.
 		for _, action := range []string{"reconcile", "abandon"} {
 			code, _, raw := s.do("POST", base+"intents/"+unresolved+"/"+action, viewer, map[string]any{}, s.tenant)
-			if code != http.StatusForbidden && code != http.StatusNotFound {
-				t.Errorf("viewer %s = %d %s", action, code, raw)
+			if code != http.StatusForbidden {
+				t.Errorf("viewer %s = %d %s, want 403", action, code, raw)
 			}
 		}
 	})
@@ -147,6 +169,13 @@ func TestProductionIntentAdmissionWithoutRequestDeadline(t *testing.T) {
 			if code != http.StatusNotFound {
 				t.Errorf("wrong tenant %s = %d %s", path, code, raw)
 			}
+		}
+		body := map[string]any{"operation_id": "comment-wrong-tenant", "number": 17, "state": "completed"}
+		if code, _, raw := s.do("POST", base+"targets/"+target+"/issue-comments", editor, body, other); code != http.StatusNotFound && code != http.StatusServiceUnavailable {
+			t.Errorf("wrong tenant comment = %d %s", code, raw)
+		}
+		if s.host.commentCreates != 1 {
+			t.Errorf("wrong tenant dispatched a comment: %d", s.host.commentCreates)
 		}
 	})
 	if code, _, raw := s.do("POST", "/v1/auth/logout", admin, map[string]any{}, ""); code >= 300 {
@@ -330,6 +359,181 @@ func TestProductionCompositionThroughTheSealedDoor(t *testing.T) {
 	if s.host.mints != s.host.releases {
 		t.Fatalf("mints = %d releases = %d", s.host.mints, s.host.releases)
 	}
+}
+
+// Reconciling an uncertain intent appends an observation and can adopt it: a
+// tenant-state write. Its door therefore holds the publish floor every
+// publishing role carries (gitpublish:push:write), never the read permission:
+// a read-only caller gets 403 and keeps every read, and a caller who may push,
+// open a pull request or merge reconciles exactly as before. Admission then
+// re-checks the intent's own effect permission, so an editor still cannot
+// settle a merge intent (concealed as not_found, as on the reads).
+func TestReconcileRouteRequiresAPublishPermission(t *testing.T) {
+	s := newServer(t)
+	requirePasskeyStepUp(t, s.st)
+	if code, _, raw := s.do("POST", "/v1/setup", "", map[string]any{"token": s.setup, "email": "root@x.io", "password": "supersecret1"}, ""); code != http.StatusCreated {
+		t.Fatalf("setup = %d %s", code, raw)
+	}
+	root := s.login("root@x.io", "supersecret1")
+	// Adding a person asks for the deployment's step-up; the members under
+	// test sign in plainly. The merge route's AAL3 floor needs the admin
+	// stepped up.
+	s.stepUp(root)
+	s.tenant = s.seedOrg("acme")
+	admin, editor, viewer := s.member(root, "admin"), s.member(root, "editor"), s.member(root, "viewer")
+	s.stepUp(admin)
+
+	// A target, seeded directly: creating one through the route needs AAL3.
+	var target model.ID
+	if err := s.m.data.Mutate(context.Background(), s.tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(kindTarget)
+		if err != nil {
+			return err
+		}
+		rec, err := repo.Create(context.Background(), model.Record{"workspace_id": model.NewID().String(), "credential_binding": "cb1", "repository_binding": "rb1", "push_prefix": "olivares/", "merge_bases": "main", "created_by": "user:seed"})
+		target = model.ID(rec.String(model.ColID))
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	base := "/v1/m/gitpublish/targets/" + target.String()
+
+	// One uncertain intent per effect, each opened through its own route by a
+	// caller who may run it: the editor pushes and opens the pull request, the
+	// stepped-up admin merges. The held git write and the ambiguous host
+	// answers leave all three uncertain.
+	s.m.opts.DispatchTimeout = 20 * time.Millisecond
+	s.git.hold = make(chan struct{})
+	defer close(s.git.hold)
+	code, out, raw := s.do("POST", base+"/pushes", editor, map[string]any{
+		"operation_id": "op-push", "ref": "refs/heads/olivares/push", "commit": shaCommit, "tree": shaTree,
+	}, s.tenant)
+	if code != http.StatusAccepted || out["state"] != StateUncertain {
+		t.Fatalf("editor push = %d %s", code, raw)
+	}
+	pushIntent := out["id"].(string)
+
+	amb := gp.Result{Class: gp.Ambiguous, Reason: "transport"}
+	s.host.refs["olivares/pr"] = shaCommit
+	s.host.createRes = &amb
+	code, out, raw = s.do("POST", base+"/pull-requests", editor, map[string]any{
+		"operation_id": "op-pr", "head_ref": "olivares/pr", "base": "main", "commit": shaCommit, "title": "t",
+	}, s.tenant)
+	if code != http.StatusAccepted || out["state"] != StateUncertain {
+		t.Fatalf("editor pull request = %d %s", code, raw)
+	}
+	prIntent := out["id"].(string)
+	s.host.createRes = nil
+
+	// The merge's open change names another head, so the pull-request intent's
+	// own reconcile never observes it.
+	s.host.changes = append(s.host.changes, gp.Change{Number: 7, Open: true, HeadRef: "olivares/merge-head", HeadSHA: shaOther, BaseRef: "main", CreatedAt: time.Now()})
+	s.host.mergeRes = &amb
+	code, out, raw = s.do("POST", base+"/merges", admin, map[string]any{
+		"operation_id": "op-merge", "number": 7, "expected_head": shaOther, "method": "merge",
+	}, s.tenant)
+	if code != http.StatusAccepted || out["state"] != StateUncertain {
+		t.Fatalf("admin merge = %d %s", code, raw)
+	}
+	mergeIntent := out["id"].(string)
+	s.host.mergeRes = nil
+
+	intentPath := func(id string) string { return "/v1/m/gitpublish/intents/" + id }
+
+	t.Run("publishers reconcile as before", func(t *testing.T) {
+		// The host's answer in a fresh observation is what "as before" means:
+		// the observe pipeline read the host and recorded its verdict, not a
+		// placeholder. push: the held dispatch never created the ref, so the
+		// host cannot say (unknown); pull request and merge: change 7 is open
+		// with another head (absent_or_old).
+		for _, c := range []struct {
+			token, id, want string
+		}{{editor, pushIntent, "unknown"}, {editor, prIntent, "absent_or_old"}, {admin, mergeIntent, "absent_or_old"}} {
+			before := observationsOf(t, s, c.token, c.id)
+			code, out, raw := s.do("POST", intentPath(c.id)+"/reconcile", c.token, nil, s.tenant)
+			if code != http.StatusAccepted || out["state"] != StateUncertain {
+				t.Errorf("reconcile = %d %s, want 202 uncertain", code, raw)
+			}
+			after := observationsOf(t, s, c.token, c.id)
+			if len(after) != len(before)+1 {
+				t.Errorf("reconcile left %d observations (was %d), want exactly one more", len(after), len(before))
+			}
+			fresh := newObservation(t, before, after)
+			if fresh["source"] != "reconcile" || fresh["result"] != c.want {
+				t.Errorf("reconcile recorded source=%v result=%v, want reconcile/%s", fresh["source"], fresh["result"], c.want)
+			}
+		}
+	})
+	t.Run("editor cannot settle a merge intent", func(t *testing.T) {
+		// Admission asks the intent's own effect permission: the editor holds
+		// push and pull-request writes, never merge:admin. Concealed, as the
+		// reads of another workspace are.
+		code, _, raw := s.do("POST", intentPath(mergeIntent)+"/reconcile", editor, nil, s.tenant)
+		if code != http.StatusNotFound {
+			t.Errorf("editor merge reconcile = %d %s, want 404", code, raw)
+		}
+	})
+	t.Run("read-only caller gets 403 and keeps the reads", func(t *testing.T) {
+		// The door refuses before the intent exists: an absent id is 403 too,
+		// not the handler's 404.
+		if code, _, raw := s.do("POST", "/v1/m/gitpublish/intents/"+model.NewID().String()+"/reconcile", viewer, nil, s.tenant); code != http.StatusForbidden {
+			t.Errorf("viewer reconcile of an absent intent = %d %s, want 403", code, raw)
+		}
+		for _, id := range []string{pushIntent, prIntent, mergeIntent} {
+			if code, _, raw := s.do("POST", intentPath(id)+"/reconcile", viewer, nil, s.tenant); code != http.StatusForbidden {
+				t.Errorf("viewer reconcile = %d %s, want 403", code, raw)
+			}
+			if code, _, raw := s.do("GET", intentPath(id), viewer, nil, s.tenant); code != http.StatusOK {
+				t.Errorf("viewer read = %d %s, want 200", code, raw)
+			}
+			if code, _, raw := s.do("GET", intentPath(id)+"/observations", viewer, nil, s.tenant); code != http.StatusOK {
+				t.Errorf("viewer observations = %d %s, want 200", code, raw)
+			}
+		}
+	})
+	if s.host.mints != s.host.releases {
+		t.Fatalf("mints = %d releases = %d", s.host.mints, s.host.releases)
+	}
+}
+
+// newObservation returns the one observation after holds that before does not.
+func newObservation(t *testing.T, before, after []map[string]any) map[string]any {
+	t.Helper()
+	seen := make(map[string]bool, len(before))
+	for _, o := range before {
+		b, err := json.Marshal(o)
+		if err != nil {
+			t.Fatalf("marshal observation: %v", err)
+		}
+		seen[string(b)] = true
+	}
+	for _, o := range after {
+		b, err := json.Marshal(o)
+		if err != nil {
+			t.Fatalf("marshal observation: %v", err)
+		}
+		if !seen[string(b)] {
+			return o
+		}
+	}
+	t.Fatal("no new observation was recorded")
+	return nil
+}
+
+// observationsOf reads one intent's observation list as a caller who may.
+func observationsOf(t *testing.T, s *server, token, id string) []map[string]any {
+	t.Helper()
+	code, out, raw := s.do("GET", "/v1/m/gitpublish/intents/"+id+"/observations", token, nil, s.tenant)
+	if code != http.StatusOK {
+		t.Fatalf("observations = %d %s", code, raw)
+	}
+	items, _ := out["items"].([]any)
+	list := make([]map[string]any, 0, len(items))
+	for _, it := range items {
+		m, _ := it.(map[string]any)
+		list = append(list, m)
+	}
+	return list
 }
 
 // seedOrg creates isolation data without depending on edition-specific management routes.

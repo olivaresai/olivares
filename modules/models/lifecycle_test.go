@@ -66,7 +66,7 @@ func TestLifecycleOf(t *testing.T) {
 }
 
 // TestReferenceGovernanceDimensions pins the declared retention/access dimensions
-//: Fable 5 / Mythos 5 are Covered Models (30-day forced retention, no ZDR),
+// : Fable 5 / Mythos 5 are Covered Models (30-day forced retention, no ZDR),
 // Mythos rides the Glasswing restricted tier, standard Claude models are
 // zdr_eligible, and cross-vendor families stay unverified ("").
 func TestReferenceGovernanceDimensions(t *testing.T) {

@@ -71,9 +71,9 @@ const NAME_RE = /^[A-Za-z0-9._/-]{1,128}$/
  * set / changed without ever seeing it. By construction the value input is blank on
  * edit (blank = keep the stored value). The default is deployment-wide and
  * superadmin-only; explicit tenant mode is restricted to tenant admins and to ONE
- * namespace of that tenant: MCP credential handles (mcp/, the default) or the
- * secrets sessions receive as environment variables (env/, design FH 016). Every
- * write requires AAL3 and is audited.
+ * namespace of that tenant: MCP credential handles (mcp/, the default), the
+ * secrets sessions receive as environment variables (env/, design first-hour check) or a
+ * session's managed credentials (credential/). Every write requires AAL3 and is audited.
  */
 export function SecretsTab({
   scope,
@@ -89,8 +89,9 @@ export function SecretsTab({
   )
 }
 
-/** The tenant scope's namespaces: MCP credential handles and session secrets. */
-export type TenantSecretNamespace = 'mcp/' | 'env/'
+/** The tenant scope's namespaces: MCP credential handles, session secrets and a
+ * session's managed credentials. */
+export type TenantSecretNamespace = 'mcp/' | 'env/' | 'credential/'
 
 function SecretsBody({
   scope,
@@ -183,7 +184,9 @@ function SecretsBody({
     ? t('console:secrets.caption')
     : namespace === 'env/'
       ? t('console:secrets.sessionCaption')
-      : t('console:mcpGateway.credentialCaption')
+      : namespace === 'credential/'
+        ? t('console:secrets.credentialCaption')
+        : t('console:mcpGateway.credentialCaption')
   const sealerAvailable = query.data?.sealer_available ?? true
 
   return (
@@ -233,7 +236,11 @@ function SecretsBody({
                 <th>{t('console:secrets.colChanged')}</th>
                 <th>{t('console:secrets.colReference')}</th>
                 <th>{t('console:secrets.colUsedBy')}</th>
-                <th />
+                <th className="relative">
+                  <span className="sr-only">
+                    {t('common:actions.edit')} / {t('common:actions.delete')}
+                  </span>
+                </th>
               </tr>
             </thead>
             {groupByFolder(secrets).map(({ folder, items }, i) => (
@@ -355,7 +362,11 @@ function SecretsBody({
                 <tr>
                   <th>{t('console:secrets.colReference')}</th>
                   <th>{t('console:secrets.colUsedBy')}</th>
-                  <th />
+                  <th className="relative">
+                    <span className="sr-only">
+                      {t('console:secrets.readOnly')}
+                    </span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -468,7 +479,8 @@ interface UsageState {
 }
 
 /** What references each secret, read from the rosters that hold the references:
- * the source roster (global), the MCP gateway (mcp/) or the session runs (env/). */
+ * the source roster (global), the MCP gateway (mcp/), the session runs (env/) or
+ * the sessions that name a credential (credential/). */
 function useSecretUsage({
   scope,
   namespace,
@@ -642,7 +654,9 @@ function SecretForm({
             ? t('console:secrets.caption')
             : namespace === 'env/'
               ? t('console:secrets.sessionCaption')
-              : t('console:mcpGateway.credentialCaption')}
+              : namespace === 'credential/'
+                ? t('console:secrets.credentialCaption')
+                : t('console:mcpGateway.credentialCaption')}
         </DialogDescription>
       </DialogHeader>
 

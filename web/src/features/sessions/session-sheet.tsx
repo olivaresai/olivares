@@ -17,7 +17,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
-import { operatorName } from './provenance'
+import { operatorName, runTitle } from './provenance'
 import {
   SESSION_PARAM,
   targetFromAddress,
@@ -46,7 +46,9 @@ function SheetBody({
       {/* The name its operator typed; "Session" for one without, whose header tells it
           by the tail of its reference. */}
       <SheetTitle className="sr-only">
-        {operatorName(resolution.session) ?? t('sheet.title')}
+        {operatorName(resolution.session) ??
+          runTitle(resolution.session) ??
+          t('sheet.title')}
       </SheetTitle>
       {/* The way to the full page, on the line of the sheet's close button. */}
       <div className="flex h-12 shrink-0 items-center border-b border-line pl-3 pr-12">

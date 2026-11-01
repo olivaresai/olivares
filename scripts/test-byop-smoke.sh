@@ -4,7 +4,7 @@
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
 # Selftest for examples/bring-your-own-protocol/smoke.sh, step "generate content-source
-# skeleton" (dev#2363). That step used `go run ./cmd/olivares`, which recompiles the whole
+# skeleton". That step used `go run ./cmd/olivares`, which recompiles the whole
 # engine with different flags than `task build:bin` (measured on the builder: 84 s for the
 # build, 232 s for the `go run` that followed, 1 s for the built binary) and printed nothing
 # until the 25-minute job timeout. The fixture replaces `go` and the engine with recorders,

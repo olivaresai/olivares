@@ -48,7 +48,7 @@ export function workLine(s: LiveDTO): {
 }
 
 /** Which rung named a session: the ladder above, with the operator's own name on top. */
-export type SessionNameSource = 'run' | WorkLineSource
+export type SessionNameSource = 'run' | 'title' | WorkLineSource
 
 /**
  * WHAT A SESSION IS CALLED — THE ONE LADDER, and the reason this function exists is that
@@ -64,6 +64,9 @@ export type SessionNameSource = 'run' | WorkLineSource
  * ⛔ THE RUNGS, IN ORDER, AND EVERY ONE A FACT SOMEBODY SENT:
  *      run — the name the operator typed at launch. It outranks everything below it
  *            because it is the only rung a person chose;
+ *      title — the phrase the engine cut from the session's first message. Under the
+ *            name because a person did not choose it, over the live sentence because
+ *            it says what the session was asked, which no later action replaces;
  *      summary, goal, action — `workLine`, called and not copied, so the front door's
  *            sentence and a session's name can never drift apart;
  *      untitled — the caller's own word. NEVER the reference: a rail of six rows reading
@@ -76,15 +79,19 @@ export type SessionNameSource = 'run' | WorkLineSource
  *    line reading `from`, which is what keeps this the only ladder.
  *
  * `runName` is `null` where no run is in hand — the live page carries none — and that
- * is a fact about the READ, not a shorter ladder.
+ * is a fact about the READ, not a shorter ladder. `runTitle` is the run's too, and a
+ * caller that has the run passes both.
  */
 export function sessionNameLadder(
   runName: string | null | undefined,
   live: LiveDTO | null | undefined,
   untitled: string,
+  runTitle?: string | null,
 ): { text: string; from: SessionNameSource } {
   const named = runName?.trim()
   if (named) return { text: named, from: 'run' }
+  const titled = runTitle?.trim()
+  if (titled) return { text: titled, from: 'title' }
   const line = live ? workLine(live) : null
   if (line && line.from !== 'untitled')
     return { text: line.text, from: line.from }

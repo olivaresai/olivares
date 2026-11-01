@@ -104,7 +104,7 @@ type dataView interface {
 //
 // The fourth result is the inheritance filter's mark (inheritance_filter_walk.go): the
 // container nodes on the target's lineage that a filter row names for the target's class.
-func (r *scopeResolver) resolve(ctx context.Context, req auth.Request) (cedar.EntityMap, cedar.EntityUID, cedar.EntityUID, []cedar.EntityUID, error) {
+func (r *scopeResolver) resolve(ctx context.Context, req auth.Request) (cedar.EntityMap, cedar.EntityUID, cedar.EntityUID, []cedar.EntityUID, []auth.DecisionRemoval, error) {
 	em := cedar.EntityMap{}
 	pUID := buildPrincipalEntity(req, em)
 
@@ -117,10 +117,11 @@ func (r *scopeResolver) resolve(ctx context.Context, req auth.Request) (cedar.En
 	// simply will not match; an attribute grant still can off the request attributes.
 	if !requestHasScope(req) {
 		em[resUID] = cedar.Entity{UID: resUID, Attributes: cedar.NewRecord(attrs)}
-		return em, resUID, pUID, nil, nil
+		return em, resUID, pUID, nil, nil, nil
 	}
 
 	var marks []cedar.EntityUID
+	var removals []auth.DecisionRemoval
 	err := r.data.View(ctx, req.Tenant, func(sc store.Scope) error {
 		parents, extra, e := r.readScope(ctx, sc, req, em)
 		if e != nil {
@@ -130,13 +131,13 @@ func (r *scopeResolver) resolve(ctx context.Context, req auth.Request) (cedar.En
 			attrs[k] = v
 		}
 		em[resUID] = cedar.Entity{UID: resUID, Parents: cedar.NewEntityUIDSet(parents...), Attributes: cedar.NewRecord(attrs)}
-		marks, e = markFilteredNodes(ctx, sc, req, em, resUID)
+		marks, removals, e = markFilteredNodesDetailed(ctx, sc, req, em, resUID)
 		return e
 	})
 	if err != nil {
-		return nil, cedar.EntityUID{}, cedar.EntityUID{}, nil, err
+		return nil, cedar.EntityUID{}, cedar.EntityUID{}, nil, nil, err
 	}
-	return em, resUID, pUID, marks, nil
+	return em, resUID, pUID, marks, removals, nil
 }
 
 // buildPrincipalEntity materializes the principal as a Cedar entity with its
@@ -1094,6 +1095,18 @@ func (e *scopedEngine) clock() time.Time {
 // that cannot complete fails CLOSED (a scope policy we cannot evaluate must not silently
 // drop a forbid).
 func (e *scopedEngine) Scoped(ctx context.Context, req auth.Request) (auth.ScopedDecision, error) {
+	return e.scopedWithExplanation(ctx, req, nil)
+}
+
+// ScopedExplanation returns the decision and the determining policies from one
+// evaluation, never a second policy read that could describe a different answer.
+func (e *scopedEngine) ScopedExplanation(ctx context.Context, req auth.Request) (auth.ScopedDecision, auth.DecisionExplanation, error) {
+	var explanation auth.DecisionExplanation
+	decision, err := e.scopedWithExplanation(ctx, req, &explanation)
+	return decision, explanation, err
+}
+
+func (e *scopedEngine) scopedWithExplanation(ctx context.Context, req auth.Request, explanation *auth.DecisionExplanation) (auth.ScopedDecision, error) {
 	// WORKSPACE CONFINEMENT. A principal whose membership is confined to a workspace
 	// (Membership.WorkspaceID) may act ONLY within it — any action targeting a DIFFERENT
 	// workspace is FORBIDDEN, overriding its tenant-wide RBAC role (the forbid effect, which
@@ -1142,12 +1155,12 @@ func (e *scopedEngine) Scoped(ctx context.Context, req auth.Request) (auth.Scope
 	}
 	set := state.set
 	if set == nil {
-		return e.scopedWithoutGrants(ctx, req, state)
+		return e.scopedWithoutGrants(ctx, req, state, explanation)
 	}
 	if e.resolver == nil {
 		return auth.ScopedDecision{}, errors.New("governance: scope resolver unavailable")
 	}
-	em, resUID, pUID, marks, err := e.resolver.resolve(ctx, req)
+	em, resUID, pUID, marks, filters, err := e.resolver.resolve(ctx, req)
 	if err != nil {
 		return auth.ScopedDecision{}, err
 	}
@@ -1158,7 +1171,7 @@ func (e *scopedEngine) Scoped(ctx context.Context, req auth.Request) (auth.Scope
 	now := e.clock()
 	creq := cedar.Request{Principal: pUID, Action: actionUID(req), Resource: resUID, Context: scopedContext(req, now)}
 	captureScopedCedar(ctx, state, em, creq, scopedGrantAboveFloor(req.Principal, req.Tenant, state.generation) && !e.grantExpiredState(state, loaded, now), marks)
-	decision, diag := cedar.Authorize(set.policies, em, creq)
+	decision, diag := authorizeCedar(set.policies, em, creq)
 	e.logDiagErrors(diag)
 	// F-06: a forbid rule that errored is a restriction Cedar dropped — fail
 	// CLOSED (EffectForbid) rather than let a permit/grant stand. Selective: a permit
@@ -1171,6 +1184,9 @@ func (e *scopedEngine) Scoped(ctx context.Context, req auth.Request) (auth.Scope
 	// Every non-forbid answer carries the filter mark, so the Authorizer drops the inherited
 	// terms even when nothing here granted.
 	abstain := func(reason string) (auth.ScopedDecision, error) {
+		if explanation != nil && filtered {
+			explanation.RemovedBy = filters
+		}
 		return auth.ScopedDecision{Effect: auth.EffectAbstain, Reason: reason, InheritanceFiltered: filtered}, nil
 	}
 	switch {
@@ -1191,10 +1207,26 @@ func (e *scopedEngine) Scoped(ctx context.Context, req auth.Request) (auth.Scope
 			e.logEffect(req, "grant-expired")
 			return abstain("cedar: scoped grant expired (policy staleness exceeded)")
 		}
-		if filtered && !grantAtOrBelow(set.policies, em, creq, marks) {
-			// Every permit that matched is a right from above the filtered node.
-			e.logEffect(req, "grant-above-inheritance-filter")
-			return abstain("cedar: the matching grant is anchored above an inheritance filter")
+		grantIDs := reasonPolicyIDs(diag.Reasons)
+		if filtered {
+			grantIDs = grantPoliciesAtOrBelow(set.policies, em, creq, marks)
+			if len(grantIDs) == 0 {
+				// Every permit that matched is a right from above the filtered node.
+				e.logEffect(req, "grant-above-inheritance-filter")
+				return abstain("cedar: the matching grant is anchored above an inheritance filter")
+			}
+		}
+		if explanation != nil {
+			explanation.Because = decisionGrants(set.policies, grantIDs)
+			for i := range explanation.Because {
+				explanation.Because[i].Node = decisionNodeForResource(explanation.Because[i].Node, req.Resource)
+				if explanation.Because[i].Subject.Ref == "" {
+					explanation.Because[i].Subject = auth.DecisionSubject{Kind: string(req.Principal.Kind), Ref: req.Principal.CredID.String()}
+				}
+				if explanation.Because[i].Node == (auth.DecisionNode{}) {
+					explanation.Because[i].Node = auth.DecisionNode{Kind: scopeTenant, Ref: string(req.Tenant)}
+				}
+			}
 		}
 		e.logEffect(req, "grant")
 		return auth.ScopedDecision{Effect: auth.EffectGrant, Reason: "cedar: scoped grant", InheritanceFiltered: filtered}, nil
@@ -1202,6 +1234,12 @@ func (e *scopedEngine) Scoped(ctx context.Context, req auth.Request) (auth.Scope
 		e.logEffect(req, "forbid")
 		// A cleanly-evaluated authored scoped forbid: business policy (shadowable).
 		// Confinement (above) and errored/fail-closed forbids stay ClassInvariant.
+		if explanation != nil {
+			explanation.RemovedBy = decisionForbids(set.policies, diag.Reasons)
+			for i := range explanation.RemovedBy {
+				explanation.RemovedBy[i].Node = decisionNodeForResource(explanation.RemovedBy[i].Node, req.Resource)
+			}
+		}
 		return auth.ScopedDecision{Effect: auth.EffectForbid, Reason: "cedar: forbidden by policy", Class: auth.ClassPolicy}, nil
 	default:
 		return abstain("cedar: no grant matched")
@@ -1212,7 +1250,7 @@ func (e *scopedEngine) Scoped(ctx context.Context, req auth.Request) (auth.Scope
 // any lineage read, as it always did, unless an inheritance filter names the request's
 // class: a filter is a row of its own and bites without any grant policy, so then the
 // lineage is read to see whether the target sits under it.
-func (e *scopedEngine) scopedWithoutGrants(ctx context.Context, req auth.Request, state scopedTenantState) (auth.ScopedDecision, error) {
+func (e *scopedEngine) scopedWithoutGrants(ctx context.Context, req auth.Request, state scopedTenantState, explanation *auth.DecisionExplanation) (auth.ScopedDecision, error) {
 	if e.resolver == nil || e.resolver.data == nil {
 		// The filters cannot be read, and an unreadable restriction must not read as none.
 		return auth.ScopedDecision{}, errors.New("governance: scope resolver unavailable")
@@ -1222,13 +1260,16 @@ func (e *scopedEngine) scopedWithoutGrants(ctx context.Context, req auth.Request
 		return auth.ScopedDecision{}, err
 	}
 	if filtersExist {
-		em, resUID, pUID, marks, err := e.resolver.resolve(ctx, req)
+		em, resUID, pUID, marks, filters, err := e.resolver.resolve(ctx, req)
 		if err != nil {
 			return auth.ScopedDecision{}, err
 		}
 		if len(marks) > 0 {
 			creq := cedar.Request{Principal: pUID, Action: actionUID(req), Resource: resUID, Context: scopedContext(req, e.clock())}
 			captureScopedCedar(ctx, state, em, creq, false, marks)
+			if explanation != nil {
+				explanation.RemovedBy = filters
+			}
 			return auth.ScopedDecision{Effect: auth.EffectAbstain, Reason: "no scoped grants for tenant", InheritanceFiltered: true}, nil
 		}
 	}
@@ -1297,7 +1338,7 @@ func evalGrantBasicDetailed(set *grantSet, req auth.Request, now time.Time) (aut
 	resUID := resourceUID(req)
 	em[resUID] = cedar.Entity{UID: resUID, Attributes: cedar.NewRecord(baseResourceAttrs(req))}
 	creq := cedar.Request{Principal: pUID, Action: actionUID(req), Resource: resUID, Context: scopedContext(req, now)}
-	decision, diag := cedar.Authorize(set.policies, em, creq)
+	decision, diag := authorizeCedar(set.policies, em, creq)
 	// F-06: a forbid rule that ERRORED is a restriction Cedar silently dropped —
 	// map it to EffectForbid so every caller (the hooks-PEP restrict-view Evaluate AND the
 	// authoring dry-run) fails closed consistently. A permit that errors only widens, so

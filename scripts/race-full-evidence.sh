@@ -5,12 +5,9 @@
 #
 # race-full-evidence.sh — is there a GREEN race-full run whose head_sha IS this SHA?
 #
-# That is the exact question the public release preflight asks, and it is not the
-# question anyone asks by reflex. `release.yml` requires EQUALITY of SHA and has no
-# bypass: some successful race-full run's head SHA must BE the tagged SHA. "The last
-# race-full went green" does not answer it, and reads as if it did — which matters
-# because any new commit on the public repo invalidates the evidence that existed a
-# moment earlier, and the cost of finding that out from the release run is a rerun.
+# This diagnostic checks exact SHA only. The release preflight uses
+# require-green-run.sh, which also accepts successful push/dispatch evidence on
+# an identical Git tree. A negative here is not the release gate's verdict.
 #
 # THREE ANSWERS, because "no evidence" and "I could not look" decide differently:
 #   0  evidence exists — the run id is printed
@@ -97,6 +94,6 @@ if runs:
     print("  => NO green run on that SHA (%d concluded, none successful)" % len(runs))
     sys.exit(1)
 print("  => NO race-full run at all on that SHA")
-print("     the preflight will say: no successful race-full run exists on the tagged SHA")
+print("     exact-SHA diagnostic only; release also checks identical-tree qualification")
 sys.exit(1)
 '

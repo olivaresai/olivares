@@ -53,7 +53,7 @@ func TestProcProcessNaturalExitReapsDespiteAnInheritedOutputHolder(t *testing.T)
 	}
 	_ = wout.Close()
 	_ = werr.Close()
-	p := (&procRunner{lineCap: 64}).watch(cmd, nil, stdout, stderr, 50*time.Millisecond, func() {})
+	p := (&procRunner{lineCap: 64}).watch(cmd, nil, stdout, stderr, 50*time.Millisecond, func() {}, nil)
 	defer p.Stop(context.Background())
 	sink := drainOutput(p)
 	if !p.finishedWithin(2 * time.Second) {
@@ -179,7 +179,7 @@ func TestProcProcessCanceledWaitRetainsConfirmedReaping(t *testing.T) {
 	_ = stdinRead.Close()
 	_ = wout.Close()
 	_ = werr.Close()
-	p := (&procRunner{lineCap: 64}).watch(cmd, stdin, stdout, stderr, 50*time.Millisecond, func() {})
+	p := (&procRunner{lineCap: 64}).watch(cmd, stdin, stdout, stderr, 50*time.Millisecond, func() {}, nil)
 	t.Cleanup(func() { _ = p.Stop(context.Background()) })
 	sink := drainOutput(p)
 	cancel()
@@ -234,7 +234,7 @@ func TestTerminalEvidenceNativeStopRetainsIncompleteOutputWithNilWait(t *testing
 	_ = werr.Close()
 	// This owned writer models a retained descriptor. It is closed by cleanup;
 	// no process or goroutine outside the fixture is required to keep EOF pending.
-	p := (&procRunner{lineCap: 64}).watch(cmd, stdin, stdout, stderr, 50*time.Millisecond, func() {})
+	p := (&procRunner{lineCap: 64}).watch(cmd, stdin, stdout, stderr, 50*time.Millisecond, func() {}, nil)
 	t.Cleanup(func() { _ = p.Stop(context.Background()) })
 	m, st, tenant, _ := newRuntimeHarness(t, WithRunner(fixedOutputProcessRunner{p}), WithCredentialSource(staticCred()))
 	ref, _ := launchedRun(t, m, tenant)

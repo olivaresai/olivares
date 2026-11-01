@@ -37,10 +37,12 @@ type sessionView struct {
 	noOneAsked bool
 	// lastText is the last assistant text shown, so a result that only repeats it
 	// (an API error arrives as both) is not printed twice.
-	lastText string
+	lastText  string
+	lastReply string
 	// failed is set when the last turn ended in an error; signedOut when the tool
 	// said it is not signed in.
 	failed, signedOut bool
+	limited           bool
 	// readyShown: Claude repeats its init frame at every turn, so the ready line
 	// is shown once (and never by send, whose start line already said it).
 	readyShown bool
@@ -138,6 +140,7 @@ func (v *sessionView) codex(frame map[string]any, line string) bool {
 			if text := strings.TrimSpace(str(item, "text")); text != "" {
 				v.say(text, termrender.RoleNone)
 				v.lastText = text
+				v.lastReply = text
 			}
 		case "commandExecution":
 			v.say("→ command "+truncateSummary(str(item, "command")), termrender.RoleMuted)
@@ -175,6 +178,7 @@ func (v *sessionView) codex(frame map[string]any, line string) bool {
 		turn, _ := params["turn"].(map[string]any)
 		status := str(turn, "status")
 		failed := status == "failed"
+		v.limited = status == "interrupted"
 		if e, ok := turn["error"].(map[string]any); ok && failed && str(e, "message") != v.lastText {
 			v.say(str(e, "message"), termrender.RoleFail)
 		}
@@ -254,7 +258,7 @@ func (v *sessionView) acp(frame map[string]any) (ended, handled bool) {
 	case method != "":
 		return false, false
 	}
-	if e, ok := frame["error"].(map[string]any); ok && (v.driver == "opencode" || v.driver == "grok" || v.driver == "gemini-cli") {
+	if e, ok := frame["error"].(map[string]any); ok && (v.driver == "opencode" || v.driver == "grok" || v.driver == "gemini-cli" || v.driver == "cursor") {
 		// An ACP prompt that fails is answered with an error instead of a stopReason.
 		v.flushACP()
 		v.say("✗ "+str(e, "message"), termrender.RoleFail)
@@ -264,6 +268,7 @@ func (v *sessionView) acp(frame map[string]any) (ended, handled bool) {
 	}
 	result, _ := frame["result"].(map[string]any)
 	reason := str(result, "stopReason")
+	v.limited = reason != "" && reason != "end_turn" && reason != "refusal"
 	if reason == "" {
 		return false, false
 	}
@@ -350,6 +355,7 @@ func (v *sessionView) flushACP() {
 	default:
 		v.say(text, termrender.RoleNone)
 		v.lastText = text
+		v.lastReply = text
 	}
 }
 
@@ -476,6 +482,7 @@ func (v *sessionView) assistant(frame map[string]any) {
 			if text := strings.TrimSpace(str(block, "text")); text != "" {
 				v.say(text, termrender.RoleNone)
 				v.lastText = text
+				v.lastReply = text
 			}
 		case "tool_use":
 			v.seenTool(str(block, "id"))
@@ -525,6 +532,10 @@ func (v *sessionView) toolErrors(frame map[string]any) {
 }
 
 func (v *sessionView) result(frame map[string]any) {
+	v.limited = strings.HasPrefix(str(frame, "subtype"), "error_max_")
+	if text := str(frame, "result"); text != "" {
+		v.lastReply = text
+	}
 	failed := frame["is_error"] == true || strings.HasPrefix(str(frame, "subtype"), "error")
 	if text := strings.TrimSpace(str(frame, "result")); failed && text != "" && text != v.lastText {
 		v.say(text, termrender.RoleFail)

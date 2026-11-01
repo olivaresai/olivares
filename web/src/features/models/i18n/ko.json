@@ -1,13 +1,15 @@
 {
-  "title": "모델 및 프로바이더",
-  "description": "거버넌스된 모델 에스테이트 — 선언된 기능과 가격, 라우팅 정책 및 프로바이더 키 참조입니다. 비밀은 절대 표시되지 않으며 마스킹된 참조만 표시됩니다.",
+  "title": "모델",
+  "description": "도구와 프로바이더가 지금 실행할 수 있는 모델, 이를 사용하는 세션 및 모델 거버넌스입니다.",
   "tabs": {
+    "available": "사용 가능",
     "catalog": "카탈로그",
     "estate": "에스테이트",
     "routing": "라우팅",
     "keys": "프로바이더 키",
     "gpai": "GPAI 태세",
-    "access": "접근"
+    "access": "접근",
+    "governance": "거버넌스"
   },
   "catalog": {
     "title": "기능 매트릭스",
@@ -271,5 +273,57 @@
     "truncatedHint": "표시된 것보다 많은 접근 규칙이 있으며 이 페이지는 id로 행을 가져옵니다. 이 행의 표시는 불러온 규칙만 반영합니다: 제한을 도입하거나 허용 대상을 추가할 허용이 누락될 수 있고 접근을 차감하는 금지도 누락될 수 있습니다 — 따라서 이 페이지는 현실보다 넓게 또는 좁게 읽힐 수 있으며, 불러온 규칙이 없는 주체는 전혀 나타나지 않습니다. 여기서 유효 접근을 추론하지 마십시오: 엔진은 결정 전에 모든 페이지를 소진하며 사용자, 역할 및 그룹 전반에서 주체를 해석하는데 행은 이를 표시할 수 없습니다.",
     "groupsTruncated": "그룹 {{n}}개를 불러왔으며 더 있습니다",
     "groupsTruncatedHint": "표시된 것보다 많은 모델 그룹이 있으며 이 페이지는 id로 행을 가져옵니다. 여기에 없는 그룹은 존재하지 않는다는 증거가 아닙니다 — 규칙이 여전히 이를 대상으로 삼을 수 있습니다."
+  },
+  "available": {
+    "title": "지금 사용 가능",
+    "description": "도구와 프로바이더가 지금 실행할 수 있는 모델과 그것을 사용하는 세션입니다.",
+    "columns": {
+      "model": "모델",
+      "runsOn": "도구 또는 프로바이더",
+      "source": "출처",
+      "state": "상태",
+      "sessions": "세션"
+    },
+    "source": {
+      "tool": "도구의 실시간 목록",
+      "ollama": "Ollama에 설치됨",
+      "providerList": "프로바이더의 모델 목록",
+      "provider": "API 프로바이더",
+      "session": "실시간 세션"
+    },
+    "state": {
+      "ready": "준비됨",
+      "checkingModels": "모델 확인 중",
+      "stopped": "Ollama 중지됨",
+      "unlisted": "모델을 나열하지 않음",
+      "listsNone": "나열된 모델 없음",
+      "failed": "목록을 사용할 수 없음",
+      "starting": "Ollama 시작 중",
+      "ollamaFailed": "Ollama 실패"
+    },
+    "ownDefault": "기본 모델",
+    "providerModels": "모델 목록",
+    "ollamaModels": "설치된 모델",
+    "openAiTools": "AI 도구 열기",
+    "sessions_other": "세션 {{count}}개",
+    "openSessions": "{{model}}을(를) 사용하는 세션",
+    "empty": "아직 사용 가능한 모델이 없습니다",
+    "emptyHint": "Ollama에 모델을 설치하거나 프로바이더를 추가하면 여기에 표시됩니다.",
+    "noAccess": "모델 목록에 접근할 수 없습니다",
+    "noAccessHint": "현재 역할로는 도구, 프로바이더, Ollama, 세션의 모델 목록을 읽을 수 없습니다. 관리자에게 접근 권한을 요청하십시오.",
+    "installModel": "모델 설치",
+    "addProvider": "프로바이더 추가",
+    "sourceFailed": "{{source}}을(를) 읽을 수 없습니다. 다른 소스는 계속 표시됩니다.",
+    "sources": {
+      "tools": "도구의 모델 목록",
+      "ollama": "Ollama",
+      "availability": "프로바이더의 모델",
+      "runs": "실행 중인 세션"
+    },
+    "profilesTruncated": "처음 {{n}}개의 도구 프로필만 표시하며 더 있습니다.",
+    "runsTruncated": "집계는 상태별 최근 세션 {{n}}개를 대상으로 하며 더 있습니다.",
+    "runsFailed": "실행 중인 세션을 읽을 수 없습니다. 집계가 없습니다.",
+    "sessionsUnknown": "세션 수를 사용할 수 없습니다.",
+    "unmatched_other": "실행 중인 세션 {{count}}개가 여기에 없는 모델을 사용합니다."
   }
 }

@@ -42,6 +42,7 @@
   "retryIn": "Réessayez dans {{seconds}} s.",
   "signIn": "Connectez-vous pour comparer.",
   "diffLabel": "Diff unifié de {{path}}",
+  "diffLabelRich": "Diff unifié de <path />",
   "colOld": "Ancien",
   "colNew": "Nouveau",
   "colChange": "Changement",

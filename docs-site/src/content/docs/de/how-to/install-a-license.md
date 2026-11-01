@@ -12,11 +12,14 @@ tun: wo die Datei abgelegt wird, wie Sie sie auf eine laufende Engine anwenden, 
 installierte Lizenz auslesen und — falls Sie einen Business-Plan gekauft haben — wie Sie
 das Community-Binary ohne Neuinstallation gegen das kommerzielle Binary austauschen.
 
-:::note[Eine Lizenz ist eine Attestierung, kein Laufzeitschalter]
-**Sie sperrt keine Funktion der Software, die Sie ausführen.** Eine abgelaufene oder fehlende
-Lizenz schaltet keine Funktionalität ab, und keine Lizenz begrenzt Benutzerkonten — selbst
-gehostete Benutzer sind in jeder Stufe unbegrenzt. Sie ist eine signierte Aussage über Ihre
-Berechtigung und kein Schlüssel, der bereits auf Ihrer Festplatte vorhandenen Code freischaltet.
+:::note[Die Lizenz, nicht das Binary, schaltet die kommerziellen Funktionen ein]
+**Das Business-Build führt eine kommerzielle Funktion nur aus, solange eine gültige Lizenz
+installiert ist, deren Berechtigungen sie umfassen.** Es prüft die Lizenz offline, auf dem
+Rechner, bei jeder Nutzung. Ohne Lizenz oder mit einer abgelaufenen oder widerrufenen Lizenz
+antwortet neue Arbeit dieser Funktion mit `addon_requires_license`; Lesen, Prüfen und Exportieren
+Ihrer Daten funktionieren weiter, und keine Lizenz begrenzt Benutzerkonten — selbst gehostete
+Benutzer sind in jeder Stufe unbegrenzt. Das Community-Binary liest nie eine Lizenz, um etwas
+ein- oder auszuschalten.
 
 **Eine aktive Lizenz gewährt Zugang zu kommerziellen Artefakten.** Die Offline-Installation (`olivares upgrade --bundle`) erfordert das Enterprise-Binary. Enterprise installiert ein signiertes Community-Bundle ohne Lizenz; ein kommerzielles Bundle erfordert eine aktive, offline geprüfte Lizenz. Community und Business unterstützen `--bundle --check`, ohne eine Lizenz zu lesen oder das Bundle zu installieren.
 :::

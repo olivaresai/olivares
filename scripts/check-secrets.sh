@@ -200,6 +200,16 @@ fi
 SCAN_SCOPE="${OLIVARES_SECRETS_SCOPE:-head}"
 for _a in "$@"; do [ "$_a" = "--all-refs" ] && SCAN_SCOPE=all; done
 
+# Explicit ranges share the same report, redaction and fail-closed verdict as history scans.
+scan_range="${OLIVARES_SECRETS_RANGE:-}"
+if [ -n "$scan_range" ]; then
+    [ "$SCAN_SCOPE" = "head" ] || cannot_look "a range cannot be combined with all-ref scope"
+    [[ "$scan_range" =~ ^[0-9a-f]{40}\.\.[0-9a-f]{40}$ ]] || cannot_look "range must be two full commit IDs"
+    git cat-file -e "${scan_range%%..*}^{commit}" 2>/dev/null &&
+        git cat-file -e "${scan_range##*..}^{commit}" 2>/dev/null || cannot_look "range endpoint is unavailable"
+    git rev-list "$scan_range" >/dev/null 2>&1 || cannot_look "cannot read requested range"
+fi
+
 # ⛔ SCHEDULER PARALLELISM OF THE ONE ALL-REF DETECT (R89-C1, 2026-09-12). After the narrowed
 # extraction the sweep's remaining cost is gitleaks rule matching, and a Go binary with GOMAXPROCS
 # unset schedules on every CPU it sees — on a shared runner host, every job asks for all of them
@@ -226,6 +236,8 @@ fi
 # contract was requested. HEAD observation is not all-ref coverage.
 if [ "$SCAN_SCOPE" = "all" ]; then
 	say "check-secrets: admission scope=all — whole-repository audit; charges only HEAD-reachable findings."
+elif [ -n "$scan_range" ]; then
+	say "check-secrets: admission range=$scan_range — only the requested commits are observed."
 else
 	say "check-secrets: admission scope=head — current HEAD history; refs HEAD does not reach are not observed."
 fi
@@ -397,7 +409,11 @@ EOF
 	fi
 fi
 if [ "$SCAN_SCOPE" != "all" ]; then
-	scan_args+=(--log-opts="HEAD")
+	if [ -n "$scan_range" ]; then
+		scan_args+=(--log-opts="--text --remerge-diff $scan_range")
+	else
+		scan_args+=(--log-opts="--text --remerge-diff HEAD")
+	fi
 elif [ -n "$SNAP" ]; then
 	# One argv value; gitleaks splits it on spaces and restores none of its empty-opts defaults,
 	# so all three are written back here, unchanged. The captured worktree HEADs follow `--all`

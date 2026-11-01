@@ -23,7 +23,7 @@ func TestMCPGatewayConsoleAdmission(t *testing.T) {
 	viewer := h.mkMember(admin, "viewer@mcp.test", "viewerpass1", auth.RoleViewer, tenant)
 	operator := h.mkMember(admin, "admin@mcp.test", "adminpass1", auth.RoleAdmin, tenant)
 	// Members are added before the passkey step-up is required: adding a person asks
-	// for the same step-up (HU-28).
+	// for the same step-up.
 	h.requirePasskeyStepUp()
 	base := "/v1/console/mcp-gateway"
 	for _, route := range []struct{ method, path string }{
@@ -98,7 +98,7 @@ func TestMCPGatewayConsoleLifecycleAndConfinement(t *testing.T) {
 	admin := h.mkMember(root, "mcp-admin@api.test", "fixturepass1", auth.RoleAdmin, tenant)
 	viewer := h.mkMember(root, "mcp-viewer@api.test", "fixturepass1", auth.RoleViewer, tenant)
 	// The admin's refusal below is the passkey step-up's; the default policy asks for
-	// none. Members are added first: adding a person asks for the same step-up (HU-28).
+	// none. Members are added first: adding a person asks for the same step-up.
 	h.requirePasskeyStepUp()
 	input := map[string]any{"version": 0, "server": map[string]any{"name": "Fixture", "transport": "streamable_http", "url": "https://tools.test/mcp", "trust": map[string]any{}, "enabled": false}}
 	before := gateway.effects
@@ -124,7 +124,7 @@ func TestMCPGatewayConsoleLifecycleAndConfinement(t *testing.T) {
 	}
 	workspaces := h.do("GET", "/v1/workspaces", root, nil, tenantHdr(tenant))
 	workspace := workspaces.body["items"].([]any)[0].(map[string]any)["id"]
-	h.elevate(root) // adding a person under the passkey step-up asks for it (HU-28)
+	h.elevate(root) // adding a person under the passkey step-up asks for it
 	created := h.do("POST", "/v1/users", root, map[string]any{"email": "mcp-confined@api.test", "password": "fixturepass1", "tenant": tenant.String(), "role": "admin", "workspace_id": workspace}, nil)
 	if created.code != 201 {
 		t.Fatalf("confined fixture=%d %s", created.code, created.raw)

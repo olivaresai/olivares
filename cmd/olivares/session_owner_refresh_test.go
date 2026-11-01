@@ -33,7 +33,9 @@ func TestManagedOwnerRefreshKeepsNativeWorkProcessAndMCP(t *testing.T) {
 			dir := filepath.Dir(e.marker)
 			tokenFile := filepath.Join(dir, "managed-token")
 			script := filepath.Join(dir, "claude-stand-in")
-			body := "#!/bin/sh\numask 077\nprintf '%s\\n' \"$$\" >> '" + e.marker + "'\nprintf '%s' \"$OLIVARES_HOOK_PEP_TOKEN\" > '" + tokenFile + "'\nexec cat >/dev/null\n"
+			// Delay the bearer write to exercise an existing but empty file.
+			// Publish the PID only after writing finishes: file existence is not readiness.
+			body := "#!/bin/sh\numask 077\n{ sleep 0.2; printf '%s' \"$OLIVARES_HOOK_PEP_TOKEN\"; } > '" + tokenFile + "' &&\nprintf '%s\\n' \"$$\" >> '" + e.marker + "'\nexec cat >/dev/null\n"
 			if err := os.WriteFile(script, []byte(body), 0o700); err != nil {
 				t.Fatal(err)
 			}

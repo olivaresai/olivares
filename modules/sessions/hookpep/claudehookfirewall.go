@@ -52,7 +52,12 @@ const hookFirewallSignalSource = "hooks_pep"
 // handed over as unbindable, so an agent-scoped policy denies it instead of falling through to
 // a broader one.
 func (d *Decider) runHookFirewall(ctx context.Context, tenant model.TenantID, actor string, agent hookAgent, in claude.HookDecisionInput) claudeapi.ContentInspectionDecision {
-	if d.Inspector == nil {
+	// Ask once: a settings change between the nil check and the call must not swap it.
+	inspector := d.Inspector
+	if d.InspectorLive != nil {
+		inspector = d.InspectorLive()
+	}
+	if inspector == nil {
 		return claudeapi.ContentInspectionDecision{Forward: true}
 	}
 	collected := claude.ExtractToolContent(in.Tool, in.RewriteBase())
@@ -65,7 +70,7 @@ func (d *Decider) runHookFirewall(ctx context.Context, tenant model.TenantID, ac
 	// The run is named only when the credential proved it: a payload's own session id is
 	// the caller's word (Decide replaces it with the proven run for a session bearer).
 	scope, _ := ctx.Value(sessionHookScopeKey{}).(auth.SessionScope)
-	dec := d.Inspector.Inspect(ctx, claudeapi.ContentInspectionInput{
+	dec := inspector.Inspect(ctx, claudeapi.ContentInspectionInput{
 		Tenant:          tenant.String(),
 		ActorRef:        agent.proven,
 		UnbindableAgent: agent.unbindable,

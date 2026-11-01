@@ -55,7 +55,7 @@ describe('session-start line', () => {
   })
 })
 
-// dev#3119: a limit that stopped the turn is one sentence in the person's words, with the
+// the regression: a limit that stopped the turn is one sentence in the person's words, with the
 // reset time; the window names come from the catalog in every language.
 describe('the limit that stopped the turn', () => {
   const stop = (info: Record<string, unknown>) =>

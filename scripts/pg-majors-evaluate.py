@@ -7,10 +7,12 @@
 #   ci/pg-majors-expectations.json PASS floor per package, all > 0
 #   pg-majors-receipts.txt         PG_MAJOR_DSN_VERIFIED|major=N|... lines ×4
 #   pg-majors-exits.txt            "<major> <exit-status>" per pass
-#   gotest-{15,16,17,18}.json      `go test -json` stream per pass
+#   gotest-{15,16,17,18}.json      `go test -json` stream per pass; each must
+#                                  carry a PG_MAJOR_ASSERTED receipt for its major
 # Exits 1 (with ::error:: lines) unless: receipts cover exactly {15,16,17,18},
-# every pass exited 0, every package meets its floor on every major, and ZERO
-# skips appear in matrix packages. A t.Skip IS an executed, reported test — a
+# every pass exited 0, every package meets its floor on every major, every
+# stream carries its own major's PG_MAJOR_ASSERTED receipt, and ZERO skips
+# appear in matrix packages. A t.Skip IS an executed, reported test — a
 # run counter cannot tell it from a PASS, which is the empty green this traps.
 # Tested by scripts/test-pg-majors-evaluate.sh (mutation battery); the workflow
 # runs that battery in the same job before trusting this file.
@@ -85,14 +87,31 @@ def main() -> int:
         except FileNotFoundError:
             errors.append(f"pass pg{m}: gotest-{m}.json missing — the pass never ran")
             continue
+        # A stream the writer never finished still clears every floor on its
+        # surviving prefix: a torn last line used to be dropped in silence and
+        # a package that never reached a terminal event was never required to.
+        # Each leg's stream is the per-major evidence now, so both are errors.
+        # The pass must also carry the harness's own PG_MAJOR_ASSERTED receipt
+        # (spec §5.4): the leg's DSN is not proof that the tests used it.
+        torn, terminal, asserted = 0, set(), []
         for line in stream:
             try:
                 ev = json.loads(line)
             except ValueError:
+                torn += 1
                 continue
             pkg = (ev.get("Package") or "?").replace(
                 "github.com/olivaresai/olivares/", ""
             )
+            if ev.get("Action") == "output":
+                proof = re.search(
+                    r"PG_MAJOR_ASSERTED\|expected=(\d+)\|connected=(\d+)",
+                    ev.get("Output") or "",
+                )
+                if proof:
+                    asserted.append(proof.groups())
+            if not ev.get("Test") and ev.get("Action") in ("pass", "fail", "skip"):
+                terminal.add(pkg)
             if ev.get("Test") and ev.get("Action") == "pass":
                 passc[pkg] += 1
             if ev.get("Test") and ev.get("Action") == "skip":
@@ -100,6 +119,24 @@ def main() -> int:
                 skips.append(f"{pkg}#{ev.get('Test')}")
             if ev.get("Action") == "fail" and pkg in floors:
                 failures.append(f"{pkg}#{ev.get('Test', '(package)')}")
+        if torn:
+            errors.append(
+                f"pass pg{m}: {torn} unparsable line(s) in gotest-{m}.json — the stream is torn"
+            )
+        if not asserted:
+            errors.append(
+                f"pass pg{m}: no PG_MAJOR_ASSERTED receipt in gotest-{m}.json — the pass never proved which server it measured"
+            )
+        for want, got in sorted(set(asserted)):
+            if want != m or got != want:
+                errors.append(
+                    f"pass pg{m}: PG_MAJOR_ASSERTED expected={want} connected={got} in gotest-{m}.json — the stream does not prove pg{m}"
+                )
+        unfinished = sorted(set(floors) - terminal)
+        if unfinished:
+            errors.append(
+                f"pass pg{m}: no terminal package event for {unfinished[:3]} — the stream is truncated"
+            )
         for pkg, floor in floors.items():
             got = passc.get(pkg, 0)
             if got < floor:

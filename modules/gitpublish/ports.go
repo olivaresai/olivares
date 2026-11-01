@@ -89,6 +89,13 @@ type RepositoryBinding struct {
 	LocalPath string
 }
 
+// WebBaseResolver is an additive custody capability for API-backed hosts. A
+// comment carrying a PR link requires it; existing custody implementations and
+// positional RepositoryBinding literals remain compatible.
+type WebBaseResolver interface {
+	RepositoryWebBase(ctx context.Context, tenant model.TenantID, workspace model.ID, id string) (string, error)
+}
+
 // Custody is the composition root's custody seam. It selects approved
 // bindings in the caller's permitted scope and opens the host adapter with
 // the binding's own credential; no request supplies a secret reference, an
@@ -124,4 +131,43 @@ type SessionFolders interface {
 // reference. *auth.Authenticator implements it.
 type PrincipalResolver interface {
 	ResolvePrincipalScope(ctx context.Context, ref auth.PrincipalRef, tenant model.TenantID) (auth.Principal, error)
+}
+
+// SessionWork commits the changes of a session run's folder as the caller and
+// names the branch, commit and tree to publish; the composition root binds the
+// sessions module. A run outside the workspace is store.ErrNotFound; a folder
+// on no branch, with no commit or that refuses the commit answers
+// gp.ErrNoBranch, gp.ErrNoCommit or gp.ErrLocalInput.
+type SessionWork interface {
+	CommitRun(ctx context.Context, p auth.Principal, tenant model.TenantID, workspace model.ID, run, message string) (gp.LocalHead, error)
+}
+
+// The answers of ShipGate.
+const (
+	GateGranted = "granted"
+	GatePending = "pending"
+	GateDenied  = "denied"
+)
+
+// GateRequest is the push a ship is about to make, as a person reviews it: the
+// governed action and target, a plan hash that binds the exact ref, commit and
+// tree, and the person who asks. ConsumerID is the ship's operation id, so a
+// retry of one ship re-obtains its grant and a second one never spends it.
+type GateRequest struct {
+	Action, SubjectKind, SubjectRef, PlanHash string
+	Reason, RequestedBy, ConsumerID           string
+}
+
+// GateDecision is the tenant's approval policy and its people's answer. Ref
+// names the approval a pending or denied answer concerns.
+type GateDecision struct {
+	Ref, State string
+}
+
+// ShipGate is the approval policy's door before a ship's push. With no policy
+// asking for review it grants at once; otherwise it opens (or finds) the
+// approval for exactly this plan and grants only an approved one, spent once.
+// Any error is a refusal: nothing is pushed when the policy cannot be read.
+type ShipGate interface {
+	Authorize(ctx context.Context, tenant model.TenantID, r GateRequest) (GateDecision, error)
 }

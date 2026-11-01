@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE COMMUNITY ROUTE SWEEP (dev#2485). Every top-level route of a Community build, opened on the
+// THE COMMUNITY ROUTE SWEEP. Every top-level route of a Community build, opened on the
 // demo estate, must answer without a single 501, and no navigation list may offer a page that
 // docs/editions.md places in Business. A 501 is the engine saying "this route is Business": a
 // Community page that asks for one has asked for something it cannot have.
@@ -103,9 +103,9 @@ test.describe('@sweep Community serves only Community pages', () => {
       await page.screenshot({
         path: resolve(OUT, 'routes', `${slug(path)}.png`),
       })
-      // Every link of the navigation landmarks and the area directories is an offer.
+      // Every link of the navigation landmarks (the left navigation and a page's row) is an offer.
       const hrefs = await page
-        .locator('nav a[href], [data-slot="area-directory"] a[href]')
+        .locator('nav a[href]')
         .evaluateAll((links) =>
           links.map((a) => new URL((a as HTMLAnchorElement).href).pathname),
         )

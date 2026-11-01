@@ -9,9 +9,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/olivaresai/olivares/core/internal/store/dialect"
 	"github.com/olivaresai/olivares/core/store"
@@ -245,6 +247,37 @@ func verifyBootstrapFunction(ctx context.Context, q rowQuerier) error {
 // transition. They still need specs, because the bootstrap receipts attribute them and the
 // verification compares them, and both need a declared canonical object to compare against.
 func guardMetadataSpecs(format int64) ([]guardSpec, error) {
+	// Only the compiled format is cached: callers also pass a format read from a database.
+	if format != guardManifestFormat {
+		return deriveGuardMetadataSpecs(format)
+	}
+	if cached := guardMetadataSpecsCompiled.Load(); cached != nil {
+		return cloneGuardSpecs(*cached), nil
+	}
+	specs, err := deriveGuardMetadataSpecs(format)
+	if err != nil {
+		return nil, err
+	}
+	kept := cloneGuardSpecs(specs)
+	guardMetadataSpecsCompiled.Store(&kept)
+	return specs, nil
+}
+
+// guardMetadataSpecsCompiled holds the census of the compiled format. The specs are a pure
+// function of compiled constants (the control-plane relations and the canonical
+// definition), yet every seal, receipt and verification names them, and each derivation
+// hashes three definitions and three entries. Callers get their own copy.
+var guardMetadataSpecsCompiled atomic.Pointer[[]guardSpec]
+
+func cloneGuardSpecs(specs []guardSpec) []guardSpec {
+	out := slices.Clone(specs)
+	for i := range out {
+		out[i].LegacyAllowedStates = slices.Clone(out[i].LegacyAllowedStates)
+	}
+	return out
+}
+
+func deriveGuardMetadataSpecs(format int64) ([]guardSpec, error) {
 	def := canonicalGuardDefinition()
 	out := make([]guardSpec, 0, 3)
 	for _, t := range dialect.GuardControlPlaneTables() {

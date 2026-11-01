@@ -6,6 +6,7 @@ package auth_test
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"testing"
 
@@ -105,15 +106,22 @@ func TestSSOLateGroupAssertionCannotRestoreOffboardedSubject(t *testing.T) {
 						return err
 					}
 					f.a = auth.NewAuthenticator(decorated, nil).WithGroupMapper(fakeGroupMapper{})
+					// The reconcile that follows the session commit finds the subject offboarded.
+					// The sign-in is refused: no token for a session
+					// that carries none of the memberships the IdP asserted, answered like any
+					// other refusal and without the offboarding state.
 					token, _, err := f.a.CompleteSSO(ctx, identity, ssoCompletionIP, f.tenant, false)
-					if err != nil || token == "" || decorated.afterMint != nil {
+					if decorated.afterMint != nil {
 						t.Fatalf("SSO did not reach the committed-session/offboard boundary: %v", err)
 					}
-					if after := f.state(t); after != fenced || after.memberships != 0 {
-						t.Fatalf("late assertion changed fenced subject: %+v -> %+v", fenced, after)
+					if !errors.Is(err, auth.ErrUnauthenticated) || errors.Is(err, auth.ErrConsentRequired) || errors.Is(err, auth.ErrRetirementPending) || token != "" {
+						t.Fatalf("CompleteSSO = token issued=%t, err=%v; want a refusal with ErrUnauthenticated only", token != "", err)
 					}
-					if _, err := f.a.Authenticate(ctx, token); err == nil {
-						t.Fatal("the offboarded SSO session still authenticates")
+					// Only the refusal's own audit record is new.
+					want := fenced
+					want.auditSeq++
+					if after := f.state(t); after != want || after.memberships != 0 {
+						t.Fatalf("late assertion changed fenced subject: %+v -> %+v, want %+v", fenced, after, want)
 					}
 				})
 			}

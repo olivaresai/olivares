@@ -382,15 +382,15 @@ func TestPricingFor_FamilyPrefix(t *testing.T) {
 		wantMatch bool
 		wantDate  string
 	}{
-		{"claude-opus-4-8", 5, true, "2026-09-25"},  // current Opus = $5 (not the deprecated $15)
-		{"claude-opus-4-1", 15, true, "2026-09-25"}, // deprecated Opus 4.1 keeps $15
-		{"claude-opus-4-0", 15, true, "2026-09-25"}, // deprecated Opus 4.0 keeps $15
-		{"claude-sonnet-5", 2, true, "2026-09-25"},  // Sonnet 5 standard list price is $2/$10
-		{"claude-sonnet-4-6", 3, true, "2026-09-25"},
-		{"claude-haiku-4-5", 1, true, "2026-09-25"},             // current Haiku 4.5 = $1 (not retired $0.80)
-		{"claude-3-5-haiku-20241022", 0.80, true, "2026-09-25"}, // retired Haiku 3.5 keeps $0.80
-		{"claude-3-opus-20240229", 15, true, "2026-09-25"},
-		{"claude-fable-5", 10, true, "2026-09-25"},  // Fable 5 = $10/$50 (launch 2026-06-09)
+		{"claude-opus-4-8", 5, true, "2026-10-15"},  // current Opus = $5 (not the deprecated $15)
+		{"claude-opus-4-1", 15, true, "2026-10-15"}, // deprecated Opus 4.1 keeps $15
+		{"claude-opus-4-0", 15, true, "2026-10-15"}, // deprecated Opus 4.0 keeps $15
+		{"claude-sonnet-5", 2, true, "2026-10-15"},  // Sonnet 5 standard list price is $2/$10
+		{"claude-sonnet-4-6", 3, true, "2026-10-15"},
+		{"claude-haiku-4-5", 1, true, "2026-10-15"},             // current Haiku 4.5 = $1 (not retired $0.80)
+		{"claude-3-5-haiku-20241022", 0.80, true, "2026-10-15"}, // retired Haiku 3.5 keeps $0.80
+		{"claude-3-opus-20240229", 15, true, "2026-10-15"},
+		{"claude-fable-5", 10, true, "2026-10-15"},  // Fable 5 = $10/$50 (launch 2026-06-09)
 		{"claude-mythos-5", 10, true, "2026-06-09"}, // Mythos 5: curated fallback (not in the dataset)
 		{"claude-mythos-preview", 0, false, ""},     // preview has NO published list price — never guessed
 		{"gpt-4o", 0, false, ""},
@@ -500,8 +500,8 @@ func TestPricingFor_Sonnet5(t *testing.T) {
 	}
 	if p.InputPerMTokUSD != 2 || p.OutputPerMTokUSD != 10 ||
 		p.CacheWritePerMTokUSD != 2.50 || p.CacheWrite1hPerMTokUSD != 4 ||
-		p.CacheReadPerMTokUSD != 0.20 || p.AsOf != "2026-09-25" {
-		t.Fatalf("sonnet-5 pricing = %+v, want 2/10 + cache 2.50/4/0.20 as of 2026-09-25", p)
+		p.CacheReadPerMTokUSD != 0.20 || p.AsOf != "2026-10-15" {
+		t.Fatalf("sonnet-5 pricing = %+v, want 2/10 + cache 2.50/4/0.20 as of 2026-10-15", p)
 	}
 }
 

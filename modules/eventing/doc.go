@@ -5,7 +5,7 @@
 // Package eventing is module XIX's eventing half: the platform that
 // turns the in-process event bus (S02) into an EXTERNAL subscription surface —
 // typed event subscriptions with delivery guarantees — closing gap EXT-2
-//. The notify module (module XV) remains the alert ROUTER
+// . The notify module (module XV) remains the alert ROUTER
 // to operator-provisioned destinations; this module is the integrator-facing
 // eventing platform: tenant self-service subscriptions, durable at-least-once
 // delivery, retries with backoff, a dead-letter queue, and replay from a
@@ -66,8 +66,10 @@
 //   - The cross-tenant dispatch pump (cmd/olivares/eventingpump.go) calls
 //     DispatchDue/PruneExpired per business tenant on the runtime scheduler —
 //     tenant enumeration is a System operation a module cannot perform
-//. An in-process nudge channel gives fresh events low-latency
-//     first attempts on the node that captured them.
+//
+// . An in-process nudge channel gives fresh events low-latency
+//
+//	first attempts on the node that captured them.
 //
 // The in-proc bus is at-most-once with drop-on-shutdown; durability begins at
 // the capture transaction. Events published while no matching enabled

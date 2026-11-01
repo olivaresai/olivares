@@ -13,7 +13,7 @@ and a reconstructable timeline. Where module I (inventory) materializes the dura
 estate, module II keeps a **live operational overlay** per session over the same
 observation stream — and shows only what that stream honestly carries.
 
-Olivares <!-- release -->0.4<!-- /release --> also **launches** official provider CLIs as owned children under a
+Olivares <!-- release -->0.5<!-- /release --> also **launches** official provider CLIs as owned children under a
 [provider profile](/how-to/operate-provider-sessions/). That managed path is
 the same module. It does not replace the overlay, and it does not merge two
 homes that announce the same provider session id (`CHANGELOG.md` `[26.9.0]` B1/B2).
@@ -84,15 +84,47 @@ If no executable resolves, launch is refused. Other readiness checks, including
 profile authentication and launch policy, still apply. Operator steps:
 [Operate a provider session](/how-to/operate-provider-sessions/).
 
+## Provider account usage
+
+`GET /v1/m/sessions/provider-accounts/{ref}` and the account list carry the
+latest `usage[]` facts reported by that account's own tool home. The CLI exposes
+the same response through `olivares provider account get <ref> -o json`.
+These readings come from structured tool responses, not session text.
+
+A percentage row has `window`, `label`, `utilization` (percent used),
+`observed_at`, and `resets_at` when reported. Window names are open-ended:
+`five_hour`, `seven_day`, per-model windows, and Claude Code's `monthly_spend`
+are examples. Extra-usage utilization appears as `monthly_extra_usage` when
+the tool reports no spend window. A missing reading is unknown; a reported
+zero remains zero.
+
+Codex credits use a separate kind of row, without a percentage:
+
+```json
+{
+  "window": "credits",
+  "label": "Credits",
+  "credit": { "balance": "12.50", "has_credits": true, "unlimited": false },
+  "observed_at": "2026-10-29T10:00:00Z"
+}
+```
+
+`balance` preserves the tool's decimal string. It is omitted when unknown;
+`"0"` is a known zero. `unlimited` and `has_credits` are the tool's flags,
+not percentages. A zero credit balance does not mean a percentage window
+has reached its limit. Existing percentage rows keep their fields.
+
 ## Managed-run lifecycle and restart boundaries
 
 Sessions is a kernel module: it keeps running even when it is not in the saved
 module selection. Turning off an optional module does not reset session data.
 
 The managed-run API under `/v1/m/sessions/runs` and `olivares session` use the
-same runtime. Run reads require `sessions:run:read`; launch, input, stop and
-resume require `sessions:run:write`. A viewer can read a run without being
-allowed to stop it. Tenant and workspace authority still apply to each run.
+same runtime. Listing and metadata require `sessions:run:read`; output requires
+`sessions:output:read`, held by editors and above by default. Launch, input and
+resume require `sessions:run:write`; stop requires `sessions:stop:write`. A viewer
+keeps listing and metadata but loses session content without an explicit output
+grant. Tenant and workspace authority still apply to each run.
 
 ```sh
 olivares session ls -o json

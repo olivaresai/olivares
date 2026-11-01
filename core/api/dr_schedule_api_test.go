@@ -253,6 +253,24 @@ func TestDRSchedulePutValidation(t *testing.T) {
 	}
 }
 
+// offsite_lock is what the engine read from the bucket: a GET-then-PUT round trip
+// is accepted, and a client cannot claim a lock the bucket was never seen to have.
+func TestDRSchedulePutIgnoresClientOffsiteLock(t *testing.T) {
+	dir := t.TempDir()
+	h := newDRHarness(t, dir, openDRStore(t, dir), "")
+	admin := h.adminLogin()
+	r := h.do("PUT", "/v1/console/dr/schedule", admin, map[string]any{
+		"enabled": true, "cron": "0 2 * * *", "retain_days": 7, "offsite_lock": "compliance",
+		"offsite": map[string]any{"bucket": "recovery", "credential_ref": "store:dr-offsite", "gfs": map[string]any{"daily": 7}},
+	}, nil)
+	if r.code != http.StatusOK {
+		t.Fatalf("PUT schedule = %d %s", r.code, r.raw)
+	}
+	if got, ok := r.body["offsite_lock"]; ok {
+		t.Fatalf("a client set offsite_lock to %v", got)
+	}
+}
+
 func TestDRScheduledBackupRunsAndAppliesRetention(t *testing.T) {
 	dir := t.TempDir()
 	st := openDRStore(t, dir)
@@ -377,5 +395,61 @@ func TestDRScheduledBackupWithoutPassphraseFailsLoudly(t *testing.T) {
 	}
 	if msg, _ := r.body["last_run_error"].(string); !strings.Contains(msg, "passphrase") {
 		t.Fatalf("last_run_error = %q, want a passphrase explanation", msg)
+	}
+}
+
+func TestDRScheduledBackupOffsiteFailureStillAppliesLocalRetention(t *testing.T) {
+	dir := t.TempDir()
+	passFile := filepath.Join(dir, "dr-pass.txt")
+	if err := os.WriteFile(passFile, []byte("test-schedule-passphrase"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h := newDRHarness(t, dir, openDRStore(t, dir), passFile)
+	admin := h.adminLogin()
+	backupDir := filepath.Join(dir, "backups")
+	if err := os.MkdirAll(backupDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	stale := filepath.Join(backupDir, "olivares-stale.drbundle")
+	fresh := filepath.Join(backupDir, "olivares-fresh.drbundle")
+	for path, createdAt := range map[string]time.Time{stale: now.Add(-10 * 24 * time.Hour), fresh: now.Add(-time.Hour)} {
+		f, err := os.Create(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = writeDRMetadataBundle(t, f, &dr.Manifest{Format: dr.ManifestFormat, CreatedAt: createdAt.Format(time.RFC3339), EngineKind: "sqlite", Store: dr.StoreSnapshot{Method: dr.MethodPITR, File: "external"}})
+		if closeErr := f.Close(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Resolve fails before constructing an HTTP client: this exercises the copy
+	// failure without contacting a provider or supplying credentials.
+	r := h.do("PUT", "/v1/console/dr/schedule", admin, map[string]any{
+		"enabled": true, "cron": "* * * * *", "retain_days": 7,
+		"offsite": map[string]any{"bucket": "recovery", "credential_ref": "store:missing-offsite-key"},
+	}, nil)
+	if r.code != http.StatusOK {
+		t.Fatalf("save policy: %d %s", r.code, r.raw)
+	}
+	if _, err := h.srv.RunDueScheduledBackup(context.Background(), now); err == nil || !strings.Contains(err.Error(), "offsite") {
+		t.Fatalf("want an offsite failure after the local backup: %v", err)
+	}
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Fatalf("offsite failure left an expired local bundle: %v", err)
+	}
+	if _, err := os.Stat(fresh); err != nil {
+		t.Fatalf("offsite failure removed an in-policy local bundle: %v", err)
+	}
+	bundles, err := filepath.Glob(filepath.Join(backupDir, "*.drbundle"))
+	if err != nil || len(bundles) != 2 {
+		t.Fatalf("want fresh fixture and the new local restore point: %v %v", bundles, err)
+	}
+	r = h.do("GET", "/v1/console/dr/schedule", admin, nil, nil)
+	if r.body["last_run_status"] != "failed" || r.body["last_backup"] == nil {
+		t.Fatalf("copy failure or local restore point was not recorded: %s", r.raw)
 	}
 }

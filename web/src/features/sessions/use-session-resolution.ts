@@ -197,7 +197,7 @@ export function useSessionResolution(
   // A managed row's hook calls and turn usage live on legacy rows keyed by its run ref and
   // canonical id (HU-R24). They are read through the list filtered by that id, which answers
   // 200 with no rows before the hook or the usage has written; the single-row route answered
-  // 404 there on every open (FH 057). Folded as the list does.
+  // 404 there on every open (first-hour check). Folded as the list does.
   const echoes = useQueries({
     queries: (live ? echoRefsOf(live) : []).map((ref) => {
       const params = { session_ref: ref, limit: ECHO_PAGE }

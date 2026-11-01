@@ -13,8 +13,9 @@ import { useQuery } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
 import { CircleCheck, Waypoints } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { KvList, KvRow } from '@/components/ui/kv'
+import { PathText } from '@/components/ui/path-text'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import type { RunDTO } from '@/features/agentops/types'
 import { sessionNameLadder } from '@/features/home/work-line'
@@ -85,7 +86,12 @@ export function useApprovalSession(approval: ApprovalDTO) {
   return {
     name:
       owner || row
-        ? sessionNameLadder(owner?.name, row, t('preview.untitled')).text
+        ? sessionNameLadder(
+            owner?.name,
+            row,
+            t('preview.untitled'),
+            owner?.title,
+          ).text
         : undefined,
     folder: workspace.data?.root_path,
     /** What the session reaches, as the run read reports it (#2545). */
@@ -93,12 +99,14 @@ export function useApprovalSession(approval: ApprovalDTO) {
   }
 }
 
-/** The rule that asked, as one sentence: the approval policy the engine matched (by name
- * when this person may read the rules), or the default when none matched. Null while the
- * name is being read, so the line never flashes a wrong answer; a failed read says so and
- * is never shown as a rule they may not read. */
-export function useMatchedRule(approval: ApprovalDTO): string | null {
-  const { t } = useTranslation('governance')
+/** The rule that asked: the approval policy the engine matched (by name when this person
+ * may read the rules), the default when none matched, or why its name is not shown.
+ * Pending while the name is being read, so no line flashes a wrong answer. */
+type RuleState =
+  | { kind: 'named'; name: string }
+  | { kind: 'default' | 'unreadable' | 'unknown' | 'pending' }
+
+function useRuleState(approval: ApprovalDTO): RuleState {
   const { activeTenant, can } = useAuth()
   const readable = can('governance:policy:read')
   const ref = approval.policy_ref
@@ -108,41 +116,86 @@ export function useMatchedRule(approval: ApprovalDTO): string | null {
     enabled: !!ref && readable,
     staleTime: 60_000,
   })
-  if (!ref) return t('preview.matchedDefault')
-  if (!readable) return t('preview.matchedUnreadable')
-  if (policy.isPending) return null
+  if (!ref) return { kind: 'default' }
+  if (!readable) return { kind: 'unreadable' }
+  if (policy.isPending) return { kind: 'pending' }
   return policy.data?.name
-    ? t('preview.matched', { rule: policy.data.name })
-    : t('preview.matchedUnknown')
+    ? { kind: 'named', name: policy.data.name }
+    : { kind: 'unknown' }
+}
+
+/** The rule that asked, as one sentence ("Matched: …"). Null while the name is being
+ * read; a failed read says so and is never shown as a rule they may not read. */
+export function useMatchedRule(approval: ApprovalDTO): string | null {
+  const { t } = useTranslation('governance')
+  const rule = useRuleState(approval)
+  switch (rule.kind) {
+    case 'pending':
+      return null
+    case 'named':
+      return t('preview.matched', { rule: rule.name })
+    case 'default':
+      return t('preview.matchedDefault')
+    case 'unreadable':
+      return t('preview.matchedUnreadable')
+    case 'unknown':
+      return t('preview.matchedUnknown')
+  }
+}
+
+/** The same rule as the value beside a "Rule" label: its name, or what stands for it. */
+export function useRuleName(approval: ApprovalDTO): string | null {
+  const { t } = useTranslation('governance')
+  const rule = useRuleState(approval)
+  if (rule.kind === 'pending') return null
+  return rule.kind === 'named' ? rule.name : t(`preview.rule.${rule.kind}`)
 }
 
 /** Request subjects that are themselves a destination: a new network host, an MCP server.
  * What such a request reaches is the subject it names. */
 const DESTINATION_SUBJECTS = new Set(['network_destination', 'mcp_server'])
 
-/** What a request reaches, as a person reads it: the destination it names, else the
- * folders and hosts of the session that asks. Empty when neither is known: nothing is
- * guessed. */
+type ApprovalReach = { path: string; access: string } | { text: string }
+
+/** The full string for the tooltip of a clipped reach list. The visible form uses the
+ * inert <path /> slot; replacing that slot only in the attribute cannot inject markup. */
+function approvalReachText(
+  item: ApprovalReach,
+  t: TFunction<'governance'>,
+): string {
+  return 'path' in item
+    ? t(`preview.reachFolder.${item.access}`).replace(
+        '<path />',
+        () => item.path,
+      )
+    : item.text
+}
+
+/** What a request reaches, as structured values: a folder stays a path until it is rendered,
+ * so a translated sentence can give it PathText's middle cut instead of flattening it. */
 export function approvalReaches(
   approval: ApprovalDTO,
   reaches: RunDTO['reaches'],
   t: TFunction<'governance'>,
-): string[] {
+): ApprovalReach[] {
   if (
     approval.subject_kind &&
     approval.subject_ref &&
     DESTINATION_SUBJECTS.has(approval.subject_kind)
   )
-    return [approval.subject_ref]
+    return [{ text: approval.subject_ref }]
   if (!reaches) return []
-  const known = [
-    ...reaches.folders.map((f) =>
-      t(`preview.reachFolder.${f.access}`, { path: f.path }),
-    ),
-    ...reaches.hosts,
+  const known: ApprovalReach[] = [
+    ...reaches.folders.map((folder) => ({
+      path: folder.path,
+      access: folder.access,
+    })),
+    ...reaches.hosts.map((text) => ({ text })),
   ]
   // A part the engine could not read is said, never left out as if the list were whole.
-  return reaches.reason ? [...known, t('preview.reachIncomplete')] : known
+  return reaches.reason
+    ? [...known, { text: t('preview.reachIncomplete') }]
+    : known
 }
 
 /** Why a request needs a person and what it would reach: the two lines every request
@@ -173,13 +226,31 @@ export function ApprovalWhy({
         </span>
       ) : null}
       {reach.length > 0 ? (
-        <span className="flex min-w-0 items-center gap-1.5 text-text-2">
+        <span className="flex min-w-0 items-start gap-1.5 text-text-2">
           <Waypoints aria-hidden className="size-3.5 shrink-0" />
           <span
             className="min-w-0 truncate"
-            title={t('preview.reaches', { list: reach.join(', ') })}
+            title={`${t('preview.reaches')} ${reach
+              .map((item) => approvalReachText(item, t))
+              .join(', ')}`}
           >
-            {t('preview.reaches', { list: reach.join(', ') })}
+            {t('preview.reaches')}{' '}
+            {reach.map((item, index) => (
+              <span key={index}>
+                {index > 0 ? ', ' : null}
+                {'path' in item ? (
+                  <Trans
+                    i18nKey={`preview.reachFolder.${item.access}`}
+                    ns="governance"
+                    components={{
+                      path: <PathText value={item.path} copy={false} />,
+                    }}
+                  />
+                ) : (
+                  item.text
+                )}
+              </span>
+            ))}
           </span>
         </span>
       ) : null}
@@ -239,7 +310,7 @@ function providerScope(
  * sends "CommandLine":"","FilePaths":null today, and its review lists the permission
  * options, not an operation). It cannot show what will run, and must not look as if it
  * did. Only the structured scope decides: a reviewed command is always shown as it is,
- * whatever it prints (SR4C on 912c4d15). */
+ * whatever it prints (review on 912c4d15). */
 export function approvalCommandUnknown(approval: ApprovalDTO): boolean {
   const scope = providerScope(approval)
   if (!scope) return false
@@ -266,6 +337,25 @@ const RUNS_ON_APPROVAL = new Set([
   'agentcore.export.apply',
   'agentcore.export.apply_weakening',
 ])
+
+/** The requester's own reason, beside what will run: shown only when the reviewed text is
+ * what runs (otherwise `ApprovalWhatRuns` already leads with the reason), and never the
+ * structured scope a tool's permission request carries in place of words. */
+export function approvalWhy(approval: ApprovalDTO): string | undefined {
+  const reason = approval.reason?.trim()
+  if (!reason || !approval.review?.text) return undefined
+  if (
+    approval.subject_kind === 'claude.tool' &&
+    reason.startsWith('Claude Code requests ')
+  )
+    return undefined
+  if (
+    approval.action === PROVIDER_APPROVAL &&
+    PROVIDER_REASON.test(approval.reason ?? '')
+  )
+    return undefined
+  return reason
+}
 
 /** Where a command, a tool call or a plan is expected: the requests the engine raises to
  * run something. Only on these is a missing review worth saying. A request a person
@@ -390,8 +480,9 @@ export function ApprovalPreview({ approval }: { approval: ApprovalDTO }) {
           <KvRow label={t('preview.session')}>{session.name}</KvRow>
         ) : null}
         {session.folder ? (
-          <KvRow label={t('preview.folder')} mono>
-            {session.folder}
+          <KvRow label={t('preview.folder')}>
+            {/* Read in full before Approve: it wraps, it is not cut. */}
+            <PathText value={session.folder} wrap />
           </KvRow>
         ) : null}
         <KvRow label={t('preview.askedBy')}>
@@ -528,13 +619,8 @@ export function ApprovalRequestCell({
         </>
       )}
       {session.folder ? (
-        <span
-          className="truncate font-mono text-caption text-text-2"
-          title={session.folder}
-          data-slot="approval-folder"
-        >
-          {session.folder}
-        </span>
+        // The row is a button: no copy action inside it, the cut and the hover stay.
+        <PathText value={session.folder} tone="muted" copy={false} />
       ) : null}
       {/* On a phone only this column is in view: say that the row opens the decision. */}
       {approval.status === 'pending' ? (
@@ -549,9 +635,8 @@ export function ApprovalRequestCell({
   )
 }
 
-/** Who asks, as words only: the queue's row names the person and opens nothing inside
- * itself. The engine's handle stays in Details. */
-export function AskedByName({ approval }: { approval: ApprovalDTO }) {
+/** Who asks, as words only. The engine's handle stays in Details. */
+export function useAskedBy(approval: ApprovalDTO): string {
   const { t } = useTranslation('governance')
   const members = useMemberNames()
   const { principal, can } = useAuth()
@@ -564,4 +649,9 @@ export function AskedByName({ approval }: { approval: ApprovalDTO }) {
       : null,
     principal?.actor,
   )
+}
+
+/** The queue's row names the person and opens nothing inside itself. */
+export function AskedByName({ approval }: { approval: ApprovalDTO }) {
+  return useAskedBy(approval)
 }

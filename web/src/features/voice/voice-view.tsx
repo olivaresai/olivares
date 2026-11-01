@@ -179,7 +179,15 @@ export function VoiceView() {
             title={t('policies.title')}
             description={t('policies.description')}
             actions={
-              canWritePolicy ? (
+              // One filled primary per first screen: on an empty read that
+              // SUCCEEDED the empty state owns the verb, and an unread or failed
+              // read keeps it here — the only way to act (same rule as
+              // catalog-view, vault-view).
+              canWritePolicy &&
+              !(
+                policiesQ.isSuccess &&
+                (policiesQ.data?.items?.length ?? 0) === 0
+              ) ? (
                 <PagePrimaryAction>
                   <Button
                     variant="primary"
@@ -207,7 +215,7 @@ export function VoiceView() {
                       action={
                         canWritePolicy ? (
                           <Button
-                            variant="secondary"
+                            variant="primary"
                             size="sm"
                             onClick={() => {
                               setEditing(null)

@@ -104,7 +104,13 @@ export function DictateButton({
     try {
       await loadRecognizer()
       if (!mounted.current) return
-      take = await startCapture()
+      take = await startCapture((error) => {
+        // The browser ended this take: a failure is said, an ended microphone is heard out.
+        if (capture.current !== take) return
+        if (!error) return void stopRef.current()
+        capture.current = null
+        fail(error)
+      })
     } catch (error) {
       if (!mounted.current) return
       // A refused or dismissed prompt: the button stays, and hides once the browser
@@ -127,9 +133,11 @@ export function DictateButton({
     if (!take) return
     setPhase('transcribing')
     try {
-      // The person speaks the console's language (the nine it ships are Whisper's too).
+      // The person speaks the console's language, which Whisper supports too.
       const language = i18n.resolvedLanguage ?? 'en'
-      const text = (await transcribe(await take.stop(), language)).trim()
+      const audio = await take.stop()
+      if (!mounted.current) return
+      const text = (await transcribe(audio, language)).trim()
       if (!mounted.current) return
       setPhase('idle')
       field?.current?.focus()

@@ -69,7 +69,7 @@ describe('isProfileName', () => {
 })
 
 describe('profileStem', () => {
-  it("is the first word of the tool's product name, as the profile names are: gemini, gemini-b", () => {
+  it("is the engine's stem for the tool, as the profile names are: gemini, gemini-b", () => {
     expect(profileStem('claude')).toBe('claude')
     expect(profileStem('codex')).toBe('codex')
     expect(profileStem('grok')).toBe('grok')
@@ -77,7 +77,7 @@ describe('profileStem', () => {
     expect(profileStem('gemini-cli')).toBe('gemini')
   })
 
-  it('is the tool key for a tool the console has no name for', () => {
+  it('is the tool key for a tool the engine does not list', () => {
     expect(profileStem('new-tool')).toBe('new-tool')
   })
 })

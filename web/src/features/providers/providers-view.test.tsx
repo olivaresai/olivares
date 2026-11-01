@@ -122,6 +122,18 @@ describe('ApiKeys', () => {
     ).toBeInTheDocument()
   })
 
+  // axe empty-table-header on AI tools (#3388): the actions column had an empty header.
+  it('names every column of the key table, the actions one for a screen reader', async () => {
+    providersApi.list.mockResolvedValue({ items: [registered] })
+    wrap(<ApiKeys />)
+    await screen.findByText('Anthropic (prod)')
+    for (const header of screen.getAllByRole('columnheader'))
+      expect(header).toHaveAccessibleName()
+    expect(
+      screen.getByRole('columnheader', { name: 'Actions' }),
+    ).toBeInTheDocument()
+  })
+
   it("an empty list offers the verb in the empty state only, never as the list's Add an API key button", async () => {
     wrap(<ApiKeys />)
     expect(
@@ -373,7 +385,7 @@ describe('ApiKeys', () => {
     expect(screen.queryByText(/next: deploy an agent/i)).not.toBeInTheDocument()
   })
 
-  // HU2-17: a session used a key with no binding, while this page said a provider
+  // acceptance: a session used a key with no binding, while this page said a provider
   // "launches nothing on its own" until it is bound to a provider profile.
   it('does not send a working key to provider profiles to be bound', async () => {
     providersApi.list.mockResolvedValue({
@@ -561,7 +573,7 @@ describe('ApiKeys', () => {
     ).toBeInTheDocument()
   })
 
-  // Root 19:15Z / HU2-18: the form opened with no provider chosen.
+  // Root 19:15Z / acceptance: the form opened with no provider chosen.
   it('opens the form with a provider chosen', async () => {
     const user = userEvent.setup()
     wrap(<ApiKeys />)

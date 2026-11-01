@@ -246,7 +246,7 @@ func TestSecretsTenantScopeDoesNotGrantGlobalAuthority(t *testing.T) {
 	}
 }
 
-// Design FH 016: the tenant scope also holds the secrets sessions receive as
+// Design first-hour check: the tenant scope also holds the secrets sessions receive as
 // environment variables (env/…), managed by the same tenant administrator. Every
 // other tenant namespace (provider records under an internal design note (not shipped)) stays out.
 func TestSecretsTenantScopeHoldsSessionEnvSecrets(t *testing.T) {

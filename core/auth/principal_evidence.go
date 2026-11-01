@@ -275,7 +275,7 @@ func resolveSessionEvidenceMaterial(
 		}
 		return principalEvidenceMaterial{}, principalEvidenceUnavailable("session credential row is malformed", nil)
 	}
-	if session.Revoked || session.DeletedAt != nil {
+	if !session.PairingSourceID.IsZero() || session.Revoked || session.DeletedAt != nil {
 		return principalEvidenceMaterial{}, ErrUnauthenticated
 	}
 	if !validPrincipalEvidenceID(session.UserID) {
@@ -388,13 +388,20 @@ func resolveTokenEvidenceMaterial(
 			token.BoundTenantID != tenant || !IsRole(token.Role) {
 			return principalEvidenceMaterial{}, principalEvidenceUnavailable("ordinary token binding is malformed or out of scope", nil)
 		}
+		role, ok, err := currentTokenRole(ctx, as, token)
+		if err != nil {
+			return principalEvidenceMaterial{}, principalEvidenceUnavailable("resolve token role", err)
+		}
+		if !ok {
+			return principalEvidenceMaterial{}, principalEvidenceUnavailable("token role is no longer admitted", nil)
+		}
 		principal = newPrincipal(
 			KindToken,
 			token.UserID,
 			token.ID,
 			false,
 			token.Name,
-			map[model.TenantID]string{token.BoundTenantID: token.Role},
+			map[model.TenantID]string{token.BoundTenantID: role},
 			nil,
 		)
 		if principalEvidenceAgentOBOToken(token) {

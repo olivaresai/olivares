@@ -6,22 +6,36 @@ import de from '@/lib/i18n/locales/de/nav.json'
 import en from '@/lib/i18n/locales/en/nav.json'
 import es from '@/lib/i18n/locales/es/nav.json'
 import fr from '@/lib/i18n/locales/fr/nav.json'
+import it_ from '@/lib/i18n/locales/it/nav.json'
 import ja from '@/lib/i18n/locales/ja/nav.json'
+import ko from '@/lib/i18n/locales/ko/nav.json'
 import ru from '@/lib/i18n/locales/ru/nav.json'
 import zh from '@/lib/i18n/locales/zh/nav.json'
 
-// The page has one name: the areas, the palette and the directory read the item label. The
-// top bar names the PLACE that opens it, Tools (#2544), and the page keeps its own name until
-// the Tools place issue (#2552) renames it; then this pin fails and goes back to equality.
-describe('the AI tools page name', () => {
-  it.each(Object.entries({ de, en, es, fr, ja, ru, zh }))(
-    'is the page, and the top bar names its place, until #2552 renames the page (%s)',
+// One name per thing: a place of the left navigation whose first page already has a name is
+// called by that name (AI tools, Sessions, Now), so the sidebar, the page title, the palette
+// and the row above a page read the same word in every language.
+const SAME_NAME: Readonly<Record<string, string>> = {
+  now: 'home',
+  sessions: 'sessions',
+  'ai-tools': 'agent-tools',
+  models: 'models',
+  'mcp-skills': 'capabilities',
+  security: 'security',
+  settings: 'settings',
+  access: 'accessMap',
+}
+
+describe('a place and its first page share one name', () => {
+  it.each(Object.entries({ de, en, es, fr, it: it_, ja, ko, ru, zh }))(
+    'in %s',
     (_, nav) => {
-      expect(nav.items['agent-tools']).toBeTruthy()
-      expect(nav.shell.journeys['agent-tools']).toBeTruthy()
-      expect(nav.items['agent-tools']).not.toBe(
-        nav.shell.journeys['agent-tools'],
-      )
+      for (const [place, page] of Object.entries(SAME_NAME)) {
+        const items = nav.items as Record<string, string>
+        const places = nav.places as Record<string, string>
+        expect(items[page], page).toBeTruthy()
+        expect(places[place], place).toBe(items[page])
+      }
     },
   )
 })

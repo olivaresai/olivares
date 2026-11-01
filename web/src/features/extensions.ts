@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { ReactNode } from 'react'
+import type { WorkspaceDTO, ProviderProfileDTO } from './agentops/types'
 import type { LaunchIdentityExtension } from './agentops/launch-identity'
+import type { RunOnExtension } from './agentops/run-on'
 import type { PanelExtensions } from './panels'
 import type { FeatureView } from './registry'
 
@@ -11,6 +13,7 @@ export const FEATURE_EXTENSIONS: readonly FeatureView[] = Object.freeze([])
 
 export const LAUNCH_IDENTITY_EXTENSION: LaunchIdentityExtension | undefined =
   undefined
+export const RUN_ON_EXTENSION: RunOnExtension | undefined = undefined
 /** Reviewed header absences for additional features, consumed by the action census. */
 export const NO_VERB_EXTENSIONS: ReadonlyArray<{ dir: string; why: string }> =
   Object.freeze([])
@@ -53,3 +56,9 @@ export const ANONYMOUS_EXTENSION_ROUTES: readonly {
   readonly path: string
   readonly heading: string
 }[] = Object.freeze([])
+
+/** Optional edition metadata next to folder and provider names. */
+export const WORKSPACE_METADATA:
+  ((workspace: WorkspaceDTO) => ReactNode) | undefined = undefined
+export const PROVIDER_PROFILE_METADATA:
+  ((profile: ProviderProfileDTO) => ReactNode) | undefined = undefined

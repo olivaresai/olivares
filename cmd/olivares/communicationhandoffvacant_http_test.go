@@ -643,8 +643,22 @@ func endVacantHandoffGeneration(
 		}
 		reaped, err := estate.eng.sessionsMod.ReapWorkLeases(
 			context.Background(), estate.tenant, 10)
-		if err != nil || reaped < 1 {
+		if err != nil {
 			t.Fatalf("reap the lapsed generation = %d, %v", reaped, err)
+		}
+		if reaped < 1 {
+			// The engine's own outbox pump reaps lapsed leases on every drain
+			// (workkernelpump.go), and a reap that finds nothing left settles for
+			// "already ended" without counting or erroring. What this arm must pin
+			// is that the lapsed generation WAS reaped, not that this call was the
+			// reaper: the lease read below holds the ended state either way. A
+			// lease still live here is the real failure, and it now fails naming
+			// its state instead of a bare count (the regression: the scheduled
+			// main-suite met the engine's reaper first and read 0, nil).
+			if lapsed := readVacantHandoffLease(t, estate, estate.owner, work.ResultID); lapsed.Live || lapsed.State != want {
+				t.Fatalf("lapsed generation neither reaped here (%d, %v) nor already ended: %+v",
+					reaped, err, lapsed)
+			}
 		}
 	default:
 		source = createCommunicationHTTPTestSession(t, estate.eng, estate.tenant,
@@ -710,6 +724,52 @@ func assertEndedGenerationRefusesAccept(
 	if item.OwnerEpoch != 1 {
 		t.Fatalf("a refused %s-generation accept moved ownership: %+v", offer.state, item)
 	}
+}
+
+// TestCommunicationHandoffVacantGenerationPumpReapedFirstHTTP pins the branch
+// endVacantHandoffGeneration's expired arm takes when the ENGINE's own reaper
+// wins: the scheduled main-suite of 2026-10-27 read "reap the lapsed
+// generation = 0, <nil>" because the outbox pump's drain had already expired
+// the lapsed lease. Nothing races here — the pump runs first, on
+// demand, through the same runOnce the composition tests drive directly.
+func TestCommunicationHandoffVacantGenerationPumpReapedFirstHTTP(t *testing.T) {
+	estate := bootIncomingHandoffHTTPEstate(t, communicationHTTPTestSQLiteStore(t))
+	expiring := armVacantHandoffExpiringLease(t, estate)
+	// Wait out the policy-minimum TTL exactly as the expired arm does, then let
+	// the engine's reaper take the generation: every pump drain reaps lapsed
+	// leases for each served tenant before it drains the outbox.
+	if remaining := 31*time.Second - time.Since(expiring.acquired); remaining > 0 {
+		time.Sleep(remaining)
+	}
+	ctx := context.Background()
+	if err := estate.eng.communicationPump.runOnce(ctx); err != nil {
+		t.Fatalf("pump drain that reaps the lapsed generation: %v", err)
+	}
+	// The arm's own reap now finds nothing left and settles for (0, nil) — the
+	// exact CI reading — so the ended state, not the count, carries the proof.
+	reaped, err := estate.eng.sessionsMod.ReapWorkLeases(ctx, estate.tenant, 10)
+	if err != nil {
+		t.Fatalf("reap after the engine's reaper: %d, %v", reaped, err)
+	}
+	if reaped != 0 {
+		t.Fatalf("this control needs the engine's reaper to win: own reap = %d", reaped)
+	}
+	lease := readVacantHandoffLease(t, estate, estate.owner, expiring.work.ResultID)
+	if lease.State != "expired" || lease.Live {
+		t.Fatalf("engine-reaped lease = %+v, want the expired, ended generation", lease)
+	}
+	// And a generation the engine reaped refuses an accept exactly like one the
+	// arm reaped itself: 409, no effects, ownership unmoved.
+	_, etag := readVacantHandoffItem(t, estate, estate.owner, expiring.work.ResultID)
+	offered := offerVacantHandoff(t, estate, expiring.source.communication.Token,
+		expiring.work.ResultID, etag,
+		map[string]any{"kind": "user", "ref": estate.recipient.id}, "OT-V engine-reaped generation", 1)
+	read := communicationHTTPTestDecode[sessions.IncomingHandoffReadResult](
+		t, estate.detail(t, estate.recipient.token, offered.DeliveryID))
+	assertEndedGenerationRefusesAccept(t, estate, endedGenerationOffer{
+		itemID: expiring.work.ResultID, handoffID: offered.HandoffID,
+		delivery: offered.DeliveryID, etag: read.Handoff.ETag, state: "expired",
+	})
 }
 
 // exerciseVacantGenerationConcurrency makes the causal cases of proposal 10

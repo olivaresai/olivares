@@ -103,6 +103,45 @@ func TestGeminiCLIHasASessionDriverAndVendorBinding(t *testing.T) {
 	}
 }
 
+// Cursor CLI is signed in with its own `agent login` and run over its ACP server
+// (`agent acp`). Measured on 2026.10.22-27dcf5f: `agent login` prints one link and waits,
+// `agent status --format json` answers {"isAuthenticated":...}, CURSOR_CONFIG_DIR moves
+// cli-config.json, and an account login is its only credential: no provider kind binds it.
+func TestCursorCLIHasAnOfficialLoginAndASessionDriver(t *testing.T) {
+	facts, ok := Lookup("cursor")
+	if !ok || !facts.Session || facts.Program != "agent" || facts.Name != "Cursor CLI" || facts.ConfigDir != ".cursor" ||
+		facts.ConfigHomeEnv != CursorConfigHomeEnv || facts.RuntimeBinEnv != CursorRuntimeBinEnv {
+		t.Fatalf("cursor must declare its session driver: %+v", facts)
+	}
+	if facts.ConfigHomeEnv != "CURSOR_CONFIG_DIR" {
+		t.Fatalf("config home variable = %q, want the vendor's CURSOR_CONFIG_DIR", facts.ConfigHomeEnv)
+	}
+	if facts.Installer != InstallOriginTarball || facts.SignIn != SignInLink {
+		t.Fatalf("cursor must declare its origin installer and link sign-in: %+v", facts)
+	}
+	if !slices.Equal(facts.LoginArgs, []string{"login"}) || !slices.Equal(facts.StatusArgs, []string{"status", "--format", "json"}) {
+		t.Fatalf("cursor login/status = %v / %v, want the vendor's `login` and `status --format json`", facts.LoginArgs, facts.StatusArgs)
+	}
+	if len(facts.LoginMethods) != 0 || len(facts.Bindings) != 0 || facts.OwnKind != "" || !facts.EgressMeasured {
+		t.Fatalf("cursor signs in one way, binds no provider kind and is held to its vendor service URLs: %+v", facts)
+	}
+	for _, kind := range []string{"anthropic", "openai", "xai", "gemini", "ollama", "openai_compatible"} {
+		if facts.CanBind(kind, "") {
+			t.Fatalf("cursor must not bind a %s record", kind)
+		}
+	}
+	if !slices.Equal(facts.EnvPrefixes, []string{"CURSOR_"}) {
+		t.Fatalf("cursor credential family = %v, want [CURSOR_]", facts.EnvPrefixes)
+	}
+	// `agent` is not a name to find on PATH: only a managed install or a pin runs it. No
+	// other tool shares that rule.
+	for _, f := range All() {
+		if f.NoPATHFallback != (f.Key == "cursor") {
+			t.Fatalf("%s: NoPATHFallback = %v, want it for cursor only", f.Key, f.NoPATHFallback)
+		}
+	}
+}
+
 // Only a tool whose hosts were measured behind the session proxy is network
 // confined; measuring another tool is the change that adds it here.
 func TestOnlyMeasuredToolsAreEgressEnforced(t *testing.T) {
@@ -112,8 +151,8 @@ func TestOnlyMeasuredToolsAreEgressEnforced(t *testing.T) {
 			measured = append(measured, f.Key)
 		}
 	}
-	if !slices.Equal(measured, []string{"claude", "codex", "opencode", "gemini-cli"}) {
-		t.Fatalf("egress-measured tools = %v, want [claude codex opencode gemini-cli]", measured)
+	if !slices.Equal(measured, []string{"claude", "codex", "opencode", "gemini-cli", "cursor"}) {
+		t.Fatalf("egress-measured tools = %v, want [claude codex opencode gemini-cli cursor]", measured)
 	}
 }
 
@@ -142,7 +181,7 @@ func TestSessionToolsDeclareTheirEnvironment(t *testing.T) {
 func TestDocumentedSessionSkillsFolders(t *testing.T) {
 	want := map[string]string{
 		"claude": ".claude/skills", "codex": ".agents/skills", "grok": ".agents/skills",
-		"gemini-cli": ".agents/skills", "opencode": ".opencode/skills", "ollama": "",
+		"gemini-cli": ".agents/skills", "opencode": ".opencode/skills", "cursor": "", "ollama": "",
 	}
 	for _, facts := range All() {
 		if facts.SkillsDir != want[facts.Key] {

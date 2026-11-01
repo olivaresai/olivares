@@ -3,8 +3,9 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 
 import { useId } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { Checkbox } from '@/components/ui/checkbox'
+import { PathText } from '@/components/ui/path-text'
 import './i18n'
 
 interface DiscardWorktreeOptionProps {
@@ -38,7 +39,11 @@ export function DiscardWorktreeOption({
       />
       <div className="flex flex-col gap-1">
         <label htmlFor={id} className="text-body">
-          {t('discardWorktree.label', { branch })}
+          <Trans
+            i18nKey="discardWorktree.label"
+            ns="agentops"
+            components={{ branch: <PathText value={branch} copy={false} /> }}
+          />
         </label>
         <p id={`${id}-hint`} className="text-caption text-muted-foreground">
           {t('discardWorktree.hint')}

@@ -586,6 +586,19 @@ func (d *connectorDispatcher) Deliver(ctx context.Context, tenant model.TenantID
 	return conn.Notify(ctx, n)
 }
 
+// connector returns the live connector behind a destination this tenant may address,
+// for a caller that reads through it instead of delivering. A destination the tenant
+// may not address is the same answer as an unknown one, as in Deliver.
+func (d *connectorDispatcher) connector(tenant model.TenantID, destination string) (sdk.OutputConnector, bool) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	conn, ok := d.conns[destination]
+	if !ok || !d.addressableBy(tenant, destination) {
+		return nil, false
+	}
+	return conn, true
+}
+
 // errSystemDestinationAddressable refuses a deployment message through a
 // destination some tenant may address.
 var errSystemDestinationAddressable = errors.New("notify: a deployment message needs a destination the operator scoped to no tenant")

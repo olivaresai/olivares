@@ -198,6 +198,9 @@ type PEPHookConfig struct {
 	TimeoutSecs int
 	// Redact also installs a PostToolUse redaction hook bound to the same command.
 	Redact bool
+	// PinEvents pins each hook's event (--hook-event <event>) in its command, before
+	// the deny-closed suffix, so the hook client reads it.
+	PinEvents bool
 }
 
 // PEPHook builds the managed `hooks` block that distributes the PreToolUse PEP
@@ -213,15 +216,39 @@ func PEPHook(cfg PEPHookConfig) (map[string][]HookMatcher, error) {
 	if cfg.TimeoutSecs < 0 {
 		return nil, fmt.Errorf("managed-settings: PEP hook timeout must be >= 0, got %d", cfg.TimeoutSecs)
 	}
-	entry := HookMatcher{
-		Matcher: strings.TrimSpace(cfg.Matcher),
-		Hooks:   []HookCommand{{Type: hookTypeCommand, Command: cmd, Timeout: cfg.TimeoutSecs}},
+	entry := func(event string) []HookMatcher {
+		command := cmd
+		if cfg.PinEvents {
+			command += " --hook-event " + event
+		}
+		return []HookMatcher{{
+			Matcher: strings.TrimSpace(cfg.Matcher),
+			Hooks:   []HookCommand{{Type: hookTypeCommand, Command: DenyClosed(command), Timeout: cfg.TimeoutSecs}},
+		}}
 	}
-	hooks := map[string][]HookMatcher{hookEventPreToolUse: {entry}}
+	hooks := map[string][]HookMatcher{hookEventPreToolUse: entry(hookEventPreToolUse)}
 	if cfg.Redact {
-		hooks[hookEventPostToolUse] = []HookMatcher{entry}
+		hooks[hookEventPostToolUse] = entry(hookEventPostToolUse)
 	}
 	return hooks, nil
+}
+
+// DenyClosed ends a PEP hook command with `|| exit 2`. Claude Code lets a tool call
+// proceed when a hook fails with any exit code but 2, so a hook whose program cannot
+// run (126, 127, killed) must exit 2: the call is blocked, never run ungoverned
+// (the regression, the regression). Every writer of a PEP hook command, managed settings and
+// session launches, ends it here.
+func DenyClosed(command string) string {
+	return command + denyClosedSuffix
+}
+
+const denyClosedSuffix = " || exit 2"
+
+// CutDenyClosed returns command without the suffix DenyClosed adds, and whether it ended
+// with it: a reader of managed settings (the host check) recognizes the PEP hook by what
+// precedes the suffix.
+func CutDenyClosed(command string) (string, bool) {
+	return strings.CutSuffix(command, denyClosedSuffix)
 }
 
 // validateEnv checks a managed `env` block server-side (defense in depth). It is

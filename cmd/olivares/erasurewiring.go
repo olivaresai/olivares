@@ -5,9 +5,15 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io/fs"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -322,4 +328,89 @@ func (a slogEraseAuditor) Record(_ context.Context, rec claudecompliance.EraseRe
 	a.log.Info("erasure: provider-side erase decision",
 		"target", string(rec.Target), "subject", rec.SubjectRef, "allowed", rec.Allowed,
 		"dual_control", rec.DualControl, "approvers", rec.ApproverCount, "reason", rec.Reason)
+}
+
+// ---- the erasure tombstones -------------------------------------------------------
+
+// The tombstone log and its key live in the data dir and never in a DR bundle
+// (custodyKeyFiles names neither), so no restore overwrites them.
+const (
+	erasureTombstoneFile    = "erasure-tombstones.jsonl"
+	erasureTombstoneKeyFile = "erasure-tombstone.key"
+)
+
+// erasureTombstoneLog is compliance.TombstoneLog over an append-only JSON-lines
+// file in the data dir.
+type erasureTombstoneLog struct {
+	dir string
+	mu  sync.Mutex
+}
+
+var _ compliance.TombstoneLog = (*erasureTombstoneLog)(nil)
+
+// Key mints the key only for a data dir that holds no tombstone yet: tombstones
+// copied to another host without their key cannot be opened by a new one.
+func (l *erasureTombstoneLog) Key() ([]byte, error) {
+	keyPath := filepath.Join(l.dir, erasureTombstoneKeyFile)
+	if _, err := os.Stat(keyPath); errors.Is(err, fs.ErrNotExist) {
+		fi, err := os.Stat(filepath.Join(l.dir, erasureTombstoneFile))
+		if err == nil && fi.Size() > 0 {
+			return nil, fmt.Errorf("%s holds erasure tombstones but %s is missing: copy it from the data dir that wrote them",
+				filepath.Join(l.dir, erasureTombstoneFile), keyPath)
+		}
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return nil, err
+		}
+	} else if err != nil {
+		return nil, err
+	}
+	return loadOrCreateAEADKey(keyPath)
+}
+
+// Append writes one line and syncs it before it returns.
+func (l *erasureTombstoneLog) Append(t compliance.ErasureTombstone) error {
+	b, err := json.Marshal(t)
+	if err != nil {
+		return err
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	f, err := os.OpenFile(filepath.Join(l.dir, erasureTombstoneFile), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(append(b, '\n')); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
+}
+
+// All reads every tombstone; a line it cannot parse is an error, never skipped.
+func (l *erasureTombstoneLog) All() ([]compliance.ErasureTombstone, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	b, err := os.ReadFile(filepath.Join(l.dir, erasureTombstoneFile))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var out []compliance.ErasureTombstone
+	for i, line := range bytes.Split(b, []byte("\n")) {
+		if len(bytes.TrimSpace(line)) == 0 {
+			continue
+		}
+		var t compliance.ErasureTombstone
+		if err := json.Unmarshal(line, &t); err != nil {
+			return nil, fmt.Errorf("%s line %d: %w", erasureTombstoneFile, i+1, err)
+		}
+		out = append(out, t)
+	}
+	return out, nil
 }

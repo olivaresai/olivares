@@ -12,7 +12,7 @@ export const CONSOLE_ENTRIES: Readonly<Record<string, readonly string[]>> = {
   adoption: ['adoption'],
   sourcescope: [],
   catalog: ['catalog'],
-  skills: ['skills'],
+  skills: [],
   compliance: ['compliance', 'retention'],
   consoleviews: [],
   deploy: ['deploy'],
@@ -63,7 +63,9 @@ export const CONSOLE_ENTRIES: Readonly<Record<string, readonly string[]>> = {
     'providerAccounts',
     'agent-tools',
     'workspace-templates',
+    'usage',
   ],
   voice: ['voice'],
+  aiterms: [],
   'session-cockpit': [],
 }

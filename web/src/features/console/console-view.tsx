@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { useNavigate, useRouterState } from '@tanstack/react-router'
 import { SlidersHorizontal } from 'lucide-react'
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PageHeader, WORK_CHROME_ROW } from '@/components/ui/page-header'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -13,15 +14,10 @@ import {
 } from '@/lib/hooks/use-url-state'
 import './i18n'
 import { AgentsTab } from './agents-tab'
-import { ApiKeysTab } from './api-keys-tab'
 import { BindingsTab } from './bindings-tab'
 import { ConnectorsTab } from './connectors-tab'
-import { LicenseTab } from './license-tab'
-import { PeopleTab } from './people-tab'
 import { RolesTab } from './roles-tab'
-import { SSOTab } from './sso-tab'
 import { ScopesTab } from './scopes-tab'
-import { MCPGatewayTab } from './mcp-gateway-tab'
 import { SecretsTab } from './secrets-tab'
 import { WorkspaceConnectorsTab } from './workspace-connectors-tab'
 import {
@@ -33,10 +29,10 @@ import {
 import { WorkspaceSwitcher } from '@/components/layout/workspace-switcher'
 
 /**
- * ConsoleView is the FASE X control console: the single hub an enterprise
- * uses to CONFIGURE its tenant — onboard users, connect SSO/IdP, and shape
- * workspaces and agent-groups. It composes one tab per surface; each tab gates its
- * privileged write actions behind RBAC + an AAL3 step-up (RequireAssurance) and
+ * ConsoleView is the FASE X control console, Administration: the tenant's agents,
+ * workspaces and agent-groups, source bindings, secrets and connectors. People, SSO, roles
+ * and API keys are People & groups' (MOVED_TABS below). It composes one tab per surface;
+ * each tab gates its privileged write actions behind RBAC + an AAL3 step-up (RequireAssurance) and
  * runs them through the standard privileged-mutation pattern. Hang their
  * own panels (sources, model governance) off this console.
  *
@@ -56,33 +52,55 @@ import { WorkspaceSwitcher } from '@/components/layout/workspace-switcher'
  * without touching unrelated search/hash, user clicks still replace.
  */
 const TAB_VALUES = [
-  'people',
   'agents',
-  'sso',
   'scopes',
   'roles',
   'bindings',
   'secrets',
-  'mcpGateway',
   'connectors',
   'wsConnectors',
-  'apiKeys',
-  'license',
 ] as const
 
+/**
+ * 0.5 ONE NAVIGATION — the tabs a tenant administrator finds in another place now, and where
+ * an old `?tab=` link lands: People & groups holds people, SSO, roles and API keys, License
+ * the edition. Roles stays here for a workspace (delegated) administrator, who cannot open
+ * People & groups' copy of it, so these wait for the authority and are not route
+ * TAB_ALIASES (features/registry.tsx), which already land the old MCP gateway tab.
+ */
+const MOVED_TABS: Readonly<
+  Record<string, { to: string; search?: Readonly<Record<string, string>> }>
+> = {
+  people: { to: '/identity', search: { tab: 'people' } },
+  sso: { to: '/identity', search: { tab: 'sso' } },
+  roles: { to: '/identity', search: { tab: 'roles' } },
+  apiKeys: { to: '/identity', search: { tab: 'apiKeys' } },
+  license: { to: '/settings', search: { section: 'edition' } },
+}
+
 const TAB_URL_KEYS = ['tab'] as const
-const FALLBACK_TAB = 'people'
+const FALLBACK_TAB = 'agents'
 
 function decodeConsoleTab(
   raw: UrlState,
   fallback = FALLBACK_TAB,
+  tenantAdmin = false,
 ): UrlStateDecoded<string> {
   const want = raw.tab
   if (want === undefined) {
     return { value: fallback, issues: [] }
   }
-  if ((TAB_VALUES as readonly string[]).includes(want)) {
+  const moved = Object.hasOwn(MOVED_TABS, want)
+  if (
+    (TAB_VALUES as readonly string[]).includes(want) &&
+    !(tenantAdmin && moved)
+  ) {
     return { value: want, issues: [] }
+  }
+  // A moved tab is never refused: the view sends the whole address to its new place once
+  // the authority says this is a tenant administrator, who may still be answering.
+  if (moved) {
+    return { value: fallback, issues: [] }
   }
   // Named so the hook can drop it from the address bar (a refused value must
   // not stay in a copied link) without rewriting any other key.
@@ -106,8 +124,8 @@ export default function ConsoleView() {
           ? 'roles'
           : 'agents'
   const decode = useCallback(
-    (raw: UrlState) => decodeConsoleTab(raw, fallback),
-    [fallback],
+    (raw: UrlState) => decodeConsoleTab(raw, fallback, tenantAdmin),
+    [fallback, tenantAdmin],
   )
   const [tab, patchTab] = useValidatedUrlState(
     TAB_URL_KEYS,
@@ -132,6 +150,32 @@ export default function ConsoleView() {
     [patchTab],
   )
 
+  const navigate = useNavigate()
+  const requested = new URLSearchParams(
+    useRouterState({
+      select: (s: { location: { searchStr: string } }) => s.location.searchStr,
+    }),
+  ).get('tab')
+  const moved =
+    tenantAdmin && requested !== null && Object.hasOwn(MOVED_TABS, requested)
+      ? MOVED_TABS[requested]
+      : undefined
+  useEffect(() => {
+    if (!moved) return
+    // An alias's redirect: the rest of the query and the hash come along, and the old
+    // address leaves history, so Back returns to where the link was followed from.
+    void navigate({
+      to: moved.to,
+      search: ({ tab: _tab, ...rest }: Record<string, unknown>) => ({
+        ...rest,
+        ...moved.search,
+      }),
+      hash: true,
+      replace: true,
+    } as never)
+  }, [moved, navigate])
+  if (moved) return null
+
   if (!tenantAdmin && authority.access !== null && !authority.workspace) {
     return (
       <>
@@ -155,22 +199,15 @@ export default function ConsoleView() {
           icon={SlidersHorizontal}
         />
         <TabsList className="min-w-0">
-          {tenantAdmin && (
-            <TabsTrigger value="people">{t('console:tabs.people')}</TabsTrigger>
-          )}
           <TabsTrigger value="agents">{t('console:tabs.agents')}</TabsTrigger>
-          {tenantAdmin && (
-            <TabsTrigger value="sso">{t('console:tabs.sso')}</TabsTrigger>
-          )}
           <TabsTrigger value="scopes">{t('console:tabs.scopes')}</TabsTrigger>
-          <TabsTrigger value="roles">{t('console:tabs.roles')}</TabsTrigger>
+          {!tenantAdmin && (
+            <TabsTrigger value="roles">{t('console:tabs.roles')}</TabsTrigger>
+          )}
           {tenantAdmin && (
             <>
               <TabsTrigger value="bindings">
                 {t('console:tabs.bindings')}
-              </TabsTrigger>
-              <TabsTrigger value="mcpGateway">
-                {t('console:tabs.mcpGateway')}
               </TabsTrigger>
               <TabsTrigger value="secrets">
                 {t('console:tabs.secrets')}
@@ -181,24 +218,12 @@ export default function ConsoleView() {
               <TabsTrigger value="wsConnectors">
                 {t('console:tabs.wsConnectors', 'Workspace Connectors')}
               </TabsTrigger>
-              <TabsTrigger value="apiKeys">
-                {t('console:tabs.apiKeys')}
-              </TabsTrigger>
-              <TabsTrigger value="license">
-                {t('console:tabs.license')}
-              </TabsTrigger>
             </>
           )}
         </TabsList>
       </div>
-      <TabsContent value="people" className="pt-0">
-        <PeopleTab />
-      </TabsContent>
       <TabsContent value="agents" className="pt-0">
         <AgentsTab />
-      </TabsContent>
-      <TabsContent value="sso" className="pt-0">
-        <SSOTab />
       </TabsContent>
       <TabsContent value="scopes" className="pt-0">
         <ScopesTab />
@@ -209,9 +234,6 @@ export default function ConsoleView() {
       <TabsContent value="bindings" className="pt-0">
         <BindingsTab />
       </TabsContent>
-      <TabsContent value="mcpGateway" className="pt-0">
-        <MCPGatewayTab />
-      </TabsContent>
       <TabsContent value="secrets" className="pt-0">
         <SecretsTab />
       </TabsContent>
@@ -220,12 +242,6 @@ export default function ConsoleView() {
       </TabsContent>
       <TabsContent value="wsConnectors" className="pt-0">
         <WorkspaceConnectorsTab />
-      </TabsContent>
-      <TabsContent value="apiKeys" className="pt-0">
-        <ApiKeysTab />
-      </TabsContent>
-      <TabsContent value="license" className="pt-0">
-        <LicenseTab />
       </TabsContent>
     </Tabs>
   )

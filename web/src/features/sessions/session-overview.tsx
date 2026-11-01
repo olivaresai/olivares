@@ -21,8 +21,9 @@
 //
 // ⛔ THE THREE ANSWERS STAY THREE ANSWERS. Nothing here, a read that failed,
 //    and a permission boundary are three different screens.
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { QueryErrorState } from '@/components/layout/query-error-state'
+import { PathText } from '@/components/ui/path-text'
 import { ForbiddenState } from '@/components/ui/error-state'
 import { workLine } from '@/features/home/work-line'
 import { LiveDot } from '@/features/shared'
@@ -84,7 +85,7 @@ export function SessionOverview({
   return (
     <div className="flex flex-col gap-4" data-testid="session-overview">
       <div className="flex flex-wrap items-center gap-2 empty:hidden">
-        {/* A session Olivares started is the normal case and needs no chip (dev#3120);
+        {/* A session Olivares started is the normal case and needs no chip;
             one that came another way says which. */}
         {live && isScopedRow(live) && live.attribution !== 'managed' ? (
           <AttributionChip attribution={live.attribution} />
@@ -113,9 +114,15 @@ export function SessionOverview({
           title={cwd}
           className="text-caption text-muted-foreground [overflow-wrap:anywhere]"
         >
-          {!run?.workspace_ref && run?.workspace_path
-            ? t('conversation.temporaryFolder')
-            : t('conversation.workingFolder', { cwd })}
+          {!run?.workspace_ref && run?.workspace_path ? (
+            t('conversation.temporaryFolder')
+          ) : (
+            <Trans
+              i18nKey="conversation.workingFolder"
+              ns="sessions"
+              components={{ path: <PathText value={cwd} /> }}
+            />
+          )}
         </p>
       ) : null}
 

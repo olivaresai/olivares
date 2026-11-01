@@ -20,6 +20,7 @@ import {
 import { EmptyState } from '@/components/ui/empty-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { PathText } from '@/components/ui/path-text'
 import {
   Select,
   SelectContent,
@@ -38,16 +39,25 @@ import { Spinner } from '@/components/ui/spinner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
+import { useUrlState } from '@/lib/hooks/use-url-state'
 import { cn } from '@/lib/utils'
 import { agentOpsApi, agentOpsKeys } from './api'
+import {
+  mayChoosePermission,
+  PERMISSION_CHOICES,
+  PERMISSION_NAME,
+} from './session-launch'
 import { WorkspaceBrowser } from './workspace-browser'
+import { SessionTerminal } from '@/features/sessions/session-terminal'
 import { WorkspaceWiki } from './workspace-wiki'
 import {
   DEFAULT_DLP_MODE,
   type CreateWorkspaceRequest,
   type WorkspaceDTO,
 } from './types'
+import '@/features/first-hour/i18n'
 import './i18n'
+import { WORKSPACE_METADATA } from '@/features/extensions'
 
 const PAGE = 100
 const DEFAULT_MAX_READ = 5 * 1024 * 1024
@@ -57,10 +67,14 @@ export function WorkspacesPanel() {
   const { t } = useTranslation('agentops')
   const { activeTenant, can } = useAuth()
   const canAdmin = can('sessions:workspace:admin')
+  // A shell in the folder writes to it, so it needs the right to.
+  const canWrite = can('sessions:workspace:write')
 
   const [createOpen, setCreateOpen] = useState(false)
-  const [browse, setBrowse] = useState<WorkspaceDTO | null>(null)
   const [confirmDel, setConfirmDel] = useState<WorkspaceDTO | null>(null)
+  const [location, patchLocation] = useUrlState(['workspace', 'path', 'file'], {
+    history: 'push',
+  })
 
   const query = useInfiniteQuery({
     queryKey: agentOpsKeys.workspaces(activeTenant, { limit: PAGE }),
@@ -73,6 +87,16 @@ export function WorkspacesPanel() {
     () => query.data?.pages.flatMap((p) => p.items) ?? [],
     [query.data],
   )
+  const listedBrowse = rows.find(
+    (workspace) => workspace.workspace_ref === location.workspace,
+  )
+  const browseQuery = useQuery({
+    queryKey: agentOpsKeys.workspace(activeTenant, location.workspace ?? ''),
+    queryFn: () =>
+      agentOpsApi.getWorkspace(location.workspace!, { tenant: activeTenant! }),
+    enabled: !!activeTenant && !!location.workspace && !listedBrowse,
+  })
+  const browse = listedBrowse ?? browseQuery.data ?? null
 
   // Borrar NO está gateado por AAL3 hoy (handlers_scoping.go no llama `requireAAL3` en
   // `handleDeleteWorkspace`), así que esto NO arregla un fallo alcanzable: pasa a la política
@@ -94,16 +118,16 @@ export function WorkspacesPanel() {
         cell: ({ row }) => (
           <span className="font-medium text-foreground">
             {row.original.name || row.original.workspace_ref}
+            {WORKSPACE_METADATA?.(row.original)}
           </span>
         ),
       },
       {
         accessorKey: 'root_path',
         header: t('workspaces.cols.rootPath'),
+        meta: { className: 'min-w-0 w-40 max-w-40 md:w-full md:max-w-0' },
         cell: ({ getValue }) => (
-          <span className="font-mono text-caption text-muted-foreground">
-            {getValue<string>()}
-          </span>
+          <PathText value={getValue<string>()} tone="muted" size="small" />
         ),
       },
       {
@@ -153,7 +177,13 @@ export function WorkspacesPanel() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setBrowse(row.original)}
+              onClick={() =>
+                patchLocation({
+                  workspace: row.original.workspace_ref,
+                  path: undefined,
+                  file: undefined,
+                })
+              }
             >
               <FolderTree className="size-3.5" />
               {t('workspaces.open')}
@@ -172,7 +202,7 @@ export function WorkspacesPanel() {
       },
     ]
     return base
-  }, [t, canAdmin])
+  }, [t, canAdmin, patchLocation])
 
   return (
     <div className="flex flex-col gap-3">
@@ -230,7 +260,17 @@ export function WorkspacesPanel() {
         onConfirm={() => confirmDel && del.mutate(confirmDel)}
       />
 
-      <Sheet open={browse !== null} onOpenChange={(o) => !o && setBrowse(null)}>
+      <Sheet
+        open={browse !== null}
+        onOpenChange={(open) => {
+          if (!open)
+            patchLocation({
+              workspace: undefined,
+              path: undefined,
+              file: undefined,
+            })
+        }}
+      >
         <SheetContent className="flex w-full flex-col gap-3 overflow-y-auto sm:max-w-5xl">
           {browse && (
             <>
@@ -241,15 +281,21 @@ export function WorkspacesPanel() {
                     {browse.name || browse.workspace_ref}
                   </span>
                 </SheetTitle>
-                <SheetDescription className="font-mono text-caption">
-                  {browse.root_path}
+                <SheetDescription>
+                  <PathText value={browse.root_path} copy={false} wrap />
                 </SheetDescription>
               </SheetHeader>
               <ReadOnlyFolders workspace={browse} canAdmin={canAdmin} />
+              <DefaultPermission workspace={browse} canAdmin={canAdmin} />
               <Tabs key={browse.workspace_ref} defaultValue="files">
                 <TabsList aria-label={browse.name || browse.workspace_ref}>
                   <TabsTrigger value="files">{t('browser.title')}</TabsTrigger>
                   <TabsTrigger value="wiki">{t('wiki.title')}</TabsTrigger>
+                  {canWrite && (
+                    <TabsTrigger value="terminal">
+                      {t('sessions:terminal.title')}
+                    </TabsTrigger>
+                  )}
                 </TabsList>
                 <TabsContent value="files">
                   <WorkspaceBrowser workspace={browse} />
@@ -257,6 +303,11 @@ export function WorkspacesPanel() {
                 <TabsContent value="wiki">
                   <WorkspaceWiki workspace={browse} />
                 </TabsContent>
+                {canWrite && (
+                  <TabsContent value="terminal">
+                    <SessionTerminal workspaceRef={browse.workspace_ref} />
+                  </TabsContent>
+                )}
               </Tabs>
             </>
           )}
@@ -266,7 +317,7 @@ export function WorkspacesPanel() {
   )
 }
 
-/** The folders a session in this workspace may read and never change (HU2-21). The list is the
+/** The folders a session in this workspace may read and never change. The list is the
  * engine's own: read fresh, replaced whole on save, then read again. Nothing is listed or edited
  * before that read succeeds: a pending or failed read is not an empty list, and a save from it
  * would replace the saved list. The console does not canonicalize or probe a path; the engine
@@ -328,9 +379,7 @@ function ReadOnlyFolders({
               key={folder}
               className="flex items-center justify-between gap-2"
             >
-              <span className="min-w-0 font-mono text-caption break-all text-foreground">
-                {folder}
-              </span>
+              <PathText value={folder} />
               {canAdmin && (
                 <Button
                   variant="ghost"
@@ -391,6 +440,120 @@ function ReadOnlyFolders({
           </div>
         </>
       )}
+    </section>
+  )
+}
+
+/** The permission a session started in this folder is offered first. It is the
+ * engine's own: read fresh, saved on its own by name, then read again. Full is offered only to
+ * someone who may run it, as the engine decides; nothing is chosen before that read succeeds. */
+function DefaultPermission({
+  workspace,
+  canAdmin,
+}: {
+  workspace: WorkspaceDTO
+  canAdmin: boolean
+}) {
+  const { t } = useTranslation(['agentops', 'firstHour'])
+  const { activeTenant, can } = useAuth()
+  const workspaceRef = workspace.workspace_ref
+  const current = useQuery({
+    queryKey: agentOpsKeys.workspace(activeTenant, workspaceRef),
+    queryFn: () => agentOpsApi.getWorkspace(workspaceRef),
+  })
+  const [draft, setDraft] = useState<string | null>(null)
+  const saved = current.data?.default_permission ?? ''
+  const chosen = draft ?? saved
+  const mayRunAdmin = can('sessions:run:admin')
+  const save = usePrivilegedMutation<string, WorkspaceDTO>({
+    mutationFn: (name) =>
+      agentOpsApi.setWorkspaceDefaultPermission(workspaceRef, name),
+    invalidateKeys: () => [
+      agentOpsKeys.workspace(activeTenant, workspaceRef),
+      agentOpsKeys.workspaces(activeTenant),
+    ],
+    successMessage: t('agentops:workspaces.defaultPermission.saved'),
+    onDone: () => setDraft(null),
+  })
+  const options = [
+    {
+      value: '',
+      label: t('agentops:workspaces.defaultPermission.none'),
+      full: false,
+      restricted: false,
+    },
+    ...PERMISSION_CHOICES.filter(
+      // A saved Full or Auto stays visible, unchoosable, to someone who may not run it.
+      (c) =>
+        mayChoosePermission(c, mayRunAdmin) || saved === PERMISSION_NAME[c],
+    ).map((c) => ({
+      value: PERMISSION_NAME[c],
+      label: t(`firstHour:permission.${c}`),
+      full: c === 'full',
+      restricted: !mayChoosePermission(c, mayRunAdmin),
+    })),
+  ]
+  return (
+    <section className="flex flex-col gap-2 rounded-md border border-border p-3">
+      <h3 className="text-body font-medium text-foreground">
+        {t('agentops:workspaces.defaultPermission.title')}
+      </h3>
+      <p className="text-caption text-muted-foreground">
+        {t('agentops:workspaces.defaultPermission.description')}
+      </p>
+      {/* A failed read is the read-only folders' above: the same request, so the sheet
+          has one alert and one retry, and nothing is chosen from a failed read. */}
+      {current.isPending ? (
+        <Spinner />
+      ) : current.isSuccess ? (
+        <>
+          <div
+            role="radiogroup"
+            aria-label={t('agentops:workspaces.defaultPermission.label')}
+            className="flex flex-col gap-1.5"
+          >
+            {options.map((o) => (
+              <label
+                key={o.value}
+                className="flex items-center gap-2 text-body text-foreground"
+              >
+                <input
+                  type="radio"
+                  name={`default-permission-${workspaceRef}`}
+                  value={o.value}
+                  checked={chosen === o.value}
+                  disabled={!canAdmin || o.restricted}
+                  onChange={() => setDraft(o.value)}
+                />
+                <span className={o.full ? 'text-warning' : undefined}>
+                  {o.label}
+                </span>
+              </label>
+            ))}
+          </div>
+          {canAdmin && (
+            <div className="flex justify-end gap-2">
+              {draft !== null && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setDraft(null)}
+                >
+                  {t('agentops:workspaces.defaultPermission.discard')}
+                </Button>
+              )}
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={draft === null || save.isPending}
+                onClick={() => draft !== null && save.mutate(draft)}
+              >
+                {t('agentops:workspaces.defaultPermission.save')}
+              </Button>
+            </div>
+          )}
+        </>
+      ) : null}
     </section>
   )
 }

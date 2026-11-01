@@ -81,6 +81,7 @@ func (m *Module) providerProfileRoutes(reg api.RouteRegistrar) {
 // It deliberately carries no path — those belong to the authorized configuration
 // read — and no credential value ever.
 type providerProfileDTO struct {
+	MaxDataClass   string `json:"max_data_class"`
 	ProfileRef     string `json:"profile_ref"`
 	Driver         string `json:"driver"`
 	EnvironmentRef string `json:"environment_ref"`
@@ -96,7 +97,7 @@ type providerProfileDTO struct {
 	LocalEnvironment bool `json:"local_environment"`
 	// ServerUserLogin marks an own-login profile that points at this server's user
 	// login (the engine user's own ~/.claude and the like, the homes profiles were
-	// given before FH 036). It is not launched; sign in again to use a product login.
+	// given before first-hour check). It is not launched; sign in again to use a product login.
 	ServerUserLogin bool `json:"server_user_login,omitempty"`
 	// Operable is the LEGACY enablement flag, preserved with its exact meaning and
 	// its exact computation: local, active, a driver this runtime has REGISTERED,
@@ -160,6 +161,7 @@ type providerProfileConfigurationDTO struct {
 }
 
 type createProfileRequest struct {
+	MaxDataClass   string `json:"max_data_class"`
 	Driver         string `json:"driver"`
 	ConfigHome     string `json:"config_home"`
 	UserHome       string `json:"user_home"`
@@ -191,8 +193,9 @@ type createProfileRequest struct {
 // active↔disabled transition. Retirement has its own admin route; driver,
 // environment and homes are not here because they are not mutable.
 type patchProfileRequest struct {
-	DisplayName *string `json:"display_name"`
-	State       *string `json:"state"`
+	MaxDataClass *string `json:"max_data_class"`
+	DisplayName  *string `json:"display_name"`
+	State        *string `json:"state"`
 	// AuthSource re-authorizes (or withdraws, with "") the authentication source.
 	// It is not identity, so it does not create a new profile id; a LIVE child
 	// keeps the source its own launch was authorized under.
@@ -239,7 +242,8 @@ func (m *Module) toProfileDTO(p ProviderProfile) providerProfileDTO {
 	grant, _ := decodeProfileWorkGrant(p.SessionWorkGrant)
 	return providerProfileDTO{
 		ProfileRef: p.Ref, Driver: p.Driver, EnvironmentRef: p.EnvironmentRef,
-		DisplayName: p.DisplayName, Accent: p.Accent, AccountName: p.AccountName, State: p.State, AuthSource: p.AuthSource,
+		MaxDataClass: p.MaxDataClass,
+		DisplayName:  p.DisplayName, Accent: p.Accent, AccountName: p.AccountName, State: p.State, AuthSource: p.AuthSource,
 		ProviderRecordRef:     p.ProviderRecordRef,
 		SessionTools:          p.SessionTools,
 		SessionToolsDeclared:  p.SessionToolsDeclared,
@@ -249,7 +253,7 @@ func (m *Module) toProfileDTO(p ProviderProfile) providerProfileDTO {
 		SessionRegistries:     p.SessionRegistries,
 		SessionEgressHosts:    p.SessionEgressHosts,
 		LocalEnvironment:      local,
-		ServerUserLogin:       usesServerUserLogin(p.Driver, p.AuthSource, p.ConfigHome),
+		ServerUserLogin:       usesServerUserLogin(p.Driver, p.AuthSource, p.ConfigHome, p.UserHome),
 		Operable: local && p.State == ProfileActive && m.driverOperable(p.Driver) &&
 			requireAuthSourceForDriver(p.Driver, p.AuthSource) == nil,
 		CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt, RetiredAt: p.RetiredAt,
@@ -291,6 +295,10 @@ func (m *Module) handleCreateProfile(w http.ResponseWriter, r *http.Request, mc 
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
+	if body.MaxDataClass != "" && !m.mayAdministerProfiles(r.Context(), mc) {
+		writeJSON(w, http.StatusForbidden, errorBody("profile administration is required to approve a data class"))
+		return
+	}
 	if err := m.requireNamedTool(r.Context(), mc, body.Driver); err != nil {
 		writeRunErr(w, err)
 		return
@@ -300,7 +308,8 @@ func (m *Module) handleCreateProfile(w http.ResponseWriter, r *http.Request, mc 
 		return
 	}
 	prof, err := m.CreateProfile(r.Context(), mc.Tenant, CreateProfileInput{
-		Driver: body.Driver, ConfigHome: body.ConfigHome, UserHome: body.UserHome,
+		MaxDataClass: body.MaxDataClass,
+		Driver:       body.Driver, ConfigHome: body.ConfigHome, UserHome: body.UserHome,
 		DisplayName: body.DisplayName, EnvironmentRef: body.EnvironmentRef,
 		AuthSource: body.AuthSource, ProviderRecordRef: body.ProviderRecordRef,
 		SessionTools:          derefTools(body.SessionTools),
@@ -473,11 +482,15 @@ func (m *Module) handlePatchProfile(w http.ResponseWriter, r *http.Request, mc a
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	if body.DisplayName == nil && body.State == nil && body.AuthSource == nil &&
+	if body.MaxDataClass != nil && !m.mayAdministerProfiles(r.Context(), mc) {
+		writeJSON(w, http.StatusForbidden, errorBody("profile administration is required to approve a data class"))
+		return
+	}
+	if body.MaxDataClass == nil && body.DisplayName == nil && body.State == nil && body.AuthSource == nil &&
 		body.ProviderRecordRef == nil && body.SessionTools == nil && body.SessionPermissionMode == nil && len(body.SessionWorkGrant) == 0 &&
 		body.SessionPrograms == nil && body.SessionRegistries == nil && body.SessionEgressHosts == nil {
 		writeJSON(w, http.StatusBadRequest, errorBody(
-			"nothing to change: provide display_name, state, auth_source, provider_record_ref, session_tools, session_permission_mode, session_work_grant, session_programs, session_registries and/or session_egress_hosts"))
+			"nothing to change: provide max_data_class, display_name, state, auth_source, provider_record_ref, session_tools, session_permission_mode, session_work_grant, session_programs, session_registries and/or session_egress_hosts"))
 		return
 	}
 	if body.State != nil {
@@ -506,7 +519,8 @@ func (m *Module) handlePatchProfile(w http.ResponseWriter, r *http.Request, mc a
 		}
 	}
 	prof, err := m.PatchProfile(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), ProfilePatch{
-		DisplayName: body.DisplayName, State: body.State, AuthSource: body.AuthSource,
+		MaxDataClass: body.MaxDataClass,
+		DisplayName:  body.DisplayName, State: body.State, AuthSource: body.AuthSource,
 		ProviderRecordRef:     body.ProviderRecordRef,
 		SessionTools:          body.SessionTools,
 		SessionPermissionMode: body.SessionPermissionMode,

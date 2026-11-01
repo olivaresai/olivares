@@ -132,6 +132,14 @@ func (r *conversationRecordingRunner) Launch(ctx context.Context, spec LaunchSpe
 // Native Codex owns the persisted conversation. Only the Responses provider is
 // a labelled loopback stand-in; no fake tool or fabricated transcript is used.
 func TestCodexNativeConversationAfterStoppedHandleIsGone(t *testing.T) {
+	testCodexNativeConversationAfterStoppedHandleIsGone(t, false)
+}
+
+func TestCodexNativeConversationBeforeFirstTurn(t *testing.T) {
+	testCodexNativeConversationAfterStoppedHandleIsGone(t, true)
+}
+
+func testCodexNativeConversationAfterStoppedHandleIsGone(t *testing.T, empty bool) {
 	native := os.Getenv("OLIVARES_TEST_CODEX_PROGRAM")
 	if native == "" {
 		t.Skip("set OLIVARES_TEST_CODEX_PROGRAM to the native Codex executable")
@@ -170,7 +178,11 @@ func TestCodexNativeConversationAfterStoppedHandleIsGone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, prompt := range []string{"initial CLI prompt", "earlier console prompt"} {
+	prompts := []string{"initial CLI prompt", "earlier console prompt"}
+	if empty {
+		prompts = nil
+	}
+	for _, prompt := range prompts {
 		if err := m.sendTextInput(ctx, tenant, run.RunRef, prompt); err != nil {
 			t.Fatal(err)
 		}
@@ -238,7 +250,23 @@ func TestCodexNativeConversationAfterStoppedHandleIsGone(t *testing.T) {
 			history = payload.Line
 		}
 	}
-	for _, text := range []string{"initial CLI prompt", "earlier console prompt", "fixture answer"} {
+	expected := []string{"initial CLI prompt", "earlier console prompt", "fixture answer"}
+	if empty {
+		expected = nil
+		if history != "" {
+			var payload struct {
+				Type  string            `json:"type"`
+				Turns []json.RawMessage `json:"turns"`
+			}
+			if err := json.Unmarshal([]byte(history), &payload); err != nil || payload.Type != "olivares_conversation" || payload.Turns == nil || len(payload.Turns) != 0 {
+				t.Fatalf("empty session history = %s", history)
+			}
+		}
+		if requests.Load() != 0 {
+			t.Fatal("empty session contacted the provider")
+		}
+	}
+	for _, text := range expected {
 		if !strings.Contains(history, text) {
 			t.Errorf("stored native history lost %q", text)
 		}
@@ -248,19 +276,25 @@ func TestCodexNativeConversationAfterStoppedHandleIsGone(t *testing.T) {
 	}
 	runner.mu.Lock()
 	defer runner.mu.Unlock()
-	if len(runner.specs) != launchesBeforeRead+1 {
-		t.Fatalf("reader launch count=%d expected=%d", len(runner.specs), launchesBeforeRead+1)
+	readers := 1
+	if empty {
+		readers = 0
 	}
-	spec := runner.specs[len(runner.specs)-1]
-	if spec.NetworkPolicy == nil || !spec.NetworkPolicy.Offline || len(spec.NetworkPolicy.Providers)+len(spec.NetworkPolicy.Controls) != 0 {
-		t.Fatal("history reader did not deny all network destinations")
+	if len(runner.specs) != launchesBeforeRead+readers {
+		t.Fatalf("reader launch count=%d expected=%d", len(runner.specs), launchesBeforeRead+readers)
 	}
-	if spec.Confinement == nil {
-		t.Fatal("history reader omitted filesystem confinement")
-	}
-	for _, variable := range spec.Env {
-		if variable.Name != "HOME" && variable.Name != "CODEX_HOME" {
-			t.Errorf("history reader received extra variable %s", variable.Name)
+	if readers != 0 {
+		spec := runner.specs[len(runner.specs)-1]
+		if spec.NetworkPolicy == nil || !spec.NetworkPolicy.Offline || len(spec.NetworkPolicy.Providers)+len(spec.NetworkPolicy.Controls) != 0 {
+			t.Fatal("history reader did not deny all network destinations")
+		}
+		if spec.Confinement == nil {
+			t.Fatal("history reader omitted filesystem confinement")
+		}
+		for _, variable := range spec.Env {
+			if variable.Name != "HOME" && variable.Name != "CODEX_HOME" {
+				t.Errorf("history reader received extra variable %s", variable.Name)
+			}
 		}
 	}
 	if !strings.Contains(res.raw, `"io_unavailable":"not_live_on_node"`) || strings.Contains(res.raw, "event: end") {

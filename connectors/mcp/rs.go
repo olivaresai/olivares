@@ -3408,7 +3408,8 @@ func (rs *ResourceServer) auditTaskTraced(ctx context.Context, tok validatedToke
 func (rs *ResourceServer) handleUIRead(ctx context.Context, w http.ResponseWriter, r *http.Request, req rsRequest, tok validatedToken) bool {
 	// One answer for the whole request: the policy digest below and the inspection
 	// that follows must agree even if the add-on is turned on or off in between.
-	renderOn := sdk.CapabilityEnabled(rs.renderInspector)
+	renderInspector := rs.renderInspectorNow()
+	renderOn := sdk.CapabilityEnabled(renderInspector)
 	trace := requestTraceParent(r, req.Params)
 
 	// STRICT canonicalization is the first thing that touches the params (the
@@ -3583,7 +3584,7 @@ func (rs *ResourceServer) handleUIRead(ctx context.Context, w http.ResponseWrite
 		}
 		if len(htmlContent) > 0 {
 			hash := contentSHA256(htmlContent)
-			idec := rs.renderInspector.InspectRender(ctx, RenderInspectionInput{
+			idec := renderInspector.InspectRender(ctx, RenderInspectionInput{
 				Tenant:      rs.tenant,
 				Subject:     tok.Subject,
 				TemplateURI: uri,

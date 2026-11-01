@@ -10,6 +10,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import { fakeRouter } from '@/test/fake-router'
+
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 
 vi.mock('@/components/ui/toaster', () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
@@ -36,6 +41,7 @@ import { WorkspacesPanel } from './workspaces-panel'
 
 describe('Register workspace DLP default', () => {
   it('registers a folder with only its root path at the engine default, off, also after a reset from label', async () => {
+    fakeRouter.reset('/workspaces')
     api.listWorkspaces.mockResolvedValue({ items: [], has_more: false })
     api.createWorkspace.mockImplementation((b) =>
       Promise.resolve({ workspace_ref: 'ws_1', state: 'active', ...b }),

@@ -2200,6 +2200,13 @@ func TestCleanupAndHandoffPublishedCallForms(t *testing.T) {
 		{"TypeScript cleanup", string(emitTypeScript(doc)), "postV1MSessionsRunsByRefCleanup(ref: string, opts?: RequestOptions)"},
 		{"Java cleanup", string(emitJava(doc)), "postV1MSessionsRunsByRefCleanup(String ref)"},
 		{"Java cleanup options", string(emitJava(doc)), "postV1MSessionsRunsByRefCleanup(String ref, RequestOptions options)"},
+		{"Go resume body", string(goSource), "PostV1MSessionsRunsByRefResumeWithBody(ctx context.Context, ref string, body any, opts ...RequestOption)"},
+		{"TypeScript resume body", string(emitTypeScript(doc)), "postV1MSessionsRunsByRefResumeWithBody(ref: string, body?: JsonInput, opts?: RequestOptions)"},
+		{"Java resume body", string(emitJava(doc)), "postV1MSessionsRunsByRefResumeWithBody(String ref, Object body, RequestOptions options)"},
+		{"Go resume", string(goSource), "PostV1MSessionsRunsByRefResume(ctx context.Context, ref string, opts ...RequestOption)"},
+		{"TypeScript resume", string(emitTypeScript(doc)), "postV1MSessionsRunsByRefResume(ref: string, opts?: RequestOptions)"},
+		{"Java resume", string(emitJava(doc)), "postV1MSessionsRunsByRefResume(String ref)"},
+		{"Java resume options", string(emitJava(doc)), "postV1MSessionsRunsByRefResume(String ref, RequestOptions options)"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if !strings.Contains(tc.source, tc.want) {

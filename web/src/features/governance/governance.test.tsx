@@ -182,7 +182,7 @@ describe('GovernanceView — approval queue (HITL)', () => {
     expect(within(second).getByText('Escalated')).toBeInTheDocument()
   })
 
-  it('an approval that expired says so with its stored time, never "—" (HU 039)', async () => {
+  it('an approval that expired says so with its stored time, never "—"', async () => {
     // A no-expiry policy: no expires_at; the engine stores expired + decided_at (PEP f0c79f29).
     const { expires_at: _, ...noExpiry } = pendingApproval
     api.listApprovals.mockResolvedValue({

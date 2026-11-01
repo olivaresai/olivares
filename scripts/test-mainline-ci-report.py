@@ -261,6 +261,16 @@ class ReporterTest(unittest.TestCase):
         self.assertEqual([issue["title"] for issue in self.github.issues],
                          ["mainline-ci: job community-functional failed on main"])
 
+    def test_weekly_secrets_failure_and_recovery_are_reported(self):
+        repo = "owner/development"
+        self.run.update(name="secrets-weekly", event="schedule", head_repository={"full_name": repo})
+        report.reconcile_run(self.run, repo, self.github.request)
+        self.assertEqual(len(self.github.issues), 1)
+        self.run["id"] += 1
+        self.github.jobs[0]["conclusion"] = "success"
+        report.reconcile_run(self.run, repo, self.github.request)
+        self.assertEqual(self.github.issues[0]["state"], "closed")
+
     def scheduled_run(self, run_id, jobs):
         self.run.update(id=run_id, name="merge-gate-check main batteries", event="schedule",
                         head_repository={"full_name": "owner/development"})

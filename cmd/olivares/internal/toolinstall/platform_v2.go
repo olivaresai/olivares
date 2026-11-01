@@ -40,6 +40,15 @@ func PlatformV2For(driver string, host Platform) (PlatformV2, string, error) {
 			return PlatformV2{}, "", refuse(KindUnsupportedPlatform, "%s release is unavailable for this architecture", driver)
 		}
 		return PlatformV2{OS: "linux", Arch: host.Arch}, "linux-" + host.Arch, nil
+	case DriverCursor:
+		// downloads.cursor.com/lab/<version>/linux/<x64|arm64>/ (the install script's own mapping).
+		switch host.Arch {
+		case "amd64":
+			return PlatformV2{OS: "linux", Arch: host.Arch}, "linux-x64", nil
+		case "arm64":
+			return PlatformV2{OS: "linux", Arch: host.Arch}, "linux-arm64", nil
+		}
+		return PlatformV2{}, "", refuse(KindUnsupportedPlatform, "architecture %q has no Cursor CLI package", host.Arch)
 	case DriverGrok:
 		p := PlatformV2{OS: "linux", Arch: host.Arch, Libc: ""}
 		switch host.Arch {
@@ -77,7 +86,7 @@ func validateRequestV2(req RequestV2) error {
 	if req.Driver == "" {
 		return refuse(KindInvalidRequest, "a driver is required")
 	}
-	if req.Driver != DriverCodex && req.Driver != DriverGrok && req.Driver != DriverOpenCode && req.Driver != DriverOllama && req.Driver != DriverGemini {
+	if req.Driver != DriverCodex && req.Driver != DriverGrok && req.Driver != DriverOpenCode && req.Driver != DriverOllama && req.Driver != DriverGemini && req.Driver != DriverCursor {
 		return refuse(KindUnsupportedProvider, "driver %q is not a v2 installer", req.Driver)
 	}
 	if !filepath.IsAbs(req.DestRoot) || filepath.Clean(req.DestRoot) != req.DestRoot || req.DestRoot == string(filepath.Separator) {

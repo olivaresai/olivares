@@ -41,6 +41,8 @@ type sweepReport struct {
 	More      bool `json:"more"` // true if pending requests remain unscanned (re-run the sweep)
 	// break-glass grants whose lapsed expiry this sweep materialized.
 	BreakGlassExpired int `json:"breakglass_expired"`
+	GrantsExpired     int `json:"grants_expired"`
+	GrantReminders    int `json:"grant_reminders"`
 }
 
 // pendingFinding is a finding collected during a sweep transaction and emitted
@@ -157,6 +159,13 @@ func (m *Module) handleSweep(w http.ResponseWriter, r *http.Request, mc api.Modu
 	} else {
 		report.BreakGlassExpired = n
 	}
+	grantReport, err := m.SweepGrantExpiry(r.Context(), mc.Tenant)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	report.GrantsExpired = grantReport.Expired
+	report.GrantReminders = grantReport.Reminders
 	writeJSON(w, http.StatusOK, report)
 }
 

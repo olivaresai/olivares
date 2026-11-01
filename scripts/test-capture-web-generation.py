@@ -377,16 +377,20 @@ else:
                 ('an artifact of another producing attempt is still refused', '2', 'false', False),
                 ('a rebuild flag over an artifact this job did not rebuild is refused', '1', 'true', False),
                 ('a missing producing attempt is refused loudly', '', 'false', False),
+                ('an unset producing attempt is refused loudly', None, 'false', False),
             ]:
                 with self.subTest(job=job, case=label):
                     destination.write_text('consumer sentinel')
+                    env = dict(self.env, GITHUB_WORKSPACE=str(self.repo),
+                               GITHUB_RUN_ATTEMPT="2", CONSOLE_REBUILT_IN_THIS_JOB=rebuilt)
+                    if attempt is None:
+                        env.pop("GENERATION_ATTEMPT")
+                    else:
+                        env["GENERATION_ATTEMPT"] = attempt
                     result = subprocess.run(
                         ['bash', '-e', '-o', 'pipefail', '-c', script], cwd=self.repo,
-                        env=dict(self.env, GITHUB_WORKSPACE=str(self.repo),
-                                 GITHUB_RUN_ATTEMPT="2", GENERATION_ATTEMPT=attempt,
-                                 CONSOLE_REBUILT_IN_THIS_JOB=rebuilt),
-                        capture_output=True, text=True, timeout=10)
-                    if label == 'a missing producing attempt is refused loudly':
+                        env=env, capture_output=True, text=True, timeout=10)
+                    if not attempt:
                         self.assertIn('::error::', result.stdout + result.stderr)
                     if accepted:
                         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

@@ -67,7 +67,8 @@
   "effects": {
     "push": "Push",
     "pull_request": "Pull request",
-    "merge": "Merge"
+    "merge": "Merge",
+    "issue_comment": "Issue comment"
   },
   "authority": {
     "requires": "Requires {{permission}}",
@@ -174,6 +175,7 @@
     "field_not_accepted": "The request carried a field this route does not accept.",
     "forbidden": "Your current authority does not allow this action on this target.",
     "head_mismatch": "The pull request’s head is no longer the reviewed commit.",
+    "link_not_allowed": "The pull request link must point to a pull request of the approved repository.",
     "host_credential_refused": "The Git host refused the binding’s credential or its scope. Nothing was dispatched.",
     "host_unavailable": "The Git host could not be reached. Nothing was dispatched.",
     "intent_settled": "The intent is already settled, so it cannot be abandoned.",
@@ -201,7 +203,13 @@
     "unsupported_requirement": "The host cannot honour this requirement, for example a rebase merge on GitLab.",
     "version_conflict": "The target changed since you opened it. Reopen it to see the current version.",
     "workflow_change_refused": "The commit changes CI workflow files, which this target refuses to publish.",
-    "unknown": "The engine refused the request with a code this console does not describe."
+    "unknown": "The engine refused the request with a code this console does not describe.",
+    "no_branch": "The session’s folder is on no branch. Switch it to a branch, then ship again.",
+    "no_commit": "The session’s branch has no commit yet.",
+    "nothing_to_ship": "The session’s commit adds nothing to the branch it would be merged into.",
+    "commit_refused": "The session’s folder refused the commit: it is read-only, still working, or your profile has no name and email.",
+    "approval_denied": "A person did not approve this push, or its approval ended. Ship again to ask for a new review.",
+    "approval_unavailable": "The approval service could not answer. Ship again in a moment."
   },
   "intents": {
     "title": "Intents",
@@ -254,5 +262,24 @@
     "abandonTitle": "Abandon intent {{id}}?",
     "abandonDescription": "Abandoning records that you take responsibility for this unresolved intent. It does not change or read the host, and the scope stays held until a new request acknowledges this intent.",
     "abandonReason": "Reason (at most 256 characters)"
+  },
+  "ship": {
+    "button": "Ship",
+    "shipTo": "Ship to {{prefix}}",
+    "title": "Ship this session",
+    "description": "Commits the session’s changes as you, pushes them to a branch under {{prefix}} and opens a pull request, in one action.",
+    "submit": "Ship",
+    "message": "Commit message",
+    "messageHint": "Used only when the session’s folder has changes. Defaults to the title.",
+    "shipped": "Shipped: {{branch}} is pushed.",
+    "pullRequest": "Pull request #{{number}}",
+    "pullRequestOpen": "Open the pull request",
+    "awaitingTitle": "Waiting for another person’s approval",
+    "awaitingBody": "Your changes are committed. Another person has to approve the push (approval {{id}}) before it goes out. When they have, ship again.",
+    "again": "Ship again",
+    "incompleteTitle": "The ship did not finish",
+    "incompletePush": "The push of {{branch}} did not apply ({{state}}). Check this target’s intents, then ship again.",
+    "incompletePullRequest": "{{branch}} is pushed, but the pull request was not opened ({{code}}). Ship again to retry it.",
+    "pullRequests": "Pull requests"
   }
 }

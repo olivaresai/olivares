@@ -35,11 +35,18 @@ func hasTargetedUnresolvableScopeForbid(
 		return false
 	}
 	for id, policy := range policies.All() {
-		if policy == nil || policy.Effect() != cedar.Forbid || !basicPolicyHeadMatches(policy, entities, req) {
+		if policy == nil || policy.Effect() != cedar.Forbid {
+			continue
+		}
+		policyReq := req
+		if legacy, split := legacySessionRequest(req); split && !policyNamesSessionPermission(policy, sessionRequestPermission(req)) {
+			policyReq = legacy
+		}
+		if !basicPolicyHeadMatches(policy, entities, policyReq) {
 			continue
 		}
 
-		missing := unresolvableScopeParents(policy, entities, req)
+		missing := unresolvableScopeParents(policy, entities, policyReq)
 		if len(missing) == 0 {
 			continue
 		}
@@ -47,10 +54,10 @@ func hasTargetedUnresolvableScopeForbid(
 		// Use cedar-go's typed AST rather than Cedar text/JSON substring matching:
 		// typed variables, entity UIDs and scope nodes distinguish hierarchy `in`
 		// from set membership and let us validate the policy head without heuristics.
-		probeEntities := addScopeProbeParents(entities, req, missing)
+		probeEntities := addScopeProbeParents(entities, policyReq, missing)
 		probeSet := cedar.NewPolicySet()
 		probeSet.Add(id, policy)
-		_, diag := cedar.Authorize(probeSet, probeEntities, req)
+		_, diag := authorizeCedar(probeSet, probeEntities, policyReq)
 		if len(diag.Reasons) > 0 {
 			return true
 		}

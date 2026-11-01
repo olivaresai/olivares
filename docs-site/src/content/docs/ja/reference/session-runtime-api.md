@@ -32,12 +32,13 @@ Claude Code の hook 経路は `olivares claude-hook`（PreToolUse PEP）のま�
 
 | 権限 | 経路 |
 |---|---|
-| `sessions:run:read` | `GET /runs`、`GET /runs/{ref}`、`GET /runs/{ref}/events`、`GET /runs/{ref}/attach`、`GET /runs/{ref}/handoff`、`GET /runs/{ref}/activity`、`GET /runs/{ref}/activity/agents/{agent}`、`GET /runs/{ref}/messages`、`POST /runs/{ref}/pin`、`DELETE /runs/{ref}/pin` |
-| `sessions:run:write` | `POST /runs`、`POST /runs/{ref}/input`、`POST /runs/{ref}/interrupt`、`POST /runs/{ref}/stop`、`POST /runs/{ref}/resume`、`POST /runs/{ref}/move`、`POST /runs/{ref}/handoff`, `PUT /runs/{ref}/name`, `POST /runs/{ref}/archive`, `DELETE /runs/{ref}/archive` |
+| `sessions:run:read` | `GET /runs`, `GET /runs/{ref}`, `POST /runs/{ref}/pin`, `DELETE /runs/{ref}/pin` |
+| `sessions:output:read` | `GET /runs/{ref}/events`, `GET /runs/{ref}/attach`, `GET /runs/{ref}/changes`, `GET /runs/{ref}/changes/file`, `GET /runs/{ref}/git`, `GET /runs/{ref}/diff`, `GET /runs/{ref}/diff/file`, `GET /runs/{ref}/handoff`, `GET /runs/{ref}/activity`, `GET /runs/{ref}/activity/agents/{agent}`, `GET /runs/{ref}/messages`, `GET /runs/{ref}/attachments/{id}` |
+| `sessions:run:write` | `POST /runs`、`POST /runs/{ref}/input`、`POST /runs/{ref}/interrupt`、`POST /runs/{ref}/resume`、`POST /runs/{ref}/move`、`POST /runs/{ref}/handoff`, `PUT /runs/{ref}/name`, `POST /runs/{ref}/archive`, `DELETE /runs/{ref}/archive` |
+| `sessions:stop:write` | `POST /runs/{ref}/stop` |
 | `sessions:run:admin` | `POST /runs/{ref}/cleanup`、`DELETE /runs/{ref}` |
 
-viewer は、自分自身のセッションを一覧し、ピン留めできる。作成、入力、停止には
-write が要る。経路の authorizer が執行点であり、権限がなければ 403 となる。
+viewer はセッションの一覧表示と自分用のピン留めを利用できます。作成と入力には `sessions:run:write`、停止には `sessions:stop:write` が必要です。出力、会話記録、ファイルや Git の内容には、editor 以上が標準で持つ `sessions:output:read` が必要になりました。viewer はメタデータと個人のマークを保持しますが、明示的に許可されない限り、これらの内容へのアクセスを失います。権限がない場合は 403 を返します。
 
 ## コンソールが読む経路
 
@@ -56,6 +57,9 @@ write が要る。経路の authorizer が執行点であり、権限がなけ�
 | `POST`, `DELETE` | `/runs/{ref}/pin` | 呼び出し元のためにセッションをピン留めする、またはピンを外す。ピンは呼び出し元自身のものであり、別のブラウザーやマシンにも引き継がれる。他の人の一覧は決して変えない。どちらの呼び出しも冪等で、200 `{run_ref, pinned, pinned_at}` で応答する。1 人が保持できるピンは最大 20 件で、21 件目をピン留めすると最も古いものが外れる。セッションを解放または削除すると、そのセッションのすべてのピンが外れる。`GET /runs` と `GET /runs/{ref}` は呼び出し元自身の `pinned` と `pinned_at` を返す。`GET /runs` は、さらにそのページの外にある呼び出し元のピン留めセッションも返す（`limit` を超えて最大 20 行まで。`pagination=cursor` は、すべてのセッションに一度で到達するため、追加しない）。ピンは、それを作成した認証情報に属する。人のコンソールと `olivares login` のセッションはピンを共有し、API トークンは自身のピンを保持する。解放されたセッションは 409 で応答する |
 | `POST`, `DELETE` | `/runs/{ref}/snooze` | 呼び出し元のために、セッションを指定の時刻までスヌーズする。または、スヌーズを終える。`POST` は `{until}`（将来の RFC 3339 時刻。それ以外は 400）を受け取り、2 回目の `POST` で時刻を移動できる。スヌーズはピンと同様に呼び出し元自身のものであり、コンソールは `until` までそのセッションを本人の一覧から外すが、他の人の一覧は変わらない。どちらも 200 `{run_ref, snoozed_until?, done}` で応答する。`GET /runs` と `GET /runs/{ref}` が呼び出し元の `snoozed_until` を返すのは、スヌーズが続いている間だけである。セッションを解放または削除すると、そのセッションのすべてのスヌーズが外れる。解放されたセッションは 409 で応答する |
 | `POST`, `DELETE` | `/runs/{ref}/done` | 呼び出し元のためにセッションを完了にする、または完了の印を消す。コンソールは、完了したセッションをその本人の一覧の「以前」に分類する。どちらも冪等で、200 `{run_ref, snoozed_until?, done}` で応答する。`GET /runs` と `GET /runs/{ref}` は呼び出し元の `done` を返す。セッションを解放または削除すると、そのセッションのすべての印が外れる。解放されたセッションは 409 で応答する |
+| `GET`, `POST`, `PUT` | `/runs/{ref}/queue` | ツールが作業している間にセッション向けに並べられたメッセージ。`GET` は `{run_ref, items, hold?, can_steer}` を返します。送信順のメッセージ(`id`、`text`、`queued_by`、`queued_at`)、先頭がまだ送られていない理由(`hold`: `turn`、`approval`、`limit`、`stopped`。すぐ送られる場合は省略)、ツールが実行中のターンへメッセージを受け付けるか(`can_steer`)です。`POST` は `{text}` を受け取り、メッセージとともに 201 を返します。セッションがビジーでなければ、すぐ送信されます。`PUT` は `{ids}`(待機中の各 id を新しい順序で一度ずつ。それ以外は 400)を受け取り、キューを返します。キューはサーバーに保存されるため、再読み込み後も、どの端末でも表示されます。ターンが終わると、先頭のメッセージがセッションの入力から一度だけ送られます。停止・中断・上限に達したセッションや承認待ちのセッションはキューを保持します。書き込み権限とエディションの規則は `/input` と同じです。作業項目から開始されたセッションと解放済みのセッションは 409 を返します。セッションを解放するとキューは破棄され、`POST /runs/{ref}/cleanup` の応答は破棄したメッセージを `discarded_queue` に並べます |
+| `PATCH`, `DELETE` | `/runs/{ref}/queue/{id}` | 待機中のメッセージの本文を変更する(`{text}`、メッセージとともに 200)か、送信せずにキューから外す(キューとともに 200)。キューにない id は 404 を返します |
+| `POST` | `/runs/{ref}/queue/{id}/steer` | 待機中のメッセージをセッションの入力から今すぐ送信します。ツールが受け付ける場合は実行中のターンへ(`can_steer`)、そうでなければ次のメッセージとして送ります。メッセージは先にキューから外れるため一度だけ送られ、何も書き込まれる前に拒否された場合は元の位置に戻ります。202 `{accepted}` を返します。実行中のターンにメッセージを受け付けないツールは、ターンの間 409 を返します |
 | `PUT` | `/runs/{ref}/name` | 本文 `{name}`。セッションの名前を変更する。名前は前後の空白が除かれ、空の名前は名前を消し、クライアントは独自の命名に戻る。200 文字を超える名前、制御文字または不可視文字（書式文字、行区切り・段落区切り：ゼロ幅スペース、方向の上書き）、または `name` がない場合は 400。200 で run を返す。名前はセッションのものなので、すべての読み手に見える。監査台帳に `sessions.run.renamed` として、名前ではなく run の参照とともに記録される。すでにセッションの名前と同じ名前は何も変えず、何も記録しない |
 | `POST`, `DELETE` | `/runs/{ref}/archive` | セッションをアーカイブする、またはアーカイブを解除する。本文なし。200 で run を返し、アーカイブ中は `archived_at` を含む。アーカイブしてもセッションは停止も削除もされない。印は呼び出し元ではなくセッションのものなので、全員にとってアーカイブされる。`GET /runs` はこれで絞り込まれず、各クライアントがアーカイブ済みセッションを一覧から外す。どちらの呼び出しも冪等で、アーカイブ済みセッションをアーカイブしても `archived_at` は保たれ、何も記録されない。監査台帳に `sessions.run.archived` と `sessions.run.unarchived` として記録される |
 | `POST` | `/runs/{ref}/move` | 本文 `{provider_profile_ref}`。停止または失敗した Claude Code セッションを、同じツールの別のプロファイルに付け替え、その会話を引き継ぐ。何も開始しない。200 で run を返す |
@@ -189,8 +193,9 @@ git リポジトリのトップフォルダーである登録済みのワーク�
 
 ### フォルダーのセットアップコマンドを承認する
 
-セットアップコマンドは、登録されたフォルダーに属し、エンジンのストレージに保存される。
-リポジトリのファイルや環境変数では変更できない。現時点では、これらの操作でも、セッションの開始時でも、このコマンドを実行するものはない。
+セットアップコマンドは、登録されたフォルダーに属し、エンジンのストレージに保存されます。
+リポジトリのファイルや環境変数では変更できません。コマンドの保存と承認では実行されません。
+ワークツリーの開始時に、以下のとおり実行されます。
 
 - `PUT /workspaces/{ref}/setup-command` は `{"command":"npm ci"}` を受け取る。
   空白を含め、UTF-8 のテキストがそのまま保持される。最大 8192 バイトで、NUL を含められない。
@@ -211,7 +216,39 @@ git リポジトリのトップフォルダーである登録済みのワーク�
 フォルダーを読める人は誰でもコマンドを読めるため、シークレットは含めないこと。
 `"no_setup":true` を付けた `POST /runs` は、その開始に限ってセットアップをスキップする。
 ワークツリーを持つセッションのハンドオフは、新しいワークツリーを開始し、同じ承認が必要である。
-スキップのオプションはない。それ以外の開始と resume は、既存の動作を維持する。
+スキップのオプションはありません。ワークツリーを使わない開始は、既存の動作のままです。
+
+新しいワークツリーの作成後、セッションの最初のターンの前に、承認されたコマンドが
+`/bin/sh -c` でワークツリーフォルダー内に 1 回実行されます。コマンドはフォルダーの
+confinement（ワークツリーとその Git メタデータ）とセッションのネットワークポリシーの下で
+実行されます。同じ許可リストがダウンロードにも適用されます。プロバイダーキーにバインド
+されたセッションは、そのプロバイダーと明示的に許可されたホストにのみ到達するため、
+インストーラーを実行する前にパッケージレジストリを許可してください。セッションの環境変数、
+認証情報、プロバイダーアカウントのホーム、認証情報ファイルは渡されません。`PATH` は
+セッションと同じで、プロファイルのプログラムを見つけられます。終了ステータスが 0 以外、
+または制限時間での停止の場合、開始は停止され、実行の ledger にはコマンドの最後の出力を
+持つ `worktree_setup` イベントが記録されます。リクエストはコマンドを最大 20 秒待ちます。
+その間に終了したコマンドはこれまでどおり応答し、失敗した場合の応答は 422 で最後の出力を
+含みます。その時点でまだ実行中のコマンドはセッションのものになります。応答は 201 で
+`state` は `pending`、コマンドはセッションの隔離の下で実行を続け、停止リクエストで終了します。
+制限時間は 10 分です。セッションの最初の入力はコマンドの完了を最大 30 秒待ち、その後は 409
+（`session is not running`、`state=pending`）で拒否され、呼び出し側が再送します。コンソールは
+セッションの準備ができるまで最初のメッセージを保持して、その時点で送信するため、インストーラーの
+実行中に送ったメッセージは終了後に届き、準備途中のフォルダーには届きません。失敗した、制限時間に達した、または
+停止されたコマンドは、実行を `failed`（停止リクエストの場合は `stopped`）にし、同じ
+イベントと最後の出力を残します。ツールには入力が届きません。resume はコマンドの終了を待ち、
+20 秒の制限を保ちます。
+Linux では、コマンドが残したバックグラウンドプロセスは、コマンド終了時に停止されます。Linux 以外では、切り離されたプロセスを残さないため、開始を拒否します。コマンドが
+書き込んだファイルは、既存のファイルと同じように検査されます。プログラムを実行したり
+トラフィックをリダイレクトしたりできるプロジェクトエージェント設定があると、開始は停止されます。
+
+コマンドはワークツリーセッションの最初の開始時に実行されます。承認待ちの開始では、承認によって
+開始が許可されたときに実行されます。セットアップが失敗した後の再開では、セッションの前に
+コマンドが再実行されます。承認または正常終了できない場合、セッションは開始されません。
+セットアップが成功した後は、後の起動手順が失敗した場合でも、再開でコマンドは再実行されません。
+プロセスのクリーンアップを確認できない場合、再開は拒否されます。残ったプロセスを停止し、
+新しいワークツリーを開始してください。`no_setup` はその開始と後の再開でセットアップをスキップします。セットアップ状態が記録される前の
+古いリリースのワークツリー実行は、一度も開始されていない場合、承認されたセットアップを 1 回実行します。
 
 CLI では、`olivares agent workspace setup <ref> --command 'npm ci'` で設定し、
 `olivares agent workspace setup <ref>` で読み取り、表示されたハッシュを
@@ -238,6 +275,8 @@ DLP ポスチャが拒否するワークスペースは 403 で応答する（�
 消失したブランチ、またはワークスペースと履歴を共有しないブランチは 409 で応答する。
 `worktree_from` は、リポジトリのどのローカルブランチ、タグ、リモートブランチも保持していないコミット ID に対しても 422 で応答する。
 
+その diff の 1 行へのコメントは、ほかの入力と同じく `POST /runs/{ref}/input` を通り、エージェントへの次のメッセージとして戻る。場所を示すには `review_comment`（`path`、1 から始まる `line`、`side`。`original` は `base` のファイル、`modified` は `head` のファイル）を加える。形式の誤った場所、または `attachments` と一緒に送られた場所は 400 で応答し、何も送らない。入力が受理されると、監査台帳は実行、パス、行、側とともに `sessions.run.review_comment` を記録する。コメント自体はツールが受け取ったメッセージであり、台帳にはコピーされない。`olivares session diff <session>` は同じ diff を unified diff として出力する。
+
 切断した attach の後の再接続は、同じ生きているプロセスに対する `GET …/attach?from={last+1}` である。プロセスが失われた後、attach はセッションがライブでないことを示す。
 Resume は新しい世代を始める。Reconnect は代替プロセスを捏造しない（SDD R04）。
 
@@ -255,7 +294,11 @@ Resume は新しい世代を始める。Reconnect は代替プロセスを捏造
 | Codex | `.codex/config.toml` | `hooks`、`notify`、`mcp_servers`、`model_providers`、`otel`、最上位の任意の `*_base_url`、および最終行に挙げた名前を持つ `shell_environment_policy.set` エントリ。`profiles.<name>` 配下の同じキー |
 | Gemini CLI | `.gemini/settings.json` | `hooks`、`mcpServers`、`toolDiscoveryCommand`、`toolCallCommand`、`proxy`、`tools.discoveryCommand`、`tools.callCommand`、`mcp.serverCommand`、`telemetry.otlpEndpoint` |
 | Gemini CLI | `.gemini/.env`、`.env` | 最終行に挙げた名前を持つエントリ |
+| OpenCode | `opencode.json`、`opencode.jsonc` | `$schema`、`theme`、`keybinds`、`logLevel`、`model`、`small_model`、`username`、`share`、`autoupdate`、`snapshot`、`layout` 以外のすべてのトップレベルキー。テキスト中のあらゆる `{file:…}` と `{env:…}` トークン。`{file:}` は、それが指すファイルの sha256 に結び付けられる |
+| OpenCode | `.opencode/` | フォルダー全体。各ファイルをその sha256 で（フォルダー内のリンクはリンク先で）扱う。ただし、そのフォルダー自身の `.gitignore` は除く。その中の `opencode.json` と `opencode.jsonc` は上の行と同じく扱い、`{file:}` は `.opencode/` から読む |
 | 環境変数名 | | `NODE_OPTIONS`、`NODE_EXTRA_CA_CERTS`、`NODE_TLS_REJECT_UNAUTHORIZED`、`LD_PRELOAD`、`LD_LIBRARY_PATH`、`LD_AUDIT`、`DYLD_INSERT_LIBRARIES`、`BASH_ENV`、`PATH`、`PYTHONPATH`、`GIT_SSH_COMMAND`、`GIT_EXTERNAL_DIFF`、`SSL_CERT_FILE`、`CLAUDE_CODE_SHELL_PREFIX`、`ANTHROPIC_CUSTOM_HEADERS`、`AWS_ENDPOINT_URL*`、および `_BASE_URL`、`_API_BASE`、`_ENDPOINT`、`_PROXY` で終わる任意の名前（`NO_PROXY` はプロキシを絞り込むだけなので、フラグは付かない） |
+
+`.opencode/` を承認する前に `package.json` を確認し、そのフォルダーで `OpenCode=1.19.4; npm install --ignore-scripts --save-exact @opencode-ai/plugin@"$OpenCode"` を実行してください。パッケージのバージョンは固定の OpenCode 1.19.4 に対応し、インストールスクリプトは無効のままです。`node_modules/` と、ルートに `@opencode-ai/plugin` および宣言されたすべての依存関係を含む `package-lock.json` が必要です。不足すると、インストールを求める理由とともにセッションを拒否します。インストール済みツリーは承認ハッシュに含まれ、変更には再承認が必要です。
 
 存在するが、その形式として読み取れないファイル（有効な JSON または TOML ではない、1 MiB を超える、
 64 階層より深くネストしている、通常のファイルではない）は、安全であることを示せないため、
@@ -263,9 +306,9 @@ Resume は新しい世代を始める。Reconnect は代替プロセスを捏造
 パース後のドキュメントと同じく 1 階層となり、それを囲む括弧の階層に加算される。
 35 個のネストしたインラインテーブルの上にある 30 セグメントのヘッダーは 65 階層である。
 ファイルに `[[array]]` ヘッダーが 1 つでもあると、各ヘッダーのセグメントは、配列とその要素の両方を指しうるため 2 回数えられる。
-サイズ超過のファイルは、チェックのたびに全体がハッシュされる。フラグ対象が何もないフォルダーは、従来どおり開始される。
+サイズ超過のファイルは、チェックのたびに全体がハッシュされる。ただし、OpenCode のファイルは、パース用の制限付き読み取りの後で拒否される。フラグ対象が何もないフォルダーは、従来どおり開始される。
 
-- `GET /workspaces/{ref}/project-config` は、3 つのツールすべてのファイルについて、フラグ対象の
+- `GET /workspaces/{ref}/project-config` は、上記のすべてのツールのファイルについて、フラグ対象の
   キーをファイルごとにその値とともに一覧にし（URL 内のパスワードはマスクされる）、そのフラグ対象部分
   そのものの `sha256`、さらに `approved` と最後の `approval` を返す。フォルダー自体を読み取る。
   別のコミットから開始したワークツリーは異なる追跡ファイルを持つことがあり、その拒否は自身の
@@ -278,6 +321,8 @@ Resume は新しい世代を始める。Reconnect は代替プロセスを捏造
 フラグ対象のファイルを読むツールの開始または resume は、保存済みの承認が現在のハッシュと等しくない限り、
 409 で応答する。フラグ対象の値を 1 文字変更する、またはフラグ対象のキーを追加・削除すると、
 再承認が必要になる。フラグ対象でないキーの変更では不要である。このチェックをスキップするオプションはない。
+
+ハッシュでは結び付けられない設定もあるため、どの承認でもセッションはそれを使えない。そのエントリには `refused` の理由が付き、その設定が変更または削除されるまで、承認の内容にかかわらず、そのツールの開始または resume はすべて 409 で応答する。対象は次のとおり。`{env:…}` トークンを含む OpenCode のファイル。有効な JSONC ではない OpenCode のファイル。フォルダー外のファイル、`~` 配下のファイル、絶対パスのファイル、パスの前後に空白があるファイル、または 1 MiB 以下の通常ファイルではないものを指す `{file:…}`。合わせて 8192 ファイルまたは 64 MiB を超えるファイルを指す `{file:…}` トークン。展開された置換コンテンツが 64 MiB を超える場合。空でない `plugin` または `instructions` キー。1 MiB を超える、または通常ファイルではない OpenCode のファイル。フォルダー外へのリンクである `opencode.json(c)` または `.opencode`。フォルダーではない `.opencode`。8192 エントリ、64 MiB、または 1024 フォルダーを超える `.opencode/` フォルダー、およびその外へのリンク、リンクのループ、通常ファイルではないエントリ、またはチェックが読めないフォルダーやファイルを含む `.opencode/` フォルダー。
 
 エンジンのフックを持つ Claude Code セッションは `--setting-sources ""` で起動される。
 Claude Code 2.1.299 では、そのセッションはプロジェクトやローカルの設定ファイルも、プロジェクトの

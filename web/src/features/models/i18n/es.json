@@ -1,13 +1,15 @@
 {
-  "title": "Modelos y proveedores",
-  "description": "El parque de modelos gobernado — capacidades y precios declarados, política de routing y referencias a claves de proveedor. Los secretos nunca se muestran; solo referencias enmascaradas.",
+  "title": "Modelos",
+  "description": "Modelos que tus herramientas y proveedores pueden ejecutar ahora, las sesiones que los usan y la gobernanza de modelos.",
   "tabs": {
+    "available": "Disponibles",
     "catalog": "Catálogo",
     "estate": "Parque",
     "routing": "Routing",
     "keys": "Claves de proveedor",
     "gpai": "Postura GPAI",
-    "access": "Acceso"
+    "access": "Acceso",
+    "governance": "Gobernanza"
   },
   "catalog": {
     "title": "Matriz de capacidades",
@@ -271,5 +273,61 @@
     "truncatedHint": "Hay más reglas de acceso de las que se ven; esta página coge filas por id. Las marcas de estas filas reflejan SÓLO las reglas cargadas: pueden faltar allows que introduzcan confinamiento o añadan destinos permitidos, y pueden faltar forbids que resten acceso — así que esta página puede leerse más ancha O más estrecha que la realidad, y un sujeto sin ninguna regla cargada no aparece siquiera. No deduzcas de aquí el acceso efectivo: el motor recorre todas las páginas antes de decidir, y resuelve un principal por usuario, rol y grupo a la vez, que una fila no puede enseñar.",
     "groupsTruncated": "Cargados {{n}} grupos; hay más",
     "groupsTruncatedHint": "Hay más grupos de modelos de los que se ven; esta página coge filas por id. Que un grupo no salga aquí no demuestra que no exista — una regla puede seguir apuntándole."
+  },
+  "available": {
+    "title": "Disponibles ahora",
+    "description": "Los modelos que tus herramientas y proveedores pueden ejecutar ahora, y las sesiones que los usan.",
+    "columns": {
+      "model": "Modelo",
+      "runsOn": "Herramienta o proveedor",
+      "source": "Origen",
+      "state": "Estado",
+      "sessions": "Sesiones"
+    },
+    "source": {
+      "tool": "Lista en vivo de la herramienta",
+      "ollama": "Instalado en Ollama",
+      "providerList": "Lista de modelos del proveedor",
+      "provider": "Proveedor de API",
+      "session": "Sesión activa"
+    },
+    "state": {
+      "ready": "Listo",
+      "checkingModels": "Comprobando modelos",
+      "stopped": "Ollama detenido",
+      "unlisted": "No lista sus modelos",
+      "listsNone": "No lista ningún modelo",
+      "failed": "Lista no disponible",
+      "starting": "Ollama arrancando",
+      "ollamaFailed": "Ollama falló"
+    },
+    "ownDefault": "Su modelo por defecto",
+    "providerModels": "Lista de modelos",
+    "ollamaModels": "Modelos instalados",
+    "openAiTools": "Abrir Herramientas de IA",
+    "sessions_one": "{{count}} sesión",
+    "sessions_many": "{{count}} sesiones",
+    "sessions_other": "{{count}} sesiones",
+    "openSessions": "Sesiones que usan {{model}}",
+    "empty": "Aún no hay ningún modelo disponible",
+    "emptyHint": "Instala un modelo en Ollama o añade un proveedor y aparecerá aquí.",
+    "noAccess": "Sin acceso a las listas de modelos",
+    "noAccessHint": "Tu rol no puede leer las listas de modelos de las herramientas, los proveedores, Ollama ni las sesiones. Pide acceso a un administrador.",
+    "installModel": "Instalar un modelo",
+    "addProvider": "Añadir un proveedor",
+    "sourceFailed": "No se pudo leer {{source}}. Las demás fuentes siguen mostrándose.",
+    "sources": {
+      "tools": "Las listas de modelos de las herramientas",
+      "ollama": "Ollama",
+      "availability": "Los modelos de los proveedores",
+      "runs": "Las sesiones en curso"
+    },
+    "profilesTruncated": "Se muestran los primeros {{n}} perfiles de herramientas; hay más.",
+    "runsTruncated": "Los recuentos cubren las {{n}} sesiones más recientes de cada estado; hay más.",
+    "runsFailed": "No se pudieron leer las sesiones en curso; faltan los recuentos.",
+    "sessionsUnknown": "Los recuentos de sesiones no están disponibles.",
+    "unmatched_one": "{{count}} sesión activa usa un modelo que no aparece aquí.",
+    "unmatched_many": "{{count}} sesiones activas usan modelos que no aparecen aquí.",
+    "unmatched_other": "{{count}} sesiones activas usan modelos que no aparecen aquí."
   }
 }

@@ -128,7 +128,7 @@ func slaEventsWindow(ctx context.Context, evRepo store.GenericRepo, subjectKind,
 			eq(colEvSubjectKind, subjectKind), eq(colEvSubjectRef, subjectRef),
 			{Column: colEvOccurredAt, Op: model.OpLt, Value: window},
 		},
-		// SR5C: the anchor is THE latest event before the window, and "latest"
+		// review: the anchor is THE latest event before the window, and "latest"
 		// breaks occurred_at ties by id DESC — the same winner the lifetime
 		// fold reaches (it walks id-ascending and last write wins).
 		Sort:  []model.Sort{{Column: colEvOccurredAt, Desc: true}, {Column: model.ColID, Desc: true}},

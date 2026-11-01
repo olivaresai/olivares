@@ -658,7 +658,7 @@ func (a *Authenticator) credentialBindingAdmissionFor(ctx context.Context, ref P
 			if err != nil {
 				return credentialBindingUnavailable("read the session", err)
 			}
-			if row.Version != ref.version || row.Revoked || row.DeletedAt != nil ||
+			if !row.PairingSourceID.IsZero() || row.Version != ref.version || row.Revoked || row.DeletedAt != nil ||
 				!now.Time().Before(row.ExpiresAt.Time()) ||
 				(!row.TenantScope.IsZero() && row.TenantScope != tenant) {
 				return ErrCredentialBindingInvalid
@@ -731,7 +731,7 @@ func verifyCredentialPin(ctx context.Context, as store.AuthScope, pin credential
 		if err != nil {
 			return credentialBindingUnavailable("re-read the session", err)
 		}
-		if session.ID != pin.id || session.Version != pin.version || session.Revoked ||
+		if !session.PairingSourceID.IsZero() || session.ID != pin.id || session.Version != pin.version || session.Revoked ||
 			session.DeletedAt != nil || session.UserID != pin.user {
 			return ErrCredentialBindingInvalid
 		}

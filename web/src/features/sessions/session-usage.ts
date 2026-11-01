@@ -20,7 +20,7 @@ export function sessionModelRef(
 
 /**
  * The model the launch asked for and the one its turns run on, when they differ
- * (dev#2786). Only a Claude Code launch on its own sign-in is asked for an exact id;
+ *. Only a Claude Code launch on its own sign-in is asked for an exact id;
  * a provider names its models itself, so a provider-bound name is not held against it.
  */
 export function modelMismatch(
@@ -39,10 +39,10 @@ export function modelMismatch(
   return { requested, inUse }
 }
 
-/** This session's usage: tokens always, the cost only when one was reported. */
+/** This session's usage: the tokens and the cost, each only when the tool reported it. */
 export interface SessionUsage {
-  input: number
-  output: number
+  input?: number
+  output?: number
   costMicroUsd?: number
   costPartial: boolean
 }
@@ -60,33 +60,30 @@ export function sessionUsage(
     let input = 0
     let output = 0
     let costMicroUsd: number | undefined
-    let reported = false
+    let tokens = false
     let unpriced = false
     for (const run of runs) {
       input += run.input_tokens ?? 0
       output += run.output_tokens ?? 0
-      reported ||= run.input_tokens != null || run.output_tokens != null
+      tokens ||= run.input_tokens != null || run.output_tokens != null
       if (run.cost_micro_usd != null) {
         costMicroUsd = (costMicroUsd ?? 0) + run.cost_micro_usd
-        reported = true
       } else unpriced = true
     }
-    return reported
-      ? {
-          input,
-          output,
-          costMicroUsd,
-          costPartial: costMicroUsd != null && unpriced,
-        }
-      : null
-  }
-  if (
-    live &&
-    (live.input_tokens > 0 || live.output_tokens > 0 || live.cost_micro_usd > 0)
-  )
+    if (!tokens && costMicroUsd == null) return null
     return {
-      input: live.input_tokens,
-      output: live.output_tokens,
+      input: tokens ? input : undefined,
+      output: tokens ? output : undefined,
+      costMicroUsd,
+      costPartial: costMicroUsd != null && unpriced,
+    }
+  }
+  if (!live) return null
+  const tokens = live.input_tokens > 0 || live.output_tokens > 0
+  if (tokens || live.cost_micro_usd > 0)
+    return {
+      input: tokens ? live.input_tokens : undefined,
+      output: tokens ? live.output_tokens : undefined,
       costMicroUsd: live.cost_micro_usd > 0 ? live.cost_micro_usd : undefined,
       costPartial: false,
     }

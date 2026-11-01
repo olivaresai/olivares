@@ -39,6 +39,15 @@ func TestFakeOllamaProcess(t *testing.T) {
 	mux.HandleFunc("/fake/no-cloud", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(os.Getenv("OLLAMA_NO_CLOUD")))
 	})
+	// Test-only: end the fake process on request, so a test can drive a service that
+	// stops on its own.
+	mux.HandleFunc("/fake/exit", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		go func() { // let the response leave before the process goes away
+			time.Sleep(50 * time.Millisecond)
+			os.Exit(0)
+		}()
+	})
 	mux.HandleFunc("/api/tags", func(w http.ResponseWriter, _ *http.Request) {
 		entries, _ := os.ReadDir(dir)
 		var models []map[string]string
@@ -83,6 +92,9 @@ type ollamaFixture struct {
 	mod       *Module
 	gate      chan struct{} // when set, Register waits for it to close
 	entered   int
+	// The fake container CLI and its call log, made on first use (ollama_container_test.go).
+	containerCLI string
+	containerLog string
 }
 
 func (f *ollamaFixture) registered() string {
@@ -257,7 +269,7 @@ func TestOllamaRefusesWhatItCannotDo(t *testing.T) {
 	}
 }
 
-// Root on FH 033: a start that names no tenant registers the endpoint nowhere, and the
+// Root on first-hour check: a start that names no tenant registers the endpoint nowhere, and the
 // row says where it answers so a tenant adds it in Providers.
 func TestOllamaStartedWithoutATenantRegistersNothing(t *testing.T) {
 	call, f := newOllamaServer(t)
@@ -283,7 +295,7 @@ func TestOllamaStartedWithoutATenantRegistersNothing(t *testing.T) {
 	}
 }
 
-// FH 087: an OpenCode session on the local Ollama needs the record's model list, and
+// first-hour check: an OpenCode session on the local Ollama needs the record's model list, and
 // the record is registered before any model is downloaded. A download that succeeds
 // registers again, for the tenant that started the service, so its list is read.
 func TestOllamaDownloadRegistersAgainForTheStartingTenant(t *testing.T) {

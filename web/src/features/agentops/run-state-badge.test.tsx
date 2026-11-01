@@ -37,7 +37,7 @@ describe('RunStateBadge', () => {
     expect(running.querySelector('[aria-hidden]')).toHaveClass('bg-success')
   })
 
-  // dev#3120: Recent work called every finished run "Stopped", which reads as cancelled.
+  // the regression: Recent work called every finished run "Stopped", which reads as cancelled.
   // The engine writes the same row for a tool that ended on its own and for a person's
   // Stop the tool obeyed cleanly (r08b-rows.fixture.ts): the run's ledger tells them apart.
   const ended = { state: 'stopped', exit_code: 0, reason: 'exit 0' } as const

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// "Use an API key instead" (HU2-18): the sign-in sheet itself turns into the key
+// "Use an API key instead": the sign-in sheet itself turns into the key
 // form, on the provider the tool runs on. The page and the dialog stay (#2551), the
 // field takes the focus, Cancel returns to the sign-in with nothing kept, and the key
 // leaves the browser once, in the create request.
@@ -28,7 +28,7 @@ import {
 } from '@/lib/hooks/use-privileged-mutation'
 import { firstHourKeys, type SignInTool } from './api'
 
-/** The API key each sign-in tool can run on instead of its own login (HU2-18). */
+/** The API key each sign-in tool can run on instead of its own login. */
 const KEY_KIND: Partial<Record<SignInTool, ProviderKind>> = {
   claude: 'anthropic',
   codex: 'openai',

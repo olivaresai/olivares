@@ -37,6 +37,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { KvList, KvRow } from '@/components/ui/kv'
+import { PathText } from '@/components/ui/path-text'
 import {
   Select,
   SelectContent,
@@ -80,6 +81,7 @@ import {
 } from './types'
 import { useFreshRead } from './use-fresh-read'
 import './i18n'
+import { PROVIDER_PROFILE_METADATA } from '@/features/extensions'
 
 const ALL = '__all__'
 const STATES = ['active', 'disabled', 'retired'] as const
@@ -399,6 +401,7 @@ function ProfilesTable({
                     fallback={label}
                   />
                 </RowOpenButton>
+                {PROVIDER_PROFILE_METADATA?.(profile)}
               </td>
               <td
                 className={`font-mono text-caption text-muted-foreground ${HIDDEN_ON_PHONE}`}
@@ -491,7 +494,7 @@ export function StateBadge({ state }: { state: string }) {
 /** Legacy enablement flag as the server reported it — not a launch guarantee. */
 function OperableBadge({ profile }: { profile: ProviderProfileDTO }) {
   const { t } = useTranslation('agentops')
-  // FH 036: not launched, and said so, until an administrator decides what to do.
+  // first-hour check: not launched, and said so, until an administrator decides what to do.
   if (profile.server_user_login)
     return (
       <Badge variant="warning" data-testid="profile-server-user-login">
@@ -665,6 +668,7 @@ export function ProfileSheetBody({
             <ProviderAccent accent={profile.accent} />
             <span className="truncate">
               {profileName(profile) ?? profile.profile_ref}
+              {PROVIDER_PROFILE_METADATA?.(profile)}
             </span>
           </SheetTitle>
           <SheetDescription className="font-mono text-caption">
@@ -846,14 +850,14 @@ export function ProfileSheetBody({
                   mono
                   align="start"
                 >
-                  {reveal.state.data.config_home}
+                  <PathText value={reveal.state.data.config_home} />
                 </KvRow>
                 <KvRow
                   label={t('profiles.configuration.userHome')}
                   mono
                   align="start"
                 >
-                  {reveal.state.data.user_home}
+                  <PathText value={reveal.state.data.user_home} />
                 </KvRow>
               </KvList>
               <p className="text-caption text-muted-foreground">

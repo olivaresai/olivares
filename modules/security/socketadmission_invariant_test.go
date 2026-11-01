@@ -17,7 +17,7 @@ import (
 )
 
 // TestInvariant_EverySocketGoesThroughTheAdmissionPoint is the CLASS guard for
-//. It is the deliverable that matters most, because the defect it exists to
+// . It is the deliverable that matters most, because the defect it exists to
 // stop is not a bug — it is a shape.
 //
 // The history: the rule "a listener may only be reachable off-host if its traffic

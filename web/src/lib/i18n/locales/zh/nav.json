@@ -15,13 +15,6 @@
     "protocols": "协议",
     "infrastructure": "基础设施"
   },
-  "filter": {
-    "placeholder": "筛选导航…",
-    "label": "筛选导航",
-    "clear": "清除筛选",
-    "results": "匹配：{{n}}",
-    "empty": "没有视图匹配“{{query}}”"
-  },
   "items": {
     "estate": "资产",
     "home": "主页",
@@ -32,7 +25,6 @@
     "reach": "覆盖范围",
     "health": "健康与 SLA",
     "capabilities": "MCP 与技能",
-    "skills": "技能目录",
     "protocolBindings": "协议绑定",
     "communications": "通信",
     "communicationsInbox": "通信收件箱",
@@ -77,6 +69,7 @@
     "eventing": "Webhook 与事件",
     "session-viewer": "会话查看器",
     "backups": "备份",
+    "updates": "更新",
     "logs": "日志",
     "inferenceProxy": "推理代理",
     "alerting": "告警",
@@ -86,8 +79,8 @@
     "providerBindings": "来源绑定",
     "providerAccounts": "提供商账户",
     "agent-tools": "AI 工具",
-    "mcpServers": "MCP 服务器",
-    "storedBudgets": "预算"
+    "storedBudgets": "预算",
+    "usage": "用量"
   },
   "workspace": {
     "open": "打开 {{workspace}}",
@@ -109,7 +102,6 @@
     "reach": "查看每个工具可以访问哪些目标，以及哪些正在等待批准。",
     "health": "智能体与 MCP 的可用性与 SLA",
     "capabilities": "治理 MCP 服务器、技能与工具",
-    "skills": "浏览技能包并将其分配给部门、智能体组和智能体",
     "protocolBindings": "编排并协调受治理的 A2A 和 MCP 绑定",
     "communications": "所选工作区的频道、直接通知与个人收件箱",
     "communicationsInbox": "发给您的消息：逐条打开并确认",
@@ -129,7 +121,7 @@
     "work": "共享工作：工作项、依赖关系、验收和决定",
     "agentops": "启动会话并跟踪每个会话的工作，包括 Olivares 发现的会话",
     "agentArtifacts": "Skills、MCP 扩展与指令文件——注册表、态势与供应链 BOM",
-    "models": "模型、路由与提供商密钥",
+    "models": "模型、路由与治理",
     "modelOps": "自有模型、准入与部署",
     "finops": "token 成本、预算与支出",
     "adoption": "生产力、采纳率与模型分布",
@@ -164,11 +156,12 @@
     "eventing": "出站 Webhook 订阅、已捕获的事件日志、投递记录和死信队列",
     "team-costs": "按团队的成本归属：会话、令牌和支出，含每日趋势以及按项目和模型的明细",
     "backups": "控制平面的加密灾难恢复快照：创建、计划、下载和恢复",
+    "updates": "此引擎正在运行的版本、其通道中最新的已签名版本，以及安装它的一个操作",
     "logs": "引擎实时日志流，支持按级别和模块筛选、搜索和暂停",
     "sourceDiff": "逐个文件比较已连接 Git 仓库的基准修订与 head 修订",
     "agent-tools": "查看会话所用的账户和 API 密钥；安装工具并登录仅限部署管理员",
-    "mcpServers": "将远程 MCP 服务器连接到此组织，测试它们，并选择会话可以使用哪些工具",
-    "storedBudgets": "针对每个已保存限额的消耗情况。预留容量计入限额。"
+    "storedBudgets": "针对每个已保存限额的消耗情况。预留容量计入限额。",
+    "usage": "每个账户的官方 5 小时和每周限额（最接近限额的在前），以及今天的令牌和费用。"
   },
   "commandActions": {
     "eventing": {
@@ -198,14 +191,12 @@
   "areas": {
     "infrastructure": {
       "label": "基础设施",
-      "question": "我有哪些资源和工作区？",
       "sections": {
         "estate": "清单与工作区"
       }
     },
     "ai": {
       "label": "AI",
-      "question": "我观测或管理哪些会话、配置文件和模型？",
       "sections": {
         "sessions": "会话",
         "environments": "配置文件与环境",
@@ -216,7 +207,6 @@
     },
     "data-context": {
       "label": "数据与上下文",
-      "question": "我连接或复用哪些知识、能力和工件？",
       "sections": {
         "capabilities": "能力",
         "knowledge": "知识与工件"
@@ -224,14 +214,12 @@
     },
     "work-communications": {
       "label": "工作与通信",
-      "question": "我协调哪些工作，它如何通信？",
       "sections": {
         "work": "工作与通信"
       }
     },
     "automation": {
       "label": "自动化",
-      "question": "我自动化哪些流程、事件和通知？",
       "sections": {
         "workflows": "流程与编排",
         "events": "事件与通知"
@@ -239,7 +227,6 @@
     },
     "security-identity": {
       "label": "安全与身份",
-      "question": "谁在什么规则下可以访问，我如何保护环境？",
       "sections": {
         "access": "身份与访问",
         "policy": "策略与治理边界",
@@ -248,14 +235,12 @@
     },
     "deployment": {
       "label": "交付",
-      "question": "我如何准备和控制部署？",
       "sections": {
         "deployments": "部署"
       }
     },
     "observation": {
       "label": "监督",
-      "question": "正在发生什么、花费多少、我能证明什么？",
       "sections": {
         "operations": "状态与活动",
         "cost-adoption": "成本与采用",
@@ -264,7 +249,6 @@
     },
     "system": {
       "label": "系统与设置",
-      "question": "我如何管理组织、安装和个人偏好？",
       "sections": {
         "administration": "管理",
         "maintenance": "安装与维护",
@@ -273,36 +257,8 @@
       }
     }
   },
-  "directory": {
-    "areas": "区域",
-    "expand": "显示{{area}}的模块",
-    "collapse": "隐藏{{area}}的模块",
-    "modulesOf": "{{area}}的模块",
-    "empty": "此区域没有您可用的条目",
-    "emptyHint": "当您在当前组织中的角色获得此区域某个模块的访问权限时，条目会显示在这里。",
-    "backHome": "前往主页",
-    "area": "区域"
-  },
   "personal": {
-    "favorites": "收藏",
-    "add": "将{{name}}加入收藏",
-    "remove": "从收藏中移除{{name}}",
-    "viewAll": "查看全部（{{count}}）",
-    "manage": "管理收藏",
-    "empty": "点击模块的星标，将其保存在这里。",
-    "scope": "保存在你的账户中，任何浏览器都可使用。",
-    "saveFailed": "无法将收藏保存到你的账户。它们保留在此浏览器中，并会在你下次更改或登录时再次保存。",
-    "temporary": "收藏目前仅保留在内存中。",
-    "clear": "清空收藏",
-    "recents": "最近访问",
-    "recentManage": "管理最近访问",
-    "recentViewAll": "查看最近访问（{{count}}）",
-    "recentEmpty": "打开的模块会显示在这里。",
-    "recentScope": "在此标签页中打开的模块。重新加载、退出登录或切换账户及组织时清除。",
-    "recentRemove": "从最近访问中移除{{name}}",
-    "recentClear": "清除最近访问",
-    "pinRow": "将 {{name}} 固定到收藏 (p)",
-    "unpinRow": "从收藏中取消固定 {{name}} (p)"
+    "saveFailed": "无法将更改保存到你的账户。这些更改仅在本次访问期间生效。"
   },
   "scope": {
     "tenant": "组织",
@@ -334,7 +290,6 @@
     "starting": "会话正在启动…",
     "startAgain": "请重新开始会话以发送消息。",
     "turnAria": "会话回合",
-    "attachedWaiting": "需要你处理",
     "rawLine": "原始行",
     "advancedHint": "向 stdin 发送一行 NDJSON。默认是句子栏。",
     "wirePlaceholder": "向 stdin 发送一行 NDJSON…",
@@ -364,27 +319,36 @@
     "modelPicker": "模型：{{value}}",
     "effortPicker": "推理强度：{{value}}",
     "accessPicker": "访问权限：{{value}}",
-    "accessKeeps": "此会话保持其访问权限。更改访问权限将启动新会话。"
+    "accessKeeps": "此会话保持其访问权限。更改访问权限将启动新会话。",
+    "queue": {
+      "title": "排队的消息",
+      "hold": {
+        "turn": "工具正在工作。第一条消息会在本轮结束后发送。",
+        "approval": "正在等待批准。队列会保留。",
+        "limit": "账户额度使上一轮结束。队列会保留。",
+        "stopped": "会话已停止。队列会保留。",
+        "ready": "正在发送下一条消息…"
+      },
+      "steer": "插入当前轮",
+      "sendNow": "立即发送",
+      "edit": "编辑消息",
+      "editAria": "编辑排队的消息",
+      "save": "保存",
+      "cancel": "取消",
+      "remove": "移除消息",
+      "moveUp": "前移",
+      "moveDown": "后移",
+      "failed": "无法更新队列。",
+      "placeholder": "按 Enter 将消息排队，等本轮结束后发送",
+      "placeholderSteer": "按 Enter 排队到本轮之后，按 Ctrl+Enter 立即插入当前轮",
+      "discarded": "会话被释放时，以下消息仍在排队：",
+      "copy": "复制"
+    }
   },
   "shell": {
-    "journeysLabel": "工作流程",
-    "journeys": {
-      "home": "主页",
-      "sessions": "会话",
-      "agent-tools": "工具",
-      "rules": "规则",
-      "audit": "账本",
-      "organization": "组织",
-      "storedBudgets": "预算"
-    },
-    "phoneBarLabel": "主导航",
-    "newSession": "新建会话",
     "searchCommands": "搜索和命令",
     "search": "搜索",
     "stopAll": "全部停止",
-    "allAreas": "所有区域",
-    "more": "更多",
-    "moreLabel": "更多：所有区域",
     "workspaceCount": "工作区：{{count}}",
     "rail": {
       "title": "会话",
@@ -448,10 +412,40 @@
       "usage": "{{tool}} 用量",
       "fiveHour": "5 小时",
       "week": "周",
+      "toolsUnreadable": "无法读取 AI 工具 · 重试",
       "version": "版本"
     },
     "account": {
       "version": "版本 {{version}}"
-    }
+    },
+    "collapse": "收起导航",
+    "expand": "展开导航",
+    "openNavigation": "打开导航",
+    "closeNavigation": "关闭导航"
+  },
+  "places": {
+    "now": "主页",
+    "sessions": "会话",
+    "files": "文件与工作区",
+    "work": "工作与沟通",
+    "ai-tools": "AI 工具",
+    "models": "模型",
+    "mcp-skills": "MCP 与技能",
+    "sources": "来源",
+    "rules": "规则与审批",
+    "usage": "用量与成本",
+    "activity": "活动与审计",
+    "access": "访问映射",
+    "people": "人员与组",
+    "security": "安全",
+    "operations": "运维",
+    "license": "许可证",
+    "settings": "设置"
+  },
+  "groups": {
+    "work": "工作",
+    "tools": "工具",
+    "control": "控制",
+    "admin": "管理"
   }
 }

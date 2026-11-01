@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE ACCOUNT MENU, WITH NO SIDEBAR (#2544): All areas opens from it and gives focus back
-// to the account button, Help opens this page's documentation, and the engine's state is
-// read in it.
+// THE ACCOUNT MENU: identity, Settings, the theme, Help for this page and the version.
+// It is not a second navigation: All areas and favorites retired with the one left
+// navigation (0.5), and the engine's state is read in the status bar.
 import type { ComponentProps } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
-import { renderIntel, screen, waitFor } from '@/test/intel'
+import { renderIntel, screen } from '@/test/intel'
 
 const router = vi.hoisted(() => ({ pathname: '/routine-policies' }))
 vi.mock('@/lib/auth/context', () => ({
@@ -53,37 +53,22 @@ vi.mock('@/lib/hooks/use-server-info', () => ({
 
 import i18n from '@/lib/i18n'
 import { useThemeStore } from '@/stores/theme'
-import { AreasSheet } from './sidebar'
-import { useAreasSheet } from './areas-sheet-store'
 import { THEME_OPTIONS } from './theme-toggle'
 import { UserMenu } from './user-menu'
 
 afterEach(() => {
   router.pathname = '/routine-policies'
-  useAreasSheet.setState({ open: false, opener: null })
 })
 
 describe('the account menu', () => {
-  it('opens All areas, and closing it gives focus back to the account button', async () => {
+  it('is no second navigation: no All areas and no favorites (0.5)', async () => {
     const user = userEvent.setup()
-    renderIntel(
-      <>
-        <UserMenu />
-        <AreasSheet />
-      </>,
-    )
-    const account = screen.getByRole('button', { name: /, Account$/ })
-    await user.click(account)
-    await user.click(screen.getByRole('menuitem', { name: 'All areas' }))
-    expect(
-      await screen.findByRole('dialog', { name: 'All areas' }),
-    ).toBeVisible()
-    expect(useAreasSheet.getState().opener).toBe(account)
-    await user.keyboard('{Escape}')
-    await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: 'All areas' })).toBeNull(),
-    )
-    await waitFor(() => expect(account).toHaveFocus())
+    renderIntel(<UserMenu />)
+    await user.click(screen.getByRole('button', { name: /, Account$/ }))
+    const items = screen.getAllByRole('menuitem').map((i) => i.textContent)
+    expect(items).not.toContain('All areas')
+    expect(items.some((i) => /favorites/i.test(i ?? ''))).toBe(false)
+    expect(screen.getByRole('menuitem', { name: 'Settings' })).toBeVisible()
   })
 
   it("opens this page's documentation in a new tab", async () => {
@@ -129,14 +114,5 @@ describe('the account menu', () => {
     ).toHaveAttribute('aria-checked', 'true')
     await user.click(screen.getByRole('menuitemradio', { name: 'Dark' }))
     expect(useThemeStore.getState().theme).toBe('dark')
-  })
-})
-
-describe('All areas takes no opener from a click that focused nothing', () => {
-  it('ignores <body> (Safari does not focus a clicked button)', () => {
-    ;(document.activeElement as HTMLElement | null)?.blur()
-    useAreasSheet.getState().show()
-    expect(useAreasSheet.getState().open).toBe(true)
-    expect(useAreasSheet.getState().opener).toBeNull()
   })
 })

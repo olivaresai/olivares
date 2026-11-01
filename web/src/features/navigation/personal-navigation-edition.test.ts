@@ -54,8 +54,8 @@ it('preserves Business favorites through Community load/toggle and Business relo
 
   const c = await edition(community)
   const middle = open(c)
-  expect(middle.getSnapshot().favorites).toEqual(paid)
   await settle()
+  expect(middle.getSnapshot().favorites).toEqual(paid)
   expect(
     middle
       .getSnapshot()
@@ -78,6 +78,6 @@ it('preserves Business favorites through Community load/toggle and Business relo
       .getSnapshot()
       .favorites.map((link) => again.resolvePersonalLink(link)?.id),
   ).toEqual(paidIds)
-  expect(JSON.parse(localStorage.getItem(key)!).favorites).toEqual(paid)
+  expect(localStorage.getItem(key)).toBeNull()
   last.revoke()
 })

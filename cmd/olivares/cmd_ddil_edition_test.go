@@ -6,12 +6,14 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/core/license"
 )
 
 func runDDILThroughRoot(args ...string) (stdout string, err error) {
@@ -101,5 +103,29 @@ func TestDDILBusinessKeepsEveryVerb(t *testing.T) {
 		if err == nil || exitcode.From(err) == exitcode.Edition || !strings.Contains(err.Error(), "required flag") {
 			t.Errorf("Business ddil %s without flags = %v, want the required-flag error", verb, err)
 		}
+	}
+}
+
+// Importing is the forward-going verb: the Business build asks its licence gate, with the
+// command's data directory, before it reads the bundle or writes anything, and returns the
+// gate's refusal. Keygen, verify and export never ask it.
+func TestDDILBusinessImportAsksTheLicenceGateFirst(t *testing.T) {
+	asEdition(t, "enterprise")
+	var asked []string
+	thisEdition.ddilImport = func(dataDir string) error {
+		asked = append(asked, dataDir)
+		return license.AddonRequired("ddil", "import")
+	}
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "ddil.key")
+	if _, err := runDDILThroughRoot("keygen", "--out", keyPath); err != nil {
+		t.Fatalf("keygen without a licence = %v, want it to run", err)
+	}
+	_, err := runDDILThroughRoot("import", "--bundle", filepath.Join(dir, "missing.ddil"), "--pubkey", "@"+keyPath, "--data-dir", dir)
+	if !errors.Is(err, license.ErrAddonRequiresLicense) {
+		t.Fatalf("import without a licence = %v, want the add-on refusal before the bundle is read", err)
+	}
+	if len(asked) != 1 || asked[0] != dir {
+		t.Fatalf("the gate was asked with %q, want once with the --data-dir %q", asked, dir)
 	}
 }

@@ -57,12 +57,12 @@ func (m *Module) prepareCodexSandbox(ctx context.Context, p *CreateRunParams, sp
 	stopCtx, stopCancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 	stopErr := proc.Stop(stopCtx)
 	stopCancel()
-	if !childWasReaped(waitErr) || !childWasReaped(stopErr) {
-		return &runErr{http.StatusBadGateway, "Codex sandbox check could not stop its process; the session was not started"}
-	}
 	<-drained
-	if err != nil || waitErr != nil || stopErr != nil || probeCtx.Err() != nil {
-		return &runErr{http.StatusBadGateway, "Codex sandbox check did not finish reliably; the session was not started"}
+	if err := codexSandboxStopError(proc, waitErr, stopErr); err != nil {
+		return err
+	}
+	if err := codexSandboxReadinessError(err, waitErr, stopErr, probeCtx); err != nil {
+		return err
 	}
 	if code == 0 {
 		return nil
@@ -85,6 +85,33 @@ func (m *Module) prepareCodexSandbox(ctx context.Context, p *CreateRunParams, sp
 	// The fallback changes an effective pin; a required host sandbox policy
 	// must still agree before the session process can start.
 	return checkCodexBoundProviderConfig(ctx, spec)
+}
+
+// codexSandboxLaunchError keeps an unreaped probe beside its safe refusal so the
+// caller can register process custody instead of finalizing beside a live child.
+type codexSandboxLaunchError struct {
+	proc  Process
+	cause error
+}
+
+func (e *codexSandboxLaunchError) Error() string { return e.cause.Error() }
+func (e *codexSandboxLaunchError) Unwrap() error { return e.cause }
+
+func codexSandboxStopError(proc Process, waitErr, stopErr error) error {
+	if !childWasReaped(waitErr) || !childWasReaped(stopErr) {
+		return &codexSandboxLaunchError{proc: proc, cause: &runErr{http.StatusBadGateway, "Codex sandbox check could not stop its process; the session was not started"}}
+	}
+	return nil
+}
+
+func codexSandboxReadinessError(launchErr, waitErr, stopErr error, probeCtx context.Context) error {
+	if launchErr != nil {
+		return launchFailedErr("Codex sandbox check", launchErr)
+	}
+	if waitErr != nil || stopErr != nil || probeCtx.Err() != nil {
+		return &runErr{http.StatusBadGateway, "Codex sandbox check did not finish reliably; the session was not started"}
+	}
+	return nil
 }
 
 func codexSandboxDetail(p CreateRunParams, spec LaunchSpec) string {

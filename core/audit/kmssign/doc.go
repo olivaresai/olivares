@@ -13,7 +13,7 @@
 // crypto/sha256), GCP and Azure use a pluggable bearer-token source. Nothing here
 // uses cgo, so wiring an off-box signer never drags a native dependency into the
 // static engine binary — the same constraint that keeps SQLCipher out of the core
-//. A native PKCS#11/HSM device (which DOES need cgo) is reached
+// . A native PKCS#11/HSM device (which DOES need cgo) is reached
 // out-of-process or via a KMS that is itself HSM-backed (CloudHSM / Managed HSM /
 // a KMS key whose ORIGIN is the HSM), behind this same audit.CheckpointKey seam —
 // never compiled in.

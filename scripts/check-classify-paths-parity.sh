@@ -6,7 +6,7 @@
 # Trigger-coverage witness for mainline-ci (entry name kept for compatibility).
 #
 # CIG2 superseded trigger/classifier list equality. This witness requires an
-# inspectable main push without `paths` or `paths-ignore`, an inspectable
+# manual dispatch alone or an inspectable main push without path filters, an inspectable
 # classify job, and a secrets job independent of classify. A grep for
 # `paths-ignore:` is not sufficient: quoted keys, flow mappings, `paths:`,
 # anchors and other unsupported shapes must not return 0.

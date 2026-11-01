@@ -84,16 +84,17 @@ func TestSessionRuntimeCompositionRegistersDriversIndependently(t *testing.T) {
 		vars map[string]string
 		want []string
 	}{
-		{"nothing pinned", nil, []string{"codex", "gemini-cli", "grok", "opencode"}},
-		{"codex only", map[string]string{envSessionCodexBin: "/opt/codex"}, []string{"codex", "gemini-cli", "grok", "opencode"}},
-		{"grok only", map[string]string{envSessionGrokBin: "/opt/grok"}, []string{"codex", "gemini-cli", "grok", "opencode"}},
-		{"opencode only", map[string]string{envSessionOpenCodeBin: "/opt/opencode"}, []string{"codex", "gemini-cli", "grok", "opencode"}},
-		{"gemini only", map[string]string{envSessionGeminiBin: "/opt/gemini"}, []string{"codex", "gemini-cli", "grok", "opencode"}},
-		{"both", map[string]string{envSessionCodexBin: "/opt/codex", envSessionGrokBin: "/opt/grok"}, []string{"codex", "gemini-cli", "grok", "opencode"}},
-		{"all four", map[string]string{
+		{"nothing pinned", nil, []string{"codex", "cursor", "gemini-cli", "grok", "opencode"}},
+		{"codex only", map[string]string{envSessionCodexBin: "/opt/codex"}, []string{"codex", "cursor", "gemini-cli", "grok", "opencode"}},
+		{"grok only", map[string]string{envSessionGrokBin: "/opt/grok"}, []string{"codex", "cursor", "gemini-cli", "grok", "opencode"}},
+		{"opencode only", map[string]string{envSessionOpenCodeBin: "/opt/opencode"}, []string{"codex", "cursor", "gemini-cli", "grok", "opencode"}},
+		{"gemini only", map[string]string{envSessionGeminiBin: "/opt/gemini"}, []string{"codex", "cursor", "gemini-cli", "grok", "opencode"}},
+		{"cursor only", map[string]string{envSessionCursorBin: "/opt/agent"}, []string{"codex", "cursor", "gemini-cli", "grok", "opencode"}},
+		{"both", map[string]string{envSessionCodexBin: "/opt/codex", envSessionGrokBin: "/opt/grok"}, []string{"codex", "cursor", "gemini-cli", "grok", "opencode"}},
+		{"all five", map[string]string{
 			envSessionCodexBin: "/opt/codex", envSessionGrokBin: "/opt/grok", envSessionOpenCodeBin: "/opt/opencode",
-			envSessionGeminiBin: "/opt/gemini",
-		}, []string{"codex", "gemini-cli", "grok", "opencode"}},
+			envSessionGeminiBin: "/opt/gemini", envSessionCursorBin: "/opt/agent",
+		}, []string{"codex", "cursor", "gemini-cli", "grok", "opencode"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

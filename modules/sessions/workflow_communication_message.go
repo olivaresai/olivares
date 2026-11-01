@@ -26,10 +26,18 @@ func (m *Module) SendWorkflowWorkTask(
 ) (WorkflowWorkTaskResult, error) {
 	ctx, cancel := workflowCommunicationContext(ctx)
 	defer cancel()
-	preflight, err := m.prepareWorkflowCommunicationPublish(
-		ctx, tenant, cmd.Actor, cmd.WorkItemID, cmd.ChannelID, cmd.Recipient,
+	kind, sourceKind, sourceEvent := MessageWorkTask, RouteSourceUserMessage, ""
+	if cmd.Actor.AuditKind == model.ActorSystem {
+		kind, sourceKind, sourceEvent = MessageSystem, RouteSourceSystemEvent, workflowWorkTaskEventType
+	}
+	target, err := m.workflowCommunicationScope(ctx, tenant, cmd.WorkItemID, cmd.ChannelID)
+	if err != nil {
+		return WorkflowWorkTaskResult{}, workflowCommunicationError("send work task", err)
+	}
+	preflight, err := m.prepareWorkflowCommunicationPublishTarget(
+		ctx, tenant, target, cmd.Actor, cmd.WorkItemID, cmd.ChannelID, cmd.Recipient,
 		cmd.Content, cmd.Urgency, cmd.AckDueAt, cmd.IdempotencyKey,
-		MessageWorkTask, workflowWorkTaskCommandScope,
+		kind, workflowWorkTaskCommandScope, sourceKind, sourceEvent,
 	)
 	if err != nil {
 		return WorkflowWorkTaskResult{}, workflowCommunicationError("send work task", err)

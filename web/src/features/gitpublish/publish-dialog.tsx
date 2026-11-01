@@ -34,11 +34,11 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
-import { ApiError } from '@/lib/api/errors'
 import { gitpublishApi, gitpublishKeys } from './api'
 import {
   actionAuthority,
   hasChangeAPI,
+  failureOf,
   newOperationId,
   outcomeOf,
   reconcileAction,
@@ -467,14 +467,6 @@ function BaseField({
       </Select>
     </Field>
   )
-}
-
-/** A failed request as an outcome, except the step-up demand: the hook runs that ceremony
- * and sends the same request once it succeeds. */
-function failureOf(error: unknown): PublicationOutcome | null {
-  if (!error) return null
-  if (error instanceof ApiError && error.isStepUpRequired) return null
-  return outcomeOf({ error })
 }
 
 function isComplete(effect: PublicationEffect, d: Draft): boolean {

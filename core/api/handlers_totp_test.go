@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 )
@@ -208,7 +209,7 @@ func TestTOTPPolicyHTTP(t *testing.T) {
 	}
 }
 
-// The administrator reset: membership:write + AAL3 gates, tenant-scoped, and an
+// The administrator reset: authenticator:write + AAL3 gates, tenant-scoped, and an
 // editor is refused.
 func TestTOTPAdminResetHTTP(t *testing.T) {
 	h := newHarness(t)
@@ -230,7 +231,7 @@ func TestTOTPAdminResetHTTP(t *testing.T) {
 	boss := mkUser("reset-boss@totp.test", "bosspass1234", auth.RoleAdmin)
 	hand := mkUser("reset-hand@totp.test", "handpass1234", auth.RoleEditor)
 	// The reset below is asserted under the passkey step-up; the people exist first
-	// (adding a person asks for the same step-up, HU-28).
+	// (adding a person asks for the same step-up, acceptance).
 	h.requirePasskeyStepUp()
 
 	// The victim enroles a factor.
@@ -314,4 +315,77 @@ func userID(t *testing.T, h *harness, token string) string {
 		t.Fatalf("whoami = %d %s", r.code, r.raw)
 	}
 	return r.body["user_id"].(string)
+}
+
+// One explicit reset grant must not convey membership management.
+type resetGrant struct {
+	user   model.ID
+	tenant model.TenantID
+}
+
+func (g *resetGrant) Scoped(_ context.Context, req auth.Request) (auth.ScopedDecision, error) {
+	if req.Principal.UserID == g.user && req.Tenant == g.tenant && req.Permission == "authenticator:write" {
+		return auth.ScopedDecision{Effect: auth.EffectGrant}, nil
+	}
+	return auth.ScopedDecision{Effect: auth.EffectAbstain}, nil
+}
+func TestTOTPResetOnlyPermissionHTTP(t *testing.T) {
+	grant := &resetGrant{}
+	h := newHarnessOpts(t, func(o *api.Options) { o.Authorizer = auth.NewAuthorizer(nil, auth.WithScopedGrants(grant)) })
+	wireTOTPSealer(t, h)
+	root := h.adminLogin()
+	tenant := h.createOrg(root, "reset-only")
+	grant.tenant = tenant
+	r := h.do("POST", "/v1/users", root, map[string]any{"email": "help@reset.test", "password": "handpass1234"}, nil)
+	if r.code != http.StatusCreated {
+		t.Fatalf("user: %d %s", r.code, r.raw)
+	}
+	r = h.do("POST", "/v1/auth/login", "", map[string]any{"email": "help@reset.test", "password": "handpass1234"}, nil)
+	token := r.body["token"].(string)
+	id := userID(t, h, token)
+	grant.user = model.ID(id)
+	if p, err := h.authr.Authenticate(context.Background(), token); err != nil {
+		t.Fatal(err)
+	} else if _, ok := p.RoleIn(tenant); ok {
+		t.Fatal("helpdesk has membership")
+	}
+	r = h.do("POST", "/v1/users", root, map[string]any{"email": "member@reset.test", "password": "memberpass1234", "tenant": tenant.String(), "role": auth.RoleViewer}, nil)
+	if r.code != http.StatusCreated {
+		t.Fatalf("member: %d %s", r.code, r.raw)
+	}
+	r = h.do("POST", "/v1/auth/login", "", map[string]any{"email": "member@reset.test", "password": "memberpass1234"}, nil)
+	member := r.body["token"].(string)
+	victimID := userID(t, h, member)
+	h.requirePasskeyStepUp()
+	r = h.do("POST", "/v1/auth/totp/enrol", member, map[string]any{}, nil)
+	secret := r.body["secret"].(string)
+	if r = h.do("POST", "/v1/auth/totp/activate", member, map[string]any{"code": apiTOTPCode(t, secret, time.Now())}, nil); r.code != http.StatusOK {
+		t.Fatalf("activate: %d %s", r.code, r.raw)
+	}
+	path := "/v1/users/" + victimID + "/totp/reset"
+	if r = h.do("POST", path, token, map[string]any{}, tenantHdr(tenant)); r.code != http.StatusForbidden {
+		t.Fatalf("AAL1 = %d %s", r.code, r.raw)
+	}
+	h.elevate(token)
+	for _, path := range []string{"/v1/memberships", "/v1/onboard"} {
+		r = h.do("POST", path, token, map[string]any{"tenant": tenant.String(), "user_id": id, "role": "editor"}, tenantHdr(tenant))
+		if r.code != http.StatusForbidden {
+			t.Errorf("%s = %d %s", path, r.code, r.raw)
+		}
+	}
+	if r = h.do("POST", path, token, map[string]any{}, tenantHdr(tenant)); r.code != http.StatusOK {
+		t.Fatalf("AAL3 = %d %s", r.code, r.raw)
+	}
+	r = h.do("GET", "/v1/audit/system?action=auth.totp.reset", root, nil, nil)
+	if r.code != http.StatusOK {
+		t.Fatalf("reset ledger: %d %s", r.code, r.raw)
+	}
+	rows, _ := r.body["items"].([]any)
+	if len(rows) != 1 {
+		t.Fatalf("reset entries = %d: %s", len(rows), r.raw)
+	}
+	event, _ := rows[0].(map[string]any)
+	if event["action"] != "auth.totp.reset" || event["actor"] != "user:"+id || event["target_id"] != victimID {
+		t.Fatalf("reset actor or target is wrong: %v", event)
+	}
 }

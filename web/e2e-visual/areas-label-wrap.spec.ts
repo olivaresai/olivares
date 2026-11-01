@@ -2,16 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// An All areas label wraps between words, never inside one ("Operacione / s de / modelos",
-// FILM3 review 2026-10-16, es at 1920x1080 @2x, then in the sidebar). The rows grow to a
-// second line rather than cut a label (sidebar.tsx, NavItem), so a word that is wider than
-// the row must not be the thing that gives. The sidebar is gone (#2544); the same rows live
-// in the All areas sheet, opened from the account menu. Measured in a real browser, because jsdom has no layout:
-// each word of each label (a word ends at a space or a hyphen) is asked for its client
-// rects, and a word that paints on two lines is a split word. Measured 2026-10-16 with a
-// 240 px sidebar: the label had 127 px and the widest split word, Russian
-// "Администрирование", needed 139 px; a split is a few pixels short, not a long word.
-// Spaceless scripts (ja, zh) have no words to split.
+// A left-navigation label wraps between words, never inside one ("Operacione / s de / modelos",
+// FILM3 review 2026-10-16, es at 1920x1080 @2x). The rows grow to a second line rather than
+// cut a label (sidebar.tsx), so a word that is wider than the row must not be the thing that
+// gives. Measured in a real browser, because jsdom has no layout: each word of each label (a
+// word ends at a space or a hyphen) is asked for its client rects, and a word that paints on
+// two lines is a split word. Spaceless scripts (ja, zh) have no words to split.
 import { expect, test, type Page } from '@playwright/test'
 import { fixtureFor } from './fixtures'
 
@@ -54,7 +50,7 @@ async function mockApi(page: Page, lang: string) {
 
 for (const lang of LOCALES) {
   for (const viewport of VIEWPORTS) {
-    test(`All areas labels keep whole words in ${lang} at ${viewport.width}`, async ({
+    test(`left navigation labels keep whole words in ${lang} at ${viewport.width}`, async ({
       browser,
     }) => {
       const context = await browser.newContext({
@@ -65,36 +61,23 @@ for (const lang of LOCALES) {
       try {
         await mockApi(page, lang)
         await page.goto('/model-operations')
-        await page.locator('header[data-slot="topbar"]').waitFor()
-        await page
-          .locator('header[data-slot="topbar"] button[aria-haspopup="menu"]')
-          .last()
-          .click()
-        await page
-          .getByRole('menuitem')
-          .filter({ has: page.locator('svg.lucide-layout-grid') })
-          .click()
-        const areas = page.getByRole('dialog')
-        await expect(areas).toBeVisible()
+        await page.locator('[data-slot="sidebar"]').waitFor()
         // The language is the thing under test: a detection that fell back to English
         // would measure English labels in every case and pass.
         await expect(page.locator('html')).toHaveAttribute('lang', lang)
-        // Every area open: the long module names live inside the folded ones.
-        await areas
-          .locator('button[aria-label]')
-          .filter({ has: page.locator('svg.lucide-chevrons-up-down') })
-          .first()
-          .click()
         await page.evaluate(() => document.fonts.ready)
-        const rows = await page.locator('[data-nav-row]:visible').count()
-        expect(rows, 'All areas rendered its rows').toBeGreaterThan(20)
+        const rows = await page
+          .locator('[data-slot="sidebar"] a[data-place]:visible')
+          .count()
+        expect(rows, 'the navigation rendered its places').toBeGreaterThan(10)
 
         const split = await page.evaluate(() => {
           const out: string[] = []
-          for (const row of document.querySelectorAll('[data-nav-row]')) {
-            // A row that is not painted (a folded area) has nothing to wrap.
+          for (const row of document.querySelectorAll(
+            '[data-slot="sidebar"] a[data-place]',
+          )) {
             if (!row.getClientRects().length) continue
-            const label = row.querySelector<HTMLElement>('span[title]')
+            const label = row.querySelector<HTMLElement>('span')
             const text = label?.firstChild
             // A painted row whose label is not one plain text node cannot be measured, and
             // skipping it would let the check pass having looked at nothing.

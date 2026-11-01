@@ -17,7 +17,7 @@ export type RunWordFacts = Pick<
 const LEDGER_PAGE = { limit: 200 }
 
 /**
- * The word for a run's state (dev#3120: Recent work read every finished run as Stopped,
+ * The word for a run's state (the regression: Recent work read every finished run as Stopped,
  * which reads as cancelled). Finished is Done; Stopped is a stop a person or a policy
  * asked for.
  *

@@ -381,6 +381,8 @@ const configEnvironmentHelp = "Environment variables (process values override ac
 	"    ID-token or UserInfo claim carrying group membership. Unset leaves group mapping off.\n" +
 	"  OLIVARES_OIDC_ISSUER\n" +
 	"    OIDC issuer URL. Required when the protocol is `oidc`.\n" +
+	"  OLIVARES_OLLAMA_CONTAINER_IMAGE\n" +
+	"    Image `olivares tool start ollama --container` runs through Podman or Docker, with the engine's models directory mounted at `/models`. On an AMD host with this unset, the ROCm build is used. Read at start; the value must be an image name, not an option. An NVIDIA GPU is given as `--gpus all`, which needs the NVIDIA container toolkit on the host (on Podman, its CDI spec from `nvidia-ctk cdi generate`); without it the start fails. Default: docker.io/ollama/ollama:latest.\n" +
 	"  OLIVARES_ONBOARDING_CONFIG\n" +
 	"    Path to the JSON configuration of the onboarding readiness assessor. Read by the Business edition each time `olivares enterprise readiness` runs, not when the engine starts. `{}` selects the standard profile. Unset, or a file that cannot be read or parsed, makes that command report that onboarding readiness is not configured.\n" +
 	"  OLIVARES_ORCH_CADENCE_INTERVAL\n" +
@@ -525,6 +527,8 @@ const configEnvironmentHelp = "Environment variables (process values override ac
 	"    Path to the JSON grants file of the egress gate for provider server tools (web search, web fetch, code execution) in the inline proxy. Read only by the Business edition (AI Runtime Security). Unset keeps those tools observe-only; a file that cannot be read or parsed denies every recognized egress server tool until the file is fixed and the engine is restarted.\n" +
 	"  OLIVARES_SERVER_URL\n" +
 	"    Base URL of the engine the CLI talks to, when `--server` is not given.\n" +
+	"  OLIVARES_SESSIONS_AGENT_BOOTSTRAP_LISTEN\n" +
+	"    Listen address of the agent enrollment endpoint, as `host:port`: the server-only TLS endpoint where a node agent enrolls with a one-use token before it holds a certificate. Read at startup; empty, the default, means no listener. Read only by the Business edition; a Community binary refuses to serve while it is set.\n" +
 	"  OLIVARES_SESSIONS_AGENT_LINK_LISTEN\n" +
 	"    Listen address of the agent link, as `host:port`: the mutual-TLS endpoint an edition built on this tree serves for its node agents. Read at startup; empty, the default, means no listener. Read only by the Business edition; a Community binary refuses to serve while it is set.\n" +
 	"  OLIVARES_SESSIONS_MANAGED_STOP_ADMISSION_TIMEOUT\n" +
@@ -534,7 +538,7 @@ const configEnvironmentHelp = "Environment variables (process values override ac
 	"  OLIVARES_SESSION_CONTAINER_IMAGE\n" +
 	"    Image that container sessions (`isolation=container`) run in. It must hold what the tool shells out to, such as git and a shell, and run the host's tool program, which is mounted into it read-only. Default: localhost/olivares-session:latest.\n" +
 	"  OLIVARES_SESSION_CONTAINER_RUNTIME\n" +
-	"    Container runtime for `isolation=container`: `auto` uses podman, then docker, whichever is installed; `podman` or `docker` pins one; `off` turns container isolation off. Read at engine start. Default: auto.\n" +
+	"    Container runtime for `isolation=container` and for `olivares tool start ollama --container`: `auto` uses podman, then docker, whichever is installed; `podman` or `docker` pins one; `off` turns both off. Read at engine start. Default: auto.\n" +
 	"  OLIVARES_SESSION_CONTEXT_AVAILABILITY\n" +
 	"    Whether session context governance is required, and what happens when the context service cannot answer.\n" +
 	"  OLIVARES_SESSION_KILLSWITCH_SWEEP\n" +
@@ -551,6 +555,8 @@ const configEnvironmentHelp = "Environment variables (process values override ac
 	"    Executable the session runtime launches. Default: claude.\n" +
 	"  OLIVARES_SESSION_RUNTIME_CODEX_BIN\n" +
 	"    Explicit override selecting the official Codex executable instead of the newest verified managed install or `codex` on the engine's `PATH`. The driver is registered at boot even when unset; launch is refused if no executable resolves.\n" +
+	"  OLIVARES_SESSION_RUNTIME_CURSOR_BIN\n" +
+	"    Pinned official Cursor CLI (`agent`) executable the session runtime may operate; unset, the Cursor CLI installed on this node is found when a session launches.\n" +
 	"  OLIVARES_SESSION_RUNTIME_GEMINI_BIN\n" +
 	"    Pinned official Gemini CLI executable the session runtime may operate; unset, the Gemini CLI installed on this node is found when a session launches.\n" +
 	"  OLIVARES_SESSION_RUNTIME_GROK_BIN\n" +

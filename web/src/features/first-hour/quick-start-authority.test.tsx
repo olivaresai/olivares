@@ -29,8 +29,31 @@ vi.mock('./api', async (orig) => ({
       Promise.resolve({ driver, installed: true, signed_in: true }),
   },
 }))
+const accessExtension = vi.hoisted(() => ({
+  props: null as null | {
+    sourceType: string
+    sourceRef: string
+    workspaceRef: string
+  },
+}))
+vi.mock('@/features/extensions', async (orig) => ({
+  ...(await orig<typeof import('@/features/extensions')>()),
+  PANEL_EXTENSIONS: {
+    get accessRequestAction() {
+      return (props: {
+        sourceType: string
+        sourceRef: string
+        workspaceRef: string
+      }) => {
+        accessExtension.props = props
+        return <button>Request access</button>
+      }
+    },
+  },
+}))
 
 import { agentOpsApi } from '@/features/agentops/api'
+import { ApiError } from '@/lib/api/errors'
 import { readinessOf } from '@/features/first-hour/readiness.fixture'
 import type { RunDTO } from '@/features/agentops/types'
 import { providersApi } from '@/features/providers/api'
@@ -93,6 +116,7 @@ function retire(change: string) {
 
 beforeEach(() => {
   vi.restoreAllMocks()
+  accessExtension.props = null
   navigate.mockReset()
   useTenantStore.setState({ activeTenant: 'tnt-a' })
   useSessionStore.setState({ credentialGeneration: 1 })
@@ -125,7 +149,8 @@ beforeEach(() => {
   vi.spyOn(agentOpsApi, 'createRun').mockResolvedValue({
     run_ref: 'run_new',
     provider_driver: 'claude',
-    state: 'pending',
+    // A pending run holds its first message until it runs: this launch has started.
+    state: 'running',
   } as RunDTO)
   // The quick form's default permission requires this built-in template.
   vi.spyOn(http, 'get').mockResolvedValue({
@@ -145,6 +170,33 @@ afterEach(() => {
 })
 
 describe('the quick New session launch authority', () => {
+  it('offers access request on a refused quick launch', async () => {
+    startWithRetry()
+    vi.spyOn(agentOpsApi, 'createRun').mockRejectedValue(
+      new ApiError(
+        403,
+        'module_error',
+        'this provider profile or tool is not assigned to you; request access from a department admin or owner',
+      ),
+    )
+    await submit()
+    expect(
+      await screen.findByRole('button', { name: 'Request access' }),
+    ).toBeInTheDocument()
+    expect(accessExtension.props).toEqual({
+      sourceType: 'tool',
+      sourceRef: 'claude',
+      workspaceRef: '',
+    })
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('radio', { name: 'Codex' }))
+    expect(accessExtension.props).toEqual({
+      sourceType: 'tool',
+      sourceRef: 'claude',
+      workspaceRef: '',
+    })
+  })
+
   it.each(['credential', 'tenant', 'principal'])(
     'stops first-message retries after the %s changes',
     async (change) => {

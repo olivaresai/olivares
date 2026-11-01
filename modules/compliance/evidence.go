@@ -121,6 +121,7 @@ func (m *Module) handleExportEvidence(w http.ResponseWriter, r *http.Request, mc
 	}
 	var dto evidencePackageDTO
 	var results []controlResultDTO
+	var supplement map[string]any
 
 	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		pkgRepo, err := sc.Ext(packageKind)
@@ -136,6 +137,12 @@ func (m *Module) handleExportEvidence(w http.ResponseWriter, r *http.Request, mc
 		if err != nil {
 			return err
 		}
+		if exportFormat(r) == "json" && m.evidenceSupplement != nil {
+			supplement, err = m.evidenceSupplement(r.Context(), sc, dto.LedgerSeq)
+			if err != nil {
+				return err
+			}
+		}
 		meta := map[string]any{"framework": dto.Framework, "format": exportFormat(r)}
 		return auditEvent(r.Context(), sc, mc, "compliance.evidence.export", packageKind, id, meta)
 	})
@@ -149,12 +156,16 @@ func (m *Module) handleExportEvidence(w http.ResponseWriter, r *http.Request, mc
 		return
 
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	out := map[string]any{
 		"package":    dto,
 		"controls":   results,
 		"manifest":   evidenceManifest(dto),
 		"disclaimer": reportDisclaimer,
-	})
+	}
+	if supplement != nil {
+		out["ledger_evidence"] = supplement
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // controlResultDTO is one sealed control result.

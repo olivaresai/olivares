@@ -67,9 +67,14 @@ var (
 // managed local config, no hooks, no credential helper, no askpass, no
 // redirects and only the admitted protocol.
 type Executor struct {
-	git  string
-	home string
+	git   string
+	home  string
+	start func(*exec.Cmd) error // nil: exec.Cmd.Start
 }
+
+// StartWith sets how the executor starts git. The composition root uses it to run git in its own SELinux domain on the
+// Olivares Server; nil keeps exec.Cmd.Start.
+func (x *Executor) StartWith(start func(*exec.Cmd) error) { x.start = start }
 
 // NewExecutor pins the git executable and an empty engine-owned home.
 func NewExecutor(gitPath, emptyHome string) (*Executor, error) {
@@ -181,7 +186,9 @@ func (x *Executor) sshEnv(key Secret) ([]string, func(), error) {
 	// itself: single-quote for sh, double-quote and %-escape for ssh. (-i is
 	// not used: ssh checks its raw name, then expands it, so a % cannot pass;
 	// a ${VAR} in the home still fails closed as an unreadable remote.)
-	line := fmt.Sprintf("%s -F /dev/null -o %s -o IdentitiesOnly=yes -o BatchMode=yes -o PreferredAuthentications=publickey -o PasswordAuthentication=no -o StrictHostKeyChecking=accept-new -o %s", shellQuote(ssh), shellQuote(sshPathOption("IdentityFile", name)), shellQuote(sshPathOption("UserKnownHostsFile", known)))
+	// A remote that accepts and then stalls must not hold a push: 30 s to connect, and the
+	// session ends after 4 unanswered keep-alives 15 s apart.
+	line := fmt.Sprintf("%s -F /dev/null -o %s -o IdentitiesOnly=yes -o BatchMode=yes -o PreferredAuthentications=publickey -o PasswordAuthentication=no -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o %s", shellQuote(ssh), shellQuote(sshPathOption("IdentityFile", name)), shellQuote(sshPathOption("UserKnownHostsFile", known)))
 	return []string{"GIT_SSH_COMMAND=" + line}, cleanup, nil
 }
 
@@ -223,6 +230,15 @@ func (x *Executor) run(ctx context.Context, repo string, header Secret, scheme s
 }
 
 func (x *Executor) exec(ctx context.Context, dir, repo string, header, key Secret, scheme string, args ...string) (string, int, error) {
+	out, code, _, err := x.execTail(ctx, false, dir, repo, header, key, scheme, args...)
+	return out, code, err
+}
+
+// execTail is exec, plus, when cause is set, the first line git printed on stderr: only a
+// read (LsRemote) asks for it, to name why it failed. Every other call keeps stderr
+// discarded: a pipe would make Wait outlast a killed git while a hook it started still
+// holds stderr, and a dispatch must end at its deadline.
+func (x *Executor) execTail(ctx context.Context, cause bool, dir, repo string, header, key Secret, scheme string, args ...string) (string, int, string, error) {
 	// Private callers supply literal verbs/flags and validated operands: absolute
 	// paths, SHA-prefixed revisions, branch refs and SSH/HTTPS/file URLs. guard keeps
 	// all other transports disabled; in particular, ext cannot run commands.
@@ -232,34 +248,48 @@ func (x *Executor) exec(ctx context.Context, dir, repo string, header, key Secre
 	cmd.Env = x.closedEnv(header, repo)
 	if !key.IsZero() {
 		if scheme != "ssh" {
-			return "", 0, ErrDestination
+			return "", 0, "", ErrDestination
 		}
 		env, cleanup, err := x.sshEnv(key)
 		if err != nil {
 			// Nothing was started: a refusal, never an ambiguous dispatch.
-			return "", 0, ErrTransportStart
+			return "", 0, "", ErrTransportStart
 		}
 		cmd.Env = append(cmd.Env, env...)
 		defer cleanup()
 	}
 	cmd.WaitDelay = 5 * time.Second
-	// Only stdout is read (porcelain status, config names, object ids). stderr
-	// is discarded: it is never parsed and never returned.
+	// Only stdout is read (porcelain status, config names, object ids). stderr is never
+	// parsed; a read's first stderr line only names why it failed.
 	var out bytes.Buffer
+	var tail stderrHead
 	cmd.Stdout = &out
-	cmd.Stderr = nil
-	err := cmd.Run()
+	if cause {
+		cmd.Stderr = &tail
+	}
+	err := x.run1(cmd)
 	if cerr := ctx.Err(); cerr != nil {
 		// Killed by the deadline or cancellation: whatever git printed is
 		// not a status.
-		return "", 0, cerr
+		return "", 0, "", cerr
 	}
 	code := 0
 	var ee *exec.ExitError
 	if errors.As(err, &ee) {
 		code, err = ee.ExitCode(), nil
 	}
-	return out.String(), code, err
+	return out.String(), code, tail.line(header, key), err
+}
+
+// run1 runs one git through the executor's start.
+func (x *Executor) run1(cmd *exec.Cmd) error {
+	if x.start == nil {
+		return cmd.Run()
+	}
+	if err := x.start(cmd); err != nil {
+		return fmt.Errorf("%w: %v", ErrTransportStart, err) // git never ran
+	}
+	return cmd.Wait()
 }
 
 // admittedRemote checks one remote URL against its scheme's admitted shape:
@@ -342,11 +372,48 @@ func (x *Executor) LsRemote(ctx context.Context, r RemoteRef, symref bool, patte
 	}
 	args = append(args, r.URL)
 	args = append(args, patterns...)
-	out, code, err := x.exec(ctx, x.home, "", r.Header, key, r.Scheme, args...)
-	if err != nil || code != 0 {
-		return "", ErrHostUnavailable
+	out, code, tail, err := x.execTail(ctx, true, x.home, "", r.Header, key, r.Scheme, args...)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrHostUnavailable, err)
+	}
+	if code != 0 {
+		return "", fmt.Errorf("%w: git exit %d: %s", ErrHostUnavailable, code, tail)
 	}
 	return out, nil
+}
+
+// stderrHead keeps the start of what git prints on stderr (4 KiB at most): the cause is
+// its first line ("Permission denied (publickey).", "Host key verification failed.",
+// "does not appear to be a git repository"); the lines after it are git's boilerplate.
+type stderrHead struct{ b []byte }
+
+func (t *stderrHead) Write(p []byte) (int, error) {
+	if room := 4096 - len(t.b); room > 0 {
+		t.b = append(t.b, p[:min(room, len(p))]...)
+	}
+	return len(p), nil
+}
+
+// line is the first non-empty line, printable ASCII only, at most 200 bytes, never a dump.
+func (t *stderrHead) line(secrets ...Secret) string {
+	first, _, _ := strings.Cut(strings.TrimSpace(string(t.b)), "\n")
+	// A remote can echo a credential. Remove its fields before filtering or
+	// truncating, including the token in an Authorization header and key lines.
+	for _, secret := range secrets {
+		for _, field := range strings.Fields(secret.Reveal()) {
+			first = strings.ReplaceAll(first, field, redacted)
+		}
+	}
+	first = strings.Map(func(r rune) rune {
+		if r < 0x20 || r > 0x7e {
+			return -1
+		}
+		return r
+	}, strings.TrimSpace(first))
+	if len(first) > 200 {
+		first = first[:200]
+	}
+	return first
 }
 
 // InitManaged creates a bare server repository with only the managed config.

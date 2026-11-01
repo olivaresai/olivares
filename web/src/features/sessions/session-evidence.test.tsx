@@ -16,7 +16,7 @@ vi.mock('./api', async (original) => {
 
 import { SessionEvidence } from './session-evidence'
 
-describe('SessionEvidence reads the rows the session wrote on other channels (HU 029)', () => {
+describe('SessionEvidence reads the rows the session wrote on other channels', () => {
   it('counts the PEP hook row’s tool calls as turns and resources', async () => {
     timelineById.mockImplementation(async (ref: string) =>
       ref === 'lr-hook'

@@ -19,7 +19,7 @@ import (
 	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
-// dev#2154, real use: through the production runner, Landlock and the egress
+// the regression, real use: through the production runner, Landlock and the egress
 // proxy, a record-bound Claude profile that declares github.com and
 // api.github.com reaches those two hosts with curl and git and nothing else
 // (a push's first request, GitHub's own authentication challenge, included),
@@ -52,7 +52,7 @@ func TestRealProfileEgressHostsReachOnlyTheDeclaredHosts(t *testing.T) {
 		WithProviderSecretVault(newFakeVault()), WithClaudeHookPEP(dataDir, "/bin/true"), WithConfinement([]string{dataDir}, true))
 	m.UseExecutionEnvironmentRef(testEnvRef)
 	// A GLM key is an Anthropic-kind record at z.ai's endpoint. The launch's
-	// bound endpoint is moved to the stand-in below, as in dev#1517's test.
+	// bound endpoint is moved to the stand-in below, as in the regression's test.
 	glm := anthropicInput("GLM")
 	glm.BaseURL = "https://api.z.ai/api/anthropic"
 	rec := mustCreateRecord(t, m, tenant, glm)

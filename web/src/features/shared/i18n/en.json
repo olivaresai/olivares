@@ -47,6 +47,7 @@
     "unknownUser": "Unknown user",
     "unknownWorkspace": "Unknown workspace"
   },
+  "openInEditor": "Open in {{editor}}",
   "headDiff": {
     "file": "File",
     "changes": "Changes since HEAD",

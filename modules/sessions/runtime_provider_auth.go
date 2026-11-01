@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 )
@@ -160,6 +161,9 @@ type ProviderApprovalRequest struct {
 	Method string
 	// Kind is the codec family the answer will be encoded with.
 	Kind string
+	// SessionScopeAllowed is supplied by the driver codec, never by provider prose.
+	// False means the method cannot grant permission bounded to this session.
+	SessionScopeAllowed bool
 	// ToolKind is the kind of tool an ACP agent says is asking (toolCall.kind: read,
 	// search, edit, execute, ...), set by the agent's own code for its built-in tools.
 	ToolKind string
@@ -264,6 +268,12 @@ func (m *Module) mintLaunchAuthority(
 	// live policy never sees. Recheck the home on every create and resume.
 	if driver == providerDriverGemini {
 		if err := geminiHomeRefusal(p.ProviderHome); err != nil {
+			return Credential{}, nil, err
+		}
+	}
+	// Cursor CLI approves a tool from its own config or a hook the same way.
+	if driver == providerDriverCursor {
+		if err := cursorHomeRefusal(p.ProviderHome); err != nil {
 			return Credential{}, nil, err
 		}
 	}
@@ -385,7 +395,7 @@ const localModelProbeTimeout = 3 * time.Second
 // tool's raw connection errors and nothing said Ollama was stopped. One look at the
 // endpoint, the one a provider test makes; a node with no probe wired launches as before.
 //
-// SR2C on 58f72367: that look reads the whole catalog, and a slow listing is not a
+// review on 58f72367: that look reads the whole catalog, and a slow listing is not a
 // stopped server. A failed look refuses the launch only when the endpoint is clearly
 // down (localEndpointDown); slowness, a timeout or any other failure launches as before.
 func (m *Module) localModelAnswers(ctx context.Context, rec ProviderRecord) error {
@@ -445,8 +455,18 @@ func (m *Module) mintFromProviderRecord(
 			"the provider this profile is bound to is revoked; bind an active provider before launching",
 		}
 	}
-	if rec.Service != "" {
+	if !modelprovider.NativeService(rec.Service) {
 		return Credential{}, nil, errServiceProviderNative
+	}
+	var presetAuth modelprovider.AuthScheme
+	if rec.Service != "" {
+		row, _ := modelprovider.LookupPreset(rec.Service)
+		if rec.Kind != row.Kind || rec.BaseURL != row.BaseURL {
+			return Credential{}, nil, badRequest("preset " + row.Ref + " requires its documented kind and endpoint")
+		}
+		if driver == providerDriverClaude {
+			presetAuth = row.Auth
+		}
 	}
 	if !recordServesDriver(rec.Kind, rec.BaseURL, driver) {
 		// Re-checked HERE and not only when the binding was written: a driver's
@@ -519,7 +539,7 @@ func (m *Module) mintFromProviderRecord(
 		if driver == providerDriverOpenCode && len(models) == 0 {
 			// OpenCode is pointed at the local endpoint only (driver_opencode.go). With
 			// no model listed it would fall back to its own hosted default and send the
-			// prompt off this server; the launch is refused instead (FH 085).
+			// prompt off this server; the launch is refused instead (first-hour check).
 			return Credential{}, nil, &runErr{
 				http.StatusConflict,
 				"the local model provider " + strconv.Quote(rec.DisplayName) + " lists no model; download a model in Ollama, then test the provider in Providers so its models are read",
@@ -575,15 +595,23 @@ func (m *Module) mintFromProviderRecord(
 			return Credential{}, nil, &runErr{http.StatusConflict, err.Error()}
 		}
 	}
-	env := providerRecordEnv(rec.Kind, baseURL, string(key))
+	env := providerRecordEnv(rec.Kind, baseURL, string(key), presetAuth)
 	if len(env) == 0 {
 		return Credential{}, nil, &runErr{
 			http.StatusUnprocessableEntity,
 			"the provider bound to this profile has a kind this node cannot turn into a credential environment",
 		}
 	}
-	if err := validateRecordCredentialEnv(rec.Kind, env); err != nil {
+	if err := validateRecordCredentialEnv(rec.Kind, env, presetAuth); err != nil {
 		return Credential{}, nil, err
+	}
+	// These model names come only from the closed preset row and the validated
+	// saved default. They are not credential-adapter authority.
+	if driver == providerDriverClaude {
+		env = append(env, providerPresetModelEnv(rec)...)
+		if err := validateExplicitEnv(env); err != nil {
+			return Credential{}, nil, err
+		}
 	}
 	// Nothing about the value reaches the run row. The record ref already travels in
 	// the launch snapshot and the K4 digest, so "which credential authorized this

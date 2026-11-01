@@ -113,7 +113,7 @@ func walk(root *os.Root, sc *sourceConfig) ([]fileEntry, walkStats, error) {
 			typ := ent.Type()
 			switch {
 			case typ&os.ModeSymlink != 0:
-				// Never follow a symlink (the escape guarantee is the os.Root's; this
+				// Never follow a symlink (the escape guarantee is the os.the maintainer's; this
 				// is the belt: we do not even attempt to resolve it).
 				stats.symlinks++
 			case ent.IsDir():

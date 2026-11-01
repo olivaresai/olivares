@@ -15,7 +15,9 @@
 //	   into core Identity entities plus the module-owned collection/membership
 //	   graph. Find-or-create on core Identity is keyed on external_id ALONE and
 //	   UPGRADES in place, so it converges on the SAME row the access-map bridge
+//
 // creates from a raw audit reference — that single-row convergence is
+//
 //	   what makes firm attribution possible (ARCHITECTURE.md). Minimal data
 //	   (docs/SECURITY-HARDENING.md): PII-bearing directory attributes (email/upn/mail) are dropped,
 //	   never persisted into Identity.Metadata.

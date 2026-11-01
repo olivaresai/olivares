@@ -7,6 +7,7 @@ package gitpublish
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -133,6 +134,53 @@ func TestPermissionHidden404KeepsUncertainty(t *testing.T) {
 		t.Fatalf("observations = %+v", obs)
 	}
 	close(h.git.hold)
+}
+
+// A push refused with lookup_incomplete still answers only that code, and the
+// operator learns why: the module hands the failed lookup's cause to OnLookupFailure.
+func TestFailedLookupReportsItsCause(t *testing.T) {
+	h := newHarness(t)
+	var target model.ID
+	var cause string
+	h.m.opts.OnLookupFailure = func(tg model.ID, c string) { target, cause = tg, c }
+	h.host.branchErr = fmt.Errorf("%w: git exit 128: Permission denied (publickey).", gp.ErrHostUnavailable)
+	if _, err := h.push(h.user(), "op-lookup", "refs/heads/olivares/a", ""); codeOf(err) != "lookup_incomplete" {
+		t.Fatalf("err = %v, want lookup_incomplete", err)
+	}
+	if target != h.target.ID || !strings.Contains(cause, "Permission denied (publickey)") {
+		t.Fatalf("OnLookupFailure got target %v cause %q", target, cause)
+	}
+}
+
+func TestFailedCommentLookupReportsItsCause(t *testing.T) {
+	h := newHarness(t)
+	var cause string
+	h.m.opts.OnLookupFailure = func(_ model.ID, c string) { cause = c }
+	h.host.lookupErr = fmt.Errorf("%w: comment lookup refused", gp.ErrHostUnavailable)
+	if _, err := h.m.Comment(context.Background(), h.user(), issueCommentInput(h, "comment-lookup")); codeOf(err) != "lookup_incomplete" {
+		t.Fatalf("err = %v, want lookup_incomplete", err)
+	}
+	if !strings.Contains(cause, "comment lookup refused") {
+		t.Fatalf("OnLookupFailure lost the comment lookup cause: %q", cause)
+	}
+}
+
+func TestFailedLookupDoesNotLogAHostRequestIDSecret(t *testing.T) {
+	h := newHarness(t)
+	const credential = "fixture-host-credential"
+	h.host.mintSecret = credential
+	h.host.branchErr = &gp.HostError{Status: 503, Code: "server_error", RequestID: credential}
+	var cause string
+	h.m.opts.OnLookupFailure = func(_ model.ID, c string) { cause = c }
+	if _, err := h.push(h.user(), "lookup-request-id", "refs/heads/olivares/a", ""); codeOf(err) != "lookup_incomplete" {
+		t.Fatalf("err = %v, want lookup_incomplete", err)
+	}
+	if strings.Contains(cause, credential) {
+		t.Fatal("lookup diagnostic logged a credential reflected in a host request ID")
+	}
+	if !strings.Contains(cause, "status 503 code server_error") {
+		t.Fatalf("lookup diagnostic lost the host failure: %q", cause)
+	}
 }
 
 func TestIncompleteLookupRefusesCreate(t *testing.T) {

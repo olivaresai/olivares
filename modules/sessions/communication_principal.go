@@ -268,6 +268,8 @@ func communicationPrincipalMatchesRecipient(
 	recipient RecipientRef,
 ) bool {
 	switch {
+	case principal.System:
+		return recipient == (RecipientRef{Kind: RecipientAgent, Ref: principal.SystemGrantAgentID.String()})
 	case principal.UserID != "":
 		return recipient == (RecipientRef{Kind: RecipientUser, Ref: principal.UserID.String()})
 	case principal.SessionID != "":

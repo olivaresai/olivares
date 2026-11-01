@@ -3,11 +3,27 @@
 #
 # pg-majors — the PostgreSQL 15/16/17/18 support matrix.
 #
-# ONE job, FOUR service containers, one build-cache warmup, four independent
-# passes of the same packages with per-major DSNs and declared scope. Not a
-# strategy.matrix: the db-capable runner pool has size 1, so four legs would
-# serialize anyway and pay the fixed overhead (checkout, setup-go, image pulls)
-# four times.
+# ONE LEG PER MAJOR (strategy.matrix). Each leg runs one pass of the declared
+# packages against its own major and publishes its own evidence; `evaluate`
+# assembles the four legs and judges them once. The single-job/four-pass shape
+# this replaced could not finish: every pass was cut by `go test -timeout 45m`
+# at 45m04s, and the same suite needs 65 minutes at best and 244 at worst on
+# this host (measured in main-suite.yml). Four serial passes do not fit any
+# GitHub job clock — 360 minutes is the cap — so one clock per leg is the only
+# budget that can hold a real pass. Each leg reuses main-suite's measured
+# 322-minute step and 300-minute go test timeout, inside a 350-minute job so
+# four-server provisioning and the evidence upload fit around a worst-case
+# pass (GitHub-hosted jobs stop at 360).
+#
+# The legs may serialize on the single db-capable runner; that is harmless now,
+# because each job's timeout starts when that job starts, whereas four passes
+# inside one job shared one clock they could not fit. Every leg still starts ALL
+# FOUR service containers: the guard tests (guardmajormatrix_pg_test.go) walk the
+# whole matrix inside one test and need every DSN at once, and each pass exports
+# OLIVARES_TEST_POSTGRES_OTHER_DSN from the neighbour major. fail-fast stays
+# false: one failed major must not cancel the legs that still have verdicts.
+# A skipped leg is not a pass — evaluate refuses unless every major published a
+# receipt, an exit status and a go-test stream.
 #
 # NOT a required check (a required context that never triggers blocks a PR as
 # "expected, never reported") and NOT on pull_request (it would queue behind
@@ -48,11 +64,20 @@ jobs:
     # Scheduled runs only where the repository opts in with CI_NIGHTLIES=true.
     if: github.event_name == 'workflow_dispatch' || vars.CI_NIGHTLIES == 'true'
     runs-on: ${{ vars.CI_RUNNER_DB || vars.CI_RUNNER || 'ubuntu-latest' }}
-    # Absolute backstop only. The design estimate is 21-38 min with the fixed
-    # overhead UNMEASURED, and the first run pulls three new images; the
-    # hang guard is the step timeout on the passes, so the failure reporter
-    # still posts when a pass wedges.
-    timeout-minutes: 150
+    # main-suite.yml budgets the same suite at 330/322/300m after measuring
+    # 65 minutes at best and 244 at worst. This leg needs more than that job
+    # budget: it provisions four servers and warms the build before the pass,
+    # and a job that times out runs no `always()` step, so a worst-case pass
+    # would lose its evidence. 350 keeps the whole leg under the 360 cap. The
+    # pass is cut by a hang guard only after that measured worst case, never by
+    # the timeout cliff that produced the 2026-10-07/14/21 failures.
+    timeout-minutes: 350
+    strategy:
+      # The four verdicts are the evidence; a failed major must not cancel the
+      # legs that can still tell us which majors are healthy.
+      fail-fast: false
+      matrix:
+        major: ['15', '16', '17', '18']
     services:
       # Digests re-verified against the registry on 2026-07-31 (manifest-list
       # digests, Docker Hub API) — pg16 matches the
@@ -125,7 +150,7 @@ jobs:
       # Unreachable server = fail, never a partial pass: this job provisions
       # real Postgres ×4, so PG-less could only mean a service died. Covers
       # only "unreachable" — the real anti-empty-green net is the receipt +
-      # floor + no-skip evaluation at the end.
+      # floor + no-skip evaluation in the evaluate job.
       OLIVARES_GATE_STRICT_PG: "1"
     steps:
       - name: resolve the four ephemeral Postgres ports
@@ -204,25 +229,46 @@ jobs:
             psql "$base/olivares" -v ON_ERROR_STOP=1 -c \
               "CREATE EXTENSION IF NOT EXISTS vector;"
           done
-      - name: warm the build cache once (compile only, run nothing)
-        # ONE compilation, four executions. `-run '^$(none)$'` here
-        # is a build warmup, deliberately not a gate: matching zero tests exits
-        # 0 with "no tests to run", which is exactly why -run is FORBIDDEN as a
-        # selection mechanism (§2.3) and exactly right for compiling without
-        # executing. Passes 2-4 then re-link from cache instead of recompiling.
+      - name: warm the build cache once per leg (compile only, run nothing)
+        # Compile this leg's test binaries before the long pass; a cache hit from
+        # a sibling leg on the same runner makes this nearly free. `-run
+        # '^$(none)$'` here is a build warmup, deliberately not a gate: matching
+        # zero tests exits 0 with "no tests to run", which is exactly why -run
+        # is FORBIDDEN as a selection mechanism (§2.3) and exactly right for
+        # compiling without executing.
         run: |
           set -euo pipefail
           # shellcheck disable=SC2016,SC2046 # The regex and newline-separated package list are passed to go unchanged.
           go test -count=1 -run '^$(none)$' $(grep -v '^#' ci/pg-majors-packages.txt | sed 's|^|github.com/olivaresai/olivares/|') >/dev/null
-      - name: verify the per-pass process environment
+      - name: verify the per-leg process environment
         run: go test -p=2 -count=1 -timeout=2m ./cmd/olivares/tools/pgmajorsenvtest
-      - name: run the packages against each of the four majors
+      - name: run the packages against this leg's major
         id: passes
         shell: bash
-        timeout-minutes: 100
+        timeout-minutes: 322
+        env:
+          # A matrix leg names its major here, outside the Bash script: the
+          # script must stay a literal, ${{ }}-free string so the envtest can
+          # execute it. Unset (a plain single-job run) means all four majors.
+          PG_MAJORS: ${{ matrix.major }}
         run: |
           # Record every test result without disabling fail-fast for setup or ledger writes.
           set -euo pipefail
+          majors="${PG_MAJORS-15 16 17 18}"
+          # Whitespace-only is as empty as empty: `for m in $majors` would run
+          # zero passes and the step would still exit 0.
+          if [ -z "${majors//[[:space:]]/}" ]; then
+            echo "::error::PG_MAJORS is empty; a leg must name the major it verifies" >&2
+            exit 1
+          fi
+          for m in $majors; do
+            case "$m" in
+              15 | 16 | 17 | 18) ;;
+              *)
+                echo "::error::PG_MAJORS names unsupported major '$m'; supported majors are 15 16 17 18" >&2
+                exit 1 ;;
+            esac
+          done
           pkgs=$(grep -v '^#' ci/pg-majors-packages.txt | sed 's|^|github.com/olivaresai/olivares/|')
           : > pg-majors-exits.txt
           # The matrix tests (guardmajormatrix_pg_test.go) walk ALL FOUR majors
@@ -237,7 +283,8 @@ jobs:
             MAJOR_DSNS="${MAJOR_DSNS:+${MAJOR_DSNS},}${mm}=postgres://postgres:postgres@127.0.0.1:${pp}/postgres?sslmode=disable"
           done
           echo "PG_MAJOR_DSNS_BUILT|majors=15,16,17,18" | tee -a pg-majors-receipts.txt
-          for m in 15 16 17 18; do
+          # shellcheck disable=SC2086 # $majors is the validated space-separated selection.
+          for m in $majors; do
             port=$(eval "echo \${PGPORT_$m}")
             other=$((15 + (m - 15 + 1) % 4))
             other_port=$(eval "echo \${PGPORT_$other}")
@@ -256,7 +303,7 @@ jobs:
               OLIVARES_TEST_POSTGRES_MAJOR_DSNS="$MAJOR_DSNS" \
               OLIVARES_TEST_POSTGRES_OTHER_DSN="postgres://postgres:postgres@127.0.0.1:${other_port}/postgres?sslmode=disable" \
               OLIVARES_TEST_POSTGRES_OTHER_EXPECT_MAJOR="$other" \
-              go test -json -skip "$skip" -count=1 -timeout 45m $pkgs > "gotest-$m.json" 2>&1; then
+              go test -json -skip "$skip" -count=1 -timeout 300m $pkgs > "gotest-$m.json" 2>&1; then
               pass_rc=0
             else
               pass_rc=$?
@@ -264,20 +311,114 @@ jobs:
             echo "$m $pass_rc" >> pg-majors-exits.txt
           done
           cat pg-majors-exits.txt
-      - name: self-test the evaluator, then evaluate — receipts, floors, zero skips
-        run: |
-          set -euo pipefail
-          # The evaluator is the job's whole anti-empty-green net, so its own
-          # mutation battery runs first, in this same job: a gate that has only
-          # ever been seen passing has never been seen working.
-          bash scripts/test-pg-majors-evaluate.sh
-          python3 scripts/pg-majors-evaluate.py
       - name: Preserve evidence on the runner
         if: always()
         continue-on-error: true
         uses: ./.github/actions/ci-evidence
         with:
-          name: pg-majors-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          name: pg-majors-logs-${{ matrix.major }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            gotest-${{ matrix.major }}.json
+            pg-majors-exits.txt
+            pg-majors-receipts.txt
+      - name: retain this leg's PostgreSQL diagnostics
+        # REQUIRED payload: evaluate downloads it by pattern, so a leg that
+        # cannot publish its evidence must fail, not report success without it.
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pg-majors-logs-${{ matrix.major }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            gotest-${{ matrix.major }}.json
+            pg-majors-exits.txt
+            pg-majors-receipts.txt
+          if-no-files-found: error
+          retention-days: 1
+  evaluate:
+    needs: pg-majors
+    # Success or failure: a failed leg still publishes evidence, and the
+    # evaluator names the missing or failing major. Skipped and cancelled runs
+    # are not verdicts and are not judged.
+    if: always() && (needs.pg-majors.result == 'success' || needs.pg-majors.result == 'failure')
+    runs-on: ${{ vars.CI_RUNNER_LIGHT || vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: collect the four legs' evidence
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: pg-majors-logs-*
+          path: legs
+      - name: assemble the matrix and judge it — receipts, floors, zero skips
+        id: assemble
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          : > pg-majors-exits.txt
+          : > pg-majors-receipts.txt
+          for m in 15 16 17 18; do
+            # A leg's artifact carries the attempt that produced it. Take the
+            # newest attempt for this major: re-running only the failed jobs
+            # leaves the untouched legs' evidence at an earlier attempt.
+            src=
+            newest=-1
+            for d in "legs/pg-majors-logs-${m}-${GITHUB_RUN_ID}-"*; do
+              [ -d "$d" ] || continue
+              attempt=${d##*-}
+              case "$attempt" in '' | *[!0-9]*) continue ;; esac
+              if [ "$attempt" -gt "$newest" ]; then
+                src=$d
+                newest=$attempt
+              fi
+            done
+            if [ -z "$src" ]; then
+              echo "::error::matrix leg pg$m published no artifact (looked in legs/pg-majors-logs-${m}-${GITHUB_RUN_ID}-*)" >&2
+              exit 1
+            fi
+            for f in "gotest-$m.json" pg-majors-exits.txt pg-majors-receipts.txt; do
+              if [ ! -f "$src/$f" ]; then
+                echo "::error::matrix leg pg$m published no $f" >&2
+                exit 1
+              fi
+            done
+            # Exactly one status per major: two lines for the same major would
+            # let the evaluator's dict keep whichever comes last.
+            statuses=$(grep -cx "$m [0-9][0-9]*" "$src/pg-majors-exits.txt" || true)
+            if [ "${statuses:-0}" -ne 1 ]; then
+              echo "::error::matrix leg pg$m did not publish exactly one exit status for pg$m" >&2
+              exit 1
+            fi
+            # Each leg verifies all four servers before running; the merged
+            # stream keeps exactly one receipt per major, which is the
+            # evaluator's contract. Capture the count: an empty substitution
+            # would make `[ "" -ne 1 ]` exit 2, which `if` reads as false.
+            receipts=$(grep -c "^PG_MAJOR_DSN_VERIFIED|major=$m|" "$src/pg-majors-receipts.txt" || true)
+            if [ "${receipts:-0}" -ne 1 ]; then
+              echo "::error::matrix leg pg$m did not verify pg$m exactly once" >&2
+              exit 1
+            fi
+            cp "$src/gotest-$m.json" "gotest-$m.json"
+            grep "^$m " "$src/pg-majors-exits.txt" >> pg-majors-exits.txt
+            grep "^PG_MAJOR_DSN_VERIFIED|major=$m|" "$src/pg-majors-receipts.txt" >> pg-majors-receipts.txt
+          done
+          # The evaluator is the run's whole anti-empty-green net, so its own
+          # mutation battery runs first, in this same job: a gate that has only
+          # ever been seen passing has never been seen working.
+          # The battery's own cases must not write their verdicts into the
+          # step summary operators read: only the assembled run reports there.
+          env -u GITHUB_STEP_SUMMARY bash scripts/test-pg-majors-evaluate.sh
+          python3 scripts/pg-majors-evaluate.py
+      - name: Preserve the assembled matrix evidence on the runner
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/ci-evidence
+        with:
+          name: pg-majors-evaluation-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             gotest-15.json
             gotest-16.json
@@ -285,12 +426,12 @@ jobs:
             gotest-18.json
             pg-majors-exits.txt
             pg-majors-receipts.txt
-      - name: retain PostgreSQL matrix diagnostics
+      - name: retain the assembled matrix diagnostics
         if: always()
         continue-on-error: true
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: pg-majors-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          name: pg-majors-evaluation-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             gotest-15.json
             gotest-16.json
@@ -301,8 +442,8 @@ jobs:
           if-no-files-found: error
           retention-days: 1
   report-failure:
-    needs: pg-majors
-    if: always() && needs.pg-majors.result == 'failure' && github.event_name == 'schedule' && vars.CI_NIGHTLIES == 'true'
+    needs: [pg-majors, evaluate]
+    if: always() && (needs.pg-majors.result == 'failure' || needs.evaluate.result == 'failure') && github.event_name == 'schedule' && vars.CI_NIGHTLIES == 'true'
     runs-on: ${{ vars.CI_RUNNER_LIGHT || vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 5
     permissions:
@@ -317,5 +458,5 @@ jobs:
           set -euo pipefail
           gh issue create --repo "$GH_REPO" \
             --title "pg-majors scheduled run failed ($(date -u +%F))" \
-            --body "Run: ${RUN_URL}. See the matrix job summary and diagnostic artifact for failures and qualification scope." \
+            --body "Run: ${RUN_URL}. See the matrix legs and the evaluate job summary for the failing major; each leg's diagnostic artifact is named pg-majors-logs-<major>-<run>-<attempt>." \
             --label github_actions

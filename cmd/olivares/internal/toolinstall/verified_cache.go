@@ -44,7 +44,7 @@ import (
 //     the bytes, not a verdict): the verdict (damaged, unverified) is decided again
 //     at every read, but an executable that has not changed is not read again. The
 //     host observer's Claude Code release is always unverified to it, so without
-//     this every observation hashed the whole executable (dev#2609).
+//     this every observation hashed the whole executable.
 //
 // An engine built without a cache (EngineOptions.Verified nil) checks every read,
 // as before. Off Linux the identity is not read and nothing is cached.

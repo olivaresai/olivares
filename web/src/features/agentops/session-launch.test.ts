@@ -27,8 +27,10 @@ import { sentTurnsOf, useSentTurns } from '@/features/sessions/sent-turns'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 import {
+  DEFAULT_PERMISSION,
   launchSession,
   needsApproval,
+  PERMISSION_CHOICES,
   type QuickLaunch,
   type SessionLaunch,
 } from './session-launch'
@@ -93,6 +95,20 @@ describe('the first-hour launch', () => {
       )
     },
   )
+  it('sends the node chosen by Run on', async () => {
+    await startSession({
+      driver: 'claude',
+      folder: '',
+      permission: 'ask',
+      prompt: '',
+      runOn: 'node-remote',
+    })
+    expect(ops.createRun).toHaveBeenCalledWith(
+      expect.objectContaining({ run_on: 'node-remote' }),
+      launchAuthority,
+    )
+  })
+
   it('uses the supplied registration even when another folder has the same path', async () => {
     ops.listWorkspaces.mockResolvedValue({
       items: [
@@ -169,7 +185,7 @@ describe('the first-hour launch', () => {
     expect(ops.createWorkspace).not.toHaveBeenCalled()
   })
 
-  // HU 030: which profile a session runs under was chosen here and differently
+  // acceptance: which profile a session runs under was chosen here and differently
   // in the CLI. It is the engine's one rule now; the console asks and never picks.
   it('starts on the profile the engine resolves for the tool, and picks none itself', async () => {
     ops.resolveProfile.mockResolvedValue({
@@ -255,7 +271,7 @@ describe('the first-hour launch', () => {
       }),
       launchAuthority,
     )
-    // HU2-37: no model chosen, so none is sent and the engine resolves it.
+    // acceptance: no model chosen, so none is sent and the engine resolves it.
     expect(ops.createRun.mock.calls[0][0]).not.toHaveProperty('model')
     expect(JSON.parse(ops.input.mock.calls[0][1])).toEqual({
       type: 'user',
@@ -314,7 +330,7 @@ describe('the first-hour launch', () => {
     expect(ops.inputText).not.toHaveBeenCalled()
   })
 
-  // Changed with N1 (Root 2026-10-02, HU 043): every preset applies to every tool, so
+  // Changed with N1 (Root 2026-10-02, acceptance): every preset applies to every tool, so
   // Codex starts with the chosen preset too (it used to get no template and no mode).
   it('starts Codex with a text turn and the same preset as any tool', async () => {
     ops.createRun.mockResolvedValue({
@@ -337,7 +353,7 @@ describe('the first-hour launch', () => {
     )
   })
 
-  // HU2-37: the New session dialog's model reaches the launch only when the user chose one.
+  // acceptance: the New session dialog's model reaches the launch only when the user chose one.
   it('starts with the model chosen in New session', async () => {
     await startSession({
       driver: 'codex',
@@ -361,7 +377,7 @@ describe('the first-hour launch', () => {
     expect(ops.createRun.mock.calls[0][0]).not.toHaveProperty('model')
   })
 
-  // Design FH 016: vault secrets travel by NAME; the server opens the values.
+  // Design first-hour check: vault secrets travel by NAME; the server opens the values.
   it('names the chosen vault secrets on the launch, and only their names', async () => {
     await startSession({
       driver: 'claude',
@@ -384,11 +400,74 @@ describe('the first-hour launch', () => {
     })
     expect(ops.createRun.mock.calls[0][0].secret_env).toBeUndefined()
   })
+
+  // the regression: the four names are a view over the engine's permission modes, so
+  // each choice sends the value the engine already accepts.
+  it.each([
+    ['ask', 'default'],
+    ['editsOnly', 'acceptEdits'],
+    ['auto', 'auto'],
+    ['full', 'bypassPermissions'],
+    ['readOnly', 'plan'],
+  ] as const)(
+    'sends the %s choice as permission_mode %s',
+    async (permission, mode) => {
+      await startSession({
+        driver: 'claude',
+        folder: '',
+        prompt: '',
+        permission,
+      })
+      expect(ops.createRun.mock.calls[0][0].permission_mode).toBe(mode)
+      expect(ops.createRun.mock.calls[0][0]).not.toHaveProperty('template_id')
+    },
+  )
+
+  it('never starts a session in Full unless Full was chosen', async () => {
+    expect(DEFAULT_PERMISSION).not.toBe('full')
+    expect(PERMISSION_CHOICES).toContain('full')
+    expect(PERMISSION_CHOICES).toContain(DEFAULT_PERMISSION)
+    // And on the wire: the usual default is dontAsk under the engine's built-in
+    // allowlist (an empty mode with its template), never bypassPermissions.
+    await startSession({
+      driver: 'claude',
+      folder: '',
+      prompt: '',
+      permission: DEFAULT_PERMISSION,
+    })
+    const run = ops.createRun.mock.calls[0][0]
+    expect(run.permission_mode).toBe('')
+    expect(run.template_id).toBe('tpl-ec')
+  })
+  // managed credentials travel by NAME; the broker's helper carries the use.
+  it('names the chosen managed credentials on the launch, and only their names', async () => {
+    await startSession({
+      driver: 'claude',
+      folder: '',
+      prompt: '',
+      permission: 'editsOnly',
+      credentials: ['prod-db', 'build-host'],
+    })
+    expect(ops.createRun.mock.calls[0][0].credentials).toEqual([
+      'prod-db',
+      'build-host',
+    ])
+  })
+
+  it('names no credential when none was chosen', async () => {
+    await startSession({
+      driver: 'claude',
+      folder: '',
+      prompt: '',
+      permission: 'editsOnly',
+    })
+    expect(ops.createRun.mock.calls[0][0].credentials).toBeUndefined()
+  })
   it.each([
     ['grok', 'Grok Build'],
     ['opencode', 'OpenCode'],
   ] as const)(
-    'starts %s on its resolved profile with the chosen preset (HU 043)',
+    'starts %s on its resolved profile with the chosen preset',
     async (driver, name) => {
       ops.createRun.mockResolvedValue({
         run_ref: 'run_3',
@@ -422,7 +501,7 @@ describe('the first-hour launch', () => {
     expect(ops.createRun.mock.calls[0][0].permission_mode).toBe('default')
   })
 
-  // HU2-27: the engine refused Codex's first turn (a refused key) and the dialog said
+  // acceptance: the engine refused Codex's first turn (a refused key) and the dialog said
   // "The session did not start" while the session ran on, with no trace of the message.
   it('opens a session whose first message was refused, with the message and the reason', async () => {
     vi.useFakeTimers()
@@ -455,7 +534,7 @@ describe('the first-hour launch', () => {
     expect(sentTurnsOf('run_1')).toEqual([{ text: 'hello' }])
   })
 
-  // SR4C on 3cf9f18a: a start that completes after a sign-out notes nothing.
+  // review on 3cf9f18a: a start that completes after a sign-out notes nothing.
   it('notes nothing when the sign-in changed while the start was out', async () => {
     // Claude Code takes its first message as a stream-json line (agentOpsApi.input).
     ops.input.mockImplementation(async () => {
@@ -610,164 +689,173 @@ describe('the name a launch derives', () => {
 // #500: a launch that waits for an approval answers 202 waiting_approval. The console
 // posted the first message 20 times into the waiting run, gave up after 15 s and kept it
 // only as a "Not sent" note; after the approval the session ran with no turn.
-describe('a first message whose launch waits for an approval', () => {
-  const waiting = {
-    run_ref: 'run_5',
-    provider_driver: 'codex',
-    state: 'waiting_approval',
-  }
-  let state: string
-  let reason: string | undefined
-  beforeEach(() => {
-    vi.useFakeTimers()
-    state = 'waiting_approval'
-    reason = undefined
-    ops.createRun.mockResolvedValue(waiting)
-    ops.getRun.mockImplementation(async () => ({ ...waiting, state, reason }))
-    ops.inputText.mockImplementation(async () => {
-      if (state !== 'running')
-        throw new ApiError(
-          409,
-          'module_error',
-          `session is not running (state=${state})`,
-        )
-      return { accepted: true }
+describe.each(['waiting_approval', 'pending'])(
+  'a first message whose launch is %s',
+  (initialState) => {
+    const waiting = {
+      run_ref: 'run_5',
+      provider_driver: 'codex',
+      state: initialState,
+    }
+    let state: string
+    let reason: string | undefined
+    beforeEach(() => {
+      vi.useFakeTimers()
+      state = initialState
+      reason = undefined
+      ops.createRun.mockResolvedValue(waiting)
+      ops.getRun.mockImplementation(async () => ({ ...waiting, state, reason }))
+      ops.inputText.mockImplementation(async () => {
+        if (state !== 'running')
+          throw new ApiError(
+            409,
+            'module_error',
+            `session is not running (state=${state})`,
+          )
+        return { accepted: true }
+      })
     })
-  })
-  afterEach(() => vi.useRealTimers())
+    afterEach(() => vi.useRealTimers())
 
-  const start = () =>
-    startSession({
-      driver: 'codex',
-      folder: '',
-      prompt: ' say hello ',
-      permission: 'editsAndCommands',
-    })
+    const start = () =>
+      startSession({
+        driver: 'codex',
+        folder: '',
+        prompt: ' say hello ',
+        permission: 'editsAndCommands',
+      })
 
-  it('is sent once after the approval, when the session runs', async () => {
-    let opened = false
-    const started = start().then((run) => {
-      opened = true
-      return run
-    })
-    // The dialog opens the session at once: it does not wait for the approval.
-    await vi.advanceTimersByTimeAsync(0)
-    expect(opened).toBe(true)
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(ops.inputText).not.toHaveBeenCalled()
-    expect(sentTurnsOf('run_5')).toEqual([{ text: 'say hello', waiting: true }])
-    state = 'pending'
-    await vi.advanceTimersByTimeAsync(5_000)
-    expect(ops.inputText).not.toHaveBeenCalled()
-    state = 'running'
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(ops.inputText).toHaveBeenCalledTimes(1)
-    expect(ops.inputText.mock.calls[0].slice(0, 2)).toEqual([
-      'run_5',
-      'say hello',
-    ])
-    expect(sentTurnsOf('run_5')).toEqual([{ text: 'say hello' }])
-    expect((await started).run_ref).toBe('run_5')
-  })
-
-  it.each([
-    ['declined', 'human review rejected'],
-    ['expired', 'approval expired'],
-  ])(
-    'stays as not sent, with the reason, when the launch is %s',
-    async (ended, why) => {
-      const started = start()
-      state = ended
-      reason = why
+    it('is sent once after the approval, when the session runs', async () => {
+      let opened = false
+      const started = start().then((run) => {
+        opened = true
+        return run
+      })
+      // The dialog opens the session at once: it does not wait for the approval.
+      await vi.advanceTimersByTimeAsync(0)
+      expect(opened).toBe(true)
       await vi.advanceTimersByTimeAsync(30_000)
       expect(ops.inputText).not.toHaveBeenCalled()
       expect(sentTurnsOf('run_5')).toEqual([
-        { text: 'say hello', refused: why },
+        { text: 'say hello', waiting: true },
       ])
-      await started
-    },
-  )
-
-  it('reads again through a passing error or state, and sends once', async () => {
-    await start()
-    ops.getRun.mockRejectedValueOnce(new ApiError(503, 'unavailable', 'busy'))
-    state = 'starting'
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(sentTurnsOf('run_5')).toEqual([{ text: 'say hello', waiting: true }])
-    state = 'running'
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(ops.inputText).toHaveBeenCalledTimes(1)
-    expect(sentTurnsOf('run_5')).toEqual([{ text: 'say hello' }])
-  })
-
-  it.each([403, 404])(
-    'stays as not sent when the run answers %i',
-    async (status) => {
-      await start()
-      ops.getRun.mockRejectedValue(
-        new ApiError(status, 'denied', 'run not found'),
-      )
-      await vi.advanceTimersByTimeAsync(10_000)
-      expect(ops.getRun).toHaveBeenCalledTimes(1)
-      expect(sentTurnsOf('run_5')).toEqual([
-        { text: 'say hello', refused: 'run not found' },
+      state = 'pending'
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(ops.inputText).not.toHaveBeenCalled()
+      state = 'running'
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(ops.inputText).toHaveBeenCalledTimes(1)
+      expect(ops.inputText.mock.calls[0].slice(0, 2)).toEqual([
+        'run_5',
+        'say hello',
       ])
-    },
-  )
+      expect(sentTurnsOf('run_5')).toEqual([{ text: 'say hello' }])
+      expect((await started).run_ref).toBe('run_5')
+    })
 
-  it('stays as not sent when the run cannot be read for a minute', async () => {
-    await start()
-    ops.getRun.mockRejectedValue(new ApiError(503, 'unavailable', 'busy'))
-    await vi.advanceTimersByTimeAsync(58_000)
-    expect(sentTurnsOf('run_5')).toEqual([{ text: 'say hello', waiting: true }])
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(ops.getRun).toHaveBeenCalledTimes(30)
-    expect(sentTurnsOf('run_5')).toEqual([
-      { text: 'say hello', refused: 'busy' },
-    ])
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(ops.getRun).toHaveBeenCalledTimes(30)
-  })
-
-  it('stays as not sent, with the reason, when the running session refuses it', async () => {
-    await start()
-    state = 'running'
-    ops.inputText.mockRejectedValue(
-      new ApiError(409, 'conflict', 'auth_required'),
+    it.each([
+      ['declined', 'human review rejected'],
+      ['expired', 'approval expired'],
+    ])(
+      'stays as not sent, with the reason, when the launch is %s',
+      async (ended, why) => {
+        const started = start()
+        state = ended
+        reason = why
+        await vi.advanceTimersByTimeAsync(30_000)
+        expect(ops.inputText).not.toHaveBeenCalled()
+        expect(sentTurnsOf('run_5')).toEqual([
+          { text: 'say hello', refused: why },
+        ])
+        await started
+      },
     )
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(ops.inputText).toHaveBeenCalledTimes(20)
-    expect(sentTurnsOf('run_5')).toEqual([
-      { text: 'say hello', refused: 'auth_required' },
-    ])
-  })
 
-  it('is never sent after switching organization and back', async () => {
-    await start()
-    const tenant = useTenantStore.getState().activeTenant
-    useTenantStore.setState({ activeTenant: 'tenant-b' })
-    useTenantStore.setState({ activeTenant: tenant })
-    state = 'running'
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(ops.getRun).not.toHaveBeenCalled()
-    expect(ops.inputText).not.toHaveBeenCalled()
-    expect(useSentTurns.getState().byRun).toEqual({})
-  })
+    it('reads again through a passing error or state, and sends once', async () => {
+      await start()
+      ops.getRun.mockRejectedValueOnce(new ApiError(503, 'unavailable', 'busy'))
+      state = 'starting'
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(sentTurnsOf('run_5')).toEqual([
+        { text: 'say hello', waiting: true },
+      ])
+      state = 'running'
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(ops.inputText).toHaveBeenCalledTimes(1)
+      expect(sentTurnsOf('run_5')).toEqual([{ text: 'say hello' }])
+    })
 
-  it('is never sent after a sign-out', async () => {
-    const started = start()
-    await vi.advanceTimersByTimeAsync(0)
-    useSessionStore.setState((s) => ({
-      credentialGeneration: s.credentialGeneration + 1,
-    }))
-    state = 'running'
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(ops.getRun).not.toHaveBeenCalled()
-    expect(ops.inputText).not.toHaveBeenCalled()
-    expect(useSentTurns.getState().byRun).toEqual({})
-    await started
-  })
-})
+    it.each([403, 404])(
+      'stays as not sent when the run answers %i',
+      async (status) => {
+        await start()
+        ops.getRun.mockRejectedValue(
+          new ApiError(status, 'denied', 'run not found'),
+        )
+        await vi.advanceTimersByTimeAsync(10_000)
+        expect(ops.getRun).toHaveBeenCalledTimes(1)
+        expect(sentTurnsOf('run_5')).toEqual([
+          { text: 'say hello', refused: 'run not found' },
+        ])
+      },
+    )
+
+    it('stays as not sent when the run cannot be read for a minute', async () => {
+      await start()
+      ops.getRun.mockRejectedValue(new ApiError(503, 'unavailable', 'busy'))
+      await vi.advanceTimersByTimeAsync(58_000)
+      expect(sentTurnsOf('run_5')).toEqual([
+        { text: 'say hello', waiting: true },
+      ])
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(ops.getRun).toHaveBeenCalledTimes(30)
+      expect(sentTurnsOf('run_5')).toEqual([
+        { text: 'say hello', refused: 'busy' },
+      ])
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(ops.getRun).toHaveBeenCalledTimes(30)
+    })
+
+    it('stays as not sent, with the reason, when the running session refuses it', async () => {
+      await start()
+      state = 'running'
+      ops.inputText.mockRejectedValue(
+        new ApiError(409, 'conflict', 'auth_required'),
+      )
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(ops.inputText).toHaveBeenCalledTimes(20)
+      expect(sentTurnsOf('run_5')).toEqual([
+        { text: 'say hello', refused: 'auth_required' },
+      ])
+    })
+
+    it('is never sent after switching organization and back', async () => {
+      await start()
+      const tenant = useTenantStore.getState().activeTenant
+      useTenantStore.setState({ activeTenant: 'tenant-b' })
+      useTenantStore.setState({ activeTenant: tenant })
+      state = 'running'
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(ops.getRun).not.toHaveBeenCalled()
+      expect(ops.inputText).not.toHaveBeenCalled()
+      expect(useSentTurns.getState().byRun).toEqual({})
+    })
+
+    it('is never sent after a sign-out', async () => {
+      const started = start()
+      await vi.advanceTimersByTimeAsync(0)
+      useSessionStore.setState((s) => ({
+        credentialGeneration: s.credentialGeneration + 1,
+      }))
+      state = 'running'
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(ops.getRun).not.toHaveBeenCalled()
+      expect(ops.inputText).not.toHaveBeenCalled()
+      expect(useSentTurns.getState().byRun).toEqual({})
+      await started
+    })
+  },
+)
 
 // The engine names the refusal by its code (409 approval_required); its sentence may
 // change or be translated, so the form never reads it.

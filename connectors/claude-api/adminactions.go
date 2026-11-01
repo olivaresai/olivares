@@ -58,7 +58,7 @@
 // are Console-only and the Rate Limits API is read-only). So the only API-actuable
 // workspace-level hard cap is ARCHIVE (POST /v1/organizations/workspaces/{id}/archive),
 // which revokes all keys in the workspace — the FinOps defense-in-depth backstop
-//. The Source surfaces the spend-limit gap as a posture finding
+// . The Source surfaces the spend-limit gap as a posture finding
 // (governance.go); this actuator never POSTs to an endpoint that does not exist.
 //
 // ONBOARDING writes (verified against platform.claude.com on 2026-07-05): create invite

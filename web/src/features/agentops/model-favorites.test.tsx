@@ -5,6 +5,7 @@
 // The models a person starred are a browser preference kept per (origin, user, tenant):
 // never carried to another user or tenant, never read back as anything but a short list of
 // strings, and not offered at all where there is no user to keep them for.
+import { preferenceStorage } from '@/lib/preference-storage'
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -25,7 +26,7 @@ const blob = (favorites: unknown, version: unknown = 1) =>
   JSON.stringify({ version, favorites })
 
 beforeEach(() => {
-  window.localStorage.clear()
+  preferenceStorage.clear()
   auth.principal = { kind: 'user', user_id: 'u1' }
   auth.activeTenant = 't1'
 })

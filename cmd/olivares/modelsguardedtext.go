@@ -130,7 +130,10 @@ type modelsChatExecutor struct {
 	// inspector is the OPTIONAL enterprise content firewall. It is wired INDEPENDENTLY of
 	// the Messages listener: a Chat-only boot with a configured firewall inspects, and a
 	// configured inspector is never silently absent because this path exists.
-	inspector      contentInspector
+	inspector contentInspector
+	// inspectorLive says what is in force now, when the engine's edition lets an
+	// administrator change the firewall while it runs (wire.go). It replaces inspector.
+	inspectorLive  func() contentInspector
 	approvals      *approvalBridge
 	bus            inferencepep.ObservationSink
 	circuitBreaker circuitBreakerEngine
@@ -586,8 +589,12 @@ func (x *modelsChatExecutor) subject(p models.ExecutionProfile) inferencepep.Ins
 // inspection binds the shared service. The approval callback targets THIS subject kind, so
 // a held detection here never opens an approval that looks like a Messages one.
 func (x *modelsChatExecutor) inspection() inferencepep.ContentInspectionService {
+	inspector := x.inspector
+	if x.inspectorLive != nil {
+		inspector = x.inspectorLive()
+	}
 	return inferencepep.ContentInspectionService{
-		Inspector: x.inspector, Publish: x.publish, Approve: x.openChatInspectionApproval,
+		Inspector: inspector, Publish: x.publish, Approve: x.openChatInspectionApproval,
 		Clock: x.clock,
 	}
 }

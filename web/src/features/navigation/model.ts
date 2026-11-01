@@ -4,11 +4,11 @@
 //
 // THE NAVIGATION MODEL (N1) — every consumer of the nine-area structure resolves through here.
 //
-// The top bar's places, All areas, the phone bar, the command palette, the nine directory
-// pages and the areas filter all need the same three answers: where does a path sit, which
-// entries of an area may THIS principal see, and which entries match a query. Answering them
-// in several places is how a re-grouping buries a screen: one consumer keeps an older list
-// and the operator finds the module in the palette but not in All areas. So the answers are
+// The left navigation, the command palette, the page frames and the areas filter all need
+// the same three answers: where does a path sit, which entries of an area may THIS principal
+// see, and which entries match a query. Answering them in several places is how a
+// re-grouping buries a screen: one consumer keeps an older list and the operator finds the
+// module in the palette but not in the navigation. So the answers are
 // computed once, from the single FEATURE_VIEWS registry and NAV_AREAS, and every consumer
 // derives.
 //
@@ -26,7 +26,6 @@ import type { TFunction } from 'i18next'
 import {
   FEATURE_VIEWS,
   NAV_AREAS,
-  nounsForView,
   viewsByArea,
   type AreaId,
   type FeatureView,
@@ -37,9 +36,7 @@ import { Settings } from 'lucide-react'
 /**
  * The pinned Settings utility (app/routes.tsx settingsRoute) is not a FEATURE_VIEWS entry
  * and has no permission: every signed-in principal reaches it. It belongs to System & settings
- * → Preferences in the directory, while All areas keeps it pinned at the
- * foot and does NOT repeat it inside the area list (design decision: its presence in the
- * directory "does not require duplicating the link in the same sidebar list").
+ * → Preferences, so a path under it resolves to that area and section.
  */
 export const SETTINGS_UTILITY = {
   id: 'settings',
@@ -242,11 +239,6 @@ export function areaLabel(t: TFunction, areaId: AreaId): string {
   return t(`nav:areas.${areaId}.label`)
 }
 
-/** The task question the directory opens with ("What sessions, profiles and models do I…"). */
-export function areaQuestion(t: TFunction, areaId: AreaId): string {
-  return t(`nav:areas.${areaId}.question`)
-}
-
 export function sectionLabel(
   t: TFunction,
   areaId: AreaId,
@@ -283,20 +275,20 @@ export function fold(s: string): string {
     .toLowerCase()
 }
 
-export type NavSearchKind = 'area' | 'view' | 'settings'
+export type NavSearchKind = 'view' | 'settings'
 
 export interface NavSearchEntry {
   kind: NavSearchKind
-  /** Registry id, area id, or `settings`. Unique together with `kind`. */
+  /** Registry id, or `settings`. Unique together with `kind`. */
   id: string
   path: string
   icon: LucideIcon
   label: string
-  /** `Area › Section` in the current language — shown beside a result to disambiguate. */
+  /** `Group › Place` in the current language: where the left navigation holds it. */
   context: string
   description: string
-  areaId: AreaId | null
-  sectionId: string | null
+  /** The Settings section an entry opens (`/settings?section=…`), when it is one. */
+  sectionId?: string
   /** Registry position: the stable tie-break, never activity or recency. */
   order: number
   /** Folded haystacks, one per field so the ranker can tell a label hit from a description hit. */
@@ -310,129 +302,16 @@ export interface NavSearchEntry {
   }
 }
 
-function aliasesFor(t: TFunction, id: string): string[] {
-  const out: string[] = []
-  for (const lng of [undefined, 'en'] as const) {
-    const raw = t(`nav:aliases.${id}`, {
-      defaultValue: '',
-      ...(lng ? { lng } : {}),
-    })
-    for (const part of String(raw).split('·'))
-      if (part.trim()) out.push(part.trim())
-  }
-  const en = t(`nav:items.${id}`, { lng: 'en', defaultValue: '' })
-  if (en) out.push(String(en))
-  return [...new Set(out)]
-}
-
 /**
- * The common projection the All areas filter and the ⌘K palette search over: every area,
- * every non-hidden view and the Settings utility, with the current label, the English
- * fallback label, explicit former names, path, area/section and the thirteen nouns.
- * Authorization is NOT applied here — callers filter with `can`
- * — so one index serves every principal and the ranking never depends on who is asking.
- */
-export function buildNavSearchIndex(t: TFunction): NavSearchEntry[] {
-  const entries: NavSearchEntry[] = []
-  let order = 0
-  for (const area of NAV_AREAS) {
-    const label = areaLabel(t, area.id)
-    const question = areaQuestion(t, area.id)
-    entries.push({
-      kind: 'area',
-      id: area.id,
-      path: area.path,
-      icon: area.icon,
-      label,
-      context: '',
-      description: question,
-      areaId: area.id,
-      sectionId: null,
-      order: order++,
-      haystack: {
-        label: fold(label),
-        aliases: [fold(String(t(`nav:areas.${area.id}.label`, { lng: 'en' })))],
-        path: fold(area.path),
-        context: area.sections.map((s) => fold(sectionLabel(t, area.id, s))),
-        description: fold(question),
-      },
-    })
-  }
-  for (const v of FEATURE_VIEWS) {
-    if (v.hideInNav || v.navigation.kind === 'detail') continue
-    const label = viewLabel(t, v.id)
-    const description = viewDescription(t, v.id)
-    const area = areaOfView(v)
-    const sectionId =
-      v.navigation.kind === 'feature' ? v.navigation.sectionId : null
-    const contextParts: string[] = []
-    if (area) contextParts.push(areaLabel(t, area.id))
-    if (area && sectionId)
-      contextParts.push(sectionLabel(t, area.id, sectionId))
-    entries.push({
-      kind: 'view',
-      id: v.id,
-      path: v.path,
-      icon: v.icon,
-      label,
-      context: contextParts.join(' › '),
-      description,
-      areaId: area?.id ?? null,
-      sectionId,
-      order: order++,
-      haystack: {
-        label: fold(label),
-        aliases: aliasesFor(t, v.id).map(fold),
-        path: fold(v.path),
-        context: [
-          ...contextParts.map(fold),
-          ...nounsForView(v.id).map((n) => fold(String(t(`nav:nouns.${n}`)))),
-        ],
-        description: fold(description),
-      },
-    })
-  }
-  const settingsLabel = viewLabel(t, SETTINGS_UTILITY.id)
-  const settingsArea = areaLabel(t, SETTINGS_UTILITY.areaId)
-  const settingsSection = sectionLabel(
-    t,
-    SETTINGS_UTILITY.areaId,
-    SETTINGS_UTILITY.sectionId,
-  )
-  entries.push({
-    kind: 'settings',
-    id: SETTINGS_UTILITY.id,
-    path: SETTINGS_UTILITY.path,
-    icon: SETTINGS_UTILITY.icon,
-    label: settingsLabel,
-    context: `${settingsArea} › ${settingsSection}`,
-    description: viewDescription(t, SETTINGS_UTILITY.id),
-    areaId: SETTINGS_UTILITY.areaId,
-    sectionId: SETTINGS_UTILITY.sectionId,
-    order,
-    haystack: {
-      label: fold(settingsLabel),
-      aliases: aliasesFor(t, SETTINGS_UTILITY.id).map(fold),
-      path: fold(SETTINGS_UTILITY.path),
-      context: [fold(settingsArea), fold(settingsSection)],
-      description: fold(viewDescription(t, SETTINGS_UTILITY.id)),
-    },
-  })
-  return entries
-}
-
-/**
- * The index narrowed to what THIS principal may open: a view by its own permission, an area
- * by the union of its leaves, the Settings utility always. The All areas filter and the ⌘K
- * palette both project through here and then rank through `rankNavMatches`, so the two
- * surfaces can never disagree on membership or on order (independent review finding 1).
+ * The index narrowed to what THIS principal may open: a view by its own permission, the
+ * Settings utility always. The ⌘K palette projects through here and then ranks through
+ * `rankNavMatches`, with the same check the sidebar uses.
  */
 export function authorizedEntries(
   entries: readonly NavSearchEntry[],
   gate: ViewGate,
 ): NavSearchEntry[] {
   return entries.filter((e) => {
-    if (e.kind === 'area') return isAreaVisible(e.id as AreaId, gate)
     if (e.kind === 'view') {
       const view = viewById(e.id)
       return !!view && isListed(view, gate)

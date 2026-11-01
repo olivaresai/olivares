@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// dev#2614: Detect hashes every vendor-default and PATH candidate it finds, which the CLI's
+// the regression: Detect hashes every vendor-default and PATH candidate it finds, which the CLI's
 // JSON reports. A caller that keeps only origin, match and the executable bit asks for
 // NoDigest and reads none of them; everything else about the candidates is the same.
 func TestDetectNoDigestReadsNoCandidateAndChangesNothingElse(t *testing.T) {

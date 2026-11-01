@@ -194,7 +194,7 @@ func governanceIdentityBindingSchema() map[string]any {
 func governancePolicySchema() map[string]any {
 	schema := governanceClosedObject(oas.Obj(
 		"name", oas.Obj("type", "string", "minLength", 1),
-		"kind", oas.Obj("type", "string", "enum", oas.Enum("abac", "approval")),
+		"kind", oas.Obj("type", "string", "enum", oas.Enum("abac", "approval", "grant_expiry")),
 		"enabled", oas.Obj("type", "boolean"),
 		"spec", oas.Obj("description", "Kind-specific policy specification."),
 	), "name", "kind")
@@ -216,8 +216,22 @@ func governancePolicySchema() map[string]any {
 			),
 			"required", []string{"kind"},
 		),
+		oas.Obj(
+			"properties", oas.Obj(
+				"kind", oas.Obj("const", "grant_expiry"),
+				"spec", oas.Obj("anyOf", []any{governanceGrantExpirySpecSchema(), oas.Obj("type", "null")}),
+			),
+			"required", []string{"kind"},
+		),
 	}
 	return schema
+}
+
+func governanceGrantExpirySpecSchema() map[string]any {
+	return governanceClosedObject(oas.Obj(
+		"default_seconds", oas.Obj("type", "integer", "format", "int64", "minimum", 0, "maximum", 31536000),
+		"maximum_seconds", oas.Obj("type", "integer", "format", "int64", "minimum", 0, "maximum", 31536000),
+	))
 }
 
 func governanceABACSpecSchema() map[string]any {
@@ -270,6 +284,12 @@ func governanceApprovalPolicySpecSchema() map[string]any {
 		"match", match,
 		"sensitive_paths", oas.Obj("type", "array", "maxItems", 50, "items", oas.Obj("type", "string", "minLength", 1, "maxLength", 128)),
 		"require_other_than_launcher", oas.Obj("type", "boolean"),
+		"change_record", governanceClosedObject(oas.Obj(
+			"system", oas.Obj("type", "string", "enum", oas.Enum("servicenow", "jira")),
+			"key", oas.Obj("type", "string", "minLength", 1, "maxLength", 64, "pattern", "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$"),
+			"destination", oas.Obj("type", "string", "maxLength", 128, "pattern", "^([A-Za-z0-9][A-Za-z0-9_.-]{0,127})?$"),
+			"states", oas.Obj("type", "array", "maxItems", 16, "items", oas.Obj("type", "string", "minLength", 1, "maxLength", 64)),
+		), "system", "key"),
 	))
 	// For a critical action the handler accepts an omitted/zero threshold (the
 	// engine floors it to two) or an explicitly dual-control threshold.
@@ -302,6 +322,7 @@ func governanceApprovalCreateSchema() map[string]any {
 func governanceApprovalDecisionSchema() map[string]any {
 	return governanceClosedObject(oas.Obj(
 		"decision", oas.Obj("type", "string", "enum", oas.Enum("approve", "reject")),
+		"scope", oas.Obj("type", "string", "enum", oas.Enum("", "session"), "description", "Session-bounded provider permission, only when session_scope_allowed is true; omit or leave empty for a single use."),
 		"note", oas.Obj("type", "string", "maxLength", 4096),
 	), "decision")
 }

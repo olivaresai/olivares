@@ -7,6 +7,8 @@ package sessions
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -58,6 +60,23 @@ type childDecision struct {
 	// providerEnv is a registered driver's governed managed credential; empty
 	// for every other source.
 	providerEnv []EnvVar
+	// setupRun asks a start to run the approved setup command of its new worktree
+	// once, before the child starts (runWorktreeSetup): the first start of a worktree run,
+	// whether it is a create, an approved queued start or a resume of a run whose first
+	// start failed. A resume of a run that has started never asks.
+	// setupCleanupFailed means the setup guard already exited without proving its
+	// detached descendants were gone. No later start may overlap them.
+	setupCleanupFailed bool
+	setupRun           bool
+}
+
+// setupInBackground says whether this start has a setup command that its session may have
+// to own once the request has waited for it (runtime_launch_background.go). A folder the
+// launch holds open read-only handles for is never started from a goroutine: the handles
+// close when the request's own function returns. Worktree launches refuse such folders,
+// so the check is a guard, not a path.
+func (d childDecision) setupInBackground() bool {
+	return d.setupRun && d.ws != nil && d.ws.setupCommand != "" && len(d.ws.readOnlyHandles) == 0
 }
 
 // launchChild builds the child, lets the launch-time contributions add theirs and
@@ -65,6 +84,32 @@ type childDecision struct {
 // the spec is returned whatever happened, as the runner may hand back a process
 // together with an error.
 func (m *Module) launchChild(ctx, runCtx context.Context, tenant model.TenantID, runRef string, p *CreateRunParams, d childDecision) (LaunchSpec, Process, string, error) {
+	spec, proc, stage, err := m.prepareChild(ctx, runCtx, tenant, runRef, p, d)
+	if err != nil {
+		return spec, proc, stage, err
+	}
+	// The setup runs after the session's spec is final, so it gets the same confinement, and
+	// before the child exists, so the first turn never sees a half-prepared worktree. It is
+	// also before the check in startChildProcess, because what it writes is read by the session.
+	if d.setupRun {
+		if proc, err := m.runWorktreeSetup(ctx, tenant, runRef, *p, spec, d.ws, syncSetupLimit()); err != nil {
+			// An unreaped setup is a live launch error: the create/resume caller keeps
+			// its custody and cannot start a second setup beside it.
+			return spec, proc, worktreeSetupStage, err
+		}
+	}
+	proc, stage, err = m.startChildProcess(ctx, runCtx, tenant, runRef, p, d.ws, spec, ctx.Err)
+	return spec, proc, stage, err
+}
+
+// prepareChild is the launch up to the setup: the refusals that need no process, the
+// child's final spec and every launch-time contribution to it. A start that runs its
+// setup in the background (runtime_launch_background.go) stops here, registers the
+// session and continues with the setup and startChildProcess on its own.
+func (m *Module) prepareChild(ctx, runCtx context.Context, tenant model.TenantID, runRef string, p *CreateRunParams, d childDecision) (LaunchSpec, Process, string, error) {
+	if d.setupCleanupFailed {
+		return LaunchSpec{}, nil, worktreeSetupStage, worktreeRefusal("the previous setup's process cleanup was not confirmed; resume is refused, so stop its leftover processes and start a new worktree")
+	}
 	if err := d.ws.noDeleteIsolationRefusal(p.Isolation); err != nil {
 		return LaunchSpec{}, nil, "folder access mode", err
 	}
@@ -80,6 +125,8 @@ func (m *Module) launchChild(ctx, runCtx context.Context, tenant model.TenantID,
 	p.resolvedProgram, p.resolvedIdentity = toolProgramIdentity(program)
 	d.networkModel, d.networkModelSet = launchNetworkModel(launchDriverKey(*p), *p, d), true
 	spec := m.childSpec(*p, d)
+	spec.RunOn, spec.RunRef, spec.WorkspaceDirOwned = p.RunOn, runRef, p.WorkspaceDirOwned
+	spec.TenantID = string(tenant)
 	if err := openCodeUnknownHosts(launchDriverKey(*p), d.cred.bound, d.networkModel, spec.NetworkPolicy); err != nil {
 		return spec, nil, "provider hosts", err
 	}
@@ -88,15 +135,43 @@ func (m *Module) launchChild(ctx, runCtx context.Context, tenant model.TenantID,
 		m.warnf("sessions: a launch on a provider key has no key to pin; the session proxy does not check which key it forwards",
 			"run_ref", runRef, "kind", d.cred.bound.Kind)
 	}
-	if stage, err := m.prepareSessionLaunch(ctx, runCtx, tenant, runRef, p, &spec); err != nil {
-		return spec, nil, stage, err
+	if err := remoteLaunchSpecRefusal(spec); err != nil {
+		return spec, nil, "remote launch preparation", err
 	}
+	if stage, err := m.prepareSessionLaunch(ctx, runCtx, tenant, runRef, p, &spec); err != nil {
+		return spec, launchPreparationProcess(err), stage, err
+	}
+	return spec, nil, "", nil
+}
+
+// startChildProcess is the launch after the setup: the project configuration check, the
+// last look at whether the start was cancelled (cancelled says so: the request's context
+// for a start that waits, the start's own for one the session owns) and the process.
+func (m *Module) startChildProcess(ctx, runCtx context.Context, tenant model.TenantID, runRef string, p *CreateRunParams, ws *resolvedWorkspace, spec LaunchSpec, cancelled func() error) (Process, string, error) {
 	// The files may have changed since the check that let this start through.
-	if verdict := m.checkProjectConfig(ctx, tenant, *p, d.ws); verdict.refusal != nil && !m.claudeHooksApply(*p, spec.Env) {
-		return spec, nil, "project agent configuration check", verdict.refusal
+	if verdict := m.checkProjectConfig(ctx, tenant, *p, ws); verdict.refusal != nil && !m.claudeHooksApply(*p, spec.Env) {
+		return nil, "project agent configuration check", verdict.refusal
+	}
+	if err := cancelled(); err != nil {
+		return nil, "create request cancellation", worktreeRefusal("the create request was cancelled before the session could start: %v", err)
+	}
+	if err := remoteLaunchSpecRefusal(spec); err != nil {
+		return nil, "remote launch preparation", err
+	}
+	if spec.RunOn != "" {
+		proc, err := m.rt.RunPlacement.Launch(runCtx, spec)
+		return proc, "remote tool process launch", err
 	}
 	proc, err := m.rt.Runner.Launch(runCtx, spec)
-	return spec, proc, "tool process launch", err
+	return proc, "tool process launch", err
+}
+
+func launchPreparationProcess(err error) Process {
+	var probeErr *codexSandboxLaunchError
+	if errors.As(err, &probeErr) {
+		return probeErr.proc
+	}
+	return nil
 }
 
 // launchNetworkModel is the model whose provider an own-login OpenCode launch is held
@@ -231,6 +306,51 @@ func (m *Module) childSpec(p CreateRunParams, d childDecision) LaunchSpec {
 		}
 		if p.Transport != TransportRemoteControl && d.cred.bound.Kind != "" {
 			claude.Settings = claudeBoundSettings
+			// Repeat only non-secret model policy at the same settings priority as
+			// the quiet switches, so saved settings cannot replace a preset's roles.
+			settingsEnv := map[string]string{}
+			for _, item := range d.providerEnv {
+				if item.Name == "ANTHROPIC_MODEL" || strings.HasPrefix(item.Name, "ANTHROPIC_DEFAULT_") && strings.HasSuffix(item.Name, "_MODEL") || item.Name == "CLAUDE_CODE_SUBAGENT_MODEL" {
+					settingsEnv[item.Name] = item.Value
+				}
+			}
+			if len(settingsEnv) > 0 {
+				for _, item := range claudeBoundProviderEnv {
+					if item.Name != "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST" {
+						settingsEnv[item.Name] = item.Value
+					}
+				}
+				// Claude also needs native modelOverrides to recognize a provider ID;
+				// the role env alone routes it correctly but still emits an SDK warning.
+				overrides := map[string]string{}
+				for alias, name := range map[string]string{
+					"opus": "ANTHROPIC_DEFAULT_OPUS_MODEL", "sonnet": "ANTHROPIC_DEFAULT_SONNET_MODEL",
+					"haiku": "ANTHROPIC_DEFAULT_HAIKU_MODEL", "fable": "ANTHROPIC_DEFAULT_FABLE_MODEL",
+				} {
+					if id := settingsEnv[name]; id != "" {
+						overrides[claudeModelAliases[alias]] = id
+					}
+				}
+				settings := map[string]any{"env": settingsEnv}
+				if len(overrides) > 0 {
+					primary := settingsEnv["ANTHROPIC_MODEL"]
+					alias := strings.TrimSuffix(strings.ToLower(p.Model), "[1m]")
+					if _, known := claudeModelAliases[alias]; p.Model != "" && !known && alias != "best" && alias != "opusplan" {
+						primary = p.Model
+					}
+					// A separate, recognized version slot registers a saved/explicit main
+					// that differs from the vendor's roles. The launch still uses its exact ID.
+					if !strings.HasPrefix(strings.ToLower(primary), "claude-") {
+						overrides["claude-sonnet-4-6"] = primary
+					}
+					// Never redirect an explicitly selected Claude version.
+					delete(overrides, alias)
+					settings["modelOverrides"] = overrides
+				}
+				// All values are strings or maps of strings, so marshaling cannot fail.
+				raw, _ := json.Marshal(settings)
+				claude.Settings = string(raw)
+			}
 		}
 		if p.FastMode != nil {
 			fast := `{"fastMode":` + strconv.FormatBool(*p.FastMode)
@@ -518,19 +638,34 @@ func (m *Module) claudeHooksApply(p CreateRunParams, env []EnvVar) bool {
 // Claude launch that carries them and cannot have its hooks written is refused:
 // it never runs ungoverned. A launch without them (no PEP mounted on this
 // engine) is launched as before.
+// containerHookBinary is the container hook's own entrypoint label, not the host hook's
+// olivares_exec_t: the kernel allows only one transition on olivares_exec_t.
+var containerHookBinary = "/usr/libexec/olivares-container-hook"
+
 func (m *Module) prepareClaudeHooks(spec *LaunchSpec, p CreateRunParams, runRef string) error {
 	if !m.claudeHooksApply(p, spec.Env) {
 		return nil
 	}
-	if err := ConfigureClaudeHookPEP(spec, m.rt.hookDataDir, runRef, m.rt.hookBinary); err != nil {
+	binary := m.rt.hookBinary
+	if spec.Isolation == IsolationContainer && selinuxEnforcingAt(selinuxEnforcePath) {
+		info, err := os.Stat(containerHookBinary)
+		switch {
+		case err == nil && info.Mode().IsRegular():
+			binary = containerHookBinary
+		case err != nil && !errors.Is(err, os.ErrNotExist):
+			return fmt.Errorf("sessions: cannot use the container hook entrypoint %s: %w", containerHookBinary, err)
+		}
+	}
+	if err := ConfigureClaudeHookPEP(spec, m.rt.hookDataDir, runRef, binary); err != nil {
 		return err
 	}
-	// Grant only this launch's settings directory to the confined child.
-	spec.AllowRead(filepath.Join(m.rt.hookDataDir, "run", runRef))
 	if spec.Isolation == IsolationContainer {
 		// The hook command is the engine's own program, wherever it lives on the host:
 		// a container that lacked it would run its tool calls with no hook to ask.
-		spec.Binds = append(spec.Binds, ContainerBind{HostPath: m.rt.hookBinary, Target: m.rt.hookBinary, ReadOnly: true, NoRelabel: true})
+		spec.Binds = append(spec.Binds, ContainerBind{HostPath: binary, Target: binary, ReadOnly: true, NoRelabel: true})
+	} else {
+		// A native child reads this launch's settings directory; a container takes it inline.
+		spec.AllowRead(filepath.Join(m.rt.hookDataDir, "run", runRef))
 	}
 	return nil
 }
@@ -547,6 +682,8 @@ func (m *Module) prepareClaudeHooks(spec *LaunchSpec, p CreateRunParams, runRef 
 //
 // OpenCode's own login has no record: its model's provider names the hosts it
 // needs (openCodeOwnLoginHosts), and a model naming none keeps today's network.
+// Cursor's account has no model-dependent route: its vendor-declared production
+// apiUrl, metricsUrl and websiteUrl are the whole boundary (cursorOwnLoginHosts).
 func sessionNetworkPolicy(driver string, bound BoundProvider, model string, injected, credentials []EnvVar) *egress.Policy {
 	if facts, ok := driverfacts.Lookup(driver); !ok || !facts.EgressMeasured {
 		return nil
@@ -564,6 +701,8 @@ func sessionNetworkPolicy(driver string, bound BoundProvider, model string, inje
 		// Copies: a profile's registries are appended to this launch's policy
 		// (applyProfileRegistries), never to the table every launch reads.
 		p = &egress.Policy{Providers: slices.Clone(hosts[:1]), PublicProviders: slices.Clone(hosts[1:]), PublicOnly: true}
+	case driver == providerDriverCursor:
+		p = &egress.Policy{Providers: slices.Clone(cursorOwnLoginHosts[:1]), PublicProviders: slices.Clone(cursorOwnLoginHosts[1:]), PublicOnly: true}
 	default:
 		return nil
 	}
@@ -573,7 +712,7 @@ func sessionNetworkPolicy(driver string, bound BoundProvider, model string, inje
 	if keyHeaderKinds[bound.Kind] {
 		keyEnv := providerRecordKeyEnv(bound.Kind)
 		for _, item := range credentials {
-			if key := strings.TrimSpace(item.Value); item.Name == keyEnv && key != "" {
+			if key := strings.TrimSpace(item.Value); (item.Name == keyEnv || bound.Kind == ProviderKindAnthropic && item.Name == "ANTHROPIC_AUTH_TOKEN") && key != "" {
 				p.CredentialSHA256 = sha256.Sum256([]byte(key))
 			}
 		}

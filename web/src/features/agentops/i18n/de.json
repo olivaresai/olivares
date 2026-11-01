@@ -119,7 +119,7 @@
     "detach": "Trennen"
   },
   "discardWorktree": {
-    "label": "Worktree und Branch {{branch}} ebenfalls verwerfen",
+    "label": "Worktree und Branch <branch /> ebenfalls verwerfen",
     "hint": "Wird entfernt, wenn der Branch gemergt und der Worktree sauber ist. Anhaken, um nicht gemergte oder nicht committete Arbeit zu verwerfen."
   },
   "create": {
@@ -148,8 +148,11 @@
     "worktree": "In einem neuen Git-Worktree arbeiten",
     "worktreeHint": "Startet einen neuen Branch in einem eigenen Worktree, damit Sitzungen im selben Repository keine Dateien teilen. Der Ordner muss der oberste Ordner des Repositorys sein.",
     "worktreeFrom": "Startet bei",
+    "sourceUrl": "GitHub-Issue oder Pull Request",
+    "sourceUrlHint": "Startet in einem Worktree auf einem nach ihm benannten Branch und sendet Titel und Text als erste Nachricht. Erfordert Repository-Zugangsdaten, die für diesen Ordner registriert sind.",
+    "sourceUrlPlaceholder": "https://github.com/owner/repo/issues/17",
     "isolation": "Isolation",
-    "isolationContainerHint": "Container führt die Sitzung mit Podman oder Docker auf diesem Server aus. Eine Sitzung mit einem Provider aus „Provider“ braucht native.",
+    "isolationContainerHint": "Container führt die Sitzung mit Podman oder Docker auf diesem Server aus.",
     "envAllow": "Host-Umgebung weiterleiten (Namen)",
     "envAllowPlaceholder": "PATH, HOME, TERM",
     "envAllowHint": "Zulassungsliste der NAMEN von Host-Umgebungsvariablen, die durchgereicht werden (Werte werden niemals gesendet).",
@@ -232,6 +235,7 @@
     "workspaceDirectory": "Arbeitsverzeichnis",
     "workspaceDirectoryOwn": "eigenes Verzeichnis für diese Sitzung",
     "worktreeBranch": "Worktree-Branch",
+    "sourceItem": "Gestartet von",
     "created": "Erstellt",
     "started": "Gestartet",
     "lastActivity": "Letzte Aktivität",
@@ -389,6 +393,15 @@
       "discard": "Änderungen verwerfen",
       "save": "Ordner speichern",
       "saved": "Schreibgeschützte Ordner gespeichert."
+    },
+    "defaultPermission": {
+      "title": "Standardberechtigung",
+      "description": "Sitzungen in diesem Ordner bieten zuerst diese Berechtigung an. Wer eine startet, kann trotzdem eine andere wählen.",
+      "label": "Standardberechtigung",
+      "none": "Kein Standard",
+      "save": "Standard speichern",
+      "saved": "Standardberechtigung gespeichert.",
+      "discard": "Änderungen verwerfen"
     }
   },
   "browser": {
@@ -399,6 +412,9 @@
     "newFile": "Neue Datei",
     "refresh": "Aktualisieren",
     "download": "Herunterladen",
+    "source": "Quelltext",
+    "rendered": "Gerendert",
+    "htmlPreview": "HTML-Vorschau: {{name}}",
     "edit": "Bearbeiten",
     "save": "Speichern",
     "saving": "Wird gespeichert…",
@@ -421,7 +437,7 @@
     "moveTitle": "Verschieben / umbenennen",
     "moveFromLabel": "Von",
     "moveToLabel": "Nach (relativer Pfad)",
-    "deleteTitle": "{{name}} löschen",
+    "deleteTitle": "<path /> löschen",
     "deleteBody": "Dies löscht den Eintrag aus dem Host-Arbeitsbereich. Es kann nicht rückgängig gemacht werden.",
     "deleteRecursive": "Ordner und seinen gesamten Inhalt löschen (rekursiv)",
     "created": "Erstellt",
@@ -894,6 +910,7 @@
       "runner_ready": "Der Sitzungs-Runner kann geprüft werden.",
       "runner_not_configured": "Der Sitzungs-Runner ist in dieser Runtime nicht konfiguriert.",
       "isolation_unsupported": "Dieser Server kann diese Isolierung nicht bereitstellen. Behalten Sie native bei oder installieren Sie Podman oder Docker auf dem Server für Container.",
+      "container_image_missing": "Auf diesem Server fehlt noch das Image, in dem Container-Sitzungen laufen. Erstellen Sie es einmal (olivares doctor zeigt, wie), oder bleiben Sie bei native.",
       "runner_inspection_unavailable": "Der konfigurierte Runner kann ohne Start nicht geprüft werden. Das ist keine fehlende Installation.",
       "program_present": "Das aufgelöste Programm ist vorhanden und für diese Identität ausführbar.",
       "program_missing": "Das aufgelöste Programm ist nicht vorhanden. Konfigurieren Sie die offizielle CLI über das bestehende Verfahren; für Claude kann das OLIVARES_SESSION_RUNTIME_CLAUDE_BIN nennen. Dieser Lesevorgang installiert nichts.",
@@ -932,6 +949,7 @@
       "configure_provider_credential_adapter": "Richten Sie den Anmeldedaten-Adapter dieses Werkzeugs ein.",
       "review_runtime_credential_composition": "Prüfen Sie die work/K3-Runtime-Anmeldedaten-Zusammensetzung.",
       "select_supported_selection": "Wählen Sie einen Transport und eine Isolierung, die diese Runtime nachweist.",
+      "provide_session_image": "Session-Image erstellen: olivares doctor zeigt den Befehl.",
       "retry_inspection": "Lesen Sie die Anforderungen erneut."
     },
     "remainingCheck": {
@@ -949,6 +967,7 @@
       "grok_acp": "Grok ACP",
       "opencode_acp": "OpenCode ACP",
       "gemini_acp": "Gemini CLI ACP",
+      "cursor_acp": "Cursor CLI ACP",
       "unknown": "Unbekanntes Protokoll"
     }
   },
@@ -1018,5 +1037,19 @@
     "fullSize": "Das angehängte Bild in voller Größe",
     "unavailable": "Bild nicht verfügbar",
     "movedOn": "Sie haben die Sitzung gewechselt, bevor es gespeichert war"
+  },
+  "usage": {
+    "fiveHour": "5 Stunden",
+    "week": "Wöchentlich",
+    "percent": "{{window}} {{percent}} %",
+    "unknown": "Nutzung unbekannt",
+    "limit": {
+      "fiveHour": "5-Stunden-Limit erreicht",
+      "fiveHourResets": "5-Stunden-Limit erreicht, Zurücksetzung {{time}}",
+      "week": "Wochenlimit erreicht",
+      "weekResets": "Wochenlimit erreicht, Zurücksetzung {{time}}",
+      "other": "Limit {{label}} erreicht",
+      "otherResets": "Limit {{label}} erreicht, Zurücksetzung {{time}}"
+    }
   }
 }

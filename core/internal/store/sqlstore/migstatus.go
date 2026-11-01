@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"sort"
 
+	"github.com/olivaresai/olivares/core/dr/opgate"
 	"github.com/olivaresai/olivares/core/internal/store/dialect"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -75,16 +76,14 @@ func openForRead(cfg store.Config) (*sql.DB, error) {
 	if dsn == "" {
 		dsn = ":memory:"
 	}
-	db, err := sql.Open("sqlite", dsn)
+	db, err := sql.Open("sqlite", opgate.SQLiteDSNWithPragmas(dsn, "query_only(1)", "busy_timeout(5000)", opgate.SQLiteTempStoreMemory))
 	if err != nil {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	for _, pragma := range []string{"PRAGMA query_only = ON", "PRAGMA busy_timeout = 5000"} {
-		if _, err := db.Exec(pragma); err != nil {
-			_ = db.Close()
-			return nil, fmt.Errorf("sqlstore: read-only open %q: %w", pragma, err)
-		}
+	if err := db.PingContext(context.Background()); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("sqlstore: read-only pragmas: %w", err)
 	}
 	return db, nil
 }

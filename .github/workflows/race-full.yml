@@ -7,8 +7,8 @@
 # cmd/olivares e2e tail that keeps pushes inside the 2-vCPU runner's budget. This
 # workflow closes that gap on a weekly cadence so nothing is permanently unraced,
 # and it is the mandatory pre-release evidence: a release must point at a green
-# race-full run on the EXACT tagged SHA (equality since 2026-07-30 — an ancestor
-# green does not cover the diff that came after it).
+# race-full run on the tagged SHA or an identical Git tree. An ancestor green
+# with a different tree does not cover the diff that came after it.
 #
 # TWO jobs, deliberately split: the pathological cmd/olivares ROOT package is
 # isolated in its own job so its (long, wall-clock-bound) run — or its timeout —
@@ -89,6 +89,7 @@ jobs:
           {
             echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
             echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
+            echo "GOFLAGS=${GOFLAGS:+$GOFLAGS }-modcacherw"
             echo "GOPATH=$RUNNER_TEMP/gopath"
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
@@ -346,6 +347,7 @@ jobs:
           {
             echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
             echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
+            echo "GOFLAGS=${GOFLAGS:+$GOFLAGS }-modcacherw"
             echo "GOPATH=$RUNNER_TEMP/gopath"
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
@@ -451,15 +453,15 @@ jobs:
   # el SHA etiquetado.
   #
   # Los turnos salen de scripts/race-groups.json y el `-run` lo compone `race-groups.sh`:
-  # el reparto esta CERRADO POR PREFIJO, porque `-run ^Test(Auth)` casa tambien
-  # `TestAuthorizeX` y sin esa clausura habria tests corriendo en DOS turnos. El control de
-  # union del job `setup` comprueba las dos mitades —ningun test sin turno, ninguno en dos—
-  # ANTES de gastar cuatro Postgres.
+  # Each top-level test is assigned to ONE shard by the hash of its name
+  # (scripts/lib/test_name_shard.py). The expression is anchored, `^(TestA|TestB)$`, so
+  # `TestAuth` does not match `TestAuthorizeX`. Adding a test changes no list. The setup
+  # job's union check verifies that no shard is empty BEFORE provisioning four
+  # PostgreSQL services.
   #
-  # ⛔ Y el fallo silencioso que hace falta cortar aqui es otro que en los grupos: **un
-  # `-run` que no casa con nada SALE 0 y parece verde**. Un turno con familias rancias
-  # publicaria un exito sin ejecutar un test; por eso `root-run` cuenta los tests que casa
-  # y se niega si son cero.
+  # ⛔ The other silent failure to prevent here differs from the group case: **a
+  # `-run` that matches nothing EXITS 0 and looks green**. An empty shard would report
+  # success without running a test, so `root-run` counts the matches and refuses zero.
   race-root:
     needs: setup
     strategy:
@@ -611,6 +613,7 @@ jobs:
           {
             echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
             echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
+            echo "GOFLAGS=${GOFLAGS:+$GOFLAGS }-modcacherw"
             echo "GOPATH=$RUNNER_TEMP/gopath"
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"

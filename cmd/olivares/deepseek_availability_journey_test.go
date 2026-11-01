@@ -94,16 +94,26 @@ func TestDeepSeekAvailabilityRoutesOnlyFreshRegisteredObservation(t *testing.T) 
 							t.Fatal(err)
 						}
 						discovery := c.transport.calls()[beforeDiscovery:]
-						if len(discovery) != 1 || discovery[0].method != http.MethodGet || discovery[0].url != modelprovider.DeepSeekModelsURL || c.providerVault.opens != beforeDiscoveryOpens+1 {
+						if scenario == "changed_fresh" {
+							// A new name does not change what the provider serves: the
+							// observation stays fresh without another probe.
+							if len(discovery) != 0 || c.providerVault.opens != beforeDiscoveryOpens {
+								t.Fatal("a renamed registration was probed again")
+							}
+						} else if len(discovery) != 1 || discovery[0].method != http.MethodGet || discovery[0].url != modelprovider.DeepSeekModelsURL || c.providerVault.opens != beforeDiscoveryOpens+1 {
 							t.Fatal("changed registration was not rediscovered through the sealed metadata path")
 						}
 						items, err := c.modelsModule.AvailableModels(ctx, c.tenant)
 						if err != nil || len(items) != 1 || items[0].State != "fresh" || items[0].ProviderRef != c.profile.ProviderRef {
 							t.Fatal("new registration snapshot is not fresh")
 						}
-						// The selector cannot read the private credential pin. The existing
-						// leaf resolver must refuse it even after a fresh new observation.
-						wantResolved, wantStatus = true, http.StatusServiceUnavailable
+						// The selector cannot read the private credential pin. A rename keeps
+						// the key the pin names, so the turn dispatches; a new key is not the
+						// pinned one, and the leaf resolver refuses it after a fresh observation.
+						wantResolved, wantStatus = true, http.StatusOK
+						if scenario == "rotated_fresh" {
+							wantStatus = http.StatusServiceUnavailable
+						}
 					case "revoked":
 						if revoked := c.do("POST", providersPath+"/"+c.profile.ProviderRef+"/revoke", c.admin, map[string]any{}); revoked.code != http.StatusOK {
 							t.Fatalf("revoke = %d", revoked.code)

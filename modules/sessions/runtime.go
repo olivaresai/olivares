@@ -12,7 +12,9 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"net/http"
+	"os"
 	"os/exec"
 	"slices"
 	"strconv"
@@ -34,6 +36,8 @@ import (
 // processes (the durable state of record is the sessions_run table; this map is
 // the live handles keyed by tenant|run_ref).
 type runtimeState struct {
+	limitResumeCancel context.CancelFunc
+	limitResumeWG     sync.WaitGroup
 	// toolMu holds launch selection through live registration against release removal.
 	toolMu sync.RWMutex
 	*Dependencies
@@ -131,6 +135,9 @@ type runtimeState struct {
 	// directory); nil leaves children unconfined (runtime_confinement.go).
 	confineProtect  []string
 	confineRequired bool
+	// credentialDataDir is the engine data directory, the one protected folder whose run
+	// directory a broker may grant from (session_credentials.go); empty grants from none.
+	credentialDataDir string
 
 	// afterFunc is the TIMER seam behind the template duration ceiling. It is a
 	// seam of its own and not a derivative of the module clock, because a controllable
@@ -146,6 +153,8 @@ type runtimeState struct {
 	approvalWorkers        map[string]context.CancelFunc
 	approvalWorkersStopped bool
 	approvalWG             sync.WaitGroup
+	pushStopped            bool
+	pushWG                 sync.WaitGroup
 
 	// opMu guards opLocks; opLocks serializes lifecycle OPERATIONS on the same run
 	// (resume/stop/cleanup/delete) so two operators cannot double-launch or race a
@@ -322,6 +331,10 @@ const defaultRuntimeIdleWindow = 5 * time.Minute
 
 // liveRun is a process Olivares currently supervises.
 type liveRun struct {
+	costCapMicroUSD int64
+	costSpent       int64
+	costOverflowed  bool
+	runTimeout      bool
 	program         string      // canonical executable selected before confinement and launch
 	programIdentity fs.FileInfo // immutable identity captured before exec
 	// authorityMu pins registration while a profiled effect commits and publishes.
@@ -331,7 +344,10 @@ type liveRun struct {
 	runID       model.ID
 	transport   Transport
 	proc        Process
-	ring        *outputRing
+	// setupProcess marks a one-shot worktree setup in launch-error custody. Its
+	// typed cleanup outcome is persisted by the bridge's final settlement.
+	setupProcess bool
+	ring         *outputRing
 	// outputMu serializes publication and recording with output finalization.
 	outputMu     sync.Mutex
 	outputClosed bool
@@ -411,6 +427,7 @@ type liveRun struct {
 
 	mu            sync.Mutex
 	stopRequested bool
+	stopActor     string // audit actor of the first operator stop; empty for runtime stops
 	// lastIOAt and activityVersion are the idle policy's window and its change
 	// witness (runtime_idle_policy.go).
 	lastIOAt         time.Time
@@ -428,6 +445,7 @@ type liveRun struct {
 	sessionCallsEnded  bool
 	claudeTurnDone     chan struct{}
 	claudePendingTurns int
+	driverInputStarted bool // this process generation attempted input; handshake/replay output is not input
 	driverTurnEnded    bool // a driver's last turn ended and no input has started the next (waitingForInput)
 	claudeOutputOpen   bool // Claude produced turn output since its last result (waitingForInput)
 	turnInterrupted    bool // confirmed interrupt; late output cannot reopen work before accepted input
@@ -441,7 +459,12 @@ type liveRun struct {
 	ownerAccessRetryAt      time.Time
 	ownerAccessAttempts     int
 
-	launchFailed      bool
+	launchFailed bool
+	// launchErr and failureDetail describe a start that ended before the tool ran
+	// (runtime_launch_background.go): the typed error whose cleanup outcome the final
+	// settlement keeps, and the refusal text that settlement records as the detail.
+	launchErr         error
+	failureDetail     string
 	finalized         bool
 	processReaped     bool // Wait confirmed collection; finalization alone does not
 	finalizedCh       chan struct{}
@@ -597,14 +620,37 @@ func notFoundErr() *runErr            { return &runErr{http.StatusNotFound, "ses
 func conflictErr(msg string) *runErr  { return &runErr{http.StatusConflict, msg} }
 func forbiddenErr(msg string) *runErr { return &runErr{http.StatusForbidden, msg} }
 
+// ClientStatus and ClientMessage say what the caller of a route that renders a department's
+// instructions may be told (modules/governance clientError): the refusal as it is worded here.
+func (e *runErr) ClientStatus() int     { return e.status }
+func (e *runErr) ClientMessage() string { return e.msg }
+
 // permModeBypass is the "full" preset: every tool, no prompts.
 const permModeBypass = "bypassPermissions"
 
-// refuseUnrestrictedFor answers a launch or a resume in the "full" preset by a
-// caller who is not a run administrator.
+// permModeAuto is Claude Code's own automatic mode: its classifier, not a person,
+// approves each call.
+const permModeAuto = "auto"
+
+// needsRunAdministration says a mode lets the tool act without a person approving
+// each call ("full" and "auto"), so only a run administrator may choose it.
+func needsRunAdministration(mode string) bool {
+	switch strings.TrimSpace(mode) {
+	case permModeBypass, permModeAuto:
+		return true
+	}
+	return false
+}
+
+// refuseUnrestrictedFor answers a launch or a resume in the "full" or "auto" preset
+// by a caller who is not a run administrator.
 func refuseUnrestrictedFor(mode string, mayRunUnrestricted bool) error {
-	if strings.TrimSpace(mode) == permModeBypass && !mayRunUnrestricted {
-		return forbiddenErr("only an administrator can run a session with full permissions; you can choose ask, read only, edits only, or edits and commands")
+	if needsRunAdministration(mode) && !mayRunUnrestricted {
+		name := "full"
+		if strings.TrimSpace(mode) == permModeAuto {
+			name = "auto"
+		}
+		return forbiddenErr("only an administrator can run a session with " + name + " permissions; you can choose supervised, read only, auto-accept edits, or edits and commands")
 	}
 	return nil
 }
@@ -617,6 +663,12 @@ type CreateRunParams struct {
 	queuedCredential     auth.QueuedCredential
 	queuedIntent         *LaunchIntent
 	Name                 string
+	RepositoryURL        string  `json:"repository_url,omitempty"`
+	RepositoryRef        string  `json:"repository_ref,omitempty"`
+	CostCapMicroUSD      int64   `json:"cost_cap_micro_usd,omitempty"`
+	TimeoutSeconds       float64 `json:"timeout_seconds,omitempty"`
+	runDeadline          time.Time
+	costSpent            int64
 	Transport            Transport
 	PermissionMode       string
 	Effort               string
@@ -625,6 +677,9 @@ type CreateRunParams struct {
 	FastMode     *bool  `json:"fast_mode,omitempty"`
 	ServiceTier  string `json:"service_tier,omitempty"`
 	WorkspaceRef string
+	// RunOn names the enrolled remote node for this launch. Empty is the local engine.
+	// The approval and dispatch digests include it; resume reads the stored value.
+	RunOn string `json:"run_on,omitempty"`
 	// WorkspaceDir is the HOST directory this launch's work lands in: the
 	// canonical root of the registered workspace named above, or — when none is
 	// named — the directory of its OWN this plane created for the run
@@ -660,6 +715,12 @@ type CreateRunParams struct {
 	// SERVER-SET only and, like WorkspaceDir, is not part of the semantic request
 	// the digest pins (runtime_worktree.go).
 	WorktreeBranch string `json:"-"`
+	// SourceURL is the page of the GitHub issue or pull request this session starts
+	// from (session_source_item.go). It implies Worktree, names the branch after the
+	// item and stays on the session as a link; omitempty keeps every existing
+	// launch's dispatch digest unchanged. worktreeBranchStem is derived from it.
+	SourceURL          string `json:"source_url,omitempty"`
+	worktreeBranchStem string
 	// ToolSurface is the effective tool surface resolved for this launch, and
 	// ToolSurfaceDeclared says whether the launch form must emit it
 	// (provider_profile_policy.go). Server-set from the profile, never from the
@@ -707,10 +768,14 @@ type CreateRunParams struct {
 	// merge's OUTPUT and are not accepted from the wire: a caller cannot post an
 	// allowlist, only a template that carries one, so "restricted" always traces to a
 	// stored, permissioned template rather than to whatever the request asked for.
-	TemplateID   string
-	AllowedTools []string      // the child's allow rules; enforced with permission-mode dontAsk
-	Instructions string        // appended to the child's system prompt
-	MaxDuration  time.Duration // the runtime stops the session at this age (0 = unbounded)
+	TemplateID string
+	// ExpectedTemplateVersion is an optional server-side precondition for a run
+	// whose earlier approval already named a template revision. It is never wire
+	// input; resolution refuses a stale approval before applying any terms.
+	ExpectedTemplateVersion int64         `json:"-"`
+	AllowedTools            []string      // the child's allow rules; enforced with permission-mode dontAsk
+	Instructions            string        // appended to the child's system prompt
+	MaxDuration             time.Duration // the runtime stops the session at this age (0 = unbounded)
 	// TemplateVersion is the RESOLVED template's store version at the moment of this
 	// launch. It reaches the launch gate in the intent so a governed approval binds to the
 	// terms that were approved, and it is persisted so an operator can tell which revision
@@ -737,6 +802,10 @@ type CreateRunParams struct {
 	// effective terms (askCallerQuestions); the API sets it from the authenticated
 	// caller, so the question is asked and recorded only where it decides.
 	asks callerAsks
+	// standardsRefs are the instruction templates the launch's department and group standards
+	// came from (department_standards.go). A fresh launch fills them in; a resume and a queued
+	// launch read them from the run and keep them.
+	standardsRefs []string
 	// permissionModeNamed records that the LAUNCH named its permission mode (the
 	// person's preset), captured before a template or validateCreate can change it:
 	// a profile's declared mode applies only to a launch that named none
@@ -809,7 +878,7 @@ type CreateRunParams struct {
 func launchIntentFor(ctx context.Context, action LaunchAction, runRef string, p CreateRunParams, ws *resolvedWorkspace, lease Lease) LaunchIntent {
 	intent := LaunchIntent{
 		Action: action, RunRef: runRef, Transport: p.Transport,
-		PermissionMode: p.PermissionMode, Model: p.Model, WorkspaceRef: p.WorkspaceRef,
+		PermissionMode: p.PermissionMode, Model: p.Model, RunOn: p.RunOn, WorkspaceRef: p.WorkspaceRef,
 		Actor: p.Actor, ActorKind: p.ActorKind, RecordRequested: p.RecordRequested,
 		Holder: lease.Holder, Fence: lease.Fence, ClaimSID: lease.SID,
 		TemplateRef: p.TemplateID, TemplateVersion: p.TemplateVersion, TemplateBuiltin: p.TemplateBuiltin,
@@ -819,6 +888,10 @@ func launchIntentFor(ctx context.Context, action LaunchAction, runRef string, p 
 		RegistrySecrets: registryTokenRefs(p.profileRegistries),
 		GitRead:         p.GitRead,
 		Credentials:     slices.Clone(p.Credentials),
+	}
+	intent.CostCapMicroUSD = p.CostCapMicroUSD
+	if !p.runDeadline.IsZero() {
+		intent.RunDeadlineAt = model.NewTimestamp(p.runDeadline).String()
 	}
 	intent.LauncherPrincipal, _ = api.RequestPrincipal(ctx)
 	// The authenticated identity wins; the actor-derived form stays for
@@ -1043,6 +1116,30 @@ func (m *Module) createRunInternal(
 	p CreateRunParams,
 	work *workLaunchCall,
 ) (runDTO, error) {
+	// A start from an item works in a worktree named after it. Settled first, so
+	// every gate below judges the launch it will be.
+	if p.SourceURL != "" {
+		ref, err := parseSourceItemURL(p.SourceURL)
+		if err != nil {
+			return runDTO{}, err
+		}
+		if p.RepositoryURL != "" {
+			return runDTO{}, badRequest("source_url cannot be combined with repository_url")
+		}
+		p.SourceURL, p.Worktree, p.worktreeBranchStem = ref.URL(), true, ref.branchStem()
+	}
+	placementPrincipal, _ := api.RequestPrincipal(ctx)
+	if work != nil {
+		placementPrincipal = auth.Principal{AgentIdentity: work.spec.askedAgent}
+	}
+	node, err := m.checkRunPlacement(ctx, tenant, p.RunOn, placementPrincipal)
+	if err != nil {
+		return runDTO{}, err
+	}
+	p.RunOn = node
+	if err := m.refuseRemoteInputs(p); err != nil {
+		return runDTO{}, err
+	}
 	// The person's preset is what the launch NAMED, read before the template below can
 	// change it: read after, a template's wider mode would count as the person's choice.
 	p.permissionModeNamed = strings.TrimSpace(p.PermissionMode) != ""
@@ -1097,6 +1194,11 @@ func (m *Module) createRunInternal(
 	// Formalize workspace_ref → governed host path/mount BEFORE the gates so the
 	// CRITICAL determination can read the workspace's classification/mount
 	// posture. A non-empty ref that is not a registered workspace fails deny-closed.
+	// The caller's rights on the folder come first: a refusal must not say whether its
+	// root is available on this node.
+	if err := p.asks.refuseWorkspace(p.WorkspaceRef); err != nil {
+		return runDTO{}, err
+	}
 	ws, err := m.resolveLaunchWorkspace(ctx, tenant, p.WorkspaceRef)
 	if err != nil {
 		return runDTO{}, err
@@ -1153,7 +1255,7 @@ func (m *Module) createRunInternal(
 		// The opt-in: a worktree and branch of the workspace's repository. Made at
 		// the same point as the directory above, for the same reason, and removed
 		// again (fresh, so nothing is lost) when the launch is refused before its row.
-		dir, branch, werr := m.prepareRunWorktree(ctx, runRef, ws, p.Isolation, p.WorktreeFrom)
+		dir, branch, werr := m.prepareRunWorktree(ctx, runRef, ws, p.Isolation, p.WorktreeFrom, p.worktreeBranchStem)
 		if werr != nil {
 			return runDTO{}, werr
 		}
@@ -1171,9 +1273,25 @@ func (m *Module) createRunInternal(
 		p.WorkspaceDir, p.WorkspaceDirOwned = dir, true
 		defer func() {
 			if !rowCommitted {
-				discardEmptyRunWorkspaceDir(dir)
+				if p.RepositoryURL != "" {
+					_ = os.RemoveAll(dir)
+				} else {
+					discardEmptyRunWorkspaceDir(dir)
+				}
 			}
 		}()
+		if p.RepositoryURL != "" {
+			fetchCtx := ctx
+			cancel := func() {}
+			if !p.runDeadline.IsZero() {
+				fetchCtx, cancel = context.WithDeadline(ctx, p.runDeadline)
+			}
+			err := prepareRepositorySource(fetchCtx, dir, p.RepositoryURL, p.RepositoryRef)
+			cancel()
+			if err != nil {
+				return runDTO{}, err
+			}
+		}
 	}
 	var identityWorkspace model.ID
 	if orchestrationGrant != nil {
@@ -1322,14 +1440,29 @@ func (m *Module) createRunInternal(
 	runCtx, cancel := context.WithCancel(context.Background())
 	m.rt.toolMu.RLock()
 	defer m.rt.toolMu.RUnlock()
-	spec, proc, stage, lerr := m.launchChild(ctx, runCtx, tenant, runRef, &p, childDecision{
+	decision := childDecision{
 		cred: cred, work: runtimeCreds.work, communication: runtimeCreds.communication,
 		ws: ws, gateEnv: pr.injectEnv, providerEnv: providerEnv,
-	})
-	if lerr != nil || proc == nil {
+		setupRun: p.Worktree && !p.NoSetup,
+	}
+	// A start with a setup command to run may have to hand that setup to the session when
+	// the request has waited long enough: it prepares the child here and starts the setup
+	// and the tool below, from the registered session (runtime_launch_background.go).
+	var background *backgroundLaunch
+	var spec LaunchSpec
+	var proc Process
+	var stage string
+	var lerr error
+	if decision.setupInBackground() {
+		background = newBackgroundLaunch(ctx, runCtx)
+		spec, proc, stage, lerr = m.prepareChild(ctx, runCtx, tenant, runRef, &p, decision)
+	} else {
+		spec, proc, stage, lerr = m.launchChild(ctx, runCtx, tenant, runRef, &p, decision)
+	}
+	if lerr != nil || (proc == nil && background == nil) {
 		// Runner saw both raw bearers in LaunchSpec. Its error is therefore treated
 		// as secret-bearing even if the built-in runner currently returns safe text.
-		m.warnf("session launch failed", "run_ref", runRef, "reason", launchFailedErr(stage, lerr).msg)
+		m.warnf("session launch failed", "run_ref", runRef, "reason", launchLogReason(stage, lerr))
 		var compensationErr error
 		if proc != nil {
 			// A Runner may legally return a process together with an error. Register
@@ -1337,6 +1470,7 @@ func (m *Module) createRunInternal(
 			// unenumerable. The bridge owns/drains Output and will confirm a later exit.
 			lr := &liveRun{
 				tenant: tenant, runRef: runRef, runID: runID, transport: p.Transport,
+				costCapMicroUSD: p.CostCapMicroUSD, costSpent: p.costSpent, runTimeout: false,
 				proc: proc, program: spec.Program, programIdentity: p.resolvedIdentity, ring: newOutputRing(m.rt.ringFrames, m.rt.ringBytes),
 				redact: p.outputRedactor(), redactsEveryEarlierValue: true,
 				cancel: cancel, context: runCtx, companion: companionSpec(spec), finalizedCh: make(chan struct{}),
@@ -1350,6 +1484,7 @@ func (m *Module) createRunInternal(
 				communicationCredentialNotAfter: runtimeCreds.communication.NotAfter,
 				stopRequested:                   true, stopReason: "launch_error", launchFailed: true,
 			}
+			lr.setupProcess = stage == worktreeSetupStage
 			m.rt.putLive(lr)
 			go m.bridge(lr)
 			stopConfirmed, stopErr := m.teardownLiveWithContext(wctx, lr)
@@ -1358,7 +1493,7 @@ func (m *Module) createRunInternal(
 				// Keep Claim + pending generation intact. A later Stop/promotion retries
 				// the same registered child; no successor can be admitted meanwhile.
 				return runDTO{}, errors.Join(
-					launchFailedErr(stage, lerr),
+					launchRefusal(stage, lerr),
 					compensationErr,
 				)
 			}
@@ -1383,16 +1518,19 @@ func (m *Module) createRunInternal(
 			mutate: func(rec model.Record) {
 				rec[colExitCode] = int64(-1)
 				rec[colRuntimeLaunchID] = nil
+				markWorktreeSetupCleanupFailure(rec, lerr)
+				markWorktreeSetupCleanupOutcome(rec, stage, proc)
 			},
 		})
 		return runDTO{}, errors.Join(
-			launchFailedErr(stage, lerr),
+			launchRefusal(stage, lerr),
 			compensationErr, workLeaseErr, transitionErr,
 		)
 	}
 
 	lr := &liveRun{
 		tenant: tenant, runRef: runRef, runID: runID, transport: p.Transport,
+		costCapMicroUSD: p.CostCapMicroUSD, costSpent: p.costSpent, runTimeout: false,
 		proc: proc, program: spec.Program, programIdentity: p.resolvedIdentity, ring: newOutputRing(m.rt.ringFrames, m.rt.ringBytes),
 		redact: p.outputRedactor(), redactsEveryEarlierValue: true,
 		cancel: cancel, context: runCtx, companion: companionSpec(spec), finalizedCh: make(chan struct{}),
@@ -1404,6 +1542,11 @@ func (m *Module) createRunInternal(
 		communicationWorkspaceID:        runtimeCreds.communication.WorkspaceID,
 		communicationCredentialID:       runtimeCreds.communication.ID,
 		communicationCredentialNotAfter: runtimeCreds.communication.NotAfter,
+	}
+	if background != nil {
+		// The tool's process does not exist yet: the run is supervised through the
+		// handle that becomes it, so stop, heartbeat and settlement need no second path.
+		lr.proc = background.pp
 	}
 	m.startAgentSpan(lr, p, cred)
 	m.rt.putLive(lr)
@@ -1417,56 +1560,68 @@ func (m *Module) createRunInternal(
 	// the effects would never apply and `last_activity_at` would freeze at launch,
 	// so a live run would look idle.
 	lr.abreVentanaDeReserva()
-	defer lr.cierraVentanaYVuelca()
 	go m.bridge(lr)
-	m.armRunDeadline(lr, p.MaxDuration)
+	m.armPipelineDeadline(lr, p)
 
-	// The owned handshake runs INSIDE the reservation window on purpose: the
-	// provider's root response is allowed to arrive before the launch transition
-	// commits, and the alias it nominates is queued rather than written — so a
-	// launch that then loses its row binds nothing, and the retry converges.
-	if herr := m.finishDriverLaunch(wctx, lr); herr != nil {
-		lr.endHandshake(herr, "driver_handshake_failed")
-		stopped, teardownErr := m.teardownLiveWithContext(wctx, lr)
-		if !stopped {
-			// Keep the claim and the pending generation: an unstopped child is still
-			// ours, and a later stop retries that exact process.
+	// complete is the launch from the moment the tool's process exists: the handshake, the
+	// launch transition and the answer. A start that waits runs it inline; a start that
+	// owns its setup runs it once the setup is done (runLaunchInBackground).
+	complete := func(proc Process) (runDTO, error) {
+		// The owned handshake runs INSIDE the reservation window on purpose: the
+		// provider's root response is allowed to arrive before the launch transition
+		// commits, and the alias it nominates is queued rather than written — so a
+		// launch that then loses its row binds nothing, and the retry converges.
+		if herr := m.finishDriverLaunch(wctx, lr); herr != nil {
+			lr.endHandshake(herr, "driver_handshake_failed")
+			stopped, teardownErr := m.teardownLiveWithContext(wctx, lr)
+			if !stopped {
+				// Keep the claim and the pending generation: an unstopped child is still
+				// ours, and a later stop retries that exact process.
+				return runDTO{}, errors.Join(herr, teardownErr)
+			}
+			m.awaitFinalize(lr)
 			return runDTO{}, errors.Join(herr, teardownErr)
 		}
-		m.awaitFinalize(lr)
-		return runDTO{}, errors.Join(herr, teardownErr)
-	}
 
-	// Transition PENDING → RUNNING (+ pid, started_at, 'launched' event). The guard
-	// permits 'launched' only FROM pending: if the process already exited and the
-	// bridge finalized the row to a terminal state, this loses the race — return the
-	// row's TRUE state rather than resurrecting a dead session to running.
-	rec, err := m.transition(wctx, tenant, runRef, transitionInput{
-		event: "launched", toState: stateRunning,
-		detail: joinDetail(pr.contextPolicySummary, templateDetail(tpl, tplConflicts), m.confinementDetail(proc, runRef),
-			secretEnvDetail(p.SecretEnv), p.gitReadDetail, p.credentialDetail, p.registryDetail, p.egressDetail, codexSandboxDetail(p, spec)),
-		actor: p.Actor, actorKind: p.ActorKind, guard: guardRuntimeLaunch(runtimeCreds.launchID),
-		confinement: reportedConfinement(proc),
-		mutate: func(rec model.Record) {
-			rec[colStartedAt] = model.NewTimestamp(m.now()).String()
-			rec[colLastActivityAt] = model.NewTimestamp(m.now()).String()
-			if pid := proc.PID(); pid > 0 {
-				rec[colPID] = int64(pid)
+		// Transition PENDING → RUNNING (+ pid, started_at, 'launched' event). The guard
+		// permits 'launched' only FROM pending: if the process already exited and the
+		// bridge finalized the row to a terminal state, this loses the race — return the
+		// row's TRUE state rather than resurrecting a dead session to running.
+		rec, err := m.transition(wctx, tenant, runRef, transitionInput{
+			event: "launched", toState: stateRunning,
+			detail: joinDetail(pr.contextPolicySummary, templateDetail(tpl, tplConflicts), m.confinementDetail(proc, runRef),
+				secretEnvDetail(p.SecretEnv), p.gitReadDetail, p.credentialDetail, p.registryDetail, p.egressDetail, codexSandboxDetail(p, spec)),
+			actor: p.Actor, actorKind: p.ActorKind, guard: guardRuntimeLaunch(runtimeCreds.launchID),
+			confinement: reportedConfinement(proc),
+			mutate: func(rec model.Record) {
+				rec[colStartedAt] = model.NewTimestamp(m.now()).String()
+				rec[colLastActivityAt] = model.NewTimestamp(m.now()).String()
+				rec[colRunSetupPending] = false
+				if pid := proc.PID(); pid > 0 {
+					rec[colPID] = int64(pid)
+				}
+			},
+		})
+		if err != nil {
+			stopped, teardownErr := m.teardownLiveWithContext(wctx, lr)
+			if isRunConflict(err) {
+				return m.racedFinalizeDTO(wctx, tenant, runRef, lr, stopped, err, teardownErr)
 			}
-		},
-	})
-	if err != nil {
-		stopped, teardownErr := m.teardownLiveWithContext(wctx, lr)
-		if isRunConflict(err) {
-			return m.racedFinalizeDTO(wctx, tenant, runRef, lr, stopped, err, teardownErr)
+			return runDTO{}, errors.Join(err, teardownErr)
 		}
-		return runDTO{}, errors.Join(err, teardownErr)
+		completion := runtimeLaunchCompletion(tenant, runRef, runtimeCreds.launchID, rec)
+		dto := m.toRunDTO(m.settleDriverLaunch(wctx, lr, rec))
+		dto.Completion = completion
+		m.observeRuntimeLaunch(wctx, completion)
+		return dto, nil
 	}
-	completion := runtimeLaunchCompletion(tenant, runRef, runtimeCreds.launchID, rec)
-	dto := m.toRunDTO(m.settleDriverLaunch(wctx, lr, rec))
-	dto.Completion = completion
-	m.observeRuntimeLaunch(wctx, completion)
-	return dto, nil
+	if background == nil {
+		defer lr.cierraVentanaYVuelca()
+		return complete(proc)
+	}
+	background.lr, background.wctx, background.tenant, background.runRef = lr, wctx, tenant, runRef
+	background.p, background.decision, background.spec, background.finish = p, decision, spec, complete
+	return m.runLaunchInBackground(background)
 }
 
 // resumeRun relaunches a stopped run. agentIdentity is the AUTHENTICATED agent
@@ -1515,6 +1670,12 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	if err != nil {
 		return runDTO{}, err
 	}
+	if rec.Int(colRunCostCap) > 0 && rec.String(colReason) == "run cost cap reached" {
+		return runDTO{}, conflictErr("run cost cap reached")
+	}
+	if rec.Int(colRunCostCap) > 0 && rec.String(colReason) == "run cost unavailable" {
+		return runDTO{}, conflictErr("the prior run cost is unknown; start a new bounded run instead")
+	}
 	if err := m.refuseLegacyControlUnderWork(ctx, tenant, rec); err != nil {
 		return runDTO{}, err
 	}
@@ -1524,7 +1685,11 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	if engineResume {
 		// The pass lists the engine's runs before it resumes them one by one: a run a person
 		// resumed or stopped since is theirs now, whatever the listing said.
-		if rec.String(colState) != stateStopped || !endedByTheEngine(rec.String(colReason)) {
+		if attempt, scheduled := ctx.Value(limitResumeKey{}).(limitResumeAttempt); scheduled {
+			if rec.String(colRunResumeAt) != attempt.at || rec.String(colRunArchivedAt) != "" {
+				return runDTO{}, conflictErr("scheduled resume cancelled")
+			}
+		} else if rec.String(colState) != stateStopped || !endedByTheEngine(rec.String(colReason)) {
 			return runDTO{}, conflictErr("run no longer waits for the engine's resume")
 		}
 		asks = m.principalAsks(ctx, tenant, engineLauncher)
@@ -1567,6 +1732,25 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	default:
 		return runDTO{}, conflictErr("session must be stopped/failed to resume (state=" + rec.String(colState) + ")")
 	}
+	placementPrincipal, _ := api.RequestPrincipal(ctx)
+	if engineResume {
+		placementPrincipal = engineLauncher
+	}
+	if queued {
+		placementPrincipal = queuedLauncher
+	}
+	if _, err := m.checkRunPlacement(ctx, tenant, rec.String(colRunOn), placementPrincipal); err != nil {
+		return runDTO{}, err
+	}
+	if rec.String(colRunOn) != "" {
+		names, err := decodeCredentialNames(rec.String(colRunCredentials))
+		if err != nil {
+			return runDTO{}, err
+		}
+		if err := m.refuseRemoteInputs(CreateRunParams{RunOn: rec.String(colRunOn), GitRead: rec.String(colRunGitRead), Credentials: names, WorkspaceRef: rec.String(colWorkspaceRef), WorktreeBranch: rec.String(colRunWorktreeBranch)}); err != nil {
+			return runDTO{}, err
+		}
+	}
 	if err := m.refuseUncollectedProcess(tenant, runRef, rec.String(colState), "resume"); err != nil {
 		return runDTO{}, err
 	}
@@ -1587,9 +1771,18 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	if err != nil {
 		return runDTO{}, err
 	}
+	// The templates it was given standards from: a record that cannot be read refuses the resume
+	// before anything of its workspace is touched.
+	standardsRefs, err := decodeStandardsRefs(rec.String(colRunStandardsRefs))
+	if err != nil {
+		return runDTO{}, m.errStandardsUnreadable(err)
+	}
 	// Re-resolve the workspace on resume (it may have been disabled/deregistered or
 	// its root may be unavailable on this node — fail the resume deny-closed). Done
 	// BEFORE the gates so the CRITICAL determination sees the workspace posture.
+	if err := asks.refuseWorkspace(rec.String(colWorkspaceRef)); err != nil {
+		return runDTO{}, err
+	}
 	ws, err := m.resolveLaunchWorkspace(ctx, tenant, rec.String(colWorkspaceRef))
 	if err != nil {
 		return runDTO{}, err
@@ -1624,16 +1817,19 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	}
 	p := CreateRunParams{
 		WorkspaceDir: resumeDir, WorkspaceDirOwned: ws == nil,
+		CostCapMicroUSD: rec.Int(colRunCostCap), costSpent: rec.Int(colRunCostMicroUSD),
 		WorktreeBranch: rec.String(colRunWorktreeBranch),
 		Transport:      transport, PermissionMode: rec.String(colPermissionMode),
 		Effort: rec.String(colEffort), Model: rec.String(colRunModelRef),
 		FastMode: runFastMode(rec), ServiceTier: rec.String(colRunServiceTier),
-		WorkspaceRef: rec.String(colWorkspaceRef), Isolation: Isolation(rec.String(colIsolation)),
+		WorkspaceRef: rec.String(colWorkspaceRef), RunOn: rec.String(colRunOn), Isolation: Isolation(rec.String(colIsolation)),
 		// Both are needed: AgentRef is the AUTHENTICATED agent identity
 		// sessionStopGate.Check decides on, and TemplateID re-resolves the template on
 		// resume. Without either the resume runs with no identity or a stale posture.
 		Name: rec.String(colRunName), Actor: actor, ActorKind: actorKind, AgentRef: agentIdentity,
 		TemplateID: rec.String(colTemplateID),
+		// The standards it was launched with, not those of whoever resumes it.
+		standardsRefs: standardsRefs,
 		// The stored mode IS the session's preset, chosen at its first launch: the
 		// profile as it reads today does not replace it on a resume.
 		permissionModeNamed: true,
@@ -1647,6 +1843,13 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	// and the current template below can neither add one nor rebind a variable to
 	// another secret. The template merges into a COPY; the stored
 	// binding, untouched, is restored after it and validated again.
+	if raw := rec.String(colRunDeadline); raw != "" {
+		deadline, err := time.Parse(time.RFC3339Nano, raw)
+		if err != nil {
+			return runDTO{}, badRequest("the run deadline is unreadable")
+		}
+		p.runDeadline = deadline
+	}
 	storedSecretEnv, err := decodeSecretEnv(rec.String(colRunSecretEnv))
 	if err != nil {
 		return runDTO{}, err
@@ -1685,6 +1888,10 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	// token is minted for this launch.
 	p.GitRead = rec.String(colRunGitRead)
 	if p.Credentials, err = decodeCredentialNames(rec.String(colRunCredentials)); err != nil {
+		m.warnUnreadableNames(runRef, err)
+		return runDTO{}, err
+	}
+	if err := m.refuseRemoteInputs(p); err != nil {
 		return runDTO{}, err
 	}
 	p.askCallerQuestions()
@@ -1701,6 +1908,8 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	if err := m.refuseCredentialsFor(p); err != nil {
 		return runDTO{}, err
 	}
+	// A tool without an automatic mode asks instead, as it did when the run began.
+	p.PermissionMode = launchPermissionMode(launchDriverKey(p), p.PermissionMode)
 	if err := refuseNativeCustomPreset(p, launchDriverKey(p)); err != nil {
 		return runDTO{}, err
 	}
@@ -1771,6 +1980,12 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 		event: "resuming", toState: statePending,
 		actor: actor, actorKind: actorKind,
 		mutate: func(record model.Record) {
+			if _, scheduled := ctx.Value(limitResumeKey{}).(limitResumeAttempt); !scheduled {
+				record[colRunResumeCancelled] = record.String(colRunResumeAt) != "" || record.Bool(colRunResumeAfterLimit)
+				record[colRunResumeAfterLimit] = false
+				record[colRunResumeDismissed] = true
+			}
+			record[colRunResumeAt] = nil
 			record[colRuntimeLaunchID] = launchID.String()
 			// The current declaration reaches this launch, so the row records its tokens
 			// before the process can print one (the same order as arming the redactor).
@@ -1890,13 +2105,16 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	spec, proc, stage, lerr := m.launchChild(ctx, runCtx, tenant, runRef, &p, childDecision{
 		cred: cred, work: runtimeCreds.work, communication: runtimeCreds.communication,
 		resumeID: claudeID, ws: ws, gateEnv: pr.injectEnv, providerEnv: providerEnv,
+		// A worktree run that has not started yet is a start: its setup has not run.
+		setupRun: worktreeSetupPending(rec), setupCleanupFailed: rec.Bool(colRunSetupCleanupFailed),
 	})
 	if lerr != nil || proc == nil {
-		m.warnf("session resume launch failed", "run_ref", runRef, "reason", launchFailedErr(stage, lerr).msg)
+		m.warnf("session resume launch failed", "run_ref", runRef, "reason", launchLogReason(stage, lerr))
 		var compensationErr error
 		if proc != nil {
 			lr := &liveRun{
 				tenant: tenant, runRef: runRef, runID: model.ID(rec.String(model.ColID)), transport: transport,
+				costCapMicroUSD: p.CostCapMicroUSD, costSpent: p.costSpent, runTimeout: false,
 				proc: proc, program: spec.Program, programIdentity: p.resolvedIdentity, ring: ring,
 				redact: p.outputRedactor(), redactsEveryEarlierValue: !earlierValuesUnheld,
 				cancel: cancel, context: runCtx, companion: companionSpec(spec), finalizedCh: make(chan struct{}),
@@ -1910,13 +2128,14 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 				communicationCredentialNotAfter: runtimeCreds.communication.NotAfter,
 				stopRequested:                   true, stopReason: "launch_error", launchFailed: true,
 			}
+			lr.setupProcess = stage == worktreeSetupStage
 			m.rt.putLive(lr)
 			go m.bridge(lr)
 			stopConfirmed, stopErr := m.teardownLiveWithContext(wctx, lr)
 			compensationErr = stopErr
 			if !stopConfirmed {
 				return runDTO{}, errors.Join(
-					launchFailedErr(stage, lerr),
+					launchRefusal(stage, lerr),
 					compensationErr,
 				)
 			}
@@ -1928,16 +2147,21 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 		_, transitionErr := m.transition(wctx, tenant, runRef, transitionInput{
 			event: "failed", toState: stateFailed,
 			detail: launchFailedErr(stage, lerr).msg, actor: actor, actorKind: actorKind,
-			guard:  guardRuntimeLaunch(launchID),
-			mutate: func(record model.Record) { record[colRuntimeLaunchID] = nil },
+			guard: guardRuntimeLaunch(launchID),
+			mutate: func(record model.Record) {
+				record[colRuntimeLaunchID] = nil
+				markWorktreeSetupCleanupFailure(record, lerr)
+				markWorktreeSetupCleanupOutcome(record, stage, proc)
+			},
 		})
 		return runDTO{}, errors.Join(
-			launchFailedErr(stage, lerr),
+			launchRefusal(stage, lerr),
 			compensationErr, transitionErr,
 		)
 	}
 	lr := &liveRun{
 		tenant: tenant, runRef: runRef, runID: model.ID(rec.String(model.ColID)), transport: transport,
+		costCapMicroUSD: p.CostCapMicroUSD, costSpent: p.costSpent, runTimeout: false,
 		proc: proc, program: spec.Program, programIdentity: p.resolvedIdentity, ring: ring,
 		redact: p.outputRedactor(), redactsEveryEarlierValue: !earlierValuesUnheld,
 		cancel: cancel, context: runCtx, companion: companionSpec(spec), finalizedCh: make(chan struct{}),
@@ -1965,7 +2189,7 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	lr.abreVentanaDeReserva()
 	defer lr.cierraVentanaYVuelca()
 	go m.bridge(lr)
-	m.armRunDeadline(lr, p.MaxDuration)
+	m.armPipelineDeadline(lr, p)
 
 	// A resume that the provider refuses is a REFUSAL, not an invitation to start a
 	// different conversation under the same run.
@@ -1991,6 +2215,7 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 			rec[colLastActivityAt] = model.NewTimestamp(m.now()).String()
 			rec[colExitCode] = nil
 			rec[colStoppedAt] = nil
+			rec[colRunSetupPending] = false
 			if pid := proc.PID(); pid > 0 {
 				rec[colPID] = int64(pid)
 			}
@@ -2035,6 +2260,14 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	dto := m.toRunDTO(m.settleDriverLaunch(wctx, lr, updated))
 	dto.Completion = completion
 	m.observeRuntimeLaunch(wctx, completion)
+	if _, scheduled := ctx.Value(limitResumeKey{}).(limitResumeAttempt); scheduled {
+		if _, err := m.transition(wctx, tenant, runRef, transitionInput{event: "scheduled_message", actor: actor, actorKind: actorKind, keepReason: true, detail: limitResumeMessage}); err != nil {
+			return dto, err
+		}
+		if _, err := m.sendTextInputLoaded(ctx, tenant, runRef, limitResumeMessage, nil, updated); err != nil {
+			return dto, err
+		}
+	}
 	return dto, nil
 }
 
@@ -2062,6 +2295,41 @@ func (m *Module) stopRun(ctx context.Context, tenant model.TenantID, runRef, act
 // this helper lets the legacy route retain its error taxonomy while StopForWork
 // distinguishes a pre-effect refusal from an uncertain attempted stop.
 func (m *Module) stopRunLoaded(ctx context.Context, tenant model.TenantID, runRef, actor, actorKind, detail string, rec model.Record) (runDTO, bool, error) {
+	if rec.String(colRunResumeAt) != "" || storedRunLimit(rec) != nil {
+		if err := m.cancelLimitResume(ctx, tenant, runRef, actor, actorKind); err != nil {
+			return runDTO{}, false, err
+		}
+		var err error
+		rec, err = m.loadRun(ctx, tenant, runRef)
+		if err != nil {
+			return runDTO{}, false, err
+		}
+	}
+	dto, attempted, err := m.stopRunEffectLoaded(ctx, tenant, runRef, actor, actorKind, detail, rec)
+	if err == nil || attempted {
+		// Cover terminal/orphan retries and a stop that crossed the effect boundary
+		// but failed while waiting. Keep the original stop error as well.
+		err = errors.Join(err, m.cancelRunApprovals(ctx, tenant, rec, actor, actorKind))
+	}
+	return dto, attempted, err
+}
+
+func (m *Module) cancelRunApprovals(ctx context.Context, tenant model.TenantID, rec model.Record, actor, actorKind string) error {
+	if m.rt.CancelSessionApprovals == nil {
+		return nil
+	}
+	// Engine requests use the canonical SID; older callers use the stored provider ID.
+	// A provider's output cannot claim another canonical engine identity.
+	refs := []string{rec.String(colRunClaimSID)}
+	if provider := rec.String(colClaudeSessionID); !validCanonicalSID(provider) {
+		refs = append(refs, provider)
+	}
+	return m.rt.CancelSessionApprovals(ctx, tenant, refs, actor, actorKind)
+}
+
+// stopRunEffectLoaded closes approvals after proving authority, before stopping
+// the process, so a decision during shutdown cannot become a consumable grant.
+func (m *Module) stopRunEffectLoaded(ctx context.Context, tenant model.TenantID, runRef, actor, actorKind, detail string, rec model.Record) (runDTO, bool, error) {
 	if m.rt.CommunicationCredentialsEnabled && rec.String(colState) == statePending &&
 		rec.String(colRuntimeLaunchID) != "" {
 		// A pending row with a generation token is an in-flight create/resume on
@@ -2128,6 +2396,9 @@ func (m *Module) stopRunLoaded(ctx context.Context, tenant model.TenantID, runRe
 	if err := m.assertRunAuthority(ctx, lr); err != nil {
 		return runDTO{}, false, err
 	}
+	if err := m.cancelRunApprovals(ctx, tenant, rec, actor, actorKind); err != nil {
+		return runDTO{}, false, err
+	}
 	// Record WHO requested the stop, then signal and wait for finalize.
 	if _, err := m.transition(ctx, tenant, runRef, transitionInput{
 		event: "stopping", actor: actor, actorKind: actorKind, detail: detail,
@@ -2135,7 +2406,7 @@ func (m *Module) stopRunLoaded(ctx context.Context, tenant model.TenantID, runRe
 	}); err != nil {
 		return runDTO{}, false, err
 	}
-	outcome, stopErr, revokeErr := m.stopLiveEffect(ctx, lr, detail, legacyRevocationPhase(ctx))
+	outcome, stopErr, revokeErr := m.stopLiveEffect(ctx, lr, detail, actor, legacyRevocationPhase(ctx))
 	if outcome == stopEffectCanceled {
 		return runDTO{}, true, errors.Join(ctx.Err(), stopErr, revokeErr)
 	}
@@ -2170,10 +2441,13 @@ const (
 func (m *Module) stopLiveEffect(
 	ctx context.Context,
 	lr *liveRun,
-	reason string,
+	reason, actor string,
 	revoke revocationPhase,
 ) (stopEffectOutcome, error, error) {
 	lr.mu.Lock()
+	if !lr.stopRequested {
+		lr.stopActor = actor
+	}
 	lr.stopRequested = true
 	if reason != "" {
 		lr.stopReason = reason
@@ -2319,29 +2593,44 @@ func (m *Module) interruptRunLoadedWithReason(ctx context.Context, tenant model.
 // could be written into a process that stop was already tearing down, and neither
 // side knew about the other.
 func (m *Module) sendTextInput(ctx context.Context, tenant model.TenantID, runRef, text string) error {
+	_, err := m.sendTextInputAttempt(ctx, tenant, runRef, text)
+	return err
+}
+
+// sendTextInputAttempt is sendTextInput that also reports whether the input CROSSED to
+// the child, the one fact a caller needs to decide whether a refused message may be put
+// back (the message queue, run_queue.go).
+func (m *Module) sendTextInputAttempt(ctx context.Context, tenant model.TenantID, runRef, text string) (bool, error) {
+	if err := m.awaitLaunch(ctx, tenant, runRef); err != nil {
+		return false, err
+	}
 	// serialize with stop/resume/interrupt; a caller that is gone does not wait for it
 	release, err := m.rt.lockRunContext(ctx, liveKey(tenant, runRef))
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer release()
 	rec, err := m.loadRun(ctx, tenant, runRef)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err := m.refuseUnfencedActiveWork(ctx, tenant, rec); err != nil {
-		return err
+		return false, err
 	}
-	if _, err = m.sendTextInputLoaded(ctx, tenant, runRef, text, nil, rec); err != nil {
-		return err
+	attempted, err := m.sendTextInputLoaded(ctx, tenant, runRef, text, nil, rec)
+	if err != nil {
+		return attempted, err
 	}
 	m.answerDenialBreach(tenant, runRef)
-	return nil
+	return true, nil
 }
 
 // sendImageInput is sendTextInput for a message that carries images: the same lock,
 // the same checks, and the images delivered natively by the run's tool.
 func (m *Module) sendImageInput(ctx context.Context, tenant model.TenantID, runRef, text string, images []turnImage) error {
+	if err := m.awaitLaunch(ctx, tenant, runRef); err != nil {
+		return err
+	}
 	release, err := m.rt.lockRunContext(ctx, liveKey(tenant, runRef))
 	if err != nil {
 		return err
@@ -2377,6 +2666,11 @@ func (m *Module) sendTextInputLoaded(
 	images []turnImage,
 	rec model.Record,
 ) (bool, error) {
+	if _, scheduled := ctx.Value(limitResumeKey{}).(limitResumeAttempt); !scheduled {
+		if err := m.cancelLimitResumeForInput(ctx, tenant, runRef); err != nil {
+			return false, err
+		}
+	}
 	if line, ok := claudeTextTurn(rec, text, images); ok {
 		if lr, live := m.rt.getLive(tenant, runRef); live && lr.session == nil {
 			var echo *imageTurn
@@ -2639,6 +2933,10 @@ func (m *Module) deleteRun(ctx context.Context, tenant model.TenantID, runRef, a
 // mutex on the same key: a self-deadlock in the process that owns the child, not
 // a stronger guarantee.
 func (m *Module) sendInput(ctx context.Context, tenant model.TenantID, runRef string, line []byte) error {
+	// a first turn waits for the session's start (its worktree setup) outside the lock
+	if err := m.awaitLaunch(ctx, tenant, runRef); err != nil {
+		return err
+	}
 	// serialize with stop/resume/interrupt; a caller that is gone does not wait for it
 	release, err := m.rt.lockRunContext(ctx, liveKey(tenant, runRef))
 	if err != nil {
@@ -2666,6 +2964,11 @@ func (m *Module) sendInput(ctx context.Context, tenant model.TenantID, runRef st
 //
 // The caller holds the per-run operation lock (both of them do).
 func (m *Module) sendInputLoaded(ctx context.Context, tenant model.TenantID, runRef string, line []byte, rec model.Record) (bool, error) {
+	if _, scheduled := ctx.Value(limitResumeKey{}).(limitResumeAttempt); !scheduled {
+		if err := m.cancelLimitResumeForInput(ctx, tenant, runRef); err != nil {
+			return false, err
+		}
+	}
 	lr, err := m.rawInputLive(tenant, runRef, line, rec)
 	if err != nil {
 		return false, err
@@ -3141,11 +3444,24 @@ func (m *Module) persistNewRun(ctx context.Context, tenant model.TenantID, runRe
 			row[colRunFastMode] = *p.FastMode
 		}
 		setIf(row, colRunServiceTier, p.ServiceTier)
+		if p.CostCapMicroUSD > 0 {
+			row[colRunCostCap] = p.CostCapMicroUSD
+		}
+		if !p.runDeadline.IsZero() {
+			row[colRunDeadline] = model.NewTimestamp(p.runDeadline).String()
+		}
 		setIf(row, colRunModelRef, p.Model)
 		setIf(row, colWorkspaceRef, p.WorkspaceRef)
+		setIf(row, colRunOn, p.RunOn)
 		setIf(row, colRunWorkspacePath, p.WorkspaceDir)
 		setIf(row, colRunWorktreeBranch, p.WorktreeBranch)
+		// A new worktree records whether its setup is still to run, including an
+		// explicit false when this start skipped it. Legacy NULL is derived on resume.
+		if p.Worktree {
+			row[colRunSetupPending] = !p.NoSetup
+		}
 		setIf(row, colRunHandoffOf, p.HandoffOf)
+		setIf(row, colRunSourceURL, p.SourceURL)
 		// Written in BOTH directions, never only when true: an explicit false is a
 		// recorded "this directory is not mine", which is what the release purge
 		// needs to read. Absent would be indistinguishable from a legacy row.
@@ -3155,6 +3471,7 @@ func (m *Module) persistNewRun(ctx context.Context, tenant model.TenantID, runRe
 		if p.TemplateID != "" {
 			row[colTemplateVersion] = p.TemplateVersion
 		}
+		setIf(row, colRunStandardsRefs, encodeStandardsRefs(p.standardsRefs))
 		setIf(row, colRunSecretEnv, encodeSecretEnv(p.SecretEnv))
 		setIf(row, colRunGitRead, p.GitRead)
 		setIf(row, colRunCredentials, encodeCredentialNames(p.Credentials))
@@ -3176,6 +3493,9 @@ func (m *Module) persistNewRun(ctx context.Context, tenant model.TenantID, runRe
 			return err
 		}
 		setProfileSnapshot(row, p.ProviderHome)
+		if row.String(colRunProfileDriver) == providerDriverCodex {
+			row[colRunCodexInputAttempted] = false
+		}
 		if work != nil {
 			// A work-bound run is authorized in the workspace its lineage names, and
 			// the work lease question is asked in the item's. At creation they must be
@@ -3517,6 +3837,12 @@ func (m *Module) transition(ctx context.Context, tenant model.TenantID, runRef s
 				return err
 			}
 		}
+		if in.event == "moved" || in.event == "cleaned" {
+			rec[colRunResumeCancelled] = rec.String(colRunResumeAt) != "" || rec.Bool(colRunResumeAfterLimit)
+			rec[colRunResumeAt] = nil
+			rec[colRunResumeAfterLimit] = false
+			rec[colRunResumeDismissed] = true
+		}
 		if in.mutate != nil {
 			in.mutate(rec)
 		}
@@ -3790,6 +4116,10 @@ func (m *Module) expireRun(lr *liveRun, d time.Duration) {
 	// successor's row.
 	if cur, ok := m.rt.getLive(lr.tenant, lr.runRef); !ok || cur != lr {
 		return // a successor owns this run now; its own ceiling governs it
+	}
+	if lr.runTimeout {
+		m.stopPipelineRun(lr, "run timeout reached")
+		return
 	}
 	m.stopOwnedRun(lr, "max session duration reached ("+d.String()+", template policy)")
 }
@@ -4110,6 +4440,19 @@ func (m *Module) now() time.Time { return m.clock.Now().Time() }
 
 // validateCreate normalizes and validates launch parameters.
 func validateCreate(p *CreateRunParams) error {
+	if p.CostCapMicroUSD < 0 || math.IsNaN(p.TimeoutSeconds) || math.IsInf(p.TimeoutSeconds, 0) || p.TimeoutSeconds < 0 || p.TimeoutSeconds > 30*24*3600 {
+		return badRequest("invalid run cost cap or timeout")
+	}
+	if p.RepositoryURL != "" {
+		if p.WorkspaceRef != "" || p.Worktree {
+			return badRequest("repository_url cannot be combined with a workspace or worktree")
+		}
+		if err := validateRepositorySource(p.RepositoryURL, p.RepositoryRef); err != nil {
+			return err
+		}
+	} else if p.RepositoryRef != "" {
+		return badRequest("repository_ref needs repository_url")
+	}
 	if p.Transport == "" {
 		p.Transport = TransportStreamJSON
 	}
@@ -4123,7 +4466,7 @@ func validateCreate(p *CreateRunParams) error {
 		return badRequest("invalid isolation (want native|container|sandbox)")
 	}
 	if p.PermissionMode == "" {
-		p.PermissionMode = "default"
+		p.PermissionMode = engineDefaultPermissionMode
 	}
 	if !validPermissionModes[p.PermissionMode] {
 		return badRequest("invalid permission_mode")
@@ -4196,4 +4539,27 @@ func launchFailedErr(what string, lerr error) *runErr {
 		return &runErr{http.StatusBadGateway, what + ": this server cannot run the tool's program (permission denied); reinstall it from AI tools"}
 	}
 	return &runErr{http.StatusBadGateway, what + " failed; the session was not started"}
+}
+
+// launchRefusal is launchFailedErr for the create and resume answer: a stage that refused
+// with its own code (a licence that does not cover managed credentials answers
+// addon_requires_license) keeps it, so a client tells that refusal from a role refusal.
+func launchRefusal(what string, lerr error) error {
+	var coded *codedRunErr
+	if errors.As(lerr, &coded) {
+		return coded
+	}
+	return launchFailedErr(what, lerr)
+}
+
+// launchLogReason is the launch failure safe for the engine log. The API refusal
+// keeps the setup's recorded output; the log does not need another copy of it.
+func launchLogReason(stage string, lerr error) string {
+	msg := launchFailedErr(stage, lerr).msg
+	if stage == worktreeSetupStage {
+		if i := strings.Index(msg, worktreeSetupOutputMark); i >= 0 {
+			msg = msg[:i]
+		}
+	}
+	return msg
 }

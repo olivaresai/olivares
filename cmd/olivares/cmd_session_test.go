@@ -52,6 +52,9 @@ type fakeSessionEngine struct {
 	// launchWaits answers a new run with 202: it waits for a launch approval.
 	launchWaits  bool
 	launchDriver string
+	// launchRunMode, when set, is the permission_mode the started run reports instead of
+	// the one asked for, as when the engine makes a tool without an automatic mode ask.
+	launchRunMode string
 	// launchRefusal, when set, answers a new run with 422 and this sentence, as the
 	// engine does for a permission preset the tool cannot honour. launchRefusalStatus
 	// replaces the 422 (403: the caller is not a run administrator).
@@ -62,7 +65,7 @@ type fakeSessionEngine struct {
 	// cleanupRefusal, when set, answers a release (POST …/cleanup) with 409 and this
 	// sentence, as the engine does for a worktree it will not remove unconfirmed.
 	cleanupRefusal string
-	// resolved is what POST provider-profiles/resolve answers (FH 026); resolveRefusal,
+	// resolved is what POST provider-profiles/resolve answers (first-hour check); resolveRefusal,
 	// when set, is its 409 sentence. Unset: the first active own-login profile of the
 	// driver, else a new one, like the engine.
 	resolved       map[string]any
@@ -99,6 +102,17 @@ type fakeSessionEngine struct {
 	// steerRefusal, when set, answers POST …/input with 501 business_required and this
 	// sentence, as a Community engine does for a session another person started.
 	steerRefusal string
+	// item is what GET source-items answers; itemRefusal, when set, is its refusal
+	// sentence (itemStatus, default 422); itemQueries records every query it received.
+	item        map[string]any
+	itemRefusal string
+	itemStatus  int
+	itemQueries []url.Values
+	// shipTargets are the publication targets GET /v1/m/gitpublish/targets lists;
+	// shipStatus and shipAnswer are what POST …/ships answers.
+	shipTargets []map[string]any
+	shipStatus  int
+	shipAnswer  map[string]any
 }
 
 // handoffStateOrDelivered is what POST …/handoff answers for the first turn.
@@ -161,6 +175,19 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		writeJSON(404, map[string]any{"error": "workspace not found"})
+	case r.Method == "GET" && path == sessionSourceItemsPath:
+		f.mu.Lock()
+		f.itemQueries = append(f.itemQueries, r.URL.Query())
+		f.mu.Unlock()
+		if f.itemRefusal != "" {
+			status := f.itemStatus
+			if status == 0 {
+				status = http.StatusUnprocessableEntity
+			}
+			writeJSON(status, map[string]any{"error": map[string]any{"message": f.itemRefusal}})
+			return
+		}
+		writeJSON(200, f.item)
 	case r.Method == "POST" && strings.HasSuffix(path, "/wiki"):
 		writeJSON(200, map[string]any{"workspace_ref": strings.TrimSuffix(strings.TrimPrefix(path, sessionWorkspacesPath+"/"), "/wiki")})
 	case r.Method == "POST" && path == sessionWorkspacesPath:
@@ -234,6 +261,10 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		writeJSON(404, map[string]any{"error": map[string]any{"code": "not_found", "message": "profile not found"}})
+	case r.Method == "GET" && path == "/v1/m/gitpublish/targets":
+		writeJSON(200, map[string]any{"items": f.shipTargets})
+	case r.Method == "POST" && strings.HasPrefix(path, "/v1/m/gitpublish/targets/") && strings.HasSuffix(path, "/ships"):
+		writeJSON(f.shipStatus, f.shipAnswer)
 	case r.Method == "POST" && strings.HasSuffix(path, "/move") && f.moveRefusal != "":
 		writeJSON(409, map[string]any{"error": map[string]any{"code": "conflict", "message": f.moveRefusal}})
 	case r.Method == "GET" && strings.HasSuffix(path, "/handoff"):
@@ -281,9 +312,16 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 		if driver == "" {
 			driver = "claude"
 		}
+		// The run reports the mode it was stored with: the one asked for, unless the
+		// engine made the tool ask instead (launchRunMode).
+		mode := body["permission_mode"]
+		if f.launchRunMode != "" {
+			mode = f.launchRunMode
+		}
 		writeJSON(201, map[string]any{
 			"run_ref": "01a0f6dc-0000-7000-8000-000000000009", "name": body["name"], "state": "running",
 			"provider_driver": driver, "transport": "stream-json", "workspace_path": "/srv/demo",
+			"permission_mode": mode,
 		})
 	case r.Method == "POST" && strings.HasSuffix(path, "/cleanup") && f.cleanupRefusal != "":
 		writeJSON(409, map[string]any{"error": map[string]any{"code": "conflict", "message": f.cleanupRefusal}})
@@ -364,6 +402,17 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 					if run["name"] == nil {
 						delete(out, "name")
 					}
+				// The title the engine cuts from the first message is display-only: the fake
+				// makes one that names the style asked, so a test sees which one was sent.
+				case strings.HasSuffix(path, "/title") && r.Method == http.MethodPost:
+					style := str(body, "style")
+					if style == "" {
+						style = "sentence"
+					}
+					f.mu.Lock()
+					run["title"] = "made " + style
+					f.mu.Unlock()
+					out["title"] = run["title"]
 				case strings.HasSuffix(path, "/archive"):
 					f.mu.Lock()
 					if r.Method == http.MethodPost && run["archived_at"] == nil {
@@ -804,7 +853,7 @@ func TestSessionViewDropsTerminalControls(t *testing.T) {
 // CLI refuses before it registers the folder or posts the start, and keeps the engine's
 // sentence.
 func TestSessionStartRefusesWhenTheEditsAndCommandsTemplateCannotBeResolved(t *testing.T) {
-	for _, tool := range []string{"claude", "codex", "grok", "opencode", "gemini-cli"} {
+	for _, tool := range []string{"claude", "codex", "grok", "opencode", "gemini-cli", "cursor"} {
 		for _, tc := range []struct {
 			name     string
 			set      func(*fakeSessionEngine)
@@ -854,7 +903,7 @@ func TestSessionStartUsesTheConsolesDefaultsForAClaudeSession(t *testing.T) {
 	if _, errb, err := execSessionCLI(t, nil, append([]string{"session", "start", t.TempDir()}, sessionCreds(f.URL)...)...); err != nil {
 		t.Fatalf("start: %v\n%s", err, errb)
 	}
-	// The profile is the engine's choice (provider-profiles/resolve, FH 026), the same as
+	// The profile is the engine's choice (provider-profiles/resolve, first-hour check), the same as
 	// the console's; the CLI no longer creates one, nor sets session_tools.
 	if prof := f.postsTo(profilesPath); len(prof) != 0 {
 		t.Fatalf("the CLI created a profile itself: %v", prof)

@@ -59,7 +59,7 @@ func proposalSubjects(ctx context.Context, mc api.ModuleContext, id model.ID, ap
 		if err != nil {
 			return err
 		}
-		if op := rec.String(colPROp); op != postureOpCreate && op != postureOpUpdate {
+		if op := rec.String(colPROp); op != postureOpCreate && op != postureOpUpdate && op != postureOpAccessRequest {
 			return nil
 		}
 		var in bindingDTO

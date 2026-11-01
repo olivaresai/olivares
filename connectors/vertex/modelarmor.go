@@ -3,7 +3,7 @@
 
 // This file reads the Google Model Armor configuration — the Google equivalent of Amazon
 // Bedrock Guardrails / Azure RAI — and emits it as read-only safety_posture findings
-//. It reads the per-region TEMPLATES (RAI filters + confidence, prompt-injection/
+// . It reads the per-region TEMPLATES (RAI filters + confidence, prompt-injection/
 // jailbreak, malicious-URI, Sensitive-Data-Protection enforcement, and the documented
 // templateMetadata posture subset) and FLOOR SETTINGS (project runtime floor plus
 // org/folder conformance baselines). It is the same posture pattern bedrock/guardrails.go

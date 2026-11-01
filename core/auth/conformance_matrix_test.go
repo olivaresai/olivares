@@ -42,7 +42,7 @@ func (f cmEval) Evaluate(ctx context.Context, req auth.Request) (auth.Decision, 
 }
 
 // cmExpectScopeable is the INDEPENDENT spec for a built-in role's grant on a
-// scopeable operational resource kind (the ScopeableKinds() set): read for viewer
+// scopeable operational resource kind (the tree/module kinds): read for viewer
 // and up, write for editor and up, the admin verb for OWNER ONLY — the admin role
 // adds IAM/tenant management, not the admin verb on operational resources.
 func cmExpectScopeable(role, verb string) bool {
@@ -62,7 +62,8 @@ func TestConformance_ScopeableMatrix(t *testing.T) {
 	ctx := context.Background()
 	roles := []string{auth.RoleViewer, auth.RoleEditor, auth.RoleAdmin, auth.RoleOwner}
 	verbs := []string{auth.VerbRead, auth.VerbWrite, auth.VerbAdmin}
-	for _, kind := range auth.ScopeableKinds() {
+	// Tenant-only core capabilities carry exact verbs and have their own role matrix.
+	for _, kind := range append(auth.TreeScopeableKinds(), auth.ModuleScopeableKinds()...) {
 		for _, role := range roles {
 			p := auth.ScopedPrincipal("s", "sub", cmTenantA, role)
 			for _, verb := range verbs {

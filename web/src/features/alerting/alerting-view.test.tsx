@@ -1052,7 +1052,7 @@ describe('AlertingView · dead letters', () => {
 })
 
 /**
- * ONE ORANGE PER FIRST SCREEN (dev#2673's console rule 2026-10-17): while a
+ * ONE ORANGE PER FIRST SCREEN (the regression's console rule 2026-10-17): while a
  * read list is empty, the page header's verb steps aside and the empty state
  * carries the verb's single fill (main e601803a8, dfff8c3ad).
  */

@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/olivaresai/olivares/connectors/managedsettings"
 )
 
 // CheckClaudeHookHostPolicy is shared by launch and doctor. Managed settings
@@ -26,7 +28,7 @@ func CheckClaudeHookHostPolicy() error {
 
 // claudeManagedSettingsDir is the directory Claude Code reads its managed (policy-tier)
 // settings from: the system one. The pinned Claude Code 2.1.288 does not honour
-// CLAUDE_CODE_MANAGED_SETTINGS_PATH (SR2C 071 traced it to an empty override), so neither does
+// CLAUDE_CODE_MANAGED_SETTINGS_PATH (review 071 traced it to an empty override), so neither does
 // this check. A variable only so tests can move it.
 var claudeManagedSettingsDir = func() string {
 	switch runtime.GOOS {
@@ -147,8 +149,11 @@ func checkClaudeHookHostPolicyDir(dir string) error {
 				continue
 			}
 			for _, hook := range matcher.Hooks {
-				parts := strings.Fields(hook.Command)
-				if hook.Type == "command" && len(parts) >= 2 && parts[0] == "olivares" && parts[1] == "claude-hook" && !strings.ContainsAny(hook.Command, ";|&`$<>\r\n") {
+				// Exactly the deny-closed suffix managed settings add may follow the
+				// command; any other shell operator still refuses it.
+				command, _ := managedsettings.CutDenyClosed(hook.Command)
+				parts := strings.Fields(command)
+				if hook.Type == "command" && len(parts) >= 2 && parts[0] == "olivares" && parts[1] == "claude-hook" && !strings.ContainsAny(command, ";|&`$<>\r\n") {
 					managedPEP = true
 				}
 			}

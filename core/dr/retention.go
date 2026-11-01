@@ -18,6 +18,7 @@ package dr
 
 import (
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -46,6 +47,48 @@ type GFSPolicy struct {
 // IsZero reports whether the policy prunes nothing (all limits zero).
 func (p GFSPolicy) IsZero() bool {
 	return p.Daily == 0 && p.Weekly == 0 && p.Monthly == 0 && p.Yearly == 0 && p.KeepLast == 0
+}
+
+// tierSpan is how long one GFS tier can keep a bundle: its count of periods, each
+// rounded up (a month is 31 days, a year 366), so an Object Lock sized from it never
+// ends before the tier would release the bundle. Zero for keep-last and unset tiers,
+// which have no time bound.
+func (p GFSPolicy) tierSpan(tier string) time.Duration {
+	day := 24 * time.Hour
+	switch tier {
+	case "daily":
+		return time.Duration(p.Daily) * day
+	case "weekly":
+		return time.Duration(p.Weekly) * 7 * day
+	case "monthly":
+		return time.Duration(p.Monthly) * 31 * day
+	case "yearly":
+		return time.Duration(p.Yearly) * 366 * day
+	}
+	return 0
+}
+
+// WriterLockSpan is the Object Lock an append-only writer puts on a new bundle: the
+// span of the finest period tier set. A newer bundle may supersede it in every tier,
+// so only the finest window is guaranteed; the pruner extends what GFS keeps longer
+// (KeepLockSpan). Zero when no period tier is set.
+func (p GFSPolicy) WriterLockSpan() time.Duration {
+	for _, tier := range []string{"daily", "weekly", "monthly", "yearly"} {
+		if span := p.tierSpan(tier); span > 0 {
+			return span
+		}
+	}
+	return 0
+}
+
+// KeepLockSpan is how long, from its CreatedAt, a bundle PlanGFS kept for reason
+// ("daily+monthly" and the like) must stay locked: the longest span among its tiers.
+func (p GFSPolicy) KeepLockSpan(reason string) time.Duration {
+	var span time.Duration
+	for _, tier := range strings.Split(reason, "+") {
+		span = max(span, p.tierSpan(tier))
+	}
+	return span
 }
 
 // RetentionDecision is one bundle's outcome.

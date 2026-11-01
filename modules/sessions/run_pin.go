@@ -228,12 +228,19 @@ func unpinRun(ctx context.Context, sc store.Scope, caller, runRef string) error 
 	return repo.Delete(ctx, id)
 }
 
-// dropPersonalRunState removes EVERY person's pins (#2130) and snooze and done
-// marks (#2480, run_mark.go) on one run: a session that is released or deleted
-// leaves every person's list for good.
+// dropPersonalRunState removes EVERY person's pins (#2130), snooze and done
+// marks (#2480, run_mark.go) and the messages queued for the session (#3125,
+// run_queue.go) on one run: a session that is released or deleted leaves every
+// person's list for good. Only a release can reach a queue (a delete needs a released
+// session), and its answer carries the queue it discards, so nothing a person typed
+// goes without being shown.
 func dropPersonalRunState(ctx context.Context, sc store.Scope, runRef string) error {
-	// Both kinds are tried: a failure on one must not leave the other's rows behind.
-	return errors.Join(dropRunRows(ctx, sc, runPinKind, runRef), dropRunRows(ctx, sc, runMarkKind, runRef))
+	// Every kind is tried: a failure on one must not leave the others' rows behind.
+	return errors.Join(
+		dropRunRows(ctx, sc, runPinKind, runRef),
+		dropRunRows(ctx, sc, runMarkKind, runRef),
+		dropRunRows(ctx, sc, runQueueKind, runRef),
+	)
 }
 
 // dropRunRows removes every row of one per-person kind on one run. Both kinds name

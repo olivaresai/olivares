@@ -67,7 +67,8 @@
   "effects": {
     "push": "Push",
     "pull_request": "Pull request",
-    "merge": "Fusion"
+    "merge": "Fusion",
+    "issue_comment": "Commentaire sur le ticket"
   },
   "authority": {
     "requires": "Requiert {{permission}}",
@@ -174,6 +175,7 @@
     "field_not_accepted": "La demande contenait un champ que cette route n’accepte pas.",
     "forbidden": "Votre autorité actuelle ne permet pas cette action sur cette cible.",
     "head_mismatch": "Le head de la pull request n’est plus le commit revu.",
+    "link_not_allowed": "Le lien doit pointer vers une pull request du dépôt approuvé.",
     "host_credential_refused": "L’hôte Git a refusé l’identifiant de la liaison ou sa portée. Rien n’a été envoyé.",
     "host_unavailable": "L’hôte Git est injoignable. Rien n’a été envoyé.",
     "intent_settled": "Le résultat de l’intention est déjà définitif ; elle ne peut donc pas être abandonnée.",
@@ -201,7 +203,13 @@
     "unsupported_requirement": "L’hôte ne peut pas honorer cette exigence, par exemple une fusion par rebase sur GitLab.",
     "version_conflict": "La cible a changé depuis que vous l’avez ouverte. Rouvrez-la pour voir la version actuelle.",
     "workflow_change_refused": "Le commit modifie des fichiers de workflow CI, que cette cible refuse de publier.",
-    "unknown": "Le moteur a refusé la demande avec un code que cette console ne décrit pas."
+    "unknown": "Le moteur a refusé la demande avec un code que cette console ne décrit pas.",
+    "no_branch": "Le dossier de la session n’est sur aucune branche. Passez-le sur une branche, puis livrez à nouveau.",
+    "no_commit": "La branche de la session n’a pas encore de commit.",
+    "nothing_to_ship": "Le commit de la session n’ajoute rien à la branche dans laquelle il serait fusionné.",
+    "commit_refused": "Le dossier de la session a refusé le commit : il est en lecture seule, travaille encore, ou votre profil n’a ni nom ni e-mail.",
+    "approval_denied": "Une personne n’a pas approuvé ce push, ou son approbation a pris fin. Livrez à nouveau pour demander une nouvelle revue.",
+    "approval_unavailable": "Le service d’approbation n’a pas pu répondre. Livrez à nouveau dans un instant."
   },
   "intents": {
     "title": "Intentions",
@@ -254,5 +262,24 @@
     "abandonTitle": "Abandonner l’intention {{id}} ?",
     "abandonDescription": "Abandonner enregistre que vous prenez la responsabilité de cette intention non résolue. Cela ne modifie ni ne lit l’hôte, et la portée reste détenue jusqu’à ce qu’une nouvelle demande prenne acte de cette intention.",
     "abandonReason": "Motif (256 caractères au maximum)"
+  },
+  "ship": {
+    "button": "Livrer",
+    "shipTo": "Livrer vers {{prefix}}",
+    "title": "Livrer cette session",
+    "description": "Valide les changements de la session en votre nom, les pousse vers une branche sous {{prefix}} et ouvre une pull request, en une seule action.",
+    "submit": "Livrer",
+    "message": "Message du commit",
+    "messageHint": "Utilisé seulement si le dossier de la session a des changements. Par défaut, le titre.",
+    "shipped": "Livré : {{branch}} est poussée.",
+    "pullRequest": "Pull request n° {{number}}",
+    "pullRequestOpen": "Ouvrir la pull request",
+    "awaitingTitle": "En attente de l’approbation d’une autre personne",
+    "awaitingBody": "Vos changements sont validés. Une autre personne doit approuver le push (approbation {{id}}) avant qu’il parte. Une fois fait, livrez à nouveau.",
+    "again": "Livrer à nouveau",
+    "incompleteTitle": "La livraison n’a pas abouti",
+    "incompletePush": "Le push de {{branch}} n’a pas été appliqué ({{state}}). Vérifiez les intentions de cette cible, puis livrez à nouveau.",
+    "incompletePullRequest": "{{branch}} est poussée, mais la pull request n’a pas été ouverte ({{code}}). Livrez à nouveau pour réessayer.",
+    "pullRequests": "Pull requests"
   }
 }

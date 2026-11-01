@@ -6,7 +6,7 @@
 // RUNTIME behind two module seams: the testing-sandbox's Runner (module XVII,
 // modules/sandbox) and the red-team's Sandbox (module XVIII, modules/redteam).
 // It is the OS-level execution boundary the contract (docs/contracts/
-//-sandbox.md §3.2/§3.3) and the RED LINE (docs/SECURITY-HARDENING.md) describe:
+// -sandbox.md §3.2/§3.3) and the RED LINE (docs/SECURITY-HARDENING.md) describe:
 // an ephemeral, hardened, EGRESS-CONTROLLED instance, attested per run.
 //
 // WHY THIS LIVES IN THE AGPL MOTOR, NOT A CONNECTOR.

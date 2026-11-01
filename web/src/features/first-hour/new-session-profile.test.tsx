@@ -18,6 +18,10 @@ import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('@/features/agentops/launch-identity', () => ({
+  LaunchPreflight: () => <p>Launch policy fixture</p>,
+}))
+
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     can: () => true,
@@ -62,6 +66,8 @@ import { useTenantStore } from '@/stores/tenant'
 import { NewSessionDialog, StartSessionForm } from './first-hour'
 import { firstHourKeys } from './api'
 import { readinessOf } from './readiness.fixture'
+import { useClientSettings } from '@/features/settings/preferences'
+import { SessionDefaultsSettings } from '@/features/settings/session-defaults-settings'
 
 function wrap(
   ui: ReactNode,
@@ -114,6 +120,7 @@ const run = (ref: string, profile: string, driver = 'claude') =>
   }) as unknown as RunDTO
 
 beforeEach(() => {
+  useClientSettings.getState().restore()
   vi.restoreAllMocks()
   launch.launchSession.mockReset()
   launch.launchSession.mockResolvedValue({ run_ref: 'run_1' })
@@ -140,6 +147,92 @@ beforeEach(() => {
 const profileSelect = () => screen.findByRole('combobox', { name: 'Profile' })
 
 describe('the profile in the New session dialog', () => {
+  it('falls back from a saved tool whose named account is signed out', async () => {
+    vi.mocked(agentOpsApi.toolsReadiness).mockResolvedValue(
+      readinessOf({ claude: 'own_login' }),
+    )
+    vi.mocked(agentOpsApi.listAccounts).mockResolvedValue({
+      items: [account('ppf_z', 'codex-z', 'codex')],
+      has_more: false,
+    })
+    useClientSettings.setState({
+      sessionDefaults: {
+        tool: 'codex',
+        account: 'ppf_z',
+        model: '',
+        folder: '',
+      },
+    })
+    wrap(<StartSessionForm />)
+    await waitFor(() =>
+      expect(
+        screen.getByRole('radio', { name: 'Claude Code' }),
+      ).toHaveAttribute('aria-checked', 'true'),
+    )
+    expect(
+      screen.getByText(/saved default.*no longer available/i),
+    ).toBeVisible()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
+    )
+  })
+  it('saves session defaults from Settings and resets each choice', async () => {
+    const user = userEvent.setup()
+    wrap(<SessionDefaultsSettings />)
+    const tool = await screen.findByRole('combobox', { name: 'Default tool' })
+    await user.click(tool)
+    await user.click(await screen.findByRole('option', { name: 'Codex' }))
+    expect(useClientSettings.getState().sessionDefaults.tool).toBe('codex')
+    await user.click(screen.getByRole('button', { name: 'Reset Default tool' }))
+    expect(useClientSettings.getState().sessionDefaults.tool).toBe('')
+  })
+  it('starts with the saved account instead of the recent account', async () => {
+    useClientSettings.setState({
+      sessionDefaults: {
+        tool: 'claude',
+        account: 'ppf_c',
+        model: '',
+        folder: '',
+      },
+    })
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [run('recent', 'ppf_b')],
+      has_more: false,
+    })
+    wrap(<NewSessionDialog open onOpenChange={vi.fn()} />)
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
+    )
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(launch.launchSession).toHaveBeenCalled())
+    expect(launch.launchSession.mock.calls[0][0].quick.profileRef).toBe('ppf_c')
+  })
+  it('explains an unavailable saved account and uses the first ready choice', async () => {
+    useClientSettings.setState({
+      sessionDefaults: {
+        tool: 'claude',
+        account: 'removed',
+        model: '',
+        folder: '',
+      },
+    })
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [run('recent', 'ppf_c')],
+      has_more: false,
+    })
+    wrap(<NewSessionDialog open onOpenChange={vi.fn()} />)
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
+    )
+    expect(
+      screen.getByText(/saved default.*no longer available/i),
+    ).toBeVisible()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(launch.launchSession).toHaveBeenCalled())
+    expect(
+      launch.launchSession.mock.calls[0][0].quick.profileRef,
+    ).toBeUndefined()
+  })
   it('hides speed capabilities for a named provider-bound account', async () => {
     const user = userEvent.setup()
     vi.mocked(agentOpsApi.listAccounts).mockResolvedValue({
@@ -562,5 +655,77 @@ describe('the profile in the New session dialog', () => {
     await screen.findByText(/claude-b.*not signed in/i)
     expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
     expect(launch.launchSession).not.toHaveBeenCalled()
+  })
+})
+
+it('shows edition preflight in the quick form before More options opens', async () => {
+  wrap(<StartSessionForm />)
+  expect(await screen.findByText('Launch policy fixture')).toBeVisible()
+  expect(screen.getByRole('button', { name: 'More options' })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  )
+})
+
+describe('the usage of the accounts in the New session dialog', () => {
+  const windows = (five: number, week: number, resets_at?: string) => [
+    {
+      window: 'five_hour',
+      label: '5-hour',
+      utilization: five,
+      observed_at: '2026-10-29T10:00:00Z',
+      ...(resets_at ? { resets_at } : {}),
+    },
+    {
+      window: 'seven_day',
+      label: 'Weekly',
+      utilization: week,
+      observed_at: '2026-10-29T10:00:00Z',
+    },
+  ]
+
+  it('shows each account its 5-hour and weekly use, and marks the chosen one at its limit before Start', async () => {
+    vi.mocked(agentOpsApi.listAccounts).mockResolvedValue({
+      items: [
+        { ...account('ppf_b', 'claude-b'), usage: windows(40, 10) },
+        {
+          ...account('ppf_c', 'claude-c'),
+          usage: windows(100, 62, '2030-01-01T10:00:00Z'),
+        },
+      ],
+      has_more: false,
+    })
+    const user = userEvent.setup()
+    wrap(<StartSessionForm />)
+    await user.click(await profileSelect())
+    expect(
+      await screen.findByRole('option', { name: /claude-b/ }),
+    ).toHaveTextContent('5-hour 40% · Weekly 10%')
+    expect(screen.getByRole('option', { name: /claude-c/ })).toHaveTextContent(
+      '5-hour 100% · Weekly 62%',
+    )
+    // The default login is not an account: no figures for it, nothing marked yet.
+    expect(
+      screen.getByRole('option', { name: 'Default sign-in' }),
+    ).not.toHaveTextContent('%')
+    expect(screen.queryByText(/limit reached/)).toBeNull()
+
+    await user.click(screen.getByRole('option', { name: /claude-c/ }))
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      /5-hour limit reached, resets /,
+    )
+    // Marked, not blocked: the person may still start on it.
+    expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
+  })
+
+  it('says nothing about usage for an account whose tool reported none', async () => {
+    const user = userEvent.setup()
+    wrap(<StartSessionForm />)
+    await user.click(await profileSelect())
+    expect(
+      await screen.findByRole('option', { name: 'claude-b' }),
+    ).toBeVisible()
+    expect(screen.queryByText(/%/)).toBeNull()
+    expect(screen.queryByText(/limit reached/)).toBeNull()
   })
 })

@@ -119,6 +119,11 @@ func consoleViewsUIStateSchema() map[string]any {
 				"type", "boolean",
 				"description", "Show the active commercial edition badge. Defaults to true; omitted fields retain their saved value.",
 			),
+			"preferences", oas.Obj(
+				"type", "object", "maxProperties", 11,
+				"description", "The caller's console preferences, merged by key. Null deletes a key. Only console preference keys are accepted; credentials and drafts are never preferences.",
+				"additionalProperties", oas.Obj("anyOf", []any{oas.Obj("type", "string", "maxLength", 16384), oas.Obj("type", "null")}),
+			),
 			"pane_widths", oas.Obj(
 				"type", "object",
 				"description", "Panel widths in pixels by pane id (lowercase letters, digits and dashes, up to 32 characters; at most 16 panes). Panes named here replace their saved width; a width of 0 puts a pane back to its default; panes not named keep theirs.",
@@ -131,6 +136,7 @@ func consoleViewsUIStateSchema() map[string]any {
 			oas.Obj("required", oas.Enum("sidebar")),
 			oas.Obj("required", oas.Enum("show_edition_badge")),
 			oas.Obj("required", oas.Enum("pane_widths")),
+			oas.Obj("required", oas.Enum("preferences")),
 		},
 	)
 }

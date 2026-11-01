@@ -6,7 +6,7 @@
 # Test check-c05-37-closure.sh with 37 cases and all three answers.
 # Include acceptance controls: a gate rejecting everything passes rejection-only tests.
 # The original 13 cases left eleven mutants alive in sol max's review
-# (an internal design note (not shipped) §2). Each new case isolates one
+# (an internal audit §2). Each new case isolates one
 # property: the old method case also failed its route; bad host/id values did not
 # contain the valid substrings, letting `in` survive; 401 was the sole negative status.
 # Prose cases deliberately use two forbidden claims in different case: one claim lets

@@ -377,7 +377,7 @@ const TOKEN_PAIRS: {
  * looked at. The ones with an unambiguous fix were fixed in the same change; the
  * ones below need a call this session is not the one to make — a brand-token
  * boundary that belongs to the palette itself (the orange fill on light grounds).
- * The API-playground ramp badges that were here took status tokens (dev#2543).
+ * The API-playground ramp badges that were here took status tokens.
  *
  * THIS IS NOT A RECLASSIFICATION, AND IT CANNOT ROT. Each entry names ONE origin
  * and ONE pairing with the ratio measured the day it was written, and the gate
@@ -417,7 +417,7 @@ const CONTRAST_DEBT: {
   ratio: number
   why: string
 }[] = [
-  // Re-measured with the B2 palette (dev#2543): the light canvas is the website's #fafaf9
+  // Re-measured with the B2 palette: the light canvas is the website's #fafaf9
   // (it was #ffffff) and the card surface white again (it was #f8f7f4), so the same orange
   // fill measures 2.58 on the canvas, 2.69 on the surface and 2.31 on its soft fill over
   // the canvas. The fill still carries only ink (--accent-foreground, 6.88:1); the orange
@@ -443,7 +443,7 @@ const CONTRAST_DEBT: {
     ratio: 2.31,
     why: ACCENT_FILL,
   },
-  // The api-playground method badges and the BETA marker left the ledger with dev#2543:
+  // The api-playground method badges and the BETA marker left the ledger with the regression:
   // they are status tokens on their soft fills now (method-colors.ts), not the raw
   // Tailwind ramp. `--accent-text` over `--elevated` (dark, 4.33) left it with v26.10.
 ]

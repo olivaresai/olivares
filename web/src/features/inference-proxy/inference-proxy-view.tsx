@@ -561,7 +561,7 @@ function DLPSection() {
             description={t('dlp.emptyHint')}
             // "Add a rule to allow or deny a classification on egress" — the same
             // verb the card header carries, on the same right, in the secondary
-            // style: the header holds this screen's one orange (dev#2673).
+            // style: the header holds this screen's one orange.
             action={
               canEdit ? (
                 <Button

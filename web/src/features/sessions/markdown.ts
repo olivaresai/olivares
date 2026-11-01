@@ -57,7 +57,7 @@ const isSpace = (ch: string | undefined) => ch === undefined || /\s/.test(ch)
 const isPunct = (ch: string | undefined) => ch !== undefined && PUNCT.test(ch)
 const indentOf = (line: string) => /^ */.exec(line)![0].length
 // A leading tab reads as four spaces where indentation is measured; the line itself keeps
-// it, so a code block keeps its tabs (a Makefile recipe needs them, dev#2788).
+// it, so a code block keeps its tabs (a Makefile recipe needs them, the regression).
 const spaced = (line: string) =>
   line.replace(/^\t+/, (tabs) => '    '.repeat(tabs.length))
 
@@ -459,6 +459,7 @@ function parseBlocks(
   raw: string[],
   depth: number,
   resolveHref: HrefResolver,
+  onBlock?: (block: Block, source: string) => void,
 ): Block[] {
   const lines = raw.map(spaced)
   if (depth > MAX_DEPTH)
@@ -471,6 +472,11 @@ function parseBlocks(
       i++
       continue
     }
+    const start = i
+    const append = (block: Block, end: number) => {
+      blocks.push(block)
+      onBlock?.(block, raw.slice(start, end).join('\n'))
+    }
     const fence = fenceOf(line)
     if (fence) {
       const body: string[] = []
@@ -478,21 +484,24 @@ function parseBlocks(
       while (i < lines.length && !closesFence(lines[i]!, fence[1]!))
         body.push(raw[i++]!)
       i++ // the closing fence; a block still streaming runs to the end
-      blocks.push({ kind: 'code', text: body.join('\n') })
+      append({ kind: 'code', text: body.join('\n') }, i)
       continue
     }
     const heading = HEADING.exec(line)
     if (heading) {
-      blocks.push({
-        kind: 'heading',
-        level: heading[1]!.length,
-        inline: parseInline(headingText(heading[2]!), 0, false, resolveHref),
-      })
+      append(
+        {
+          kind: 'heading',
+          level: heading[1]!.length,
+          inline: parseInline(headingText(heading[2]!), 0, false, resolveHref),
+        },
+        i + 1,
+      )
       i++
       continue
     }
     if (RULE.test(line)) {
-      blocks.push({ kind: 'rule' })
+      append({ kind: 'rule' }, i + 1)
       i++
       continue
     }
@@ -500,15 +509,18 @@ function parseBlocks(
       const inner: string[] = []
       while (i < lines.length && QUOTE.test(lines[i]!))
         inner.push(lines[i++]!.replace(QUOTE, ''))
-      blocks.push({
-        kind: 'quote',
-        blocks: parseBlocks(inner, depth + 1, resolveHref),
-      })
+      append(
+        {
+          kind: 'quote',
+          blocks: parseBlocks(inner, depth + 1, resolveHref),
+        },
+        i,
+      )
       continue
     }
     if (ITEM.test(line)) {
       const list = parseList(raw, lines, i, depth, resolveHref)
-      blocks.push(list.block)
+      append(list.block, list.end)
       i = list.end
       continue
     }
@@ -524,11 +536,14 @@ function parseBlocks(
             parseInline(c, 0, false, resolveHref),
           ),
         )
-      blocks.push({
-        kind: 'table',
-        head: head.map((c) => parseInline(c, 0, false, resolveHref)),
-        rows,
-      })
+      append(
+        {
+          kind: 'table',
+          head: head.map((c) => parseInline(c, 0, false, resolveHref)),
+          rows,
+        },
+        i,
+      )
       continue
     }
     // The lines stay as they were written (the painter keeps line breaks and indentation),
@@ -545,23 +560,33 @@ function parseBlocks(
       )
     )
       text.push(lines[i++]!)
-    blocks.push({
-      kind: 'paragraph',
-      inline: parseInline(text.join('\n'), 0, false, resolveHref),
-    })
+    append(
+      {
+        kind: 'paragraph',
+        inline: parseInline(text.join('\n'), 0, false, resolveHref),
+      },
+      i,
+    )
   }
   return blocks
 }
 
-/** The reply as blocks, ready to paint. Never throws; never produces markup. */
+/** The reply as blocks, ready to paint; never produces markup. The optional visitor
+ * receives each top-level block's source with normalized line endings. */
 export function parseMarkdown(
   text: string,
   resolveHref: HrefResolver = safeHref,
+  onBlock?: (block: Block, source: string) => void,
 ): Block[] {
-  return parseBlocks(text.replace(/\r\n?/g, '\n').split('\n'), 0, resolveHref)
+  return parseBlocks(
+    text.replace(/\r\n?/g, '\n').split('\n'),
+    0,
+    resolveHref,
+    onBlock,
+  )
 }
 
-/** A reply as the person reads it, for a copy (dev#2788): no markers, a list item keeps
+/** A reply as the person reads it, for a copy: no markers, a list item keeps
  * its bullet or number, a code block its text exactly, a link its address. */
 export function plainText(blocks: readonly Block[], gap = '\n\n'): string {
   const inline = (nodes: readonly Inline[]): string =>

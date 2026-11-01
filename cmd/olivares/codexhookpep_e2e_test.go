@@ -35,7 +35,7 @@ import (
 // index that guarantees it is actually in play.
 
 // These two payloads are VERBATIM captures from a live `codex exec` run against
-// codex-cli 0.145.0 (see an internal design note (not shipped)).
+// codex-cli 0.145.0 (see an internal audit).
 // They are duplicated from the connector's own tests on purpose: this file must exercise
 // what Codex actually sends, and a payload edited to suit our parser would prove nothing.
 const realPreToolUsePayload = `{"session_id":"019fc4c3-40c5-7371-9c92-7b269d23897b","turn_id":"019fc4c3-4157-7380-867c-474a842a75e5","transcript_path":"/workspace/.s528-probe/sessions/2026/08/03/rollout-2026-08-03T01-15-58-019fc4c3-40c5-7371-9c92-7b269d23897b.jsonl","cwd":"/workspace/.s528-probe","hook_event_name":"PreToolUse","model":"gpt-5.6-terra","permission_mode":"bypassPermissions","tool_name":"Bash","tool_input":{"command":"echo HELLO_S528"},"tool_use_id":"exec-5e34277c-9063-4eb0-95dd-79e6fe3e8960"}`

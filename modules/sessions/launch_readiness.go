@@ -108,6 +108,8 @@ const (
 	codeRunnerNotConfigured         = "runner_not_configured"
 	codeIsolationUnsupported        = "isolation_unsupported"
 	codeRunnerInspectionUnavailable = "runner_inspection_unavailable"
+	// The container runtime is there but the image sessions run in is not on this host.
+	codeContainerImageMissing = "container_image_missing"
 
 	// program
 	codeProgramPresent       = "program_present"
@@ -163,6 +165,7 @@ const (
 	remediationReviewRuntimeCredentials  = "review_runtime_credential_composition"
 	remediationSelectSupportedSelection  = "select_supported_selection"
 	remediationRetryInspection           = "retry_inspection"
+	remediationProvideSessionImage       = "provide_session_image"
 )
 
 // The closed protocol/io/input vocabulary of transport_capabilities. It
@@ -175,6 +178,7 @@ const (
 	protocolGrokACP             = "grok_acp"
 	protocolOpenCodeACP         = "opencode_acp"
 	protocolGeminiACP           = "gemini_acp"
+	protocolCursorACP           = "cursor_acp"
 	protocolUnknown             = "unknown"
 
 	ioBidirectional = "bidirectional"
@@ -227,6 +231,7 @@ func readinessCodeVocabulary() []string {
 		codeEnvironmentLocal, codeOtherEnvironment, codeEnvironmentUnavailable,
 		codeDriverOperable, codeDriverNotRegistered, codeTransportUnsupported,
 		codeRunnerReady, codeRunnerNotConfigured, codeIsolationUnsupported, codeRunnerInspectionUnavailable,
+		codeContainerImageMissing,
 		codeProgramPresent, codeProgramMissing, codeProgramNotExecutable,
 		codeHomesResolved, codeHomeUnavailable, codeHomeChanged,
 		codeAuthSourceAccountHome, codeAuthSourceManagedInjection, codeAuthSourceLegacyClaude,
@@ -247,7 +252,7 @@ func readinessRemediationVocabulary() []string {
 		remediationConfigureDriver, remediationConfigureRunner, remediationConfigureProgram,
 		remediationReviewProfileHomes, remediationAuthorizeAuthSource, remediationConfigureClaudeCredential,
 		remediationConfigureProviderAdapter, remediationReviewRuntimeCredentials,
-		remediationSelectSupportedSelection, remediationRetryInspection,
+		remediationSelectSupportedSelection, remediationRetryInspection, remediationProvideSessionImage,
 	}
 }
 
@@ -619,6 +624,16 @@ func (m *Module) runnerAndProgramChecks(
 	switch obs.Isolation {
 	case RunnerIsolationSupported:
 		runner.State, runner.Code = ReadinessReady, codeRunnerReady
+		switch obs.Image {
+		case RunnerImageMissing:
+			runner.State, runner.Code = ReadinessNotConfigured, codeContainerImageMissing
+			runner.Remediation = remediationProvideSessionImage
+		case RunnerImageUnavailable:
+			// Asked, but no usable answer. Unknown, never ready and never "build it":
+			// the image may be there and the runtime broken.
+			runner.State, runner.Code = ReadinessUnknown, codeInspectionUnavailable
+			runner.Remediation = remediationRetryInspection
+		}
 	case RunnerIsolationUnsupported:
 		runner.State, runner.Code = ReadinessUnsupported, codeIsolationUnsupported
 		runner.Remediation = remediationSelectSupportedSelection
@@ -898,7 +913,7 @@ func (m *Module) transportCapabilities(driver, transport string) LaunchTransport
 func normalizeTransportProfile(p DriverTransportProfile) LaunchTransportCapabilities {
 	out := LaunchTransportCapabilities{Protocol: protocolUnknown, IO: ioUnknown, Input: inputUnknown}
 	switch p.Protocol {
-	case protocolClaudeStreamJSON, protocolClaudeRemoteControl, protocolCodexAppServer, protocolGrokACP, protocolOpenCodeACP, protocolGeminiACP:
+	case protocolClaudeStreamJSON, protocolClaudeRemoteControl, protocolCodexAppServer, protocolGrokACP, protocolOpenCodeACP, protocolGeminiACP, protocolCursorACP:
 		out.Protocol = p.Protocol
 	}
 	switch p.IO {

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/governance/testsupport"
 	"github.com/olivaresai/olivares/modules/skills"
 )
 
@@ -334,5 +335,28 @@ func TestSkillsPackRetirementSurvivesTargetAuthority(t *testing.T) {
 	code, raw := c.doHeader("DELETE", "/v1/m/skills/packs/"+pinned, c.token, version(pinned), nil)
 	if code != http.StatusConflict || !strings.Contains(string(raw), "pack_in_use") {
 		t.Fatalf("retire an assigned pack = %d %s", code, raw)
+	}
+}
+
+func TestSkillsFolderCanonicalForbids(t *testing.T) {
+	c := bootSkillsComposition(t)
+	revision := c.installPack("folder-forbid-pack")
+	code, raw := c.do("POST", "/v1/m/sessions/workspaces", c.token, map[string]any{"root_path": t.TempDir()})
+	if code != http.StatusCreated {
+		t.Fatalf("folder = %d %s", code, raw)
+	}
+	ref := decodeField(t, raw, "workspace_ref")
+	for _, verb := range []string{"read", "write"} {
+		t.Run(verb, func(t *testing.T) {
+			testsupport.SeedCedar(t, c.eng.store, model.TenantID(c.tenant), `forbid(principal, action == Action::"resource:`+verb+`", resource);`, c.eng.nhiEnforcer)
+			if verb == "write" {
+				code, raw = c.assign(c, "folder", ref, revision)
+			} else {
+				code, raw = c.do("GET", "/v1/m/skills/assignments?target_kind=folder&target_id="+ref, c.token, nil)
+			}
+			if code != http.StatusNotFound {
+				t.Errorf("folder %s = %d %s, want 404", verb, code, raw)
+			}
+		})
 	}
 }

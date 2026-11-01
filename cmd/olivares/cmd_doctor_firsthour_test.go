@@ -72,7 +72,7 @@ func TestDoctorFirstHourNextStepWhenAgentPresentAndPEPMissing(t *testing.T) {
 	}
 }
 
-// TestDoctorNextStepFollowsTheToolsSignIn is HU 016: after the tool was installed and
+// TestDoctorNextStepFollowsTheToolsSignIn is acceptance: after the tool was installed and
 // signed in, doctor still said "sign the tool in". The next step now follows the
 // engine's answer for the tool the coding-agent row found, and the last line of the
 // report runs the same command.
@@ -152,7 +152,7 @@ type errNotFound struct{}
 
 func (errNotFound) Error() string { return "not found" }
 
-// TestDoctorCountsAToolInstalledByOlivares is HU-13: with Claude Code installed by
+// TestDoctorCountsAToolInstalledByOlivares is acceptance: with Claude Code installed by
 // Olivares under <data-dir>/tools and nothing on PATH, doctor said no coding agent
 // was installed.
 //

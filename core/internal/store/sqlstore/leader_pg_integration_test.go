@@ -170,7 +170,7 @@ func TestPGLockBackendConcurrentFenceReads(t *testing.T) {
 
 // TestPGElectorResignTerminatesAWedgedSession is the executable form of the
 // three evidence items the fence-fix audit demanded
-// (an internal design note (not shipped)): a bounded
+// (an internal audit): a bounded
 // Resign through the REAL elector path must not wait for a wedged fence read,
 // must terminate the physical session (socket kill — sql.Conn.Close alone
 // waits for the operation and then POOLS the still-locked session), and the

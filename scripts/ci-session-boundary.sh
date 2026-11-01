@@ -19,10 +19,8 @@
 # switch for this single-use VM. Then, on every runner, it asks the kernel for a user and
 # a network namespace, as the engine does, and prints the answer.
 #
-# WHAT IT IS NOT. It is not a gate: the tests are the arbiter of the engine's own
-# request, which differs from unshare(1)'s (uid mapping, ambient capabilities, clone
-# against unshare), so a refusal here is a warning that names the likely cause and never
-# fails the job. It does not probe Landlock either; the tests do, through confine.Probe.
+# A refused or unavailable probe fails the job before the session tests start. The
+# engine's own tests still check its namespace setup and Landlock through confine.Probe.
 # A self-hosted runner is never changed (no sudo is assumed), only measured. It changes
 # no test and skips none.
 set -euo pipefail
@@ -39,12 +37,12 @@ echo "$key: $(cat "$switch" 2>/dev/null || echo 'not present')"
 echo "lsm: $(cat /sys/kernel/security/lsm 2>/dev/null || echo 'unreadable')"
 
 if ! command -v unshare > /dev/null; then
-  echo "::warning::unshare is not installed on this runner, so the namespaces were not probed"
-  exit 0
+  echo "::error::unshare is not installed on this runner; install util-linux before running session tests"
+  exit 1
 fi
 if ! answer=$(unshare --user --map-root-user --net true 2>&1); then
   answer=${answer//$'\n'/ }
-  echo "::warning::this runner refused an unprivileged user and network namespace (${answer}); the session boundary reproducers are expected to fail here"
-  exit 0
+  echo "::error::this runner refused an unprivileged user and network namespace (${answer}); configure the runner to allow session namespaces before running session tests"
+  exit 1
 fi
 echo "unprivileged user and network namespaces: allowed (Landlock is checked by the tests)"

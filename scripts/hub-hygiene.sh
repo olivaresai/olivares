@@ -35,7 +35,7 @@ for arg in "$@"; do
 	case "$arg" in
 	--apply)
 		printf '%s\n' \
-			'hub-hygiene: --apply was removed (exit 2): two failed rechecks left four classes of data loss unresolved; see design/audits/2026-08-04-codex-hub-hygiene-recontrast.md.' >&2
+			'hub-hygiene: --apply was removed (exit 2): two failed rechecks left four classes of data loss unresolved; see an internal audit' >&2
 		exit 2
 		;;
 	--dry-run) ;;

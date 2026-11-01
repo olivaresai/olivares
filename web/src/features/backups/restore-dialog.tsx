@@ -208,8 +208,8 @@ export function RestoreDialog({ open, onOpenChange }: RestoreDialogProps) {
 function AwaitingApprovalStep({ requestId }: { requestId: string }) {
   const { t } = useTranslation('backups')
   return (
-    <div className="flex flex-col items-center gap-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-6 text-center">
-      <UserCheck className="size-8 text-amber-500" />
+    <div className="flex flex-col items-center gap-3 rounded-lg border border-warning-line bg-warning-soft p-6 text-center">
+      <UserCheck className="size-8 text-warning" />
       <p className="text-body font-medium">{t('restore.awaitingTitle')}</p>
       <p className="text-body text-muted-foreground">
         {t('restore.awaitingDescription')}

@@ -6,6 +6,7 @@ package agenttoolsapi
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -282,6 +283,13 @@ func deviceSignIn(driver string) bool {
 	return facts.SignIn == driverfacts.SignInDevice
 }
 
+// linkSignIn reports whether a tool's login is a link the person approves in a browser,
+// with nothing to type back: the tool ends on its own once the browser approves.
+func linkSignIn(driver string) bool {
+	facts, _ := driverfacts.Lookup(driver)
+	return facts.SignIn == driverfacts.SignInLink
+}
+
 // userCodeIn finds a device login's one-time code in one line of its output.
 func userCodeIn(driver, line string) string {
 	if driver == "grok" {
@@ -320,6 +328,10 @@ type LoginHomeFunc func(ctx context.Context, tenant model.TenantID, driver, acco
 func loginHomeError(w http.ResponseWriter, err error) {
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, exec.ErrWaitDelay) {
 		fail(w, 503, "unavailable", "The tool's sign-in status check timed out. Try again.")
+		return
+	}
+	if toolinstall.KindOf(err) == toolinstall.KindVerificationUnavailable { // the node-wide rule, with its own sentence, before a probeError wrap
+		installerError(w, err)
 		return
 	}
 	var probe *probeError
@@ -361,7 +373,7 @@ func (m *Module) OnSignedIn(f func(model.TenantID)) {
 
 // toolEnv is the child's whole environment: the tenant's login home the product
 // created, PATH, the tool's configuration directory inside that home and the
-// host's way out (hostNetworkEnv), and nothing else. FH 036: it was the ENGINE
+// host's way out (hostNetworkEnv), and nothing else. first-hour check: it was the ENGINE
 // USER's home (~/.claude), so a fresh install read, and would have used, a vendor
 // login nobody gave the product. The engine's own HOME, CLAUDE_CONFIG_DIR,
 // CODEX_HOME or API keys never reach it.
@@ -396,6 +408,11 @@ func (m *Module) toolEnv(ctx context.Context, tenant model.TenantID, driver, acc
 	}
 	env = append(env, facts.ConfigHomeEnv+"="+configValue)
 	env = append(env, hostNetworkEnv()...)
+	if driver == "cursor" {
+		// The file store keeps the login inside this home; the default store may reach for the
+		// host's keyring. The link is printed for the person, never opened on this host.
+		env = append(env, "AGENT_CLI_CREDENTIAL_STORE=file", "NO_OPEN_BROWSER=1")
+	}
 	if driver == "opencode" {
 		env = append(env, "XDG_CONFIG_HOME="+filepath.Join(home, ".config"),
 			"XDG_DATA_HOME="+filepath.Join(home, ".local", "share"),
@@ -484,6 +501,11 @@ func (m *Module) readStatusUnlogged(ctx context.Context, tenant model.TenantID, 
 		return out, nil
 	}
 	out.Installed = true
+	return m.readResolvedStatus(ctx, tenant, out, program, configDir, env)
+}
+
+func (m *Module) readResolvedStatus(ctx context.Context, tenant model.TenantID, out SignInStatus, program, configDir string, env []string) (SignInStatus, error) {
+	driver := out.Driver
 	if driver == "gemini-cli" {
 		return geminiSignInStatus(out, configDir)
 	}
@@ -508,6 +530,45 @@ func (m *Module) readNativeStatus(ctx context.Context, out SignInStatus, program
 	return st, err
 }
 
+var errSignInOutputLimit = errors.New("tool status output exceeded 64 KiB")
+
+// boundedStatusOutput stops an untrusted status process from growing engine memory
+// without bound. Returning the error also gives the child a broken pipe instead of
+// letting it continue writing after the limit. With truncate set the excess is dropped and
+// the child carries on: a listing keeps its first bytes, as before the bound existed.
+type boundedStatusOutput struct {
+	buf       bytes.Buffer
+	remaining int
+	exceeded  bool
+	truncate  bool
+}
+
+func (w *boundedStatusOutput) Write(p []byte) (int, error) {
+	if w.exceeded && !w.truncate {
+		return 0, errSignInOutputLimit
+	}
+	if len(p) > w.remaining {
+		n, _ := w.buf.Write(p[:w.remaining])
+		w.remaining = 0
+		w.exceeded = true
+		if w.truncate {
+			return len(p), nil
+		}
+		return n, errSignInOutputLimit
+	}
+	n, err := w.buf.Write(p)
+	w.remaining -= n
+	return n, err
+}
+
+// retainExitStderr keeps the diagnostic cmd.Output used to collect, but bounded.
+func retainExitStderr(err error, stderr *boundedStatusOutput) {
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && len(exit.Stderr) == 0 {
+		exit.Stderr = stderr.buf.Bytes()
+	}
+}
+
 func (m *Module) runNativeStatus(ctx context.Context, out SignInStatus, program, configDir string, env []string) (SignInStatus, error) {
 	driver := out.Driver
 	ctx, cancel := context.WithTimeout(ctx, statusTimeout)
@@ -517,6 +578,7 @@ func (m *Module) runNativeStatus(ctx context.Context, out SignInStatus, program,
 		return out, errSignInStatus
 	}
 	args := facts.StatusArgs
+	env = readEnv(driver, env)
 	if driver == "opencode" {
 		// A status read must not refresh the native model catalog.
 		env = append(env, "OPENCODE_DISABLE_MODELS_FETCH=1")
@@ -530,21 +592,27 @@ func (m *Module) runNativeStatus(ctx context.Context, out SignInStatus, program,
 	cmd.Dir = envValue(env, "HOME") // the organization's login home, as for the login
 	var raw []byte
 	var runErr error
-	if driver == "codex" {
+	bounded := &boundedStatusOutput{remaining: maxSignInOutput}
+	cmd.Stdout = bounded
+	stderr := &boundedStatusOutput{remaining: maxSignInOutput}
+	cmd.Stderr = stderr
+	if driver == "codex" || driver == "cursor" {
 		// `codex login status` prints its answer on stderr (codex-cli 0.160), so
-		// reading stdout alone reported every signed-in Codex as signed out.
-		raw, runErr = cmd.CombinedOutput()
-	} else {
-		raw, runErr = cmd.Output()
+		// reading stdout alone reported every signed-in Codex as signed out. Cursor's
+		// signed-out answer was seen as JSON on stdout and as an error line.
+		cmd.Stderr = bounded
 	}
+	runErr = cmd.Run()
+	retainExitStderr(runErr, stderr)
+	raw = bounded.buf.Bytes()
 	if ctx.Err() != nil {
 		return out, ctx.Err()
 	}
+	if bounded.exceeded || stderr.exceeded {
+		return out, &probeError{cmdLine(program, args...), errSignInOutputLimit}
+	}
 	if errors.Is(runErr, exec.ErrWaitDelay) {
 		return out, runErr
-	}
-	if len(raw) > maxSignInOutput {
-		raw = raw[:maxSignInOutput]
 	}
 	if driver == "codex" {
 		text := strings.TrimSpace(ansiEscape.ReplaceAllString(string(raw), ""))
@@ -554,6 +622,18 @@ func (m *Module) runNativeStatus(ctx context.Context, out SignInStatus, program,
 			out.Method = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(text, "Logged in using"), "Logged in"))
 		}
 		return out, nil
+	}
+	if driver == "cursor" {
+		// The tool answers a signed-out login with exit status 0 (measured), so a command that
+		// failed has not said anything about the login.
+		if runErr != nil {
+			return out, &probeError{cmdLine(program, args...), commandFailure(ctx, runErr)}
+		}
+		st := cursorSignInStatus(out, raw)
+		if st.unrecognized {
+			return st, errSignInStatus
+		}
+		return st, nil
 	}
 	if driver == "opencode" {
 		if runErr != nil {
@@ -626,6 +706,29 @@ func openCodeLoginFor(driver, id string) string {
 	return id // a method without a known auth list line never counts as signed in
 }
 
+// LocalLoginStatus reads a workstation's native login using its resolved
+// configuration directories. Only the sign-in bit leaves the native status reader.
+// Callers supply a sanitized environment, never provider keys or inherited secrets.
+func LocalLoginStatus(ctx context.Context, engine *toolinstall.Engine, child ChildCommand, driver, program, configDir string, env []string) (bool, error) {
+	if engine == nil || child == nil || !filepath.IsAbs(program) {
+		return false, errors.New("local tool status requires an engine, confined child builder and absolute executable")
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	m := &Module{engine: engine, ctx: ctx, cancel: cancel, childCommand: child}
+	defer m.Close()
+	if !filepath.IsAbs(configDir) || !filepath.IsAbs(envValue(env, "HOME")) {
+		return false, errors.New("local tool login directories must be absolute")
+	}
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		return false, err
+	}
+	st, err := m.readResolvedStatus(ctx, "", SignInStatus{Driver: driver, Installed: true}, program, configDir, env)
+	if err == nil && st.unrecognized {
+		err = errSignInStatus
+	}
+	return st.SignedIn, err
+}
+
 // LoginStatus reports whether a driver's tool is installed on this node and, for
 // a tool with its own login, whether the tenant's own login is signed in: the
 // answer GET sign-in gives, for the sessions module's rule that picks a new
@@ -677,6 +780,10 @@ func (m *Module) SetChildCommand(f ChildCommand) {
 // ChildCommand (tests substitute it).
 var toolCommand = exec.CommandContext
 
+// hostConfinement is how this module reads what the host can enforce; tests
+// substitute it. The rule itself is toolinstall.RefuseUnconfinedUnsigned.
+var hostConfinement = confine.Probe
+
 // build is the composition's ChildCommand, or an unconfined one when none is wired.
 func (m *Module) build() ChildCommand {
 	m.mu.Lock()
@@ -693,8 +800,13 @@ func (m *Module) build() ChildCommand {
 // may write the tool's configuration home, its login home unless that is the
 // engine user's own home (granting it would let the tool write every project and
 // key in it), and a private temporary directory (TMPDIR) that release removes once
-// the child has exited.
+// the child has exited. The login, the status read and the provider probes of an
+// unsigned install go through the node-wide rule first: while this host cannot
+// confine a child, they are refused rather than run (#3312).
 func (m *Module) command(ctx context.Context, driver, program, configDir string, env []string, args ...string) (*exec.Cmd, func(), error) {
+	if err := toolinstall.RefuseUnconfinedUnsigned(m.engine.VerificationLevels()[driver], driver, hostConfinement()); err != nil {
+		return nil, nil, err
+	}
 	tmp, err := confine.ChildTempDir()
 	if err != nil {
 		return nil, nil, fmt.Errorf("the tool's temporary directory: %w", err)
@@ -830,6 +942,10 @@ func (m *Module) handleSignInStart(w http.ResponseWriter, r *http.Request, mc ap
 		}
 		s, err := m.startSignIn(tenant, in.Driver, in.AccountRef, configDir, program, args, env, in.Method)
 		if err != nil {
+			if toolinstall.KindOf(err) == toolinstall.KindVerificationUnavailable { // the node-wide rule, with its own sentence
+				installerError(w, err)
+				return
+			}
 			fail(w, 503, "unavailable", "The tool's sign-in could not be started on this node.")
 			return
 		}
@@ -999,17 +1115,17 @@ func (m *Module) startSignIn(tenant model.TenantID, driver, accountRef, configDi
 				if (cur.URL == "" || driver == "gemini-cli") && !signInError.MatchString(line) {
 					// A URL with userinfo is never the sign-in link: it is the
 					// host proxy's, with its credential (#547).
-					if u := firstURL.FindString(line); u != "" && !hasUserInfo(u) && (driver != "gemini-cli" || geminiAuthorizationURL(u)) {
+					if u := firstURL.FindString(line); u != "" && !hasUserInfo(u) && (driver != "gemini-cli" || geminiAuthorizationURL(u)) && (driver != "cursor" || cursorLoginURL(strings.TrimRight(u, ".,)"))) {
 						cur.URL = strings.TrimRight(u, ".,)")
 					}
 				}
 				if deviceSignIn(driver) && cur.UserCode == "" && cur.URL != "" {
 					cur.UserCode = userCodeIn(driver, line)
 				}
-				prompted := cur.State == signInStarting && cur.keyPrompt == "" && cur.URL != "" && (pasteSignIn(driver) || cur.UserCode != "")
+				prompted := cur.State == signInStarting && cur.keyPrompt == "" && cur.URL != "" && (pasteSignIn(driver) || linkSignIn(driver) || cur.UserCode != "")
 				if prompted {
 					cur.State = signInNeedCode
-					if deviceSignIn(driver) {
+					if deviceSignIn(driver) || linkSignIn(driver) {
 						cur.State = signInWaiting
 					}
 				}
@@ -1071,6 +1187,10 @@ func (m *Module) startSignIn(tenant model.TenantID, driver, accountRef, configDi
 			// sign-in started: a key login that stored no key is not signed in
 			// because the home holds another login.
 			st, serr := m.readStatus(m.ctx, tenant, driver, accountRef)
+			if driver == "cursor" && serr != nil {
+				m.finishSignIn(s.ID, signInFailed, "The tool's sign-in status could not be read after the login ended. Start it again or update Cursor CLI.")
+				return
+			}
 			listed := serr == nil && st.SignedIn
 			if listed && s.login != "" && !slices.Contains(strings.Split(st.Method, ", "), s.login) {
 				slog.Warn("tool sign-in failed", "driver", driver, "status", "exit status 0", "want", s.login, "listed", st.Method)

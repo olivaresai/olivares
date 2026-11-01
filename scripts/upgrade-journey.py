@@ -90,6 +90,15 @@ class CouldNotLook(Exception):
     pass
 
 
+def first_boot_deadline():
+    """The installer's first-boot wait, one value for every first boot (scripts/install-service.sh, #3342)."""
+    text = (pathlib.Path(__file__).resolve().parent / "install-service.sh").read_text()
+    found = re.search(r"^FIRST_BOOT_DEADLINE=(\d+)$", text, re.M)
+    if not found:
+        raise Fail("no FIRST_BOOT_DEADLINE in scripts/install-service.sh")
+    return int(found.group(1))
+
+
 def say(msg):
     print(f"upgrade-journey: {msg}", flush=True)
 
@@ -110,7 +119,7 @@ class Api:
         self.ctx = ssl.create_default_context()
         self.ctx.check_hostname, self.ctx.verify_mode = False, ssl.CERT_NONE
 
-    def call(self, method, path, body=None, want=(200, 201, 202, 204)):
+    def call(self, method, path, body=None, want=(200, 201, 202, 204), with_status=False):
         headers = {"content-type": "application/json"}
         if self.token:
             headers["authorization"] = "Bearer " + self.token
@@ -128,17 +137,21 @@ class Api:
         if status not in want:
             raise Fail(f"{method} {path}: HTTP {status} {raw.decode(errors='replace')[:300]}")
         text = raw.decode(errors="replace").strip()
-        return json.loads(text) if text[:1] in ("{", "[") else {}
+        result = json.loads(text) if text[:1] in ("{", "[") else {}
+        return (status, result) if with_status else result
 
     def wait_healthy(self, engine):
-        for _ in range(120):
+        deadline, started = first_boot_deadline(), time.monotonic()
+        while True:
             try:
                 urllib.request.urlopen(self.base + "/healthz", timeout=2, context=self.ctx)
+                say(f"engine healthy after {time.monotonic() - started:.0f}s (first-boot wait {deadline}s)")
                 return
             except Exception:
                 engine.require_alive()
+                if time.monotonic() - started >= deadline:
+                    raise Fail(f"engine start: no /healthz answer within {deadline} s")
                 time.sleep(1)
-        raise Fail("engine start: no /healthz answer within 120 s")
 
     def sign_in(self, email):
         out = self.call("POST", "/v1/auth/login", {"email": email, "password": PASSWORD})
@@ -330,7 +343,7 @@ class ComposeBackend:
         # The documented upgrade pulls; an image that is already here (a local candidate) is not pulled.
         if subprocess.run(["docker", "image", "inspect", image], capture_output=True).returncode != 0:
             self.compose("pull", "--quiet", image=image)
-        self.compose("up", "--wait", "--wait-timeout", "120", "-d", image=image)
+        self.compose("up", "--wait", "--wait-timeout", str(first_boot_deadline()), "-d", image=image)
         port = self.compose("port", "olivares", "8443", image=image).stdout.strip().rsplit(":", 1)[-1]
         api = Api(f"https://127.0.0.1:{port}")
         api.wait_healthy(self)
@@ -414,6 +427,7 @@ def seed(backend, state):
     listed = {r["run_ref"]: r for r in api.call("GET", "/v1/m/sessions/runs").get("items", [])}
     state["run_facts"] = {ref: (listed[ref].get("name"), listed[ref].get("workspace_ref")) for ref in runs}
     state.update(tenant=api.tenant, runs=runs, profile=profile, workspace=ws_ref)
+    state["audit_anchor"] = api.call("GET", "/v1/audit?limit=1")["items"][0]
     say(f"seeded on the old engine: 2 accounts, 1 provider key ({state['provider']['key_hint']!r}), {SESSIONS} sessions")
     backend.stop()
     # The pre-upgrade DR bundle (UPGRADE-AND-ROLLBACK.md section 3), taken with the OLD engine.
@@ -467,9 +481,26 @@ def check_data(api, state, who):
         if (have[ref].get("name"), have[ref].get("workspace_ref")) != (name, workspace):
             raise Fail(f"{who}: session {ref} changed: {have[ref].get('name')!r} in {have[ref].get('workspace_ref')!r}, "
                        f"was {name!r} in {workspace!r}")
-    audit = api.call("GET", "/v1/audit/verify")
+    check_audit_data(api, state, who)
+
+
+def check_audit_data(api, state, who):
+    # Preserve a signed pre-upgrade event byte for byte in both editions.
+    anchor = state["audit_anchor"]
+    rows = api.call("GET", f"/v1/audit?from={anchor['seq']}&limit=1").get("items", [])
+    if not rows or any(rows[0].get(key) != anchor.get(key) for key in ("seq", "hash", "prev_hash", "sig")):
+        raise Fail(f"{who}: the signed pre-upgrade ledger event changed")
+    edition = api.call("GET", "/v1/server-info").get("edition")
+    if edition == "community":
+        # Earlier Community releases offered verification; newer ones retain a 501 seam.
+        status, audit = api.call("GET", "/v1/audit/verify", want=(200, 501), with_status=True)
+        if status == 501 and audit.get("error", {}).get("code") == "audit_export_unavailable":
+            return
+    else:
+        audit = api.call("GET", "/v1/audit/verify")
     if audit.get("ok") is not True:
         raise Fail(f"{who}: the audit chain does not verify: {audit}")
+
 
 
 def upgrade(backend, state, expect_version):

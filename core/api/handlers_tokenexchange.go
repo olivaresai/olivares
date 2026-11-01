@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 // handleTokenExchange implements the RFC 8693 token-exchange endpoint at
@@ -82,6 +83,10 @@ func (s *Server) handleTokenExchange(w http.ResponseWriter, r *http.Request, mc 
 // token-endpoint errors are HTTP 400 by the OAuth contract.
 func classifyExchangeError(err error) (status int, code string, internal bool) {
 	switch {
+	case errors.Is(err, store.ErrStoreUnavailable) && !errors.Is(err, store.ErrCommitOutcomeUnknown):
+		// The store could not be read: not the caller's token. Retryable
+		// and never described to the client; the cause is logged.
+		return http.StatusServiceUnavailable, "temporarily_unavailable", true
 	case errors.Is(err, auth.ErrInvalidTarget):
 		return http.StatusBadRequest, "invalid_target", false
 	case errors.Is(err, auth.ErrInvalidSubjectToken),

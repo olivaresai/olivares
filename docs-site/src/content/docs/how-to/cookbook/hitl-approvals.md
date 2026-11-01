@@ -88,6 +88,14 @@ silently forgets.
 
 ## Notes
 
+For supported Codex permission requests, **Approve for this session** grants the
+reviewed permission for the current session. **Approve once** keeps its single-use
+behavior. The same choice is available in the conversation and the approval queue.
+API clients can send `{"decision":"approve","scope":"session"}` when the request
+reports `session_scope_allowed: true`. Other requests reject this scope with HTTP
+400 and record no decision. The decision trail and audit event retain the scope;
+when several people must approve, a single-use decision keeps the grant single-use.
+
 - `escalate_in_seconds` notifies the SoD team if a request sits undecided —
   use it for production-critical actions.
 - Cancel (`POST …/{id}/cancel`) is for the requester or an admin on a

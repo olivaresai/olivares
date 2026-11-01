@@ -188,8 +188,7 @@
     },
     "server": {
       "title": "Aucun serveur MCP découvert",
-      "description": "Les serveurs MCP apparaissent lorsque les observations des connecteurs les identifient dans l’inventaire du locataire.",
-      "action": "Ajouter ou tester un serveur dans Serveurs MCP"
+      "description": "Les serveurs MCP apparaissent lorsque les observations des connecteurs les identifient dans l’inventaire du locataire."
     },
     "skill": {
       "title": "Compétences non trouvées",

@@ -189,7 +189,7 @@ describe('session header — the tool’s own mode', () => {
       }),
     )
     const mode = screen.getByTestId('narrative-mode')
-    expect(mode).toHaveTextContent('Ask before each action')
+    expect(mode).toHaveTextContent('Supervised')
     expect(mode).not.toHaveTextContent('dangerFullAccess')
     expect(mode).not.toHaveTextContent('untrusted')
     // Codex's own words stay one hover away, named as Codex's.
@@ -201,9 +201,9 @@ describe('session header — the tool’s own mode', () => {
 
   it.each([
     ['dontAsk', 'Edit files and run commands'],
-    ['acceptEdits', 'Edit files only'],
+    ['acceptEdits', 'Auto-accept edits'],
     ['plan', 'Read only'],
-    ['default', 'Ask before each action'],
+    ['default', 'Supervised'],
   ])(
     'words the launch permission %s as New session does',
     async (mode, words) => {
@@ -253,14 +253,15 @@ describe('session header — the tool’s own mode', () => {
     )
   })
 
-  it('words Claude Code’s bypassPermissions in its own meaning, never as the launch permission', () => {
+  it('words Claude Code’s bypassPermissions as Full from its own word, never from the launch permission', () => {
     renderHeader(
       run({ permission_mode: 'default', tool_mode: 'bypassPermissions' }),
     )
     const mode = screen.getByTestId('narrative-mode')
-    // dev#3120: "Never asks for permission" alarmed and said nothing of the boundary.
+    // the regression: "Never asks for permission" alarmed and said nothing of the boundary.
+    // the regression: the same words say it under the name the person chose it by.
     expect(mode.textContent).toBe(
-      'Runs without asking: confined by Olivares policy',
+      'Full: runs without asking, confined by Olivares policy',
     )
     expect(
       within(mode).getByRole('link', { name: 'Olivares policy' }),
@@ -271,7 +272,7 @@ describe('session header — the tool’s own mode', () => {
     )
   })
 
-  it.each(['auto', 'constructor', '__proto__'])(
+  it.each(['constructor', '__proto__'])(
     'never words a Claude session in %s as the launch permission',
     (word) => {
       renderHeader(run({ permission_mode: 'default', tool_mode: word }))
@@ -282,11 +283,29 @@ describe('session header — the tool’s own mode', () => {
   )
 
   it.each([
-    ['acceptEdits', 'Edit files only'],
-    ['default', 'Ask before each action'],
+    ['acceptEdits', 'Auto-accept edits'],
+    ['default', 'Supervised'],
+    ['auto', 'Auto'],
   ])('words a Claude session in %s from its own word', (word, words) => {
     renderHeader(run({ permission_mode: 'plan', tool_mode: word }))
     expect(screen.getByTestId('narrative-mode')).toHaveTextContent(words)
+  })
+
+  // the regression: the chip says what the person gets, not only the name.
+  it.each([
+    ['plan', 'Read only: Reads and plans. Every change is refused.'],
+    ['default', 'Supervised: Asks before every action that is not a read.'],
+    [
+      'acceptEdits',
+      'Auto-accept edits: Reads and edits files without asking. Everything else asks.',
+    ],
+    [
+      'auto',
+      "Auto: The tool's own reviewed automatic mode decides. A tool without one asks, as in Supervised. Needs run administration.",
+    ],
+  ])('says what a Claude session in %s gets', (word, text) => {
+    renderHeader(run({ permission_mode: 'default', tool_mode: word }))
+    expect(screen.getByTestId('narrative-mode').textContent).toBe(text)
   })
 
   it.each([
@@ -306,7 +325,7 @@ describe('session header — the tool’s own mode', () => {
       renderHeader(
         run({
           provider_driver: 'codex',
-          permission_mode: 'bypassPermissions',
+          permission_mode: 'dontAsk',
           tool_mode: toolMode,
         }),
       )
@@ -320,11 +339,29 @@ describe('session header — the tool’s own mode', () => {
     },
   )
 
-  it('keeps a word it has no console wording for, rather than guessing one', () => {
+  it('words a Codex session launched in Full as Full, not by its own sandbox names', () => {
     renderHeader(
       run({
         provider_driver: 'codex',
         permission_mode: 'bypassPermissions',
+        tool_mode: 'untrusted · dangerFullAccess',
+      }),
+    )
+    const mode = screen.getByTestId('narrative-mode')
+    expect(mode.textContent).toBe(
+      'Full: runs without asking, confined by Olivares policy',
+    )
+    expect(mode).toHaveAttribute(
+      'title',
+      'Codex reports: untrusted · dangerFullAccess',
+    )
+  })
+
+  it('keeps a word it has no console wording for, rather than guessing one', () => {
+    renderHeader(
+      run({
+        provider_driver: 'codex',
+        permission_mode: 'dontAsk',
         tool_mode: 'someday · dangerFullAccess',
       }),
     )
@@ -409,6 +446,13 @@ describe('session header — this session’s usage', () => {
     expect(meter).toHaveTextContent('$0.00')
     expect(meter).not.toHaveTextContent('cost not reported')
     expect(meter).not.toHaveTextContent('partial')
+  })
+
+  it('shows the cost alone when the tool reported a cost and no tokens', () => {
+    renderHeader(run({ cost_micro_usd: 120_000 }))
+    const meter = screen.getByTestId('narrative-usage')
+    expect(meter).toHaveTextContent(/^\$0\.12$/)
+    expect(meter).not.toHaveTextContent('0 in')
   })
 
   it.each([

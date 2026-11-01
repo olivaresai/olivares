@@ -11,10 +11,11 @@ mechanism, see §9 Honest limits).
 > **Thesis.** A product whose integrity IS a per-event hash-chained and signed
 > ledger cannot treat backup/restore as a naive `pg_dump`. Restoring
 > must **preserve chain continuity** and **key custody**, and
-> the restore must **prove** that it did (`/v1/audit/verify` green post-restore).
+> the restore must **prove** that it did through its built-in verification in every edition.
+> Independent post-restore verification through `/v1/audit/verify` requires Business.
 > This runbook is the procedure; the tool is `olivares dr`.
 
-**The enrolled DR restore control supports PostgreSQL 15, 16, 17 and 18 in 26.10** (measured on 15.19, 16.15, 17.11 and 18.6). Other majors refuse with `DR restore control contract: PostgreSQL major <major> is unsupported (verified contracts: 15, 16, 17, 18)`, where `<major>` is the detected server major. A control is never repaired: after an in-place major upgrade, a control that does not match the new major's catalog and permissions is refused.
+**The enrolled DR restore control supports PostgreSQL 15, 16, 17 and 18 in 26.10** (measured on 15.19, 16.15, 17.11 and 18.6). What is measured on those four servers, and by what, is in §9 "What is measured, on which major". Other majors refuse with `DR restore control contract: PostgreSQL major <major> is unsupported (verified contracts: 15, 16, 17, 18)`, where `<major>` is the detected server major. A control is never repaired: after an in-place major upgrade, a control that does not match the new major's catalog and permissions is refused.
 
 Logical PostgreSQL restore re-establishes the compiled custody-table permissions before booting the recovered store: the separate application role receives SELECT only, while the backup administrator retains read access. The ACL changes commit together with the existing authority and login-capability privilege restoration. A malformed custody schema or guard refuses restore and rolls back those privilege changes; normal boot continues to refuse permission drift.
 
@@ -157,7 +158,7 @@ store/<snapshot>.enc   the consistent store snapshot, AES-256-GCM in chunks unde
   design, so the `audit-signing.key` encrypted in the bundle remains necessary.
 - **3-2-1.** A backup on the same host/cluster **is not** disaster recovery: copy the
   bundles **off-site**. `dr backup --offsite-bucket …` replicates each bundle to an
-  S3-compatible target (AWS S3, Cloudflare R2, MinIO, Wasabi) in the same run; `dr
+  S3-compatible target in the same run; `dr
   push`/`dr pull`/`dr list --offsite` manage the mirror. Offsite credentials are
   passed **by reference** (a file or the standard `AWS_*` env), never inline. A push
   failure **fails** the backup — the operator is never left with only a local copy.
@@ -186,14 +187,17 @@ upper tiers have nothing to recover from.
 |---|---|---|---|---|
 | SQLite (single-node/dev/air-gap) | `dr backup` (VACUUM INTO) by cron | = cron interval (e.g. 15 min–6 h) | < 15 min (small estate) | online snapshot, no downtime (WAL allows a concurrent reader) |
 | Postgres (scale) — logical | `pg-dump.sh` by cron | = cron interval (e.g. 1–6 h) | < 30 min | consistent dump; version-tolerant restore |
-| Postgres (scale) — PITR | `pg_basebackup` + WAL archiving | ≈ seconds (`archive_timeout` + lag) | < 30 min | near-zero RPO; companion bundle `--pitr-ref` |
+| Postgres (scale) — PITR | `pg_basebackup` + WAL archiving | ≈ seconds (`archive_timeout` + lag) | < 30 min | near-zero RPO; companion bundle `--pitr-ref`; recovery to a chosen instant measured on 15, 16, 17 and 18 (§9) |
 
 **RPO** in a disaster = (instant of the disaster − `created_at` of the last good bundle;
 manifest field, visible with `dr inspect`). **RTO** = restore snapshot + verify
-+ boot. `dr drill` measures SQLite RTO on a synthetic ledger. It does not
-measure RPO, and it does not measure a Postgres restore. Record a measured
-RTO with its event count and host. Do not replace a target above with an
-unmeasured figure.
++ boot. `dr drill` measures SQLite RTO on a synthetic ledger and, given
+`--scratch-dsn`, the PostgreSQL RTO of the logical tier too (tables below). It
+does not measure RPO, and its PostgreSQL figure starts once the empty target
+database exists. The PITR tier's RTO is the base-restore time plus WAL replay
+plus `dr restore` of the companion; §9 gives what one run of each measured.
+Record a measured RTO with its event count and host. Do not replace a target
+above with an unmeasured figure.
 
 **Measured RTO (SQLite, `task dr:drill` on the reference build container, 2026-07-09).**
 The restore is verify-bound — the full ledger re-verification is a per-event Ed25519
@@ -224,6 +228,26 @@ On production hardware with a larger estate the boot + per-event term dominate; 
 evidence (upgrade, key-rotation posture, ledger recovery, support-bundle) lives in
 [docs/DAY2-DRILL-LOG.md](DAY2-DRILL-LOG.md).
 
+**Measured RTO (PostgreSQL, `olivares dr drill --events N --scratch-dsn …`, 2026-10-25).**
+The same synthetic-ledger round trip on a throwaway PostgreSQL database of each supported
+major: seed, `pg_dump`, drop the source, provision an empty target as `olivares db init`
+does, then `pg_restore` as the owner role, close the restored authority, boot and re-verify
+the whole ledger. The clock starts once the empty target exists. One run per cell, on a
+16-CPU shared build host (Go 1.26.10), loopback servers with default durability, the
+engine's schema of 2556 relations. "Restored" is the ledger events the drill counted
+(the seeded N plus 4 events the engine recorded itself).
+
+| `--events` (restored) | PostgreSQL 15.19 | 16.15 | 17.11 | 18.6 | SQLite, same runs |
+|---|---|---|---|---|---|
+| 500 (504) | 7.36 s | 7.22 s | 4.31 s | 5.00 s | 0.86 s to 2.42 s |
+| 2 000 (2 004) | 7.38 s | 5.24 s | 4.08 s | 4.00 s | 0.92 s to 1.09 s |
+| 5 000 (5 004) | 5.23 s | 5.91 s | 4.24 s | 4.54 s | 1.17 s to 1.34 s |
+
+At these sizes the PostgreSQL figure is a fixed cost of a few seconds (restoring and booting
+the schema), not a function of the event count, so it does not extrapolate: restore time on a
+real estate grows with the size of the data `pg_restore` loads, and that was not measured. The
+tier table above keeps its targets; this is what one drill printed.
+
 ## 5.5 Retention (GFS)
 
 `--retain-days N` is a flat age cut. For a professional retention curve use
@@ -233,6 +257,8 @@ days, 4 ISO weeks, 12 months and 3 years, plus an absolute floor of the 3 newest
 any `--gfs-*` tier is set it supersedes `--retain-days` and prunes **both** the local
 directory **and** the offsite mirror in the same run. The policy is a pure, tested
 function (`core/dr/retention.go`), so the local and offsite decisions are identical.
+With `--offsite-immutable` the backup prunes only the local directory; the offsite
+mirror is pruned by `olivares dr prune --offsite` with its own credential (below).
 
 ---
 
@@ -266,6 +292,76 @@ The bundle is written locally, streamed off-box (the "1" of 3-2-1), and both cop
 are pruned to the GFS curve. Omit `--offsite-endpoint` for AWS S3 (derived from the
 region); the `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` env are honoured as a
 fallback to the `*-file` flags.
+
+### Immutable offsite copy (Object Lock)
+
+With the command above, the credential that writes the backups can also delete them,
+and so can anyone who steals it from this host. For one copy that ransomware cannot
+delete, use a bucket created with S3 Object Lock and split the credentials:
+
+- **Writer** (on this host): `dr backup … --offsite-immutable` with a GFS period tier.
+  It checks that the bucket has Object Lock, puts each bundle in COMPLIANCE mode until
+  now + the finest `--gfs-*` period (7 days for `--gfs-daily 7`), and never sends a
+  DELETE. Grant it `s3:PutObject`, `s3:PutObjectRetention`, `s3:GetObject`,
+  `s3:ListBucket` and `s3:GetBucketObjectLockConfiguration`, and **not**
+  `s3:DeleteObject`.
+- **Pruner** (elsewhere, its own credential): `olivares dr prune --offsite` with the
+  same `--gfs-*` flags deletes the bundles the policy expires and extends the
+  COMPLIANCE lock of the ones it keeps to their GFS span (a monthly keeper stays
+  locked for the months the policy keeps it). A bucket lifecycle rule can replace it.
+- **Checks**: `olivares dr ls --offsite` warns when the bucket has no Object Lock or
+  defaults to GOVERNANCE retention, and `--max-age 26h` exits 7 when the newest
+  offsite bundle is older than that (the missing-backup alert for a scheduler).
+
+On a versioned Object Lock bucket the pruner's DELETE adds a delete marker; the locked
+version stays until its retention ends, and a lifecycle rule for noncurrent versions
+removes it after that. Cloudflare R2 documents its own bucket locks rather than the
+S3 Object Lock API, so it is not qualified for this mode.
+
+### Tested offsite targets
+
+The [recorded qualification table](DR-OFFSITE-TARGETS.md) is generated by the same
+runner as the nightly. Its dates identify that recorded run.
+
+The [offsite nightly workflow](../.github/workflows/dr-offsite-nightly.yml) runs
+against disposable MinIO and SeaweedFS containers. Open its latest run and read
+the **Tested offsite targets** table in the job summary or download the
+`offsite-targets` artifact (kept for one day; the job summary stays with the run). The script generates that table from the test results;
+each passing row includes the target version, image ID and UTC pass date. The
+header identifies the source commit. A failed or skipped test cannot produce a
+passing row. Check the run's
+result and date before using an older report.
+
+The check creates an authenticated bucket, backs up a real SQLite estate to it,
+prunes an older offsite bundle with GFS, lists and downloads the surviving bundle,
+compares its bytes, removes the source and original local bundles, and restores
+and verifies the downloaded ledger.
+It also cuts a TCP upload after 64 KiB and checks that a new object is absent and
+an existing complete object survives an interrupted overwrite.
+On MinIO it also creates an Object Lock bucket and a write-only credential (an STS
+session policy without delete), backs up twice with `--offsite-immutable`, checks that
+a DELETE with that credential is refused by the bucket (HTTP 403), prunes with the
+separate credential, fires the `dr ls --offsite --max-age` missing-backup alert, and
+checks the warning and refusal for a bucket without Object Lock.
+
+MinIO is a pinned, archived implementation used for compatibility testing. Its
+[upstream repository](https://github.com/minio/minio) is archived; this result
+does not recommend it for a new deployment. The test builds its pinned source
+archive. SeaweedFS uses a pinned
+image. Neither target requires a cloud account. Cloud services are not qualified
+by this check.
+
+To reproduce the same check on a disposable Docker host with curl and Go:
+
+```sh
+bash scripts/dr-offsite-targets.sh offsite-targets.md
+```
+
+The script generates temporary credentials, passes them through private files,
+checks captured client and server logs before printing output, and removes its
+containers, temporary files and newly pulled images. The nightly opens or updates
+one tracking issue on failure. Scheduled runs require `CI_NIGHTLIES=true`; a manual
+dispatch also runs the check.
 
 ### Postgres (logical) and PITR
 Logical backup requires both DSNs: `OLIVARES_DSN` is the NOBYPASSRLS application
@@ -415,6 +511,40 @@ does not exist yet. Point every DSN at the same server.
    chain (`Verify`) + per-event signatures (`VerifyEvents` against the restored key)
    + checkpoints + **tip == manifest** + **key fingerprint == manifest**. **Exits with
    a non-zero code if the restore is NOT continuity-safe** (do not resume writes).
+7. **Applies again the erasures the backup predates.** Every completed right-to-erasure
+   leaves a tombstone in `<data-dir>/erasure-tombstones.jsonl`, sealed under
+   `<data-dir>/erasure-tombstone.key`. Neither file is in a bundle, so no restore
+   replaces them. For each tombstone whose erasure the restored store does not hold
+   applied (no erasure receipt and no `compliance.erasure.replay` event), the restore
+   runs the erasure targets, the account leg and the crypto-shred again, appends
+   `compliance.erasure.replay` to the tenant chain and prints
+   `erasure replay: <n> reapplied, <m> already in the backup`. That event is the
+   store's record of the replay: a later restore of a backup taken after it counts the
+   erasure as already in the backup, so a person who came back under the same email
+   is not erased again. A tombstone of a tenant the restored store does not hold has
+   nothing to erase: the line adds `, <k> of a tenant the backup does not hold`. With
+   no tombstone file in the data dir the restore prints
+   `erasure replay: no erasure tombstones in <data-dir>`. A tombstone file without its
+   key stops the replay with an error that names the key file; the restore does not
+   mint a new key. The provider leg is not
+   repeated: the provider's copy is not in the backup. A legal hold in the restored
+   store stops that erasure, as it stops a live one: the restore exits non-zero and
+   names it. Before it replaces the store the restore leaves
+   `<data-dir>/erasure-replay.pending`; while that file exists, `olivares serve` runs
+   the same replay before it serves and does not start if the replay fails. Remove the
+   file only to accept a hold's outcome on purpose.
+
+**Beyond use until it expires.** A backup keeps a person erased after it was taken
+until its retention removes it: the longest of `--retain-days` and the GFS policy
+(§5.5) on every tier is the term after which no backup holds the person. Until then
+step 7 keeps that data beyond use: no restore serves it. Declare that term in your
+records of processing and in the reply to the data subject. To restore on another
+host, copy `erasure-tombstones.jsonl` and `erasure-tombstone.key` into the target
+data dir before `dr restore`; keep a copy of both apart from the backups. They hold
+no identifier in clear, only ids, data classes, instants and the sealed subject.
+The tombstone is the last write of the erasure's shred transaction. If that
+transaction's commit fails after the write, the tombstone stays, and the next restore
+completes the approved erasure that did not complete live.
 
 ### Restoring OVER a live data dir — `--in-place` (staged, atomic, self-preserving)
 When you cannot take the data dir empty first (recovering a corrupted-but-running
@@ -432,6 +562,52 @@ a green verify **promotes**: it first moves the current store/keys aside as
 files into place atomically, rolling back on any promotion error. **A failed verify
 leaves the live data dir completely untouched** — the destructive operation is
 transactional. Remove the `*.pre-restore-<ts>` files once you are satisfied.
+
+### Appliance backup defaults
+
+On the appliance, the engine creates a private, random 32-byte recovery secret
+at `/var/lib/olivares/dr-recovery.key` on the data volume. The existing passphrase
+cipher derives the bundle KEK from this base64-encoded secret. The recovery file
+is never included in the backup. Save it separately from the appliance and its
+backup target; initial administrator setup requires confirmation of that copy.
+An explicitly configured `OLIVARES_DR_PASSPHRASE_FILE` takes precedence.
+
+The first boot seeds the existing schedule: daily at 02:00 UTC, 30 days of local
+retention, a 24-hour recovery point target, and a weekly scratch-restore test on
+Sunday at 03:00 UTC. Saved administrator choices survive restart. An existing
+schedule or backups never cause a lost recovery key to be silently replaced.
+Non-appliance installations keep their existing opt-in schedule behavior.
+
+Backups → Schedule edits `verify_cron`, `rpo_hours` and the offsite destination.
+An empty verification cron disables only verification; an empty offsite bucket
+disables only replication. Old clients that omit these settings preserve them.
+Store the offsite credentials as a global secret with JSON fields `access_key_id`,
+`secret_access_key`, and optional `session_token`, then enter its `store:<name>`
+reference. Only the reference is saved in the schedule. Custom endpoints require
+HTTPS without embedded credentials. Offsite GFS uses the existing daily, weekly,
+monthly, yearly and minimum-copy policy. Replication or pruning errors are shown
+as a failed scheduled run; a successfully written local bundle is retained.
+
+Each scheduled copy also reads the bucket's Object Lock configuration and reports
+it as `offsite_lock` (`compliance`, `governance`, `no_default`, `none` or
+`unknown`). The engine's uploads carry no lock headers of their own, so only a
+bucket with a default COMPLIANCE retention protects them from a stolen server
+credential; for any other value the Backups page shows a warning. For the
+immutable copy, give the schedule a credential without `s3:DeleteObject`, set the
+offsite GFS counts to 0 and run `olivares dr prune --offsite` with its own
+credential elsewhere (see "Immutable offsite copy" above). If the GFS counts stay
+set, the bucket refuses the engine's DELETE, the run fails, and the refusal is
+recorded in the system audit ledger as `dr.offsite.delete_failed`.
+
+Weekly verification authenticates and restores the last scheduled bundle in a
+throwaway SQLite store, checks ledger continuity, and removes that store. Manual
+backups may use different passphrases and are not selected for this unattended
+test. Verification runs independently of the backup toggle and records its result
+in the system audit ledger (`dr.verify.completed` or `dr.verify.failed`) and in
+schedule history. A corrupt bundle fails visibly. The Backups page reports the
+last backup, age against the recovery point target, verification result and target
+free space (Linux; unavailable readings are explicit). Bundle contents still follow
+the inventory described earlier in this runbook.
 
 ### SQLite restore from the console
 
@@ -452,6 +628,9 @@ the restore may reconnect to that job's progress using the same credential for
 ten minutes, or until restart. This is a read-only continuation receipt for that
 job, not fresh authentication; the stopped store cannot recheck credential
 expiry or revocation. It permits no other API access or writes.
+
+The restart applies again the erasures the backup predates before it serves
+(step 7 of the procedure above).
 
 The console refuses non-SQLite engines before staging any files. It stages
 all decrypted keys on the destination filesystem and checks their destination
@@ -539,6 +718,39 @@ inserted into the pre-existing tables. The cost is that a restore which used to 
 partial success now fails outright, which is the intended trade: a DR restore that
 "mostly worked" leaves a ledger that is neither the old estate nor the backup.
 
+**Replacing an occupied Postgres target needs `--force` and `--admin-dsn`, on top of the two
+flags.** Without `--force`, a restore over a database that already holds an estate is refused:
+with the keys still in the data dir at the keys check, and with an empty data dir (custody
+arriving in the bundle) by the `pg_restore` transaction failing whole. With `--operator`,
+`--reason` **and** `--force`, the restore first takes a `pg_dump` of the database it is about to
+replace, through `--admin-dsn` (the BYPASSRLS role, as for a backup), and leaves it in the data
+dir as `database.pgcustom.pre-restore-<ts>` with mode 0600, beside the previous signing keys
+(`--pg-dump` names the executable). Without `--admin-dsn` it refuses before touching anything.
+Then `pg_restore` also drops each object the dump replaces (`--clean --if-exists`) and creates
+the dump's in its place, still in one transaction: the estate is **replaced whole or not at
+all**, and a failed replacement puts the previous keys back and KEEPS the safety copy, naming it
+in the error (a client-side failure does not prove the server rolled back, so the copy is only
+removed by you, once you have confirmed the database is unchanged). The act is
+sealed in the restored ledger as above. Objects the backup does not contain are left alone; one
+that blocks a drop fails the restore whole. Measured on PostgreSQL 15.19, 16.15, 17.11 and 18.6,
+in the single-role and the owner/app posture: without the declaration, and declared without
+`--force`, the live estate (an organisation created after the backup) and the signing key are
+byte-for-byte where they were; declared and forced, the post-backup organisation is gone, the
+backup's are back, a table the live estate had lost is recreated, the restored tables are owned
+by the posture's DDL role, the safety copy is one non-empty 0600 file, and the ledger holds
+exactly one `dr.restore.cli` event naming the declared operator and reason.
+
+> **That one transaction needs a lock table large enough for it, and the default is not
+> large enough on PostgreSQL 18.** Dropping and recreating every relation holds a lock for each.
+> The engine schema measured **2556 relations** in `public`. With the server's defaults
+> (`max_locks_per_transaction = 64`, `max_connections = 100`) the replacement completed on
+> 15.19, 16.15 and 17.11 and **failed on 18.6** with `out of shared memory … You might need to
+> increase max_locks_per_transaction`: the restore failed whole, the estate and the keys were
+> untouched, and the error names the setting. With `max_locks_per_transaction = 256` it completed
+> on all four. Raise it (a server restart) before replacing an estate on PostgreSQL 18; a restore
+> into an **empty** target does not need it. The figure of 2556 grows with the schema: re-read
+> it with `SELECT count(*) FROM pg_class WHERE relnamespace = 'public'::regnamespace`.
+
 > **"Single transaction" is not "the target is untouched", and the difference is
 > measured.** A few PostgreSQL effects are not transactional and survive the rollback —
 > **sequence advances** (`nextval`/`setval`) above all, and whatever a **pre-existing event
@@ -564,7 +776,7 @@ so a failure after that point is recoverable.
 > *without knowing*, and that the act is no longer silent. A restore into a **clean**
 > target destroys nothing and needs neither flag.
 
-**Independent confirmation** (recommended after starting the service):
+**Independent confirmation in Business** (recommended after starting the service; Community restore already verifies the restored ledger internally):
 ```sh
 # via API:
 curl -s https://host:8443/v1/audit/verify -H "Authorization: Bearer $TOK" -H "X-Olivares-Tenant: $TENANT"
@@ -578,12 +790,21 @@ olivares audit verify --tenant $TENANT --pubkey <base64> [--pubkey-alg …]
 
 An untested backup is not a backup. Two drills, escalating in fidelity:
 
-**a) Verify an EXISTING bundle** (SQLite: ledger continuity in a scratch directory; Postgres: digest and key decryption only), no prod:
+**a) Verify an EXISTING bundle** (SQLite: ledger continuity in a scratch directory; Postgres: ledger continuity in a throwaway database, or digest and key decryption only when no scratch server is given), no prod:
 ```sh
 olivares dr verify --in /backups/olivares-dr-<ts>.drbundle --passphrase-file /run/secrets/dr-pass
 # SQLite: restores + verifies the full chain in a disposable dir → "DR drill PASSED".
-# Postgres: checks digest + that the keys decrypt; the full chain
-#           verification requires restoring to a scratch Postgres (see §9).
+
+olivares dr verify --in /backups/olivares-pg-<ts>.drbundle --passphrase-file /run/secrets/dr-pass \
+  --scratch-dsn file:/run/secrets/scratch.dsn
+# Postgres: creates a throwaway database with its own owner, app and admin roles on the
+#           server the maintenance DSN reaches (the authority `olivares db init` needs),
+#           pg_restores the bundle into it, boots, verifies chain + per-event signatures +
+#           checkpoints + tips there → "DR drill PASSED", then drops database and roles.
+#           The reference must be file: or env: (a DBA credential never goes in argv).
+# Postgres without --scratch-dsn: checks digest + that the keys decrypt, and prints that the
+#           ledger was NOT restored. A bundle whose payload was altered under a valid digest
+#           passes that check and fails the scratch restore.
 ```
 
 SQLite verification reads the restored snapshot offline, including Business
@@ -603,6 +824,15 @@ task dr:drill                 # or: olivares dr drill --events 1000
 # tips → prints "DR drill PASSED — restored N events" and "measured RTO: …". It uses a
 # throwaway scratch dir (never a real data dir), so it is CI-safe (it runs in the
 # nightly drills workflow). Exit ≠ 0 = incident.
+
+olivares dr drill --events 1000 --scratch-dsn env:OLIVARES_SCRATCH_DSN
+# The same round trip on PostgreSQL, next to the SQLite one: a throwaway source database is
+# seeded, backed up with pg_dump, DROPPED; a second throwaway database is provisioned as
+# `olivares db init` would and the bundle is restored into it. Prints "DR drill PASSED
+# (postgres) — restored N ledger events" and "measured RTO (postgres: restore + boot +
+# verify): …". The RTO starts once the empty target exists, so provisioning it is not in it.
+# Both databases and their roles are removed, also when the drill fails. Without
+# --scratch-dsn the drill prints "postgres: not measured" instead of staying silent.
 ```
 Record the result and the measured RTO (§5). A failed drill is an incident.
 
@@ -624,6 +854,30 @@ Record the result and the measured RTO (§5). A failed drill is an incident.
 Everything above is covered by tests (`core/dr/*_test.go`,
 `cmd/olivares/cmd_dr_test.go`).
 
+### What is measured, on which major
+
+Measured on PostgreSQL **15.19, 16.15, 17.11 and 18.6** (PGDG builds), each started by the
+test itself on loopback with the server's own defaults unless stated, on a 16-CPU shared
+build host, 2026-10-25. One run each; the timings are of a small estate (three tenants plus
+the system tenant) and are what one run printed, not targets.
+
+| Path | Test | What it asserted | Majors |
+|---|---|---|---|
+| PITR to an instant between two audit events | `TestDRPostgresPITRRestoresToAnInstantBetweenTwoAuditEvents` (`task dr:pitr`) | WAL archived by the server, `pg_basebackup`, `dr backup --pitr-ref`, two events with the instant read from the server's clock between them; recovery with `recovery_target_time` stopped before the second (the server logs where); `dr restore` of the companion verified the chain; the recovered chain ends at the first event itself, and the act is sealed in the recovered ledger | 15, 16, 17, 18 |
+| Restore over an occupied target | `TestDRRestoreOverAnOccupiedPostgresTarget` | refused without the declaration; refused with it but without `--force` (keys on disk, and fresh data dir where the one transaction fails whole); `--force` alone refused; a live object that blocks a drop fails the replacement whole; declared and forced replaces the estate, recreates a table the live estate had lost, keeps the previous keys and a 0600 safety `pg_dump`, seals one `dr.restore.cli` event and leaves the tables owned by the posture's DDL role. `max_locks_per_transaction = 256` | 15, 16, 17, 18, both postures |
+| Replacement with a lock table too small | `TestDRRestoreReplaceFailsWholeWhenTheLockTableIsTooSmall` | `max_locks_per_transaction = 10`: fails whole, names the setting, estate and keys untouched, the safety copy kept and named | 15, 16, 17, 18 |
+| Replacement with the default lock table | `TestDRRestoreReplaceIsWholeOrNotAtAllOnTheDefaultLockTable` | 64 × 100: completed on 15, 16, 17; **failed whole on 18** (see §7) | 15, 16, 17, 18 |
+| `dr verify --scratch-dsn` | `TestDRVerifyPostgresRestoresIntoAScratchDatabase` | good bundle verifies and nothing is left; a payload altered under a valid digest passes the digest-only check and fails the scratch restore on a broken chain; a failing restore leaves nothing; an inline credential is refused | 16 |
+| `dr drill --scratch-dsn` | `TestDRDrillPostgresPublishesItsRTONextToSQLite` and the measurement below | prints the PostgreSQL RTO next to the SQLite one; restored events ≥ seeded; a failing restore fails the drill and leaves nothing | 16 in the suite; 15-18 in the measurement |
+| Logical backup → restore round trip, both postures | `TestDRPostgresRoundTripAcrossBothPostures` | as before | 16 |
+
+PITR timings of the run on the final head (WAL replay to the instant plus promote; then
+`dr restore` of the companion, which boots the engine and re-verifies): 15.19 1.6 s and
+2.2 s; 16.15 1.9 s and 2.5 s; 17.11 1.7 s and 2.1 s; 18.6 2.1 s and 2.6 s. Three earlier runs
+of the same cell on the same shared host printed 1.5 s to 2.6 s for the replay (8.7 s once, on
+18.6) and 1.6 s to 10.8 s for the companion restore, so read these as "seconds on a small estate
+on a shared host", not as a figure per major.
+
 ### Honest limits
 - **What is exercised against a live Postgres, and what is not.** The Postgres leg
   of `cmd/olivares` runs against a real server wherever
@@ -631,13 +885,13 @@ Everything above is covered by tests (`core/dr/*_test.go`,
   **skips** where it is not — a skipped leg is not a passing one. It provisions the
   owner/app/admin roles through the product's own `db init` path and drives
   `dr backup` → `dr restore` end to end in **both** the single-role and the
-  owner/app split postures, plus the wrong-role and mismatched-target refusals. Not
-  covered live anywhere: PITR WAL replay itself (only the companion bundle's
-  keys+manifest path), restore into an **occupied** Postgres target, `--force`,
-  offsite push/pull against a real bucket, and any multi-node/HA behaviour. Only
-  PostgreSQL **16** is measured; nothing here is claimed for 15/17/18. The
-  manifest/verification logic is **engine-agnostic** and is additionally tested over
-  SQLite.
+  owner/app split postures, plus the wrong-role and mismatched-target refusals.
+  PITR WAL replay, restore over an occupied target and `--force` are exercised on
+  servers the test starts itself, one per major (`task dr:pitr`, which fails and does
+  not skip when a major's binaries are missing): see "What is measured, on which
+  major" below. Offsite bucket results are in "Tested offsite targets" above.
+  Multi-node/HA behaviour is not covered. The manifest/verification logic is
+  **engine-agnostic** and is additionally tested over SQLite.
 - **The owner/app split was UNSUPPORTED for DR before `--owner-dsn` existed, not
   merely untested.** Measured on PostgreSQL 16.15 at Community `b71ef8ef19`: the
   documented logical backup, logical restore, PITR companion backup and PITR
@@ -680,16 +934,41 @@ Everything above is covered by tests (`core/dr/*_test.go`,
 - **`ListOrgs` in Postgres without `--admin-dsn`** runs RLS-limited and may **omit
   tenants** from the manifest → provision the BYPASSRLS role and pass `--admin-dsn` for a
   complete backup (the backup warns if it lacks it).
-- **Offsite replication is not wire-tested against a live bucket in CI** (there is no
-  S3/R2 in the build container). What IS proven here: the AWS SigV4 signer against the
-  AWS-published S3 "GET Object" worked example (a known-answer test, not a self-check),
-  the full push→list→pull→delete round trip against an in-process mock S3, and the GFS
-  retention algebra. A real-bucket smoke (point `--offsite-endpoint` at a scratch R2/S3
-  bucket and run `dr push` + `dr list --offsite`) is the operator's one-time acceptance
-  step; the signing and protocol are the standard, stdlib-only SigV4 path.
+- **Offsite qualification is target-specific.** The nightly checks the pinned
+  container versions in its generated target table, including interrupted uploads
+  and GFS deletion. It does not qualify a cloud service or a different version.
+  Run a backup, list, pull and verified restore against your own scratch bucket
+  before relying on that destination. The signer also has a known-answer test
+  against the published SigV4 example; the ordinary suite uses an in-process S3
+  fake and tests the retention algebra.
 - **`--in-place` is SQLite-only.** Postgres restores into a live database with
   `pg_restore` (the DB engine's own transaction is the atomicity boundary there); the
   staged-and-promote flow is for the single-file SQLite store.
+- **A tenant created after the PITR companion was taken is reported, not passed.** The
+  companion's manifest lists the tenants at the time of the base backup. `dr restore` of it
+  against a recovered cluster that holds a later tenant fails with `restored store has
+  tenant … not in the manifest`: take a new companion after creating a tenant, and recover
+  to an instant after it. Measured on 15, 16, 17 and 18.
+- **The PITR cell archives with `cp` into a local directory and restores a small estate.** It
+  proves the product's part of the path (companion, boot, chain verification) on each major's
+  own WAL replay, not pgBackRest, WAL-G or object-store archiving, and not the replay time of a
+  large estate: measure that on your own archive.
+- **A forced replacement leaves objects the backup does not contain.** `--clean --if-exists`
+  drops what the dump replaces. A table, function or trigger in the live estate that the
+  backup predates stays, and a live estate migrated past the backup keeps its newer objects
+  beside the restored migration history. After a compromise restore into a fresh database
+  (§7, empty target) instead of over the damaged one.
+- **`dr verify`/`dr drill --scratch-dsn` refuse a bundle that carries the isolated directory
+  inventory.** Restoring it needs a DBA step on the restored database, and in a throwaway
+  restore the payload is not trusted yet; verify such a bundle with a real restore.
+- **A killed `dr verify`/`dr drill` can leave its throwaway database behind.** An interrupt
+  (Ctrl-C, SIGTERM) cancels the restore and drops the database and its three roles; `kill -9`
+  or a host loss cannot. The leftovers are named `olvdr_<12 hex>` (database) and
+  `olvdr_app_|olvdr_own_|olvdr_adm_<12 hex>` (roles): drop them with `DROP DATABASE … WITH
+  (FORCE)` and `DROP ROLE`.
+- **`--scratch-dsn` reaches only the server it names.** The derived DSNs keep the maintenance
+  DSN's `sslmode`, certificate paths and `connect_timeout`, and nothing else from its query
+  (`user`, `password`, `dbname`, `service` and `options` would override the scratch roles).
 
 ---
 

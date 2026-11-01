@@ -22,10 +22,10 @@
 # $T/wf-main.yml); cases 43-46 break the mainline one alone, so a gate that only read
 # pr-ci.yml would pass everything above and fail exactly there.
 #
-# ⛔ THE NAME GROUPS (cases 21-30) NEED A SECOND SYNTHETIC UNIVERSE. A `group` record splits
-# ONE package across shards by test NAME, so the mutants are "a test in no group" and "a test
-# in two groups" — the same two defects as the package partition, one level down, and with a
-# worse failure: `go test -run` over an expression that matches nothing EXITS 0. A shard would
+# ⛔ THE NAME GROUPS NEED A SECOND SYNTHETIC UNIVERSE. A `group` record splits
+# ONE package across shards by generated test NAME assignment. The behavior under test is
+# exact-once coverage, repeatability, addition without a spec edit, and refusal of an empty
+# selection: `go test -run` over an expression that matches nothing EXITS 0, so a shard would
 # report success having run no test at all. OLIVARES_PR_SUITE_TESTS gives the gate its test
 # universe from a file, exactly as OLIVARES_PR_SUITE_PACKAGES gives it its packages, so the
 # battery describes the tree it needs without writing a single Go file.
@@ -74,6 +74,7 @@ example.test/tree/cmd/tool TestAlphaSecond
 example.test/tree/cmd/tool TestBeta
 example.test/tree/cmd/tool TestGamma
 example.test/tree/cmd/tool FuzzDelta
+example.test/tree/cmd/tool ExampleDelta
 EOF
 }
 
@@ -95,6 +96,7 @@ EOF
 }
 
 base_wf() {
+  : > "$T/export-public.sh"
   cat > "$T/wf.yml" <<'EOF'
 name: fixture
 
@@ -144,6 +146,28 @@ jobs:
         timeout-minutes: 15
         run: echo lint
 EOF
+  # The candidate miniature: the shard job of candidate-shards.yml, the push-triggered copy of
+  # pr-ci's shard job. Its ceilings and its matrix are pinned the same way as the other two.
+  cat > "$T/wf-candidate.yml" <<'EOF'
+name: fixture-candidate
+
+on:
+  push:
+    branches: ['release/*-candidate']
+
+jobs:
+  pr-test-shard:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [a, b]
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: one shard
+        timeout-minutes: 45
+        run: task test:functional:shard
+EOF
 }
 
 base_taskfile() {
@@ -158,17 +182,17 @@ EOF
 
 reset_fixture() { base_pkgs; base_spec; base_wf; base_taskfile; base_tests; }
 
-# The same fixture with cmd/tool split by test NAME across two shards: one named group and
-# one remainder. `pkg a example.test/tree/cmd/...` stays declared and stays honest — it still
-# owns cmd/helper — which is the shape the real tree has once the root package is partitioned.
+# The same fixture with cmd/tool split by generated test NAME assignment across two shards.
+# `pkg a example.test/tree/cmd/...` stays declared and stays honest — it still owns
+# cmd/helper — which is the shape the real tree has once the root package is partitioned.
 group_fixture() {
   reset_fixture
   {
     printf 'shard t1\n'
-    printf 'group a example.test/tree/cmd/tool alpha A\n'
-    printf 'group t1 example.test/tree/cmd/tool rest *\n'
+    printf 'group a example.test/tree/cmd/tool alpha\n'
+    printf 'group t1 example.test/tree/cmd/tool rest\n'
   } >> "$T/spec.txt"
-  sed -i 's|shard: \[a, b\]|shard: [a, b, t1]|' "$T/wf.yml" "$T/wf-main.yml"
+  sed -i 's|shard: \[a, b\]|shard: [a, b, t1]|' "$T/wf.yml" "$T/wf-main.yml" "$T/wf-candidate.yml"
 }
 
 run_gate() {
@@ -177,6 +201,8 @@ run_gate() {
   OLIVARES_PR_SUITE_TESTS="$T/tests.txt" \
   OLIVARES_PR_CI_WF="$T/wf.yml" \
   OLIVARES_MAINLINE_CI_WF="$T/wf-main.yml" \
+  OLIVARES_CANDIDATE_SHARDS_WF="$T/wf-candidate.yml" \
+  OLIVARES_EXPORT_SCRIPT="$T/export-public.sh" \
   OLIVARES_TASKFILE="$T/Taskfile.yml" \
   bash "$GATE" > "$T/out.txt" 2> "$T/err.txt"
   echo "$?"
@@ -343,6 +369,8 @@ run_gate_real_enum() {
   OLIVARES_PR_SUITE_PACKAGES="$T/pkgs.txt" \
   OLIVARES_PR_CI_WF="$T/wf.yml" \
   OLIVARES_MAINLINE_CI_WF="$T/wf-main.yml" \
+  OLIVARES_CANDIDATE_SHARDS_WF="$T/wf-candidate.yml" \
+  OLIVARES_EXPORT_SCRIPT="$T/export-public.sh" \
   OLIVARES_TASKFILE="$T/Taskfile.yml" \
   bash "$GATE" > "$T/out.txt" 2> "$T/err.txt"
   echo "$?"
@@ -402,6 +430,8 @@ enum_fixture() {
     printf 'package enum\n\nimport "testing"\n\n'
     printf 'func TestAsciiOne(t *testing.T) { _ = t }\n'
     printf 'func Test\xc3\x9cberSync(t *testing.T) { _ = t }\n'
+    printf 'func FuzzDelta(f *testing.F) { _ = f }\n'
+    printf 'func ExampleFixture() {}\n'
   } > "$dir/enum_test.go"
 }
 
@@ -428,6 +458,8 @@ run_gate_no_pkg_override() {
   OLIVARES_PR_SUITE_SHARDS="$T/spec.txt" \
   OLIVARES_PR_CI_WF="$T/wf.yml" \
   OLIVARES_MAINLINE_CI_WF="$T/wf-main.yml" \
+  OLIVARES_CANDIDATE_SHARDS_WF="$T/wf-candidate.yml" \
+  OLIVARES_EXPORT_SCRIPT="$T/export-public.sh" \
   OLIVARES_TASKFILE="$T/Taskfile.yml" \
   bash "$GATE" > "$T/out.txt" 2> "$T/err.txt"
   echo "$?"
@@ -508,45 +540,6 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# The costly b/c families must leave their original jobs without losing coverage.
-# Hosted root-h still exceeded half its timeout after that move; E/G must leave it.
-echo "test-check-pr-suite-shards: the b/c rebalance"
-if python3 - "$ROOT/scripts/pr-suite-shards.sh" <<'PYREBALANCE'
-import re, subprocess, sys
-
-reader = sys.argv[1]
-pkg = "github.com/olivaresai/olivares/cmd/olivares"
-def expression(group):
-    return re.compile(subprocess.check_output(
-        ["bash", reader, "run-expr", pkg, group], text=True).strip())
-
-expressions = {group: expression(group) for group in ("b", "c", "e", "f", "g", "h")}
-for family in ("E", "G"):
-    if expressions["h"].search("Test" + family):
-        sys.exit("group h still carries family %s after exceeding its hosted budget" % family)
-expressions["i"] = expression("i")
-destinations = set()
-for original, families in (("b", ("E", "F", "G", "H", "I", "CommunicationIncoming")),
-                           ("c", ("O", "P", "R", "CommunicationChannel"))):
-    for family in families:
-        name = "Test" + family
-        if expressions[original].search(name):
-            sys.exit("group %s still carries family %s" % (original, family))
-        owners = [group for group, expr in expressions.items() if expr.search(name)]
-        if len(owners) != 1 or owners[0] not in ("e", "f", "g", "i"):
-            sys.exit("moved family %s must run once in a lighter job: %s" % (family, owners))
-        destinations.add(owners[0])
-if destinations != {"e", "f", "g", "i"}:
-    sys.exit("moved families must use the four receiving jobs: " + str(destinations))
-PYREBALANCE
-then
-  printf '  ✓ case 47 — b/c prefixes leave their original jobs and E/G leave over-budget h\n'
-  PASS=$((PASS + 1))
-else
-  printf '  ✗ case 47 — b/c prefixes are not rebalanced\n' >&2
-  FAIL=$((FAIL + 1))
-fi
-
 echo "test-check-pr-suite-shards: the fixture"
 
 reset_fixture
@@ -610,7 +603,7 @@ check "case 15 — a leg that is not a task" 1 "not a task of"
 
 reset_fixture
 printf 'shard c\n' >> "$T/spec.txt"
-sed -i 's|shard: \[a, b\]|shard: [a, b, c]|' "$T/wf.yml" "$T/wf-main.yml"
+sed -i 's|shard: \[a, b\]|shard: [a, b, c]|' "$T/wf.yml" "$T/wf-main.yml" "$T/wf-candidate.yml"
 check "case 16 — a shard that owns nothing and declares no leg" 1 "runs nothing and reports success"
 
 reset_fixture
@@ -630,23 +623,21 @@ reset_fixture
 rm -f "$T/wf.yml"
 check "case 20 — an absent workflow is COULD NOT LOOK" 2 "missing"
 
-# THE NAME GROUPS ─────────────────────────────────────────────────────────────────────
-# One package, its tests split across shards by name. Everything above proves the gate can
-# see a package that belongs to no shard; these prove it can see a TEST that belongs to no
-# group — the same silence one level down, and the one `go test` answers 0 to.
+# GENERATED NAME GROUPS ─────────────────────────────────────────────────────────────
+# The assignment is computed from the test inventory. These cases prove that no remainder or
+# hand-written family list is needed, while empty selections and invalid records still fail.
 group_fixture
-check "case 21 — a package split by test name is CLEAN (no-fire control)" 0 "CLEAN"
+check "case 21 — a package split by generated test name is CLEAN" 0 "CLEAN"
 
 group_fixture
-# `beta B` instead of the remainder: TestGamma and FuzzDelta are then named by nothing, and
-# no group claims what is left. This is the mutant the remainder exists for.
-sed -i 's|^group t1 example.test/tree/cmd/tool rest \*$|group t1 example.test/tree/cmd/tool beta B|' "$T/spec.txt"
-check "case 22 — a test of a partitioned package that NO group names" 1 "belong to NO name group"
+# Renaming the second group needs no remainder marker: every test still has exactly one owner.
+sed -i 's|^group t1 example.test/tree/cmd/tool rest$|group t1 example.test/tree/cmd/tool beta|' "$T/spec.txt"
+check "case 22 — generated coverage needs no remainder group" 0 "CLEAN"
 
 group_fixture
-# `Alpha` is a longer prefix of the same names `A` already takes: both groups select them.
+# A hand-written family is no longer part of the grammar; refusing it prevents silent drift.
 printf 'group t1 example.test/tree/cmd/tool alpha-again Alpha\n' >> "$T/spec.txt"
-check "case 23 — a test named by TWO groups" 1 "are named by TWO name groups"
+check "case 23 — a hand-written family is rejected" 1 "not a record this reader knows"
 
 group_fixture
 # The package is split by name AND sent whole to a shard: every test of it runs twice, and
@@ -659,31 +650,28 @@ sed -i 's|shard: \[a, b, t1\]|shard: [a, b]|' "$T/wf.yml"
 check "case 25 — the matrix does not list the new group shard" 1 "disagree"
 
 group_fixture
-# Stale families are worse here than a stale pattern: `-run` matches nothing, `go test`
-# prints ok and exits 0, and the shard publishes a success having run no test.
-sed -i 's|^group a example.test/tree/cmd/tool alpha A$|group a example.test/tree/cmd/tool alpha Zeta|' "$T/spec.txt"
-check "case 26 — a named group whose families match no test" 1 "names no test in this tree"
+# TestGamma is the only member of alpha in this two-group fixture, so rest is empty.
+printf 'example.test/tree/cmd/tool TestGamma\n' > "$T/tests.txt"
+check "case 26 — a generated group that selects nothing" 1 "selects no test"
 
 group_fixture
-printf 'group b example.test/tree/cmd/tool rest-again *\n' >> "$T/spec.txt"
-check "case 27 — two remainder groups for one package" 1 "two remainder groups"
+printf 'group t1 example.test/tree/cmd/tool rest\n' >> "$T/spec.txt"
+check "case 27 — two groups with the same name" 1 "declares two groups called"
 
 group_fixture
-sed -i 's|^group t1 example.test/tree/cmd/tool rest \*$|group zz example.test/tree/cmd/tool rest *|' "$T/spec.txt"
+sed -i 's|^group t1 example.test/tree/cmd/tool rest$|group zz example.test/tree/cmd/tool rest|' "$T/spec.txt"
 sed -i 's|shard: \[a, b, t1\]|shard: [a, b]|' "$T/wf.yml"
 sed -i '/^shard t1$/d' "$T/spec.txt"
 check "case 28 — a group naming a shard that is never declared" 1 "which is never declared"
 
 group_fixture
-sed -i 's|^group a example.test/tree/cmd/tool alpha A$|group a example.test/tree/cmd/absent alpha A|' "$T/spec.txt"
+sed -i 's|^group a example.test/tree/cmd/tool alpha$|group a example.test/tree/cmd/absent alpha|' "$T/spec.txt"
 check "case 29 — a group naming a package this tree does not have" 1 "this tree does not have"
 
 group_fixture
-# The remainder is EXACT NAMES, so it is the one expression that can outgrow what the kernel
-# will carry in a single argument. A gate that lets it through buys an exec failure on the
-# runner whose message is about the argument list and never about the tests.
-# The input names also exceed ARG_MAX: enumeration must reach the declared refusal,
-# rather than failing to exec the reader with its test list in an environment variable.
+# Exact-name expressions can outgrow what the kernel carries in one argument. The input names
+# also exceed ARG_MAX: enumeration must reach the declared refusal rather than failing to exec
+# the reader with its test list in an environment variable.
 python3 - "$T/tests.txt" <<'PYGEN'
 import os, sys
 count = max(100000, os.sysconf("SC_ARG_MAX")) // len("TestBeyondWhatOneArgumentOfTheKernelWillCarry00000000\n") + 1
@@ -693,57 +681,10 @@ with open(sys.argv[1], "a", encoding="utf-8") as fh:
 PYGEN
 check "case 30 — a -run expression over the argument limit" 1 "MAX_ARG_STRLEN"
 
-group_fixture
-# ⛔ THE REMAINDER IS MANDATORY EVEN WHEN NOTHING IS ORPHANED TODAY, and this is the only case
-# that says so. core/api is split by two families that between them name every test it has, so
-# there is no orphan to report and case 22's finding stays quiet: what is left is a package
-# whose NEXT test would match nothing. Without this case the rule could be deleted and the
-# battery would stay green — measured, by removing it.
-{
-  printf 'example.test/tree/core/api TestOne\n'
-  printf 'example.test/tree/core/api TestTwo\n'
-} >> "$T/tests.txt"
-{
-  printf 'group a example.test/tree/core/api one One\n'
-  printf 'group b example.test/tree/core/api two Two\n'
-} >> "$T/spec.txt"
-check "case 31 — a partitioned package with no remainder group" 1 "none of them is the remainder"
-
 # NOTHING SELECTED IS NOT NOTHING WRONG ───────────────────────────────────────────────
-# `go test -run` over an expression that matches no test prints ok and exits 0. Everything
-# from here down is about the two places that can happen — the gate, which can refuse the
-# spec, and the runner, which is the only thing left when the gate was never run.
 group_fixture
-# core/api split into two families that between them name both its tests: the remainder is
-# then EMPTY, and an empty remainder is not an idle group — it is a `go test` that would
-# select nothing, or be skipped, and either way report success.
-{
-  printf 'example.test/tree/core/api TestOne\n'
-  printf 'example.test/tree/core/api TestTwo\n'
-} >> "$T/tests.txt"
-{
-  printf 'group a example.test/tree/core/api one One\n'
-  printf 'group b example.test/tree/core/api two Two\n'
-  printf 'group t1 example.test/tree/core/api rest *\n'
-} >> "$T/spec.txt"
-check "case 32 — a remainder that selects nothing" 1 "selects no test"
-
-group_fixture
-# Shard t1 owns no whole package, so nothing can fail ahead of the group and the case is
-# about the group alone.
-sed -i 's|^group t1 example.test/tree/cmd/tool rest \*$|group t1 example.test/tree/cmd/tool zeta Zeta|' "$T/spec.txt"
-check_runner "case 33 — the runner refuses a named group that selects nothing" t1 1 "selects no test"
-
-group_fixture
-{
-  printf 'example.test/tree/core/api TestOne\n'
-} >> "$T/tests.txt"
-{
-  printf 'shard t2\n'
-  printf 'group a example.test/tree/core/api one One\n'
-  printf 'group t2 example.test/tree/core/api rest *\n'
-} >> "$T/spec.txt"
-check_runner "case 34 — the runner refuses a remainder that selects nothing" t2 1 "selects no test"
+printf 'example.test/tree/cmd/tool TestGamma\n' > "$T/tests.txt"
+check_runner "case 33 — the runner refuses a generated group that selects nothing" t1 1 "selects no test"
 
 # AN INABILITY IS NEVER AN EMPTY UNIVERSE ─────────────────────────────────────────────
 group_fixture
@@ -780,8 +721,8 @@ unset OLIVARES_ROOT OLIVARES_PR_SUITE_READER
 # A NAME IS ENUMERATED WHOLE OR IT IS REFUSED ─────────────────────────────────────────
 reset_fixture
 enum_fixture
-check_tests "case 39 — a name outside ASCII is enumerated whole" "$T/enum" example.test/enum \
-  "TestAsciiOne TestÜberSync"
+check_tests "case 39 — real Test, Fuzz and Example declarations are enumerated whole" "$T/enum" example.test/enum \
+  "ExampleFixture FuzzDelta TestAsciiOne TestÜberSync"
 
 reset_fixture
 enum_bad_fixture
@@ -799,7 +740,7 @@ fake_pg_env_root
 export OLIVARES_ROOT="$T/fakeroot" STUB_TASK_EXIT=0
 check_runner_log "case 41 — a red package does not hide its group or its leg" a 1 \
   "FAIL example.test/tree/cmd/helper" \
-  "group alpha of example.test/tree/cmd/tool: 2 of 5 test(s)" \
+  "group alpha of example.test/tree/cmd/tool: 2 of 6 test(s)" \
   "leg test:example-leg"
 unset OLIVARES_ROOT STUB_TASK_EXIT
 
@@ -830,6 +771,62 @@ check "case 45 — mainline-ci's shard job ceiling is not the declared one" 1 "j
 reset_fixture
 rm -f "$T/wf-main.yml"
 check "case 46 — an absent mainline-ci workflow is COULD NOT LOOK" 2 "missing"
+
+# CANDIDATE-SHARDS ─────────────────────────────────────────────────────────────────────
+# The push-triggered shard job of candidate-shards.yml: a copy of pr-ci's battery that runs on
+# release candidate branches, so it is pinned to the same list and the same ceilings.
+reset_fixture
+sed -i 's|shard: \[a, b\]|shard: [a]|' "$T/wf-candidate.yml"
+check "case 46a — the candidate workflow's matrix lost a shard that pr-ci still runs" 1 "wf-candidate.yml and the shard list disagree"
+
+reset_fixture
+sed -i 's|^    timeout-minutes: 55$|    timeout-minutes: 90|' "$T/wf-candidate.yml"
+check "case 46b — the candidate workflow's shard job ceiling is not the declared one" 1 "wf-candidate.yml declares timeout-minutes"
+
+reset_fixture
+rm -f "$T/wf-candidate.yml"
+check "case 46c — an absent candidate workflow in a tree with the export script is COULD NOT LOOK" 2 "missing"
+
+# The trigger is what makes the battery run at all: an edited glob, a dropped `push` or an added
+# `pull_request` leaves every shard green on a file nothing ever starts.
+reset_fixture
+sed -i "s|branches: \['release/\*-candidate'\]|branches: ['release/*-cand']|" "$T/wf-candidate.yml"
+check "case 46e — the candidate workflow's branch glob is not the candidate branches" 1 "wf-candidate.yml triggers on"
+
+reset_fixture
+sed -i "s|^  push:\$|  pull_request:|" "$T/wf-candidate.yml"
+check "case 46f — the candidate workflow no longer triggers on a push" 1 "wf-candidate.yml triggers on"
+
+# An extra trigger beside the push is as wrong as a missing one: it starts the battery where the spec
+# says it starts, and the exact compare must refuse a loosened `on:` block, not only a changed one.
+reset_fixture
+sed -i "s|^  push:\$|  pull_request:\n  push:|" "$T/wf-candidate.yml"
+check "case 46g — the candidate workflow triggers on a push and something else" 1 "wf-candidate.yml triggers on"
+
+# A public tree has no export script and no candidate workflow: the pin does not apply there, and
+# the gate says so instead of failing the public pull-request check that runs it.
+reset_fixture
+rm -f "$T/export-public.sh" "$T/wf-candidate.yml"
+check "case 46d — a public tree with no candidate workflow passes with a NOTICE" 0 "its pin does not apply here"
+
+# The export must keep the dev-only workflow out of the public tree. Dropping it from GITHUB_BLOCK
+# would ship a dev battery publicly, and the 46d NOTICE branch would then hide the difference.
+# The export script is hub-only (SCRIPTS_BLOCK) and this selftest is exported: public pr-ci runs it on a
+# tree without that script, so there the exclusion is checked on the development tree, as the lint does.
+# export-closure: hub-only scripts/export-public.sh — the exporter is in SCRIPTS_BLOCK and does not travel;
+# the whole check sits inside the presence test for it, so a public tree takes the else branch.
+if [ -f "$ROOT/scripts/export-public.sh" ]; then
+  if awk '/^GITHUB_BLOCK=\(/{f=1} f&&!/^[[:space:]]*#/&&/candidate-shards\.yml/{hit=1} f&&/^\)/{exit} END{exit !hit}' "$ROOT/scripts/export-public.sh"; then
+    printf '  ✓ case 46h — the public export lists the candidate workflow in GITHUB_BLOCK\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ✗ case 46h — scripts/export-public.sh does not exclude candidate-shards.yml from the public tree\n' >&2
+    FAIL=$((FAIL + 1))
+  fi
+else
+  printf '  ✓ case 46h — no export script in this tree; the candidate workflow exclusion is checked on the development tree\n'
+  PASS=$((PASS + 1))
+fi
 
 # THE CLOCK A `go test` IS GIVEN ──────────────────────────────────────────────────────────
 # The batteries (merge-gate-check) run the shards under a multiple of the declared clocks, and
@@ -984,8 +981,8 @@ export OLIVARES_SHARD_JSON=yes
 check_runner "case 60 — an OLIVARES_SHARD_JSON that is not 0 or 1 is refused" a 2 "OLIVARES_SHARD_JSON"
 unset OLIVARES_SHARD_JSON
 
-# PARTITION: THE SCHEDULED MATRIX COMES FROM THIS FILE, NOT A SECOND LIST ─────────────────
-# `partition <package>` is how main-suite.yml derives its cmd/olivares shard matrix. A
+# PARTITION: NAME GROUPS COME FROM THIS FILE, NOT A SECOND LIST ─────────────────
+# `partition <package>` lists the shard groups that split one package. A
 # subcommand with no battery case is a contract nothing pins, so: declaration order on the
 # happy path, a refusal when no group splits the package, and a usage refusal with no
 # argument.
@@ -1058,9 +1055,8 @@ sed_fails_for() {
   chmod +x "$T/badsed/sed"
 }
 
-# awk failing for one -v shape, the same way. partition matches with `-v p=<package>` and
-# the group families are read with `-v pkg=<package>`; a stub that fails on only that
-# argument proves the read is refused without touching any other awk call.
+# awk failing for one -v shape, the same way. partition matches with `-v p=<package>`;
+# a stub that fails on only that argument proves the read is refused without touching other awk calls.
 awk_fails_for_var() {
   local prefix="$1" dir="$2" real
   real="$(command -v awk)" || { echo "test-check-pr-suite-shards: no awk on PATH" >&2; exit 2; }
@@ -1075,7 +1071,7 @@ awk_fails_for_var() {
 
 group_fixture
 # b splits the package too, so omitting b would be a smaller matrix, not an empty one.
-printf 'group b example.test/tree/cmd/tool b B\n' >> "$T/spec.txt"
+printf 'group b example.test/tree/cmd/tool b\n' >> "$T/spec.txt"
 awk_fails_for_shard b
 got=0
 PATH="$T/badawk:$PATH" OLIVARES_PR_SUITE_SHARDS="$T/spec.txt" \
@@ -1288,7 +1284,7 @@ else
 fi
 
 # The last reads the reviewer found unchecked. Each one can fail while the code still has
-# an answer: an empty CANNOT list, an empty family list, or "this shard does not split the
+# an answer: an empty CANNOT list, an empty group list, or "this shard does not split the
 # package" all look the same as a clean read. The stub fails only the one read under test.
 group_fixture
 awk_fails_for_var p= badawkpkg
@@ -1302,21 +1298,6 @@ if [ "$got" -eq 2 ] && grep -qF 'counting the name groups of shard a for example
   PASS=$((PASS + 1))
 else
   printf '  ✗ case 73 — partition exited %s; expected refusal rc 2 and no shard list\n' "$got" >&2
-  FAIL=$((FAIL + 1))
-fi
-
-group_fixture
-awk_fails_for_var pkg= badawkfam
-got=0
-PATH="$T/badawkfam:$PATH" OLIVARES_PR_SUITE_SHARDS="$T/spec.txt" \
-  bash "$ROOT/scripts/pr-suite-shards.sh" run-expr example.test/tree/cmd/tool alpha \
-  > "$T/out.txt" 2> "$T/err.txt" || got=$?
-if [ "$got" -eq 2 ] && grep -qF 'cannot read the families of group alpha of example.test/tree/cmd/tool' "$T/err.txt" &&
-   [ ! -s "$T/out.txt" ]; then
-  printf '  ✓ case 74 — a failed group-family read is refused, not read as "no such group"\n'
-  PASS=$((PASS + 1))
-else
-  printf '  ✗ case 74 — run-expr exited %s; expected refusal rc 2 and no expression\n' "$got" >&2
   FAIL=$((FAIL + 1))
 fi
 
@@ -1382,38 +1363,6 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# The remainder's complement: group_families answers `*`, then named_of reads the other
-# groups. The second `pkg=` awk call is the one that can fail; the first must still answer,
-# or the case would test group_families again.
-group_fixture
-printf 'example.test/tree/cmd/tool TestAlpha\nexample.test/tree/cmd/tool TestAlphaSecond\nexample.test/tree/cmd/tool TestBeta\n' > "$T/fixture-tests.txt"
-REAL_AWK="$(command -v awk)" || { echo "test-check-pr-suite-shards: no awk on PATH" >&2; exit 2; }
-mkdir -p "$T/badnamed"; : > "$T/badnamed/count"
-{
-  printf '#!/usr/bin/env bash\n'
-  printf 'if [ "${2#pkg=}" != "${2:-}" ]; then\n'
-  printf '  n=$(cat %q 2>/dev/null || echo 0); n=$((n + 1)); printf "%%s\\n" "$n" > %q\n' \
-    "$T/badnamed/count" "$T/badnamed/count"
-  printf '  [ "$n" -lt 2 ] || exit 2\n'
-  printf 'fi\n'
-  printf 'exec %q "$@"\n' "$REAL_AWK"
-} > "$T/badnamed/awk"
-chmod +x "$T/badnamed/awk"
-got=0
-PATH="$T/badnamed:$PATH" OLIVARES_PR_SUITE_SHARDS="$T/spec.txt" \
-  OLIVARES_PR_SUITE_TESTS="$T/fixture-tests.txt" \
-  bash "$ROOT/scripts/pr-suite-shards.sh" run-expr example.test/tree/cmd/tool rest \
-  > "$T/out.txt" 2> "$T/err.txt" || got=$?
-if [ "$got" -eq 2 ] &&
-   grep -qF 'cannot read the named families of example.test/tree/cmd/tool' "$T/err.txt" &&
-   [ ! -s "$T/out.txt" ]; then
-  printf '  ✓ case 78 — a failed complement read is refused, not read as "no other group names"\n'
-  PASS=$((PASS + 1))
-else
-  printf '  ✗ case 78 — run-expr exited %s; expected refusal rc 2 and no expression\n' "$got" >&2
-  FAIL=$((FAIL + 1))
-fi
-
 # The blank-line filter over go list's test files. Exit 1 means "all blank"; exit 2 is that
 # grep could not look, and it used to make the package look testless.
 reset_fixture
@@ -1442,6 +1391,7 @@ fi
 # The test universe given by OLIVARES_PR_SUITE_TESTS. Its awk read used to end with an
 # unconditional return 0, so a failed read was an empty list.
 group_fixture
+printf 'example.test/tree/cmd/tool TestAlpha\n' > "$T/fixture-tests.txt"
 awk_fails_for_var p= badspeclist
 got=0
 PATH="$T/badspeclist:$PATH" OLIVARES_PR_SUITE_SHARDS="$T/spec.txt" \
@@ -1456,6 +1406,114 @@ else
   printf '  ✗ case 80 — tests exited %s; expected refusal rc 2 and no test list\n' "$got" >&2
   FAIL=$((FAIL + 1))
 fi
+
+# A failed status-producing read is never an empty answer. Drive the same gate with one
+# sed program broken at a time; every extraction must return COULD NOT LOOK.
+check_sed_refusal() {
+  local name="$1" program="$2" got
+  sed_fails_for "$program"
+  got="$(PATH="$T/badsed:$PATH" run_gate)"
+  if [ "$got" = 2 ] && grep -qF 'could not read' "$T/err.txt"; then
+    printf '  ✓ %s (rc 2)\n' "$name"
+    PASS=$((PASS + 1))
+  else
+    printf '  ✗ %s — expected rc 2, got %s\n' "$name" "$got" >&2
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+n=81
+for program in \
+  's/^JOB //p' \
+  's/^MATRIX //p' \
+  's/^JOBCEILING //p' \
+  's/^STEPCEILINGS //p' \
+  's/^CANNOT //p' \
+  's/^NOTICE //p' \
+  's/^FINDING //p' \
+  's/^DETAIL //p' \
+  's/^REPARTO //p' \
+  's/^GROUPS //p' \
+  's/^TOTAL //p'; do
+  reset_fixture
+  check_sed_refusal "case $n — a failed workflow or partition record read is refused" "$program"
+  n=$((n + 1))
+done
+
+# grep status 1 means NOMATRIX is absent; any higher status means the read failed.
+reset_fixture
+mkdir -p "$T/badstatusgrep"
+REAL_GREP="$(command -v grep)"
+{
+  printf '#!/usr/bin/env bash\n'
+  printf 'if [ "$1" = "-qx" ] && [ "$2" = "NOMATRIX" ]; then exit 2; fi\n'
+  printf 'exec %q "$@"\n' "$REAL_GREP"
+} > "$T/badstatusgrep/grep"
+chmod +x "$T/badstatusgrep/grep"
+got="$(PATH="$T/badstatusgrep:$PATH" run_gate)"
+if [ "$got" = 2 ] && grep -qF 'could not inspect the workflow shape' "$T/err.txt"; then
+  printf '  ✓ case 92 — a failed NOMATRIX read is refused (rc 2)\n'
+  PASS=$((PASS + 1))
+else
+  printf '  ✗ case 92 — NOMATRIX read returned %s, expected 2\n' "$got" >&2
+  FAIL=$((FAIL + 1))
+fi
+
+# A sort can emit a complete-looking inventory and still fail. Its status must be checked.
+mkdir -p "$T/badsort"
+cat > "$T/badsort/sort" <<'EOF'
+#!/usr/bin/env bash
+cat
+exit 2
+EOF
+chmod +x "$T/badsort/sort"
+reset_fixture
+got="$(PATH="$T/badsort:$PATH" run_gate)"
+if [ "$got" = 2 ] && grep -qF 'could not write the package universe' "$T/err.txt"; then
+  printf '  ✓ case 93 — a failed override-universe write is refused (rc 2)\n'
+  PASS=$((PASS + 1))
+else
+  printf '  ✗ case 93 — override-universe write returned %s, expected 2\n' "$got" >&2
+  FAIL=$((FAIL + 1))
+fi
+
+# Six real Go packages form the same universe as the basic fixture, with no network access.
+universe_work_fixture() {
+  local root="$T/work" pkg name
+  rm -rf "$root"
+  mkdir -p "$root/tree"
+  printf 'go 1.26.6\n\nuse ./tree\n' > "$root/go.work"
+  printf 'module example.test/tree\n\ngo 1.26.6\n' > "$root/tree/go.mod"
+  for pkg in cmd/tool cmd/helper core/api core/internal/store modules/one modules/two; do
+    name="${pkg##*/}"
+    mkdir -p "$root/tree/$pkg"
+    printf 'package %s\n' "$name" > "$root/tree/$pkg/pkg.go"
+    printf 'package %s\n\nimport "testing"\n\nfunc TestThing(t *testing.T) { _ = t }\n' \
+      "$name" > "$root/tree/$pkg/pkg_test.go"
+  done
+}
+
+reset_fixture
+universe_work_fixture
+export OLIVARES_ROOT="$T/work" OLIVARES_PR_SUITE_READER="$ROOT/scripts/pr-suite-shards.sh"
+got="$(run_gate_no_pkg_override)"
+if [ "$got" = 0 ] && grep -qF 'CLEAN' "$T/out.txt"; then
+  printf '  ✓ case 94 — the real workspace-universe control is CLEAN\n'
+  PASS=$((PASS + 1))
+else
+  printf '  ✗ case 94 — valid workspace returned %s, expected CLEAN\n' "$got" >&2
+  FAIL=$((FAIL + 1))
+fi
+
+got="$(PATH="$T/badsort:$PATH" run_gate_no_pkg_override)"
+if [ "$got" = 2 ] && grep -qF 'could not write the package universe' "$T/err.txt"; then
+  printf '  ✓ case 95 — a failed workspace-universe write is refused (rc 2)\n'
+  PASS=$((PASS + 1))
+else
+  printf '  ✗ case 95 — workspace-universe write returned %s, expected 2\n' "$got" >&2
+  FAIL=$((FAIL + 1))
+fi
+unset OLIVARES_ROOT OLIVARES_PR_SUITE_READER
 
 # THE WHOLE-PACKAGE LEG OF root-a ─────────────────────────────────────────────────────────
 # Measured in the scheduled batteries of 2026-10-17 (runs 39002849343, 39026256760,
@@ -1477,13 +1535,69 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# A DYING DISK MUST NOT REPORT AS FAILING TESTS. Main run 40185355549 (2026-10-25) red-flagged
+# seven cmd/olivares tests across two shards — a postgres data file that could not extend,
+# sqlite's "database or disk is full", a TempDir mkdir — and every one of them was green on
+# the same tree with free disk. The failing lines named tests and never the disk, so the
+# failure went to a code lane. The runner must refuse to LOOK below its free-space floor,
+# and the refusal must name the disk and the floor, before it runs a single test.
+group_fixture
+fake_pg_env_json
+mkdir -p "$T/stubdf"
+cat > "$T/stubdf/df" <<'EOF'
+#!/usr/bin/env bash
+# 24 MiB free, whatever is asked: a disk that is already dying.
+printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n'
+printf '/dev/fake 4096000 4071424 24576 100%% /\n'
+EOF
+chmod +x "$T/stubdf/df"
+got=0
+PATH="$T/stubdf:$PATH" OLIVARES_ROOT="$T/fakeroot" \
+  OLIVARES_PR_SUITE_SHARDS="$T/spec.txt" \
+  OLIVARES_PR_SUITE_PACKAGES="$T/pkgs.txt" OLIVARES_PR_SUITE_TESTS="$T/tests.txt" \
+  bash "$ROOT/scripts/pr-suite-shards.sh" run a > "$T/out.txt" 2> "$T/err.txt" || got=$?
+if [ "$got" -eq 2 ] && grep -qF 'COULD NOT LOOK' "$T/err.txt" &&
+   grep -qF 'free space' "$T/err.txt" && grep -qF '8192' "$T/err.txt" &&
+   [ ! -s "$T/pg-args.txt" ]; then
+  printf '  ✓ case 89 — run refuses a dying disk by name before it runs a test\n'
+  PASS=$((PASS + 1))
+else
+  printf '  ✗ case 89 — run exited %s; expected refusal rc 2 naming the disk and the floor, with no go test call\n' \
+    "$got" >&2
+  FAIL=$((FAIL + 1))
+fi
+
+# The no-fire control of case 89, with room to run: a guard that fires on every disk passes
+# the case above and is worse than no guard — it would red every healthy shard. The df stub
+# is kept, so what is proven is the READING of the number, not the presence of a stub.
+cat > "$T/stubdf/df" <<'EOF'
+#!/usr/bin/env bash
+# 150 GiB free, whatever is asked.
+printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n'
+printf '/dev/fake 262144000 104857600 157286400 40%% /\n'
+EOF
+chmod +x "$T/stubdf/df"
+got=0
+PATH="$T/stubdf:$PATH" OLIVARES_ROOT="$T/fakeroot" \
+  OLIVARES_PR_SUITE_SHARDS="$T/spec.txt" \
+  OLIVARES_PR_SUITE_PACKAGES="$T/pkgs.txt" OLIVARES_PR_SUITE_TESTS="$T/tests.txt" \
+  bash "$ROOT/scripts/pr-suite-shards.sh" run a > "$T/out.txt" 2> "$T/err.txt" || got=$?
+if [ "$got" -eq 0 ] && [ -s "$T/pg-args.txt" ]; then
+  printf '  ✓ case 90 — a disk with room runs the shard (the case 89 control)\n'
+  PASS=$((PASS + 1))
+else
+  printf '  ✗ case 90 — run exited %s with the floor satisfied; the guard fired on a healthy disk\n' \
+    "$got" >&2
+  FAIL=$((FAIL + 1))
+fi
+
 echo
 printf 'test-check-pr-suite-shards: %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ] || exit 1
 # A battery that ran nothing exits 0 for free. It has to say how many it ran, and refuse
 # if the number is not the one it was written with.
-[ "$PASS" -eq 80 ] || {
-  echo "test-check-pr-suite-shards: only $PASS of 80 cases ran — the battery was edited without its count" >&2
+[ "$PASS" -eq 99 ] || {
+  echo "test-check-pr-suite-shards: only $PASS of 99 cases ran — the battery was edited without its count" >&2
   exit 1
 }
 exit 0

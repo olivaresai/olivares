@@ -2,21 +2,25 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { NewSessionHost } from '@/features/first-hour/new-session-host'
+import { PreferencesSync } from '@/features/console/preferences-sync'
 import { PaneWidthsSync } from '@/features/console/pane-widths-sync'
 import { SettingsVisit } from '@/features/navigation/permitted-visit'
 import { PersonalNavigationProvider } from '@/features/navigation/personal-navigation'
 import { engineFavorites } from '@/features/saved-views/api'
+import { engineToolsQuery } from '@/features/agentops/api'
+import { useQuery } from '@tanstack/react-query'
 import {
   Outlet,
   useNavigate,
   useRouter,
   useRouterState,
 } from '@tanstack/react-router'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { PageActionsProvider } from '@/components/ui/page-actions'
 import { Spinner } from '@/components/ui/spinner'
 import { useAuth } from '@/lib/auth/context'
 import { isSignInPath } from '@/lib/auth/return-path'
+import { useMinWidth } from '@/lib/hooks/use-min-width'
 import { useServerInfo } from '@/lib/hooks/use-server-info'
 import { useSyncModulesNotEnabled } from '@/stores/modules'
 import { AppFrame } from './app-frame'
@@ -25,12 +29,11 @@ import { CommandMenu } from './command-menu'
 import { DestinationSections } from './destination-sections'
 import { GlobalShortcuts } from './shortcuts'
 import { RouteFrame } from './page-frames'
-import { PhoneBar } from './phone-bar'
 import { SidePanelProvider } from './side-panel'
-import { AreasSheet } from './sidebar'
-import { useAreasSheet } from './areas-sheet-store'
+import { NavigationDrawer, Sidebar } from './sidebar'
 import { TenantGate } from './tenant-gate'
 import { Topbar } from './topbar'
+import { TopbarSearchProvider } from './topbar-search'
 import { SessionNotifications } from './session-notifications'
 import { StatusBar } from './status-bar'
 
@@ -49,13 +52,13 @@ function Splash() {
  * AppLayout is the authenticated shell and the auth GUARD for everything under it:
  * while the principal loads it shows a splash; if there is no session it redirects
  * to /login (the api client's onUnauthorized clears an expired session, which lands
- * here). Authenticated, it renders the frame (app-frame.tsx): the top bar and the routed
- * work, the phone bar below 761 px, plus the always-mounted ⌘K palette and the
- * "All areas" sheet.
+ * here). Authenticated, it renders the frame (app-frame.tsx): the left navigation, the top
+ * bar and the routed work, plus the always-mounted ⌘K palette and, below 761 px, the
+ * navigation drawer the top bar's menu button opens.
  *
- * THE SHELL CONTRACT (console Estate, issue #2544):
+ * THE SHELL CONTRACT (0.5, after console Estate #2544):
  *
- *   top bar 56 px: scope · places · search · notifications · account
+ *   left navigation │ top bar 56 px: title · search · notifications · account
  *   ──────────────────────────────────────────────────────────────
  *   work — the whole remaining canvas [+ the side panel a page declares]
  *   ──────────────────────────────────────────────────────────────
@@ -115,7 +118,7 @@ function useSignedOutRoute(status: string) {
       // signed-out answer can come first, and RC10 sent a deep link to /login with no
       // returnTo (SC on 6e97de81). Read here and not at render: the guard's own
       // redirect moves the live location, and re-reading it on render redirected again
-      // with a longer returnTo, forever (refresh 02, HU 016). A sign-in page is never
+      // with a longer returnTo, forever (refresh 02, acceptance). A sign-in page is never
       // returned to.
       const { resolvedLocation, location } = router.state
       const requested = resolvedLocation?.href ?? location.href
@@ -132,7 +135,18 @@ function useSignedOutRoute(status: string) {
 }
 
 export function AppLayout() {
-  const { status } = useAuth()
+  const { status, activeTenant, grants } = useAuth()
+  // The engine's tool table (engine-tools.ts), read before the shell paints: every tool
+  // name, list and binding rule below answers from it. The splash waits while the answer
+  // is coming (an organization is chosen, or about to be: one membership); a failed read
+  // paints, and the status bar says so with Retry.
+  const tools = useQuery(
+    engineToolsQuery(status === 'authenticated' ? activeTenant : null),
+  )
+  const toolsComing =
+    status === 'authenticated' &&
+    !tools.data &&
+    (tools.fetchStatus === 'fetching' || (!activeTenant && grants.length === 1))
   // Which engine modules run here (server-info modules_not_enabled, ARCH C1): read once
   // for the navigation gate, the route gate and the Home tiles.
   useSyncModulesNotEnabled()
@@ -142,43 +156,51 @@ export function AppLayout() {
   // Where a signed-out browser goes, and the page it returns to (read in the guard's
   // effect, once).
   const signInRoute = useSignedOutRoute(status)
-  if (status === 'loading' || signInRoute) return <Splash />
+  // The drawer exists only where the column does not: widening the window closes it.
+  const [drawer, setDrawer] = useState(false)
+  const wide = useMinWidth(761)
+  if (wide && drawer) setDrawer(false)
+  if (status === 'loading' || signInRoute || toolsComing) return <Splash />
 
   return (
     <PersonalNavigationProvider engineFavorites={engineFavorites}>
       <SessionNotifications />
-      <PaneWidthsSync />
-      <SidePanelProvider>
-        <AppFrame
-          topbar={<Topbar />}
-          statusBar={<StatusBar />}
-          phoneBar={<PhoneBar onMore={() => useAreasSheet.getState().show()} />}
-          overlays={
-            <>
-              <AreasSheet />
-              <CommandMenu />
-              <GlobalShortcuts />
-              <NewSessionHost />
-            </>
-          }
-        >
-          {/* No active tenant ⇒ the routed view is never mounted, so it cannot
-              fire the tenant-scoped reads the engine would answer with 400
-              "tenant required". See TenantGate. */}
-          {/* One host per page for the verb a TABBED screen declares from
-              inside its active tab. It wraps the routed content, so the header and
-              the tab that fills its primary-action slot share it. */}
-          <PageActionsProvider>
-            <RouteFrame pathname={pathname}>
-              <TenantGate>
-                <DestinationSections />
-                <Outlet />
-                <SettingsVisit />
-              </TenantGate>
-            </RouteFrame>
-          </PageActionsProvider>
-        </AppFrame>
-      </SidePanelProvider>
+      <PreferencesSync>
+        <PaneWidthsSync />
+        <SidePanelProvider>
+          <TopbarSearchProvider>
+            <AppFrame
+              sidebar={<Sidebar />}
+              topbar={<Topbar onMenu={() => setDrawer(true)} />}
+              statusBar={<StatusBar />}
+              overlays={
+                <>
+                  <NavigationDrawer open={drawer} onOpenChange={setDrawer} />
+                  <CommandMenu />
+                  <GlobalShortcuts />
+                  <NewSessionHost />
+                </>
+              }
+            >
+              {/* No active tenant ⇒ the routed view is never mounted, so it cannot
+                fire the tenant-scoped reads the engine would answer with 400
+                "tenant required". See TenantGate. */}
+              {/* One host per page for the verb a TABBED screen declares from
+                inside its active tab. It wraps the routed content, so the header and
+                the tab that fills its primary-action slot share it. */}
+              <PageActionsProvider>
+                <RouteFrame pathname={pathname}>
+                  <TenantGate>
+                    <DestinationSections />
+                    <Outlet />
+                    <SettingsVisit />
+                  </TenantGate>
+                </RouteFrame>
+              </PageActionsProvider>
+            </AppFrame>
+          </TopbarSearchProvider>
+        </SidePanelProvider>
+      </PreferencesSync>
     </PersonalNavigationProvider>
   )
 }

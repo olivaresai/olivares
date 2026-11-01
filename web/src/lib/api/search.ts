@@ -51,8 +51,8 @@ export async function searchConsole(q: string): Promise<ConsoleSearchResponse> {
 /** Maps a server result kind to the console route that lists that entity. */
 export const SEARCH_KIND_ROUTES: Record<string, string> = {
   workspace: '/workspace',
-  user: '/console',
-  connector: '/console',
+  user: '/identity?tab=people',
+  connector: '/console?tab=connectors',
   'governance.policy': '/permissions',
   'eventing.subscription': '/eventing',
   'notify.route': '/alerting',
@@ -62,7 +62,7 @@ export const SEARCH_KIND_ROUTES: Record<string, string> = {
 /** Maps a server result kind to the feature id whose nav label names it. */
 export const SEARCH_KIND_FEATURE: Record<string, string> = {
   workspace: 'workspaceDashboard',
-  user: 'console',
+  user: 'identity',
   connector: 'console',
   'governance.policy': 'permissions',
   'eventing.subscription': 'eventing',

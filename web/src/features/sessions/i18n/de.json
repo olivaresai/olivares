@@ -1,4 +1,13 @@
 {
+  "compact": {
+    "context": "Kontext",
+    "now": "Jetzt komprimieren",
+    "beforeSend": "Vor dem Senden komprimieren",
+    "working": "Komprimierung…",
+    "hint": "Fasst frühere Beiträge zusammen, um Kontext freizugeben. Der Entwurf bleibt erhalten, bis die Komprimierung bestätigt ist.",
+    "unavailable": "Verfügbar, wenn die Sitzung ruht und das Werkzeug native Komprimierung meldet.",
+    "failed": "Die Komprimierung wurde nicht bestätigt. Ihre Nachricht wurde nicht gesendet."
+  },
   "git": {
     "title": "Git",
     "branch": "Branch",
@@ -307,16 +316,17 @@
     "currentSession": "Aktuelle Sitzung",
     "besideSession": "Sitzung daneben",
     "switchSession": "Sitzung wechseln",
-    "closeContext": "Kontext schließen",
+    "details": "Sitzungsdetails",
+    "closeContext": "Details schließen",
     "backTo": "Zurück zu {{pane}}",
     "pane": {
       "rail": "Sitzungen",
       "narrative": "Arbeit",
-      "context": "Kontext"
+      "context": "Details"
     },
     "resize": {
       "rail": "Breite der Sitzungsliste ändern",
-      "context": "Breite des Kontextbereichs ändern",
+      "context": "Breite des Detailbereichs ändern",
       "beside": "Breite der Sitzung daneben ändern"
     }
   },
@@ -351,7 +361,9 @@
     "planNotRead": "Plan-Fenster nicht gelesen",
     "resets": "Wird {{when}} zurückgesetzt ({{at}})",
     "stale": "zuletzt bekannt",
-    "readAt": "Gelesen {{at}}"
+    "readAt": "Gelesen {{at}}",
+    "permission": "{{name}}: {{what}}",
+    "full": "Vollzugriff: läuft ohne Rückfrage, begrenzt durch die <policy>Olivares-Richtlinie</policy>"
   },
   "evidence": {
     "checks": {
@@ -430,7 +442,7 @@
       "worker": "Worker",
       "orchestrator": "Orchestrator"
     },
-    "details": "Details",
+    "details": "Referenzen",
     "echoes": "Auch gemeldet als",
     "folder": "Ordner",
     "temporaryFolder": "Temporärer Ordner dieser Sitzung",
@@ -442,12 +454,29 @@
     "noChanges": "Olivares hat diese Sitzung nicht gestartet, daher gibt es keine Änderungen zu zeigen.",
     "filesUnavailable": "Dieser Ordner kann nicht durchsucht werden.",
     "filesNoAccess": "Ihre Rolle darf diesen Ordner nicht durchsuchen.",
-    "filesFailed": "Der Ordner konnte nicht gelesen werden."
+    "filesFailed": "Der Ordner konnte nicht gelesen werden.",
+    "facts": {
+      "title": "Sitzung",
+      "state": "Status",
+      "workspace": "Arbeitsbereich",
+      "tool": "Werkzeug",
+      "account": "Konto",
+      "model": "Modell",
+      "access": "Zugriff",
+      "cost": "Kosten"
+    },
+    "usage": {
+      "title": "Kontonutzung",
+      "fiveHour": "{{percent}} % von 5 Stunden",
+      "week": "{{percent}} % der Woche"
+    }
   },
   "conversation": {
     "log": "Unterhaltung",
     "waiting": "Warten auf die Sitzung…",
     "empty": "Noch keine Nachrichten.",
+    "earlier": "Frühere Ausgabe anzeigen",
+    "earlierFailed": "Die frühere Ausgabe konnte nicht geladen werden.",
     "ended": "Die Sitzung ist beendet.",
     "lag_one": "{{count}} Rahmen verloren — die Ausgabe darunter setzt nach der Lücke fort.",
     "lag_other": "{{count}} Rahmen verloren — die Ausgabe darunter setzt nach der Lücke fort.",
@@ -475,8 +504,8 @@
     "startedTools_one": "{{count}} Werkzeug",
     "startedTools_other": "{{count}} Werkzeuge",
     "notSent": "Nicht gesendet: {{reason}}",
-    "waitingApproval": "Wird gesendet, sobald der Start genehmigt ist und die Sitzung läuft.",
-    "workingFolder": "Arbeitsordner: {{cwd}}",
+    "waitingApproval": "Wird gesendet, sobald die Sitzung bereit ist.",
+    "workingFolder": "Arbeitsordner: <path />",
     "temporaryFolder": "Arbeitsordner: temporärer Ordner dieser Sitzung",
     "workedFor": "Gearbeitet: {{duration}}",
     "modelChanged": "Modell gewechselt: {{from}} → {{to}}",
@@ -514,8 +543,11 @@
       "command_one": "{{count}} Shell-Befehl läuft",
       "command_other": "{{count}} Shell-Befehle laufen",
       "edit": "Bearbeitet {{target}}",
+      "editPath": "Bearbeitet <path/>",
       "read": "Liest {{target}}",
+      "readPath": "Liest <path/>",
       "search": "Sucht {{target}}",
+      "searchPath": "Sucht <lead/><path/>",
       "agent": "{{name}} arbeitet",
       "tool": "{{tool}} läuft"
     },
@@ -532,6 +564,14 @@
         "extra": "Limit für zusätzliche Nutzung",
         "usage": "Nutzungslimit"
       }
+    },
+    "card": {
+      "question": "Frage",
+      "plan": "Vorgeschlagener Plan",
+      "todos": "Aufgabenliste ({{done}} von {{total}} erledigt)",
+      "send": "Antwort senden",
+      "answered": "Antwort gesendet: {{answer}}",
+      "sendFailed": "Die Antwort konnte nicht gesendet werden."
     }
   },
   "changes": {
@@ -580,6 +620,22 @@
       "added": "Hinzugefügt",
       "modified": "Geändert",
       "deleted": "Gelöscht"
+    },
+    "comment": {
+      "title": "Zeile kommentieren",
+      "line": "Zeile",
+      "version": "Stand",
+      "text": "Kommentar",
+      "send": "An die Sitzung senden",
+      "sent": "Kommentar an die Sitzung gesendet.",
+      "failed": "Der Kommentar konnte nicht gesendet werden. Versuchen Sie es gleich noch einmal.",
+      "notLive": "Setzen Sie die Sitzung fort, um einen Kommentar zu senden.",
+      "noPermission": "Zum Senden eines Kommentars brauchen Sie die Berechtigung, in Sitzungen zu schreiben.",
+      "needLine": "Wählen Sie eine Zeile: Klicken Sie auf ihre Nummer oder geben Sie sie ein.",
+      "noSuchLine": "Die Datei hat keine Zeile {{line}} {{version}}.",
+      "empty": "Schreiben Sie den Kommentar.",
+      "atBase": "am Ausgangspunkt",
+      "atTip": "an der Branch-Spitze"
     }
   },
   "peers": {
@@ -703,6 +759,13 @@
     "unreadable": "{{n}} Einträge des Protokolls konnten nicht gelesen werden."
   },
   "limit": {
+    "settingsSaved": "Einstellung zur automatischen Fortsetzung gespeichert.",
+    "resumeAtReset": "Nach Zurücksetzung fortsetzen",
+    "snoozeUntilReset": "Bis zur Zurücksetzung ausblenden",
+    "automatic": "Nach Zurücksetzung eines Limits automatisch fortsetzen",
+    "resumes": "Fortsetzung {{time}}",
+    "cancel": "Abbrechen",
+    "cancelled": "Geplante Fortsetzung abgebrochen.",
     "usageUntil": "Kontingent aufgebraucht bis {{time}}",
     "usage": "Kontingent aufgebraucht",
     "rate": "Der Anbieter begrenzt gerade die Anfragen. Versuchen Sie es gleich noch einmal."
@@ -713,6 +776,10 @@
   },
   "rowActions": {
     "rename": "Umbenennen…",
+    "regenerateTitle": "Titel neu erzeugen",
+    "titleShort": "Kurz",
+    "titleSentence": "Normal",
+    "titleLong": "Lang",
     "renameTitle": "Sitzung umbenennen",
     "renameDescription": "Der Name wird auf dem Server gespeichert und überall angezeigt, wo diese Sitzung aufgeführt ist. Lassen Sie ihn leer, um zu dem Namen zurückzukehren, den Olivares ihr gibt.",
     "renameLabel": "Name",
@@ -734,6 +801,52 @@
     "copiedPartial": "Kopiert. {{n}} Einträge des Transkripts konnten nicht gelesen werden und fehlen darin.",
     "clipped": "Einige Nachrichten sind länger als 64 KiB und wurden in der Kopie gekürzt; jede endet mit [...].",
     "noWholeText": "Die Engine hat nur die erste Zeile jeder Nachricht gesendet, daher wurde das Transkript nicht kopiert.",
-    "transcriptChanged": "Das Transkript hat sich beim Kopieren geändert. Versuchen Sie es erneut."
+    "transcriptChanged": "Das Transkript hat sich beim Kopieren geändert. Versuchen Sie es erneut.",
+    "undo": "Rückgängig"
+  },
+  "approval": {
+    "declineSend": "Ablehnen und senden",
+    "feedbackUnsupported": "Dieses Werkzeug kann Ihr Feedback nicht empfangen. Ihre Antwort wird mit der Ablehnung gespeichert.",
+    "title": "Genehmigung erforderlich",
+    "why": "Warum",
+    "rule": "Regel",
+    "reach": "Reichweite",
+    "requestedBy": "Angefragt von",
+    "reachUnknown": "Nicht gemeldet",
+    "notYours": "Eine andere Person mit Genehmigungsrechten entscheidet diese Anfrage.",
+    "approved": "Genehmigt",
+    "denied": "Abgelehnt",
+    "ended": "Wartet nicht mehr",
+    "unreadable": "Die Anfrage konnte nicht gelesen werden."
+  },
+  "terminal": {
+    "title": "Terminal",
+    "hint": "Eine Shell im Ordner dieser Sitzung, mit denselben Grenzen wie die Sitzung. Sie läuft unter Ihrer Identität; jede eingegebene Befehlszeile wird aufgezeichnet.",
+    "open": "Terminal öffnen",
+    "close": "Schließen",
+    "copy": "Kopieren",
+    "paste": "Einfügen",
+    "again": "Neues Terminal öffnen",
+    "reconnecting": "Verbindung wird wiederhergestellt…",
+    "ended": "Das Terminal wurde beendet.",
+    "endedWith": "Das Terminal wurde beendet (Exit {{code}}).",
+    "input": "Terminal-Eingabe",
+    "label": "Terminal",
+    "noFolder": "Diese Sitzung hat keinen Ordner, daher gibt es keinen Ort für ein Terminal.",
+    "unavailable": "Der Ordner der Sitzung ist hier nicht verfügbar, daher lässt sich darin kein Terminal öffnen.",
+    "problem": {
+      "step_up": "Bestätigen Sie zuerst Ihre Identität und öffnen Sie das Terminal dann erneut.",
+      "refused": "Sie haben kein Recht, in diesem Ordner ein Terminal zu öffnen.",
+      "busy": "Sie haben zu viele Terminals geöffnet. Schließen Sie zuerst eines.",
+      "failed": "Das Terminal konnte nicht geöffnet werden. Versuchen Sie es gleich noch einmal."
+    },
+    "keys": {
+      "esc": "Esc",
+      "tab": "Tab",
+      "ctrlC": "Strg+C",
+      "up": "Hoch",
+      "down": "Runter"
+    },
+    "closeLabel": "Terminal schließen"
   }
 }

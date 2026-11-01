@@ -40,6 +40,7 @@
   "retryIn": "{{seconds}} 秒后可重试。",
   "signIn": "请登录后再比较。",
   "diffLabel": "{{path}} 的统一差异",
+  "diffLabelRich": "<path /> 的统一差异",
   "colOld": "旧",
   "colNew": "新",
   "colChange": "变更",

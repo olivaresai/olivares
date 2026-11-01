@@ -27,7 +27,6 @@ import {
   activeAreaId,
   authorizedEntries,
   authorizedSections,
-  buildNavSearchIndex,
   fold,
   isAreaVisible,
   permissionGate,
@@ -35,11 +34,13 @@ import {
   resolveLocation,
   visibleAreas,
 } from './model'
+import { buildNavSearchIndex } from './places'
 
 /** Ratified route placements, as `id: [area, section]` (`root` for `/`). */
 const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   home: 'root',
   storedBudgets: ['observation', 'cost-adoption'],
+  usage: ['observation', 'cost-adoption'],
   workspaceDashboard: ['infrastructure', 'estate'],
   inventory: ['infrastructure', 'estate'],
   estate: ['infrastructure', 'estate'],
@@ -50,7 +51,6 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   providerBindings: ['ai', 'environments'],
   providerAccounts: ['ai', 'environments'],
   'agent-tools': ['ai', 'environments'],
-  mcpServers: ['ai', 'environments'],
   'workspace-templates': ['ai', 'environments'],
   // Added after the ratification: the Reach view sits here until the Tools area (#2552) lands.
   reach: ['ai', 'environments'],
@@ -62,7 +62,6 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   rateLimits: ['ai', 'provider-reference'],
   capabilities: ['data-context', 'capabilities'],
   catalog: ['data-context', 'capabilities'],
-  skills: ['data-context', 'capabilities'],
   knowledge: ['data-context', 'knowledge'],
   agentArtifacts: ['data-context', 'knowledge'],
   work: ['work-communications', 'work'],
@@ -97,6 +96,7 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   sourceDiff: ['system', 'administration'],
   onboarding: ['system', 'maintenance'],
   backups: ['system', 'maintenance'],
+  updates: ['system', 'maintenance'],
   logs: ['system', 'maintenance'],
   apiPlayground: ['system', 'development'],
 }
@@ -416,8 +416,8 @@ describe('search ranking — one index for the sidebar and the palette', () => {
   const index = buildNavSearchIndex(t)
   const ids = (q: string) => rankNavMatches(index, q).map((e) => e.id)
 
-  it('indexes every area, every listed view and the Settings utility, in registry order', () => {
-    expect(index.filter((e) => e.kind === 'area')).toHaveLength(9)
+  it('indexes every listed view and the Settings utility, in registry order, and no retired area', () => {
+    expect(index.map((e) => e.kind)).not.toContain('area')
     const listed = FEATURE_VIEWS.filter((v) => !v.hideInNav).length
     expect(index.filter((e) => e.kind === 'view')).toHaveLength(listed)
     expect(index.filter((e) => e.kind === 'settings')).toHaveLength(1)
@@ -477,17 +477,15 @@ describe('search ranking — one index for the sidebar and the palette', () => {
     }
   })
 
-  it('finds an area by its own name and by a section name', () => {
-    // The module labelled exactly "Security" outranks the area whose label merely starts
-    // with the word; the area is the very next hit.
+  it('finds pages by their place and by a retired area name, which is no destination', () => {
     const security = rankNavMatches(index, 'security')
     expect(security[0]).toMatchObject({ kind: 'view', id: 'security' })
-    expect(security[1]).toMatchObject({ kind: 'area', id: 'security-identity' })
-    expect(
-      rankNavMatches(index, 'provider reference').some(
-        (e) => e.kind === 'area' && e.id === 'ai',
-      ),
-    ).toBe(true)
+    // "Oversight" held cost, audit and evidence: its pages are found, the area is not offered.
+    const oversight = ids('oversight')
+    expect(oversight).toEqual(
+      expect.arrayContaining(['audit', 'usage', 'storedBudgets', 'adoption']),
+    )
+    expect(ids('usage & cost')[0]).toBe('usage')
   })
 
   it('keeps the tie-break stable: equal scores stay in registry order', () => {
@@ -505,10 +503,23 @@ describe('search ranking — one index for the sidebar and the palette', () => {
     expect(fold('が')).toBe('が')
   })
 
-  it('shows Area › Section beside every module result', () => {
+  it('shows Group › Place beside every page, the words of the sidebar', () => {
     const agentops = index.find((e) => e.id === 'agentops')!
-    expect(agentops.context).toBe('AI › Sessions')
+    expect(agentops.context).toBe('Work › Sessions')
+    expect(index.find((e) => e.id === 'usage')!.context).toBe(
+      'Control › Usage & cost',
+    )
+    expect(index.find((e) => e.id === 'storedBudgets')!.context).toBe(
+      'Control › Usage & cost',
+    )
+    expect(index.find((e) => e.id === 'permissions')!.context).toBe(
+      'Control › Rules & approvals',
+    )
+    // No page says a retired area name beside it.
+    expect(
+      index.filter((e) => /Oversight|Security & identity/.test(e.context)),
+    ).toEqual([])
     const settings = index.find((e) => e.kind === 'settings')!
-    expect(settings.context).toBe('System & settings › Personal preferences')
+    expect(settings.context).toBe('')
   })
 })

@@ -60,7 +60,7 @@ type ServerToolEgressGate interface {
 // gate over the sanitized input, map a deny, and on Forward return the governed request with
 // its accepted binding and the snapshot the later checks use. identity fields come from the
 // admitted identity, never from the body.
-func (d *Decider) governEgress(ctx context.Context, req claudeapi.MessageRequest, tenant model.TenantID, actor, sessionRef string, unbindable bool) (claudeapi.MessageRequest, *claudeapi.MCPEgressSnapshot, gateResult, bool) {
+func (d *Decider) governEgress(ctx context.Context, egress ServerToolEgressGate, req claudeapi.MessageRequest, tenant model.TenantID, actor, sessionRef string, unbindable bool) (claudeapi.MessageRequest, *claudeapi.MCPEgressSnapshot, gateResult, bool) {
 	_, snap, err := claudeapi.SnapshotMCPEgress(req)
 	if err != nil {
 		return claudeapi.MessageRequest{}, nil, mcpGateDeny(mcpErrorCode(err)), false
@@ -75,7 +75,7 @@ func (d *Decider) governEgress(ctx context.Context, req claudeapi.MessageRequest
 		// A private copy: the gate receives in by value but shares its slices.
 		dests = append(dests, in.MCP.Destinations...)
 	}
-	egDec := d.Egress.GovernEgress(ctx, in)
+	egDec := egress.GovernEgress(ctx, in)
 	d.publishEgressFindings(ctx, tenant, req.Model, egDec.Findings, declaresMCP)
 	if !egDec.Forward {
 		if declaresMCP || egDec.MCPDeny != "" {

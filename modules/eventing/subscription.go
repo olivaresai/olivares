@@ -100,15 +100,26 @@ func validAuthType(t string) bool {
 func (in *subscriptionRequest) hasSink() bool { return strings.TrimSpace(in.SinkKind) != "" }
 
 // refuseSink answers 501 business_required to a request that carries a SIEM sink when no
-// SinkRenderer is wired. Community links none (siemforward.NewRenderer is nil there), so
+// SinkRenderer is wired, and the sink gate's licence refusal when one is wired and refuses. Community links none (siemforward.NewRenderer is nil there), so
 // the sink could only be parked. The generic webhook never reaches it; a sink stored
 // before can still be disabled or cleared by an update that omits it, or deleted.
 func (m *Module) refuseSink(w http.ResponseWriter, in *subscriptionRequest) bool {
-	if !in.hasSink() || m.renderer != nil {
+	if !in.hasSink() {
 		return false
 	}
-	writeJSON(w, http.StatusNotImplemented, errorBodyCode("business_required", "SIEM push requires Olivares Business: https://olivares.ai/pricing"))
-	return true
+	if m.renderer == nil {
+		writeJSON(w, http.StatusNotImplemented, errorBodyCode("business_required", "SIEM push requires Olivares Business: https://olivares.ai/pricing"))
+		return true
+	}
+	if m.sinkGate == nil {
+		return false
+	}
+	if err := m.sinkGate(); err != nil {
+		status, body, _ := api.StoreErrorBody(err)
+		writeJSON(w, status, body)
+		return true
+	}
+	return false
 }
 
 // validateSink checks the sink profile and trims its scalar fields. The endpoint

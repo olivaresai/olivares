@@ -16,7 +16,7 @@ import (
 
 // capturingAuditor records ToolDecisions so the tests can assert the SEP-414
 // trace correlation on PEP decisions. It embeds the granting in-memory journal
-//: enforcement legs behave contract-faithfully while decisions are captured.
+// : enforcement legs behave contract-faithfully while decisions are captured.
 type capturingAuditor struct {
 	fakeEvidenceJournal
 	decisions []ToolDecision

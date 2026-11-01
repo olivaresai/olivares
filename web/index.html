@@ -9,7 +9,7 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
     <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png" />
-    <link rel="apple-touch-icon" href="/favicon-48.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
     <!--
       The three faces of the first paint (Inter, Space Grotesk and JetBrains Mono 400,
@@ -69,7 +69,7 @@
     <title>Olivares AI — Ground truth for enterprise AI</title>
     <!--
       No-FOUC theme bootstrap. Applies the persisted theme (the OS preference when
-      nothing is stored, HU-27) to <html> BEFORE first paint, so the operator never
+      nothing is stored, acceptance) to <html> BEFORE first paint, so the operator never
       sees a flash of the wrong theme. Under the CSP Level 3 policy (script-src 'nonce-…' 'strict-dynamic',
       see cmd/olivares/webui.go), this inline script is authorized by the same
       per-response nonce the server injects into the __CSP_NONCE__ placeholder.
@@ -81,7 +81,7 @@
           var prefersDark = window.matchMedia(
             '(prefers-color-scheme: dark)',
           ).matches
-          /* The OS preference unless the operator chose Light or Dark (HU-27). MUST
+          /* The OS preference unless the operator chose Light or Dark. MUST
              stay identical to readStored + resolveDark in src/stores/theme.ts: this
              runs before any bundle, so a disagreement is a visible flash of the wrong
              theme. */
@@ -109,6 +109,7 @@
     <script nonce="__CSP_NONCE__" data-load-guard>
       ;(function () {
         var KEY = 'olivares.console.reloadedAt'
+        var NOTICE_KEY = 'olivares.console.reloadNotice'
         var WINDOW_MS = 120000
         var LINES = {
           en: 'Reloading the console…',
@@ -146,6 +147,15 @@
           } catch (e) {
             return false
           }
+          /* After the first load, either resource-event order is the same
+             reload-and-notice path. A first-load transport failure stays quiet. */
+          try {
+            if (document.readyState === 'complete') {
+              sessionStorage.setItem(NOTICE_KEY, '1')
+            }
+          } catch (e) {
+            /* The recovery already happened; its note is best-effort. */
+          }
           var root = document.getElementById('root')
           if (root) {
             var p = document.createElement('p')
@@ -170,7 +180,14 @@
           true,
         )
         window.addEventListener('vite:preloadError', function (event) {
-          if (reloadOnce()) event.preventDefault()
+          /* A modulepreload error can win the race and start the reload first.
+             Hold Vite's duplicate throw as well as the one that starts it. */
+          if (
+            reloadOnce() ||
+            document.querySelector('[data-load-guard-line]')
+          ) {
+            event.preventDefault()
+          }
         })
       })()
     </script>

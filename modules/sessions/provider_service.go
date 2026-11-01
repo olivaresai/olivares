@@ -19,18 +19,30 @@ type ProviderServiceProbe interface {
 	ProbeService(context.Context, ProviderProbeRequest, string) (ProviderProbeResult, error)
 }
 
+// maxPresetRefEcho bounds how much of an unknown ref an error repeats back.
+const maxPresetRefEcho = 64
+
+// providerServiceBaseURL resolves a record's service to its row of the preset
+// catalog and holds the record to it: the row's kind and its documented endpoint.
+// No service leaves the base as typed.
 func providerServiceBaseURL(kind, service, base string) (string, error) {
 	if service == "" {
 		return base, nil
 	}
-	if service != modelprovider.ServiceDeepSeek || kind != ProviderKindOpenAICompatible {
-		return "", badRequest("unsupported provider service or kind")
+	row, ok := modelprovider.LookupPreset(service)
+	if !ok {
+		if len(service) > maxPresetRefEcho {
+			service = service[:maxPresetRefEcho] + "…"
+		}
+		return "", badRequest("unknown provider preset " + strconv.Quote(service) + "; valid presets: " + strings.Join(modelprovider.PresetRefs(), ", "))
 	}
-	base = strings.TrimSpace(base)
-	if base != "" && base != modelprovider.DeepSeekBaseURL {
-		return "", badRequest("DeepSeek service requires its documented endpoint")
+	if kind != row.Kind {
+		return "", badRequest("preset " + row.Ref + " has kind " + row.Kind)
 	}
-	return modelprovider.DeepSeekBaseURL, nil
+	if base = strings.TrimRight(strings.TrimSpace(base), "/"); base != "" && base != row.BaseURL {
+		return "", badRequest("preset " + row.Ref + " requires its documented endpoint")
+	}
+	return row.BaseURL, nil
 }
 
 func (m *Module) probeProviderService(ctx context.Context, rec ProviderRecord, key string) (ProviderProbeResult, error) {
@@ -47,6 +59,8 @@ func (m *Module) probeProviderService(ctx context.Context, rec ProviderRecord, k
 
 // ParseProviderCredentialReference parses the non-secret immutable provider pin
 // used only by service execution profiles: provider:<record-ref>:<record-version>.
+// The version names the key and endpoint the record held then; the pin holds while
+// they stay in place, across connection tests, renames and default-model changes.
 func ParseProviderCredentialReference(value string) (string, int64, bool) {
 	parts := strings.Split(value, ":")
 	if len(parts) != 3 || parts[0] != "provider" || !validProviderRecordRef(parts[1]) {
@@ -71,7 +85,7 @@ func (m *Module) ResolveProviderCredential(ctx context.Context, tenant model.Ten
 	if rec.State != ProviderRecordActive {
 		return nil, ErrProviderRecordRevoked
 	}
-	if rec.Version != version || service != modelprovider.ServiceDeepSeek || rec.Service != service ||
+	if !rec.pinHolds(version) || service != modelprovider.ServiceDeepSeek || rec.Service != service ||
 		rec.Kind != ProviderKindOpenAICompatible || rec.BaseURL != modelprovider.DeepSeekBaseURL || endpoint != modelprovider.DeepSeekChatURL {
 		return nil, ErrProviderRecordChanged
 	}
@@ -83,9 +97,20 @@ func (m *Module) ResolveProviderCredential(ctx context.Context, tenant model.Ten
 		return nil, openFailure(err)
 	}
 	current, err := m.GetProviderRecord(ctx, tenant, ref)
-	if err != nil || current.Version != version || current.State != ProviderRecordActive || current.SecretRef != rec.SecretRef {
+	if err != nil || !current.pinHolds(version) || current.State != ProviderRecordActive || current.SecretRef != rec.SecretRef {
 		clear(key)
 		return nil, ErrProviderRecordChanged
 	}
 	return key, nil
+}
+
+// pinHolds reports whether the key and endpoint in place at record version v are
+// still the record's: set at or before v, and v not newer than the record. A row
+// from before the credential version was recorded holds only its current version.
+func (r ProviderRecord) pinHolds(v int64) bool {
+	since := r.CredentialVersion
+	if since == 0 {
+		since = r.Version
+	}
+	return since <= v && v <= r.Version
 }

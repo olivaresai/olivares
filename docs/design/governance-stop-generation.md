@@ -46,9 +46,9 @@ metadata do not increment. Rollback reverts generation and stop together.
 | --- | --- |
 | Operator engage | barrier, generation, active lookup, approvals, stop and audit |
 | Guardian stop auto/approval | barrier before action/approval access; new stop bumps |
-| Guardian approved stop | barrier, stored arm revalidation, approval, stop, action |
+| Guardian approved stop | barrier, approval spend (a bound change record is read first), stored arm revalidation, stop, action |
 | Tier floor | agent read, barrier before signal writes, count, optional new stop |
-| Reenable | barrier, generation, stop/approval, existing quorum and review checks, bump |
+| Reenable | preflight: barrier, generation, stop/approval and quorum floor; then one transaction: barrier, approval spend (a bound change record is read first), generation, stop, quorum and review checks, bump |
 | Review | barrier, stop and separation check, metadata and audit; no bump |
 
 Guardian quarantine is an identity arm and never takes the governance barrier.

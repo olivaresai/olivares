@@ -97,7 +97,7 @@ type sendFails struct {
 
 func (p sendFails) Send(context.Context, []byte) error { return p.err }
 
-// SR5C on 1285a54c: Process.Send says what happened to the bytes and the caller records
+// review on 1285a54c: Process.Send says what happened to the bytes and the caller records
 // it. A refusal whose interrupt could not be written records that attempt with the cause
 // and what fixes the credential, and claims no interruption.
 func TestARefusalWhoseInterruptWriteFailsRecordsWhatHappened(t *testing.T) {
@@ -151,7 +151,7 @@ func (sendUntilExpired) Send(ctx context.Context, _ []byte) error {
 	return fmt.Errorf("sessions: write stdin: no bytes were written: %w", ctx.Err())
 }
 
-// SR2C on 07a5b505: a native write can spend its whole context, and the outcome written
+// review on 07a5b505: a native write can spend its whole context, and the outcome written
 // under that same context would be refused by the store. The outcome and the remedy
 // still commit when the write's context has expired.
 func TestARefusalRecordsAFailedWriteEvenWhenItsContextExpired(t *testing.T) {

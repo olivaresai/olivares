@@ -159,8 +159,21 @@ type BudgetStatus struct {
 
 // AccessData is the data for an access-review report.
 type AccessData struct {
-	Generated time.Time
-	Users     []UserAccess
+	Generated           time.Time
+	Users               []UserAccess
+	ExpiringGrants      []AccessGrant
+	NeverExpiringGrants []AccessGrant
+}
+
+// AccessGrant is one active scoped grant or source-scope binding in an access review.
+type AccessGrant struct {
+	ID         string
+	Kind       string
+	SourceType string
+	SourceRef  string
+	ScopeTree  string
+	ScopeRef   string
+	ExpiresAt  string
 }
 
 // UserAccess is one user's access information.

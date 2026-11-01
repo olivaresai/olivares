@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# osv-scanner reads this file for the go.mod next to it (OpenSSF Scorecard's Vulnerabilities
+# check runs osv-scanner). Each entry is one advisory that does not affect this module, with the
+# measured reason. A called vulnerability still fails scripts/govulncheck-gate.sh.
+
+[[IgnoredVulns]]
+id = "GO-2026-5932"
+reason = "Not affected: the vulnerable package golang.org/x/crypto/openpgp is not imported (go list -deps -test ./... names no such package, and govulncheck reports it at module level only: 0 called, 0 imported). OpenPGP goes through github.com/ProtonMail/go-crypto/openpgp. The advisory has no fixed version."

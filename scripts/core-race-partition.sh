@@ -7,7 +7,7 @@
 # deterministic partition of them.
 #
 # Background: on 2026-09-13 the race-core job (run 34743156449, job 103686207093,
-# ci-runner-8) was killed by its 180-minute step ceiling. `core/auth` alone took 2529.5 s,
+# build-host) was killed by its 180-minute step ceiling. `core/auth` alone took 2529.5 s,
 # `core/internal/store/sqlstore` was still running when the cap fired, and 22 of the 47 core
 # test packages sort after it and NEVER RAN. The leg did not hang: it did not fit on one
 # runner, and nothing reported the unreached packages at all. This helper adds a selector so

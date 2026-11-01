@@ -13,9 +13,9 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 )
 
-// TestSessionStartUsesTheEnginesDefaultProfile is HU 030: without --profile, `session
+// TestSessionStartUsesTheEnginesDefaultProfile is acceptance: without --profile, `session
 // start` used the tool's own login while the console chose a working profile (one bound
-// to a Providers key). It now asks the engine (POST provider-profiles/resolve, FH 026/028),
+// to a Providers key). It now asks the engine (POST provider-profiles/resolve, first-hour check/028),
 // launches under the profile it answers, and says which one in one line of three forms.
 func TestSessionStartUsesTheEnginesDefaultProfile(t *testing.T) {
 	for _, tc := range []struct {
@@ -85,7 +85,7 @@ func TestSessionStartPrintsTheEnginesRefusalAsItIs(t *testing.T) {
 	}
 }
 
-// TestSessionStartPrintsTheEnginesUnavailableSentence: FH 032 answers 503 with one
+// TestSessionStartPrintsTheEnginesUnavailableSentence: first-hour check answers 503 with one
 // sentence when the node cannot read the tool's sign-in status. It is printed as it is
 // (exit 6, the engine's side), like the 409.
 func TestSessionStartPrintsTheEnginesUnavailableSentence(t *testing.T) {

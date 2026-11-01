@@ -454,7 +454,7 @@ func TestTheLiveRowOfAStoppedManagedRunReadsEnded(t *testing.T) {
 	}
 }
 
-// SR2C on e97d5e7c: the same managed row goes from ended back to live when the session
+// review on e97d5e7c: the same managed row goes from ended back to live when the session
 // resumes, and is ended again when it stops (live_scope.go clears ended_at on the bind).
 func TestTheManagedRowEndsResumesAndEndsAgain(t *testing.T) {
 	for _, be := range profileBackends(t) {

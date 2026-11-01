@@ -35,13 +35,17 @@ import (
 // fakeHost captures published events so the access-map permitted-edge projection can
 // be asserted, and satisfies sdk.Host for the modules' Init.
 type fakeHost struct {
-	mu     sync.Mutex
-	events []event.Event
+	mu         sync.Mutex
+	events     []event.Event
+	publishErr error
 }
 
 func (h *fakeHost) Publish(_ context.Context, e event.Event) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.publishErr != nil {
+		return h.publishErr
+	}
 	h.events = append(h.events, e)
 	return nil
 }
@@ -95,7 +99,8 @@ func newHarnessOn(t *testing.T, cfg store.Config, opts ...sourcescope.Option) *h
 	ctx := context.Background()
 	host := &fakeHost{}
 	gov := governance.New()
-	ss := sourcescope.New(append([]sourcescope.Option{sourcescope.WithScopedAuthorizer(gov.ScopedGrants())}, opts...)...)
+	authorizer := auth.NewAuthorizer(gov.RequestEvaluator(), auth.WithScopedGrants(gov.ScopedGrants()))
+	ss := sourcescope.New(append([]sourcescope.Option{sourcescope.WithScopedAuthorizer(gov.ScopedGrants()), sourcescope.WithAuthorizer(authorizer)}, opts...)...)
 
 	register := func(reg store.ExtensionRegistry) error {
 		if err := gov.RegisterSchema(reg); err != nil {
@@ -128,9 +133,10 @@ func newHarnessOn(t *testing.T, cfg store.Config, opts ...sourcescope.Option) *h
 		t.Fatal(err)
 	}
 	authr := auth.NewAuthenticator(st, nil)
+	ss.UseRequesterWorkspace(authr.RequesterWorkspace)
 	srv, err := api.New(api.Options{
 		Store: st, Authenticator: authr,
-		Authorizer: auth.NewAuthorizer(gov.RequestEvaluator(), auth.WithScopedGrants(gov.ScopedGrants())),
+		Authorizer: authorizer,
 		Signer:     signer, SetupToken: tok, Version: "test",
 		Modules: []api.Module{gov, ss},
 	})

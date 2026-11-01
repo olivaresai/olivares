@@ -10,6 +10,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -31,6 +32,7 @@ import (
 // posture operations and request statuses.
 const (
 	postureOpCreate          = "create"
+	postureOpAccessRequest   = "access_request"
 	postureOpUpdate          = "update"
 	postureOpDelete          = "delete"
 	postureOpDisableScoping  = "disable_scoping"
@@ -90,6 +92,7 @@ type postureRequestDTO struct {
 	Status        string `json:"status"`
 	DecidedBy     string `json:"decided_by,omitempty"`
 	Note          string `json:"note,omitempty"`
+	WorkspaceID   string `json:"workspace_id,omitempty"`
 	GuardProfile  string `json:"guard_profile,omitempty"`
 }
 
@@ -107,6 +110,7 @@ func toPostureRequestDTO(rec model.Record) postureRequestDTO {
 		Status:        rec.String(colPRStatus),
 		DecidedBy:     rec.String(colPRDecidedBy),
 		Note:          rec.String(colPRNote),
+		WorkspaceID:   rec.String(colPRWorkspaceID),
 	}
 	if p := rec.String(colPRProposed); p != "" {
 		if assignmentOps[d.Op] {
@@ -144,6 +148,21 @@ func scopeOf(d bindingDTO) postureScope {
 }
 
 func (s postureScope) String() string { return s.tree + ":" + s.ref }
+
+func expiryExtended(old, updated string) bool {
+	if old == updated {
+		return false
+	}
+	if updated == "" {
+		return old != ""
+	}
+	if old == "" {
+		return false
+	}
+	oldAt, oldErr := time.Parse(time.RFC3339Nano, old)
+	newAt, newErr := time.Parse(time.RFC3339Nano, updated)
+	return oldErr != nil || newErr != nil || newAt.After(oldAt)
+}
 
 // classifyUpdate reports whether updating a binding from old→updated RELAXES enforcement
 // and a human reason for the audit/UI. otherEnabledAllows is the number of
@@ -188,6 +207,16 @@ func (s postureScope) String() string { return s.tree + ":" + s.ref }
 // one; posture_classify_test.go pins that as a property over the whole input space.
 func classifyUpdate(old, updated bindingDTO, otherEnabledAllows int) (bool, string) {
 	oldEff, newEff := normalizeEffect(old.Effect), normalizeEffect(updated.Effect)
+	forbidExpiry := old.ExpiresAt != updated.ExpiresAt || (oldEff != newEff && updated.ExpiresAt != "")
+	if (oldEff == effectForbid || newEff == effectForbid) && forbidExpiry {
+		return true, "forbid expiry changed (a restriction lifts at a different time)"
+	}
+	if expiryExtended(old.ExpiresAt, updated.ExpiresAt) {
+		return true, "expiry extended (access remains available for longer)"
+	}
+	if isStandardsSource(old.SourceType) {
+		return classifyStandardsUpdate(old, updated)
+	}
 	oldScope, newScope := scopeOf(old), scopeOf(updated)
 	moved := oldScope != newScope
 
@@ -322,7 +351,13 @@ func classifyUpdate(old, updated bindingDTO, otherEnabledAllows int) (bool, stri
 //   - every FURTHER enabled allow on an ALREADY-CONFINED source ADDS a grant — a population
 //     that could not reach the source now can. Gated.
 func classifyCreate(created bindingDTO, otherEnabledAllows, assignmentRows int) (bool, string) {
+	if isStandardsSource(created.SourceType) {
+		return classifyStandardsCreate(created)
+	}
 	if normalizeEffect(created.Effect) == effectForbid {
+		if created.ExpiresAt != "" {
+			return true, "forbid has an expiry (the restriction lifts later)"
+		}
 		return false, ""
 	}
 	if !created.Enabled {
@@ -507,6 +542,9 @@ func countOtherAssignments(ctx context.Context, sc store.Scope, connectorName, e
 // enabled forbid (a restriction), or removing the last enabled allow (the source becomes
 // global). Deleting an already-disabled binding changes no enforcement.
 func classifyDelete(deleted bindingDTO, otherEnabledAllows int) (bool, string) {
+	if isStandardsSource(deleted.SourceType) {
+		return classifyStandardsDelete(deleted)
+	}
 	if !deleted.Enabled {
 		return false, ""
 	}
@@ -551,7 +589,7 @@ func (m *Module) createPostureRequest(ctx context.Context, sc store.Scope, mc ap
 }
 
 // createAssignmentPostureRequest is the same, for a proposal on the ASSIGNMENT surface
-//. The two surfaces share one request table and one approval flow — the dual-control
+// . The two surfaces share one request table and one approval flow — the dual-control
 // machinery was never binding-specific — and differ only in the shape stored in `proposed`.
 func (m *Module) createAssignmentPostureRequest(ctx context.Context, sc store.Scope, mc api.ModuleContext, op, targetID, reason string, proposed *assignmentDTO) (postureRequestDTO, error) {
 	proposedJSON := ""
@@ -574,6 +612,10 @@ func (m *Module) createAssignmentPostureRequest(ctx context.Context, sc store.Sc
 // non-nil, so an `any` parameter would silently store the string "null" for a delete op and
 // hand the approver a proposal that decodes to a zero-valued row.
 func (m *Module) createPostureRequestJSON(ctx context.Context, sc store.Scope, mc api.ModuleContext, op, sourceType, sourceRef, targetID, reason, proposedJSON string) (postureRequestDTO, error) {
+	return m.createPostureRequestJSONAt(ctx, sc, mc, op, sourceType, sourceRef, targetID, reason, proposedJSON, "")
+}
+
+func (m *Module) createPostureRequestJSONAt(ctx context.Context, sc store.Scope, mc api.ModuleContext, op, sourceType, sourceRef, targetID, reason, proposedJSON, workspaceID string) (postureRequestDTO, error) {
 	repo, err := sc.Ext(postureRequestKind)
 	if err != nil {
 		return postureRequestDTO{}, err
@@ -584,6 +626,7 @@ func (m *Module) createPostureRequestJSON(ctx context.Context, sc store.Scope, m
 		colPRReason: reason, colPRProposer: mc.Principal.Actor(),
 		colPRProposerUser: auth.PersonRefOf(mc.Principal).User,
 		colPRStatus:       postureStatusPending, colPRDecidedBy: "", colPRDecidedByUser: "",
+		colPRWorkspaceID: workspaceID,
 	})
 	if err != nil {
 		return postureRequestDTO{}, err
@@ -603,6 +646,7 @@ func auditPosture(ctx context.Context, sc store.Scope, mc api.ModuleContext, ver
 		ActorKind:  mc.Principal.ActorKind(),
 		Action:     "sourcescope.posture." + verb,
 		TargetKind: postureRequestKind,
+		TargetID:   model.ID(pr.ID),
 		Meta: map[string]any{
 			"op": pr.Op, "source_type": pr.SourceType, "source_ref": pr.SourceRef,
 			"target_id": pr.TargetID, "reason": pr.Reason, "status": pr.Status,
@@ -655,6 +699,15 @@ func (m *Module) handleDisableScoping(w http.ResponseWriter, r *http.Request, mc
 				"becomes UNCONFINED, not global: its ref carries connector assignment rows, so " +
 				"visibility falls back to the assignment gate, which admits only the assigned workspaces"
 		}
+		if isStandardsSource(in.SourceType) {
+			// A standard is not a source that becomes visible: it stops being given.
+			what := "instructions"
+			if in.SourceType == sourceTemplate {
+				what = "default template"
+			}
+			reason = "disable every assignment of this template as " + what +
+				": no department or group is given it any more — a one-way relaxation"
+		}
 		pr, perr := m.createPostureRequest(r.Context(), sc, mc, postureOpDisableScoping, in.SourceType, in.SourceRef, "", reason, nil)
 		out = pr
 		return perr
@@ -678,24 +731,43 @@ func (m *Module) handleListPostureRequests(w http.ResponseWriter, r *http.Reques
 		}
 	}
 	out := listResponse[postureRequestDTO]{Items: []postureRequestDTO{}}
+	limit := q.Limit
+	var recs []model.Record
 	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
 		repo, err := sc.Ext(postureRequestKind)
 		if err != nil {
 			return err
 		}
-		recs, page, err := repo.List(r.Context(), q)
-		if err != nil {
-			return err
+		q.Limit = listCap
+		for {
+			pageRows, page, err := repo.List(r.Context(), q)
+			if err != nil {
+				return err
+			}
+			recs = append(recs, pageRows...)
+			if !page.HasMore || page.Cursor == "" {
+				return nil
+			}
+			q.Cursor = page.Cursor
 		}
-		for _, rec := range recs {
-			out.Items = append(out.Items, toPostureRequestDTO(rec))
-		}
-		out.Cursor, out.HasMore = page.Cursor, page.HasMore
-		return nil
 	})
 	if err != nil {
 		writeStoreError(w, err)
 		return
+	}
+	visible := make([]postureRequestDTO, 0, len(recs))
+	for _, rec := range recs {
+		if rec.String(colPROp) == postureOpAccessRequest && rec.String(colPRProposerUser) != mc.Principal.UserID.String() && !m.mayApproveAccessRequest(r.Context(), mc, rec) {
+			continue
+		}
+		visible = append(visible, toPostureRequestDTO(rec))
+	}
+	if limit > 0 && len(visible) > limit {
+		out.Items = visible[:limit]
+		out.HasMore = true
+		out.Cursor = out.Items[len(out.Items)-1].ID
+	} else {
+		out.Items = visible
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -708,8 +780,9 @@ func (m *Module) handleGetPostureRequest(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	var (
-		out   postureRequestDTO
-		found bool
+		out    postureRequestDTO
+		record model.Record
+		found  bool
 	)
 	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
 		repo, err := sc.Ext(postureRequestKind)
@@ -720,6 +793,7 @@ func (m *Module) handleGetPostureRequest(w http.ResponseWriter, r *http.Request,
 		if err != nil {
 			return err
 		}
+		record = rec
 		found, out = true, toPostureRequestDTO(rec)
 		return nil
 	})
@@ -731,12 +805,16 @@ func (m *Module) handleGetPostureRequest(w http.ResponseWriter, r *http.Request,
 		writeJSON(w, http.StatusNotFound, errorBody("not found"))
 		return
 	}
+	if record.String(colPROp) == postureOpAccessRequest && record.String(colPRProposerUser) != mc.Principal.UserID.String() && !m.mayApproveAccessRequest(r.Context(), mc, record) {
+		writeJSON(w, http.StatusNotFound, errorBody("not found"))
+		return
+	}
 	writeJSON(w, http.StatusOK, out)
 }
 
-// handleApprovePostureRequest is the SECOND-person leg of dual-control: a DISTINCT
-// principal (never the proposer) approves a pending relaxation, which then applies inside
-// the approver's transaction and is audited. It requires the posture:admin permission.
+// handleApprovePostureRequest approves a pending relaxation or access request.
+// A distinct principal applies it inside the approver's transaction and records
+// the decision in the audit ledger.
 func (m *Module) handleApprovePostureRequest(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	m.decidePostureRequest(w, r, mc, true)
 }
@@ -761,6 +839,15 @@ func (m *Module) decidePostureRequest(w http.ResponseWriter, r *http.Request, mc
 	subjects, err := proposalSubjects(r.Context(), mc, id, approve)
 	if err != nil {
 		writeStoreError(w, err)
+		return
+	}
+	allowed, err := m.accessRequestDecisionAllowed(r.Context(), mc, id, false, approve)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if !allowed {
+		writeJSON(w, http.StatusForbidden, errorBody("access requests require the department admin or owner for the requested workspace"))
 		return
 	}
 	err = fencedWrite(r, mc, subjects, func(sc store.Scope) error {
@@ -946,8 +1033,10 @@ func (m *Module) applyPosture(ctx context.Context, sc store.Scope, mc api.Module
 	storedReason := rec.String(colPRReason)
 	// A proposal a Business install queued to assign or change an assignment is not applied
 	// by a Community one. Deleting one and disabling the scoping of its source only relax.
-	if op := rec.String(colPROp); (op == postureOpCreate || op == postureOpUpdate) && !m.mayWriteSource(rec.String(colPRSourceType)) {
-		return nil, errProfileAssignmentBusiness
+	if op := rec.String(colPROp); op == postureOpCreate || op == postureOpUpdate || op == postureOpAccessRequest {
+		if err := m.mayWriteSource(rec.String(colPRSourceType)); err != nil {
+			return nil, err
+		}
 	}
 	switch rec.String(colPROp) {
 	case postureOpDelete:
@@ -969,6 +1058,85 @@ func (m *Module) applyPosture(ctx context.Context, sc store.Scope, mc api.Module
 		}
 		return nil, auditBinding(ctx, sc, mc, "delete", snap)
 
+	case postureOpAccessRequest:
+		var proposal accessProposal
+		if uerr := json.Unmarshal([]byte(rec.String(colPRProposed)), &proposal); uerr != nil {
+			return nil, validationError("stored access proposal is unreadable")
+		}
+		in := proposal.bindingDTO
+		if err := validateAccessProposal(rec, in); err != nil {
+			return nil, err
+		}
+		in.SourceType = rec.String(colPRSourceType)
+		in.SourceRef = rec.String(colPRSourceRef)
+		if msg := in.validate(); msg != "" {
+			return nil, validationError(msg)
+		}
+		if proposal.Lifetime > 0 {
+			in.ExpiresAt = model.NewTimestamp(m.clock.Now().Time().Add(proposal.Lifetime)).String()
+		}
+		confined, cerr := sourceConfined(ctx, sc, in.SourceType, in.SourceRef)
+		if cerr != nil {
+			return nil, cerr
+		}
+		if !confined {
+			return nil, errPostureMoved
+		}
+		in.ExpiresAt, err = m.resolveBindingExpiry(ctx, sc, &in)
+		if err != nil {
+			return nil, expiryFailure(err)
+		}
+		wsID, folderPath, rerr := resolveScope(ctx, sc, in.ScopeTree, &in.ScopeRef)
+		if rerr != nil {
+			return nil, rerr
+		}
+		in.FolderPath = folderPath
+		duplicate, _, _, perr := createPreflight(ctx, sc, in.SourceType, in.SourceRef, scopeOf(in))
+		if perr != nil {
+			return nil, perr
+		}
+		targetID := rec.String(colPRTargetID)
+		if duplicate && targetID == "" {
+			targetID, err = m.expiredBindingForRenewal(ctx, sc, in)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if targetID != "" {
+			target, gerr := brepo.Get(ctx, model.ID(targetID))
+			if gerr != nil {
+				return nil, gerr
+			}
+			old := toBindingDTO(target)
+			expired, xerr := bindingExpired(old, m.clock.Now().Time())
+			if xerr != nil {
+				return nil, xerr
+			}
+			if !duplicate || !expired || old.SourceType != in.SourceType || old.SourceRef != in.SourceRef ||
+				scopeOf(old) != scopeOf(in) || normalizeEffect(old.Effect) != effectAllow {
+				return nil, store.ErrConflict
+			}
+			for k, v := range in.fields(wsID, target.String(colCreatedBy)) {
+				target[k] = v
+			}
+			resetBindingExpiryLifecycle(target, old, in)
+			updated, uerr := brepo.Update(ctx, target)
+			if uerr != nil {
+				return nil, uerr
+			}
+			out := toBindingDTO(updated)
+			return &out, auditBinding(ctx, sc, mc, "update", out)
+		}
+		if duplicate {
+			return nil, store.ErrConflict
+		}
+		created, cerr := brepo.Create(ctx, in.fields(wsID, rec.String(colPRProposer)))
+		if cerr != nil {
+			return nil, cerr
+		}
+		out := toBindingDTO(created)
+		return &out, auditBinding(ctx, sc, mc, "create", out)
+
 	case postureOpCreate:
 		var in bindingDTO
 		if uerr := json.Unmarshal([]byte(rec.String(colPRProposed)), &in); uerr != nil {
@@ -980,6 +1148,10 @@ func (m *Module) applyPosture(ctx context.Context, sc store.Scope, mc api.Module
 		in.SourceRef = rec.String(colPRSourceRef)
 		if msg := in.validate(); msg != "" {
 			return nil, validationError(msg)
+		}
+		in.ExpiresAt, err = m.resolveBindingExpiry(ctx, sc, &in)
+		if err != nil {
+			return nil, expiryFailure(err)
 		}
 		wsID, folderPath, rerr := resolveScope(ctx, sc, in.ScopeTree, &in.ScopeRef)
 		if rerr != nil {
@@ -994,6 +1166,9 @@ func (m *Module) applyPosture(ctx context.Context, sc store.Scope, mc api.Module
 		}
 		if duplicate {
 			return nil, store.ErrConflict
+		}
+		if cerr := refuseSecondDefaultTemplate(ctx, sc, in, ""); cerr != nil {
+			return nil, cerr
 		}
 		relaxing, reason := classifyCreate(in, otherAllows, assignRows)
 		if cerr := checkPremiseUnchanged(storedReason, relaxing, reason); cerr != nil {
@@ -1024,11 +1199,20 @@ func (m *Module) applyPosture(ctx context.Context, sc store.Scope, mc api.Module
 		if msg := in.validate(); msg != "" {
 			return nil, validationError(msg)
 		}
+		if in.ExpiresAt != old.ExpiresAt {
+			in.ExpiresAt, err = m.resolveBindingExpiry(ctx, sc, &in)
+			if err != nil {
+				return nil, expiryFailure(err)
+			}
+		}
 		wsID, folderPath, rerr := resolveScope(ctx, sc, in.ScopeTree, &in.ScopeRef)
 		if rerr != nil {
 			return nil, rerr
 		}
 		in.FolderPath = folderPath
+		if cerr := refuseSecondDefaultTemplate(ctx, sc, in, old.ID); cerr != nil {
+			return nil, cerr
+		}
 		otherAllows, cerr := countOtherEnabledAllows(ctx, sc, old.SourceType, old.SourceRef, old.ID)
 		if cerr != nil {
 			return nil, cerr
@@ -1040,6 +1224,7 @@ func (m *Module) applyPosture(ctx context.Context, sc store.Scope, mc api.Module
 		for k, v := range in.fields(wsID, target.String(colCreatedBy)) {
 			target[k] = v
 		}
+		resetBindingExpiryLifecycle(target, old, in)
 		if target, err = brepo.Update(ctx, target); err != nil {
 			return nil, err
 		}

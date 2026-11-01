@@ -53,27 +53,29 @@ done
 # `.export-tmp/tmp.NZajCfxMeT` filtrado el 23-08 —650 ficheros, 20 MB, once dias— llevaba un
 # `cmd_support_test.go` con `dr.WriteBundle(` que el arbol ya NO tiene, y el gate se puso rojo
 # acusando a un fichero limpio: medido, 0 ocurrencias en `origin/main` y 0 en la rama, y la
-# unica llamada viva del repositorio es la permitida en `core/dr/lowlevel_test.go`.
+# unica llamada viva del repositorio era la permitida en `core/dr/lowlevel_test.go`.
 #
 # Un censo que mide el disco mide los residuos de OTROS guiones. `git ls-files` mide lo que el
 # repositorio dice que existe, que es el sujeto que esta regla quiere vigilar.
-censo_go="$(mktemp)"
-trap 'rm -f "$censo_go"' EXIT
-if ! git -C "$root" ls-files -z -- '*.go' >"$censo_go" 2>/dev/null; then
+go_census="$(mktemp)"
+trap 'rm -f "$go_census"' EXIT
+if ! git -C "$root" ls-files -z -- '*.go' >"$go_census" 2>/dev/null; then
 	echo "check-uninstall-contract: 2 COULD NOT CHECK — $root is not a Git tree, so tracked" >&2
 	echo "  files cannot be enumerated. A filesystem scan is not a substitute: it would include" >&2
 	echo "  ignored residue from other scripts and report findings against valid files." >&2
 	exit 2
 fi
 
-python3 - "$root" "$censo_go" <<'PY'
+# -I keeps PYTHONOPTIMIZE from stripping the asserts below and keeps the working
+# directory off sys.path, so a planted json.py cannot answer for the real one.
+python3 -I - "$root" "$go_census" <<'PY'
 import pathlib
 import sys
 
 root = pathlib.Path(sys.argv[1])
 # El censo de Go de mas abajo mide el REPOSITORIO, no el disco. Lo recibe ya hecho, con NUL
 # de separador para que un salto de linea en un nombre no lo parta.
-censo = [b.decode() for b in pathlib.Path(sys.argv[2]).read_bytes().split(b"\0") if b]
+go_census = [b.decode() for b in pathlib.Path(sys.argv[2]).read_bytes().split(b"\0") if b]
 read = lambda p: (root / p).read_text(encoding="utf-8")
 
 main = read("cmd/olivares/main.go")
@@ -316,17 +318,60 @@ assert "refusing DR import from newer engine" in dr_integrity
 assert "requires an authenticated manifest" in dr_bundle
 
 # The low-level serializer is deliberately internal-by-convention: an added
-# producer must not bypass AuthenticateBundle. This census watches every Go
-# caller without relying on rg (which the house hook does not provide).
-for rel in censo:
+# producer must not bypass AuthenticateBundle. This census scans every tracked
+# Go file for the literal WriteBundle( (qualified, aliased or in-package),
+# without relying on rg (which the house hook does not provide).
+# A line whose first non-space characters are // is a comment, not a caller.
+# Every allowlisted file must be tracked and be a test file, so a stale entry
+# cannot sit inert and the set cannot silently widen to production code.
+#
+# The test files below call the serializer directly, by design:
+# - Fixture builders must hand the writer a member it would not produce itself:
+#   a pre-v2 manifest, or a sealed stream mutated before it is read. They cannot
+#   use WriteAuthenticatedBundle, which stamps the current format and seals the
+#   snapshot, so each authenticates its manifest once and only then writes it.
+# - Refusal tests call the serializer to prove it rejects unsafe input; the
+#   call itself is the subject under test and must return an error.
+bundle_fixtures = {
+    "cmd/olivares/cmd_dr_sealed_test.go",
+    "core/api/dr_sealed_restore_test.go",
+    "core/dr/bundle_format_test.go",
+    "core/dr/dr_test.go",
+}
+serializer_refusal_tests = {
+    "core/dr/lowlevel_test.go",
+    "core/dr/snapshot_seal_test.go",
+}
+tracked = set(go_census)
+assert tracked, "tracked Go census is empty"
+for rel in bundle_fixtures | serializer_refusal_tests:
+    assert rel in tracked, rel
+    assert rel.endswith("_test.go"), rel
+
+
+def call_lines(lines, name):
+    return [
+        n
+        for n, line in enumerate(lines)
+        if name in line and not line.lstrip().startswith("//")
+    ]
+
+
+for rel in go_census:
     if rel in ("core/dr/bundle.go",):
         continue
-    path = root / rel
-    body = path.read_text(encoding="utf-8")
-    if rel == "core/dr/lowlevel_test.go":
-        assert body.count("dr.WriteBundle(") == 1, rel
+    lines = (root / rel).read_text(encoding="utf-8").splitlines()
+    writes = call_lines(lines, "WriteBundle(")
+    if rel in bundle_fixtures:
+        auths = call_lines(lines, "AuthenticateBundle(")
+        assert len(writes) == 1, rel
+        assert len(auths) == 1, rel
+        assert auths[0] < writes[0], rel
         continue
-    assert "dr.WriteBundle(" not in body, rel
+    if rel in serializer_refusal_tests:
+        assert len(writes) == 1, rel
+        continue
+    assert not writes, rel
 
 for target in ("lint:uninstall-contract", "lint:uninstall-contract:selftest"):
     assert f"  {target}:" in taskfile

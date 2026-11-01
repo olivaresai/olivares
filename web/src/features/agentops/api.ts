@@ -8,6 +8,10 @@ import {
   type TenantRequestOptions,
 } from '@/lib/api/client'
 import type { ListResponse } from '@/lib/api/types'
+import { keepPreviousData, queryOptions } from '@tanstack/react-query'
+import { isEngineTool, setEngineTools } from './engine-tools'
+import type { ReviewCommentPlace, SessionTurnBody } from './session-turn'
+import type { TitleStyle } from '@/stores/preferences'
 import type {
   LaunchReadinessIsolation,
   LaunchReadinessTransport,
@@ -49,12 +53,16 @@ import type {
   RunMessagesDTO,
   RunMessagesParams,
   RunDTO,
+  TerminalDTO,
   RunMarkDTO,
   RunPinDTO,
+  RunQueueDTO,
+  QueuedMessageDTO,
   RunEventDTO,
   HandoffPreviewDTO,
   HandoffRunRequest,
   HandoffRunResult,
+  SourceItemDTO,
   ToolReadinessDTO,
   WorkspaceDTO,
   WriteResponse,
@@ -177,6 +185,17 @@ export const agentOpsApi = {
     body: CreateRunRequest,
     opts?: Pick<RequestOptions, 'tenant' | 'signal' | 'dispatchGuard'>,
   ) => http.post<RunDTO>(RUNS, body, opts),
+  /** The issue or pull request a start names, read by the engine with the repository
+   * credential an administrator registered for the folder's workspace. */
+  sourceItem: (
+    workspaceRef: string,
+    url: string,
+    opts?: Pick<RequestOptions, 'tenant' | 'signal'>,
+  ) =>
+    http.get<SourceItemDTO>('/v1/m/sessions/source-items', {
+      query: { workspace_ref: workspaceRef, url },
+      ...opts,
+    }),
   runEvents: (r: string, params?: EventListParams) =>
     http.get<ListResponse<RunEventDTO>>(`${RUNS}/${ref(r)}/events`, {
       query: { ...params },
@@ -268,6 +287,50 @@ export const agentOpsApi = {
       `${RUNS}/${ref(r)}/input`,
       { text, attachments },
       options,
+    ),
+  /** Send a comment on one line of the session's branch diff (202): the same turn the
+   * run takes as any message (`body` is `sessionTurnBody`'s), with the place beside it
+   * so the ledger records where it was made. A work-bound run presents its fence. */
+  reviewComment: (
+    r: string,
+    body: SessionTurnBody,
+    place: ReviewCommentPlace,
+    workLeaseFence?: number,
+    options?: RequestOptions,
+  ) =>
+    http.post<{ accepted: boolean }>(
+      `${RUNS}/${ref(r)}/input`,
+      {
+        ...body,
+        review_comment: place,
+        ...(workLeaseFence === undefined
+          ? {}
+          : { work_lease_fence: workLeaseFence }),
+      },
+      options,
+    ),
+  // --- The message queue: what the person lined up while the tool works -----
+  /** The session's queue in sending order, and why its first message has not gone. */
+  queue: (r: string, options?: Pick<RequestOptions, 'signal'>) =>
+    http.get<RunQueueDTO>(`${RUNS}/${ref(r)}/queue`, options),
+  /** Queue a message after the others (201). The engine sends it by itself when the turn
+   * ends, or at once when the session is not busy. */
+  queueAdd: (r: string, text: string) =>
+    http.post<QueuedMessageDTO>(`${RUNS}/${ref(r)}/queue`, { text }),
+  queueEdit: (r: string, id: string, text: string) =>
+    http.patch<QueuedMessageDTO>(`${RUNS}/${ref(r)}/queue/${ref(id)}`, {
+      text,
+    }),
+  /** Set the sending order: every queued id, once. */
+  queueOrder: (r: string, ids: string[]) =>
+    http.put<RunQueueDTO>(`${RUNS}/${ref(r)}/queue`, { ids }),
+  queueRemove: (r: string, id: string) =>
+    http.delete<RunQueueDTO>(`${RUNS}/${ref(r)}/queue/${ref(id)}`),
+  /** Send one queued message now: into the running turn through the tool's own input, or
+   * as the next message when the session waits (202). */
+  queueSteer: (r: string, id: string) =>
+    http.post<{ accepted: boolean }>(
+      `${RUNS}/${ref(r)}/queue/${ref(id)}/steer`,
     ),
   /** Cancel the active turn while retaining the owned process and conversation.
    * Work-bound runs must present the fence observed on that exact run. */
@@ -380,6 +443,24 @@ export const agentOpsApi = {
         : { work_lease_fence: workLeaseFence },
     ),
   resume: (r: string) => http.post<RunDTO>(`${RUNS}/${ref(r)}/resume`),
+  resumeAtReset: (r: string) =>
+    http.post<RunDTO>(`${RUNS}/${ref(r)}/resume`, { at_reset: true }),
+  cancelResumeAtReset: (r: string) =>
+    http.post<RunDTO>(`${RUNS}/${ref(r)}/resume`, { cancel_reset: true }),
+  limitResumeSettings: (opts?: Pick<RequestOptions, 'signal'>) =>
+    http.get<{ automatic: boolean }>(
+      '/v1/m/sessions/limit-resume-settings',
+      opts,
+    ),
+  setLimitResumeSettings: (
+    automatic: boolean,
+    opts?: Pick<RequestOptions, 'signal' | 'dispatchGuard'>,
+  ) =>
+    http.put<{ automatic: boolean }>(
+      '/v1/m/sessions/limit-resume-settings',
+      { automatic },
+      opts,
+    ),
   /** Pin the session for the signed-in person, or unpin it: their own mark, kept on the
    * server so it follows them to another browser. Both are idempotent. */
   pin: (r: string, opts?: Pick<RequestOptions, 'tenant'>) =>
@@ -397,9 +478,18 @@ export const agentOpsApi = {
    * one gives the session back the name the console derives. */
   rename: (r: string, name: string) =>
     http.put<RunDTO>(`${RUNS}/${ref(r)}/name`, { name }),
+  /** Cuts the session's title from its first message, in a style (the engine's default
+   * is `sentence`). `ifUntitled` makes one only for a session with no name and no title. */
+  generateTitle: (
+    r: string,
+    body: { style?: TitleStyle; if_untitled?: boolean } = {},
+  ) => http.post<RunDTO>(`${RUNS}/${ref(r)}/title`, body),
   /** Files the session under Archived, out of the default list, or brings it back. */
-  archive: (r: string) => http.post<RunDTO>(`${RUNS}/${ref(r)}/archive`),
-  unarchive: (r: string) => http.delete<RunDTO>(`${RUNS}/${ref(r)}/archive`),
+  /** `tenant` pins the organization (an Undo after a switch); absent is the active one. */
+  archive: (r: string, tenant?: string | null) =>
+    http.post<RunDTO>(`${RUNS}/${ref(r)}/archive`, undefined, { tenant }),
+  unarchive: (r: string, tenant?: string | null) =>
+    http.delete<RunDTO>(`${RUNS}/${ref(r)}/archive`, undefined, { tenant }),
   /** Rebinds a stopped session to another profile of its tool, carrying the tool's own
    * conversation state. Starts nothing; the next resume is the ordinary one. */
   move: (r: string, profileRef: string) =>
@@ -639,6 +729,26 @@ export const agentOpsApi = {
   ) => http.post<WorkspaceDTO>(WORKSPACES, body, opts),
   deleteWorkspace: (r: string) =>
     http.delete<{ deleted: boolean }>(`${WORKSPACES}/${ref(r)}`),
+  /** Opens a shell in the folder. It acts (it starts a process), so it is never a read. */
+  startTerminal: (
+    r: string,
+    size: { rows: number; cols: number },
+    opts?: Pick<RequestOptions, 'tenant' | 'signal'>,
+  ) => http.post<TerminalDTO>(`${WORKSPACES}/${ref(r)}/terminals`, size, opts),
+  terminalInput: (r: string, id: string, data: string) =>
+    http.post<Record<string, never>>(
+      `${WORKSPACES}/${ref(r)}/terminals/${ref(id)}/input`,
+      { data },
+    ),
+  terminalSize: (r: string, id: string, size: { rows: number; cols: number }) =>
+    http.post<Record<string, never>>(
+      `${WORKSPACES}/${ref(r)}/terminals/${ref(id)}/size`,
+      size,
+    ),
+  closeTerminal: (r: string, id: string) =>
+    http.delete<{ closed: boolean }>(
+      `${WORKSPACES}/${ref(r)}/terminals/${ref(id)}`,
+    ),
   initWiki: (
     r: string,
     opts?: Pick<RequestOptions, 'tenant' | 'signal' | 'dispatchGuard'>,
@@ -652,6 +762,12 @@ export const agentOpsApi = {
   setWorkspaceReadOnlyFolders: (r: string, folders: string[]) =>
     http.patch<WorkspaceDTO>(`${WORKSPACES}/${ref(r)}`, {
       read_only_folders: folders,
+    }),
+  /** Stores the permission sessions in this folder start under, by its name; '' takes it
+   * away. The answer is the workspace as saved. */
+  setWorkspaceDefaultPermission: (r: string, permission: string) =>
+    http.patch<WorkspaceDTO>(`${WORKSPACES}/${ref(r)}`, {
+      default_permission: permission,
     }),
 
   // --- Files (jailed, DLP-labelled) --------------------------------------------
@@ -749,6 +865,8 @@ export const agentOpsKeys = {
     ['agentops', tenant, 'run', r, 'messages'] as const,
   runCommands: (tenant: string | null, r: string) =>
     ['agentops', tenant, 'run', r, 'commands'] as const,
+  runQueue: (tenant: string | null, r: string) =>
+    ['agentops', tenant, 'run', r, 'queue'] as const,
   runAttachment: (tenant: string | null, r: string, id: string) =>
     ['agentops', tenant, 'run', r, 'attachment', id] as const,
   runPreviewPorts: (tenant: string | null, r: string) =>
@@ -895,4 +1013,25 @@ export const agentOpsKeys = {
    * invalidates `file`, and HEAD's text does not change when it is saved. */
   fileHead: (tenant: string | null, r: string, path: string) =>
     ['agentops', tenant, 'workspace', r, 'file-head', path] as const,
+}
+
+/** The read is tenant-scoped like every module route; the answer is the same for each. */
+export function engineToolsQuery(tenant: string | null) {
+  return queryOptions({
+    queryKey: ['engine-tools', tenant] as const,
+    queryFn: async () => {
+      const answer = await http.get<{ tools?: unknown }>('/v1/m/sessions/tools')
+      if (!Array.isArray(answer?.tools) || !answer.tools.every(isEngineTool))
+        throw new Error('The engine did not list its tools.')
+      setEngineTools(answer.tools)
+      return answer.tools
+    },
+    enabled: !!tenant,
+    // One table per engine binary: an upgrade reloads the page. Another organization
+    // keeps the answer it has while it asks, and a failed read is asked again only by
+    // the status bar's Retry, never on a focus.
+    staleTime: Infinity,
+    placeholderData: keepPreviousData,
+    refetchOnWindowFocus: false,
+  })
 }

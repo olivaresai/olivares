@@ -77,6 +77,25 @@ describe('Can message (COMMS-PATH #5)', () => {
     ])
   })
 
+  it('names a peer by its name, else by the title the engine cut, else by its id', () => {
+    const named = launched('N', 'osn_n', { name: 'deploy-api', title: 'Plan' })
+    const titled = launched('T', 'osn_t', {
+      name: undefined,
+      title: 'Fix the login bug',
+    })
+    const bare = launched('U', 'osn_u', { name: undefined })
+    const all = mergeSessions(
+      [a.live, named.live, titled.live, bare.live],
+      [a.run, named.run, titled.run, bare.run],
+    )
+    expect(
+      peerCandidates(
+        all.find((s) => s.runs[0]?.run_ref === 'A')!,
+        all,
+      ).map((p) => p.name),
+    ).toEqual(['deploy-api', 'Fix the login bug', expect.any(String)])
+  })
+
   it('offers nothing when the engine recorded no workspace for this run', () => {
     const own = mergeSessions(
       [a.live],

@@ -53,7 +53,7 @@ olivares upgrade --check
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.4
+olivares upgrade --check --current-version 0.5
 ```
 <!-- /release -->
 
@@ -172,8 +172,7 @@ olivares upgrade --install-timer --timer-schedule 'Sun *-*-* 03:00:00'
 называет также `olivares license connect refresh`. Проверка идёт по пути, поэтому бинарный файл,
 который `install.sh --bindir /usr/bin` положил туда, тоже отклоняется.
 
-Консоль предоставляет доступ только для чтения к той же информации: **Settings → update
-status** вызывает `POST /v1/console/update-check`, который по запросу проверяет настроенный
+Консоль предоставляет доступ только для чтения к той же информации: **Эксплуатация → Обновления** (`/updates`) вызывает `POST /v1/console/update-check`, который по запросу проверяет настроенный
 канал. Изолированное развёртывание или развёртывание без настроенного канала отвечает `501` и
 прямо сообщает причину, а не утверждает, что обновлений нет.
 

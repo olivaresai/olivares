@@ -1,0 +1,36 @@
+{
+  "title": "Uso y coste, por cuenta",
+  "subtitle": "Los límites oficiales de 5 horas y semanales junto a los tokens y el coste de hoy.",
+  "windows": {
+    "fiveHour": "5 horas",
+    "week": "semanal"
+  },
+  "accounts": {
+    "heading": "Cuentas",
+    "loading": "Leyendo las cuentas de cada herramienta…",
+    "error": "No se pudieron leer los límites de las cuentas.",
+    "empty": "Ninguna cuenta ha informado aún de sus límites.",
+    "resets": "se renueva {{when}}",
+    "stale": "leído por última vez {{at}}",
+    "details": "Detalles",
+    "detailsFor": "Detalles de {{account}}",
+    "adminOnly": "Los límites de las cuentas los ve un administrador del sistema."
+  },
+  "today": {
+    "heading": "Hoy",
+    "loading": "Leyendo las sesiones de hoy…",
+    "error": "No se pudieron leer las sesiones de hoy.",
+    "sessions_one": "{{count}} sesión",
+    "sessions_other": "{{count}} sesiones",
+    "sessions_many": "{{count}} de sesiones",
+    "tokens": "{{input}} de entrada · {{output}} de salida",
+    "atLeast": "Al menos",
+    "unpriced_one": "{{count}} sesión no informó de su coste.",
+    "unpriced_other": "{{count}} sesiones no informaron de su coste.",
+    "unpriced_many": "{{count}} de sesiones no informaron de su coste.",
+    "untokened_one": "{{count}} sesión no informó de sus tokens.",
+    "untokened_other": "{{count}} sesiones no informaron de sus tokens.",
+    "untokened_many": "{{count}} de sesiones no informaron de sus tokens.",
+    "viewSessions": "Ver sesiones"
+  }
+}

@@ -19,7 +19,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/olivaresai/olivares/core/api/genpb/apiv1"
-	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -106,6 +105,13 @@ func (s *Server) grpcAuthenticate(ctx context.Context) (context.Context, error) 
 		return nil, grpcError(auth.ErrUnauthenticated)
 	}
 	p, err := s.authr.Authenticate(ctx, strings.TrimSpace(token))
+	if errors.Is(err, store.ErrStoreUnavailable) {
+		// The credential could not be checked: Unavailable, not Unauthenticated
+		// (the REST half is middleware.go authenticate, the regression). The cause goes
+		// to the log, as writeError does for REST; the client sees the curated text.
+		s.log.Error("api: store unavailable", "code", "store_unavailable", "transport", "grpc", "err", err)
+		return nil, grpcError(err)
+	}
 	if err != nil {
 		return nil, grpcError(auth.ErrUnauthenticated)
 	}
@@ -311,47 +317,6 @@ func (g *grpcService) CreateAgent(ctx context.Context, req *apiv1.CreateAgentReq
 		}
 		out = toPBAgent(created)
 		return appendAudit(ctx, sc, p, "agent.create", "core.agent", created.ID)
-	})
-	if err != nil {
-		return nil, grpcError(err)
-	}
-	return out, nil
-}
-
-func (g *grpcService) VerifyAudit(ctx context.Context, req *apiv1.VerifyAuditRequest) (*apiv1.VerifyAuditResponse, error) {
-	_, tenant, err := g.s.grpcAuthorize(ctx, "audit:read", req.GetTenant())
-	if err != nil {
-		return nil, grpcError(err)
-	}
-	from := req.GetFrom()
-	if from < 1 {
-		from = 1
-	}
-	out := &apiv1.VerifyAuditResponse{}
-	err = g.s.st.View(ctx, tenant, func(sc store.Scope) error {
-		rep, err := sc.Audit().Verify(ctx, from)
-		if err != nil {
-			return err
-		}
-		cr, err := audit.VerifyCheckpoints(ctx, sc.Audit(), g.s.signer.PublicKey())
-		if err != nil {
-			return err
-		}
-		out.ChainOk, out.Checked = rep.OK, rep.Checked
-		out.CheckpointsOk, out.CheckpointCount = cr.OK, int32(cr.Checkpoints)
-		out.LatestAttestedSeq = cr.LatestAttestedSeq
-		// THE SAME PREDICATE AS REST, not a second one that resembles it (2026-08-06).
-		// This said "Mirror handleAuditVerify" and then computed something else:
-		// `cr.OK || cr.Reason == "no-checkpoints"`, a string comparison, against REST's
-		// `Status() != CheckpointStatusFailed`. Status() also requires Checkpoints == 0
-		// before it will call a report pending, so the two disagree on any report that
-		// carries checkpoints AND that reason — latent today, and a comment claiming
-		// parity is exactly how it would stay unnoticed. Both surfaces now ask the same
-		// typed question of the same value.
-		cpStatus := cr.Status()
-		out.CheckpointStatus = string(cpStatus)
-		out.Ok = rep.OK && rep.Checked > 0 && cpStatus != audit.CheckpointStatusFailed
-		return nil
 	})
 	if err != nil {
 		return nil, grpcError(err)

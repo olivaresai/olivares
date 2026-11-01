@@ -53,7 +53,7 @@ service); `--check` still shows the plan, and `--target` still replaces a path y
 
 ## 1. Versioning and the image coordinate
 
-Release and container tags use bare `MAJOR.MINOR`: release <!-- release -->`0.4`<!-- /release -->, image tags <!-- release -->`:0.4`<!-- /release --> and `:latest`;
+Release and container tags use bare `MAJOR.MINOR`: release <!-- release -->`0.5`<!-- /release -->, image tags <!-- release -->`:0.5`<!-- /release --> and `:latest`;
 FIPS/STIG variants are Business artifacts. See [versioning](../INSTALL.md#versioning).
 
 The official registry is **Docker Hub**:
@@ -71,11 +71,11 @@ digest** — a tag is mutable, a digest is exactly what you verified:
 
 <!-- release -->
 ```sh
-cosign verify docker.io/olivaresai/olivares:0.4 \
+cosign verify docker.io/olivaresai/olivares:0.5 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 # then resolve and use the digest you verified (same value on either registry):
-crane digest docker.io/olivaresai/olivares:0.4   # -> sha256:<…>
+crane digest docker.io/olivaresai/olivares:0.5   # -> sha256:<…>
 ```
 <!-- /release -->
 
@@ -632,7 +632,7 @@ olivares upgrade --enterprise --connect --data-dir /var/lib/olivares  # connecte
 
   <!-- release -->
   ```bash
-  olivares upgrade --target /opt/olivares/olivares --current-version 0.4
+  olivares upgrade --target /opt/olivares/olivares --current-version 0.5
   ```
   <!-- /release -->
 
@@ -986,9 +986,10 @@ the embedded OTA key exactly as `olivares upgrade` does, so "an update is availa
 identifies a verified newer release. Installation still requires the upgrade CLI's
 eligibility and artifact integrity checks.
 
-### The Updates page (Settings → Updates)
+### The Updates page (Operations → Updates)
 
-A system administrator can also install the update from the console. **Settings → Updates**
+A system administrator can also install the update from the console. **Operations → Updates**
+(`/updates`; the old `/settings?section=updates` address lands there)
 shows the version the engine runs, the newest signed release in the instance's channel with its
 release notes (and its security advisories), and **Update to X**. The page adds no update
 mechanism: the engine runs `olivares upgrade --check` for the status and `olivares upgrade --yes`

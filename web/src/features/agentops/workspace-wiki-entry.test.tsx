@@ -5,6 +5,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, it, vi } from 'vitest'
+import { fakeRouter } from '@/test/fake-router'
+
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1', can: () => true }),
@@ -31,6 +36,7 @@ vi.mock('./api', async (orig) => ({
 import { WorkspacesPanel } from './workspaces-panel'
 
 it('offers Wiki beside Files when a registered workspace opens', async () => {
+  fakeRouter.reset('/workspaces')
   render(
     <QueryClientProvider client={new QueryClient()}>
       <WorkspacesPanel />

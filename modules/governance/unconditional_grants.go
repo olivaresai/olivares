@@ -45,8 +45,8 @@ import (
 //
 // The row report is bound to the exact compiled `cedar-managed` authority before it is
 // returned. Within its one View it reads the full durable Cedar snapshot and recomputes
-// the managed projection from every current row/role/group; its digest must equal the
-// selected managed revision. This closes both former over-offer windows: a committed
+// the managed projection from every current row/role/group; it must equal the
+// selected managed revision after removing provenance annotations. This closes both former over-offer windows: a committed
 // epoch not yet reloaded, and a catalog/row change whose projection has not been
 // selected. A mismatch deliberately under-reports until a coherent projection is live.
 type unconditionalGrants Module
@@ -113,10 +113,10 @@ func (u *unconditionalGrants) UnconditionalGrantPerms(ctx context.Context, p aut
 		if err != nil {
 			return err
 		}
-		// The row answer is valid only for exactly the managed bytes the live
-		// runtime carries. Recompute against *all* rows, not just this actor's:
+		// Ignore provenance annotations when comparing legacy and current projections.
+		// Recompute against *all* rows, not just this actor's:
 		// another actor's row or a catalog change can alter the selected union.
-		if contentDigest(projectManagedCedar(grants, roles, groups)) != durable.state.managedDigest {
+		if withoutGrantIDAnnotations(projectManagedCedar(grants, roles, groups)) != withoutGrantIDAnnotations(managedProjectionWithGrantIDs(durable.managed, managedProjectionState{roles: roles, groups: groups, grants: grants})) {
 			return nil
 		}
 		projectionMatches = true

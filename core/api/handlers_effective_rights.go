@@ -65,17 +65,20 @@ type effectiveRightsStep struct {
 }
 
 type effectiveRight struct {
-	Name  string `json:"name"`
-	State string `json:"state"`
+	Name      string                   `json:"name"`
+	State     string                   `json:"state"`
+	Because   []effectiveRightsGrant   `json:"because,omitempty"`
+	RemovedBy []effectiveRightsRemoval `json:"removed_by,omitempty"`
 }
 
 type effectiveRightsResponse struct {
 	Subject effectiveRightsRef `json:"subject"`
 	Node    effectiveRightsRef `json:"node"`
 	// Assurance is the authenticator assurance level the subject was evaluated at.
-	Assurance int                   `json:"assurance"`
-	Path      []effectiveRightsStep `json:"path"`
-	Rights    []effectiveRight      `json:"rights"`
+	Assurance      int                   `json:"assurance"`
+	MembershipAsOf string                `json:"membership_as_of,omitempty"`
+	Path           []effectiveRightsStep `json:"path"`
+	Rights         []effectiveRight      `json:"rights"`
 }
 
 type effectiveRightsQuery struct {
@@ -172,13 +175,19 @@ func (s *Server) handleEffectiveRights(w http.ResponseWriter, r *http.Request, m
 		s.writeError(w, r, err)
 		return
 	}
+	membershipAsOf, err := s.explainEffectiveRightsDirectory(r.Context(), subject, mc.Tenant, rights)
+	if err != nil {
+		s.writeError(w, r, err)
+		return
+	}
 	subjectKind, subjectRef := authzenSubjectRef(subject)
 	writeJSON(w, http.StatusOK, effectiveRightsResponse{
-		Subject:   effectiveRightsRef{Kind: subjectKind, ID: subjectRef},
-		Node:      effectiveRightsRef{Kind: node.Kind, ID: node.ID},
-		Assurance: auth.AAL3,
-		Path:      effectiveRightsPath(q.kind, q.nodeID, ancestry),
-		Rights:    rights,
+		Subject:        effectiveRightsRef{Kind: subjectKind, ID: subjectRef},
+		Node:           effectiveRightsRef{Kind: node.Kind, ID: node.ID},
+		Assurance:      auth.AAL3,
+		MembershipAsOf: membershipAsOf,
+		Path:           effectiveRightsPath(q.kind, q.nodeID, ancestry),
+		Rights:         rights,
 	})
 }
 
@@ -201,12 +210,14 @@ func (s *Server) askTrusteeRights(ctx context.Context, subject auth.Principal, t
 			asked = append(asked, i)
 		}
 	}
-	decisions, err := s.authz.AuthorizeBatch(ctx, reqs)
+	decisions, err := s.authz.AuthorizeBatchExplanation(ctx, reqs)
 	if err != nil {
 		return nil, err
 	}
 	for j, d := range decisions {
-		out[asked[j]].State = s.rightState(ctx, rights[asked[j]].Name, reqs[j], d)
+		right := &out[asked[j]]
+		right.State = s.rightState(ctx, rights[asked[j]].Name, reqs[j], d.Decision)
+		right.Because, right.RemovedBy = effectiveRightsAttribution(tenant, d.Explanation)
 	}
 	return out, nil
 }

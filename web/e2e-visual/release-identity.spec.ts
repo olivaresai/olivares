@@ -7,7 +7,7 @@ import {
   surfaceOptions,
   watchSurface,
 } from '../e2e-release/surface'
-import { SESSION_TOOLS } from '../src/features/agentops/tool-names'
+import engineTools from '../src/features/agentops/engine-tools.fixture.json' with { type: 'json' }
 import { browserSession, fixtureFor, serverInfo } from './fixtures'
 
 test.use({ screenshot: 'only-on-failure' })
@@ -42,11 +42,13 @@ for (const theme of ['light', 'dark']) {
             ? browserSession
             : path === '/v1/m/sessions/provider-profiles/readiness'
               ? {
-                  tools: SESSION_TOOLS.map((driver) => ({
-                    driver,
-                    ready: true,
-                    reason: 'own_login',
-                  })),
+                  tools: engineTools.tools
+                    .filter((tool) => tool.session)
+                    .map(({ key: driver }) => ({
+                      driver,
+                      ready: true,
+                      reason: 'own_login',
+                    })),
                 }
               : path.endsWith('/ui-state')
                 ? { stored: true, sidebar: 'rail' }

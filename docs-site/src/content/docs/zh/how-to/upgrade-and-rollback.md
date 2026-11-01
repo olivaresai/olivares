@@ -47,7 +47,7 @@ olivares upgrade --check
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.4
+olivares upgrade --check --current-version 0.5
 ```
 <!-- /release -->
 
@@ -153,7 +153,7 @@ olivares upgrade --install-timer --timer-schedule 'Sun *-*-* 03:00:00'
 `olivares license connect refresh`。检查按路径进行，因此由 `install.sh --bindir /usr/bin` 放在那里的
 二进制文件同样会被拒绝。
 
-控制台提供相同信息的只读部分：**Settings → update status** 调用
+控制台提供相同信息的只读部分：**运维 → 更新** (`/updates`) 调用
 `POST /v1/console/update-check`，按需检查配置的渠道。隔离网络部署或未配置渠道的部署会
 返回 `501` 并说明原因，而不会报告没有更新。
 

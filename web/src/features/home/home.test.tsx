@@ -632,9 +632,63 @@ describe('Estate — live session cards and the summary sentence (#2245, #2546)'
       await screen.findByText('Couldn’t load recent work'),
     ).toBeInTheDocument()
   })
+  it.each([
+    ['archived', { archived_at: '2026-10-20T09:00:00Z' }],
+    ['snoozed', { snoozed_until: '2999-01-01T00:00:00Z' }],
+    ['done', { done: true }],
+  ] as const)(
+    'leaves a %s session out of Needs you and the summary',
+    async (_, mark) => {
+      authState.can = role
+      stub(
+        [
+          {
+            run_ref: 'run-snoozed',
+            tenant_id: 'demo',
+            state: 'running',
+            claude_session_id: 'sess-snoozed',
+            needs_person: {
+              code: 'repeated_policy_denials',
+              consecutive_denials: 3,
+              total_denials: 3,
+              reasons: ['Bash'],
+            },
+            ...mark,
+            created_at: today(),
+          },
+        ],
+        [
+          {
+            session_ref: 'sess-snoozed',
+            live_ref: 'live-snoozed',
+            attribution: 'legacy',
+            cc_state: 'silent_evasion',
+            input_tokens: 0,
+            output_tokens: 0,
+            cost_micro_usd: 0,
+            event_count: 1,
+            tool_call_count: 0,
+            first_event_at: today(),
+            last_event_at: today(),
+            duration_seconds: 0,
+          },
+        ],
+      )
+      const queryClient = createTestQueryClient()
+      renderIntel(<HomeView />, { queryClient })
+      const needs = await screen.findByTestId('now-needs')
+      await waitFor(() => expect(queryClient.isFetching()).toBe(0))
+      expect(agentOpsApi.listRuns).toHaveBeenCalled()
+      expect(within(needs).queryByTestId('now-needs-row')).toBeNull()
+      expect(
+        within(needs).getByText('Nothing waits for you.'),
+      ).toBeInTheDocument()
+      expect(await sentence()).not.toHaveTextContent(/need[s]? you/)
+    },
+  )
 })
 
-describe('Now — the next step once a coding tool is ready (HU 022)', () => {
+describe('Now — the next step once a coding tool is ready', () => {
   // What each tool runs on is the engine's answer (GET provider-profiles/readiness):
   // a tool missing from the map has nothing to run on.
   const runsOn = (answers: Parameters<typeof readinessOf>[0]) =>
@@ -685,7 +739,7 @@ describe('Now — the next step once a coding tool is ready (HU 022)', () => {
     expect(screen.queryByRole('button', { name: 'Start a session' })).toBeNull()
   })
 
-  it('a tool that runs on an API key from Providers is ready too (HU 029)', async () => {
+  it('a tool that runs on an API key from Providers is ready too', async () => {
     vi.spyOn(signInApi, 'status').mockImplementation(async (driver) => ({
       driver,
       installed: driver === 'claude',
@@ -792,7 +846,7 @@ describe('Now — the next step once a coding tool is ready (HU 022)', () => {
   })
 })
 
-describe('Now counts sessions, not the rows each one wrote (HU 029)', () => {
+describe('Now counts sessions, not the rows each one wrote', () => {
   it('one launch with its hook and usage rows is one live session', async () => {
     const RUN = '01a0f8bd-e094-7cfd-ace2-5e36665dca8b'
     const OSN = 'osn_01a0f8bd-e095-7203-b4fa-2b332c008029'

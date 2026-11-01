@@ -197,7 +197,7 @@ test('release container: a fresh administrator reaches a first answer and the co
       await page.waitForURL(`**${stepHref(WIZARD)}`)
       await expect(
         page
-          .getByRole('navigation', { name: 'Journeys', exact: true })
+          .getByRole('navigation', { name: 'Main navigation', exact: true })
           .getByRole('link', { name: 'Now', exact: true }),
       ).toBeVisible()
     })
@@ -306,7 +306,7 @@ test('release container: a fresh administrator reaches a first answer and the co
           .getByRole('button', { name: 'More options', exact: true })
           .click()
         await dialog
-          .getByRole('radio', { name: 'Ask before each action', exact: true })
+          .getByRole('radio', { name: 'Supervised', exact: true })
           .check()
         await capture(`new-session-${tool.key}-filled`)
         await dialog.getByRole('button', { name: 'Start', exact: true }).click()
@@ -363,7 +363,6 @@ test('release container: a fresh administrator reaches a first answer and the co
       ['general', 'General'],
       ['keyboard', 'Keyboard'],
       ['signIn', 'Sign-in and security'],
-      ['edition', 'Edition & modules'],
       ['tracing', 'Tracing'],
       ['signing', 'Report signing'],
       ['about', 'About'],
@@ -381,6 +380,20 @@ test('release container: a fresh administrator reaches a first answer and the co
         ).toHaveCount(0)
       })
     }
+    // Edition is the License place of the sidebar (0.5), not a row of the Settings list.
+    await stage('05-settings-edition', async () => {
+      await visit('/')
+      await page
+        .getByRole('navigation', { name: 'Main navigation' })
+        .getByRole('link', { name: 'License', exact: true })
+        .click()
+      await expect(page).toHaveURL(/\/settings\?section=edition$/)
+      await expect(
+        page.locator(
+          '.animate-spin:visible, .animate-pulse:visible, [aria-busy=true]:visible',
+        ),
+      ).toHaveCount(0)
+    })
     await stage('07-workspaces', async () => {
       await visit('/sessions')
       await page.getByTestId('sessions-list-menu').click()

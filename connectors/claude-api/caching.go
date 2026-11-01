@@ -8,7 +8,7 @@
 // (lifecycle.go samplingDeprecationFinding), this emits an informational finding when a
 // request marks a breakpoint whose counted prefix is below the threshold, so an operator
 // learns BEFORE the bill, not after. It is Anthropic platform behavior, not a product bug
-//: informational, never a claim of a fix.
+// : informational, never a claim of a fix.
 //
 // The per-model minimums are VERIFIED against the live "Cache limitations" table
 // (…/build-with-claude/prompt-caching, jun-2026) and differ by surface: the Claude API /

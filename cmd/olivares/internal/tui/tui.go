@@ -83,6 +83,11 @@ func Run(in, out *os.File, frame Frame) (int, error) {
 	if frame.Hints == "" {
 		frame.Hints = "↑↓ move  Enter show  / search  ? help  q quit"
 	}
+	// Bracketed paste: a newline inside a paste reaches the screens as text, not
+	// as an Enter. leaveScreen switches it off again.
+	if _, err := io.WriteString(out, "\x1b[?2004h"); err != nil {
+		return 0, fmt.Errorf("could not set up the terminal: %w", err)
+	}
 	h := newHost(width, height, termrender.New(out, termrender.Options{Width: width}))
 	// A signal ends the work the screens started (a sign-in the engine is
 	// waiting on) before the process exits, as a quit does.

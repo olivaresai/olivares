@@ -10,7 +10,7 @@ import { sessionDisplayState } from './session-display-state'
 /**
  * ONE STATE PER SESSION. A launched session's state is its run's; the observed state is
  * for sessions Olivares did not start. Showing both read "Active · Stopped · Live" after a
- * Stop (HU-11 in the narrative, EU on Business 06 in the detail sheet), because the
+ * Stop (acceptance in the narrative, EU on Business 06 in the detail sheet), because the
  * observed row keeps its last signal after the process ends.
  */
 export function SessionStateBadge({

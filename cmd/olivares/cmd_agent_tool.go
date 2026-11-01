@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -34,16 +33,16 @@ var verifiedToolReleases = toolinstall.NewVerifiedCache()
 // variable so tests can substitute an engine that trusts a fixture signing key
 // and a fixture release server. Production wiring trusts the embedded Claude
 // release key only; no flag or environment variable reaches this seam.
-var toolInstallEngine = func(ctx context.Context) *toolinstall.Engine {
-	// gpg when the node has it; otherwise the in-process OpenPGP check, so a
-	// distroless container verifies the same signed manifest.
-	var verifier toolinstall.SignatureVerifier = toolinstall.NativeOpenPGPVerifier{}
-	if v, err := toolinstall.NewGPGVerifier(ctx, exec.LookPath); err == nil {
-		verifier = v
-	}
-	cat := toolinstall.NewOfficialCatalog(nil, verifier)
+var toolInstallEngine = func(context.Context) *toolinstall.Engine {
+	// The in-process OpenPGP check on every node: a distroless container has no
+	// gpg, and the Server's SELinux policy denies the product gpg.
+	cat := toolinstall.NewOfficialCatalog(nil, toolinstall.NativeOpenPGPVerifier{})
 	opts := toolinstall.EngineOptions{InstallerVersion: version, Verified: verifiedToolReleases, PlaceRipgrep: true}
-	return toolinstall.NewEngineWithCapabilities(cat, opts)
+	eng := toolinstall.NewEngineWithCapabilities(cat, opts)
+	if dataDir, err := defaultDataDir(); err == nil {
+		eng.SetChildCommand(confinedToolCommand(dataDir))
+	}
+	return eng
 }
 
 func newAgentToolCmd() *cobra.Command {
@@ -87,7 +86,7 @@ type agentToolTarget struct {
 
 func (t *agentToolTarget) addFlags(cmd *cobra.Command) {
 	t.cmd = cmd
-	cmd.Flags().StringVar(&t.driver, "driver", "claude", "provider tool to install: claude, codex, grok, opencode, gemini-cli or ollama")
+	cmd.Flags().StringVar(&t.driver, "driver", "claude", "provider tool to install: claude, codex, grok, opencode, gemini-cli, cursor or ollama")
 	cmd.Flags().StringVar(&t.version, "version", "latest", "exact version (X.Y.Z) or the vendor pointer latest or stable")
 	cmd.Flags().StringVar(&t.platform, "platform", "", "target platform key: linux-x64, linux-arm64, linux-x64-musl, linux-arm64-musl (default: this host)")
 	addAgentToolRootFlag(cmd, &t.root)
@@ -297,7 +296,7 @@ func newAgentToolInstallCmd() *cobra.Command {
 			"revalidated (receipt, bytes, retained signed manifest) and reported as noop; other versions\n" +
 			"are left untouched beside it. --plan FILE executes a plan written by `plan --out` and\n" +
 			"refuses if the vendor's selection changed since. Exit codes: 2 unsupported driver,\n" +
-			"platform or source; 8 version unknown or gpg unavailable (nothing was done); 5 another\n" +
+			"platform or source; 8 version unknown or verification unavailable (nothing was done); 5 another\n" +
 			"install holds the lock, the destination is damaged or occupied, or the plan changed;\n" +
 			"1 signature, size, hash or probe refusal (staging removed, nothing recorded).",
 		Example: "  olivares agent tool install --driver claude --version 2.1.261 --yes\n" +
@@ -412,7 +411,7 @@ func newAgentToolListCmd() *cobra.Command {
 		Long: "list reads every release directory under the tools root, loads its receipt strictly,\n" +
 			"re-hashes the executable against it and re-verifies the retained signed manifest under the\n" +
 			"pinned key, exactly as install's no-op path does. installed means all three agree now;\n" +
-			"unverified means bytes and receipt agree but gpg is unavailable to re-check the signature\n" +
+			"unverified means bytes and receipt agree but the signature could not be re-checked\n" +
 			"(provenance is then not reported); damaged names the contradiction. Nothing is repaired or\n" +
 			"removed. Unfinished staging directories left by an interrupted install are reported as\n" +
 			"leftovers for you to inspect; they are never removed by name.",
@@ -450,7 +449,7 @@ func newAgentToolDetectCmd() *cobra.Command {
 			"class: registered (a receipt records it and its retained signed manifest re-verifies now),\n" +
 			"manifest-corroborated (its bytes are named by a signed manifest you pass with\n" +
 			"--manifest/--manifest-sig, verified under the pinned key), unregistered-observed,\n" +
-			"unverified (receipt and bytes agree but gpg is unavailable) or damaged.\n\n" +
+			"unverified (receipt and bytes agree but the signature was not re-checked) or damaged.\n\n" +
 			"Nothing is executed unless you ask. --probe runs `<tool> --version` from an empty temporary\n" +
 			"home for registered and manifest-corroborated candidates only; an unregistered path runs\n" +
 			"only when you name it exactly with --probe-path (repeatable). A damaged candidate is never\n" +

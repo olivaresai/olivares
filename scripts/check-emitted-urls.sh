@@ -73,7 +73,7 @@ MAX_RECORD_AGE_DAYS=45
 # <url> <status measured> <ISO date> [owner, only when the status is not 200]
 #
 # A URL may carry ${RELEASE}: the row is a TEMPLATE for the release family, expanded against
-# the RELEASE-VERSION canon when this script runs (dev#2201). README.md derives its package
+# the RELEASE-VERSION canon when this script runs. README.md derives its package
 # and tag URLs from that canon, so a literal per-version row broke at every cut. The expanded
 # row is judged exactly as a literal one — declared, aged, owned — and `--probe` hands the row
 # back paste-ready for the record it lives in (shell-escaped for the inline record's
@@ -295,8 +295,8 @@ MAX_RECORD_AGE_DAYS=45
 # deb, rpm and apk downloads; the three answered 200 in five of five probes (GET, following
 # redirects), as did the 0.2 tag page. The 0.1 package rows and the 0.1 tag page left the record:
 # nothing emits them any more.
-# 2026-10-15 · those four rows became ${RELEASE} templates (dev#2201): README derives them from the
-# canon, so literal rows broke at every cut and cost dev#2183/PR #2187 three review rounds. The rows
+# 2026-10-15 · those four rows became ${RELEASE} templates: README derives them from the
+# canon, so literal rows broke at every cut and cost the regression/PR #2187 three review rounds. The rows
 # keep their 0.2 measurements; a cut re-probes and pastes the template row back with the fresh date,
 # and the record itself no longer changes between releases.
 EMITTED_RECORD="https://alma.olivares.ai 200 2026-09-24
@@ -311,6 +311,7 @@ https://github.com/olivaresai/olivares#install 200 2026-10-14
 https://github.com/olivaresai/olivares.git 200 2026-09-24
 https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\$ver 404 2026-10-08 sigstore-certificate-identity-not-a-location
 https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\${tag} 404 2026-09-24 sigstore-certificate-identity-not-a-location
+https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\${RELEASE} 404 2026-10-31 sigstore-certificate-identity-not-a-location
 https://github.com/olivaresai/olivares/blob/main/CONTRIBUTING.md 200 2026-09-24
 https://github.com/olivaresai/olivares/blob/main/GOVERNANCE.md 200 2026-09-24
 https://github.com/olivaresai/olivares/blob/main/INSTALL.md#installation-qualification 200 2026-10-14
@@ -325,6 +326,9 @@ https://github.com/olivaresai/olivares/releases/download/\$ver 404 2026-10-08 re
 https://github.com/olivaresai/olivares/releases/download/\${RELEASE}/olivares_\${RELEASE}_linux_amd64.apk 200 2026-10-15
 https://github.com/olivaresai/olivares/releases/download/\${RELEASE}/olivares_\${RELEASE}_linux_amd64.deb 200 2026-10-15
 https://github.com/olivaresai/olivares/releases/download/\${RELEASE}/olivares_\${RELEASE}_linux_amd64.rpm 200 2026-10-15
+https://github.com/olivaresai/olivares/releases/download/\${RELEASE}/checksums.txt 200 2026-10-31
+https://github.com/olivaresai/olivares/releases/download/\${RELEASE}/checksums.txt.sig 200 2026-10-31
+https://github.com/olivaresai/olivares/releases/download/\${RELEASE}/checksums.txt.pem 200 2026-10-31
 https://github.com/olivaresai/olivares/releases/tag/\${RELEASE} 200 2026-10-14
 https://github.com/olivaresai/olivares/security/advisories/OLIVARES-DRILL-0001 404 2026-09-24 drill-fixture-not-a-location
 https://github.com/olivaresai/olivares/tree/main/examples/govern-claude-code 200 2026-09-24
@@ -547,7 +551,7 @@ def emitted():
 HUB_RECORD = "docs/emitted-urls-hub-record.txt"
 
 # The release family of the record is declared by TEMPLATE, never by literal per-version rows
-# (dev#2201): README.md derives its package and tag URLs from RELEASE-VERSION, so a literal row
+#: README.md derives its package and tag URLs from RELEASE-VERSION, so a literal row
 # expired at every cut and main went red until someone re-edited the record by hand. A record
 # URL may carry ${RELEASE}; it expands against the canon when the record is parsed, and the
 # EXPANDED row is then judged by every rule of this gate exactly as a literal one is. The canon's
@@ -1041,7 +1045,7 @@ def selftest():
     expect("the real inline record refuses an emitted v26.9.1 release link",
            rc == 1 and f"{v2691} is emitted" in out and "not in the record" in out)
 
-    # --- the release family by template (dev#2201): README.md derives its package and tag URLs
+    # --- the release family by template: README.md derives its package and tag URLs
     # from RELEASE-VERSION, so literal per-version rows broke at every cut until someone
     # re-edited the record by hand. A ${RELEASE} row expands against the tree's own canon at
     # parse time, and the expanded row is judged by every rule above exactly as a literal one.
@@ -1051,7 +1055,7 @@ def selftest():
                [f"https://github.com/olivaresai/olivares/releases/tag/{ver}"]
 
     # The family follows the canon, never a literal version: a cut moves RELEASE-VERSION and these
-    # fixtures move with it (dev#2951). `other` is the one version that is not the canon, for the
+    # fixtures move with it. `other` is the one version that is not the canon, for the
     # cases that name a release the canon does not declare.
     canon = canon_version("the selftest's canon")
     other = next(v for v in ("0.8", "0.9") if v != canon)
@@ -1249,7 +1253,7 @@ if PROBE:
     print(f"check-emitted-urls: probing {len(urls)} emitted URL(s) (network) — {today}")
     # Read the records first, only to learn the template rows: the paste-back below must hand
     # a ${RELEASE} row back AS ITS TEMPLATE, measured now with its owner kept. A literal row
-    # pasted back is the per-cut break the template exists to end (dev#2201).
+    # pasted back is the per-cut break the template exists to end.
     parse_record(os.environ["EMITTED_RECORD"], "the inline record")
     hub_text = hub_record_text()
     if hub_text is not None:

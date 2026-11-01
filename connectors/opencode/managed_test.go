@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 )
 
 func TestValidateConfigJSON(t *testing.T) {
@@ -61,5 +63,50 @@ func TestVerifyDriftJSONFindsAWeakenedHost(t *testing.T) {
 	got, err := VerifyDriftJSON("host-1", []byte(authored), []byte(weak), at)
 	if err != nil || len(got) != 1 || got[0].Title != "OpenCode: permission.edit differs from the published policy" || got[0].SubjectKind != "opencode_managed_config" {
 		t.Fatalf("weakened edit permission: err=%v findings=%+v", err, got)
+	}
+}
+
+func TestVerifyDriftJSONFindsAHostThatWidensAPolicyTable(t *testing.T) {
+	at := time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)
+	authored := `{"permission":{"bash":{"*":"deny"},"edit":"ask"},"mcp":{"approved":{"type":"local","command":["approved-mcp"]}}}`
+	entry := func(pattern string) string { return "permission.bash entry " + redact.Hash(pattern)[:12] }
+	cases := []struct {
+		name, observed, want string
+	}{
+		{"faithful host", authored, ""},
+		{"host keys outside the policy tables are its own",
+			`{"theme":"dark","permission":{"bash":{"*":"deny"},"edit":"ask"},"mcp":{"approved":{"type":"local","command":["approved-mcp"]}}}`, ""},
+		{"allow rule added to a tool table",
+			`{"permission":{"bash":{"*":"deny","rm *":"allow"},"edit":"ask"},"mcp":{"approved":{"type":"local","command":["approved-mcp"]}}}`,
+			"OpenCode: " + entry("rm *") + " is on the host but not in the published policy"},
+		{"allow rule carrying a password",
+			`{"permission":{"bash":{"*":"deny","mysql -pS3cr3tPass *":"allow"},"edit":"ask"},"mcp":{"approved":{"type":"local","command":["approved-mcp"]}}}`,
+			"OpenCode: " + entry("mysql -pS3cr3tPass *") + " is on the host but not in the published policy"},
+		{"tool added to the permission table",
+			`{"permission":{"bash":{"*":"deny"},"edit":"ask","webfetch":"allow"},"mcp":{"approved":{"type":"local","command":["approved-mcp"]}}}`,
+			"OpenCode: permission.webfetch is on the host but not in the published policy"},
+		{"remote MCP server added",
+			`{"permission":{"bash":{"*":"deny"},"edit":"ask"},"mcp":{"approved":{"type":"local","command":["approved-mcp"]},"rogue":{"type":"remote","url":"https://rogue.example"}}}`,
+			"OpenCode: mcp.rogue is on the host but not in the published policy"},
+		{"control: published rule changed",
+			`{"permission":{"bash":{"*":"allow"},"edit":"ask"},"mcp":{"approved":{"type":"local","command":["approved-mcp"]}}}`,
+			"OpenCode: " + entry("*") + " differs from the published policy"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := VerifyDriftJSON("host-1", []byte(authored), []byte(tc.observed), at)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.want == "" {
+				if len(got) != 0 {
+					t.Fatalf("want no findings, got %+v", got)
+				}
+				return
+			}
+			if len(got) != 1 || got[0].Title != tc.want {
+				t.Fatalf("want one finding %q, got %+v", tc.want, got)
+			}
+		})
 	}
 }

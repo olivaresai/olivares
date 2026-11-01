@@ -171,9 +171,10 @@ func TestIdlePolicyWorkInFlight(t *testing.T) {
 		{"claude interrupted with approval open", &liveRun{turnInterrupted: true, pendingApprovals: []*runApprovalWait{{}}}, true},
 		{"session tool call open", &liveRun{claudeTurnsEnded: 1, sessionCalls: []*runtimeSessionCall{{}}}, true},
 		{"driver turn named", &liveRun{session: &fakeTurnSession{turn: "t1"}}, true},
+		{"driver handshake output is not input", &liveRun{session: &fakeTurnSession{}, lastIOAt: now.Add(-time.Minute)}, false},
 		{"driver turn ended", &liveRun{session: &fakeTurnSession{}, driverTurnEnded: true, lastIOAt: now.Add(-time.Minute)}, false},
-		{"driver input accepted, turn not named, inside window", &liveRun{session: &fakeTurnSession{}, lastIOAt: now.Add(-time.Minute)}, true},
-		{"driver input accepted, turn not named, past window", &liveRun{session: &fakeTurnSession{}, lastIOAt: now.Add(-6 * time.Minute)}, false},
+		{"driver input accepted, turn not named, inside window", &liveRun{session: &fakeTurnSession{}, driverInputStarted: true, lastIOAt: now.Add(-time.Minute)}, true},
+		{"driver input accepted, turn not named, past window", &liveRun{session: &fakeTurnSession{}, driverInputStarted: true, lastIOAt: now.Add(-6 * time.Minute)}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := tc.run.workInFlightLocked(now, window); got != tc.want {

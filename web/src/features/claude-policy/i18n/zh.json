@@ -115,9 +115,9 @@
   "ref": {
     "ms": {
       "paths": "managed-settings.json 路径",
-      "legacyPath": "旧版 Windows C:\\ProgramData\\ClaudeCode 路径已不再受支持（已在 {{since}} 移除）。",
+      "legacyPath": "旧版 Windows <path /> 路径已不再受支持（已在 {{since}} 移除）。",
       "precedence": "设置优先级（从高到低）",
-      "dropIn": "Drop-in 目录：{{dir}}",
+      "dropIn": "Drop-in 目录：<path />",
       "serverManaged": "服务器受管层级",
       "failClosed": "失败即关闭",
       "noMerge": "不合并",

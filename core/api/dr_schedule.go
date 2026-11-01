@@ -33,6 +33,10 @@ const drScheduleActor = "backup-scheduler"
 // persistedDRSchedule is the stored subset of drSchedule: config + last-run
 // bookkeeping. NextRun is never stored (derived from the cron on read).
 type persistedDRSchedule struct {
+	drProtection
+	drVerificationResult
+	LastBundle         string `json:"last_bundle,omitempty"`
+	LastBackup         string `json:"last_backup,omitempty"`
 	Enabled            bool   `json:"enabled"`
 	Cron               string `json:"cron"`
 	RetainDays         int    `json:"retain_days"`
@@ -44,6 +48,7 @@ type persistedDRSchedule struct {
 	LastRun             string `json:"last_run,omitempty"`
 	LastRunStatus       string `json:"last_run_status,omitempty"`
 	LastRunError        string `json:"last_run_error,omitempty"`
+	OffsiteLock         string `json:"offsite_lock,omitempty"`
 }
 
 // readPersistedDRSchedule reads the stored schedule out of the estate. found is
@@ -127,12 +132,39 @@ func (s *Server) loadDRSchedule(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if s.drSvc.cfg.Appliance {
+		if err := s.prepareApplianceRecoveryKey(!found); err != nil {
+			return err
+		}
+	}
+	if found {
+		policy := drScheduleRequest{LocalTarget: &p.LocalTarget, VerifyCron: &p.VerifyCron, Offsite: p.Offsite}
+		if p.RPOHours != 0 {
+			policy.RPOHours = &p.RPOHours
+		}
+		if err := validateDRProtection(policy); err != nil {
+			return fmt.Errorf("stored DR protection policy: %w", err)
+		}
+	}
 	if !found {
+		if s.drSvc.cfg.Appliance {
+			initial := drSchedule{Enabled: true, Cron: "0 2 * * *", Retain: 30,
+				drProtection: drProtection{VerifyCron: "0 3 * * 0", RPOHours: 24}}
+			if err := s.saveDRSchedule(ctx, initial); err != nil {
+				return err
+			}
+			s.drSvc.setSchedule(func(d *drSchedule) { *d = initial })
+			return nil
+		}
 		s.drSvc.setSchedule(func(d *drSchedule) { *d = drSchedule{} })
 		return nil
 	}
 	requireDualControl := p.armedDualControl()
 	s.drSvc.setSchedule(func(d *drSchedule) {
+		d.drProtection = p.drProtection
+		d.drVerificationResult = p.drVerificationResult
+		d.LastBundle = p.LastBundle
+		d.LastBackup = p.LastBackup
 		d.Enabled = p.Enabled
 		d.Cron = p.Cron
 		d.Retain = p.RetainDays
@@ -141,6 +173,7 @@ func (s *Server) loadDRSchedule(ctx context.Context) error {
 		d.DisarmBy = p.DualControlDisarmBy
 		d.LastRun = p.LastRun
 		d.LastRunStatus = p.LastRunStatus
+		d.OffsiteLock = p.OffsiteLock
 		d.LastRunError = p.LastRunError
 	})
 	return nil
@@ -150,17 +183,26 @@ func (s *Server) loadDRSchedule(ctx context.Context) error {
 // settings — a read-modify-write of the FULL settings map inside one Mutate tx
 // (SetOrgSettings REPLACES the map, so sibling keys must ride along).
 func (s *Server) saveDRSchedule(ctx context.Context, sched drSchedule) error {
+	return s.persistDRSchedule(ctx, sched, "")
+}
+
+func (s *Server) persistDRSchedule(ctx context.Context, sched drSchedule, action string) error {
 	requireDualControl := sched.RequireDualControl
 	p := persistedDRSchedule{
-		Enabled:             sched.Enabled,
-		Cron:                sched.Cron,
-		RetainDays:          sched.Retain,
-		RequireDualControl:  &requireDualControl,
-		DualControlDisarmAt: sched.DisarmAt,
-		DualControlDisarmBy: sched.DisarmBy,
-		LastRun:             sched.LastRun,
-		LastRunStatus:       sched.LastRunStatus,
-		LastRunError:        sched.LastRunError,
+		LastBundle:           sched.LastBundle,
+		LastBackup:           sched.LastBackup,
+		drProtection:         sched.drProtection,
+		drVerificationResult: sched.drVerificationResult,
+		Enabled:              sched.Enabled,
+		Cron:                 sched.Cron,
+		RetainDays:           sched.Retain,
+		RequireDualControl:   &requireDualControl,
+		DualControlDisarmAt:  sched.DisarmAt,
+		DualControlDisarmBy:  sched.DisarmBy,
+		LastRun:              sched.LastRun,
+		LastRunStatus:        sched.LastRunStatus,
+		OffsiteLock:          sched.OffsiteLock,
+		LastRunError:         sched.LastRunError,
 	}
 	raw, err := json.Marshal(p)
 	if err != nil {
@@ -176,13 +218,16 @@ func (s *Server) saveDRSchedule(ctx context.Context, sched drSchedule) error {
 			settings = map[string]any{}
 		}
 		settings[drScheduleSettingsKey] = string(raw)
-		_, err = sc.SetOrgSettings(ctx, settings)
+		_, err = sc.SetOrgSettings(ctx, settings, org.Version)
+		if err == nil && action != "" {
+			_, err = sc.Audit().Append(ctx, model.AuditDraft{Actor: drScheduleActor, ActorKind: "system", Action: action, Meta: map[string]any{"status": sched.LastVerifyStatus, "bundle": sched.LastBundle, "verified_at": sched.LastVerify}})
+		}
 		return err
 	})
 }
 
 // ScheduledBackupConfigured reloads the persisted state and reports whether an
-// enabled schedule has a cron. It neither evaluates nor claims a due instant.
+// backup or verification cadence is configured. It neither evaluates nor claims a due instant.
 func (s *Server) ScheduledBackupConfigured(ctx context.Context) (bool, error) {
 	if s.drSvc == nil {
 		return false, nil
@@ -193,7 +238,7 @@ func (s *Server) ScheduledBackupConfigured(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	sched := s.drSvc.scheduleSnapshot()
-	return sched.Enabled && strings.TrimSpace(sched.Cron) != "", nil
+	return (sched.Enabled && strings.TrimSpace(sched.Cron) != "") || sched.VerifyCron != "", nil
 }
 
 // RunDueScheduledBackup runs a due backup through the console backup path,
@@ -211,6 +256,13 @@ func (s *Server) RunDueScheduledBackup(ctx context.Context, now time.Time) (bool
 	if err := s.loadDRSchedule(ctx); err != nil {
 		return false, fmt.Errorf("dr schedule: reload persisted state: %w", err)
 	}
+	ran, backupErr := s.runDueBackup(ctx, now)
+	_, verifyErr := s.runDueVerification(ctx, now)
+	return ran, errors.Join(backupErr, verifyErr)
+}
+
+// The caller serializes both independent schedules under scheduleOpMu.
+func (s *Server) runDueBackup(ctx context.Context, now time.Time) (bool, error) {
 	now = now.UTC()
 	sched := s.drSvc.scheduleSnapshot()
 	if !sched.Enabled || strings.TrimSpace(sched.Cron) == "" {
@@ -267,7 +319,21 @@ func (s *Server) RunDueScheduledBackup(ctx context.Context, now time.Time) (bool
 		return false, fmt.Errorf("dr schedule: backup failed: %s", msg)
 	}
 
+	s.drSvc.setSchedule(func(d *drSchedule) { d.LastBundle = done.BundleID; d.LastBackup = done.StartedAt })
+	var offsiteErr error
+	if sched.Offsite != nil {
+		var lock string
+		lock, offsiteErr = s.replicateScheduledBackup(ctx, sched.Offsite, done.BundlePath, now)
+		if lock != "" {
+			s.drSvc.setSchedule(func(d *drSchedule) { d.OffsiteLock = lock })
+		}
+	}
+	// Copy outages must not suspend the local retention policy.
 	s.applyScheduleRetention(sched.Retain, done.BundleID, now)
+	if offsiteErr != nil {
+		s.recordScheduledRun(ctx, now, drJobFailed, offsiteErr.Error())
+		return false, fmt.Errorf("dr schedule: offsite copy: %w", offsiteErr)
+	}
 	s.recordScheduledRun(ctx, now, drJobCompleted, "")
 	s.log.Info("dr: scheduled backup completed", "job", job.ID, "bundle", done.BundleID, "retain_days", sched.Retain)
 	return true, nil
@@ -320,7 +386,13 @@ func (s *Server) applyScheduleRetention(retainDays int, keepName string, now tim
 	if retainDays <= 0 {
 		return
 	}
-	dir := s.drSvc.cfg.BackupDir
+	pin, err := s.drSvc.openBackupDirectory()
+	if err != nil {
+		s.log.Warn("dr: retention target unavailable", "err", err)
+		return
+	}
+	defer pin.Close()
+	dir := pin.Path
 	matches, err := filepath.Glob(filepath.Join(dir, "*.drbundle"))
 	if err != nil {
 		s.log.Warn("dr: retention prune skipped", "err", err)

@@ -7,8 +7,10 @@ package sqlstore
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/olivaresai/olivares/core/internal/store/dialect"
 	"github.com/olivaresai/olivares/core/store"
@@ -19,9 +21,34 @@ import (
 type guardBootVariants struct {
 	graph           guardEditionGraph
 	variantsByEpoch map[int64][]guardBootstrapReceiptVariant
+	// admission walks the post-module graph, which also holds the completed
+	// Community predecessors of a Business census.
+	admission bool
+	// mu guards variantsByEpoch for a boot shared by concurrent opens.
+	mu sync.Mutex
+}
+
+func (b *guardBootVariants) parentEpochs(epoch int64) []int64 {
+	if b.admission {
+		return guardAdmissionParentEpochs(b.graph, epoch)
+	}
+	return b.graph.parentEpochs(epoch)
+}
+
+func (b *guardBootVariants) edge(from, to int64) (guardManifestEdge, error) {
+	if b.admission {
+		return guardAdmissionEdge(b.graph, from, to)
+	}
+	return b.graph.edge(from, to)
 }
 
 func (b *guardBootVariants) variants(epoch int64) ([]guardBootstrapReceiptVariant, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.derive(epoch)
+}
+
+func (b *guardBootVariants) derive(epoch int64) ([]guardBootstrapReceiptVariant, error) {
 	if variants, ok := b.variantsByEpoch[epoch]; ok {
 		return variants, nil
 	}
@@ -38,12 +65,12 @@ func (b *guardBootVariants) variants(epoch int64) ([]guardBootstrapReceiptVarian
 	if err != nil {
 		return nil, err
 	}
-	for _, parent := range graph.parentEpochs(epoch) {
-		edge, eerr := graph.edge(parent, epoch)
+	for _, parent := range b.parentEpochs(epoch) {
+		edge, eerr := b.edge(parent, epoch)
 		if eerr != nil {
 			return nil, eerr
 		}
-		sources, serr := b.variants(parent)
+		sources, serr := b.derive(parent)
 		if serr != nil {
 			return nil, serr
 		}
@@ -66,6 +93,12 @@ func (b *guardBootVariants) variants(epoch int64) ([]guardBootstrapReceiptVarian
 			})
 		}
 	}
+	// The memo is shared: a caller that appends to the variants or to a variant's
+	// receipts must copy them, so neither slice keeps spare capacity to write into.
+	for i := range variants {
+		variants[i].Receipts = slices.Clip(variants[i].Receipts)
+	}
+	variants = slices.Clip(variants)
 	b.variantsByEpoch[epoch] = variants
 	return variants, nil
 }

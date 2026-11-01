@@ -26,6 +26,7 @@ import { attentionSnapshots, type AttentionSnapshot } from './session-attention'
 import {
   RAIL_ROWS_PER_GROUP,
   aliveSessions,
+  openSessions,
   railGroups,
   type RailGroup,
 } from './session-rail-model'
@@ -78,28 +79,40 @@ export interface SessionRailData {
   groups: RailGroup[]
   attention: AttentionSnapshot[]
   attentionReady: boolean
-  /** live: Needs you and Working, the Sessions place's count; running: every session
-   * that has not ended, idle ones too (the status bar and Stop all). */
-  sessionCounts: { live: number; needsYou: number; running: number }
+  /** live: Needs you and Working; running: every session Stop all would end, idle and
+   * archived ones too; open: those the list shows that have not ended (the Sessions badge
+   * and the status bar's "N sessions open"). */
+  sessionCounts: {
+    live: number
+    needsYou: number
+    running: number
+    open: number
+  }
   status: RailStatus
   allTo: '/sessions' | '/agentops' | '/communications/handoffs'
+}
+
+/** Whether a waiting session's row may link to its approval: the view opens and the
+ * principal reads approvals. One rule for the rail and for Now's queue. */
+export function useCanOpenApprovals(): boolean {
+  const { navigable } = useViewAccess()
+  const { can } = useAuth()
+  const approvalsView = viewById('permissions')
+  return !!approvalsView && navigable(approvalsView) && can(APPROVAL_READ)
 }
 
 /** Observed sessions, operated runs and handoffs offered to the operator. */
 export function useSessionRail(background = false): SessionRailData {
   const { navigable } = useViewAccess()
-  const { can } = useAuth()
   const boundary = useAuthBoundary()
   const now = useMinuteClock()
+  const canOpenApprovals = useCanOpenApprovals()
 
   const sessionsView = viewById('sessions')
   const runsView = viewById('agentops')
-  const approvalsView = viewById('permissions')
   const readSessions =
     !!boundary.tenant && !!sessionsView && navigable(sessionsView)
   const readRuns = !!boundary.tenant && !!runsView && navigable(runsView)
-  const canOpenApprovals =
-    !!approvalsView && navigable(approvalsView) && can(APPROVAL_READ)
 
   const live = useQuery({
     queryKey: sessionsKeys.liveScoped(
@@ -208,6 +221,7 @@ export function useSessionRail(background = false): SessionRailData {
         .reduce((n, g) => n + g.sessionTotal, 0),
       needsYou: groups.find((g) => g.id === 'needsYou')?.sessionTotal ?? 0,
       running: aliveSessions(sources),
+      open: openSessions(sources),
     },
     status,
     allTo,

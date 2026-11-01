@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -14,7 +14,12 @@ import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { governanceApi, governanceKeys } from './api'
 import { ApprovalDetails, ApprovalPreview } from './approval-preview'
 import './i18n'
-import type { ApprovalDTO, DecisionInput, DecisionVerb } from './types'
+import {
+  canDecideOnRequest,
+  type ApprovalDTO,
+  type DecisionInput,
+  type DecisionVerb,
+} from './types'
 
 /**
  * DenyDialog records a denial of the open request. Approve once needs no dialog: the
@@ -147,4 +152,34 @@ export function useDecision(
       verb === 'approve' ? t('decide.approved') : t('decide.rejected'),
     onDone: () => onEnd?.(),
   })
+}
+
+/**
+ * Whether this person may decide this request now, as the engine would answer: it is
+ * pending, they hold the approver's permission, they did not ask for it (separation of
+ * duties; a token has no stable user id) and they have not decided it already (a request
+ * that needs more than one approver stays pending after theirs, and a second decision
+ * from them is refused with 409). Offering what the engine refuses would be a dead end.
+ */
+export function useMayDecide(approval: ApprovalDTO | undefined): {
+  mayDecide: boolean
+  decidedByMe: boolean
+} {
+  const { activeTenant, can, principal } = useAuth()
+  const id = approval?.id ?? ''
+  const decisions = useQuery({
+    queryKey: governanceKeys.decisions(activeTenant, id),
+    queryFn: () => governanceApi.listDecisions(id),
+    enabled: !!approval,
+    refetchInterval: 12_000,
+  })
+  const decidedByMe =
+    !!principal?.actor &&
+    !!decisions.data?.items.some((d) => d.decider === principal.actor)
+  const mayDecide =
+    approval?.status === 'pending' &&
+    !decidedByMe &&
+    can('governance:approval:admin') &&
+    canDecideOnRequest(approval.requested_by, principal?.actor, principal?.kind)
+  return { mayDecide, decidedByMe }
 }

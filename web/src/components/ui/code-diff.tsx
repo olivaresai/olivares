@@ -26,6 +26,9 @@ export interface CodeDiffProps {
   originalLabel: string
   /** Accessible name for the right (modified) pane. */
   modifiedLabel: string
+  /** Makes each pane's line numbers clickable: called with the pane (the older revision
+   * is `original`, the newer `modified`) and the 1-based line. The panes stay read-only. */
+  onLineClick?: (side: 'original' | 'modified', line: number) => void
   height?: string
   className?: string
 }
@@ -36,16 +39,45 @@ export function CodeDiff({
   language,
   originalLabel,
   modifiedLabel,
+  onLineClick,
   height = '20rem',
   className,
 }: CodeDiffProps) {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const mergeRef = useRef<MergeView | null>(null)
+  // The editors are built once per revision; they call whichever handler is current, so a
+  // parent that passes a new function each render does not rebuild them.
+  const lineClickRef = useRef(onLineClick)
+  useEffect(() => {
+    lineClickRef.current = onLineClick
+  })
+  const clickable = onLineClick !== undefined
 
   useEffect(() => {
     if (!hostRef.current || mergeRef.current) return
-    const readOnly = (label: string) => [
-      lineNumbers(),
+    const readOnly = (label: string, side: 'original' | 'modified') => [
+      lineNumbers(
+        clickable
+          ? {
+              domEventHandlers: {
+                click: (view, block) => {
+                  lineClickRef.current?.(
+                    side,
+                    view.state.doc.lineAt(block.from).number,
+                  )
+                  return true
+                },
+              },
+            }
+          : undefined,
+      ),
+      ...(clickable
+        ? [
+            EditorView.theme({
+              '.cm-lineNumbers .cm-gutterElement': { cursor: 'pointer' },
+            }),
+          ]
+        : []),
       baseHighlightExtensions,
       languageExtension(language),
       EditorState.readOnly.of(true),
@@ -54,8 +86,8 @@ export function CodeDiff({
       EditorView.contentAttributes.of({ 'aria-label': label }),
     ]
     mergeRef.current = new MergeView({
-      a: { doc: original, extensions: readOnly(originalLabel) },
-      b: { doc: modified, extensions: readOnly(modifiedLabel) },
+      a: { doc: original, extensions: readOnly(originalLabel, 'original') },
+      b: { doc: modified, extensions: readOnly(modifiedLabel, 'modified') },
       parent: hostRef.current,
       collapseUnchanged: { margin: 3, minSize: 4 },
       highlightChanges: true,
@@ -66,7 +98,7 @@ export function CodeDiff({
       mergeRef.current = null
     }
     // Rebuild the merge view when the revisions or language change.
-  }, [original, modified, language, originalLabel, modifiedLabel])
+  }, [original, modified, language, originalLabel, modifiedLabel, clickable])
 
   return (
     <div

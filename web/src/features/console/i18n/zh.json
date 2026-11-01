@@ -1,6 +1,6 @@
 {
   "title": "管理",
-  "subtitle": "配置谁可以进入以及他们可以管理什么：为用户办理入驻、连接 SSO，并构建工作区与智能体组。",
+  "subtitle": "此组织的智能体、工作区、来源绑定、密钥和连接器。人员、登录和角色位于“人员与组”。",
   "tabs": {
     "people": "用户与组",
     "agents": "智能体",
@@ -12,8 +12,7 @@
     "apiKeys": "API 密钥",
     "license": "版本与许可证",
     "bindings": "来源绑定",
-    "wsConnectors": "工作区连接器",
-    "mcpGateway": "MCP 网关"
+    "wsConnectors": "工作区连接器"
   },
   "stepUpAction": "配置",
   "apiKeys": {
@@ -167,9 +166,13 @@
       "owner": "所有者"
     },
     "totpReset": "重置 TOTP",
-    "totpResetLabel": "重置 {{email}} 的 TOTP 因子",
+    "totpResetLabel": "重置 TOTP：{{email}}",
     "totpResetTitle": "重置该成员的 TOTP 因子？",
     "totpResetBody": "将删除 {{email}} 的因子及全部恢复代码。该账户会在下次登录时注册新因子——管理员必用策略会引导其完成注册，绝不会导致锁定。",
+    "endSessions": "结束登录",
+    "endSessionsFor": "结束 {{email}} 的登录？",
+    "endSessionsBody": "{{email}} 的所有活动登录在此组织中都将失效。其在其他组织的登录、API 令牌和账户不会更改。",
+    "sessionsEnded": "已结束对此组织的访问",
     "totpResetDone": "TOTP 因子已重置。"
   },
   "superadmins": {
@@ -313,6 +316,7 @@
       "sessions": "该密钥将从存储中移除。接收它的会话会继续运行，但在你重新创建之前无法恢复，引用它的模板也无法启动。"
     },
     "sessionCaption": "会话可以作为环境变量接收的密钥。名称以 env/ 开头。值不会再次显示。",
+    "credentialCaption": "会话可通过引擎的助手使用的托管凭据（Business）。名称以 credential/ 开头。值永远不会再次显示。",
     "colValue": "值",
     "colChanged": "上次更改",
     "colReference": "引用",
@@ -644,6 +648,7 @@
       "scopeRefPlaceholder": "请选择…",
       "scopeClass": "资源类型",
       "scopeClassAny": "任意资源",
+      "expiresAt": "到期时间（可选）",
       "scopeClassHint": "可选。将授权限定为单一资源类型（例如仅限模型）。",
       "note": "备注",
       "noteHint": "可选。随授权一同记录的上下文。",
@@ -902,7 +907,16 @@
           "unknown": "未知",
           "not_applicable": "不适用"
         },
-        "unknownHint": "未知表示引擎无法判定该权限；原因见引擎日志。这不是拒绝。"
+        "unknownHint": "未知表示引擎无法判定该权限；原因见引擎日志。这不是拒绝。",
+        "reason": "原因",
+        "membershipAsOf": "目录成员关系截至 {{at}}",
+        "grantAt": "通过 {{chain}} 在 {{node}} 上的授权 {{id}}",
+        "removedByAt": "在 {{node}} 上被 {{kind}} {{id}} 移除",
+        "removedBy": "被 {{kind}} {{id}} 移除",
+        "removalKinds": {
+          "irf": "IRF",
+          "forbid": "禁止"
+        }
       }
     }
   },
@@ -980,6 +994,7 @@
     },
     "defaultWorkspace": "默认工作区",
     "enabledYes": "已启用",
+    "expiresAt": "到期时间（可选）",
     "enabledNo": "已禁用",
     "noCredential": "无",
     "edit": "编辑",

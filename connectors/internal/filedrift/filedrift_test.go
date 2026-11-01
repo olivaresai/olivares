@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 	"github.com/olivaresai/olivares/sdk/model"
 )
 
@@ -263,5 +264,59 @@ func TestFindingsAreDistinctStableAndCarryNoValues(t *testing.T) {
 	other, _ := JSON(spec, "h2", []byte(authored), []byte(observed), at)
 	if other[0].DetailHash == a[0].DetailHash {
 		t.Error("the same fact on two hosts must be two findings")
+	}
+}
+
+func TestJSONExactTablesUnderAWildcard(t *testing.T) {
+	sp := Spec{Origin: "test_managed_config", Tool: "Test", ExactTables: []string{"perm.*"}}
+	authored := `{"perm":{"bash":{"*":"deny"},"a.b":{"x":"ask"},"edit":"ask"}}`
+	got, err := JSON(sp, "h", []byte(authored), []byte(`{"perm":{"bash":{"*":"deny","rm *":"allow"},"a.b":{"x":"ask","y":"allow"},"edit":"ask","new":"allow"}}`), at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "Test: perm.a.b.y is on the host but not in the published policy\nTest: perm.bash.rm * is on the host but not in the published policy\n"
+	if g := titles(got); g != want {
+		t.Fatalf("entries added under each published table = %q, want %q", g, want)
+	}
+	if got, _ := JSON(sp, "h", []byte(authored), []byte(authored), at); len(got) != 0 {
+		t.Fatalf("the published file on the host: %s", titles(got))
+	}
+	token := "gh" + "p_" + strings.Repeat("A", 36) // built at run time: no key-shaped literal in Git
+	observed := `{"perm":{"bash":{"*":"deny","curl -H 'Authorization: token ` + token + `' *":"allow"},"a.b":{"x":"ask"},"edit":"ask"}}`
+	got, _ = JSON(sp, "h", []byte(authored), []byte(observed), at)
+	if len(got) != 1 || strings.Contains(got[0].Title, token) || !strings.Contains(got[0].Title, "[REDACTED:github-token]") {
+		t.Fatalf("a host key carrying a credential must be scrubbed from the title: %s", titles(got))
+	}
+}
+
+func TestJSONPatternTablesKeepHostTextOutOfTitles(t *testing.T) {
+	sp := Spec{Origin: "test_managed_config", Tool: "Test", ExactTables: []string{"perm", "perm.*"}, PatternTables: []string{"perm.*"}}
+	authored := `{"perm":{"bash":{"*":"deny","psql -W hunter3 *":"ask"},"edit":"ask"}}`
+	curlAuth := "curl -" + "u admin:hunter2 *" // built at run time: no credential-shaped literal in Git
+	observed := `{"perm":{"bash":{"*":"allow","` + curlAuth + `":"allow","mysql -pS3cr3tPass *":"allow"},"edit":"ask","webfetch":"allow"}}`
+	got, err := JSON(sp, "h", []byte(authored), []byte(observed), at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := func(pattern string) string { return "Test: perm.bash entry " + redact.Hash(pattern)[:12] }
+	want := "Test: perm.webfetch is on the host but not in the published policy\n" +
+		entry(curlAuth) + " is on the host but not in the published policy\n" +
+		entry("mysql -pS3cr3tPass *") + " is on the host but not in the published policy\n" +
+		entry("*") + " differs from the published policy\n" +
+		entry("psql -W hunter3 *") + " is NOT set on the host\n"
+	if g := titles(got); g != want {
+		t.Fatalf("titles = %q, want %q", g, want)
+	}
+	seen := map[string]bool{}
+	for _, f := range got {
+		for _, secret := range []string{"hunter2", "hunter3", "S3cr3tPass"} {
+			if strings.Contains(f.Title, secret) {
+				t.Errorf("title %q carries pattern text", f.Title)
+			}
+		}
+		if seen[f.DetailHash] {
+			t.Errorf("two entries share one DetailHash: %q", f.Title)
+		}
+		seen[f.DetailHash] = true
 	}
 }

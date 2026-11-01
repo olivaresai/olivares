@@ -44,7 +44,7 @@ async function firstBoot(page: Page) {
   // Both setup paths must paint the authenticated shell before callers open Deploy.
   await expect(
     page
-      .getByRole('navigation', { name: 'Journeys', exact: true })
+      .getByRole('navigation', { name: 'Main navigation', exact: true })
       .getByRole('link', { name: 'Now', exact: true }),
   ).toBeVisible()
 }

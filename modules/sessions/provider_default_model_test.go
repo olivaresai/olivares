@@ -150,6 +150,74 @@ func TestProviderDefaultModelReachesGateAndArgvAndNextStartOnly(t *testing.T) {
 	}
 }
 
+func TestProviderDefaultModelWithoutCatalog(t *testing.T) {
+	for _, tc := range []struct {
+		name, state, service, saved, want string
+		models                            []string
+		clear, refused, primePreset       bool
+	}{
+		{name: "saved before testing", saved: "chosen-model", want: "chosen-model"},
+		{name: "saved with unavailable catalog", state: ProbeUnreachable, saved: "chosen-model", want: "chosen-model"},
+		{name: "listed saved model", state: ProbeOK, saved: "chosen-model", models: []string{"chosen-model"}, want: "chosen-model"},
+		{name: "catalog excludes saved model", state: ProbeOK, saved: "chosen-model", models: []string{"other-model"}, refused: true},
+		{name: "empty catalog excludes saved model", state: ProbeOK, saved: "chosen-model", refused: true},
+		{name: "unknown probe state remains refused", state: "invalid", saved: "chosen-model", refused: true},
+		{name: "refused key supplies no model", state: ProbeRefused, saved: "chosen-model"},
+		{name: "saved DeepSeek preset with unavailable catalog", state: ProbeUnreachable, service: "deepseek-anthropic", want: "deepseek-flash", primePreset: true},
+		{name: "saved Zai preset with unavailable catalog", state: ProbeUnreachable, service: "zai-anthropic", want: "glm-5.3", primePreset: true},
+		{name: "pending preset with unavailable catalog uses its declared preference", state: ProbeUnreachable, service: "deepseek-anthropic", want: "deepseek-flash"},
+		{name: "listed catalog excludes preset preference", state: ProbeOK, service: "deepseek-anthropic", models: []string{"other-model"}, refused: true},
+		{name: "empty catalog excludes preset preference", state: ProbeOK, service: "deepseek-anthropic", refused: true},
+		{name: "pending preset still awaits a successful test", service: "deepseek-anthropic"},
+		{name: "explicit choice wins over preset", state: ProbeUnreachable, service: "deepseek-anthropic", saved: "chosen-model", want: "chosen-model"},
+		{name: "cleared preset stays cleared", state: ProbeUnreachable, service: "deepseek-anthropic", clear: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, st, tenant, _, _ := providerHarness(t)
+			defer st.Close()
+			in := anthropicInput("Default model")
+			in.Service = tc.service
+			if tc.saved != "" {
+				in.DefaultModel = &tc.saved
+			}
+			rec := mustCreateRecord(t, m, tenant, in)
+			if tc.primePreset {
+				var err error
+				rec, err = m.recordProbeOutcome(t.Context(), tenant, rec, ProbeOK, "model listed", []string{tc.want}, time.Millisecond)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.clear {
+				empty := ""
+				var err error
+				rec, err = m.PatchProviderRecord(t.Context(), tenant, rec.Ref, ProviderRecordPatch{DefaultModel: &empty})
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.state != ProbeNever {
+				if _, err := m.recordProbeOutcome(t.Context(), tenant, rec, tc.state, "catalog outcome", tc.models, time.Millisecond); err != nil {
+					t.Fatal(err)
+				}
+			}
+			p := CreateRunParams{ProviderHome: &ProviderHomeSnapshot{Driver: providerDriverClaude,
+				AuthSource: AuthSourceManagedInjection, ProviderRecordRef: rec.Ref}}
+			err := m.resolveProviderDefaultModel(t.Context(), tenant, &p)
+			if tc.refused {
+				var coded *codedRunErr
+				if !errors.As(err, &coded) || coded.code != "provider_default_model_unavailable" {
+					t.Fatalf("excluded model = %v, want provider_default_model_unavailable", err)
+				}
+				return
+			}
+			if err != nil || p.Model != tc.want {
+				t.Fatalf("default = %q, %v; want %q", p.Model, err, tc.want)
+			}
+		})
+	}
+}
+
 func TestProviderDefaultModelUsesTheExistingWritePermission(t *testing.T) {
 	h := newHarness(t, New(WithProviderSecretVault(newFakeVault())))
 	admin := h.adminLogin()
@@ -291,7 +359,7 @@ func TestNewProviderCodingPreferenceRequiresBoundMembership(t *testing.T) {
 	}
 }
 
-// dev#2786: Claude Code resolves an alias, or picks its own default when no model
+// the regression: Claude Code resolves an alias, or picks its own default when no model
 // is given, in each process it starts, and the result was measured to differ
 // between sessions of one account (`opus` ran on claude-opus-4-8 and on
 // claude-opus-5-5). A launch on the tool's own sign-in hands the tool the exact
@@ -341,7 +409,7 @@ func TestClaudeBoundLaunchKeepsTheProviderModelName(t *testing.T) {
 	assertArgs(t, runner.lastSpec().Args, "--model", "opus")
 }
 
-// A resume re-applies today's template, and a session stored before dev#2786 names
+// A resume re-applies today's template, and a session stored before the regression names
 // an alias: neither may hand the tool the alias again. An alias and its exact id are
 // one model to the template merge, not a conflict.
 func TestClaudeResumeHandsTheToolTheExactModelID(t *testing.T) {

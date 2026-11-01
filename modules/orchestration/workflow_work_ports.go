@@ -150,15 +150,20 @@ type WorkflowWorkControl interface {
 }
 
 type WorkLaunchRequest struct {
-	RunRef            string
-	StepRef           string
-	Actor             WorkActor
-	IdempotencyKey    string
-	WorkItemID        model.ID
-	OwnerEpoch        int64
-	Fence             int64
-	RuntimeProfileRef string
-	AttemptKind       string
+	RunRef                string
+	StepRef               string
+	Actor                 WorkActor
+	IdempotencyKey        string
+	WorkItemID            model.ID
+	OwnerEpoch            int64
+	Fence                 int64
+	RuntimeProfileRef     string
+	RuntimeProfileVersion int64
+	AttemptKind           string
+	// WorkspaceRef selects a registered sessions workspace. Empty preserves
+	// workspace-less launches; Isolation is empty, native, container or sandbox.
+	WorkspaceRef string
+	Isolation    string
 }
 
 type ManagedWorkRun struct {

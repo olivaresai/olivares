@@ -17,7 +17,7 @@
 //   Codex, …): a session's reach is its tool's reach. Identity origins are not
 //   tools; non-family resource kinds (postgres.table, s3.bucket, mcp.tool, …) are
 //   not destinations of this view.
-import { toolName } from '@/features/agentops/tool-names'
+import { toolName } from '@/features/agentops/engine-tools'
 import type {
   ReachApproval,
   ReachEdge,

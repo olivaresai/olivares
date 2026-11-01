@@ -26,7 +26,7 @@ var credentialShaped = regexp.MustCompile(`(?i)(bearer\s+\S+|sk-[a-z0-9_\-]{6,}|
 // a stream-json result frame (Claude Code reports a failed start there), else the
 // last non-empty line it wrote to stderr, or the error line heading a stack trace
 // that ends its stderr. One line, bounded, with anything shaped like a credential
-// masked, because it becomes the run's reason and is shown to the operator (HU-06:
+// masked, because it becomes the run's reason and is shown to the operator (acceptance:
 // a refused or failed launch says why). Empty when the child said nothing.
 func exitCause(r *outputRing) string {
 	if r == nil {

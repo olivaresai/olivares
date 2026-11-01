@@ -297,7 +297,7 @@ const SOURCE_BINDINGS_TARGET: AuthorityTarget = {
  * identity, so the label promises the roster and nothing more. (A focused seam would need
  * the roster's DataTable search to accept an initial value — declared, not built.)
  */
-const NHI_ROSTER_TARGET: AuthorityTarget = {
+export const NHI_ROSTER_TARGET: AuthorityTarget = {
   key: 'nhiRoster',
   to: '/identity',
   search: { tab: 'inventory' },

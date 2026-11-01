@@ -36,6 +36,10 @@ func TestPlainGitTargetRefusesChangeEffects(t *testing.T) {
 	if codeOf(err) != "unsupported_requirement" {
 		t.Fatalf("merge err = %v (%s), want unsupported_requirement", err, codeOf(err))
 	}
+	_, err = h.m.Comment(ctx, h.user(), issueCommentInput(h, "op-comment"))
+	if codeOf(err) != "unsupported_requirement" {
+		t.Fatalf("comment err = %v (%s), want unsupported_requirement", err, codeOf(err))
+	}
 	if h.host.mints != 0 {
 		t.Fatalf("a refused effect minted %d tokens", h.host.mints)
 	}

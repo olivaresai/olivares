@@ -2,12 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// ONE NAVIGATION MODEL, AS THE PERSON SEES IT. Each view sits in one place, its area and
-// section, and every surface that shows where a page is says the same thing: the row of
-// pages above it, the top bar place it marks, and All areas. The first job (the four
-// journeys) is reachable from the first screen: a place, or a page in that place's
-// strip, or Settings and its strip. The top bar names the places; the areas
-// hold the rest.
+// ONE NAVIGATION MODEL, AS THE PERSON SEES IT. Each view sits in one place of the left
+// navigation (features/navigation/places.ts), and every surface that shows where a page is
+// says the same thing: the place the sidebar marks and the row of pages above it. The first
+// job (the four journeys) is reachable from the first screen: a place, or a page in that
+// place's row, or Settings and its row.
 import { cleanup } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -73,11 +72,25 @@ vi.mock('@/lib/auth/context', () => ({
   }),
 }))
 
+vi.mock('@/components/layout/scope-switcher', () => ({
+  ScopeSwitcher: () => null,
+}))
+vi.mock('@/components/layout/use-session-rail', () => ({
+  useSessionRail: () => ({
+    sessionCounts: { needsYou: 0, live: 0, running: 0, open: 0 },
+  }),
+}))
+vi.mock('@/features/governance/use-pending-approvals', async (actual) => ({
+  ...(await actual<object>()),
+  usePendingApprovals: () => ({ query: { data: undefined } }),
+}))
+
 import { FEATURE_VIEWS, type FeatureView } from '@/features/registry'
 import { SETTINGS_UTILITY, isListed, permissionGate } from './model'
 import { JOURNEYS, stepHref } from './journeys'
+import { placeOfView } from './places'
 import { DestinationSections } from '@/components/layout/destination-sections'
-import { PlacesNav } from '@/components/layout/places-nav'
+import { Sidebar } from '@/components/layout/sidebar'
 
 afterEach(() => {
   cleanup()
@@ -94,7 +107,7 @@ function shownAt(href: string) {
   routerState.search = Object.fromEntries(url.searchParams)
   const { container } = renderIntel(
     <>
-      <PlacesNav />
+      <Sidebar />
       <DestinationSections />
     </>,
   )
@@ -118,14 +131,8 @@ function shownAt(href: string) {
   return result
 }
 
-const placeOf = (v: FeatureView) =>
-  v.navigation.kind === 'root'
-    ? 'root'
-    : `${v.navigation.areaId}/${v.navigation.sectionId}`
+const placeOf = placeOfView
 const viewAt = (path: string) => FEATURE_VIEWS.find((v) => v.path === path)
-const inSettingsArea = (v: FeatureView) =>
-  v.navigation.kind !== 'root' &&
-  v.navigation.areaId === SETTINGS_UTILITY.areaId
 
 /** Every address the first screen offers: its places, Settings, and the strip each of
  *  those opens on. */
@@ -161,9 +168,22 @@ describe('the first screen', () => {
     expect(shownAt('/').rows).toEqual([
       '/',
       '/sessions',
+      '/workspace',
+      '/work',
       '/agent-tools',
+      '/models',
+      '/capabilities',
+      '/knowledge',
       '/permissions?tab=approvals',
+      // Usage & cost leads with the accounts and today, before Business's FinOps.
+      '/usage',
       '/audit',
+      '/access-map',
+      '/identity',
+      '/security',
+      '/estate',
+      '/settings?section=edition',
+      '/settings',
     ])
     // A tool, a key or a local model, a session, its approval, stop and resume, history.
     const offered = offeredFromFirstScreen()
@@ -173,8 +193,8 @@ describe('the first screen', () => {
       ...JOURNEYS.approvals,
     ])
       expect(offered).toContain(stepHref(step))
-    // The rest of the product is in the areas, not in a second list of places.
-    expect(shownAt('/').rows).not.toContain('/models')
+    // The rest of the product is in its places' rows, not in a second list of places.
+    expect(shownAt('/').rows).not.toContain('/model-operations')
   })
 })
 
@@ -183,17 +203,14 @@ describe('every page sits in one place', () => {
     (v) => v.navigation.kind === 'feature' && isListed(v, allowAll),
   )
 
-  it('lists only pages of its own section in the strip above it', () => {
+  it('lists only pages of its own place in the strip above it', () => {
     const strays = listed.flatMap((v) =>
       shownAt(v.path)
         .strip.filter((href) => href !== SETTINGS_UTILITY.path)
         .map((href) => viewAt(href))
         .filter(
           (member): member is FeatureView =>
-            !!member &&
-            placeOf(member) !== placeOf(v) &&
-            // The footer's Settings stands for its whole area.
-            !(inSettingsArea(v) && inSettingsArea(member)),
+            !!member && placeOf(member) !== placeOf(v),
         )
         .map(
           (member) =>
@@ -203,19 +220,17 @@ describe('every page sits in one place', () => {
     expect(strays).toEqual([])
   })
 
-  it('marks one place of its own section (itself when it is one), or none, leaving the page to All areas', () => {
+  it('marks exactly one place, the one that holds the page', () => {
     const wrong = listed.flatMap((v) => {
-      const { rows, marked } = shownAt(v.path)
-      const pinned = rows.some((href) => href === v.path)
-      const row = marked.length === 1 ? viewAt(marked[0].split('?')[0]) : null
-      if (row && placeOf(row) === placeOf(v) && (!pinned || row.id === v.id))
+      const { marked } = shownAt(v.path)
+      const at = marked.map((href) => href.split('?')[0])
+      const place =
+        at.length === 1 && at[0] !== SETTINGS_UTILITY.path
+          ? viewAt(at[0])
+          : null
+      if (place && placeOf(place) === placeOf(v)) return []
+      if (at[0] === SETTINGS_UTILITY.path && placeOf(v) === 'settings')
         return []
-      // Nothing marked is right only when no place holds the page's section (a section
-      // place, Rules, covers its own address and nothing else).
-      const holder = rows.find(
-        (href) => !href.includes('?') && placeOf(viewAt(href)!) === placeOf(v),
-      )
-      if (marked.length === 0 && !holder) return []
       return [
         `${v.path} (${placeOf(v)}) marks ${marked.join(', ') || 'nothing'}`,
       ]

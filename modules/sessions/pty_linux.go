@@ -21,7 +21,7 @@ import (
 // stderr stays a pipe so the two streams remain distinct on the bridge.
 // Closing stdin on Stop does not close the master: that would also tear down
 // the stdout pump before SIGTERM has a chance to flush.
-func (pr *procRunner) launchPTY(cmd *exec.Cmd, waitDelay time.Duration, stripImages bool, release func()) (*procProcess, error) {
+func (pr *procRunner) launchPTY(cmd *exec.Cmd, waitDelay time.Duration, stripImages bool, release func(), killTreeOnExit bool) (*procProcess, error) {
 	master, slave, err := openLocalPTY()
 	if err != nil {
 		return nil, fmt.Errorf("sessions: local PTY: %w", err)
@@ -44,12 +44,15 @@ func (pr *procRunner) launchPTY(cmd *exec.Cmd, waitDelay time.Duration, stripIma
 	cmd.SysProcAttr.Ctty = 0 // stdin is the slave, so the child's fd 0 is the tty
 	cmd.Cancel = func() error { return procGroupKill(cmd) }
 	program := specProgram(cmd) // the guard replaces cmd.Path
-	engine, err := watchEngine(cmd)
+	engine, err := watchEngine(cmd, killTreeOnExit)
 	if err != nil {
 		_ = stderr.Close()
 		_ = master.Close()
 		_ = slave.Close()
 		return nil, fmt.Errorf("sessions: start %q: %w", program, err)
+	}
+	if engine != nil {
+		cmd.Cancel = func() error { engine.endLifetime(); return nil }
 	}
 	if err := cmd.Start(); err != nil {
 		engine.close()
@@ -62,10 +65,25 @@ func (pr *procRunner) launchPTY(cmd *exec.Cmd, waitDelay time.Duration, stripIma
 	cmd.Env = nil
 	_ = slave.Close()
 	stdin := ptyWriter{f: master}
-	return pr.watch(cmd, stdin, stripImagesFrom(master, stripImages), stderr, waitDelay, engine.with(release)), nil
+	return pr.watch(cmd, stdin, stripImagesFrom(master, stripImages), stderr, waitDelay, release, engine), nil
 }
 
 func openLocalPTY() (master, slave *os.File, err error) {
+	master, slave, err = openPTYPair()
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := setRaw(int(slave.Fd())); err != nil {
+		_ = master.Close()
+		_ = slave.Close()
+		return nil, nil, err
+	}
+	return master, slave, nil
+}
+
+// openPTYPair opens a pty in the kernel's default (cooked) mode at 80x24: the line
+// discipline a login shell expects. An agent tool wants it raw (openLocalPTY).
+func openPTYPair() (master, slave *os.File, err error) {
 	master, err = os.OpenFile("/dev/ptmx", os.O_RDWR|unix.O_NOCTTY, 0)
 	if err != nil {
 		return nil, nil, err
@@ -82,11 +100,6 @@ func openLocalPTY() (master, slave *os.File, err error) {
 	slave, err = os.OpenFile("/dev/pts/"+strconv.Itoa(n), os.O_RDWR|unix.O_NOCTTY, 0)
 	if err != nil {
 		_ = master.Close()
-		return nil, nil, err
-	}
-	if err := setRaw(int(slave.Fd())); err != nil {
-		_ = master.Close()
-		_ = slave.Close()
 		return nil, nil, err
 	}
 	_ = unix.IoctlSetWinsize(int(master.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Row: 24, Col: 80})

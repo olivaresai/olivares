@@ -309,14 +309,14 @@ test.describe('model and effort are chosen where a session is started', () => {
     })
 
     // The composer says what the session runs on, by name: the model the engine
-    // launched `sonnet` on (dev#2786), never the alias; the header names the session
-    // and its tool only (dev#3120).
+    // launched `sonnet` on, never the alias; the header names the session
+    // and its tool only.
     const composer = page.getByTestId('work-composer')
     await expect(composer).toHaveAttribute('data-attached', 'true', {
       timeout: 30_000,
     })
     await expect(page.getByTestId('thread-tool')).toHaveText('Claude Code')
-    // Model and effort are two pickers (dev#3162).
+    // Model and effort are two pickers.
     await expect(composer.getByTestId('composer-tool-model')).toHaveText(
       'Claude Sonnet 5.5',
     )

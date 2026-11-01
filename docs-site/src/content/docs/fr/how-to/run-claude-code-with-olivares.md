@@ -73,7 +73,7 @@ override.
 <!-- release -->
 ```sh
 # verify the engine image you run (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:0.4 \
+cosign verify docker.io/olivaresai/olivares:0.5 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
@@ -116,7 +116,7 @@ la première étape en échec et n'atteint jamais l'installateur après une vér
 (
 set -eu
 cd "$(mktemp -d)"
-ver=0.4
+ver=0.5
 base=https://github.com/olivaresai/olivares/releases/download/$ver
 curl -fsSLO $base/checksums.txt
 curl -fsSLO $base/checksums.txt.sig

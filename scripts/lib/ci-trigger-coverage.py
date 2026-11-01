@@ -868,9 +868,10 @@ def inspect_coverage(doc) -> tuple[int, list[str]]:
         return 2, ["cannot observe the `on` event map"]
     if "workflow_dispatch" not in events:
         return 1, ["workflow_dispatch is missing from `on`"]
-    if "push" not in events:
-        return 2, ["cannot observe a push event"]
-    push = events["push"]
+    manual_only = set(events) == {"workflow_dispatch"}
+    if "push" not in events and not manual_only:
+        return 2, ["expected manual dispatch alone or an inspectable push event"]
+    push = events.get("push")
     if push is not None and not isinstance(push, dict):
         return 2, ["push event spec is not a mapping or null"]
     if isinstance(push, dict):
@@ -929,9 +930,10 @@ def inspect_coverage(doc) -> tuple[int, list[str]]:
             return 1, ["secrets job-level if depends on classify"]
     except Unsupported as exc:
         return 2, [str(exc)]
+    trigger = "manual dispatch only" if manual_only else "main-push eligible; no path filter"
     return 0, [
-        "main-push eligible; no path filter; classifier observed (%d journal prefix(es)); secrets independent of classify"
-        % len(patterns)
+        "%s; classifier observed (%d journal prefix(es)); secrets independent of classify"
+        % (trigger, len(patterns))
     ]
 
 
@@ -977,9 +979,9 @@ def cmd_eligible(path: str, branch: str, files: list[str]) -> int:
     try:
         doc = _load_path(path)
         events = _event_map(doc.get("on"))
-        if not events or "push" not in events:
-            raise Unsupported("cannot observe a push event")
-        ok = push_would_run(events["push"], files, branch=branch)
+        if not events:
+            raise Unsupported("cannot observe the event map")
+        ok = "push" in events and push_would_run(events["push"], files, branch=branch)
     except Unsupported as exc:
         sys.stderr.write(
             "check-classify-paths-parity: COULD NOT CHECK: %s\n" % exc

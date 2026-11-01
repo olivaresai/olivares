@@ -22,6 +22,8 @@ vi.mock('@/lib/auth/context', () => ({
 
 import { agentOpsApi } from '@/features/agentops/api'
 import type { ProviderAccountDTO } from '@/features/agentops/types'
+import { modelsApi } from '@/features/models/api'
+import { useModulesStore } from '@/stores/modules'
 import { providersApi } from '@/features/providers/api'
 import { AccountsAndKeys } from './accounts-and-keys'
 
@@ -218,5 +220,47 @@ describe('accounts and API keys on Tools', () => {
     expect(providersApi.list).not.toHaveBeenCalled()
     expect(agentOpsApi.listProfiles).not.toHaveBeenCalled()
     expect(agentOpsApi.listBindings).not.toHaveBeenCalled()
+  })
+})
+
+describe('provider key references on AI tools (#3388)', () => {
+  it('a key-reference reader finds them here, at their anchor', async () => {
+    auth.perms = new Set(['sessions:provider:read', 'models:keys:read'])
+    const keys = vi
+      .spyOn(modelsApi, 'keys')
+      .mockResolvedValue({ items: [], has_more: false })
+    mount()
+    const heading = await screen.findByRole('heading', {
+      name: 'Provider key references',
+    })
+    expect(heading.closest('#provider-key-references')).not.toBeNull()
+    expect(keys).toHaveBeenCalled()
+  })
+
+  it('a reader without key-reference read gets no part and no request', async () => {
+    auth.perms = new Set(['sessions:provider:read'])
+    const keys = vi.spyOn(modelsApi, 'keys')
+    mount()
+    await screen.findByRole('heading', { name: 'Accounts and API keys' })
+    expect(
+      screen.queryByRole('heading', { name: 'Provider key references' }),
+    ).not.toBeInTheDocument()
+    expect(keys).not.toHaveBeenCalled()
+  })
+
+  it('follows the models module: off, no part and no request', async () => {
+    auth.perms = new Set(['sessions:provider:read', 'models:keys:read'])
+    useModulesStore.setState({ off: new Set(['models']) })
+    const keys = vi.spyOn(modelsApi, 'keys')
+    try {
+      mount()
+      await screen.findByRole('heading', { name: 'Accounts and API keys' })
+      expect(
+        screen.queryByRole('heading', { name: 'Provider key references' }),
+      ).not.toBeInTheDocument()
+      expect(keys).not.toHaveBeenCalled()
+    } finally {
+      useModulesStore.setState({ off: new Set<string>() })
+    }
   })
 })

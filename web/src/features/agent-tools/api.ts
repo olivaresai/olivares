@@ -107,6 +107,10 @@ const ROOT = '/v1/m/agenttools'
 type Options = Pick<RequestOptions, 'signal' | 'dispatchGuard'>
 /** Every AI tools read (the installs, their jobs, the Ollama panel) sits under this key. */
 export const agentToolsKeys = { all: ['agent-tools'] as const }
+/** Tail of the key under which Models > Available keeps its own read of the Ollama status
+ * (under the auth boundary, so a boundary move ends it). Start, Stop and a finished download
+ * refresh every entry that carries it. */
+export const OLLAMA_AVAILABLE_KEY = 'ollama-available'
 
 export const agentToolsApi = {
   pins: (tenantId: string, signal?: AbortSignal) =>

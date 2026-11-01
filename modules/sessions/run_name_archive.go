@@ -69,6 +69,10 @@ func (m *Module) handleArchiveRun(w http.ResponseWriter, r *http.Request, mc api
 		if rec.String(colRunArchivedAt) != "" {
 			return false
 		}
+		rec[colRunResumeCancelled] = rec.String(colRunResumeAt) != "" || rec.Bool(colRunResumeAfterLimit)
+		rec[colRunResumeAt] = nil
+		rec[colRunResumeAfterLimit] = false
+		rec[colRunResumeDismissed] = true
 		rec[colRunArchivedAt] = model.NewTimestamp(m.now()).String()
 		return true
 	})
@@ -103,12 +107,13 @@ func (m *Module) changeRun(w http.ResponseWriter, r *http.Request, mc api.Module
 	}
 	defer release()
 	var dto runDTO
+	var rec model.Record
 	err = mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
 		if err != nil {
 			return err
 		}
-		rec, err := findRunRec(r.Context(), repo, ref)
+		rec, err = findRunRec(r.Context(), repo, ref)
 		if err != nil {
 			return err
 		}
@@ -131,5 +136,6 @@ func (m *Module) changeRun(w http.ResponseWriter, r *http.Request, mc api.Module
 		writeRunErr(w, err)
 		return
 	}
+	m.showTitle(r.Context(), mc, rec, &dto)
 	writeJSON(w, http.StatusOK, dto)
 }

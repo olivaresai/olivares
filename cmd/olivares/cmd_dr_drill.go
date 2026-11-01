@@ -32,16 +32,20 @@ import (
 func drDrillCmd() *cobra.Command {
 	var events int
 	var keepArtifacts bool
+	var scratchDSN, pgDumpPath, pgRestorePath string
 	cmd := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "write"},
 		Use:         "drill",
 		Short:       "Drill synthetic-ledger continuity and print measured RTO",
 		Long: "drill checks backup, restore and ledger continuity on a synthetic signed\n" +
 			"ledger in a scratch directory, then prints the measured RTO (restore + boot +\n" +
-			"verify). It does not check grants, key custody or effects after the restore\n" +
+			"verify). With --scratch-dsn it runs the same round trip on PostgreSQL, in\n" +
+			"throwaway databases it creates and removes, and prints that RTO next to the\n" +
+			"SQLite one. It does not check grants, key custody or effects after the restore\n" +
 			"point, and it never touches a real data directory (docs/DR-RUNBOOK.md §8).",
-		Example: "  olivares dr drill --events 100",
-		Args:    cobra.NoArgs,
+		Example: "  olivares dr drill --events 100\n" +
+			"  olivares dr drill --events 100 --scratch-dsn env:OLIVARES_SCRATCH_DSN",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := checkCMEKInstall(""); err != nil {
 				return err
@@ -66,7 +70,7 @@ func drDrillCmd() *cobra.Command {
 			bundle := filepath.Join(root, "drill.drbundle")
 
 			// 1) Seed an ephemeral estate with a real signed, checkpointed ledger.
-			seed, err := seedDrillEstate(ctx, src, events)
+			seed, err := seedDrillEstate(ctx, bootConfig{DataDir: src, Engine: string(store.EngineSQLite), Version: version}, events)
 			if err != nil {
 				return fmt.Errorf("drill seed: %w", err)
 			}
@@ -94,17 +98,7 @@ func drDrillCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("drill backup: %w", err)
 			}
-			bf, err := os.OpenFile(bundle, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
-			if err != nil {
-				return err
-			}
-			if err := dr.WriteAuthenticatedBundle(bf, dr.BundleInput{
-				Manifest: m, KEK: cipher.Params(), SnapshotPath: snapshotPath, SealedKeys: sealed,
-			}, cipher); err != nil {
-				_ = bf.Close()
-				return err
-			}
-			if err := bf.Close(); err != nil {
+			if err := writeDrillBundle(bundle, m, snapshotPath, sealed, cipher); err != nil {
 				return err
 			}
 			bundleSize := fileSizeOr0(bundle)
@@ -171,12 +165,34 @@ func drDrillCmd() *cobra.Command {
 			if !rep.OK {
 				return fmt.Errorf("DR drill FAILED: bundle does not restore to a continuity-safe ledger: %s", strings.Join(rep.Problems, "; "))
 			}
-			return reportDRDrillSuccess(w, restoredEvents, rto)
+			if err := reportDRDrillSuccess(w, restoredEvents, rto); err != nil {
+				return err
+			}
+			return drillPostgres(cmd, scratchDSN, events, pgDumpPath, pgRestorePath)
 		},
 	}
 	cmd.Flags().IntVar(&events, "events", 500, "ledger events to seed in the ephemeral estate")
 	cmd.Flags().BoolVar(&keepArtifacts, "keep-artifacts", false, "keep the scratch dir instead of removing it (debugging)")
+	cmd.Flags().StringVar(&scratchDSN, "scratch-dsn", "", "also run the drill on PostgreSQL: maintenance DSN of a server where throwaway databases and roles may be created and dropped; accepts a file:/env: reference only")
+	cmd.Flags().StringVar(&pgDumpPath, "pg-dump", "pg_dump", "pg_dump executable (with --scratch-dsn only)")
+	cmd.Flags().StringVar(&pgRestorePath, "pg-restore", "pg_restore", "pg_restore executable (with --scratch-dsn only)")
 	return cmd
+}
+
+// writeDrillBundle seals the snapshot and the signing keys into an authenticated
+// bundle at path.
+func writeDrillBundle(path string, m *dr.Manifest, snapshotPath string, sealed map[string][]byte, cipher *dr.KeyCipher) error {
+	bf, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	if err := dr.WriteAuthenticatedBundle(bf, dr.BundleInput{
+		Manifest: m, KEK: cipher.Params(), SnapshotPath: snapshotPath, SealedKeys: sealed,
+	}, cipher); err != nil {
+		_ = bf.Close()
+		return err
+	}
+	return bf.Close()
 }
 
 func reportDRDrillSuccess(w io.Writer, restoredEvents int64, rto time.Duration) error {
@@ -194,11 +210,11 @@ type drillSeed struct {
 	tenants        int
 }
 
-// seedDrillEstate boots a fresh engine in dir, creates a tenant, appends events to
-// its ledger and checkpoints, then closes cleanly — leaving a data dir (store +
+// seedDrillEstate boots a fresh engine with cfg, creates a tenant, appends events
+// to its ledger and checkpoints, then closes cleanly — leaving a data dir (store +
 // signing keys) exactly like a live estate a backup would capture.
-func seedDrillEstate(ctx context.Context, dir string, events int) (drillSeed, error) {
-	eng, err := boot(ctx, bootConfig{DataDir: dir, Engine: string(store.EngineSQLite), Version: version})
+func seedDrillEstate(ctx context.Context, cfg bootConfig, events int) (drillSeed, error) {
+	eng, err := boot(ctx, cfg)
 	if err != nil {
 		return drillSeed{}, err
 	}

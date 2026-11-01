@@ -42,7 +42,7 @@ func mcpSentPolicies(t *testing.T, f *fakeMCPRoster) (map[string]bool, bool) {
 	return out, true
 }
 
-// TestMCPEnableRunsNothingWithoutApprovalUnlessTheAdminSaysSo is Root's decision of
+// TestMCPEnableRunsNothingWithoutApprovalUnlessTheAdminSaysSo is the maintainer's decision of
 // 2026-10-02T01:42Z: a server's own annotations never grant "run without approval".
 // `mcp enable` alone sends no list, so every tool asks; it prints the engine's proposal
 // (the tools the server calls read-only) and how to accept it. --allow-proposed sends

@@ -44,6 +44,10 @@ func (m *Module) handleResolvePreview(w http.ResponseWriter, r *http.Request, mc
 		writeJSON(w, http.StatusBadRequest, errorBody("source_type must be one of mcp|model|provider|knowledge|data|profile|tool"))
 		return
 	}
+	if isStandardsSource(sourceType) {
+		writeJSON(w, http.StatusBadRequest, errorBody("instructions and template are assigned to a department, not used by an actor: there is nothing to preview"))
+		return
+	}
 	if sourceRef == "" || actorRef == "" {
 		writeJSON(w, http.StatusBadRequest, errorBody("source_ref and actor_ref are required"))
 		return

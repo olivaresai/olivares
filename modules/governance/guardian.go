@@ -800,9 +800,28 @@ func (m *Module) fireGuardianRule(ctx context.Context, tenant model.TenantID, ru
 	})
 	if err != nil {
 		if isConflict(err) {
-			return // a concurrent delivery won the (rule, finding) race; converged
+			converged := false
+			checkErr := m.data.View(ctx, tenant, func(sc store.Scope) error {
+				repo, err := sc.Ext(guardianActionKind)
+				if err != nil {
+					return err
+				}
+				_, dup, err := findOne(ctx, repo, eq(colGARule, ruleID), eq(colGAFindingRef, findingRef))
+				converged = dup
+				return err
+			})
+			if checkErr == nil && converged {
+				return // a concurrent delivery won the (rule, finding) race
+			}
+			m.debugf("governance: guardian rule fire conflict without a committed delivery",
+				"rule", ruleName, "finding", findingRef, "err", err, "convergence_check_err", checkErr)
+			m.emitGuardianFinding(ctx, tenant, findingGuardianFailed, targetKindOrEstate(targetKind), targetRef,
+				sdkmodel.SeverityHigh, "Guardian containment FAILED — rule '"+ruleName+"' could not commit "+action)
+			return
 		}
-		m.debugf("governance: guardian rule fire failed", "rule", ruleName, "err", err)
+		m.warnf("governance: guardian rule fire failed", "rule", ruleName, "err", err)
+		m.emitGuardianFinding(ctx, tenant, findingGuardianFailed, targetKind, targetRef,
+			sdkmodel.SeverityHigh, "Guardian containment FAILED — rule '"+ruleName+"' could not commit containment")
 		return
 	}
 	m.emitGuardianPending(ctx, tenant, emits)
@@ -886,7 +905,7 @@ func (m *Module) containLocked(ctx context.Context, sc store.Scope, ruleID, rule
 		}
 		rec[colNHIEnforce] = enforceBlocked
 		rec[colNHIEnforceWhy] = "guardian rule '" + ruleName + "' quarantine (" + f.Kind + ")"
-		if _, err := repo.Update(ctx, rec); err != nil && !isConflict(err) {
+		if _, err := repo.Update(ctx, rec); err != nil {
 			return guardianContainOutcome{}, err
 		}
 		if err := m.recordLifecycleEvent(ctx, sc, identityRef, "blocked", model.ActorSystem, "", "guardian quarantine, rule "+ruleName); err != nil {
@@ -972,7 +991,7 @@ func (m *Module) emitGuardianFinding(ctx context.Context, tenant model.TenantID,
 		OccurredAt:  m.clock.Now().Time(),
 	}
 	if err := m.host.Publish(ctx, event.FromObservation(tenant.String(), Name, finding)); err != nil {
-		m.debugf("governance: emit guardian finding failed", "err", err)
+		m.warnf("governance: emit guardian finding failed", "kind", kind, "err", err)
 	}
 }
 
@@ -1008,6 +1027,45 @@ type GuardianSweepResult struct {
 	Failed   int
 }
 
+// guardianActionConverged reports whether an action no longer needs this sweep.
+// A conflict is safe to ignore only after this read proves that convergence.
+func (m *Module) guardianActionConverged(ctx context.Context, tenant model.TenantID, actionID model.ID) (bool, error) {
+	converged := false
+	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(guardianActionKind)
+		if err != nil {
+			return err
+		}
+		rec, err := repo.Get(ctx, actionID)
+		if isNotFound(err) {
+			return validationError("guardian action vanished during the sweep")
+		}
+		if err != nil {
+			return err
+		}
+		converged = rec.String(colGAStatus) != gaStatusPending
+		return nil
+	})
+	return converged, err
+}
+
+// noteSweepFailure keeps the first failure of a sweep so the rest of the queue is still
+// tried. A conflict on an action another pass already settled is not a failure.
+func (m *Module) noteSweepFailure(ctx context.Context, tenant model.TenantID, actionID model.ID, err error, first *error) {
+	if isConflict(err) {
+		converged, checkErr := m.guardianActionConverged(ctx, tenant, actionID)
+		if checkErr == nil && converged {
+			return
+		}
+		if checkErr != nil {
+			err = checkErr
+		}
+	}
+	if *first == nil {
+		*first = err
+	}
+}
+
 // GuardianSweep advances every PENDING guardian action whose approval reached a
 // terminal state: approved → execute the containment now; rejected/canceled →
 // rejected; expired → expired (stale intelligence is not acted on). Driven
@@ -1015,6 +1073,7 @@ type GuardianSweepResult struct {
 // Idempotent: every transition is state-change-guarded.
 func (m *Module) GuardianSweep(ctx context.Context, tenant model.TenantID) (GuardianSweepResult, error) {
 	var res GuardianSweepResult
+	var firstErr error
 	if m.data == nil {
 		return res, errNoData
 	}
@@ -1038,6 +1097,8 @@ func (m *Module) GuardianSweep(ctx context.Context, tenant model.TenantID) (Guar
 		actionID := model.ID(p.String(model.ColID))
 		now := m.clock.Now()
 		var emits []pendingGuardianEmit
+		var spend model.ID
+		transition := ""
 		err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
 			emits = emits[:0]
 			// Discovery chooses lock order only. Bind it to the stored arm below.
@@ -1070,9 +1131,23 @@ func (m *Module) GuardianSweep(ctx context.Context, tenant model.TenantID) (Guar
 				if isNotFound(err) {
 					rec[colGAStatus] = gaStatusFailed
 					rec[colGADetail] = "bound approval vanished"
-					_, uerr := actRepo.Update(ctx, rec)
-					res.Failed++
-					return uerr
+					if _, uerr := actRepo.Update(ctx, rec); uerr != nil {
+						return uerr
+					}
+					emits = append(emits, pendingGuardianEmit{
+						findingKind: findingGuardianFailed, subjectKind: rec.String(colGATargetKind), subjectRef: rec.String(colGATargetRef),
+						severity: sdkmodel.SeverityHigh, title: "Guardian containment FAILED — the bound approval vanished",
+					})
+					transition = gaStatusFailed
+					_, err = sc.Audit().Append(ctx, model.AuditDraft{
+						Actor: model.ActorSystem, ActorKind: model.ActorSystem,
+						Action: "governance.guardian.execute", TargetKind: guardianActionKind, TargetID: actionID,
+						Meta: map[string]any{
+							"rule": rec.String(colGARule), "action": rec.String(colGAAction),
+							"approval": rec.String(colGAApprovalID), "status": gaStatusFailed,
+						},
+					})
+					return err
 				}
 				return err
 			}
@@ -1086,43 +1161,24 @@ func (m *Module) GuardianSweep(ctx context.Context, tenant model.TenantID) (Guar
 			case statusPending:
 				return nil // still waiting for its human
 			case statusApproved:
-				outcome, cerr := m.containLocked(ctx, sc, rec.String(colGARule), rec.String(colGARuleName),
-					rec.String(colGAAction), rec.String(colGATargetKind), rec.String(colGATargetRef),
-					sdkmodel.FindingReport{Kind: rec.String(colGAFindingKind), Severity: sdkmodel.Severity(rec.String(colGASeverity))}, now)
-				if cerr != nil {
-					return cerr
-				}
-				rec[colGAStatus] = outcome.status
-				rec[colGADetail] = outcome.detail
-				rec[colGAExecutedAt] = now.String()
-				if outcome.killswitchID != "" {
-					rec[colGAKillswitchID] = outcome.killswitchID
-				}
-				if _, uerr := actRepo.Update(ctx, rec); uerr != nil {
-					return uerr
-				}
-				emits = append(emits, outcome.emits...)
-				if outcome.status == gaStatusExecuted {
-					res.Executed++
-				} else {
-					res.Failed++
-				}
-				_, aerr := sc.Audit().Append(ctx, model.AuditDraft{
-					Actor: model.ActorSystem, ActorKind: model.ActorSystem,
-					Action: "governance.guardian.execute", TargetKind: guardianActionKind, TargetID: actionID,
-					Meta: map[string]any{
-						"rule": rec.String(colGARule), "action": rec.String(colGAAction),
-						"approval": appr.String(model.ColID), "status": rec.String(colGAStatus),
-					},
-				})
-				return aerr
+				// The shared spend path re-reads a bound change record before the act.
+				spend = model.ID(appr.String(model.ColID))
+				return nil
 			case statusRejected, statusCanceled:
 				rec[colGAStatus] = gaStatusRejected
 				rec[colGADetail] = "containment declined by human decision"
+				if appr.String(colStatus) == statusCanceled {
+					rec[colGADetail] = "approval canceled before containment"
+				}
 				if _, uerr := actRepo.Update(ctx, rec); uerr != nil {
 					return uerr
 				}
-				res.Rejected++
+				transition = gaStatusRejected
+				emits = append(emits, pendingGuardianEmit{
+					findingKind: findingGuardianFailed, subjectKind: rec.String(colGATargetKind), subjectRef: rec.String(colGATargetRef),
+					severity: sdkmodel.SeverityHigh,
+					title:    "Guardian containment FAILED — rule '" + rec.String(colGARuleName) + "': " + rec.String(colGADetail),
+				})
 				return nil
 			case statusExpired:
 				rec[colGAStatus] = gaStatusExpired
@@ -1133,18 +1189,217 @@ func (m *Module) GuardianSweep(ctx context.Context, tenant model.TenantID) (Guar
 				if _, uerr := actRepo.Update(ctx, rec); uerr != nil {
 					return uerr
 				}
-				res.Expired++
+				transition = gaStatusExpired
+				emits = append(emits, pendingGuardianEmit{
+					findingKind: findingGuardianFailed, subjectKind: rec.String(colGATargetKind), subjectRef: rec.String(colGATargetRef),
+					severity: sdkmodel.SeverityHigh,
+					title:    "Guardian containment FAILED — rule '" + rec.String(colGARuleName) + "': " + rec.String(colGADetail),
+				})
 				return nil
 			}
 			return nil
 		})
 		if err != nil {
-			if isConflict(err) {
-				continue // another pass owns this row; converged
+			m.noteSweepFailure(ctx, tenant, actionID, err, &firstErr)
+			continue
+		}
+		switch transition {
+		case gaStatusFailed:
+			res.Failed++
+		case gaStatusRejected:
+			res.Rejected++
+		case gaStatusExpired:
+			res.Expired++
+		}
+		if !spend.IsZero() {
+			d, mc, err := m.EngineApprovals().scope(tenant)
+			if err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+				continue
 			}
-			return res, err
+			var attemptEmits []pendingGuardianEmit
+			attemptStatus := ""
+			consumption, spendErr := m.consumeApprovalAndAct(ctx, d, mc, spend, consumeApprovalRequest{
+				ConsumerID: "guardian:" + actionID.String(),
+			}, func(ctx context.Context, sc store.Scope) error {
+				arm := p.String(colGAAction)
+				if arm == gaActionStopAgent || arm == gaActionStopEstate {
+					return lockKillSwitchTransaction(ctx, sc)
+				}
+				return nil
+			}, func(ctx context.Context, sc store.Scope, spent model.Record) error {
+				attemptEmits, attemptStatus = nil, ""
+				actRepo, err := sc.Ext(guardianActionKind)
+				if err != nil {
+					return err
+				}
+				rec, err := actRepo.Get(ctx, actionID)
+				if err != nil {
+					return err
+				}
+				arm := p.String(colGAAction)
+				if rec.String(colGAAction) != arm || spent.String(colAction) != guardianApprovalPrefix+arm {
+					return validationError("guardian action or its approval action changed during approval spend")
+				}
+				subjectRef := rec.String(colGATargetRef)
+				if subjectRef == "" {
+					subjectRef = "estate"
+				}
+				if rec.String(colGATargetKind) != spent.String(colSubjectKind) || subjectRef != spent.String(colSubjectRef) {
+					return validationError("guardian target or its approval subject changed during approval spend")
+				}
+				if rec.String(colGAStatus) != gaStatusPending || rec.String(colGAApprovalID) != spent.String(model.ColID) {
+					return store.ErrConflict
+				}
+				now := m.clock.Now()
+				outcome, err := m.containLocked(ctx, sc, rec.String(colGARule), rec.String(colGARuleName),
+					rec.String(colGAAction), rec.String(colGATargetKind), rec.String(colGATargetRef),
+					sdkmodel.FindingReport{Kind: rec.String(colGAFindingKind), Severity: sdkmodel.Severity(rec.String(colGASeverity))}, now)
+				if err != nil {
+					return err
+				}
+				rec[colGAStatus] = outcome.status
+				rec[colGADetail] = outcome.detail
+				rec[colGAExecutedAt] = now.String()
+				if outcome.killswitchID != "" {
+					rec[colGAKillswitchID] = outcome.killswitchID
+				}
+				if _, err := actRepo.Update(ctx, rec); err != nil {
+					return err
+				}
+				attemptEmits = append(attemptEmits, outcome.emits...)
+				attemptStatus = outcome.status
+				_, err = sc.Audit().Append(ctx, model.AuditDraft{
+					Actor: model.ActorSystem, ActorKind: model.ActorSystem,
+					Action: "governance.guardian.execute", TargetKind: guardianActionKind, TargetID: actionID,
+					Meta: map[string]any{
+						"rule": rec.String(colGARule), "action": rec.String(colGAAction),
+						"approval": spent.String(model.ColID), "status": rec.String(colGAStatus),
+					},
+				})
+				return err
+			})
+			if spendErr != nil {
+				// One unavailable record or failing action must not starve later,
+				// independent containments. Leave this action pending and report the
+				// first error after the rest of the queue has been tried.
+				m.noteSweepFailure(ctx, tenant, actionID, spendErr, &firstErr)
+				continue
+			}
+			if !consumption.Granted {
+				terminal := ""
+				if err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+					actRepo, err := sc.Ext(guardianActionKind)
+					if err != nil {
+						return err
+					}
+					rec, err := actRepo.Get(ctx, actionID)
+					if err != nil {
+						return err
+					}
+					if rec.String(colGAStatus) != gaStatusPending || rec.String(colGAApprovalID) != spend.String() {
+						return store.ErrConflict
+					}
+					if consumption.Replay {
+						// A grant spent elsewhere is not a veto over this finding. Open a
+						// fresh approval for the same containment and keep the dedup row.
+						apprRepo, err := sc.Ext(approvalKind)
+						if err != nil {
+							return err
+						}
+						approval, err := apprRepo.Get(ctx, spend)
+						if err != nil {
+							return err
+						}
+						dto, err := m.openApprovalRecord(ctx, sc, model.ActorSystem, model.ActorSystem, "", createApprovalRequest{
+							Action: approval.String(colAction), SubjectKind: approval.String(colSubjectKind),
+							SubjectRef: approval.String(colSubjectRef), Reason: approval.String(colReason),
+							ExpiresInSeconds: guardianApprovalExpiry, EscalateInSeconds: guardianApprovalEscalate,
+						}, 0, m.clock.Now())
+						if err != nil {
+							return err
+						}
+						rec[colGAApprovalID] = dto.ID
+						rec[colGADetail] = "replaced an approval already spent elsewhere"
+						if _, err := actRepo.Update(ctx, rec); err != nil {
+							return err
+						}
+						subjectRef := rec.String(colGATargetRef)
+						if subjectRef == "" {
+							subjectRef = "estate"
+						}
+						emits = append(emits, pendingGuardianEmit{
+							findingKind: findingGuardianPending, subjectKind: rec.String(colGATargetKind), subjectRef: subjectRef,
+							severity: sdkmodel.SeverityHigh, approval: &dto,
+							title: "Guardian containment QUEUED again — the prior approval was already spent",
+						})
+						_, err = sc.Audit().Append(ctx, model.AuditDraft{
+							Actor: model.ActorSystem, ActorKind: model.ActorSystem,
+							Action: "governance.guardian.fire", TargetKind: guardianActionKind, TargetID: actionID,
+							Meta: map[string]any{
+								"rule": rec.String(colGARule), "action": rec.String(colGAAction), "mode": rec.String(colGAMode),
+								"finding_kind": rec.String(colGAFindingKind), "target_kind": rec.String(colGATargetKind), "status": gaStatusPending,
+							},
+						})
+						return err
+					}
+					terminal = gaStatusFailed
+					detail := "approval could not be spent before containment"
+					switch consumption.Status {
+					case statusExpired:
+						terminal, detail = gaStatusExpired, "approval window lapsed before containment"
+					case statusRejected:
+						terminal, detail = gaStatusRejected, "containment declined by human decision"
+					case statusCanceled:
+						terminal, detail = gaStatusRejected, "approval canceled before containment"
+					}
+					rec[colGAStatus] = terminal
+					rec[colGADetail] = detail
+					if terminal == gaStatusFailed {
+						rec[colGAExecutedAt] = m.clock.Now().String()
+					}
+					if _, err := actRepo.Update(ctx, rec); err != nil {
+						return err
+					}
+					if terminal == gaStatusFailed {
+						emits = append(emits, pendingGuardianEmit{
+							findingKind: findingGuardianFailed, subjectKind: rec.String(colGATargetKind), subjectRef: rec.String(colGATargetRef),
+							severity: sdkmodel.SeverityHigh, title: "Guardian containment FAILED — approval could not be spent before containment",
+						})
+					}
+					_, err = sc.Audit().Append(ctx, model.AuditDraft{
+						Actor: model.ActorSystem, ActorKind: model.ActorSystem,
+						Action: "governance.guardian.execute", TargetKind: guardianActionKind, TargetID: actionID,
+						Meta: map[string]any{
+							"rule": rec.String(colGARule), "action": rec.String(colGAAction),
+							"approval": spend.String(), "status": terminal,
+						},
+					})
+					return err
+				}); err != nil {
+					m.noteSweepFailure(ctx, tenant, actionID, err, &firstErr)
+					continue
+				}
+				switch terminal {
+				case gaStatusExpired:
+					res.Expired++
+				case gaStatusRejected:
+					res.Rejected++
+				case gaStatusFailed:
+					res.Failed++
+				}
+			} else {
+				emits = append(emits, attemptEmits...)
+				if attemptStatus == gaStatusExecuted {
+					res.Executed++
+				} else if attemptStatus != "" {
+					res.Failed++
+				}
+			}
 		}
 		m.emitGuardianPending(ctx, tenant, emits)
 	}
-	return res, nil
+	return res, firstErr
 }

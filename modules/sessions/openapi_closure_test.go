@@ -69,7 +69,8 @@ func TestSessionsClosureRequestBodyCensus(t *testing.T) {
 		// Optional body since the worktree option: the confirmation to discard a session's
 		// worktree and branch. A call with no body is the call it always was.
 		{http.MethodPost, "/runs/{ref}/cleanup", sessionsClosureBodyful, false},
-		{http.MethodPost, "/runs/{ref}/resume", sessionsClosureBodyless, false},
+		{http.MethodPost, "/runs/{ref}/resume", sessionsClosureBodyful, false},
+		{http.MethodPut, "/limit-resume-settings", sessionsClosureBodyful, true},
 		{http.MethodPost, "/runs/{ref}/move", sessionsClosureBodyful, true},
 		{http.MethodPost, "/runs/{ref}/handoff", sessionsClosureBodyful, true},
 		{http.MethodPut, "/runs/{ref}/peers", sessionsClosureBodyful, true},
@@ -112,7 +113,7 @@ func TestSessionsClosureRequestBodyCensus(t *testing.T) {
 		}
 		counts[test.kind]++
 	}
-	want := map[sessionsClosureRequestBodyKind]int{sessionsClosureBodyful: 18, sessionsClosureBodyless: 11}
+	want := map[sessionsClosureRequestBodyKind]int{sessionsClosureBodyful: 20, sessionsClosureBodyless: 10}
 	if !reflect.DeepEqual(counts, want) {
 		t.Fatalf("census = %#v, want %#v", counts, want)
 	}
@@ -386,4 +387,16 @@ func engineProviderPlainHTTPKinds(t *testing.T) (all, plainHTTP []string) {
 	slices.Sort(all)
 	slices.Sort(plainHTTP)
 	return all, plainHTTP
+}
+
+// TestCreateRunCredentialsBoundIsTheEnginesOwn: the published maxItems of a
+// launch's credentials is the number the handler enforces, not a copy of it.
+func TestCreateRunCredentialsBoundIsTheEnginesOwn(t *testing.T) {
+	schema := oastest.Map(t, sessionsCreateRunSchema()["anyOf"].([]any)[0], "create-run body")
+	props := oastest.Map(t, schema["properties"], "properties")
+	credentials := oastest.Map(t, props["credentials"], "credentials")
+	array := oastest.Map(t, credentials["anyOf"].([]any)[0], "credentials array")
+	if got := array["maxItems"]; got != CredentialMaxNames {
+		t.Fatalf("published credentials maxItems = %v; the handler enforces %d", got, CredentialMaxNames)
+	}
 }

@@ -2203,3 +2203,58 @@ describe('Provider account sign-in', () => {
     expect(qc.getMutationCache().getAll()).toEqual([])
   })
 })
+
+describe('ProviderAccountsPanel — usage', () => {
+  const usage = (five: number, week: number) => [
+    {
+      window: 'five_hour',
+      label: '5-hour',
+      utilization: five,
+      observed_at: '2026-10-29T10:00:00Z',
+    },
+    {
+      window: 'seven_day',
+      label: 'Weekly',
+      utilization: week,
+      observed_at: '2026-10-29T10:00:00Z',
+    },
+  ]
+
+  it("shows each account's 5-hour and weekly use next to its name, and unknown when the tool reported none", async () => {
+    api.listAccounts.mockResolvedValue(
+      page([{ ...workClaude, usage: usage(41, 17) }, reviewCodex]),
+    )
+    wrap()
+    const row = (
+      await screen.findByRole('button', { name: 'work-claude' })
+    ).closest('tr')!
+    expect(within(row).getByTestId('account-usage')).toHaveTextContent(
+      '5-hour 41% · Weekly 17%',
+    )
+    const other = screen
+      .getByRole('button', { name: 'review-codex' })
+      .closest('tr')!
+    // Unknown is said in words; it is never painted as 0 %.
+    expect(within(other).getByText('Usage unknown')).toBeVisible()
+    expect(within(other).queryByText(/%/)).toBeNull()
+  })
+
+  it('reads the list again by itself, so the figures follow the tool without a reload', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      // A cold account has no usage on the first read and has it on the next.
+      api.listAccounts
+        .mockResolvedValueOnce(page([workClaude]))
+        .mockResolvedValue(page([{ ...workClaude, usage: usage(8, 3) }]))
+      wrap()
+      expect(await screen.findByText('Usage unknown')).toBeVisible()
+      await act(() => vi.advanceTimersByTimeAsync(30_000))
+      expect(await screen.findByTestId('account-usage')).toHaveTextContent(
+        '5-hour 8% · Weekly 3%',
+      )
+      expect(screen.queryByText('Usage unknown')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})

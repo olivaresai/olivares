@@ -156,7 +156,7 @@ type restoreTarget struct {
 //
 // The filesystem is NOT enough for Postgres, and believing it was is what let a
 // live Postgres estate be modified with nothing required and nothing sealed
-//. A Postgres estate lives at the far end of a DSN, and under external key
+// . A Postgres estate lives at the far end of a DSN, and under external key
 // custody (BYOK/CMEK) the data dir is legitimately empty — so every live Postgres
 // database classified as a clean target. That was defended with "pg_restore into a
 // database that already holds the schema FAILS", which is a claim about pg_restore

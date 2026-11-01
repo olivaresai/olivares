@@ -1,6 +1,6 @@
 {
   "title": "Verwaltung",
-  "subtitle": "Konfigurieren Sie, wer Zugang erhält und was verwaltet werden darf: Onboarding von Benutzern, Anbindung von SSO sowie Gestaltung von Arbeitsbereichen und Agent-Gruppen.",
+  "subtitle": "Die Agenten, Arbeitsbereiche, Quellenbindungen, Secrets und Connectors dieser Organisation. Personen, Anmeldung und Rollen finden Sie unter Personen & Gruppen.",
   "tabs": {
     "people": "Benutzer & Gruppen",
     "agents": "Agenten",
@@ -12,8 +12,7 @@
     "apiKeys": "API-Schlüssel",
     "license": "Edition & Lizenz",
     "bindings": "Quellenbindungen",
-    "wsConnectors": "Arbeitsbereich-Connectors",
-    "mcpGateway": "MCP-Gateway"
+    "wsConnectors": "Arbeitsbereich-Connectors"
   },
   "stepUpAction": "konfigurieren",
   "apiKeys": {
@@ -167,9 +166,13 @@
       "owner": "Eigentümer"
     },
     "totpReset": "TOTP zurücksetzen",
-    "totpResetLabel": "TOTP-Faktor von {{email}} zurücksetzen",
+    "totpResetLabel": "TOTP zurücksetzen: {{email}}",
     "totpResetTitle": "TOTP-Faktor dieses Mitglieds zurücksetzen?",
     "totpResetBody": "Der Faktor und alle Wiederherstellungscodes von {{email}} werden gelöscht. Das Konto registriert beim nächsten Login einen neuen Faktor — die Verpflichtungsrichtlinie führt es dorthin, nie in eine Aussperrung.",
+    "endSessions": "Anmeldungen beenden",
+    "endSessionsFor": "Anmeldungen für {{email}} beenden?",
+    "endSessionsBody": "Alle aktiven Anmeldungen für {{email}} funktionieren in dieser Organisation nicht mehr. Anmeldungen bei anderen Organisationen, API-Tokens und Konto bleiben unverändert.",
+    "sessionsEnded": "Der Zugriff auf diese Organisation wurde beendet",
     "totpResetDone": "TOTP-Faktor zurückgesetzt."
   },
   "superadmins": {
@@ -313,6 +316,7 @@
       "sessions": "Das Secret wird aus dem Speicher entfernt. Eine Sitzung, die es erhält, läuft weiter, kann aber nicht fortgesetzt werden, und eine Vorlage, die es nennt, kann nicht starten, bis Sie es neu anlegen."
     },
     "sessionCaption": "Geheimnisse, die eine Sitzung als Umgebungsvariablen erhalten kann. Namen beginnen mit env/. Ein Wert wird nie wieder angezeigt.",
+    "credentialCaption": "Verwaltete Zugangsdaten, die eine Sitzung über die Helfer der Engine nutzen kann (Business). Namen beginnen mit credential/. Ein Wert wird nie wieder angezeigt.",
     "colValue": "Wert",
     "colChanged": "Zuletzt geändert",
     "colReference": "Referenz",
@@ -644,6 +648,7 @@
       "scopeRefPlaceholder": "Auswählen…",
       "scopeClass": "Ressourcenart",
       "scopeClassAny": "Beliebige Ressource",
+      "expiresAt": "Läuft ab (optional)",
       "scopeClassHint": "Optional. Schränkt die Gewährung auf eine Ressourcenart ein (z. B. nur Modelle).",
       "note": "Notiz",
       "noteHint": "Optionaler Kontext, der zusammen mit der Gewährung festgehalten wird.",
@@ -904,7 +909,16 @@
           "unknown": "Unbekannt",
           "not_applicable": "Nicht anwendbar"
         },
-        "unknownHint": "Unbekannt heißt, die Engine konnte dieses Recht nicht entscheiden; die Ursache steht im Engine-Log. Es ist keine Ablehnung."
+        "unknownHint": "Unbekannt heißt, die Engine konnte dieses Recht nicht entscheiden; die Ursache steht im Engine-Log. Es ist keine Ablehnung.",
+        "reason": "Begründung",
+        "membershipAsOf": "Verzeichnis-Mitgliedschaft, Stand {{at}}",
+        "grantAt": "Berechtigung {{id}} auf {{node}} über {{chain}}",
+        "removedByAt": "Entfernt durch {{kind}} {{id}} auf {{node}}",
+        "removedBy": "Entfernt durch {{kind}} {{id}}",
+        "removalKinds": {
+          "irf": "IRF",
+          "forbid": "Verbot"
+        }
       }
     }
   },
@@ -983,6 +997,7 @@
     },
     "defaultWorkspace": "Standard-Arbeitsbereich",
     "enabledYes": "Aktiviert",
+    "expiresAt": "Läuft ab (optional)",
     "enabledNo": "Deaktiviert",
     "noCredential": "Keine",
     "edit": "Bearbeiten",

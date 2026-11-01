@@ -17,6 +17,21 @@ import (
 // off here — Owns the audit mechanism binds real actor/action
 // semantics and turns auditing on per entity.
 
+// currentCoreDescriptors returns the live registry schema while coreDescriptors
+// keeps the frozen inputs of historical migrations.
+func currentCoreDescriptors() []model.EntityDescriptor {
+	ds := coreDescriptors()
+	for i, d := range ds {
+		if d.Kind == authSessionDescriptor.Kind {
+			ds[i] = authSessionDescriptorV28
+		}
+		if d.Kind == apiTokenDescriptor.Kind {
+			ds[i] = apiTokenDescriptorV29
+		}
+	}
+	return ds
+}
+
 // coreDescriptors returns every core entity descriptor, in creation order
 // (referenced tables first is not required: there are no DB-level foreign keys,
 // only id references, to keep the model portable and tenant-partitionable).

@@ -6,7 +6,7 @@ description: >-
 ---
 
 :::note[Business]
-审计导出（`GET /v1/audit/export`、`olivares audit export`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、`olivares audit verify` 和 `olivares dr backup`；导出返回 HTTP 501 或退出码 9。审计转发和物理隔离网络之间的 DDIL 传输也需要 Business。
+审计导出（`GET /v1/audit/export`、`olivares audit export`）、账本验证（`GET /v1/audit/verify`、`olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、账本读取和 `olivares dr backup`；证据操作返回 HTTP 501 或退出码 9。审计转发和携带审计段的 DDIL 传输也需要 Business。
 :::
 
 你**今天**就可以把 Olivares AI 的数据送入 Splunk，无需等待原生 connector：

@@ -6,7 +6,7 @@ package sessions
 
 import "testing"
 
-// HU 024 on refresh 04: "Ask before each action" asked nothing, because the hook
+// acceptance on refresh 04: "Ask before each action" asked nothing, because the hook
 // PEP never learned which permission preset the person chose. The launch intent
 // names it, from the same facts the launch runs on, so PEP binds it to the session
 // credential at create and at resume.

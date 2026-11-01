@@ -79,7 +79,14 @@ func newPGSplitFixture(t *testing.T, label string, split bool) *pgSplitFixture {
 	if err := maint.QueryRowContext(t.Context(), "SELECT current_setting('server_version_num')::int / 10000").Scan(&major); err != nil {
 		t.Fatalf("probe server version over %s: %v", pgProbeDSN, err)
 	}
-	binDir := pgClientBinDir(t, major)
+	return provisionPGSplitFixture(t, super, pgClientBinDir(t, major), label, split)
+}
+
+// provisionPGSplitFixture provisions the fixture on the server super reaches.
+// newPGSplitFixture calls it with the suite's server; a cell that starts a server
+// of its own (the PITR cell) calls it with that one.
+func provisionPGSplitFixture(t *testing.T, super, binDir, label string, split bool) *pgSplitFixture {
+	t.Helper()
 
 	// A short unique suffix: role and database identifiers must match
 	// store.SafeIdentPattern ([a-z_][a-z0-9_]*, <=63), so no timestamp formatting

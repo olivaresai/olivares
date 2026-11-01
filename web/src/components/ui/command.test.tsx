@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { Command, CommandInput, CommandList } from './command'
 
 describe('CommandInput', () => {
-  // dev#2560: the input drops its own outline, so its row draws the 3 px focus ring, inset
+  // the regression: the input drops its own outline, so its row draws the 3 px focus ring, inset
   // because the palette panel clips anything drawn outside it.
   it('rings the input row in the focus color while the input has keyboard focus', async () => {
     const user = userEvent.setup()

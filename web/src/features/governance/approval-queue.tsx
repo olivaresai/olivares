@@ -136,7 +136,7 @@ function RowState({ approval }: { approval: ApprovalDTO }) {
           {t('approvals.escalatedBadge')}
         </Badge>
       ) : null}
-      {/* An expired request says so with the time the engine stored (HU 039: a no-expiry
+      {/* An expired request says so with the time the engine stored (acceptance: a no-expiry
           policy has no expires_at, but the bounded wait still ends it). */}
       {expiredAt ? (
         <span title={formatDateTime(expiredAt)}>

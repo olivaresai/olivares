@@ -1,6 +1,6 @@
 {
   "title": "Amministrazione",
-  "subtitle": "Configura chi può accedere e che cosa può amministrare: inserisci utenti, collega l'SSO e definisci workspace e gruppi di agenti.",
+  "subtitle": "Gli agenti, i workspace, le associazioni di origine, i segreti e i connettori di questa organizzazione. Persone, accesso e ruoli sono in Persone e gruppi.",
   "tabs": {
     "people": "Utenti e gruppi",
     "agents": "Agenti",
@@ -12,8 +12,7 @@
     "apiKeys": "Chiavi API",
     "license": "Edizione e licenza",
     "bindings": "Associazioni di origine",
-    "wsConnectors": "Connettori del workspace",
-    "mcpGateway": "Gateway MCP"
+    "wsConnectors": "Connettori del workspace"
   },
   "stepUpAction": "configurare",
   "apiKeys": {
@@ -167,9 +166,13 @@
       "owner": "Proprietario"
     },
     "totpReset": "Reimposta TOTP",
-    "totpResetLabel": "Reimposta il fattore TOTP di {{email}}",
+    "totpResetLabel": "Reimposta TOTP di {{email}}",
     "totpResetTitle": "Reimpostare il fattore TOTP di questo membro?",
     "totpResetBody": "Il fattore e tutti i codici di recupero di {{email}} vengono eliminati. L'account registra un nuovo fattore al prossimo accesso: la policy che lo richiede agli amministratori lo porta lì, senza mai bloccarlo fuori.",
+    "endSessions": "Termina accessi",
+    "endSessionsFor": "Terminare gli accessi di {{email}}?",
+    "endSessionsBody": "Tutti gli accessi attivi di {{email}} smetteranno di funzionare in questa organizzazione. Gli accessi ad altre organizzazioni, i token API e l'account non vengono modificati.",
+    "sessionsEnded": "Accesso a questa organizzazione terminato",
     "totpResetDone": "Fattore TOTP reimpostato."
   },
   "superadmins": {
@@ -313,6 +316,7 @@
       "sessions": "Il segreto viene rimosso dall'archivio. Una sessione che lo ha ricevuto continua a funzionare, ma non può essere ripresa, e un template che lo nomina non può avviarsi, finché non lo ricrei."
     },
     "sessionCaption": "Segreti che una sessione può ricevere come variabili d'ambiente. I nomi iniziano con env/. Un valore non viene mai mostrato di nuovo.",
+    "credentialCaption": "Credenziali gestite che una sessione può usare tramite gli helper del motore (Business). I nomi iniziano con credential/. Un valore non viene mai più mostrato.",
     "colValue": "Valore",
     "colChanged": "Ultima modifica",
     "colReference": "Riferimento",
@@ -644,6 +648,7 @@
       "scopeRefPlaceholder": "Seleziona…",
       "scopeClass": "Tipo di risorsa",
       "scopeClassAny": "Qualsiasi risorsa",
+      "expiresAt": "Scade (opzionale)",
       "scopeClassHint": "Facoltativo. Limita l'assegnazione a un tipo di risorsa (ad es. solo i modelli).",
       "note": "Nota",
       "noteHint": "Contesto facoltativo registrato con l'assegnazione.",
@@ -906,7 +911,16 @@
           "unknown": "Sconosciuto",
           "not_applicable": "Non applicabile"
         },
-        "unknownHint": "Sconosciuto significa che il motore non ha potuto decidere quel diritto; la causa è nel log del motore. Non è un diniego."
+        "unknownHint": "Sconosciuto significa che il motore non ha potuto decidere quel diritto; la causa è nel log del motore. Non è un diniego.",
+        "reason": "Motivo",
+        "membershipAsOf": "Appartenenza alla directory aggiornata al {{at}}",
+        "grantAt": "Concessione {{id}} su {{node}} tramite {{chain}}",
+        "removedByAt": "Rimosso da {{kind}} {{id}} su {{node}}",
+        "removedBy": "Rimosso da {{kind}} {{id}}",
+        "removalKinds": {
+          "irf": "IRF",
+          "forbid": "divieto"
+        }
       }
     }
   },
@@ -986,6 +1000,7 @@
     },
     "defaultWorkspace": "workspace predefinito",
     "enabledYes": "Abilitato",
+    "expiresAt": "Scade (opzionale)",
     "enabledNo": "Disabilitato",
     "noCredential": "Nessuna",
     "edit": "Modifica",

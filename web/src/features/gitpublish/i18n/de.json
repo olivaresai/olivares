@@ -67,7 +67,8 @@
   "effects": {
     "push": "Push",
     "pull_request": "Pull-Request",
-    "merge": "Merge"
+    "merge": "Merge",
+    "issue_comment": "Issue-Kommentar"
   },
   "authority": {
     "requires": "Erfordert {{permission}}",
@@ -174,6 +175,7 @@
     "field_not_accepted": "Die Anfrage enthielt ein Feld, das diese Route nicht akzeptiert.",
     "forbidden": "Ihre aktuelle Berechtigung erlaubt diese Aktion für dieses Ziel nicht.",
     "head_mismatch": "Der Head des Pull-Requests ist nicht mehr der geprüfte Commit.",
+    "link_not_allowed": "Der Link muss auf einen Pull Request des freigegebenen Repositorys zeigen.",
     "host_credential_refused": "Der Git-Host hat die Anmeldedaten der Bindung oder deren Geltungsbereich abgelehnt. Es wurde nichts abgesendet.",
     "host_unavailable": "Der Git-Host war nicht erreichbar. Es wurde nichts abgesendet.",
     "intent_settled": "Das Ergebnis der Absicht steht bereits fest, daher kann sie nicht aufgegeben werden.",
@@ -201,7 +203,13 @@
     "unsupported_requirement": "Der Host kann diese Anforderung nicht erfüllen, zum Beispiel einen Rebase-Merge auf GitLab.",
     "version_conflict": "Das Ziel hat sich geändert, seit Sie es geöffnet haben. Öffnen Sie es erneut, um die aktuelle Version zu sehen.",
     "workflow_change_refused": "Der Commit ändert CI-Workflow-Dateien, deren Veröffentlichung dieses Ziel ablehnt.",
-    "unknown": "Die Engine hat die Anfrage mit einem Code abgelehnt, den diese Konsole nicht beschreibt."
+    "unknown": "Die Engine hat die Anfrage mit einem Code abgelehnt, den diese Konsole nicht beschreibt.",
+    "no_branch": "Der Ordner der Sitzung ist auf keinem Branch. Wechseln Sie auf einen Branch und liefern Sie dann erneut aus.",
+    "no_commit": "Der Branch der Sitzung hat noch keinen Commit.",
+    "nothing_to_ship": "Der Commit der Sitzung fügt dem Branch, in den er gemergt würde, nichts hinzu.",
+    "commit_refused": "Der Ordner der Sitzung hat den Commit abgelehnt: Er ist schreibgeschützt, arbeitet noch oder Ihr Profil hat keinen Namen und keine E-Mail.",
+    "approval_denied": "Eine Person hat diesen Push nicht genehmigt, oder die Genehmigung ist abgelaufen. Liefern Sie erneut aus, um eine neue Prüfung anzufordern.",
+    "approval_unavailable": "Der Genehmigungsdienst konnte nicht antworten. Liefern Sie in einem Moment erneut aus."
   },
   "intents": {
     "title": "Absichten",
@@ -254,5 +262,24 @@
     "abandonTitle": "Absicht {{id}} aufgeben?",
     "abandonDescription": "Mit dem Aufgeben wird aufgezeichnet, dass Sie die Verantwortung für diese ungeklärte Absicht übernehmen. Der Host wird weder geändert noch gelesen, und der Geltungsbereich bleibt gehalten, bis eine neue Anfrage diese Absicht anerkennt.",
     "abandonReason": "Grund (höchstens 256 Zeichen)"
+  },
+  "ship": {
+    "button": "Ausliefern",
+    "shipTo": "An {{prefix}} ausliefern",
+    "title": "Diese Sitzung ausliefern",
+    "description": "Committet die Änderungen der Sitzung in Ihrem Namen, pusht sie auf einen Branch unter {{prefix}} und öffnet einen Pull-Request, alles in einer Aktion.",
+    "submit": "Ausliefern",
+    "message": "Commit-Nachricht",
+    "messageHint": "Wird nur verwendet, wenn der Ordner der Sitzung Änderungen hat. Standard ist der Titel.",
+    "shipped": "Ausgeliefert: {{branch}} ist gepusht.",
+    "pullRequest": "Pull-Request #{{number}}",
+    "pullRequestOpen": "Pull-Request öffnen",
+    "awaitingTitle": "Wartet auf die Genehmigung einer anderen Person",
+    "awaitingBody": "Ihre Änderungen sind committet. Eine andere Person muss den Push genehmigen (Genehmigung {{id}}), bevor er rausgeht. Liefern Sie danach erneut aus.",
+    "again": "Erneut ausliefern",
+    "incompleteTitle": "Die Auslieferung wurde nicht abgeschlossen",
+    "incompletePush": "Der Push von {{branch}} wurde nicht angewendet ({{state}}). Prüfen Sie die Absichten dieses Ziels und liefern Sie dann erneut aus.",
+    "incompletePullRequest": "{{branch}} ist gepusht, aber der Pull-Request wurde nicht geöffnet ({{code}}). Liefern Sie erneut aus, um es zu wiederholen.",
+    "pullRequests": "Pull-Requests"
   }
 }

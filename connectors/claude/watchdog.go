@@ -32,7 +32,7 @@ type sessionLiveness struct {
 // HOOKS are still firing while its OTEL has gone silent past the threshold, i.e.
 // the agent disabled its OTEL_* exporters mid-session while continuing to act.
 // Kernel-level ground truth for the non-cooperative case is the eBPF backstop
-//; this is the cooperative-path heuristic, emitted with honest severity.
+// ; this is the cooperative-path heuristic, emitted with honest severity.
 type watchdog struct {
 	threshold time.Duration
 	emit      func(model.Observation)

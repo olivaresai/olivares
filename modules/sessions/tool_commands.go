@@ -460,7 +460,7 @@ func (m *Module) refreshToolCommands(ctx context.Context, lr *liveRun, rec model
 		}
 		var items []toolCommand
 		if codex, ok := lr.session.(*codexSession); ok {
-			if p, ok := lr.proc.(*procProcess); ok {
+			if p, ok := liveProcess(lr).(*procProcess); ok {
 				p.catalogResponses.Store(codex)
 			}
 			items, _, err = codex.commandCatalog(ctx)
@@ -517,7 +517,7 @@ func (m *Module) askClaudeCommands(ctx context.Context, lr *liveRun) ([]toolComm
 		return nil, &runErr{http.StatusGatewayTimeout, "Claude Code has not answered its earlier requests for its commands"}
 	}
 	answer := lr.commands.expect(id)
-	if p, ok := lr.proc.(*procProcess); ok {
+	if p, ok := liveProcess(lr).(*procProcess); ok {
 		p.commandResponses.Store(&lr.commands)
 	}
 	// One deadline covers the write and the wait. The write is not the caller's to

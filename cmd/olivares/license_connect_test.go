@@ -808,6 +808,7 @@ func TestConnectBindCompletesAfterApprovalAcrossResponseLossAndRestart(t *testin
 	if code != exitcode.OK || rep["status"] != "bound" {
 		t.Fatalf("recovery after the lost answer = %d %v", code, rep)
 	}
+	assertLicenseNotification(t, c.dir, nil)
 	st := c.state()
 	if st.Pending != nil || st.Request != nil || st.Binding == nil || st.Binding.Status != "active" || st.Binding.BindingEpoch != 1 {
 		t.Fatalf("state after binding: %+v", st)

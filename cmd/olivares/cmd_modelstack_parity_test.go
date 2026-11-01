@@ -23,8 +23,8 @@ import (
 // The census of the model stack, as MEASURED from the three modules' route
 // tables on this tree:
 //
-//	modules/models/api.go:82-197              67 routes  GET 32 POST 15 PUT 11 DELETE 9
-//	modules/finops/api.go:52-120              47 routes  GET 28 POST 12 PUT  3 DELETE 4
+//	modules/models/api.go:83-199              68 routes  GET 33 POST 15 PUT 11 DELETE 9
+//	modules/finops/api.go:54-126              48 routes  GET 29 POST 12 PUT  3 DELETE 4
 //	modules/inferenceproxy/…:APIRoutes         7 routes  GET  3 POST  1 PUT  2 DELETE 1
 //
 // The table below is the CLI's answer to that census. The constants are checked
@@ -40,7 +40,7 @@ import (
 // Only comparing the two sets against the engine's route tables sees it.
 const (
 	modelsRouteCount         = 68
-	finopsRouteCount         = 47
+	finopsRouteCount         = 48
 	inferenceProxyRouteCount = 7
 	modelstackRouteCount     = modelsRouteCount + finopsRouteCount + inferenceProxyRouteCount
 )
@@ -159,12 +159,13 @@ func modelstackRoutes() []modelstackRoute {
 		put(m, mb+"/model-access/"+testID, "models", "access", "update", testID, "--data", "{}"),
 		del(m, mb+"/model-access/"+testID, "models", "access", "rm", testID, "--yes"),
 
-		// --- finops: spend and value (9) ---
+		// --- finops: spend and value (10) ---
 		get(f, fb+"/spend", "finops", "spend", "ls"),
 		get(f, fb+"/spend/summary", "finops", "spend", "summary"),
 		get(f, fb+"/spend/trend", "finops", "spend", "trend"),
 		get(f, fb+"/spend/reconciliation", "finops", "spend", "reconciliation"),
 		get(f, fb+"/spend/allocation", "finops", "spend", "allocation"),
+		get(f, fb+"/spend/changes", "finops", "spend", "changes"),
 		get(f, fb+"/spend/unified", "finops", "spend", "unified"),
 		get(f, fb+"/spend/export", "finops", "spend", "export"),
 		get(f, fb+"/value", "finops", "value", "ls"),
@@ -284,7 +285,7 @@ func newModelstackStub(t *testing.T, rec *modelstackStub) *httptest.Server {
 
 // TestEveryCensusedRouteHasACommandThatReachesIt is the PERMIT half of the
 // contrafactual, done on the wire rather than on the exit code: for each of the
-// 122 routes the census measured, one CLI invocation produces EXACTLY that
+// 123 routes the census measured, one CLI invocation produces EXACTLY that
 // method and path, exactly once.
 //
 // "Exactly once" is part of the claim. A command that made a second, unasked-for
@@ -352,7 +353,7 @@ func TestModelstackTableMatchesTheMeasuredCensus(t *testing.T) {
 		counts
 	}{
 		{"models", counts{get: 33, post: 15, put: 11, del: 9}},
-		{"finops", counts{get: 28, post: 12, put: 3, del: 4}},
+		{"finops", counts{get: 29, post: 12, put: 3, del: 4}},
 		{"inferenceproxy", counts{get: 3, post: 1, put: 2, del: 1}},
 	} {
 		got, ok := byModule[want.module]
@@ -417,30 +418,61 @@ func engineRouteCensus(t *testing.T) map[routeKey]bool {
 			t.Fatalf("%s declares no APIRoutes method", path)
 		}
 		before := len(out)
-		ast.Inspect(decl.Body, func(n ast.Node) bool {
-			call, ok := n.(*ast.CallExpr)
-			if !ok || len(call.Args) < 2 {
+		for _, body := range routeBodies(file, decl) {
+			ast.Inspect(body, func(n ast.Node) bool {
+				call, ok := n.(*ast.CallExpr)
+				if !ok || len(call.Args) < 2 {
+					return true
+				}
+				sel, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok || sel.Sel.Name != "Handle" {
+					return true
+				}
+				method, ok1 := stringLit(call.Args[0])
+				route, ok2 := stringLit(call.Args[1])
+				if !ok1 || !ok2 {
+					t.Errorf("%s: reg.Handle with a non-literal method or path; the census cannot read it", path)
+					return true
+				}
+				out[routeKey{module: module, method: method,
+					path: bases[module] + placeholderPath.ReplaceAllString(route, testID)}] = true
 				return true
-			}
-			sel, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok || sel.Sel.Name != "Handle" {
-				return true
-			}
-			method, ok1 := stringLit(call.Args[0])
-			route, ok2 := stringLit(call.Args[1])
-			if !ok1 || !ok2 {
-				t.Errorf("%s: reg.Handle with a non-literal method or path; the census cannot read it", path)
-				return true
-			}
-			out[routeKey{module: module, method: method,
-				path: bases[module] + placeholderPath.ReplaceAllString(route, testID)}] = true
-			return true
-		})
+			})
+		}
 		if len(out) == before {
 			t.Fatalf("%s: APIRoutes registered no routes the census could read", path)
 		}
 	}
 	return out
+}
+
+// routeBodies returns APIRoutes' body and the body of every method of the same
+// file that APIRoutes calls, such as m.budgetCollectionRoutes(reg). A route
+// registered through a helper is still a route: finops keeps GET and POST
+// /budgets there, and reading only APIRoutes missed both.
+func routeBodies(file *ast.File, root *ast.FuncDecl) []*ast.BlockStmt {
+	methods := map[string]*ast.FuncDecl{}
+	for _, d := range file.Decls {
+		if fn, ok := d.(*ast.FuncDecl); ok && fn.Recv != nil {
+			methods[fn.Name.Name] = fn
+		}
+	}
+	bodies := []*ast.BlockStmt{root.Body}
+	ast.Inspect(root.Body, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		if helper, ok := methods[sel.Sel.Name]; ok && helper != root {
+			bodies = append(bodies, helper.Body)
+		}
+		return true
+	})
+	return bodies
 }
 
 // placeholderPath rewrites a chi path parameter ({id}, {mappingID}) into the

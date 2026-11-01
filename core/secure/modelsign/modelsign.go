@@ -276,7 +276,7 @@ func Verify(bundleJSON []byte, policy TrustPolicy, resolved map[string]string) (
 }
 
 // verifyAnchoredStatement is the shared core of Verify and VerifyAttestation
-//: it parses the Sigstore bundle, verifies the DSSE signature over the PAE
+// : it parses the Sigstore bundle, verifies the DSSE signature over the PAE
 // pre-image, anchors the signer to the trust policy, and decodes the in-toto
 // Statement v1. done=true means v is FINAL (a deny-closed Reason is set); a
 // non-nil error is reserved for a malformed bundle. The caller owns everything

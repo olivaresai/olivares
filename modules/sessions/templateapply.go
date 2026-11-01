@@ -451,10 +451,8 @@ func sameTools(a, b []string) bool {
 // Resolution + the launch-side application.
 // ---------------------------------------------------------------------------
 
-// loadTemplate reads one template by id within the tenant, refusing an ARCHIVED one.
-// An archived template is hidden from the catalog and must not keep governing launches
-// through a reference somebody kept — the operator retired it.
-func (m *Module) loadTemplate(ctx context.Context, tenant model.TenantID, id string) (templateDTO, error) {
+// readTemplate reads one template by id within the tenant, archived or not.
+func (m *Module) readTemplate(ctx context.Context, tenant model.TenantID, id string) (templateDTO, error) {
 	tid := model.ID(strings.TrimSpace(id))
 	if tid.IsZero() {
 		return templateDTO{}, badRequest("invalid template_id")
@@ -472,6 +470,14 @@ func (m *Module) loadTemplate(ctx context.Context, tenant model.TenantID, id str
 		dto = toTemplateDTO(rec)
 		return nil
 	})
+	return dto, err
+}
+
+// loadTemplate reads one template by id within the tenant, refusing an ARCHIVED one.
+// An archived template is hidden from the catalog and must not keep governing launches
+// through a reference somebody kept — the operator retired it.
+func (m *Module) loadTemplate(ctx context.Context, tenant model.TenantID, id string) (templateDTO, error) {
+	dto, err := m.readTemplate(ctx, tenant, id)
 	if err != nil {
 		return templateDTO{}, err
 	}
@@ -513,6 +519,12 @@ func (m *Module) applyLaunchTemplate(ctx context.Context, tenant model.TenantID,
 	dto, err := m.loadTemplate(ctx, tenant, p.TemplateID)
 	if err != nil {
 		return templateDTO{}, nil, err
+	}
+	if p.ExpectedTemplateVersion < 0 {
+		return templateDTO{}, nil, badRequest("expected template version is invalid")
+	}
+	if p.ExpectedTemplateVersion > 0 && dto.Version != p.ExpectedTemplateVersion {
+		return templateDTO{}, nil, &runErr{http.StatusConflict, "template changed after this launch was approved"}
 	}
 	terms := templateTerms(dto.Body)
 	// The transport is already decided by the caller and never by the template, so the

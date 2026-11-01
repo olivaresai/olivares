@@ -67,6 +67,28 @@ beforeEach(() => {
 })
 
 describe('ApprovalDetailPanel — the reason a reviewer approves', () => {
+  it('offers session approval only when the server permits it, through the existing decision', async () => {
+    const user = userEvent.setup()
+    api.decide.mockReturnValue(new Promise(() => {}))
+    openPanel({ ...toolApproval, session_scope_allowed: true })
+    await user.click(
+      await screen.findByRole('button', { name: 'Approve for this session' }),
+    )
+    expect(api.decide).toHaveBeenCalledWith(toolApproval.id, {
+      decision: 'approve',
+      scope: 'session',
+    })
+    expect(screen.getByRole('button', { name: 'Approving…' })).toBeDisabled()
+  })
+
+  it('does not offer session approval on an ordinary request', async () => {
+    openPanel(toolApproval)
+    await screen.findByRole('button', { name: 'Approve once' })
+    expect(
+      screen.queryByRole('button', { name: 'Approve for this session' }),
+    ).toBeNull()
+  })
+
   it('lets the launcher decide a session-proposed request while naming the launcher', async () => {
     openPanel({
       ...toolApproval,
@@ -93,7 +115,7 @@ describe('ApprovalDetailPanel — the reason a reviewer approves', () => {
     expect(screen.queryByText(NOTE)).toBeNull()
   })
 
-  // dev#3268: a disabled primary says why, or shows it is working. While the decision
+  // the regression: a disabled primary says why, or shows it is working. While the decision
   // is sent, Approve once is that action in progress.
   it('shows Approve once working while the decision is sent', async () => {
     api.decide.mockReturnValue(new Promise(() => {}))
@@ -153,7 +175,7 @@ describe('ApprovalDetailPanel — the reason a reviewer approves', () => {
   })
 })
 
-// HU 047: the requester of an estate re-enable cannot decide it; the panel offered only
+// acceptance: the requester of an estate re-enable cannot decide it; the panel offered only
 // Cancel and Close, with no word on what is needed.
 describe('ApprovalDetailPanel — the requester of an estate re-enable', () => {
   it('says two other admin accounts must approve, and where to create them', async () => {

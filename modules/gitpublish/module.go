@@ -28,6 +28,7 @@ package gitpublish
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	gp "github.com/olivaresai/olivares/connectors/gitpublish"
@@ -49,21 +50,23 @@ const (
 
 // The module permissions, granted by verb tier.
 const (
-	permTargetRead  auth.Permission = "gitpublish:target:read"
-	permTargetAdmin auth.Permission = "gitpublish:target:admin"
-	permPush        auth.Permission = "gitpublish:push:write"
-	permPullRequest auth.Permission = "gitpublish:pull_request:write"
-	permMerge       auth.Permission = "gitpublish:merge:admin"
+	permTargetRead   auth.Permission = "gitpublish:target:read"
+	permTargetAdmin  auth.Permission = "gitpublish:target:admin"
+	permPush         auth.Permission = "gitpublish:push:write"
+	permPullRequest  auth.Permission = "gitpublish:pull_request:write"
+	permMerge        auth.Permission = "gitpublish:merge:admin"
+	permIssueComment auth.Permission = "gitpublish:issue_comment:write"
 )
 
 // The Cedar actions the module's governed routes name.
 const (
-	actionPush        auth.CedarAction = "publication:push"
-	actionPullRequest auth.CedarAction = "publication:open_pull_request"
-	actionMerge       auth.CedarAction = "publication:merge"
-	actionTarget      auth.CedarAction = "publication_target:write"
-	actionReconcile   auth.CedarAction = "publication_intent:reconcile"
-	actionAbandon     auth.CedarAction = "publication_intent:abandon"
+	actionPush         auth.CedarAction = "publication:push"
+	actionPullRequest  auth.CedarAction = "publication:open_pull_request"
+	actionMerge        auth.CedarAction = "publication:merge"
+	actionIssueComment auth.CedarAction = "publication:issue_comment"
+	actionTarget       auth.CedarAction = "publication_target:write"
+	actionReconcile    auth.CedarAction = "publication_intent:reconcile"
+	actionAbandon      auth.CedarAction = "publication_intent:abandon"
 )
 
 // Options composes the module. The composition root supplies the production
@@ -75,7 +78,11 @@ type Options struct {
 	// Sessions resolves a push's session run to its folder. Nil refuses a
 	// push that names a run; a push that names none never reads it.
 	Sessions SessionFolders
-	Now      func() time.Time
+	// Work commits a session run's folder for a ship, and Gate asks the tenant's
+	// approval policy before its push. Nil refuses a ship: authority_unavailable.
+	Work SessionWork
+	Gate ShipGate
+	Now  func() time.Time
 	// AdmissionTimeout bounds A1 through A4 (default 30s).
 	AdmissionTimeout time.Duration
 	// DispatchTimeout bounds the single host write (default 2m).
@@ -89,6 +96,26 @@ type Options struct {
 	// OnReleaseFailure receives a bounded release failure that has no intent
 	// to be recorded on (a refusal before W1). It never receives the token.
 	OnReleaseFailure func(target model.ID, code string)
+	// OnLookupFailure receives why a host lookup failed when a request is refused
+	// with lookup_incomplete: an error kind, git's exit code and its first
+	// line. It never receives the token or the key, and the answer stays the code.
+	OnLookupFailure func(target model.ID, cause string)
+}
+
+// lookupFailed hands a lookup_incomplete refusal's cause to OnLookupFailure.
+func (m *Module) lookupFailed(target model.ID, e *Error) {
+	if e != nil && e.cause != nil && m.opts.OnLookupFailure != nil {
+		cause := e.cause.Error()
+		var host *gp.HostError
+		if errors.As(e.cause, &host) {
+			// Request IDs come from the remote and can echo credentials. The
+			// closed status/code still names the failure without that value.
+			bounded := *host
+			bounded.RequestID = ""
+			cause = bounded.Error()
+		}
+		m.opts.OnLookupFailure(target, cause)
+	}
 }
 
 // Module is the gitpublish module.
@@ -124,12 +151,12 @@ func (m *Module) APINamespace() string { return Namespace }
 
 // Permissions implements api.Module.
 func (m *Module) Permissions() []auth.Permission {
-	return []auth.Permission{permTargetRead, permTargetAdmin, permPush, permPullRequest, permMerge}
+	return []auth.Permission{permTargetRead, permTargetAdmin, permPush, permPullRequest, permMerge, permIssueComment}
 }
 
 // Actions implements api.ActionDeclarer.
 func (m *Module) Actions() []auth.CedarAction {
-	return []auth.CedarAction{actionPush, actionPullRequest, actionMerge, actionTarget, actionReconcile, actionAbandon}
+	return []auth.CedarAction{actionPush, actionPullRequest, actionMerge, actionIssueComment, actionTarget, actionReconcile, actionAbandon}
 }
 
 // UseData implements api.DataConsumer.
@@ -154,6 +181,12 @@ func (m *Module) UseGit(g Git) { m.opts.Git = g }
 
 // UseSessions late-binds the session folder reader.
 func (m *Module) UseSessions(s SessionFolders) { m.opts.Sessions = s }
+
+// UseSessionWork late-binds the sessions module's commit of a run's folder.
+func (m *Module) UseSessionWork(w SessionWork) { m.opts.Work = w }
+
+// UseShipGate late-binds the approval policy's door before a ship's push.
+func (m *Module) UseShipGate(g ShipGate) { m.opts.Gate = g }
 
 var _ Git = (*gp.Executor)(nil)
 

@@ -4,7 +4,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { APPROVALS_SECTION } from '@/components/layout/shell-destinations'
+import { APPROVALS_SECTION } from '@/components/layout/shell-sections'
 import { JOURNEYS, stepHref, unwalked } from './journeys'
 import { viewById } from './model'
 

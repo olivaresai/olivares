@@ -38,14 +38,19 @@ var baseTime = time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
 // fakeClock is a controllable model.Clock the tests advance to exercise approval
 // expiry and escalation without sleeping.
 type fakeClock struct {
-	mu sync.Mutex
-	t  time.Time
+	mu    sync.Mutex
+	t     time.Time
+	onNow func()
 }
 
 func (c *fakeClock) Now() model.Timestamp {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	return model.NewTimestamp(c.t)
+	ts, hook := model.NewTimestamp(c.t), c.onNow
+	c.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
+	return ts
 }
 func (c *fakeClock) advance(d time.Duration) {
 	c.mu.Lock()
@@ -179,8 +184,16 @@ type harness struct {
 // late-bound with the harness store's data handle — the boot() pattern for the
 // store-backed truth-loop seams.
 type harnessOpts struct {
+	registerExtra func(store.ExtensionRegistry) error
+	extraModules  []api.Module
+	// businessApprovals is the Business build's licence gate for approval policies beyond
+	// the Community line, as the composition root wires it.
+	businessApprovals func() error
 	// ingest enables the optional collector service for transport admission tests.
-	ingest        api.ObservationPublisher
+	ingest api.ObservationPublisher
+	// selfRights wires the evidence producer behind POST /v1/auth/capabilities, as the
+	// composition root does.
+	selfRights    bool
 	policyOpts    []governance.PolicyConsoleOption
 	dataConsumers []api.DataConsumer
 	// offlineStaleness, when > 0, engages the offline-policy staleness offline-trust bound on the
@@ -226,6 +239,9 @@ func newHarnessWith(t *testing.T, hopts harnessOpts) *harness {
 	if hopts.offlineStaleness > 0 {
 		govOpts = append(govOpts, governance.WithOfflinePolicyStaleness(hopts.offlineStaleness))
 	}
+	if hopts.businessApprovals != nil {
+		govOpts = append(govOpts, governance.WithBusinessApprovals(hopts.businessApprovals))
+	}
 	gov := governance.New(govOpts...)
 	// break-glass demands an active recording session (deny-closed). The
 	// module harness records nothing engine-side, so tests wire a permissive
@@ -241,7 +257,15 @@ func newHarnessWith(t *testing.T, hopts harnessOpts) *harness {
 	if hopts.storeSharesClock {
 		storeCfg.Clock = clk
 	}
-	st, err := engine.Open(ctx, storeCfg, gov.RegisterSchema)
+	st, err := engine.Open(ctx, storeCfg, func(reg store.ExtensionRegistry) error {
+		if err := gov.RegisterSchema(reg); err != nil {
+			return err
+		}
+		if hopts.registerExtra != nil {
+			return hopts.registerExtra(reg)
+		}
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -297,13 +321,17 @@ func newHarnessWith(t *testing.T, hopts harnessOpts) *harness {
 	if hopts.departments != nil {
 		departments = hopts.departments(authr)
 	}
+	var evidence api.PrincipalEvidenceProducer
+	if hopts.selfRights {
+		evidence = authr
+	}
 	srv, err := api.New(api.Options{
-		Store: st, Authenticator: authr, Departments: departments,
+		Store: st, Authenticator: authr, Departments: departments, PrincipalEvidenceProducer: evidence,
 		Authorizer: auth.NewAuthorizer(gov.RequestEvaluator(), auth.WithScopedGrants(gov.ScopedGrants())),
 		Signer:     signer, SetupToken: tok, Version: "test",
 		Ingest:                hopts.ingest,
 		AuthorizationRecorder: gov,
-		Modules:               []api.Module{gov, policy, agents, identity},
+		Modules:               append([]api.Module{gov, policy, agents, identity}, hopts.extraModules...),
 		Recorder:              recGate,
 		// the same module, in its REPORTING capacity — whoami must be able to tell
 		// the console about authority a tenant-scoped grant confers. Wired here (not only
@@ -487,4 +515,38 @@ func findingKinds(fs []sdkmodel.FindingReport) []string {
 		out = append(out, f.Kind)
 	}
 	return out
+}
+
+// Seed an existing installation through the real store, rather than calling a paid
+// management route in the Community fixture. The legacy active flag is supported.
+func seedStoredCedar(t *testing.T, h *harness, tenant model.TenantID, surface, source string) {
+	t.Helper()
+	if err := h.st.Mutate(context.Background(), tenant, func(sc store.Scope) error {
+		epochs := sc.(store.AuthorizationEpochStore)
+		current, err := epochs.ReadAuthorizationEpoch(context.Background())
+		if err != nil {
+			return err
+		}
+		if _, err := epochs.BumpAuthorizationEpoch(context.Background(), current); err != nil {
+			return err
+		}
+		repo, err := sc.Ext(model.Kind("governance.policy_revision"))
+		if err != nil {
+			return err
+		}
+		rows, _, err := repo.List(context.Background(), model.Query{Limit: 100})
+		if err != nil {
+			return err
+		}
+		var next int64 = 1
+		for _, row := range rows {
+			if row.String("surface") == surface && row.Int("revision") >= next {
+				next = row.Int("revision") + 1
+			}
+		}
+		_, err = repo.Create(context.Background(), model.Record{"surface": surface, "revision": next, "content": source, "author": "upgrade-fixture", "validated": true, "active": true, "note": "stored before upgrade"})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
 }

@@ -96,6 +96,9 @@ const (
 	// envSessionGeminiBin names the OFFICIAL Gemini CLI this node may operate;
 	// pinning it registers the Gemini ACP driver and turns no other driver on.
 	envSessionGeminiBin = driverfacts.GeminiRuntimeBinEnv
+	// envSessionCursorBin names the OFFICIAL Cursor CLI (`agent`) this node may operate;
+	// pinning it registers the Cursor ACP driver and turns no other driver on.
+	envSessionCursorBin = driverfacts.CursorRuntimeBinEnv
 )
 
 // buildSessionRuntimeOptions assembles the operate-runtime options for module II
@@ -159,6 +162,8 @@ func buildSessionRuntimeOptions(getenv func(string) string, broker *wifCredentia
 		"transport", "acp --hostname 127.0.0.1 --print-logs --log-level ERROR (owned child, ACP over stdio; never serve, web, attach or an external listener)")
 	pinOfficialSessionDriver(&opts, getenv, log, obs, envSessionGeminiBin, "gemini-cli", sessions.NewGeminiDriver,
 		"transport", "--acp (owned child, ACP over stdio; never a relaunched copy)")
+	pinOfficialSessionDriver(&opts, getenv, log, obs, envSessionCursorBin, "cursor", sessions.NewCursorDriver,
+		"transport", "acp (owned child, ACP over stdio; the account login stays in the profile home, never a browser on this host)")
 	if base := strings.TrimSpace(getenv(envSessionBaseURL)); base != "" {
 		opts = append(opts, sessions.WithInferenceBaseURL(base))
 	}
@@ -194,7 +199,12 @@ func sessionConfinementOption(dataDir string, log *slog.Logger) sessions.Option 
 			log.Warn("session runtime: session launches are refused on this node; enable Landlock and run olivares doctor", "reason", state.Reason)
 		}
 	}
-	return sessions.WithConfinement(protect, true)
+	confinement := sessions.WithConfinement(protect, true)
+	credentials := sessions.WithCredentialDataDir(dataDir)
+	return func(m *sessions.Module) {
+		confinement(m)
+		credentials(m)
+	}
 }
 
 // sessionProtectPaths are what a confined child never reaches: the engine data
@@ -401,13 +411,15 @@ func firstHourCodexDriver() sessions.ProviderDriver {
 
 // installedSessionProgram is the executable a driver with no pinned binary runs:
 // the newest verified managed install under the engine's data directory, then
-// the official program name on the engine's PATH, else "".
+// the official program name on the engine's PATH, else "". Cursor is the exception:
+// its program is the generic name `agent`, so only its managed install or an explicit
+// administrator pin is executed; an arbitrary PATH entry never receives its login home.
 //
 // Claude Code goes through the verified check first. The observer cannot call a
 // Claude release installed (its verifier is unavailable on purpose), so its verdict is
 // never kept and asking it first hashed the whole executable on every lookup: 251 MB per
 // AI tools status, resolve and launch, which stalled the first hour on a busy disk
-// (dev#2584). The verified check keeps its result while the release is unchanged. The verified
+// . The verified check keeps its result while the release is unchanged. The verified
 // check's "" is final for Claude: the observer would only hash the executable again and still
 // not call it installed, so the lookup goes to the PATH. This "claude" and the one in
 // verifiedManagedProgram change together.
@@ -424,6 +436,9 @@ func installedSessionProgram(obs *hostToolObserver, driver string, lookPath func
 	if !ok || !facts.Session {
 		return ""
 	}
+	if facts.NoPATHFallback {
+		return ""
+	}
 	if p, err := lookPath(facts.Program); err == nil {
 		return p
 	}
@@ -431,7 +446,7 @@ func installedSessionProgram(obs *hostToolObserver, driver string, lookPath func
 }
 
 // verifiedManagedProgram re-checks a managed Claude install's retained signature
-// with the pinned release key (local gpg, no network), the check the host-tool
+// with the pinned release key (in process, no network), the check the host-tool
 // observer deliberately never runs because it executes nothing. It runs whenever a
 // program lookup asks for Claude's (a launch, the AI tools status, the resolve rule)
 // and keeps its result while the release is unchanged. A variable so tests stay hermetic.
@@ -518,8 +533,7 @@ func withContainerIsolation(native sessions.Runner, getenv func(string) string, 
 	}
 	if log != nil {
 		log.Info("session runtime: isolation=container is available",
-			"runtime", rt.Path, "image", rt.Image, "selinux_labels", rt.SELinux,
-			"limit", "a launch bound to a provider's endpoint is refused as a container session: the container runner does not hold the provider network boundary")
+			"runtime", rt.Path, "image", rt.Image, "selinux_labels", rt.SELinux)
 	}
 	// A container the runner cannot remove after its session ended has no caller to tell:
 	// the log is where an operator finds it.

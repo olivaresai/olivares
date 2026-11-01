@@ -30,7 +30,7 @@ if [ "$olivares_pkg_init" != systemd ]; then
 fi
 
 # Custody: /var/lib/olivares belongs to the service account, so root never writes,
-# chowns or chmods by path inside it. Root's own state lives in the root-owned
+# chowns or chmods by path inside it. The root user's own state lives in the root-owned
 # /var/lib/olivares-package: it and its parent must be real directories, owned by
 # the running (root) user, with no group or other write. It is created 0755 when
 # absent; anything else refuses before any effect.
@@ -153,7 +153,7 @@ if ! mv -T "$olivares_stage" "$olivares_manifest"; then
   rm -f "$olivares_stage"
   refuse manifest-rename-failed "cannot rename $olivares_stage onto $olivares_manifest (a directory there?); move it aside and run the package operation again"
 fi
-# Root's own record of whether this package created the account, read by the next run
+# The root user's own record of whether this package created the account, read by the next run
 # (the same first line and keys as the deb/rpm/apk scripts write).
 if ! ( umask 077; rm -f "$install_state.tmp" &&
   printf 'schema=olivares.pkg-install-state/v1\ngroup_created=%s\nuser_created=%s\n' "$group_created" "$user_created" >"$install_state.tmp" &&

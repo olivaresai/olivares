@@ -3,9 +3,8 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { TFunction } from 'i18next'
 import {
-  Download,
-  Folder,
   Info,
+  Bell,
   Keyboard,
   KeyRound,
   Package,
@@ -13,7 +12,6 @@ import {
   Server,
   Shield,
   SlidersHorizontal,
-  Sparkles,
   type LucideIcon,
 } from 'lucide-react'
 import {
@@ -35,25 +33,32 @@ export interface SettingsSection {
 /** Sections actually offered by Settings; the palette uses the same labels and gate. */
 export const SETTINGS_SECTIONS = [
   { id: 'general', icon: SlidersHorizontal, adminOnly: false },
+  { id: 'newSessions', icon: Play, adminOnly: false },
+  { id: 'notifications', icon: Bell, adminOnly: false },
   { id: 'keyboard', icon: Keyboard, adminOnly: false },
-  { id: 'aiTools', icon: Sparkles, adminOnly: false, view: 'providers' },
-  {
-    id: 'workspaces',
-    icon: Folder,
-    adminOnly: false,
-    view: 'workspaceDashboard',
-  },
-  { id: 'deploy', icon: Server, adminOnly: false, view: 'deploy' },
+  { id: 'permissions', icon: Shield, adminOnly: false },
   { id: 'signIn', icon: Shield, adminOnly: false },
   { id: 'setup', icon: Play, adminOnly: false, view: 'onboarding' },
+  // The License place of the sidebar (features/navigation/places.ts), not a row of Settings.
   { id: 'edition', icon: Package, adminOnly: false },
-  { id: 'updates', icon: Download, adminOnly: true },
   { id: 'sessionIdle', icon: Server, adminOnly: true },
   { id: 'tracing', icon: Server, adminOnly: true },
   { id: 'signing', icon: KeyRound, adminOnly: true },
   { id: 'about', icon: Info, adminOnly: false },
 ] as const satisfies readonly SettingsSection[]
 export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]['id']
+
+/**
+ * Sections that repeated a place of the sidebar (0.5 one navigation): AI tools, Files &
+ * workspaces and Operations hold them now. An old `/settings?section=<id>` lands on the page
+ * that holds it, with the rest of its query (the wizard's `add` and `returnTo`) and its hash.
+ */
+export const MOVED_SECTIONS: Readonly<Record<string, string>> = {
+  aiTools: '/providers',
+  workspaces: '/workspace',
+  deploy: '/deploy',
+  updates: '/updates',
+}
 
 const ALL_SECTIONS: readonly SettingsSection[] = SETTINGS_SECTIONS
 
@@ -87,7 +92,6 @@ export function settingsSearchEntries(
       label,
       context,
       description: '',
-      areaId: null,
       sectionId: s.id,
       order,
       haystack: {

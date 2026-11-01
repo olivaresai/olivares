@@ -6,9 +6,12 @@ package gitpublish
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
+	gp "github.com/olivaresai/olivares/connectors/gitpublish"
+	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -100,4 +103,97 @@ func TestSweepPumpActiveWriterOnlyDBTime(t *testing.T) {
 		t.Fatal("the sweep dispatched a write")
 	}
 	h.balanced()
+}
+
+func TestSweepDueContinuesAfterObservationFailure(t *testing.T) {
+	h := newHarness(t)
+	h.m.opts.Skew = time.Minute
+	first := crashClaim(t, h, "first", -2*time.Minute)
+	second := crashClaim(t, h, "second", -2*time.Minute)
+	h.host.refs["olivares/second"] = shaCommit
+	h.host.mintErr = gp.ErrHostUnavailable
+	h.host.onMint = func(fh *fakeHost) { fh.mintErr = nil }
+
+	if err := h.m.SweepDue(context.Background(), h.tenant); err == nil {
+		t.Fatal("the failed observation was not reported")
+	}
+	if got := stateOf(t, h, first.ID).State; got != StateUncertain {
+		t.Fatalf("failed intent = %s, want uncertain", got)
+	}
+	if got := stateOf(t, h, second.ID).State; got != StateAdopted {
+		t.Fatalf("later intent = %s, want adopted after the earlier failure", got)
+	}
+	h.balanced()
+}
+
+func TestRecoveryPersistenceIgnoresCallerCancellation(t *testing.T) {
+	for _, name := range []string{"not_dispatched", "unknown", "release_failure"} {
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t)
+			in := crashClaim(t, h, "recovery-"+name, -time.Minute)
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			switch name {
+			case "not_dispatched":
+				out, err := h.m.settleNotDispatched(ctx, h.user(), in, "host_unavailable")
+				if err != nil || out.State != StateNotDispatched {
+					t.Fatalf("settle no-dispatch = %+v, %v", out, err)
+				}
+			case "unknown":
+				if _, err := h.m.recordUnknown(ctx, h.user(), in, "reconcile", "", "host_unavailable"); err != nil {
+					t.Fatalf("record unknown: %v", err)
+				}
+			case "release_failure":
+				if _, ok := h.m.recordReleaseFailure(ctx, h.user(), in.ID, h.target.ID, "server_error"); !ok {
+					t.Fatal("release failure was not persisted")
+				}
+			}
+		})
+	}
+}
+
+type clockScope struct {
+	store.Scope
+	err error
+}
+
+func (s clockScope) TransactionNow(context.Context) (model.Timestamp, error) {
+	return model.Timestamp{}, s.err
+}
+
+type clockData struct {
+	api.ModuleData
+	err  error
+	hide bool
+}
+
+func (d clockData) Mutate(ctx context.Context, tenant model.TenantID, fn func(store.Scope) error) error {
+	return d.ModuleData.Mutate(ctx, tenant, func(sc store.Scope) error {
+		if d.hide {
+			return fn(struct{ store.Scope }{sc})
+		}
+		return fn(clockScope{Scope: sc, err: d.err})
+	})
+}
+
+func TestSweepDueRequiresTransactionClock(t *testing.T) {
+	for name, tc := range map[string]struct {
+		err  error
+		hide bool
+	}{
+		"missing": {hide: true},
+		"failed":  {err: errors.New("injected clock failure")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t)
+			stale := crashClaim(t, h, "clock", -2*time.Minute)
+			h.m.data = clockData{ModuleData: h.m.data, err: tc.err, hide: tc.hide}
+			if err := h.m.SweepDue(context.Background(), h.tenant); err == nil {
+				t.Fatal("sweep used application time without an authoritative database clock")
+			}
+			if got := stateOf(t, h, stale.ID).State; got != StateDispatching {
+				t.Fatalf("clock failure changed intent to %s", got)
+			}
+		})
+	}
 }

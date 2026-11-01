@@ -27,6 +27,7 @@ export interface LaunchIdentityProps {
 }
 export interface LaunchIdentityExtension {
   readonly useIdentities: (enabled: boolean) => LaunchIdentityState
+  readonly Preflight?: ComponentType
   readonly Component: ComponentType<LaunchIdentityProps>
 }
 
@@ -86,4 +87,10 @@ export function LaunchIdentityFields({
       pending={pending}
     />
   )
+}
+
+/** Edition preflight controls are visible before Start, outside Advanced options. */
+export function LaunchPreflight() {
+  const Component = LAUNCH_IDENTITY_EXTENSION?.Preflight
+  return Component ? <Component /> : null
 }

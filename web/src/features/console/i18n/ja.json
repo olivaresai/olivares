@@ -1,6 +1,6 @@
 {
   "title": "管理",
-  "subtitle": "誰がアクセスでき、何を管理できるかを設定します。ユーザーのオンボーディング、SSO の接続、ワークスペースとエージェントグループの構成を行います。",
+  "subtitle": "この組織のエージェント、ワークスペース、ソースバインディング、シークレット、コネクタです。ユーザー、サインイン、ロールは「ユーザーとグループ」にあります。",
   "tabs": {
     "people": "ユーザーとグループ",
     "agents": "エージェント",
@@ -12,8 +12,7 @@
     "apiKeys": "APIキー",
     "license": "エディションとライセンス",
     "bindings": "ソースバインディング",
-    "wsConnectors": "ワークスペースコネクタ",
-    "mcpGateway": "MCPゲートウェイ"
+    "wsConnectors": "ワークスペースコネクタ"
   },
   "stepUpAction": "設定",
   "apiKeys": {
@@ -167,9 +166,13 @@
       "owner": "オーナー"
     },
     "totpReset": "TOTP をリセット",
-    "totpResetLabel": "{{email}} の TOTP 要素をリセット",
+    "totpResetLabel": "TOTP をリセット: {{email}}",
     "totpResetTitle": "このメンバーの TOTP 要素をリセットしますか？",
     "totpResetBody": "{{email}} の要素とすべてのリカバリーコードを削除します。アカウントは次回ログイン時に新しい要素を登録します。管理者必須化ポリシーが案内するので、締め出されることはありません。",
+    "endSessions": "サインインを終了",
+    "endSessionsFor": "{{email}} のサインインを終了しますか？",
+    "endSessionsBody": "{{email}} のすべてのアクティブなサインインは、この組織で使用できなくなります。他の組織へのサインイン、API トークン、アカウントは変更されません。",
+    "sessionsEnded": "この組織へのアクセスを終了しました",
     "totpResetDone": "TOTP 要素をリセットしました。"
   },
   "superadmins": {
@@ -313,6 +316,7 @@
       "sessions": "シークレットはストアから削除されます。これを受け取るセッションは実行を続けますが、再作成するまで再開できず、これを指定するテンプレートも起動できません。"
     },
     "sessionCaption": "セッションが環境変数として受け取れるシークレットです。名前は env/ で始まります。値が再び表示されることはありません。",
+    "credentialCaption": "セッションがエンジンのヘルパーを通して使える管理されたクレデンシャル（Business）。名前は credential/ で始まります。値が再び表示されることはありません。",
     "colValue": "値",
     "colChanged": "最終変更",
     "colReference": "参照",
@@ -644,6 +648,7 @@
       "scopeRefPlaceholder": "選択…",
       "scopeClass": "リソースの種類",
       "scopeClassAny": "すべてのリソース",
+      "expiresAt": "有効期限（任意）",
       "scopeClassHint": "任意です。付与を 1 つのリソース種別（例: モデルのみ）に絞り込みます。",
       "note": "メモ",
       "noteHint": "付与とともに記録される任意のコンテキストです。",
@@ -902,7 +907,16 @@
           "unknown": "不明",
           "not_applicable": "該当なし"
         },
-        "unknownHint": "不明は、エンジンがその権限を判定できなかったことを意味します。原因はエンジンのログにあります。拒否ではありません。"
+        "unknownHint": "不明は、エンジンがその権限を判定できなかったことを意味します。原因はエンジンのログにあります。拒否ではありません。",
+        "reason": "理由",
+        "membershipAsOf": "ディレクトリメンバーシップの基準日時: {{at}}",
+        "grantAt": "付与 {{id}}（{{node}}、経路: {{chain}}）",
+        "removedByAt": "削除元: {{kind}} {{id}}（{{node}}）",
+        "removedBy": "削除元: {{kind}} {{id}}",
+        "removalKinds": {
+          "irf": "IRF",
+          "forbid": "禁止"
+        }
       }
     }
   },
@@ -980,6 +994,7 @@
     },
     "defaultWorkspace": "デフォルトワークスペース",
     "enabledYes": "有効",
+    "expiresAt": "有効期限（任意）",
     "enabledNo": "無効",
     "noCredential": "なし",
     "edit": "編集",

@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PathText } from '@/components/ui/path-text'
 import {
   Sheet,
   SheetContent,
@@ -224,8 +225,9 @@ export function InstallDetails({
                       key={row.path}
                       className="flex flex-col gap-2 border-t border-line py-2"
                     >
-                      <p className="break-all font-mono text-mono-s">
-                        {row.path} · {row.version ?? t('versionUnknown')}
+                      <p className="text-mono-s">
+                        <PathText value={row.path} size="small" /> ·{' '}
+                        {row.version ?? t('versionUnknown')}
                       </p>
                       {row.probe_error && <p role="alert">{row.probe_error}</p>}
                       {row.probe_skipped && (

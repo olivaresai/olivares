@@ -53,6 +53,7 @@
 // bearing rather than incidental: it derives the first-boot specs by grepping for a
 // spec that fills `locator('#token')` (web-e2e.sh:169-173). A pristine engine is the
 // only way the empty states below are the real thing instead of a leftover.
+import { consoleTenant, readConsolePreferences } from './console-preferences'
 import {
   expect,
   test,
@@ -186,7 +187,7 @@ type AuthenticatedResponse<T> = {
 /**
  * Seed only the disposable first-boot engine, with the SAME session and tenant the
  * console is using. The token is the value of the page's own session cookie
- * (live-session.ts) and the tenant is the console's persisted store, so there is no
+ * (live-session.ts) and membership supplies the disposable engine's single tenant, so there is no
  * second login; no token is logged or copied into the Playwright report.
  */
 async function authenticatedFetch<T>(
@@ -195,23 +196,9 @@ async function authenticatedFetch<T>(
   options: AuthenticatedFetchOptions = {},
 ): Promise<AuthenticatedResponse<T>> {
   const token = await sessionToken(page)
+  const tenant = await consoleTenant(page)
   const result = await page.evaluate(
-    async ({ requestPath, requestOptions, token }) => {
-      function storedState(key: string): Record<string, unknown> {
-        const raw = localStorage.getItem(key)
-        if (!raw) throw new Error(`authenticated fetch: missing ${key}`)
-        const parsed = JSON.parse(raw) as {
-          state?: Record<string, unknown>
-        }
-        return parsed.state ?? {}
-      }
-
-      const tenantStore = storedState('olivares.tenant')
-      const tenant =
-        typeof tenantStore.activeTenant === 'string'
-          ? tenantStore.activeTenant
-          : ''
-
+    async ({ requestPath, requestOptions, token, tenant }) => {
       const headers = new Headers(requestOptions.headers ?? {})
       headers.set('Accept', 'application/json')
       headers.set('Authorization', `Bearer ${token}`)
@@ -245,7 +232,7 @@ async function authenticatedFetch<T>(
         idempotencyReplayed: response.headers.get('Idempotency-Replayed'),
       }
     },
-    { requestPath: path, requestOptions: options, token },
+    { requestPath: path, requestOptions: options, token, tenant },
   )
   return result as AuthenticatedResponse<T>
 }
@@ -306,7 +293,7 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
     await page.waitForURL('**/onboarding')
     await expect(
       page
-        .getByRole('navigation', { name: 'Journeys', exact: true })
+        .getByRole('navigation', { name: 'Main navigation', exact: true })
         .getByRole('link', { name: 'Now', exact: true }),
     ).toBeVisible()
   })
@@ -319,8 +306,20 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
       .body.edition === 'community'
   await test.step('turn on the surface modules through Edition & modules', async () => {
     await page.goto(communityBuild ? '/alerting' : '/compliance')
-    await expect(page.locator('[data-slot="module-not-enabled"]')).toBeVisible()
-    await page.getByRole('link', { name: 'Open Edition & modules' }).click()
+    const off = page.locator('[data-slot="module-not-enabled"]')
+    await expect(off).toBeVisible()
+    // The page's one action (modules-settings.tsx TurnOnPage): "Turn on" when the module needs no
+    // other, else the link to Edition & modules. Six modules are chosen together, so they are set
+    // where the console keeps that choice: Edition & modules, reached from Main navigation.
+    await expect(
+      off
+        .getByRole('button', { name: 'Turn on', exact: true })
+        .or(off.getByRole('link', { name: 'Open Edition & modules' })),
+    ).toBeVisible()
+    await page
+      .getByRole('navigation', { name: 'Main navigation', exact: true })
+      .getByRole('link', { name: 'License', exact: true })
+      .click()
     const settings = page.locator('[data-slot="modules-settings"]')
     await expect(settings).toBeVisible()
     for (const name of SURFACE_MODULES) {
@@ -1059,9 +1058,7 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
   // --- 11 · Settings: account facts and every preference choice ----------------
   //
   // Settings is a real authenticated route outside FEATURE_VIEWS. About paints
-  // engine answers; General intentionally persists only
-  // non-sensitive client preferences. The distinction is asserted instead of
-  // manufacturing an HTTP call for controls whose source names a local state setter.
+  // engine answers; General keeps non-sensitive preferences in the user's server row.
   await test.step('Settings: sections, account facts, and preferences reach their promised effect', async () => {
     // A full navigation creates a fresh QueryClient. Arm both waits first so the
     // assertions bind the About facts to this live engine rather than visible copy.
@@ -1092,6 +1089,7 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
       'trigger/language',
       'theme/light',
       'theme/dark',
+      'theme/black',
       'theme/system',
       'density/comfortable',
       'density/compact',
@@ -1102,6 +1100,8 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
       'language/de',
       'language/ru',
       'language/fr',
+      'language/it',
+      'language/ko',
     ]
 
     const sections = page.getByRole('navigation', { name: 'Settings sections' })
@@ -1139,7 +1139,7 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
     await expect(page).toHaveURL(/section=general/)
     exercised.add('section/general')
     for (const [label, choices, id] of [
-      ['Theme', ['Light', 'Dark', 'System'], 'theme'],
+      ['Theme', ['System', 'Light', 'Dark', 'Black'], 'theme'],
       ['Density', ['Comfortable', 'Compact'], 'density'],
     ] as const) {
       const group = page.getByRole('radiogroup', { name: label, exact: true })
@@ -1233,7 +1233,7 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
       exercised.add(ledgerId)
     }
 
-    // Preference controls have no server mutation by contract. Ignore the session's
+    // Preferences save only to the user's interface-state row. Ignore the session's
     // independent proactive refresh if its clock happens to fire during this step.
     const preferenceMutations: string[] = []
     const recordPreferenceMutation = (request: Request) => {
@@ -1248,6 +1248,7 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
     for (const [code, label] of [
       ['light', 'Light'],
       ['dark', 'Dark'],
+      ['black', 'Black'],
       ['system', 'System'],
     ] as const) {
       const ledgerId = `theme/${code}`
@@ -1259,7 +1260,11 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
         return {
           stored: localStorage.getItem('olivares.theme'),
           dark: document.documentElement.classList.contains('dark'),
-          expectedDark: theme === 'dark' || (theme === 'system' && systemDark),
+          black: document.documentElement.classList.contains('black'),
+          expectedDark:
+            theme === 'dark' ||
+            theme === 'black' ||
+            (theme === 'system' && systemDark),
         }
       }, code)
       expect(
@@ -1270,6 +1275,10 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
         applied.dark,
         `settings ${ledgerId} Effect: document theme does not match resolution`,
       ).toBe(applied.expectedDark)
+      expect(
+        applied.black,
+        `settings ${ledgerId} Effect: true black applies only to Black`,
+      ).toBe(code === 'black')
     }
 
     // Comfortable and English are defaults: return to each from another value so
@@ -1283,9 +1292,9 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
       await expect
         .poll(
           () =>
-            page.evaluate(() => {
+            readConsolePreferences(page).then((preferences) => {
               const value = JSON.parse(
-                localStorage.getItem('olivares.prefs') ?? '{}',
+                preferences['olivares.prefs'] ?? '{}',
               ) as { state?: { density?: string } }
               return value.state?.density
             }),
@@ -1310,9 +1319,12 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
       await expect
         .poll(
           () =>
-            page.evaluate(() => ({
-              stored: localStorage.getItem('olivares.lang'),
-              documentLanguage: document.documentElement.lang,
+            Promise.all([
+              readConsolePreferences(page),
+              page.locator('html').getAttribute('lang'),
+            ]).then(([preferences, documentLanguage]) => ({
+              stored: preferences['olivares.lang'],
+              documentLanguage,
             })),
           {
             message: `settings ${ledgerId} Effect: language was not persisted and synchronized`,
@@ -1324,8 +1336,15 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
     page.off('request', recordPreferenceMutation)
     expect(
       preferenceMutations,
-      'settings General Effect: local preferences emitted an engine mutation',
-    ).toEqual([])
+      'settings General Effect: preferences did not reach the engine',
+    ).not.toEqual([])
+    expect(
+      preferenceMutations.every(
+        (request) =>
+          request.startsWith('PUT ') &&
+          request.endsWith('/v1/m/consoleviews/ui-state'),
+      ),
+    ).toBe(true)
     expect(
       [...exercised].sort(),
       'settings control ledger: every section, control, and choice must have an effect',

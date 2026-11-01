@@ -82,6 +82,7 @@ var communityRouteSurfaces = map[string]string{
 	"finops GET /seats/utilization":                   "edition-refusal",
 	"finops GET /spend":                               "edition-refusal",
 	"finops GET /spend/allocation":                    "edition-refusal",
+	"finops GET /spend/changes":                       "edition-refusal",
 	"finops GET /spend/export":                        "api-only",
 	"finops GET /spend/reconciliation":                "edition-refusal",
 	"finops GET /spend/summary":                       "edition-refusal",
@@ -152,6 +153,15 @@ var communityRouteSurfaces = map[string]string{
 	"sessions POST /tool-rings/{driver}/promote":      "edition-refusal",
 	"sessions POST /tool-rings/{driver}/rollback":     "edition-refusal",
 	"sessions PUT /tool-rings/{driver}":               "edition-refusal",
+
+	// Governed connections (a database, an SSH host or a service a session reaches
+	// through the engine, granted down the organization tree) are Business.
+	"sessions DELETE /connections/{name}":                    "edition-refusal",
+	"sessions DELETE /connections/{name}/grants/{workspace}": "edition-refusal",
+	"sessions GET /connections":                              "edition-refusal",
+	"sessions POST /connections/{name}/test":                 "edition-refusal",
+	"sessions PUT /connections/{name}":                       "edition-refusal",
+	"sessions PUT /connections/{name}/grants/{workspace}":    "edition-refusal",
 
 	// Fleet-wide managed settings are Business; validate and dry-run stay.
 	"claude-policy GET /{surface}/artifact":            "edition-refusal",

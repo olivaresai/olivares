@@ -329,7 +329,7 @@ func (a *Authenticator) MintDelegationHandle(ctx context.Context, caller Princip
 
 	subject, err := a.Authenticate(ctx, req.SubjectToken)
 	if err != nil {
-		return "", model.DelegationHandle{}, fmt.Errorf("%w: subject credential: %v", ErrInvalidDelegationRequest, err)
+		return "", model.DelegationHandle{}, credentialRefusal(ErrInvalidDelegationRequest, "subject credential: ", err)
 	}
 	if subject.Superadmin {
 		return "", model.DelegationHandle{}, fmt.Errorf("%w: cannot delegate a system (superadmin) credential", ErrInvalidDelegationRequest)
@@ -697,7 +697,7 @@ func (a *Authenticator) revalidateSubject(ctx context.Context, as store.AuthScop
 			}
 			return "", nil, nil, err
 		}
-		if s.Revoked || s.ExpiresAt.Before(now) || s.UserID != handle.SubjectUserID {
+		if !s.PairingSourceID.IsZero() || s.Revoked || s.ExpiresAt.Before(now) || s.UserID != handle.SubjectUserID {
 			return "", nil, nil, ErrDelegationInvalid
 		}
 		if !s.TenantScope.IsZero() && s.TenantScope != tenant {
@@ -728,7 +728,14 @@ func (a *Authenticator) revalidateSubject(ctx context.Context, as store.AuthScop
 		if t.BoundTenantID != tenant || !IsRole(t.Role) {
 			return "", nil, nil, ErrDelegationInvalid
 		}
-		tokenRole = t.Role
+		role, admitted, err := currentTokenRole(ctx, as, t)
+		if err != nil {
+			return "", nil, nil, err
+		}
+		if !admitted {
+			return "", nil, nil, ErrDelegationInvalid
+		}
+		tokenRole = role
 		isToken = true
 	default:
 		return "", nil, nil, ErrDelegationInvalid

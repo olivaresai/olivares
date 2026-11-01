@@ -7,13 +7,17 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/olivaresai/olivares/core/envconfig"
@@ -23,6 +27,7 @@ import (
 	coreengine "github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/secure"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/compliance"
 )
 
 // newDRCmd is the disaster-recovery command group (docs/DR-RUNBOOK.md): a
@@ -47,7 +52,7 @@ func newDRCmd() *cobra.Command {
 			"the per-tenant chain tips; restore re-verifies the chain end to end.",
 	}
 	root.AddCommand(drBackupCmd(), drRestoreCmd(), drVerifyCmd(), drInspectCmd(),
-		drPushCmd(), drPullCmd(), drListCmd(), drDrillCmd(), drRestoreStatusCmd())
+		drPushCmd(), drPullCmd(), drListCmd(), drPruneCmd(), drDrillCmd(), drRestoreStatusCmd())
 	return root
 }
 
@@ -301,7 +306,7 @@ func drBackupCmd() *cobra.Command {
 	var of offsiteFlags
 	var gf gfsFlags
 	var out, notes string
-	var allowUnverified bool
+	var allowUnverified, immutable bool
 	var pgDumpPath, snapshotFile, pitrRef string
 	var retainDays int
 	cmd := &cobra.Command{
@@ -317,6 +322,15 @@ func drBackupCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if out == "" {
 				return fmt.Errorf("--out is required")
+			}
+			// The immutable writer sizes each bundle's lock from the finest GFS
+			// period, so both are checked before any work is done.
+			lockSpan := gf.policy().WriterLockSpan()
+			if immutable && !of.configured() {
+				return fmt.Errorf("--offsite-immutable needs an offsite target: pass --offsite-bucket (and endpoint/creds)")
+			}
+			if immutable && lockSpan == 0 {
+				return fmt.Errorf("--offsite-immutable needs a GFS period tier (--gfs-daily, --gfs-weekly, --gfs-monthly or --gfs-yearly) to size each bundle's Object Lock")
 			}
 			// Resolved ONCE, before anything is written: every human line this
 			// command emits goes here — stdout in text mode (byte-for-byte what it
@@ -442,14 +456,32 @@ func drBackupCmd() *cobra.Command {
 			// offsite must not be left with a false sense of safety (only a local copy).
 			var offsiteCli *dr.OffsiteClient
 			if of.configured() {
-				offsiteCli, err = of.client()
+				if immutable {
+					offsiteCli, err = of.newClient(lockSpan)
+				} else {
+					offsiteCli, err = of.client()
+				}
 				if err != nil {
 					return fmt.Errorf("offsite: %w", err)
+				}
+				if immutable {
+					// A lock header on a bucket without Object Lock is refused by
+					// S3, or silently dropped by a lesser store: check first.
+					st, err := offsiteCli.LockStatus(cmd.Context())
+					if err != nil {
+						return fmt.Errorf("offsite replication: %w", err)
+					}
+					if !st.Enabled {
+						return fmt.Errorf("offsite replication: bucket %s has no Object Lock, so --offsite-immutable cannot lock the copy; create the bucket with Object Lock enabled", of.bucket)
+					}
 				}
 				if err := pushBundleOffsite(cmd.Context(), offsiteCli, out); err != nil {
 					return fmt.Errorf("offsite replication: %w", err)
 				}
 				fmt.Fprintf(human, "replicated offsite: %s → bucket %s\n", filepath.Base(out), of.bucket)
+				if immutable {
+					fmt.Fprintf(human, "locked offsite in COMPLIANCE mode for %s\n", lockSpan)
+				}
 				// Set only AFTER the push succeeded, which is what makes a non-null
 				// offsite in the document mean "this bundle IS off-box".
 				result.Offsite = &drOffsiteRef{Object: filepath.Base(out), Bucket: of.bucket, Prefix: of.prefix}
@@ -463,8 +495,10 @@ func drBackupCmd() *cobra.Command {
 			if gf.any() {
 				policy := gf.policy()
 				result.Retention.recordLocal(applyGFSLocal(filepath.Dir(out), filepath.Base(out), policy, now, human))
-				if offsiteCli != nil {
-					result.Retention.recordOffsite(applyGFSOffsite(cmd.Context(), offsiteCli, filepath.Base(out), policy, now, human))
+				if immutable {
+					fmt.Fprintln(human, "offsite prune left to `olivares dr prune --offsite` with its own credential: the immutable writer never deletes")
+				} else if offsiteCli != nil {
+					result.Retention.recordOffsite(applyGFSOffsite(cmd.Context(), offsiteCli, filepath.Base(out), policy, now, false, human))
 				}
 			} else if retainDays > 0 {
 				result.Retention.recordLocal(pruneOldBundles(filepath.Dir(out), out, retainDays, now, human))
@@ -478,6 +512,7 @@ func drBackupCmd() *cobra.Command {
 	addGFSFlags(cmd, &gf)
 	cmd.Flags().StringVar(&out, "out", "", "path to write the DR bundle to (required)")
 	cmd.Flags().StringVar(&notes, "notes", "", "free-form operator note recorded in the manifest (no secrets)")
+	cmd.Flags().BoolVar(&immutable, "offsite-immutable", false, "append-only offsite writer: lock the replicated bundle in S3 Object Lock COMPLIANCE mode for the finest --gfs-* period and never delete offsite (prune with dr prune --offsite and a separate credential)")
 	cmd.Flags().BoolVar(&allowUnverified, "allow-unverified", false, "capture even if a tenant chain fails verification at backup time (NOT recommended)")
 	cmd.Flags().StringVar(&pgDumpPath, "pg-dump", "pg_dump", "pg_dump executable (Postgres engine only)")
 	cmd.Flags().StringVar(&snapshotFile, "snapshot-file", "", "Postgres only: use this pre-made dump as the store snapshot instead of running pg_dump (e.g. produced by a postgres-client sidecar)")
@@ -711,7 +746,7 @@ func drRestoreCmd() *cobra.Command {
 	var decl restoreDeclaration
 	var in string
 	var force, inPlace, allowLegacyUnsigned bool
-	var pgRestorePath, superuserDSN string
+	var pgRestorePath, pgDumpPath, superuserDSN string
 	cmd := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "delete"},
 		Use:         "restore",
@@ -753,6 +788,18 @@ func drRestoreCmd() *cobra.Command {
 				if err := decl.require(why); err != nil {
 					return err
 				}
+			}
+
+			// A forced restore replaces the DATABASE only when the database itself holds
+			// an estate: keys in the data dir alone make `replaces` true, and a restore
+			// onto an empty database with --force has always needed neither a safety copy
+			// nor --admin-dsn. An unreadable target is not an empty one. Whether this
+			// bundle carries a logical dump to restore (a PITR companion carries none, so
+			// nothing is replaced) is decided below, once the bundle is open.
+			dbOccupied := false
+			if replaces && force && store.Engine(sf.engineKind) == store.EnginePostgres && strings.TrimSpace(sf.dsn) != "" {
+				occupied, perr := coreengine.ProbeTargetOccupied(cmd.Context(), store.Config{Engine: store.EnginePostgres, DSN: sf.dsn})
+				dbOccupied = perr != nil || occupied
 			}
 
 			// AUTHORITY, asked here because everything after this point writes.
@@ -864,6 +911,17 @@ func drRestoreCmd() *cobra.Command {
 			// question left is whether the old bytes survive it.
 			// Asked before anything below writes the data dir: for an older bundle it
 			// is what tells the source's own sealer keys from another installation's.
+			// The safety copy of a database about to be replaced is taken BEFORE the keys
+			// are touched, so a failure here leaves the data dir exactly as it was.
+			replaceDB := dbOccupied && m.Store.Method != dr.MethodPITR
+			var safety string
+			if replaceDB {
+				ts := time.Now().UTC().Format("20060102-150405")
+				var serr error
+				if safety, serr = safetyDumpPostgres(cmd.Context(), sf, pgDumpPath, sf.dataDir, ts); serr != nil {
+					return serr
+				}
+			}
 			same := dr.SameInstallation(sf.dataDir, m)
 			var preserved map[string]string
 			if replaces && force {
@@ -904,6 +962,11 @@ func drRestoreCmd() *cobra.Command {
 				return undoIfTheStoreWasNeverTouched(err)
 			}
 			if err := payload.unchanged(); err != nil {
+				return undoIfTheStoreWasNeverTouched(err)
+			}
+			// Before the store is replaced: should this run end before its replay, the
+			// next serve boot applies the erasures again before it opens the service.
+			if err := dr.MarkErasureReplay(sf.dataDir); err != nil {
 				return undoIfTheStoreWasNeverTouched(err)
 			}
 			// 2) Restore the store snapshot. A PITR companion bundle carries no store
@@ -961,27 +1024,30 @@ func drRestoreCmd() *cobra.Command {
 					// observable in the catalog of a real server. The round-trip cell
 					// asserts pg_get_userbyid(relowner) on every restored table, which is
 					// what kills the mutant that puts sf.dsn back.
-					if err := runPgRestore(cmd.Context(), pgRestorePath, drDDLDSN(sf), filepath.Join(work, m.Store.File)); err != nil {
+					//
+					// replaces && force is the operator saying "overwrite" about a target
+					// that holds an estate (and having declared who and why, above). That
+					// is the one case where pg_restore drops what the dump replaces; every
+					// other restore meets an occupied target with a whole-transaction
+					// failure, as before.
+					if err := runPgRestoreInto(cmd.Context(), pgRestorePath, drDDLDSN(sf), filepath.Join(work, m.Store.File), replaceDB); err != nil {
+						if safety != "" {
+							// Kept, not removed: a failure of the client does not prove the
+							// server rolled back (a dropped connection at COMMIT, a killed
+							// pg_restore), and this copy is then the only one of the old estate.
+							err = fmt.Errorf("%w; the safety copy of the database taken before the replacement is kept as %s: remove it once you have confirmed the database is unchanged", err, safety)
+						}
 						// --single-transaction means no object and no row of the backup
 						// reached the database, so the estate is exactly where it was —
 						// EXCEPT for the custody this command already replaced.
 						return undoIfTheStoreWasNeverTouched(err)
 					}
-					// pg_restore strips function ACLs along with source role names.
-					// Close only the recognized compiled H functions under the
-					// target owner before Open can publish a Store. A refusal
-					// leaves the restored estate in place for operator recovery.
-					if err := coreengine.RestorePostgresUserAuthorityPrivileges(cmd.Context(), store.Config{
-						Engine: store.EnginePostgres, DSN: sf.dsn, OwnerDSN: sf.ownerDSN,
-					}); err != nil {
-						return fmt.Errorf("close restored User authority privileges: %w", err)
+					if safety != "" {
+						drNote(cmd, fmt.Sprintf("previous database preserved as %s (a pg_dump, mode 0600; remove it once satisfied)", safety))
 					}
-					if inventoryDSN != "" {
-						if err := coreengine.RestorePostgresDirectoryInventory(cmd.Context(), store.Config{Engine: store.EnginePostgres, DSN: sf.dsn, OwnerDSN: sf.ownerDSN}, inventoryDSN); err != nil {
-							return fmt.Errorf("restore directory inventory authority: %w", err)
-						}
+					if err := restorePostgresAuthority(cmd.Context(), sf, inventoryDSN); err != nil {
+						return err
 					}
-
 				}
 			default:
 				return fmt.Errorf("unknown --engine %q", sf.engineKind)
@@ -1006,6 +1072,14 @@ func drRestoreCmd() *cobra.Command {
 			}
 			if !rep.OK {
 				return fmt.Errorf("restore is NOT ledger-continuity-safe: %s", strings.Join(rep.Problems, "; "))
+			}
+			// After the continuity verification, which compares the tip with the
+			// manifest, and before the declaration, which is sealed into what this
+			// restore leaves.
+			if err := replayErasures(cmd.Context(), eng.complianceMod, sf.dataDir, func(line string) {
+				drNote(cmd, line)
+			}); err != nil {
+				return err
 			}
 			// Seal the declaration into the estate that now exists. It goes AFTER the
 			// continuity verification so it never perturbs the tip the verifier
@@ -1032,10 +1106,11 @@ func drRestoreCmd() *cobra.Command {
 	addKEKFlags(cmd, &kf)
 	addRestoreDeclarationFlags(cmd, &decl)
 	cmd.Flags().StringVar(&in, "in", "", "DR bundle to restore (required)")
-	cmd.Flags().BoolVar(&force, "force", false, "overwrite existing keys / store file in the data dir")
+	cmd.Flags().BoolVar(&force, "force", false, "overwrite existing keys / store file in the data dir. Postgres: also replace the objects of an occupied target database, in one transaction (needs --operator and --reason; without it an occupied target is refused)")
 	cmd.Flags().BoolVar(&inPlace, "in-place", false, "replace a LIVE data dir safely: stage + verify BEFORE promoting, auto-preserving the current store/keys as *.pre-restore-<ts> (sqlite only)")
 	cmd.Flags().BoolVar(&allowLegacyUnsigned, "allow-legacy-unsigned", false, "accept a separately authenticated pre-v26.9 bundle without the keyed manifest signature (migration exception)")
 	cmd.Flags().StringVar(&pgRestorePath, "pg-restore", "pg_restore", "pg_restore executable (Postgres engine only)")
+	cmd.Flags().StringVar(&pgDumpPath, "pg-dump", "pg_dump", "pg_dump executable for the safety copy taken before --force replaces an occupied Postgres database (needs --admin-dsn)")
 	cmd.Flags().StringVar(&superuserDSN, "superuser-dsn", "", "Postgres logical restore only: explicit DBA connection to the target database, used solely to restore isolated directory inventory authority; accepts a file:/env: reference")
 	_ = cmd.MarkFlagRequired("in")
 	return cmd
@@ -1045,15 +1120,20 @@ func drVerifyCmd() *cobra.Command {
 	var kf kekFlags
 	var in string
 	var allowLegacyUnsigned bool
+	var scratchDSN, pgRestorePath string
 	cmd := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "read"},
 		Use:         "verify",
 		Short:       "Test a DR bundle WITHOUT touching the live data dir (the DR drill)",
-		Long: "verify extracts a bundle to a throwaway location, decrypts its keys and (for\n" +
-			"SQLite) restores + verifies the full chain there, so you can prove a backup is\n" +
-			"restorable on a cadence (docs/DR-RUNBOOK.md) without disturbing production.",
-		Example: "  olivares dr verify --in /srv/backups/olivares-2026-07-14.drbundle --passphrase-file /run/secrets/dr-passphrase",
-		Args:    cobra.NoArgs,
+		Long: "verify extracts a bundle to a throwaway location, decrypts its keys and restores +\n" +
+			"verifies the full chain there, so you can prove a backup is restorable on a\n" +
+			"cadence (docs/DR-RUNBOOK.md) without disturbing production. For SQLite the\n" +
+			"throwaway location is a directory. For PostgreSQL it is a throwaway database with\n" +
+			"its own roles, created and removed through --scratch-dsn; without it a PostgreSQL\n" +
+			"bundle is checked for its digest and keys only, and the output says so.",
+		Example: "  olivares dr verify --in /srv/backups/olivares-2026-07-14.drbundle --passphrase-file /run/secrets/dr-passphrase\n" +
+			"  olivares dr verify --in /srv/backups/olivares-pg.drbundle --passphrase-file /run/secrets/dr-passphrase --scratch-dsn file:/run/secrets/scratch.dsn",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := checkCMEKInstall(""); err != nil {
 				return err
@@ -1094,13 +1174,51 @@ func drVerifyCmd() *cobra.Command {
 				return printManifest(cmd, m)
 			}
 			if m.EngineKind != string(store.EngineSQLite) {
-				// A Postgres chain check needs a scratch Postgres; here we prove the
-				// bundle is intact and the keys decrypt, and surface the manifest.
+				// A Postgres chain check needs a scratch Postgres. Without one we prove
+				// the bundle is intact and the keys decrypt, say what was not checked,
+				// and surface the manifest.
 				if _, _, err := decryptAllKeys(work, m, cipher); err != nil {
 					return err
 				}
-				drNote(cmd, "bundle integrity OK (digest + keys decrypt). Full chain verification for a Postgres bundle requires restoring to a scratch Postgres (see docs/DR-RUNBOOK.md).")
-				return printManifest(cmd, m)
+				if scratchDSN == "" {
+					drNote(cmd, "bundle integrity OK (digest + keys decrypt). The ledger was NOT restored or re-verified: pass --scratch-dsn (a file:/env: reference to a maintenance DSN that can create databases and roles) to restore the bundle into a throwaway database and verify the chain there (docs/DR-RUNBOOK.md).")
+					return printManifest(cmd, m)
+				}
+				// An interrupt cancels the restore and lets the drop below run.
+				ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+				defer stop()
+				maintenance, err := resolveScratchDSN(ctx, "--scratch-dsn", scratchDSN)
+				if err != nil {
+					return err
+				}
+				payload, err := classifyDRPayload(ctx, m.EngineKind, m.Store.Method, filepath.Join(work, m.Store.File), pgRestorePath)
+				if err != nil {
+					return err
+				}
+				if payload.sum != m.Store.SHA256 || payload.size != m.Store.SizeBytes {
+					return fmt.Errorf("store payload changed after bundle authentication")
+				}
+				scratch, err := provisionScratchPostgres(ctx, maintenance)
+				if err != nil {
+					return err
+				}
+				rep, err := restoreVerifyScratch(ctx, work, m, cipher, scratch, pgRestorePath, payload)
+				// The throwaway database goes whatever the verdict was; a leftover is an
+				// error of its own, never silent.
+				if dropErr := scratch.drop(ctx); dropErr != nil {
+					err = errors.Join(err, dropErr)
+				}
+				if err != nil {
+					return err
+				}
+				if err := printReport(cmd, rep); err != nil {
+					return err
+				}
+				if !rep.OK {
+					return fmt.Errorf("DR drill FAILED: bundle is not restorable to a safe ledger: %s", strings.Join(rep.Problems, "; "))
+				}
+				drNote(cmd, "DR drill PASSED: bundle restores to a continuity-safe ledger")
+				return nil
 			}
 			payload, err := classifyDRPayload(cmd.Context(), m.EngineKind, m.Store.Method, filepath.Join(work, m.Store.File), "")
 			if err != nil {
@@ -1148,6 +1266,8 @@ func drVerifyCmd() *cobra.Command {
 	addKEKFlags(cmd, &kf)
 	cmd.Flags().StringVar(&in, "in", "", "DR bundle to verify (required)")
 	cmd.Flags().BoolVar(&allowLegacyUnsigned, "allow-legacy-unsigned", false, "accept a separately authenticated pre-v26.9 bundle without the keyed manifest signature (migration exception)")
+	cmd.Flags().StringVar(&scratchDSN, "scratch-dsn", "", "PostgreSQL bundle only: maintenance DSN of a server where a throwaway database and roles may be created and dropped, to restore the bundle there and verify the full chain; accepts a file:/env: reference only")
+	cmd.Flags().StringVar(&pgRestorePath, "pg-restore", "pg_restore", "pg_restore executable (PostgreSQL bundle with --scratch-dsn only)")
 	_ = cmd.MarkFlagRequired("in")
 	return cmd
 }
@@ -1403,6 +1523,17 @@ func restoreInPlaceSQLite(ctx context.Context, cmd *cobra.Command, work, dataDir
 	if err := dr.CopyFile(filepath.Join(work, m.Store.File), filepath.Join(staging, "olivares.db")); err != nil {
 		return err
 	}
+	// The staged engine replays the live data dir's erasure tombstones, so the
+	// restore it promotes already holds them applied. Promotion moves only the
+	// bundle's files: these copies go with the staging dir.
+	for _, name := range []string{erasureTombstoneFile, erasureTombstoneKeyFile} {
+		if err := dr.CopyFile(filepath.Join(dataDir, name), filepath.Join(staging, name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+	}
+	if err := dr.MarkErasureReplay(staging); err != nil {
+		return err
+	}
 
 	// Prove the STAGED restore is continuity-safe before promoting anything.
 	eng, err := drBoot(ctx, drFlags{dataDir: staging, engineKind: string(store.EngineSQLite)})
@@ -1418,6 +1549,14 @@ func restoreInPlaceSQLite(ctx context.Context, cmd *cobra.Command, work, dataDir
 	if err != nil {
 		_ = eng.Close()
 		return err
+	}
+	if rep.OK {
+		if err := replayErasures(ctx, eng.complianceMod, staging, func(line string) {
+			drNote(cmd, line)
+		}); err != nil {
+			_ = eng.Close()
+			return fmt.Errorf("%w; the live data dir was left UNTOUCHED", err)
+		}
 	}
 	if rep.OK && dr601.required {
 		// Seal the declaration into the STAGED estate, after its verification and
@@ -1712,6 +1851,25 @@ func runPgDump(ctx context.Context, bin, dsn, out string) error {
 	return nil
 }
 
+// restorePostgresAuthority closes the authority a logical restore leaves open.
+// pg_restore strips function ACLs along with source role names, so the recognized
+// compiled H functions are closed under the target owner before Open can publish a
+// Store. A refusal leaves the restored estate in place for operator recovery.
+// inventoryDSN, when set, is the DBA connection that restores the isolated
+// directory inventory.
+func restorePostgresAuthority(ctx context.Context, sf drFlags, inventoryDSN string) error {
+	cfg := store.Config{Engine: store.EnginePostgres, DSN: sf.dsn, OwnerDSN: sf.ownerDSN}
+	if err := coreengine.RestorePostgresUserAuthorityPrivileges(ctx, cfg); err != nil {
+		return fmt.Errorf("close restored User authority privileges: %w", err)
+	}
+	if inventoryDSN != "" {
+		if err := coreengine.RestorePostgresDirectoryInventory(ctx, cfg, inventoryDSN); err != nil {
+			return fmt.Errorf("restore directory inventory authority: %w", err)
+		}
+	}
+	return nil
+}
+
 // runPgRestore restores a custom-format dump into the target database. The target
 // should be an empty database (a fresh DR target).
 //
@@ -1747,18 +1905,140 @@ func runPgDump(ctx context.Context, bin, dsn, out string) error {
 // ledger it produces is neither the old estate nor the backup. It also rules out
 // parallel restore (--jobs), which this wrapper never asked for.
 func runPgRestore(ctx context.Context, bin, dsn, in string) error {
+	return runPgRestoreInto(ctx, bin, dsn, in, false)
+}
+
+// tailBuffer keeps the last max bytes written to it: enough to find the one
+// message the caller cares about, however much a tool prints.
+type tailBuffer struct {
+	buf []byte
+	max int
+}
+
+func (b *tailBuffer) Write(p []byte) (int, error) {
+	b.buf = append(b.buf, p...)
+	if len(b.buf) > b.max {
+		b.buf = append([]byte(nil), b.buf[len(b.buf)-b.max:]...)
+	}
+	return len(p), nil
+}
+
+func (b *tailBuffer) String() string { return string(b.buf) }
+
+// safetyDumpPostgres takes a pg_dump of the database a forced restore is about to
+// replace and leaves it in dir as database.pgcustom.pre-restore-<ts>, beside the
+// previous signing keys: the SQLite restore keeps its previous store the same way,
+// and a replacement that destroys the only copy of the old estate is not a restore
+// anyone can take back. pg_dump runs on the admin (BYPASSRLS) role, as for a backup.
+//
+// The file is created exclusively with mode 0600 BEFORE pg_dump writes a byte, so the
+// data is never readable by anyone else and an existing file or a planted symlink is
+// refused rather than written through; it is dumped under a .partial name and renamed
+// only when pg_dump succeeded, so a killed dump never leaves a truncated file under
+// the name an operator would trust. It is a plain pg_dump, not a DR bundle: not
+// encrypted, without the coordination tables, without owners and privileges.
+func safetyDumpPostgres(ctx context.Context, sf drFlags, pgDump, dir, ts string) (string, error) {
+	if strings.TrimSpace(sf.adminDSN) == "" {
+		return "", fmt.Errorf("replacing an occupied PostgreSQL database needs --admin-dsn so a safety copy of it can be taken first (pg_dump runs as the BYPASSRLS role); nothing was changed")
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", fmt.Errorf("create %s for the safety copy: %w; nothing was changed", dir, err)
+	}
+	final := filepath.Join(dir, "database.pgcustom.pre-restore-"+ts)
+	if _, err := os.Lstat(final); err == nil {
+		return "", fmt.Errorf("%s already exists; nothing was changed", final)
+	}
+	partial := final + ".partial"
+	f, err := os.OpenFile(partial, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return "", fmt.Errorf("create the safety copy: %w; nothing was changed", err)
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(partial)
+		return "", err
+	}
+	if err := pgDumpRunner(ctx, pgDump, sf.adminDSN, partial); err != nil {
+		_ = os.Remove(partial)
+		return "", fmt.Errorf("take a safety copy of the database before replacing it: %w; nothing was changed", err)
+	}
+	if err := os.Rename(partial, final); err != nil {
+		_ = os.Remove(partial)
+		return "", err
+	}
+	return final, nil
+}
+
+// runPgRestoreInto is runPgRestore with the choice of what to do with a target
+// that is not empty. replace=false is the contract above: the dump meets what is
+// there and the whole restore fails. replace=true is for a declared, forced
+// restore over an occupied estate (`dr restore --force`): pg_restore drops each
+// object of the dump that exists (--clean --if-exists) and creates the dump's in
+// its place, still in the one transaction, so the old estate is replaced whole or
+// not at all. Objects the dump does not contain are left alone; one that blocks a
+// drop (a foreign key from a table of the live estate that the backup predates)
+// fails the restore whole.
+func runPgRestoreInto(ctx context.Context, bin, dsn, in string, replace bool) error {
 	serviceFile, cleanup, err := postgresServiceFile(dsn)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
-	cmd := exec.CommandContext(ctx, bin, "--no-owner", "--no-privileges", "--single-transaction", "--dbname", "service=olivares", in) // #nosec G204 -- bin is the operator-configured pg_restore path; all other args are fixed flags
+	args := []string{"--no-owner", "--no-privileges", "--single-transaction"}
+	if replace {
+		args = append(args, "--clean", "--if-exists")
+	}
+	args = append(args, "--dbname", "service=olivares", in)
+	cmd := exec.CommandContext(ctx, bin, args...) // #nosec G204 -- bin is the operator-configured pg_restore path; all other args are fixed flags
 	cmd.Env = append(os.Environ(), "PGSERVICEFILE="+serviceFile)
-	cmd.Stderr = os.Stderr
+	// pg_restore's own words still reach the operator; they are also read here, so
+	// the one cause worth a remedy (the lock table) is named only when it is the cause.
+	stderr := &tailBuffer{max: 64 << 10}
+	cmd.Stderr = io.MultiWriter(os.Stderr, stderr)
 	if err := cmd.Run(); err != nil {
+		hint := ""
+		if replace && strings.Contains(stderr.String(), "max_locks_per_transaction") {
+			// Dropping and recreating every relation in one transaction holds more
+			// locks than creating them in an empty database.
+			hint = " Replacing an estate holds more locks in its one transaction than a restore into an empty database: raise max_locks_per_transaction on the server and run the restore again (docs/DR-RUNBOOK.md §7)."
+		}
 		return fmt.Errorf("pg_restore: %w (is %q on PATH?). "+
-			"The restore ran in a SINGLE TRANSACTION, so NONE of the backup's objects or rows were written; "+
-			"effects Postgres does not roll back (an advanced sequence, anything a pre-existing event trigger did) can still have happened", err, bin)
+			"The restore ran in a SINGLE TRANSACTION, so NONE of the backup's objects or rows were written and nothing was dropped; "+
+			"effects Postgres does not roll back (an advanced sequence, anything a pre-existing event trigger did) can still have happened.%s", err, bin, hint)
 	}
 	return nil
+}
+
+// replayErasures applies the erasure tombstones again when a restore left its
+// marker in dataDir, says what it did, and removes the marker. A legal hold in
+// the restored store stops an erasure as it stops a live one; the marker then
+// stays and the caller fails, so nothing serves the estate before an operator
+// reviews the hold (docs/DR-RUNBOOK.md).
+func replayErasures(ctx context.Context, mod *compliance.Module, dataDir string, say func(string)) error {
+	marker := filepath.Join(dataDir, dr.ErasureReplayMarker)
+	if _, err := os.Stat(marker); errors.Is(err, fs.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	if mod == nil {
+		return fmt.Errorf("a restore left %s, and this engine has no compliance module to apply the erasures again", marker)
+	}
+	// A restore on another host finds no file unless the operator copied it.
+	if _, err := os.Stat(filepath.Join(dataDir, erasureTombstoneFile)); errors.Is(err, fs.ErrNotExist) {
+		say("erasure replay: no erasure tombstones in " + dataDir)
+	}
+	rep, err := mod.ReplayErasures(ctx)
+	if err != nil {
+		return fmt.Errorf("erasure replay after a restore: %w", err)
+	}
+	line := fmt.Sprintf("erasure replay: %d reapplied, %d already in the backup", rep.Reapplied, rep.Present)
+	if rep.Absent > 0 {
+		line += fmt.Sprintf(", %d of a tenant the backup does not hold", rep.Absent)
+	}
+	say(line)
+	if len(rep.Held) > 0 {
+		return fmt.Errorf("erasure replay: a legal hold in the restored store stops %d erasure(s) (%s); review the hold, then erase again",
+			len(rep.Held), strings.Join(rep.Held, ", "))
+	}
+	return os.Remove(marker)
 }

@@ -41,6 +41,7 @@
   "retryIn": "Erneut versuchen in {{seconds}} s.",
   "signIn": "Melden Sie sich an, um zu vergleichen.",
   "diffLabel": "Einheitlicher Diff von {{path}}",
+  "diffLabelRich": "Einheitlicher Diff von <path />",
   "colOld": "Alt",
   "colNew": "Neu",
   "colChange": "Änderung",

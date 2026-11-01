@@ -71,7 +71,7 @@ Pin the engine by digest and verify it first:
 <!-- release -->
 ```sh
 # verify the engine image you run (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:0.4 \
+cosign verify docker.io/olivaresai/olivares:0.5 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
@@ -119,7 +119,7 @@ installer after a failed check.
 (
 set -eu
 cd "$(mktemp -d)"
-ver=0.4
+ver=0.5
 base=https://github.com/olivaresai/olivares/releases/download/$ver
 curl -fsSLO $base/checksums.txt
 curl -fsSLO $base/checksums.txt.sig
@@ -259,10 +259,29 @@ install it from Docker's official repository for your distribution, remove `podm
 Restart the engine; `olivares doctor` shows the runtime it found.
 
 **The image.** `OLIVARES_SESSION_CONTAINER_IMAGE` names it. The default,
-`localhost/olivares-session:latest`, is the name an Olivares Server image carries its session
-image under; nothing in this repository builds it, so on any other host name an image you have.
-It must be compatible with the host's tool program, which is mounted into it, and hold what
-the tool shells out to: a shell and `git`.
+`localhost/olivares-session:latest`, is built from
+`packaging/container/session/Containerfile`:
+a shell, `git`, `ssh`, `curl`, `jq` and `rg` on Debian 13, and nothing of the tool or its
+settings, which the host mounts. The packages install the recipe; build the image
+once, from the package or from a source checkout (`docker build` takes the same arguments).
+From the package:
+
+```bash
+podman build -f /usr/share/olivares/session-image/Containerfile -t localhost/olivares-session:latest /usr/share/olivares/session-image
+```
+
+From a source checkout:
+
+```bash
+podman build -f packaging/container/session/Containerfile -t localhost/olivares-session:latest packaging/container/session
+```
+
+Image stores belong to a user: build it as the user the engine runs as, and run `olivares doctor`
+as that user to check it. While the image is missing, `olivares doctor` says so, the session launch
+readiness reports `container_image_missing`, and a container launch is refused with HTTP 422
+before anything starts. Name your own image with the `localhost/` prefix to have it checked;
+an image named any other way is pulled by the runtime on first use and is not checked. Your own image must be compatible with the host's tool program, which is
+mounted into it, and hold what the tool shells out to: a shell and `git`.
 
 **Rootless and labels.** podman runs rootless when the engine runs as a user other than root,
 which is how the service user of a server runs it. An engine that runs as root gets rootful
@@ -275,17 +294,15 @@ them in the container. The hook program and the run's settings are mounted read-
 host's Claude Code managed settings are mounted where the container reads them
 (`/etc/claude-code`), and a hook that cannot run in the image (another architecture, no
 `/bin/sh`) blocks the tool call instead of letting it through. The hooks call the engine on
-its loopback address, so a container whose environment names the engine there shares the
-host's network. Be clear about what that means: the container isolates files, processes and
-privileges, and its network is the host's, as a native session's is. It does not isolate
-the network, and it does not scope the host's abstract Unix sockets the way a native
-session's Landlock policy does. A container that names no engine endpoint keeps the
-runtime's own network.
+its loopback address. A session bound to a provider in Providers, including a local
+Ollama endpoint, runs with no external container network. An engine-side proxy enforces
+the bound endpoint and credential; loopback relays carry provider and hook requests.
+The tool cannot bypass the proxy through a direct external connection or a host Unix
+socket. If this boundary cannot be established, the session does not start.
+An unbound container that names an engine loopback endpoint uses the host network;
+otherwise it keeps the runtime's default network.
 
-**What it does not do yet.** A session bound to a provider's endpoint from Providers stays
-native: its network boundary is a proxy and a network namespace that only the native runner
-holds, and the engine will not start a container session that is meant to reach one endpoint
-on a wider network. That includes a local model such as Ollama added in Providers. A tool that is a single program file works; one that needs its own directory beside it, or a
+**Image requirements.** A tool that is a single program file works; one that needs its own directory beside it, or a
 runtime such as Node, needs an image that holds it.
 The image needs `/bin/sh`, `git` and what the tool shells out to. Assigned skills and git
 worktrees need native isolation.

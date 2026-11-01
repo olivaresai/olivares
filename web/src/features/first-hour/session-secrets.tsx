@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// VAULT SECRETS AS A SESSION'S ENVIRONMENT (design FH 016). A tenant administrator
+// VAULT SECRETS AS A SESSION'S ENVIRONMENT (design first-hour check). A tenant administrator
 // picks session secrets (env/…) by name and the variable each is read from. Only the
 // names leave the browser: the server opens the values for the child alone, and no
 // read ever returns one.
@@ -71,6 +71,12 @@ export function SessionSecrets({
   const secrets = (query.data?.secrets ?? []).filter((s) =>
     s.name.startsWith(SESSION_SECRET_PREFIX),
   )
+  // A secret chosen from an earlier list that this one no longer shows (deleted,
+  // or another tenant's) stays in the choice, visible and removable: dropping it
+  // silently would launch without what the person picked.
+  const gone = value
+    .map((v) => v.secret)
+    .filter((secret) => !secrets.some((s) => s.name === secret))
   const toggle = (secret: string) =>
     onChange(
       value.some((v) => v.secret === secret)
@@ -83,28 +89,33 @@ export function SessionSecrets({
   return (
     <Field label={t('start.secrets')} description={t('start.secretsHint')}>
       <div className="flex flex-col gap-2">
-        {secrets.length === 0 && !query.isLoading ? (
+        {query.isError ? (
+          <p className="text-caption text-text-2">
+            {t('start.listUnavailable')}
+          </p>
+        ) : null}
+        {!query.isError && secrets.length === 0 && !query.isLoading ? (
           <p className="text-caption text-text-2">{t('start.secretsNone')}</p>
         ) : null}
-        {secrets.map((s) => {
-          const chosen = value.find((v) => v.secret === s.name)
+        {[...secrets.map((s) => s.name), ...gone].map((name) => {
+          const chosen = value.find((v) => v.secret === name)
           return (
-            <div key={s.name} className="flex flex-wrap items-center gap-2">
+            <div key={name} className="flex flex-wrap items-center gap-2">
               <label className="flex items-center gap-2 text-body text-text">
                 <input
                   type="checkbox"
                   checked={!!chosen}
-                  onChange={() => toggle(s.name)}
-                  aria-label={t('start.secretUse', { name: s.name })}
+                  onChange={() => toggle(name)}
+                  aria-label={t('start.secretUse', { name })}
                 />
-                <span className="font-mono text-caption">{s.name}</span>
+                <span className="font-mono text-caption">{name}</span>
               </label>
               {chosen ? (
                 <Input
                   className="max-w-56 font-mono"
                   value={chosen.env}
-                  onChange={(e) => rename(s.name, e.target.value.trim())}
-                  aria-label={t('start.secretVariable', { name: s.name })}
+                  onChange={(e) => rename(name, e.target.value.trim())}
+                  aria-label={t('start.secretVariable', { name })}
                   spellCheck={false}
                 />
               ) : null}

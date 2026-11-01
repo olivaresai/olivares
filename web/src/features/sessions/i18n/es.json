@@ -1,4 +1,13 @@
 {
+  "compact": {
+    "context": "Contexto",
+    "now": "Compactar ahora",
+    "beforeSend": "Compactar antes de enviar",
+    "working": "Compactando…",
+    "hint": "Resume los turnos anteriores para liberar contexto. El borrador se conserva hasta confirmar la compactación.",
+    "unavailable": "Disponible cuando la sesión está inactiva y la herramienta informa de compactación nativa.",
+    "failed": "No se confirmó la compactación. No se envió el mensaje."
+  },
   "git": {
     "title": "Git",
     "branch": "Rama",
@@ -310,16 +319,17 @@
     "currentSession": "Sesión actual",
     "besideSession": "Sesión de al lado",
     "switchSession": "Cambiar de sesión",
-    "closeContext": "Cerrar el contexto",
+    "details": "Detalles de la sesión",
+    "closeContext": "Cerrar los detalles",
     "backTo": "Volver a {{pane}}",
     "pane": {
       "rail": "Sesiones",
       "narrative": "Trabajo",
-      "context": "Contexto"
+      "context": "Detalles"
     },
     "resize": {
       "rail": "Cambiar el ancho de la lista de sesiones",
-      "context": "Cambiar el ancho del panel de contexto",
+      "context": "Cambiar el ancho del panel de detalles",
       "beside": "Cambiar el ancho de la sesión de al lado"
     }
   },
@@ -354,7 +364,9 @@
     "planNotRead": "ventana del plan no leída",
     "resets": "Se restablece {{when}} ({{at}})",
     "stale": "último conocido",
-    "readAt": "Leído {{at}}"
+    "readAt": "Leído {{at}}",
+    "permission": "{{name}}: {{what}}",
+    "full": "Acceso total: se ejecuta sin preguntar, limitado por la <policy>política de Olivares</policy>"
   },
   "evidence": {
     "checks": {
@@ -435,7 +447,7 @@
       "worker": "Trabajador",
       "orchestrator": "Orquestador"
     },
-    "details": "Detalles",
+    "details": "Referencias",
     "echoes": "También registrada como",
     "folder": "Carpeta",
     "temporaryFolder": "Carpeta temporal de esta sesión",
@@ -447,12 +459,29 @@
     "noChanges": "Olivares no inició esta sesión, así que no hay cambios que mostrar.",
     "filesUnavailable": "Esta carpeta no está disponible para explorar.",
     "filesNoAccess": "Tu rol no puede explorar esta carpeta.",
-    "filesFailed": "No se pudo leer la carpeta."
+    "filesFailed": "No se pudo leer la carpeta.",
+    "facts": {
+      "title": "Sesión",
+      "state": "Estado",
+      "workspace": "Espacio de trabajo",
+      "tool": "Herramienta",
+      "account": "Cuenta",
+      "model": "Modelo",
+      "access": "Acceso",
+      "cost": "Coste"
+    },
+    "usage": {
+      "title": "Uso de la cuenta",
+      "fiveHour": "{{percent}} % de 5 horas",
+      "week": "{{percent}} % de la semana"
+    }
   },
   "conversation": {
     "log": "Conversación",
     "waiting": "Esperando a la sesión…",
     "empty": "Todavía no hay mensajes.",
+    "earlier": "Mostrar la salida anterior",
+    "earlierFailed": "No se pudo cargar la salida anterior.",
     "ended": "La sesión ha terminado.",
     "lag_one": "{{count}} marco perdido — la salida de abajo continúa después del hueco.",
     "lag_many": "{{count}} marcos perdidos — la salida de abajo continúa después del hueco.",
@@ -482,8 +511,8 @@
     "startedTools_many": "{{count}} herramientas",
     "startedTools_other": "{{count}} herramientas",
     "notSent": "No se envió: {{reason}}",
-    "waitingApproval": "Se enviará cuando se apruebe el inicio y la sesión arranque.",
-    "workingFolder": "Carpeta de trabajo: {{cwd}}",
+    "waitingApproval": "Se enviará cuando la sesión esté lista.",
+    "workingFolder": "Carpeta de trabajo: <path />",
     "temporaryFolder": "Carpeta de trabajo: carpeta temporal de esta sesión",
     "workedFor": "Trabajó {{duration}}",
     "modelChanged": "Cambio de modelo: {{from}} → {{to}}",
@@ -531,8 +560,11 @@
       "command_many": "Ejecutando {{count}} comandos de shell",
       "command_other": "Ejecutando {{count}} comandos de shell",
       "edit": "Editando {{target}}",
+      "editPath": "Editando <path/>",
       "read": "Leyendo {{target}}",
+      "readPath": "Leyendo <path/>",
       "search": "Buscando {{target}}",
+      "searchPath": "Buscando <lead/><path/>",
       "agent": "{{name}} está trabajando",
       "tool": "Ejecutando {{tool}}"
     },
@@ -549,6 +581,14 @@
         "extra": "límite de uso adicional",
         "usage": "límite de uso"
       }
+    },
+    "card": {
+      "question": "Pregunta",
+      "plan": "Plan propuesto",
+      "todos": "Lista de tareas ({{done}} de {{total}} hechas)",
+      "send": "Enviar respuesta",
+      "answered": "Respuesta enviada: {{answer}}",
+      "sendFailed": "No se pudo enviar la respuesta."
     }
   },
   "changes": {
@@ -597,6 +637,22 @@
       "added": "Añadido",
       "modified": "Modificado",
       "deleted": "Eliminado"
+    },
+    "comment": {
+      "title": "Comentar una línea",
+      "line": "Línea",
+      "version": "Versión",
+      "text": "Comentario",
+      "send": "Enviar a la sesión",
+      "sent": "Comentario enviado a la sesión.",
+      "failed": "No se pudo enviar el comentario. Inténtalo de nuevo en un momento.",
+      "notLive": "Reanuda la sesión para enviar un comentario.",
+      "noPermission": "Necesitas permiso para escribir en sesiones para enviar un comentario.",
+      "needLine": "Elige una línea: haz clic en su número o escríbelo.",
+      "noSuchLine": "El archivo no tiene la línea {{line}} {{version}}.",
+      "empty": "Escribe el comentario.",
+      "atBase": "en la base",
+      "atTip": "en la punta de la rama"
     }
   },
   "peers": {
@@ -724,6 +780,13 @@
     "unreadable": "No se han podido leer {{n}} registros de la transcripción."
   },
   "limit": {
+    "settingsSaved": "Preferencia de reanudación automática guardada.",
+    "resumeAtReset": "Reanudar al restablecerse",
+    "snoozeUntilReset": "Posponer hasta el restablecimiento",
+    "automatic": "Reanudar automáticamente al restablecerse un límite",
+    "resumes": "Se reanuda {{time}}",
+    "cancel": "Cancelar",
+    "cancelled": "Reanudación programada cancelada.",
     "usageUntil": "Sin cuota hasta las {{time}}",
     "usage": "Sin cuota",
     "rate": "El proveedor limita las peticiones. Inténtalo de nuevo en un momento."
@@ -734,6 +797,10 @@
   },
   "rowActions": {
     "rename": "Cambiar nombre…",
+    "regenerateTitle": "Regenerar título",
+    "titleShort": "Corto",
+    "titleSentence": "Normal",
+    "titleLong": "Largo",
     "renameTitle": "Cambiar el nombre de la sesión",
     "renameDescription": "El nombre se guarda en el servidor y se muestra allí donde aparece esta sesión. Déjalo vacío para volver al nombre que le da Olivares.",
     "renameLabel": "Nombre",
@@ -755,6 +822,52 @@
     "copiedPartial": "Copiado. {{n}} registros de la transcripción no se pudieron leer y no están incluidos.",
     "clipped": "Algunos mensajes superan los 64 KiB y se han recortado en la copia; cada uno termina en [...].",
     "noWholeText": "El motor solo envió la primera línea de cada mensaje, así que la transcripción no se copió.",
-    "transcriptChanged": "La transcripción cambió mientras se copiaba. Inténtalo de nuevo."
+    "transcriptChanged": "La transcripción cambió mientras se copiaba. Inténtalo de nuevo.",
+    "undo": "Deshacer"
+  },
+  "approval": {
+    "declineSend": "Rechazar y enviar esto",
+    "feedbackUnsupported": "Esta herramienta no puede recibir tus comentarios. Tu respuesta se guardará con el rechazo.",
+    "title": "Se necesita aprobación",
+    "why": "Motivo",
+    "rule": "Regla",
+    "reach": "Alcance",
+    "requestedBy": "Solicitado por",
+    "reachUnknown": "No informado",
+    "notYours": "Otra persona con permiso de aprobación decide esta solicitud.",
+    "approved": "Aprobada",
+    "denied": "Denegada",
+    "ended": "Ya no espera",
+    "unreadable": "No se pudo leer la solicitud."
+  },
+  "terminal": {
+    "title": "Terminal",
+    "hint": "Una consola en la carpeta de esta sesión, con los mismos límites que la sesión. Se ejecuta como tú; cada línea de comandos que escribes queda registrada.",
+    "open": "Abrir terminal",
+    "close": "Cerrar",
+    "copy": "Copiar",
+    "paste": "Pegar",
+    "again": "Abrir una terminal nueva",
+    "reconnecting": "Reconectando…",
+    "ended": "La terminal ha terminado.",
+    "endedWith": "La terminal ha terminado (salida {{code}}).",
+    "input": "Entrada de la terminal",
+    "label": "Terminal",
+    "noFolder": "Esta sesión no tiene carpeta, así que no hay dónde abrir una terminal.",
+    "unavailable": "La carpeta de la sesión no está disponible aquí, así que no se puede abrir una terminal en ella.",
+    "problem": {
+      "step_up": "Confirma primero tu identidad y vuelve a abrir la terminal.",
+      "refused": "No tienes derecho a abrir una terminal en esta carpeta.",
+      "busy": "Tienes demasiadas terminales abiertas. Cierra una primero.",
+      "failed": "No se pudo abrir la terminal. Inténtalo de nuevo en un momento."
+    },
+    "keys": {
+      "esc": "Esc",
+      "tab": "Tab",
+      "ctrlC": "Ctrl+C",
+      "up": "Arriba",
+      "down": "Abajo"
+    },
+    "closeLabel": "Cerrar terminal"
   }
 }

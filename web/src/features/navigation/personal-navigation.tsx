@@ -59,6 +59,7 @@ function usePersonalSession(
     generation: number
     kind: string
     user: string | null
+    failed?: boolean
     current: () => boolean
   } | null>(null)
   const [verificationMovement, setVerificationMovement] = useState(0)
@@ -87,7 +88,10 @@ function usePersonalSession(
       if (!current()) return
       try {
         const answer = await authApi.whoami({
-          signal: controller.signal,
+          signal: AbortSignal.any([
+            controller.signal,
+            AbortSignal.timeout(5000),
+          ]),
           sessionEffects: 'none',
           dispatchGuard: () => {
             if (!current()) controller.abort()
@@ -105,7 +109,15 @@ function usePersonalSession(
           current,
         })
       } catch {
-        /* No established current identity: keep preferences in quarantine. */
+        // Settled is not verified: release the loading state without opening a partition.
+        if (current())
+          setVerified({
+            generation,
+            kind: '',
+            user: null,
+            current,
+            failed: true,
+          })
       }
     })()
     return () => {
@@ -138,6 +150,7 @@ function usePersonalSession(
         current: () =>
           status === 'authenticated' &&
           verified?.generation === generation &&
+          !verified.failed &&
           verified.current() &&
           verified.kind === principal?.kind &&
           verified.user === (typeof owner === 'string' ? owner : null) &&
@@ -284,10 +297,24 @@ function usePersonalSession(
       (!('navigation' in target) || access.navigable(target))
     )
   }
+  const key = favoriteStorageKey(
+    window.location.origin,
+    principal,
+    activeTenant,
+  )
   return {
     scope: {
       generation,
-      key: favoriteStorageKey(window.location.origin, principal, activeTenant),
+      key,
+      pending:
+        status === 'authenticated' &&
+        typeof owner === 'string' &&
+        (activeTenant !== null ||
+          (principal?.grants.some((grant) => !!grant.tenant) ?? false)) &&
+        (activeTenant === null ||
+          !verified ||
+          verified.generation !== generation ||
+          !verified.current()),
       tenant: activeTenant,
       live: session.live,
       subscribe: session.subscribe,

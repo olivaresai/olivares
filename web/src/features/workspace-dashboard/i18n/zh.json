@@ -43,6 +43,8 @@
     "empty": "还没有会话文件夹。会话在某个文件夹中启动后，它会出现在这里。",
     "loading": "正在读取会话文件夹…",
     "unavailable": "会话文件夹不可用。",
-    "truncationHint": "打开“会话”查看所有文件夹。"
+    "truncationHint": "打开“会话”查看所有文件夹。",
+    "filter": "查找文件夹",
+    "noMatch": "没有与“{{query}}”匹配的文件夹。"
   }
 }

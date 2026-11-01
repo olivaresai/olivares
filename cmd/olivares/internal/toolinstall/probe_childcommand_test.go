@@ -112,14 +112,7 @@ func TestEveryProviderProbeNamesItsScratch(t *testing.T) {
 	if err := os.WriteFile(exe, []byte("#!/bin/sh\necho 'claude codex grok ollama opencode gemini 1.2.3 (Claude Code)'\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	providers := map[string]interface {
-		Probe(context.Context, string, string, string) (ProbeReport, error)
-	}{
-		"claude": NewClaude(ClaudeOptions{}), "codex": NewCodex(CodexOptions{}), "grok": NewGrok(GrokOptions{}),
-		"codex release": NewCodexRelease(ReleaseArchiveOptions{}), "ollama": NewOllama(ReleaseArchiveOptions{}),
-		"opencode": NewOpenCode(ReleaseArchiveOptions{}), "gemini": newReleaseArchive(DriverGemini, ReleaseArchiveOptions{}),
-	}
-	for name, p := range providers {
+	for name, p := range installProbes() {
 		t.Run(name, func(t *testing.T) {
 			scratch := t.TempDir()
 			var rw []string
@@ -134,6 +127,80 @@ func TestEveryProviderProbeNamesItsScratch(t *testing.T) {
 			}
 			if !slices.Equal(rw, []string{scratch}) {
 				t.Errorf("probe writable %v, want only its scratch %s", rw, scratch)
+			}
+		})
+	}
+}
+
+// installProbes is every provider's install probe, by name: one row per driver an
+// install can stage. A new driver adds its row here and to the tests that range over it.
+func installProbes() map[string]interface {
+	Probe(context.Context, string, string, string) (ProbeReport, error)
+} {
+	return map[string]interface {
+		Probe(context.Context, string, string, string) (ProbeReport, error)
+	}{
+		"claude": NewClaude(ClaudeOptions{}), "codex": NewCodex(CodexOptions{}), "grok": NewGrok(GrokOptions{}),
+		"codex release": NewCodexRelease(ReleaseArchiveOptions{}), "ollama": NewOllama(ReleaseArchiveOptions{}),
+		"opencode": NewOpenCode(ReleaseArchiveOptions{}), "gemini": newReleaseArchive(DriverGemini, ReleaseArchiveOptions{}),
+	}
+}
+
+// An install probe is a read like any other: it runs the vendor's --version and
+// nothing else, from an empty scratch home, in an environment of its own. Nothing of
+// the operator's home or environment reaches it, so it runs none of their hooks or
+// plugins, starts none of their MCP servers and reaches none of their logins.
+func TestEveryInstallProbeRunsOnlyVersionFromItsScratchHome(t *testing.T) {
+	operator := t.TempDir()
+	t.Setenv("HOME", operator)
+	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(operator, ".claude"))
+	t.Setenv("CODEX_HOME", filepath.Join(operator, ".codex"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(operator, ".config"))
+	for _, name := range []string{"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GH_TOKEN"} {
+		t.Setenv(name, "operator-secret")
+	}
+	exe := filepath.Join(toolinstalltest.ExecCapableDir(t), "bin", "tool")
+	if err := os.MkdirAll(filepath.Dir(exe), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// The stub reports how it was started, in the scratch home it was given (every
+	// start appends), and prints one line every provider accepts as its own --version.
+	stub := "#!/bin/sh\n{ echo \"args=$*\"; echo \"pwd=$(pwd)\"; env; } >> \"$HOME/ran\"\n" +
+		"echo 'claude codex grok ollama opencode gemini 1.2.3 (Claude Code)'\n"
+	if err := os.WriteFile(exe, []byte(stub), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, p := range installProbes() {
+		t.Run(name, func(t *testing.T) {
+			scratch := t.TempDir()
+			if _, err := p.Probe(context.Background(), exe, scratch, ""); err != nil {
+				t.Fatal(err)
+			}
+			raw, err := os.ReadFile(filepath.Join(scratch, "home", "ran"))
+			if err != nil {
+				t.Fatalf("the probe never ran the tool from its scratch home: %v", err)
+			}
+			ran := string(raw)
+			var starts []string
+			for line := range strings.SplitSeq(ran, "\n") {
+				if strings.HasPrefix(line, "args=") {
+					starts = append(starts, line)
+				}
+			}
+			if !slices.Equal(starts, []string{"args=--version"}) {
+				t.Errorf("the probe must start the tool once, with --version; it started %q:\n%s", starts, ran)
+			}
+			if strings.Contains(ran, operator) || strings.Contains(ran, "operator-secret") {
+				t.Errorf("the operator's home or environment reached the probe:\n%s", ran)
+			}
+			for _, line := range strings.Split(ran, "\n") {
+				key, value, ok := strings.Cut(line, "=")
+				if !ok || key == "args" || key == "PATH" || key == "_" || !strings.HasPrefix(value, "/") {
+					continue
+				}
+				if !strings.HasPrefix(value, scratch) {
+					t.Errorf("%s=%s is outside the probe's scratch home %s", key, value, scratch)
+				}
 			}
 		})
 	}

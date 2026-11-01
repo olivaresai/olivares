@@ -87,7 +87,7 @@ assert_eq() {
 
 # wait_health: poll /healthz until the engine answers. 0 healthy, 1 gave up, 2 the engine
 # ($PID) exited, which ends the wait at once instead of burning the budget on a dead child.
-# ⛔ THE BUDGET IS 120 s, NOT 20 (dev#2775). The nightly died twice with "never became healthy"
+# ⛔ THE BUDGET IS 120 s, NOT 20. The nightly died twice with "never became healthy"
 #    because the CI runner stalled 8-10 s at a random phase of the boot (key generation one
 #    day, store migrations the next); the binary boots in about 7 s on one pinned CPU. A
 #    budget that a slow runner can exceed grades the runner, not the quickstart. Same bound

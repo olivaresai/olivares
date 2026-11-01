@@ -186,14 +186,15 @@ type snoozeRequest struct {
 
 // handleMarkRun is the one handler behind all four mark routes: it resolves the run
 // inside the caller's transaction (a run that vanished mid-flight refuses as 404),
-// refuses a released one when setting a mark, and applies change as of now, the
+// refuses a released one when setting a mark, and changes column as of now, the
 // instant the snooze route checked its moment against.
-func (m *Module) handleMarkRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext, now time.Time, set bool, change func(model.Record)) {
+func (m *Module) handleMarkRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext, now time.Time, column string, value any) {
 	if m.Data == nil {
 		writeJSON(w, http.StatusServiceUnavailable, errorBody("runtime not available"))
 		return
 	}
 	ref := chi.URLParam(r, "ref")
+	set := value != nil && value != false
 	var out markDTO
 	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
@@ -209,9 +210,21 @@ func (m *Module) handleMarkRun(w http.ResponseWriter, r *http.Request, mc api.Mo
 		if set && rec.String(colState) == stateCleaned {
 			return conflictErr("a released session cannot be snoozed or marked done")
 		}
-		mark, err := markRun(r.Context(), sc, mc.Principal.Actor(), rec, now, change)
+		mark, err := markRun(r.Context(), sc, mc.Principal.Actor(), rec, now, func(row model.Record) { row[column] = value })
 		if err != nil {
 			return err
+		}
+		if column == colRunMarkDone && mark.done && rec.String(colLimitResumeUser) == mc.Principal.UserID.String() && (rec.String(colRunResumeAt) != "" || rec.Bool(colRunResumeAfterLimit)) {
+			rec[colRunResumeCancelled] = true
+			rec[colRunResumeAt] = nil
+			rec[colRunResumeDismissed] = true
+			rec[colRunResumeAfterLimit] = false
+			if _, err := repo.Update(r.Context(), rec); err != nil {
+				return err
+			}
+			if _, err := sc.Audit().Append(r.Context(), model.AuditDraft{Actor: mc.Principal.Actor(), ActorKind: mc.Principal.ActorKind(), Action: "sessions.run.resume_cancelled", TargetKind: runKind, TargetID: model.ID(rec.String(model.ColID)), Meta: map[string]any{"reason": "marked done"}}); err != nil {
+				return err
+			}
 		}
 		out = markDTO{RunRef: ref, SnoozedUntil: mark.snoozedUntil, Done: mark.done}
 		return nil
@@ -247,20 +260,26 @@ func (m *Module) handleSnoozeRun(w http.ResponseWriter, r *http.Request, mc api.
 		writeJSON(w, http.StatusBadRequest, errorBody("until must be before the year 10000"))
 		return
 	}
-	m.handleMarkRun(w, r, mc, now, true, func(row model.Record) { row[colRunMarkSnoozedUntil] = stamp })
+	m.handleMarkRun(w, r, mc, now, colRunMarkSnoozedUntil, stamp)
 }
 
 // handleUnsnoozeRun ends the caller's snooze, idempotently.
 func (m *Module) handleUnsnoozeRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	m.handleMarkRun(w, r, mc, m.now(), false, func(row model.Record) { row[colRunMarkSnoozedUntil] = nil })
+	m.handleMarkRun(w, r, mc, m.now(), colRunMarkSnoozedUntil, nil)
 }
 
 // handleDoneRun marks the run done for the caller, idempotently.
 func (m *Module) handleDoneRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	m.handleMarkRun(w, r, mc, m.now(), true, func(row model.Record) { row[colRunMarkDone] = true })
+	release, err := m.rt.lockRunContext(r.Context(), liveKey(mc.Tenant, chi.URLParam(r, "ref")))
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	defer release()
+	m.handleMarkRun(w, r, mc, m.now(), colRunMarkDone, true)
 }
 
 // handleUndoneRun removes the caller's done mark, idempotently.
 func (m *Module) handleUndoneRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	m.handleMarkRun(w, r, mc, m.now(), false, func(row model.Record) { row[colRunMarkDone] = false })
+	m.handleMarkRun(w, r, mc, m.now(), colRunMarkDone, false)
 }

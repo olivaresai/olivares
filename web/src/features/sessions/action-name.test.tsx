@@ -27,40 +27,30 @@ function keyShapedCopy(root: HTMLElement): string[] {
   return out
 }
 
-// dev#3120: "Write · /srv/work/…/verdict.md" pushed the Context pane
-// sideways. A path is cut in its middle: the folders shrink, the file name stays, and
-// the whole path is the hover and what a copy takes.
-describe('a path is cut in the middle, never sideways', () => {
+// the regression: "Write · /srv/work/…/verdict.md" pushed the Context pane
+// sideways. #3135: a path goes through the one shared PathText, which cuts it in its middle,
+// keeps the whole value as the hover and copies it whole; ActionName keeps no cutter of its own.
+describe('a path is shown through PathText, never cut by a second mechanism', () => {
   const path = '/srv/work/reports/2026-10/review-0142/verdict.md'
 
-  it('keeps the file name whole and lets only the folders shrink', () => {
+  it('renders a path through PathText, whole as its hover, with a copy action', () => {
     const { container } = render(<ActionName value={path} />)
-    const code = container.querySelector('code')!
-    expect(code).toHaveAttribute('title', path)
-    // Selected and copied, it is the whole path, in order.
-    expect(code.textContent).toBe(path)
-    const [head, tail] = Array.from(code.children) as HTMLElement[]
-    expect(head).toHaveClass('truncate', 'min-w-0')
-    expect(tail.textContent).toBe('/verdict.md')
-    expect(tail).toHaveClass('shrink-0')
-    // The element can shrink to its column instead of widening it.
-    expect(code).toHaveClass('max-w-full', 'min-w-0')
+    const shared = container.querySelector('[data-slot="path-text"]')
+    expect(shared).not.toBeNull()
+    expect(shared!.querySelector('code')).toHaveAttribute('title', path)
+    expect(shared!.textContent).toContain('verdict.md')
+    expect(container.querySelector('button')).not.toBeNull()
   })
 
-  it('cuts the folders, not the file name, in a table cell and after a trailing slash', () => {
-    const cell = render(
-      <ActionName value={path} className="block truncate" />,
-    ).container.querySelector('code')!
-    expect(cell).toHaveClass('inline-flex')
-    expect(cell.lastElementChild?.textContent).toBe('/verdict.md')
-    const folder = render(
-      <ActionName value="/srv/work/reports/tmp/" />,
-    ).container.querySelector('code')!
-    expect(folder.lastElementChild?.textContent).toBe('/tmp/')
+  it('leaves the copy action out where the caller says so, as in a clickable table row', () => {
+    const { container } = render(<ActionName value={path} copy={false} />)
+    expect(container.querySelector('[data-slot="path-text"]')).not.toBeNull()
+    expect(container.querySelector('button')).toBeNull()
   })
 
   it('leaves a value that is not a path in one piece', () => {
     const { container } = render(<ActionName value="web.search" />)
+    expect(container.querySelector('[data-slot="path-text"]')).toBeNull()
     expect(container.querySelector('code')!.children).toHaveLength(0)
   })
 })

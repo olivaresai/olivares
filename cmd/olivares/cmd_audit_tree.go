@@ -5,20 +5,15 @@
 package main
 
 import (
-	"crypto/ed25519"
 	"encoding/base64"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/model"
-	"github.com/olivaresai/olivares/core/store"
 )
 
 // auditTreeCmd is the operator surface of the audit ledger's RFC 6962 Merkle tree:
@@ -28,13 +23,9 @@ func auditTreeCmd() *cobra.Command {
 	root := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "read"},
 		Use:         "tree",
-		Short:       "Publish and verify C2SP Merkle checkpoints of the audit ledger",
-		Long: "tree is the audit ledger's second, independent proof beside the hash chain: a signed C2SP\n" +
-			"checkpoint (origin, size, RFC 6962 root) an operator saves, and an inclusion proof for one event.\n" +
-			"From a saved checkpoint and the signing public key, `tree verify` proves offline that the\n" +
-			"ledger still holds the history the checkpoint committed to, and that one event was inside it.",
-		Example: "  olivares audit tree checkpoint --tenant t_abc123 > t_abc123.checkpoint\n" +
-			"  olivares audit tree verify --tenant t_abc123 --checkpoint t_abc123.checkpoint --pubkey <base64>",
+		Short:       "Publish signed Merkle checkpoints of the audit ledger",
+		Long:        "Save the tenant's current Merkle tree head as a signed C2SP checkpoint.",
+		Example:     "  olivares audit tree checkpoint --tenant t_abc123 > t_abc123.checkpoint",
 	}
 	root.AddCommand(auditTreeCheckpointCmd(), auditTreeProveCmd(), auditTreeVerifyCmd())
 	return root
@@ -115,41 +106,7 @@ func auditTreeProveCmd() *cobra.Command {
 		Example: "  olivares audit tree prove --tenant t_abc123 --checkpoint t_abc123.checkpoint --pubkey <base64> --seq 42 > seq42.proof",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			t, err := tenantFlag(tenant)
-			if err != nil {
-				return err
-			}
-			if seq < 1 {
-				return errors.New("--seq: want the audit sequence number of the event (>= 1)")
-			}
-			cp, err := loadTreeCheckpoint(checkpointPath, t, pubkey, cmd.InOrStdin())
-			if err != nil {
-				return err
-			}
-			eng, err := auditVerifyBoot(cmd, dataDir, engine, dsn, ownerDSN)
-			if err != nil {
-				return err
-			}
-			defer func() { _ = eng.Close() }()
-			var proof audit.TreeInclusion
-			var found bool
-			err = eng.ledger.ViewAudit(cmd.Context(), t, func(log store.AuditLog) error {
-				var perr error
-				proof, found, perr = audit.ProveInclusion(cmd.Context(), log, seq, cp.Size)
-				return perr
-			})
-			if err != nil {
-				return err
-			}
-			if !found {
-				return fmt.Errorf("event seq %d is not in the %d-event tree the checkpoint commits to", seq, cp.Size)
-			}
-			// The proof comes from the stored tree and the event from the ledger; a
-			// damaged tree would give a proof that only fails later, at the auditor.
-			if err := audit.VerifyInclusion(proof, cp); err != nil {
-				return fmt.Errorf("the stored tree does not reproduce the checkpoint: %w", err)
-			}
-			return json.NewEncoder(cmd.OutOrStdout()).Encode(proof)
+			return runAuditTreeProve(cmd, dataDir, engine, dsn, ownerDSN, tenant, checkpointPath, pubkey, seq)
 		},
 	}
 	addStoreFlags(cmd, &dataDir, &engine, &dsn)
@@ -177,48 +134,7 @@ func auditTreeVerifyCmd() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			t, err := tenantFlag(tenant)
-			if err != nil {
-				return err
-			}
-			cp, err := loadTreeCheckpoint(checkpointPath, t, pubkey, cmd.InOrStdin())
-			if err != nil {
-				return err
-			}
-			result := map[string]any{"tenant": t.String(), "size": cp.Size, "signature": "ok"}
-			what := "the first events of the ledger hash to the checkpoint (the chain itself: olivares audit verify)"
-			if proofPath != "" {
-				raw, err := readSmallFile(proofPath)
-				if err != nil {
-					return fmt.Errorf("--proof: %w", err)
-				}
-				var proof audit.TreeInclusion
-				if err := json.Unmarshal(raw, &proof); err != nil {
-					return fmt.Errorf("--proof: %w", err)
-				}
-				if err := audit.VerifyInclusion(proof, cp); err != nil {
-					return err
-				}
-				result["inclusion"] = map[string]any{"seq": proof.Seq, "outcome": "ok"}
-				what = fmt.Sprintf("the event with hash %x, claimed as seq %d, is in the tree", proof.EventHash[:min(8, len(proof.EventHash))], proof.Seq)
-			} else {
-				eng, err := auditVerifyBoot(cmd, dataDir, engine, dsn, ownerDSN)
-				if err != nil {
-					return err
-				}
-				defer func() { _ = eng.Close() }()
-				err = eng.ledger.ViewAudit(cmd.Context(), t, func(log store.AuditLog) error {
-					return audit.VerifyTreeAgainstLedger(cmd.Context(), log, cp)
-				})
-				if err != nil {
-					return err
-				}
-				result["ledger"] = "ok"
-			}
-			return renderOut(cmd, func(out io.Writer) error {
-				_, err := fmt.Fprintf(out, "checkpoint of %d events for %s: signature ok, %s\n", cp.Size, t, what)
-				return err
-			}, result)
+			return runAuditTreeVerify(cmd, dataDir, engine, dsn, ownerDSN, tenant, checkpointPath, pubkey, proofPath)
 		},
 	}
 	addStoreFlags(cmd, &dataDir, &engine, &dsn)
@@ -240,50 +156,4 @@ func tenantFlag(tenant string) (model.TenantID, error) {
 		return "", fmt.Errorf("--tenant: %w", err)
 	}
 	return t, nil
-}
-
-// loadTreeCheckpoint reads a saved checkpoint and verifies it against the key.
-func loadTreeCheckpoint(path string, tenant model.TenantID, pubB64 string, stdin io.Reader) (audit.TreeCheckpoint, error) {
-	if path == "" || pubB64 == "" {
-		return audit.TreeCheckpoint{}, errors.New("--checkpoint and --pubkey are required")
-	}
-	var raw []byte
-	var err error
-	if path == "-" {
-		raw, err = readSmallInput(stdin, "stdin")
-	} else {
-		raw, err = readSmallFile(path)
-	}
-	if err != nil {
-		return audit.TreeCheckpoint{}, fmt.Errorf("--checkpoint: %w", err)
-	}
-	pub, err := base64.StdEncoding.DecodeString(pubB64)
-	if err != nil || len(pub) != ed25519.PublicKeySize {
-		return audit.TreeCheckpoint{}, errors.New("--pubkey: invalid base64 Ed25519 public key")
-	}
-	return audit.VerifyTreeCheckpoint(raw, tenant, ed25519.PublicKey(pub))
-}
-
-// maxTreeFileBytes bounds the files the tree commands read: a checkpoint is a few
-// hundred bytes and a proof a few kilobytes.
-const maxTreeFileBytes = 1 << 20
-
-func readSmallFile(path string) ([]byte, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	return readSmallInput(f, path)
-}
-
-func readSmallInput(input io.Reader, name string) ([]byte, error) {
-	raw, err := io.ReadAll(io.LimitReader(input, maxTreeFileBytes+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(raw) > maxTreeFileBytes {
-		return nil, fmt.Errorf("%s is larger than %d bytes", name, maxTreeFileBytes)
-	}
-	return raw, nil
 }

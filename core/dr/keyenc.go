@@ -123,6 +123,12 @@ func OpenCipher(secret []byte, p KDFParams) (*KeyCipher, error) {
 		if len(secret) == 0 {
 			return nil, fmt.Errorf("dr: empty passphrase for argon2id bundle")
 		}
+		// These unauthenticated bundle values must never cost more than the writer's
+		// defaults: at most 3 passes, 64 MiB and 4 lanes. Every released writer
+		// uses those defaults. Reject zero costs too (Argon2 can panic on them).
+		if p.Time == 0 || p.Time > argonTime || p.Memory == 0 || p.Memory > argonMemory || p.Threads == 0 || p.Threads > argonThreads {
+			return nil, fmt.Errorf("dr: KDF cost outside supported bounds (t=1..%d, m=1..%d KiB, p=1..%d)", argonTime, argonMemory, argonThreads)
+		}
 		kek := argon2.IDKey(secret, salt, p.Time, p.Memory, p.Threads, p.KeyLen)
 		return &KeyCipher{kek: kek, params: p}, nil
 	case kdfRaw:

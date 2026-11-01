@@ -9,7 +9,7 @@ import { modelName } from '@/features/agentops/model-name'
 import { formatShortDateTime } from '@/lib/format'
 import type { ConversationItem } from './conversation-frames'
 
-/** A provider call refused for its credential: retrying cannot fix it (HU2-13). */
+/** A provider call refused for its credential: retrying cannot fix it. */
 function refusedKey(item: ConversationItem): boolean {
   return (
     item.systemKind === 'apiRetry' &&
@@ -17,7 +17,7 @@ function refusedKey(item: ConversationItem): boolean {
   )
 }
 
-/** System lines that report a failure, painted as one (HU2-12, HU2-13, HU2-23). */
+/** System lines that report a failure, painted as one (acceptance, acceptance, acceptance). */
 export function systemFailed(item: ConversationItem): boolean {
   return (
     item.systemKind === 'turnFailed' ||
@@ -51,7 +51,7 @@ function resetTime(iso: string | undefined, now: Date): string | undefined {
 }
 
 /** The turn a limit stopped, in words: which limit, how much of it was used and when it
- * resets, as far as the tool said (dev#3119). */
+ * resets, as far as the tool said. */
 function limitText(t: TFunction, item: ConversationItem, now: Date): string {
   const window = t(
     `sessions:conversation.limit.window.${

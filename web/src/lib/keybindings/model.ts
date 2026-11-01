@@ -133,9 +133,10 @@ export function chordMatches(chord: Chord, event: KeyEventLike): boolean {
   const printable = chord.key.length === 1
   const key = printable ? event.key.toLowerCase() : event.key
   const want = printable ? chord.key.toLowerCase() : chord.key
-  // Option+Shift+O types "Ø" on a Mac, so an Alt+letter chord also matches its physical key.
+  // Option+Shift+O types "Ø" on a Mac, so an Alt+letter chord also matches its physical
+  // key, but only when the layout typed no letter: AZERTY's Alt+Q is not Alt+A.
   const physical =
-    chord.alt && /^[a-z]$/i.test(chord.key)
+    chord.alt && /^[a-z]$/i.test(chord.key) && !/^[a-z]$/i.test(event.key)
       ? event.code === `Key${chord.key.toUpperCase()}`
       : false
   if (key !== want && !physical) return false

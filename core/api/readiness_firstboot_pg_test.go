@@ -33,11 +33,17 @@ func openFirstBootPostgres(t *testing.T, withAdminPool bool) store.Store {
 	if withAdminPool {
 		cfg.AdminDSN = dsns.Admin
 	}
+	return openLeaderPostgres(t, cfg)
+}
+
+// openLeaderPostgres opens the engine over cfg and makes it the active writer.
+func openLeaderPostgres(t *testing.T, cfg store.Config) store.Store {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	t.Cleanup(cancel)
 	st, err := sqlstore.Open(ctx, cfg, nil)
 	if err != nil {
-		t.Fatalf("open postgres (admin pool: %t): %v", withAdminPool, err)
+		t.Fatalf("open postgres (admin pool: %t): %v", cfg.AdminDSN != "", err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
 	// LEADERSHIP IS PART OF THE FIXTURE ON POSTGRES, and leaving it out is how the

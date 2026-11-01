@@ -130,7 +130,7 @@ async function expectOneOpenCount(page: Page) {
   const count = (await open.textContent())?.match(/\d+/)?.[0] ?? ''
   await expect(
     page
-      .locator('header[data-slot="topbar"] a[data-place="sessions"]')
+      .locator('[data-slot="sidebar"] a[data-place="sessions"]')
       .locator('[data-slot="count-badge"]'),
   ).toHaveText(count)
 }

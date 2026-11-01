@@ -113,7 +113,7 @@ func TestProviderOllamaCompilesBoundEndpointIntoOpenCodeLaunch(t *testing.T) {
 	m, _, tenant, _ := newRuntimeHarness(t, WithProviderDriver(NewOpenCodeDriver()), WithProviderProbe(probe))
 	m.UseExecutionEnvironmentRef(testEnvRef)
 	rec := mustCreateRecord(t, m, tenant, CreateProviderRecordInput{Kind: "ollama", DisplayName: "Local", BaseURL: "http://127.0.0.1:11435"})
-	// An OpenCode launch needs the endpoint's models (FH 085): the probe lists them.
+	// An OpenCode launch needs the endpoint's models (first-hour check): the probe lists them.
 	if _, err := m.TestProviderRecord(context.Background(), tenant, rec.Ref); err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func openCodeLocalLaunch(t *testing.T, models []string, runModel string) (string
 	return "", at, nil
 }
 
-// FH 085 (fix C proof on a GPU Ollama, OpenCode 1.18.34): with the endpoint's models
+// first-hour check (fix C proof on a GPU Ollama, OpenCode 1.18.34): with the endpoint's models
 // unlisted, a session with no model ran on OpenCode's own hosted default
 // (opencode/big-pickle, OpenCode Zen) and the prompt left the server. A session
 // bound to the local endpoint now defaults to the local model, and no other

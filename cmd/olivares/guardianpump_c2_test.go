@@ -6,7 +6,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/olivaresai/olivares/core/model"
@@ -18,6 +20,8 @@ import (
 type fakeGov struct {
 	rules  bool
 	sweeps int
+	res    governance.GuardianSweepResult
+	err    error
 }
 
 func (f *fakeGov) HasGuardianRules(context.Context, model.TenantID) (bool, error) {
@@ -26,10 +30,10 @@ func (f *fakeGov) HasGuardianRules(context.Context, model.TenantID) (bool, error
 
 func (f *fakeGov) GuardianSweep(context.Context, model.TenantID) (governance.GuardianSweepResult, error) {
 	f.sweeps++
-	return governance.GuardianSweepResult{}, nil
+	return f.res, f.err
 }
 
-// SR2C P1 (2026-10-03): there is no cached "no rules" decision. A rule created
+// review P1 (2026-10-03): there is no cached "no rules" decision. A rule created
 // (and approved) right after an all-empty tick is swept on the VERY NEXT tick —
 // the pump's 30-second operator cadence — never after a minutes-long window.
 func TestGuardianPumpSweepsOnlyRuleTenantsAndRechecksEveryTick(t *testing.T) {
@@ -77,5 +81,18 @@ func TestGuardianPumpStandbyNeverSweeps(t *testing.T) {
 	}
 	if gov.sweeps != 0 {
 		t.Fatalf("a standby must not sweep, sweeps = %d", gov.sweeps)
+	}
+}
+
+func TestGuardianPumpLogsCommittedResultsBeforeAnError(t *testing.T) {
+	var logs strings.Builder
+	gov := &fakeGov{rules: true, res: governance.GuardianSweepResult{Executed: 1}, err: errors.New("one action failed")}
+	p := &guardianPump{st: fakeStoreLeader(true), gov: gov, log: slog.New(slog.NewTextHandler(&logs, nil)),
+		tenants: func(context.Context) ([]model.TenantID, error) { return []model.TenantID{"t1"}, nil }}
+	if err := p.runOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(logs.String(), "advanced pending containments") || !strings.Contains(logs.String(), "executed=1") {
+		t.Fatalf("pump discarded the committed result after an error: %s", logs.String())
 	}
 }

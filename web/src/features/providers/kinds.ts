@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { engineTool } from '@/features/agentops/engine-tools'
 import type { ProviderKind } from './types'
 
 /**
@@ -30,10 +31,6 @@ export const LOCAL_HTTP_KINDS: readonly string[] = [
   'xai',
   'openai_compatible',
 ]
-
-/** The keys OpenCode can be held to at the provider's own address (openCodeKeyProviders in
- * modules/sessions/driver_opencode.go). */
-const OPENCODE_VENDOR_KEYS: readonly string[] = ['anthropic', 'openai', 'xai']
 
 /**
  * Plain http at localhost, a loopback address or a private-network address, without
@@ -71,36 +68,26 @@ export function isLocalHttpEndpoint(baseURL: string | undefined): boolean {
 /**
  * Whether a session of this driver can run on a record of this kind AND be held to the
  * record's endpoint: a session bound to a provider record reaches only that endpoint, or
- * it does not start. It mirrors recordServesDriver in modules/sessions/provider_record.go
- * (FH d4af6c7a, 26.10.1), the one rule the engine reads at bind, resolve and launch; the
- * console only offers what the engine accepts, and kinds.test.ts pins the table. Claude
- * Code: an Anthropic key. Codex: an OpenAI key, an OpenAI-compatible endpoint or a local
- * model. Grok Build: an xAI key. OpenCode: an Anthropic, OpenAI or xAI key at the
- * provider's own address (no base URL), a local model, or an OpenAI-compatible server at
- * a local http address. Any other driver: nothing.
+ * it does not start. The kinds a tool runs on are the engine's (driverfacts Bindings, read
+ * from GET /v1/m/sessions/tools); this applies each one's endpoint rule as CanBind does:
+ * any endpoint, the provider's own address only (no base URL), or a local http address
+ * only. A driver or rule the engine does not list serves nothing.
  */
 export function recordServesDriver(
   kind: string,
   baseURL: string | undefined,
   driver: string,
 ): boolean {
-  switch (driver.trim().toLowerCase()) {
-    case 'claude':
-      return kind === 'anthropic'
-    case 'codex':
-      return (
-        kind === 'openai' || kind === 'openai_compatible' || kind === 'ollama'
-      )
-    case 'gemini-cli':
-      return kind === 'gemini' && !baseURL?.trim()
-    case 'grok':
-      return kind === 'xai'
-    case 'opencode':
-      return (
-        kind === 'ollama' ||
-        (kind === 'openai_compatible' && isLocalHttpEndpoint(baseURL)) ||
-        (OPENCODE_VENDOR_KEYS.includes(kind) && !baseURL?.trim())
-      )
+  const binding = engineTool(driver.trim().toLowerCase())?.bindings.find(
+    (b) => b.kind === kind,
+  )
+  switch (binding?.egress) {
+    case 'configured-endpoint':
+      return true
+    case 'vendor-default-only':
+      return !baseURL?.trim()
+    case 'local-endpoint-only':
+      return isLocalHttpEndpoint(baseURL)
     default:
       return false
   }

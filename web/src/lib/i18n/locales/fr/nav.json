@@ -15,13 +15,6 @@
     "protocols": "Protocoles",
     "infrastructure": "Infrastructure"
   },
-  "filter": {
-    "placeholder": "Filtrer la navigation…",
-    "label": "Filtrer la navigation",
-    "clear": "Effacer le filtre",
-    "results": "Correspondances : {{n}}",
-    "empty": "Aucune vue ne correspond à « {{query}} »"
-  },
   "items": {
     "estate": "Parc",
     "home": "Accueil",
@@ -32,7 +25,6 @@
     "reach": "Portée",
     "health": "Santé et SLA",
     "capabilities": "MCP et compétences",
-    "skills": "Catalogue de skills",
     "protocolBindings": "Liaisons de protocole",
     "communications": "Communications",
     "communicationsInbox": "Boîte de réception des communications",
@@ -77,6 +69,7 @@
     "eventing": "Webhooks et événements",
     "session-viewer": "Visionneuse de sessions",
     "backups": "Sauvegardes",
+    "updates": "Mises à jour",
     "logs": "Journaux",
     "inferenceProxy": "Proxy d'inférence",
     "alerting": "Alertes",
@@ -86,8 +79,8 @@
     "providerBindings": "Liaisons de sources",
     "providerAccounts": "Comptes de fournisseur",
     "agent-tools": "Outils d’IA",
-    "mcpServers": "Serveurs MCP",
-    "storedBudgets": "Budgets"
+    "storedBudgets": "Budgets",
+    "usage": "Usage"
   },
   "workspace": {
     "open": "Ouvrir {{workspace}}",
@@ -109,7 +102,6 @@
     "reach": "Voyez quelles destinations chaque outil peut atteindre et lesquelles attendent une approbation.",
     "health": "Disponibilité et SLA des agents et des MCP",
     "capabilities": "Gouvernez les serveurs MCP, les compétences et les outils",
-    "skills": "Parcourir les paquets de skills et les attribuer aux départements, groupes d’agents et agents",
     "protocolBindings": "Composer et réconcilier les liaisons A2A et MCP gouvernées",
     "communications": "Canaux, avis directs et boîte de réception personnelle de l’espace de travail sélectionné",
     "communicationsInbox": "Les messages qui vous sont adressés : ouvrez et accusez réception de chacun",
@@ -129,7 +121,7 @@
     "work": "Travail partagé : unités, dépendances, acceptation et décisions",
     "agentops": "Lancer des sessions et suivre ce que fait chacune, y compris celles qu’Olivares trouve",
     "agentArtifacts": "Skills, extensions MCP et fichiers d'instructions — registre, posture et BOM de chaîne d'approvisionnement",
-    "models": "Modèles, routage et clés de fournisseur",
+    "models": "Modèles, routage et gouvernance",
     "modelOps": "Modèles détenus, admission et déploiements",
     "finops": "Coût des tokens, budgets et dépenses",
     "adoption": "Productivité, acceptation et répartition des modèles",
@@ -164,11 +156,12 @@
     "eventing": "Abonnements webhook sortants, journal des événements capturés, livraisons et file des messages morts",
     "team-costs": "Attribution des coûts par équipe : sessions, jetons et dépenses, avec tendance quotidienne et ventilation par projet et par modèle",
     "backups": "Instantanés chiffrés de reprise après sinistre du plan de contrôle : créer, planifier, télécharger et restaurer",
+    "updates": "La version que ce moteur exécute, la version signée la plus récente de son canal et une action pour l'installer",
     "logs": "Le flux de journaux du moteur en direct, avec filtres par niveau et module, recherche et pause",
     "sourceDiff": "Comparez une révision de base et une révision head d'un dépôt Git connecté, fichier par fichier",
     "agent-tools": "Voir les comptes et clés d’API avec lesquels les sessions s’exécutent ; installer et connecter les outils revient aux administrateurs du déploiement",
-    "mcpServers": "Connectez des serveurs MCP distants à cette organisation, testez-les et choisissez les outils que les sessions peuvent utiliser",
-    "storedBudgets": "Consommation par rapport à chaque limite enregistrée. La capacité réservée compte dans la limite."
+    "storedBudgets": "Consommation par rapport à chaque limite enregistrée. La capacité réservée compte dans la limite.",
+    "usage": "Les limites officielles sur 5 heures et à la semaine de chaque compte, la plus proche d'abord, et les jetons et le coût du jour."
   },
   "commandActions": {
     "eventing": {
@@ -198,14 +191,12 @@
   "areas": {
     "infrastructure": {
       "label": "Infrastructure",
-      "question": "Quelles ressources et quels espaces de travail ai-je ?",
       "sections": {
         "estate": "Inventaire et espaces de travail"
       }
     },
     "ai": {
       "label": "IA",
-      "question": "Quelles sessions, quels profils et quels modèles est-ce que j’observe ou je gère ?",
       "sections": {
         "sessions": "Sessions",
         "environments": "Profils et environnements",
@@ -216,7 +207,6 @@
     },
     "data-context": {
       "label": "Données & contexte",
-      "question": "Quelles connaissances, capacités et quels artefacts est-ce que je connecte ou réutilise ?",
       "sections": {
         "capabilities": "Capacités",
         "knowledge": "Connaissances et artefacts"
@@ -224,14 +214,12 @@
     },
     "work-communications": {
       "label": "Travail & communications",
-      "question": "Quel travail est-ce que je coordonne, et comment communique-t-il ?",
       "sections": {
         "work": "Travail et communications"
       }
     },
     "automation": {
       "label": "Automatisation",
-      "question": "Quels flux, événements et notifications est-ce que j’automatise ?",
       "sections": {
         "workflows": "Flux et orchestration",
         "events": "Événements et notifications"
@@ -239,7 +227,6 @@
     },
     "security-identity": {
       "label": "Sécurité & identité",
-      "question": "Qui a accès, selon quelles règles, et comment est-ce que je protège l’environnement ?",
       "sections": {
         "access": "Identité et accès",
         "policy": "Politiques et frontières de gouvernance",
@@ -248,14 +235,12 @@
     },
     "deployment": {
       "label": "Livraison",
-      "question": "Comment est-ce que je prépare et contrôle un déploiement ?",
       "sections": {
         "deployments": "Déploiements"
       }
     },
     "observation": {
       "label": "Supervision",
-      "question": "Que se passe-t-il, combien cela coûte-t-il, et que puis-je prouver ?",
       "sections": {
         "operations": "État et activité",
         "cost-adoption": "Coûts et adoption",
@@ -264,7 +249,6 @@
     },
     "system": {
       "label": "Système & paramètres",
-      "question": "Comment est-ce que j’administre l’organisation, l’installation et mes préférences ?",
       "sections": {
         "administration": "Administration",
         "maintenance": "Installation et maintenance",
@@ -273,36 +257,8 @@
       }
     }
   },
-  "directory": {
-    "areas": "Domaines",
-    "expand": "Afficher les modules de {{area}}",
-    "collapse": "Masquer les modules de {{area}}",
-    "modulesOf": "Modules de {{area}}",
-    "empty": "Aucune entrée de ce domaine ne vous est accessible",
-    "emptyHint": "Les entrées apparaissent ici lorsque votre rôle dans l’organisation actuelle donne accès à un module de ce domaine.",
-    "backHome": "Aller à l’accueil",
-    "area": "Domaine"
-  },
   "personal": {
-    "favorites": "Favoris",
-    "add": "Ajouter {{name}} aux favoris",
-    "remove": "Retirer {{name}} des favoris",
-    "viewAll": "Tout voir ({{count}})",
-    "manage": "Gérer les favoris",
-    "empty": "Marquez un module avec l’étoile pour le garder ici.",
-    "scope": "Enregistrés dans votre compte, dans tous vos navigateurs.",
-    "saveFailed": "Les favoris n’ont pas pu être enregistrés dans votre compte. Ils sont conservés dans ce navigateur et seront enregistrés à votre prochaine modification ou connexion.",
-    "temporary": "Les favoris restent en mémoire pour le moment.",
-    "clear": "Effacer les favoris",
-    "recents": "Récents",
-    "recentManage": "Gérer les modules récents",
-    "recentViewAll": "Voir les récents ({{count}})",
-    "recentEmpty": "Les modules ouverts apparaissent ici.",
-    "recentScope": "Ouverts dans cet onglet. Effacés au rechargement, à la déconnexion ou au changement de compte ou d’organisation.",
-    "recentRemove": "Retirer {{name}} des modules récents",
-    "recentClear": "Effacer les modules récents",
-    "pinRow": "Épingler {{name}} aux favoris (p)",
-    "unpinRow": "Détacher {{name}} des favoris (p)"
+    "saveFailed": "Les modifications n’ont pas pu être enregistrées dans votre compte. Elles s’appliquent uniquement à cette visite."
   },
   "scope": {
     "tenant": "Organisation",
@@ -334,7 +290,6 @@
     "starting": "La session démarre…",
     "startAgain": "Recommencez la session pour envoyer un message.",
     "turnAria": "Tour de session",
-    "attachedWaiting": "Vous attend",
     "rawLine": "Ligne brute",
     "advancedHint": "Envoyer une ligne NDJSON sur stdin. Le champ de phrase est la valeur par défaut.",
     "wirePlaceholder": "Envoyer une ligne NDJSON sur stdin…",
@@ -364,27 +319,36 @@
     "modelPicker": "Modèle : {{value}}",
     "effortPicker": "Effort : {{value}}",
     "accessPicker": "Accès : {{value}}",
-    "accessKeeps": "Cette session garde son accès. Un autre accès démarre une nouvelle session."
+    "accessKeeps": "Cette session garde son accès. Un autre accès démarre une nouvelle session.",
+    "queue": {
+      "title": "Messages en file d'attente",
+      "hold": {
+        "turn": "L'outil travaille. Le premier message part à la fin de son tour.",
+        "approval": "En attente d'une approbation. La file est conservée.",
+        "limit": "La limite du compte a mis fin au dernier tour. La file est conservée.",
+        "stopped": "La session est arrêtée. La file est conservée.",
+        "ready": "Envoi du message suivant…"
+      },
+      "steer": "Rediriger",
+      "sendNow": "Envoyer maintenant",
+      "edit": "Modifier le message",
+      "editAria": "Modifier le message en file d'attente",
+      "save": "Enregistrer",
+      "cancel": "Annuler",
+      "remove": "Retirer le message",
+      "moveUp": "Avancer",
+      "moveDown": "Reculer",
+      "failed": "La file d'attente n'a pas pu être mise à jour.",
+      "placeholder": "Entrée met un message en file pour après ce tour",
+      "placeholderSteer": "Entrée le met en file pour après ce tour, Ctrl+Entrée le redirige maintenant",
+      "discarded": "La session a été libérée alors que ces messages étaient encore en file :",
+      "copy": "Copier"
+    }
   },
   "shell": {
-    "journeysLabel": "Parcours",
-    "journeys": {
-      "home": "Accueil",
-      "sessions": "Sessions",
-      "agent-tools": "Outils",
-      "rules": "Règles",
-      "audit": "Registre",
-      "organization": "Organisation",
-      "storedBudgets": "Budgets"
-    },
-    "phoneBarLabel": "Principal",
-    "newSession": "Nouvelle session",
     "searchCommands": "Recherche et commandes",
     "search": "Recherche",
     "stopAll": "Tout arrêter",
-    "allAreas": "Tous les domaines",
-    "more": "Plus",
-    "moreLabel": "Plus : tous les domaines",
     "workspaceCount": "Espaces de travail : {{count}}",
     "rail": {
       "title": "Sessions",
@@ -452,10 +416,40 @@
       "usage": "Utilisation de {{tool}}",
       "fiveHour": "5 h",
       "week": "sem.",
+      "toolsUnreadable": "Outils d’IA non lus · Réessayer",
       "version": "Version"
     },
     "account": {
       "version": "Version {{version}}"
-    }
+    },
+    "collapse": "Réduire la navigation",
+    "expand": "Développer la navigation",
+    "openNavigation": "Ouvrir la navigation",
+    "closeNavigation": "Fermer la navigation"
+  },
+  "places": {
+    "now": "Accueil",
+    "sessions": "Sessions",
+    "files": "Fichiers et espaces",
+    "work": "Travail et communications",
+    "ai-tools": "Outils d’IA",
+    "models": "Modèles",
+    "mcp-skills": "MCP et compétences",
+    "sources": "Sources",
+    "rules": "Règles et approbations",
+    "usage": "Usage et coût",
+    "activity": "Activité et audit",
+    "access": "Carte des accès",
+    "people": "Personnes et groupes",
+    "security": "Sécurité",
+    "operations": "Exploitation",
+    "license": "Licence",
+    "settings": "Paramètres"
+  },
+  "groups": {
+    "work": "Travail",
+    "tools": "Outils",
+    "control": "Contrôle",
+    "admin": "Administration"
   }
 }

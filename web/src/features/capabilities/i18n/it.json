@@ -188,8 +188,7 @@
     },
     "server": {
       "title": "Nessun server MCP rilevato",
-      "description": "I server MCP compaiono quando le osservazioni dei connettori li identificano nell'inventario del tenant.",
-      "action": "Aggiungi o prova un server in Server MCP"
+      "description": "I server MCP compaiono quando le osservazioni dei connettori li identificano nell'inventario del tenant."
     },
     "skill": {
       "title": "Nessuna skill rilevata",

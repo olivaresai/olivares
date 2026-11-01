@@ -410,7 +410,7 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 		target = appliedProbeTarget(o.dataDir, pub, image)
 		targetIsSelf = target == image
 	}
-	// THE PACKAGE MANAGER OWNS THIS FILE (dev#2426). On a package install (deb,
+	// THE PACKAGE MANAGER OWNS THIS FILE. On a package install (deb,
 	// rpm, apk, AUR) run as root /usr/bin/olivares is writable, so the swap below would succeed and
 	// leave the package database describing a file it no longer has (`rpm -V`
 	// fails; the next package upgrade silently overwrites the swapped binary).

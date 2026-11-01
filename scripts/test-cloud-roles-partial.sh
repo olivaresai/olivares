@@ -30,7 +30,7 @@
 # postconditions: WHICH database received the bootstrap. That is what lets a misrouted `-f` be
 # rejected by the step's own target validation instead of by a stub that declined to answer.
 #
-# CORRECTION 1 (2026-09-10) ADDS THE DECODER SEAM. Root's owned probe showed that the inline
+# CORRECTION 1 (2026-09-10) ADDS THE DECODER SEAM. the maintainer's owned probe showed that the inline
 # validator read observations with errors="replace", so two ACL observations differing in one
 # byte -- 0xFF against 0xFE -- decoded to the same U+FFFD string and the maintenance comparison
 # passed on inputs whose bytes differ. The reader now decodes strict UTF-8. The controls below
@@ -196,7 +196,7 @@ db_json() { # <oid> <name> <owner> <datacl_is_null> <datacl> <connect> <create> 
 }
 # A database with a NULL datacl is not a database without privileges: the built-in default
 # gives PUBLIC CONNECT and TEMPORARY, which is exactly what this step has to preserve.
-# Root's retained malformed probe, byte for byte. %b turns the octal escape into the raw
+# the maintainer's retained malformed probe, byte for byte. %b turns the octal escape into the raw
 # byte, so the step reads the sequence root recorded rather than a lookalike.
 probe_obs() { # <octal escape of the invalid byte>
   printf '{"oid":5,"database":"postgres","owner":"postgres","datacl_is_null":false,"datacl":"{%b}","public_connect":true,"public_create":false,"public_temporary":true}\n' "$1"
@@ -656,7 +656,7 @@ mutant_dies(){ # <etiqueta> <kind>  ; 0 muere · 1 SOBREVIVE · 2 la mutacion no
       # and postgres carries the cloud objects. No text comparison is involved.
       run_case M 1 1 "$MB"; [ "$CASE_RC" = 0 ] || { printf 'KILLED %s (the step postconditions reject it)\n' "$1"; return 0; } ;;
     decodificacion-por-reemplazo)
-      # Root's finding, reproduced end to end through the real step. With replacement
+      # the maintainer's finding, reproduced end to end through the real step. With replacement
       # decoding the two halves of the probe pair collapse to one string, the maintenance
       # comparison passes and the step publishes. The kill is that the malformed control
       # stops failing; the emitted bytes are what make it a finding rather than a claim.

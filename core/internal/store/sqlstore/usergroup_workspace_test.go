@@ -118,8 +118,9 @@ func TestUserGroupPlaceLeavesTheOtherColumnsAlone(t *testing.T) {
 }
 
 // TestUserGroupWorkspaceMigrationUpgradesAV26Store rebuilds the v26 shape (no
-// place column, no v27 record) under existing rows and reopens: v27 adds the
-// column and its index, keeps the rows, and a group can then be placed.
+// place column, no session inventory columns, no v27-or-later record) under
+// existing rows and reopens: v27 adds the place column and its index, v28 adds
+// the session inventory columns, keeps the rows, and a group can then be placed.
 func TestUserGroupWorkspaceMigrationUpgradesAV26Store(t *testing.T) {
 	workspaceTreeEngines(t, func(t *testing.T, st store.Store, cfg store.Config) {
 		ctx := context.Background()
@@ -141,7 +142,11 @@ func TestUserGroupWorkspaceMigrationUpgradesAV26Store(t *testing.T) {
 		for _, stmt := range []string{
 			"DROP INDEX user_groups_workspace_id_idx",
 			"ALTER TABLE user_groups DROP COLUMN workspace_id",
-			"DELETE FROM schema_migrations_core WHERE version=27",
+			"DELETE FROM schema_migrations_core WHERE version>=27",
+			"ALTER TABLE auth_sessions DROP COLUMN last_used_at",
+			"ALTER TABLE auth_sessions DROP COLUMN client_kind",
+			"ALTER TABLE auth_sessions DROP COLUMN device_name",
+			"ALTER TABLE auth_sessions DROP COLUMN pairing_source_id",
 		} {
 			if _, err := db.Exec(stmt); err != nil {
 				t.Fatalf("%s: %v", stmt, err)

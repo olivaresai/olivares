@@ -20,6 +20,7 @@ import { ForbiddenState } from '@/components/ui/error-state'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
+import { useModuleOn } from '@/stores/modules'
 import { ToolAnnotations } from './annotations'
 import { capabilitiesApi, capabilitiesKeys } from './api'
 import { ConfigEditorDialog } from './config-editor'
@@ -28,8 +29,18 @@ import { WiringGraph } from './wiring-graph'
 import './i18n'
 import type { ConfigDTO, ServerDTO, SkillDTO, ToolDTO } from './types'
 import { ListTruncationBadge } from '@/features/_intel'
+import { MCPGatewayTab } from '@/features/console/mcp-gateway-tab'
+import { SkillsView } from '@/features/skills/skills-view'
 import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { useOfferedPanels } from '@/features/panels'
+
+/** The tab an address names (`?tab=`), read once like the other views' tabs: the Tools
+ * fold lands /mcp-servers on Servers and /skills on Skills (#3388). */
+function tabFromURL(offered: readonly string[]): string {
+  if (typeof window === 'undefined') return 'servers'
+  const want = new URLSearchParams(window.location.search).get('tab')
+  return want && offered.includes(want) ? want : 'servers'
+}
 
 export default function CapabilitiesView() {
   const { t } = useTranslation(['capabilities', 'common', 'intel'])
@@ -38,8 +49,20 @@ export default function CapabilitiesView() {
   const canWriteConfig = can('capabilities:config:write')
   const canReadConfig = can('capabilities:config:read')
   const extensionTabs = useOfferedPanels(PANEL_EXTENSIONS.capabilitiesTabs)
+  // The pack catalog is the skills module's part of this page (#3388): it follows that
+  // module's switch, as its own page did.
+  const skillsOn = useModuleOn('skills')
 
-  const [tab, setTab] = useState('servers')
+  const [tab, setTab] = useState(() =>
+    tabFromURL([
+      'servers',
+      'tools',
+      'skills',
+      'wiring',
+      ...(canReadConfig ? ['configs'] : []),
+      ...extensionTabs.map((p) => p.id),
+    ]),
+  )
   const [selectedServer, setSelectedServer] = useState<string | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
@@ -293,7 +316,11 @@ export default function CapabilitiesView() {
           )}
         </TabsList>
 
-        <TabsContent value="servers">
+        <TabsContent value="servers" className="flex flex-col gap-4">
+          {/* ONE MCP SERVERS DESTINATION (#3388): a server is added, tested and enabled
+              here (the tenant gateway, a tenant administrator's), above the servers the
+              inventory discovered. */}
+          {can('tenant:admin') ? <MCPGatewayTab titled={false} /> : null}
           <ListTruncationBadge
             query={servers}
             // ⛔ CLAVE PROPIA, NO LA COMPARTIDA. La compartida dice «Loaded {{n}} rows» y esta
@@ -325,15 +352,6 @@ export default function CapabilitiesView() {
               <EmptyState
                 title={t('empty.server.title')}
                 description={t('empty.server.description')}
-                action={
-                  // Servers are added, tested and enabled on MCP servers (HU 025);
-                  // this catalog lists what connectors discovered.
-                  can('tenant:admin') ? (
-                    <Button asChild variant="secondary" size="sm">
-                      <a href="/mcp-servers">{t('empty.server.action')}</a>
-                    </Button>
-                  ) : undefined
-                }
               />
             }
           />
@@ -380,7 +398,12 @@ export default function CapabilitiesView() {
           </TabsContent>
         ))}
 
-        <TabsContent value="skills">
+        <TabsContent value="skills" className="flex flex-col gap-4">
+          {/* ONE SKILLS DESTINATION (#3388): the pack catalog (install, open, assign) for a
+              skills reader, above the skills the inventory found. */}
+          {skillsOn && can('skills:catalog:read') ? (
+            <SkillsView titled={false} />
+          ) : null}
           <ListTruncationBadge
             query={skills}
             label={t('skills.truncated', {

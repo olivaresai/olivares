@@ -15,11 +15,16 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
 // The CLI and booted engine use real HTTP, SQLite and git. Only the provider
-// process is the existing labelled protocol fixture; setup never executes.
+// process is the existing labelled protocol fixture. An approved setup does run,
+// confined to the session worktree: the marker sits outside it, so the write is refused.
 func TestWorkspaceSetupCLIJourneyUsesEngineApprovalAndStartGuard(t *testing.T) {
+	if s := confine.Probe(); s.Mode != confine.ModeLandlock {
+		t.Fatal("this journey requires Landlock: " + s.Reason)
+	}
 	s := bootStubSessionEngine(t, false)
 	if err := os.WriteFile(filepath.Join(s.folder, "README"), []byte("setup journey\n"), 0600); err != nil {
 		t.Fatal(err)
@@ -81,10 +86,19 @@ func TestWorkspaceSetupCLIJourneyUsesEngineApprovalAndStartGuard(t *testing.T) {
 			t.Fatalf("unapproved command started or lost next step: %v", err)
 		}
 	}
+	// The approved setup runs before the first turn, under the session's confinement, so its
+	// write outside the worktree is refused and the start stops with the setup's status. The
+	// success path (an approved setup that writes inside the worktree) closes this test.
+	confined := func() {
+		t.Helper()
+		_, err := run(start...)
+		if err == nil || !strings.Contains(err.Error(), "exited with status 1;") || !strings.Contains(err.Error(), "Permission denied") {
+			t.Fatalf("approved setup was not stopped by its confinement: %v", err)
+		}
+	}
 	refuse()
 	success("agent", "workspace", "approve-setup", ref, "--sha256", hash)
-	started := success(start...)
-	s.do("POST", "/v1/m/sessions/runs/"+started["run_ref"].(string)+"/stop", nil, http.StatusOK)
+	confined()
 	changed := set(command + " ")
 	if out, err := run("agent", "workspace", "setup", ref); err != nil || !strings.Contains(out, "Approval: required") {
 		t.Fatalf("changed text still displayed as approved: %v %s", err, out)
@@ -94,9 +108,33 @@ func TestWorkspaceSetupCLIJourneyUsesEngineApprovalAndStartGuard(t *testing.T) {
 		t.Fatalf("stale text approved: %v", err)
 	}
 	success("agent", "workspace", "approve-setup", ref, "--sha256", changed["setup_command_sha256"].(string))
-	started = success(start...)
-	s.do("POST", "/v1/m/sessions/runs/"+started["run_ref"].(string)+"/stop", nil, http.StatusOK)
+	confined()
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
-		t.Fatalf("setup command executed: %v", err)
+		t.Fatalf("setup command wrote outside its worktree: %v", err)
 	}
+	// An approved setup that writes inside the worktree passes the same confinement, so the start succeeds.
+	inside := set("touch setup-ran")
+	success("agent", "workspace", "approve-setup", ref, "--sha256", inside["setup_command_sha256"].(string))
+	started := success(start...)
+	// The write landed inside the session's linked worktree, and nowhere else.
+	list, err := exec.Command("git", "-C", s.folder, "worktree", "list", "--porcelain").CombinedOutput()
+	if err != nil {
+		t.Fatalf("git worktree list: %v %s", err, list)
+	}
+	sessionWorktree := ""
+	for _, line := range strings.Split(string(list), "\n") {
+		if path := strings.TrimPrefix(line, "worktree "); path != line && path != s.folder {
+			sessionWorktree = path
+		}
+	}
+	if sessionWorktree == "" {
+		t.Fatal("the session started without a linked worktree")
+	}
+	if _, err := os.Stat(filepath.Join(sessionWorktree, "setup-ran")); err != nil {
+		t.Fatalf("the approved setup did not write inside its worktree: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(s.folder, "setup-ran")); !os.IsNotExist(err) {
+		t.Fatal("the approved setup wrote outside its worktree")
+	}
+	s.do("POST", "/v1/m/sessions/runs/"+started["run_ref"].(string)+"/stop", nil, http.StatusOK)
 }

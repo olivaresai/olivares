@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -85,6 +86,29 @@ func TestClaudeHookHostPolicyAcceptsPublishedManagedPEP(t *testing.T) {
 	}
 }
 
+// the regression: managed settings end the PEP hook command with || exit 2 (deny closed). A host
+// that deploys them must still launch Olivares sessions; any other shell operator after the
+// command is still refused.
+func TestClaudeHookHostPolicyAcceptsTheDenyClosedManagedPEP(t *testing.T) {
+	for command, accepted := range map[string]bool{
+		"olivares claude-hook || exit 2":                         true,
+		"olivares claude-hook --hook-event PreToolUse || exit 2": true,
+		"olivares claude-hook || exit 3":                         false,
+		"olivares claude-hook || true":                           false,
+		"olivares claude-hook; exit 2":                           false,
+		"olivares claude-hook || exit 2 || true":                 false,
+	} {
+		dir := t.TempDir()
+		doc := `{"allowManagedHooksOnly":true,"hooks":{"PreToolUse":[{"matcher":"","hooks":[{"type":"command","command":` + strconv.Quote(command) + `}]}]}}`
+		if err := os.WriteFile(filepath.Join(dir, "managed-settings.json"), []byte(doc), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := checkClaudeHookHostPolicyDir(dir); (err == nil) != accepted {
+			t.Fatalf("%q: accepted=%v, want %v (%v)", command, err == nil, accepted, err)
+		}
+	}
+}
+
 // The child reads managed settings from the directory the check read: the variable that could
 // move it is never handed to the child, and its path is never made readable (Root 2026-10-03
 // 00:5xZ). Before, the engine forwarded its own value, so a Claude Code that honoured it would
@@ -151,7 +175,7 @@ func TestConfigureClaudeHookPEPExcludesMutableHookSources(t *testing.T) {
 }
 
 // Claude Code 2.1.288 reads only the system managed directory, so the check does too: a
-// CLAUDE_CODE_MANAGED_SETTINGS_PATH in the engine's environment does not move it (SR2C 071).
+// CLAUDE_CODE_MANAGED_SETTINGS_PATH in the engine's environment does not move it (review 071).
 func TestClaudeManagedSettingsCheckIgnoresTheOverrideVariable(t *testing.T) {
 	system := t.TempDir()
 	useClaudeManagedSettingsDir(t, system)

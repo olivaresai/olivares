@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -651,7 +650,7 @@ func (b *storePreparation) openPrepared(ctx context.Context, cfg store.Config, r
 	}
 
 	reg := newRegistry()
-	for _, d := range coreDescriptors() {
+	for _, d := range currentCoreDescriptors() {
 		if err := reg.registerCore(d); err != nil {
 			return fmt.Errorf("sqlstore: core registry: %w", err)
 		}
@@ -1016,6 +1015,7 @@ func (b *storePreparation) openPrepared(ctx context.Context, cfg store.Config, r
 		if err := migrate.Apply(ctx, mdb, dia, coreTrackingTable, []migrate.Migration{
 			coreFederationDataMigration(dia), coreAuditSchemaMigration(dia), coreAuditTreeMigration(dia),
 			coreWorkspaceTreeMigration(dia), coreAuditTreeGuardMigration(dia), coreUserGroupWorkspaceMigration(dia),
+			coreAuthSessionInventoryMigration(dia), coreGroupDerivedTokenRoleMigration(dia),
 		}); err != nil {
 			return fmt.Errorf("sqlstore: core reconciliation migrations: %w", err)
 		}
@@ -1603,6 +1603,7 @@ var sqlitePragmas = []string{
 	"foreign_keys(1)",
 	"journal_mode(WAL)",
 	"recursive_triggers(1)",
+	opgate.SQLiteTempStoreMemory,
 }
 
 // openSQLite resolves a DSN through the one authority and opens it.
@@ -1627,18 +1628,8 @@ func openSQLiteTarget(target opgate.SQLiteTarget) (*sql.DB, error) {
 		// explicitly, so this is a floor and not the place the default is decided.
 		dsn = ":memory:"
 	}
-	var params strings.Builder
-	sep := "?"
-	if strings.ContainsRune(dsn, '?') {
-		sep = "&"
-	}
-	for _, pragma := range sqlitePragmas {
-		params.WriteString(sep)
-		params.WriteString("_pragma=")
-		params.WriteString(url.QueryEscape(pragma))
-		sep = "&"
-	}
-	db, err := sql.Open("sqlite", dsn+params.String())
+	dsn = opgate.SQLiteDSNWithPragmas(dsn, sqlitePragmas...)
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
 	}
@@ -1897,13 +1888,13 @@ func (s *sqlStore) view(ctx context.Context, tenant model.TenantID, fn func(stor
 	}
 	tx, err := s.db.BeginTx(ctx, viewTxOptions(s.engine))
 	if err != nil {
-		return err
+		return viewBeginErr(ctx, err)
 	}
 	defer tx.Rollback() //nolint:errcheck // View intentionally never commits
 	// Offline SQLite reads use tenant predicates without writing the scope table.
 	if bindSQLite || s.engine == store.EnginePostgres {
 		if err := s.dia.BindTenant(ctx, tx, tenant); err != nil {
-			return err
+			return viewBeginErr(ctx, err)
 		}
 	}
 	scope := &tenantScope{s: s, tx: tx, tenant: tenant, readOnly: true}
@@ -1921,10 +1912,11 @@ func (s *sqlStore) view(ctx context.Context, tenant model.TenantID, fn func(stor
 // Mutate runs fn in a tenant-pinned read-write transaction, committing on
 // success and rolling back on any error. Every SQL error return — BeginTx,
 // BindTenant, the callback's pass-through, Commit — goes through
-// wrapUnavailableErr (round-3 item 2): a connection-level failure is
-// wrapped in store.ErrStoreUnavailable (cause-preserving multi-%w), everything
-// else passes through untouched. Wrapping only; the transactional shape is
-// unchanged.
+// wrapUnavailableErr (round-3 item 2), and BeginTx and the directory bind
+// go through wrapBeginErr, which adds the pool-reset shapes: a
+// connection-level failure is wrapped in store.ErrStoreUnavailable
+// (cause-preserving multi-%w), everything else passes through untouched.
+// Wrapping only; the transactional shape is unchanged.
 //
 // The COMMIT itself goes through mutateCommitOutcomeErr, which adds
 // store.ErrCommitOutcomeUnknown IN FRONT of that same chain when the outcome was
@@ -1945,11 +1937,11 @@ func (s *sqlStore) Mutate(ctx context.Context, tenant model.TenantID, fn func(st
 	}
 	tx, err := s.db.BeginTx(ctx, directoryWriterTxOptions(s.dia))
 	if err != nil {
-		return wrapUnavailableErr(err)
+		return wrapBeginErr(err)
 	}
 	defer tx.Rollback() //nolint:errcheck // no-op after a successful commit
 	if err := bindDirectoryTenant(ctx, tx, s.dia, tenant); err != nil {
-		return wrapUnavailableErr(err)
+		return wrapBeginErr(err)
 	}
 	lineage := newLineageWriteTracker(tx, s.dia, false)
 	if err := lineage.start(ctx, tenant); err != nil {
@@ -2061,12 +2053,12 @@ func (e *exportScope) Ext(kind model.Kind) (store.GenericRepo, error) { return e
 func (s *sqlStore) System(ctx context.Context, fn func(store.SystemScope) error) (retErr error) {
 	conn, err := s.db.Conn(ctx)
 	if err != nil {
-		return err
+		return viewBeginErr(ctx, err)
 	}
 	defer conn.Close() //nolint:errcheck // operation error is authoritative
 	tx, err := conn.BeginTx(ctx, directoryWriterTxOptions(s.dia))
 	if err != nil {
-		return err
+		return viewBeginErr(ctx, err)
 	}
 	needsRestore := false
 	committed := false

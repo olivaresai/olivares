@@ -23,6 +23,8 @@ const (
 	coreWorkspaceTreeMigrationVersion  = 25
 	coreAuditTreeGuardMigrationVersion = 26
 	coreUserGroupWorkspaceVersion      = 27
+	coreAuthSessionInventoryVersion    = 28
+	coreGroupDerivedTokenRoleVersion   = 29
 )
 
 // The deployed prefix keeps its guard-edition barrier. Versions appended here
@@ -216,6 +218,72 @@ func userGroupWorkspaceV27() model.EntityDescriptor {
 	})
 	d.Indexes = nil
 	return d
+}
+
+// coreAuthSessionInventoryMigration adds observed-use metadata without
+// inventing any history. Existing rows keep NULL kind and last-used values.
+func coreAuthSessionInventoryMigration(dia dialect.Dialect) migrate.Migration {
+	return migrate.Migration{Version: coreAuthSessionInventoryVersion, Name: "auth_session_inventory", Exec: func(ctx context.Context, tx *sql.Tx) error {
+		have, err := dia.TableColumns(ctx, tx, authSessionDescriptor.Table)
+		if err != nil {
+			return fmt.Errorf("introspect %q: %w", authSessionDescriptor.Table, err)
+		}
+		if !have["selector"] {
+			return fmt.Errorf("%q is absent or lacks its selector: refusing to record v%d", authSessionDescriptor.Table, coreAuthSessionInventoryVersion)
+		}
+		return reconcileColumnsTx(ctx, tx, dia, []model.EntityDescriptor{authSessionInventoryV28()})
+	}}
+}
+
+// authSessionInventoryV28 is the migration's frozen input: only the columns v28
+// owns. Any later auth-session field needs another numbered migration.
+func authSessionInventoryV28() model.EntityDescriptor {
+	d := authSessionDescriptorV28
+	d.Fields = slices.DeleteFunc(slices.Clone(d.Fields), func(f model.FieldSpec) bool {
+		return f.Name != "last_used_at" && f.Name != "client_kind" && f.Name != "device_name" && f.Name != "pairing_source_id"
+	})
+	d.Indexes = nil
+	return d
+}
+
+// v29 adds issue-time token-role provenance and backfills only legacy rows
+// whose current roster proves a group elevation; every other row stays direct.
+func coreGroupDerivedTokenRoleMigration(dia dialect.Dialect) migrate.Migration {
+	return migrate.Migration{Version: coreGroupDerivedTokenRoleVersion, Name: "api_token_group_derived_role", Exec: func(ctx context.Context, tx *sql.Tx) error {
+		have, err := dia.TableColumns(ctx, tx, apiTokenDescriptor.Table)
+		if err != nil {
+			return fmt.Errorf("introspect %q: %w", apiTokenDescriptor.Table, err)
+		}
+		if !have["role"] {
+			return fmt.Errorf("%q is absent or lacks its role: refusing to record v%d", apiTokenDescriptor.Table, coreGroupDerivedTokenRoleVersion)
+		}
+		if !have["group_derived_role"] {
+			if _, err := tx.ExecContext(ctx, "ALTER TABLE api_tokens ADD COLUMN group_derived_role BOOLEAN NOT NULL DEFAULT FALSE"); err != nil {
+				return fmt.Errorf("add %q.group_derived_role: %w", apiTokenDescriptor.Table, err)
+			}
+		}
+		// Backfill only rows whose current roster proves a group elevation: the
+		// token outranks its owner's direct role and a current group in the same
+		// tenant maps at least the token's role. Every other legacy row stays direct.
+		if err := dia.BindTenant(ctx, tx, model.SystemTenantID); err != nil {
+			return fmt.Errorf("bind auth partition: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE api_tokens SET group_derived_role = TRUE
+			WHERE (purpose IS NULL OR purpose = '') AND is_superadmin = FALSE
+			AND EXISTS (
+				SELECT 1 FROM memberships m
+				JOIN user_group_members gm ON gm.user_id = api_tokens.user_id
+				JOIN user_groups g ON g.id = gm.group_id AND g.target_tenant_id = api_tokens.bound_tenant_id
+				WHERE m.user_id = api_tokens.user_id AND m.target_tenant_id = api_tokens.bound_tenant_id
+				AND CASE m.role WHEN 'viewer' THEN 1 WHEN 'editor' THEN 2 WHEN 'admin' THEN 3 WHEN 'owner' THEN 4 ELSE 0 END
+					< CASE api_tokens.role WHEN 'viewer' THEN 1 WHEN 'editor' THEN 2 WHEN 'admin' THEN 3 WHEN 'owner' THEN 4 ELSE 0 END
+				AND CASE g.mapped_role WHEN 'viewer' THEN 1 WHEN 'editor' THEN 2 WHEN 'admin' THEN 3 WHEN 'owner' THEN 4 ELSE 0 END
+					>= CASE api_tokens.role WHEN 'viewer' THEN 1 WHEN 'editor' THEN 2 WHEN 'admin' THEN 3 WHEN 'owner' THEN 4 ELSE 0 END
+			)`); err != nil {
+			return fmt.Errorf("backfill %q.group_derived_role: %w", apiTokenDescriptor.Table, err)
+		}
+		return nil
+	}}
 }
 
 func reconcileVersionedDirectoryGuards(ctx context.Context, tx *sql.Tx, dia dialect.Dialect, state directoryWriterControlState) error {

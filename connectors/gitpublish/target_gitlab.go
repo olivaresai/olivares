@@ -13,10 +13,12 @@ type gitlabTargetKind struct{}
 type gitlabTargetBinding struct{ apiTargetBinding }
 
 func (gitlabTargetKind) bind(cfg map[string]string) (TargetRow, error) {
-	return targetRow(cfg, cfg["group"], gitlabTargetBinding{apiTarget(cfg, gitlabsrc.DefaultAPIBase)}), nil
+	b := gitlabTargetBinding{apiTargetBinding: apiTarget(cfg, gitlabsrc.DefaultAPIBase)}
+	b.webBase = b.base
+	return targetRow(cfg, cfg["group"], b), nil
 }
 func (gitlabTargetKind) capabilities() TargetCapabilities {
-	return TargetCapabilities{Effects: []Effect{EffectPush, EffectPullRequest, EffectMerge, EffectObserve}, MergeMethods: []string{"merge", "squash"}, CIPaths: []string{".gitlab-ci.yml"}}
+	return TargetCapabilities{Effects: []Effect{EffectPush, EffectPullRequest, EffectMerge, EffectIssueComment, EffectObserve}, MergeMethods: []string{"merge", "squash"}, CIPaths: []string{".gitlab-ci.yml"}}
 }
 func (gitlabTargetKind) diffSource() DiffSource { return gitlabDiffSource{gitlabsrc.New()} }
 func (b gitlabTargetBinding) open(repo TargetRepository, credential Secret, deps HostDependencies) (Host, error) {

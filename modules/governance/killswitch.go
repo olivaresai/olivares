@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -395,6 +396,27 @@ func (m *Module) engageKillSwitchLocked(ctx context.Context, sc store.Scope, p k
 // stay pending and are denied at dispatch by the stop gates instead; honest
 // coverage, not a pretend cancel).
 func (m *Module) cancelActuationApprovals(ctx context.Context, sc store.Scope, p ksEngageParams, agentID, agentExternal string, now model.Timestamp) ([]string, error) {
+	refs := map[string]struct{}{}
+	for _, r := range []string{strings.TrimSpace(p.ScopeRef), agentID, agentExternal} {
+		if r != "" {
+			refs[r] = struct{}{}
+		}
+	}
+	return m.cancelPendingApprovals(ctx, sc, now, true, func(rec model.Record) bool {
+		_, actuation := ksActuationActions[rec.String(colAction)]
+		sessionRequest := p.ScopeKind == ksScopeEstate && ksSessionRequest(rec)
+		if !actuation && !sessionRequest {
+			return false
+		}
+		if p.ScopeKind == ksScopeAgent && !ksApprovalSubjectMatches(rec, refs) {
+			return false
+		}
+		return true
+	})
+}
+
+// cancelPendingApprovals is the shared durable cancellation path for estate and session stops.
+func (m *Module) cancelPendingApprovals(ctx context.Context, sc store.Scope, now model.Timestamp, tolerateDecisionRace bool, matches func(model.Record) bool) ([]string, error) {
 	repo, err := sc.Ext(approvalKind)
 	if err != nil {
 		return nil, err
@@ -403,29 +425,15 @@ func (m *Module) cancelActuationApprovals(ctx context.Context, sc store.Scope, p
 	if err != nil {
 		return nil, err
 	}
-	refs := map[string]struct{}{}
-	for _, r := range []string{strings.TrimSpace(p.ScopeRef), agentID, agentExternal} {
-		if r != "" {
-			refs[r] = struct{}{}
-		}
-	}
 	var canceled []string
 	for _, rec := range pending {
-		_, actuation := ksActuationActions[rec.String(colAction)]
-		sessionRequest := p.ScopeKind == ksScopeEstate && ksSessionRequest(rec)
-		if !actuation && !sessionRequest {
-			continue
-		}
-		if effectiveStatus(rec, now) != statusPending {
-			continue // lazily expired; nothing to revoke
-		}
-		if p.ScopeKind == ksScopeAgent && !ksApprovalSubjectMatches(rec, refs) {
+		if !matches(rec) || effectiveStatus(rec, now) != statusPending {
 			continue
 		}
 		rec[colStatus] = statusCanceled
 		rec[colDecidedAt] = now.String()
 		if _, uerr := repo.Update(ctx, rec); uerr != nil {
-			if isConflict(uerr) {
+			if tolerateDecisionRace && isConflict(uerr) {
 				continue // raced with a decision; no longer pending — the gates still deny
 			}
 			return nil, uerr
@@ -642,6 +650,49 @@ func (m *Module) handleKillSwitchState(w http.ResponseWriter, r *http.Request, m
 	writeJSON(w, http.StatusOK, out)
 }
 
+// distinctReenableApprovers counts the humans who actively approved one request.
+// The structural floor uses this both before and inside the spend transaction.
+func distinctReenableApprovers(ctx context.Context, sc store.Scope, approvalID model.ID) (int, error) {
+	decRepo, err := sc.Ext(decisionKind)
+	if err != nil {
+		return 0, err
+	}
+	decs, err := listAll(ctx, decRepo, eq(colApprovalID, approvalID.String()))
+	if err != nil {
+		return 0, err
+	}
+	approvers := map[string]struct{}{}
+	for _, d := range decs {
+		if d.String(colDecision) == decisionApprove {
+			if u := d.String(colDeciderUser); u != "" {
+				approvers[u] = struct{}{}
+			}
+		}
+	}
+	return len(approvers), nil
+}
+
+// detachReenableApproval unbinds a spent re-enable approval from its stop, so the next
+// request opens a fresh dual-control quorum, and records why in the ledger.
+func detachReenableApproval(ctx context.Context, sc store.Scope, mc api.ModuleContext, repo store.GenericRepo, rec model.Record, stopID model.ID, approvalID, reason string) error {
+	rec[colKSReenableAppr] = nil
+	if _, err := repo.Update(ctx, rec); err != nil {
+		return err
+	}
+	_, err := sc.Audit().Append(ctx, model.AuditDraft{
+		Actor: mc.Principal.Actor(), ActorKind: mc.Principal.ActorKind(),
+		Action: "governance.killswitch.reenable.approval.detach", TargetKind: killSwitchKind, TargetID: stopID,
+		Meta: map[string]any{"approval": approvalID, "reason": reason},
+	})
+	return err
+}
+
+// reenableFloorRefusal is the sentence for a request that reached approved with fewer
+// than ksReenableFloor distinct human approvers.
+func reenableFloorRefusal(approvers int) string {
+	return "dual-control floor: re-enable requires approval by at least 2 distinct humans (an approval policy cannot lower this); distinct approvers on the spent request: " + strconv.Itoa(approvers) + " — retry to open a fresh dual-control request"
+}
+
 // reenableKillSwitchRequest carries the optional operator note for the
 // dual-control request the first POST opens.
 type reenableKillSwitchRequest struct {
@@ -692,10 +743,10 @@ func (m *Module) handleReenableKillSwitch(w http.ResponseWriter, r *http.Request
 		clientErr  string
 		clientCode int
 		clientCID  string
+		spend      model.ID
 	)
 	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
-		generation, err := lockKillSwitchGeneration(r.Context(), sc)
-		if err != nil {
+		if _, err := lockKillSwitchGeneration(r.Context(), sc); err != nil {
 			return err
 		}
 		repo, err := sc.Ext(killSwitchKind)
@@ -738,75 +789,23 @@ func (m *Module) handleReenableKillSwitch(w http.ResponseWriter, r *http.Request
 				pending, stopDTO = &dto, toKillSwitchDTO(rec)
 				return nil
 			case statusApproved:
-				// STRUCTURAL dual-control floor: count the distinct humans who
-				// actively APPROVED, in this same transaction. The engine already
-				// floors CRITICAL at 2 — this check holds even if an operator
-				// policy downgraded the tier ("never unilateral" is not tunable).
-				decRepo, derr := sc.Ext(decisionKind)
-				if derr != nil {
-					return derr
+				// Preserve the structural floor even for a corrupt legacy row that no
+				// longer meets the live tier. Such a request is spent and unbound, so
+				// the next call opens a fresh quorum instead of looping on it.
+				approvers, err := distinctReenableApprovers(r.Context(), sc, model.ID(appr.String(model.ColID)))
+				if err != nil {
+					return err
 				}
-				decs, derr := listAll(r.Context(), decRepo, eq(colApprovalID, appr.String(model.ColID)))
-				if derr != nil {
-					return derr
-				}
-				approvers := map[string]struct{}{}
-				for _, d := range decs {
-					if d.String(colDecision) == decisionApprove {
-						if u := d.String(colDeciderUser); u != "" {
-							approvers[u] = struct{}{}
-						}
+				if approvers < ksReenableFloor {
+					if err := detachReenableApproval(r.Context(), sc, mc, repo, rec, id, appr.String(model.ColID), "dual_control_required"); err != nil {
+						return err
 					}
-				}
-				if len(approvers) < ksReenableFloor {
-					// A downgraded approval policy let this request cross to approved
-					// with fewer than two humans. The floor is non-negotiable — and an
-					// APPROVED request can take no further decisions (it is terminal),
-					// so it is SPENT: unbind it (the next attempt opens a fresh
-					// dual-control request) and refuse, never silently flip.
-					rec[colKSReenableAppr] = nil
-					if _, uerr := repo.Update(r.Context(), rec); uerr != nil {
-						return uerr
-					}
-					clientErr = "dual-control floor: re-enable requires approval by at least 2 distinct humans (an approval policy cannot lower this); distinct approvers on the spent request: " + strconv.Itoa(len(approvers)) + " — retry to open a fresh dual-control request"
+					clientErr = reenableFloorRefusal(approvers)
 					clientCID, clientCode = "dual_control_required", http.StatusConflict
 					return nil
 				}
-				// Forced post-review backpressure: a prior incident of this scope
-				// still awaiting review blocks THIS re-enable (review it first).
-				scopeKey := ksScopeKey(rec.String(colKSScopeKind), rec.String(colKSScopeRef), rec.String(colKSAgentID))
-				if prior, found, ferr := findOne(r.Context(), repo, eq(colKSActiveGuard, "review:"+scopeKey)); ferr != nil {
-					return ferr
-				} else if found {
-					clientErr = "a prior incident for this scope (" + prior.String(model.ColID) + ") has not been post-reviewed; review it before re-enabling again"
-					clientCode = http.StatusConflict
-					return nil
-				}
-				if err := advanceKillSwitchGeneration(r.Context(), sc, generation); err != nil {
-					return err
-				}
-				sealed, aerr := sc.Audit().Append(r.Context(), model.AuditDraft{
-					Actor: mc.Principal.Actor(), ActorKind: mc.Principal.ActorKind(),
-					Action: "governance.killswitch.reenable", TargetKind: killSwitchKind, TargetID: id,
-					Meta: map[string]any{
-						"approval": appr.String(model.ColID), "distinct_approvers": len(approvers),
-					},
-				})
-				if aerr != nil {
-					return aerr
-				}
-				rec[colKSStatus] = ksStatusReenabled
-				rec[colKSReenabledBy] = mc.Principal.Actor()
-				rec[colKSReenabledUser] = mc.Principal.UserID.String()
-				rec[colKSReenabledAt] = now.String()
-				// Seq 0 = evidence dropped under the degrade spool policy (honest zero).
-				rec[colKSReenableSeq] = sealed.Seq
-				rec[colKSActiveGuard] = "review:" + scopeKey
-				rec, err = repo.Update(r.Context(), rec)
-				if err != nil {
-					return err // unique-index race on review:<scopeKey> maps to 409 below
-				}
-				reenabled, stopDTO = true, toKillSwitchDTO(rec)
+				// The shared spend path re-reads a bound change record before the act.
+				spend = model.ID(appr.String(model.ColID))
 				return nil
 			default:
 				// rejected / canceled / expired: that request is spent. Fall through
@@ -853,6 +852,136 @@ func (m *Module) handleReenableKillSwitch(w http.ResponseWriter, r *http.Request
 		}
 		writeStoreError(w, err)
 		return
+	}
+	if !spend.IsZero() {
+		consumption, spendErr := m.consumeApprovalAndAct(r.Context(), mc.Data, mc, spend, consumeApprovalRequest{
+			ConsumerID: "killswitch.reenable:" + id.String(),
+		}, func(ctx context.Context, sc store.Scope) error {
+			return lockKillSwitchTransaction(ctx, sc)
+		}, func(ctx context.Context, sc store.Scope, spent model.Record) error {
+			reenabled, stopDTO = false, killSwitchDTO{} // an attempt that rolled back leaves nothing behind
+			generation, err := lockKillSwitchGeneration(ctx, sc)
+			if err != nil {
+				return err
+			}
+			repo, err := sc.Ext(killSwitchKind)
+			if err != nil {
+				return err
+			}
+			rec, err := repo.Get(ctx, id)
+			if err != nil {
+				return err
+			}
+			if rec.String(colKSStatus) != ksStatusActive || rec.String(colKSReenableAppr) != spent.String(model.ColID) {
+				return approvalDecisionError{Status: http.StatusConflict, Message: "the stop or its re-enable approval changed; reload and retry"}
+			}
+			if spent.String(colAction) != ksReenableAction || spent.String(colSubjectKind) != "killswitch" || spent.String(colSubjectRef) != id.String() {
+				return approvalDecisionError{Status: http.StatusConflict, Message: "the re-enable approval does not match this stop"}
+			}
+
+			// STRUCTURAL dual-control floor: count the distinct humans who actively
+			// approved, in the same transaction as the spend and the flip.
+			approvers, err := distinctReenableApprovers(ctx, sc, model.ID(spent.String(model.ColID)))
+			if err != nil {
+				return err
+			}
+			if approvers < ksReenableFloor {
+				// Decisions are append-only and an approved request is terminal, so the
+				// count the preflight took cannot have dropped. This holds the floor at the
+				// flip anyway; the refusal rolls the spend back and the next request's
+				// preflight detaches the request.
+				return approvalDecisionError{Status: http.StatusConflict, Code: "dual_control_required", Message: reenableFloorRefusal(approvers)}
+			}
+
+			// Forced post-review backpressure: a prior incident of this scope still
+			// awaiting review blocks this re-enable. Returning an error also rolls back
+			// the spend, so the same approval can be used after that review lands.
+			scopeKey := ksScopeKey(rec.String(colKSScopeKind), rec.String(colKSScopeRef), rec.String(colKSAgentID))
+			if prior, found, err := findOne(ctx, repo, eq(colKSActiveGuard, "review:"+scopeKey)); err != nil {
+				return err
+			} else if found {
+				return approvalDecisionError{Status: http.StatusConflict, Message: "a prior incident for this scope (" + prior.String(model.ColID) + ") has not been post-reviewed; review it before re-enabling again"}
+			}
+			if err := advanceKillSwitchGeneration(ctx, sc, generation); err != nil {
+				return err
+			}
+			sealed, err := sc.Audit().Append(ctx, model.AuditDraft{
+				Actor: mc.Principal.Actor(), ActorKind: mc.Principal.ActorKind(),
+				Action: "governance.killswitch.reenable", TargetKind: killSwitchKind, TargetID: id,
+				Meta: map[string]any{
+					"approval": spent.String(model.ColID), "distinct_approvers": approvers,
+				},
+			})
+			if err != nil {
+				return err
+			}
+			rec[colKSStatus] = ksStatusReenabled
+			rec[colKSReenabledBy] = mc.Principal.Actor()
+			rec[colKSReenabledUser] = mc.Principal.UserID.String()
+			rec[colKSReenabledAt] = m.clock.Now().String()
+			// Seq 0 = evidence dropped under the degrade spool policy (honest zero).
+			rec[colKSReenableSeq] = sealed.Seq
+			rec[colKSActiveGuard] = "review:" + scopeKey
+			rec, err = repo.Update(ctx, rec)
+			if err != nil {
+				return err
+			}
+			reenabled, stopDTO = true, toKillSwitchDTO(rec)
+			return nil
+		})
+		if spendErr != nil {
+			var refusal approvalDecisionError
+			if errors.As(spendErr, &refusal) {
+				if refusal.Code == "" {
+					writeJSON(w, refusal.Status, errorBody(refusal.Message))
+				} else {
+					writeJSON(w, refusal.Status, errorBodyCode(refusal.Code, refusal.Message))
+				}
+				return
+			}
+			if isConflict(spendErr) {
+				writeJSON(w, http.StatusConflict, errorBody("a prior incident for this scope awaits post-review, or a concurrent re-enable won the race; reload the stop state"))
+				return
+			}
+			writeStoreError(w, spendErr)
+			return
+		}
+		if !consumption.Granted {
+			// A terminal or already-spent binding must not wedge the stop. Detach it
+			// when it is still the active stop's binding; the next call opens a fresh
+			// dual-control request. If another request already finished the stop, leave
+			// that result untouched.
+			if err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+				if err := lockKillSwitchTransaction(r.Context(), sc); err != nil {
+					return err
+				}
+				repo, err := sc.Ext(killSwitchKind)
+				if err != nil {
+					return err
+				}
+				rec, err := repo.Get(r.Context(), id)
+				if err != nil {
+					return err
+				}
+				if rec.String(colKSStatus) == ksStatusActive && rec.String(colKSReenableAppr) == spend.String() {
+					reason := consumption.Status
+					if consumption.Replay {
+						reason = "already_spent"
+					}
+					return detachReenableApproval(r.Context(), sc, mc, repo, rec, id, spend.String(), reason)
+				}
+				return nil
+			}); err != nil {
+				writeStoreError(w, err)
+				return
+			}
+			message := "approval is " + consumption.Status + "; retry to open a fresh dual-control request"
+			if consumption.Replay {
+				message = "approval was already spent; retry to open a fresh dual-control request"
+			}
+			writeJSON(w, http.StatusConflict, errorBody(message))
+			return
+		}
 	}
 	if reenabled {
 		m.emitKillSwitchFinding(r.Context(), mc.Tenant, findingKillSwitchReenabled, stopDTO.ID, stopDTO.ScopeKind, sdkmodel.SeverityMedium,

@@ -474,8 +474,8 @@ mQ="$T/mQ.py"
 python3 - "$GATE" "$mQ" <<'PY2'
 import sys
 src = open(sys.argv[1]).read()
-viejo = 'm = re.search(r"const VIEWS:\\s*\\{(.*?)\\}\\[\\]\\s*=", src_sin_prosa, re.S)'
-nuevo = 'm = re.search(r"const VIEWS:\\s*\\{(.*?)\\}\\[\\]\\s*=", src, re.S)  # MUTANTE: tipo en crudo'
+viejo = 'm = re.search(r"const " + nombre + r":\\s*\\{(.*?)\\}\\[\\]\\s*=", src_sin_prosa, re.S)'
+nuevo = 'm = re.search(r"const " + nombre + r":\\s*\\{(.*?)\\}\\[\\]\\s*=", src, re.S)  # MUTANTE: tipo en crudo'
 mut = src.replace(viejo, nuevo, 1)
 assert mut != src, "the raw-type mutant was not applied"
 compile(mut, "mQ", "exec")  # un mutante que no compila no acredita nada

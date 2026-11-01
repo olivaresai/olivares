@@ -6,7 +6,7 @@
 # the SHA-256 the workflow pins, and expose it on PATH for the following steps.
 #
 # Why this exists (measured, run 34854565361, 2026-09-14): `go install …@v3.51.1` compiled go-task
-# from source in every one of 15 jobs and took 4m00s–6m20s each (ci-runner-1..9); gitleaks took
+# from source in every one of 15 jobs and took 4m00s–6m20s each (build-host); gitleaks took
 # another 45–56 s. A pinned release tarball is ~5 MB and takes seconds, and these self-hosted
 # runners keep RUNNER_TOOL_CACHE between jobs, so the second job on a runner does not download.
 #
@@ -120,7 +120,7 @@ mkdir -p "$job_dir"
 tar -xzf "$cached" -C "$job_dir" "$binary"
 chmod 0755 "${job_dir}/${binary}"
 
-# Reaching is not installing (measured 2026-08-18 on ci-runner-2: a green install step and no
+# Reaching is not installing (measured 2026-08-18 on build-host: a green install step and no
 # `task` three steps later). Export the job directory for the following steps AND prove the
 # binary runs right now, from the exported location.
 echo "$job_dir" >> "${GITHUB_PATH:?GITHUB_PATH is not set}"

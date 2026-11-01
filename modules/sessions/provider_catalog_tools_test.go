@@ -23,6 +23,7 @@ type catalogToolPeer struct {
 	procs      []*catalogPeerProcess
 	grokOutput string
 	grokExit   int
+	launchErr  error
 	// openCodeOutput is what `opencode models --pure` prints (one provider/model per line).
 	openCodeOutput string
 	openCodeExit   int
@@ -108,6 +109,9 @@ func (p *catalogPeerProcess) Send(_ context.Context, line []byte) error {
 }
 func (p *catalogToolPeer) Launch(_ context.Context, spec LaunchSpec) (Process, error) {
 	p.specs = append(p.specs, spec)
+	if p.launchErr != nil {
+		return nil, p.launchErr
+	}
 	proc := &catalogPeerProcess{fakeProc: &fakeProc{out: make(chan OutputFrame, 16), stopped: make(chan struct{})}, peer: p}
 	p.procs = append(p.procs, proc)
 	if len(spec.Args) > 0 && spec.Args[0] == "auth" {
@@ -217,6 +221,44 @@ func TestAutomaticClaudeCatalogRefusesFailedSignInStatus(t *testing.T) {
 	}
 	if len(peer.specs) != 1 || len(peer.methods) != 0 {
 		t.Fatal("model discovery continued after sign-in status failed")
+	}
+}
+
+// Reading a model list must not execute user automation: the Claude catalog child
+// is a session with the user's hooks, MCP servers and settings sources off, the same
+// switches the provider snapshot's usage read passes. Without this pin, dropping one
+// of them is caught only by the live-tool test.
+func TestAutomaticClaudeCatalogRunsNoUserAutomation(t *testing.T) {
+	peer := &catalogToolPeer{t: t, signed: true}
+	m := New(WithRunner(peer))
+	m.UseToolLoginsRoot(t.TempDir())
+	tenant := model.TenantID(model.NewID())
+	_, configHome, _ := m.OwnToolLoginHomes(tenant, "claude")
+	if err := os.MkdirAll(configHome, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.ReadOwnToolLoginModels(context.Background(), tenant, "claude"); err != nil {
+		t.Fatal(err)
+	}
+	var session []string
+	for _, spec := range peer.specs {
+		if len(spec.Args) > 0 && spec.Args[0] != "auth" {
+			session = spec.Args
+		}
+	}
+	if session == nil {
+		t.Fatal("the Claude catalog never opened its initialize session")
+	}
+	joined := strings.Join(session, "\x00")
+	for _, want := range []string{
+		"--strict-mcp-config\x00--mcp-config\x00" + `{"mcpServers":{}}`,
+		"--setting-sources\x00\x00",
+		"--settings\x00" + `{"disableAllHooks":true}`,
+		"--no-session-persistence",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("the Claude catalog session lacks %q: %q", strings.ReplaceAll(want, "\x00", " "), session)
+		}
 	}
 }
 

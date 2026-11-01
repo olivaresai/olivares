@@ -313,6 +313,15 @@ type Options struct {
 	// exactly as it was: an embedder, a single-node engine and a legacy HA
 	// deployment (standbys drained by /readyz) are unaffected.
 	LeaderRouteGate bool
+	// EditionRouteGate is asked, once the caller is authenticated, about the route the
+	// router will serve: its method and its pattern as registered under /v1 (for example
+	// "POST", "/v1/m/deploy/definitions/{id}/apply"). Its error answers the request in place
+	// of the route, as StoreErrorBody renders it (the edition's licence refusal is 403
+	// addon_requires_license with the shared add-on sentence). An
+	// anonymous request is not asked about, so the route's own authentication answers it.
+	// Every caller of Handler passes it, the listener and the engine's in-process callers
+	// alike. nil (the default, and Community) asks nothing.
+	EditionRouteGate func(method, pattern string) error
 	// LogBroker is the engine-log viewer surface: a ring-buffer slog.Handler
 	// that captures log entries and broadcasts them via SSE to the console log
 	// viewer. When set the console can stream and query engine logs in real time;
@@ -428,6 +437,7 @@ type Server struct {
 	// secretStore: the runtime secret store backing /v1/console/secrets.
 	// nil = the secret endpoints answer 501 (not opted in).
 	secretStore *auth.SecretStore
+	applianceDR bool
 	// sourceRoster: the live source-reconfiguration surface backing the
 	// source CRUD + /v1/console/runtime/reload. nil = those endpoints answer 501.
 	sourceRoster SourceRoster
@@ -466,6 +476,9 @@ type Server struct {
 	// activation endpoints answer 501 (community build / not opted in).
 	activation  ActivationService
 	departments DepartmentService
+	// workspaceAdmin answers "administers this department" (a mounted module's
+	// WorkspaceAdministration); nil = only the owner creates under a parent.
+	workspaceAdmin WorkspaceAdministration
 	// moduleSelection is the module selection surface (nil = 501).
 	moduleSelection     ModuleSelectionService
 	updates             UpdateService
@@ -495,6 +508,8 @@ type Server struct {
 	// methods re-check leadership and answer 503 not_leader on a standby. Off by
 	// default — only the leader-routing HA layout arms it.
 	leaderRouteGate bool
+	// editionRouteGate: Options.EditionRouteGate (nil keeps editionRoutes out of the chain).
+	editionRouteGate func(method, pattern string) error
 	// deprecations: the route-deprecation table indexed for the request
 	// hot path; empty keeps the deprecationHeaders middleware out of the chain.
 	// mux is the built router, kept so the deprecation writer can resolve the
@@ -595,11 +610,13 @@ func New(opts Options) (*Server, error) {
 		jobsNotRunning:      opts.JobsNotRunning,
 		logBroker:           opts.LogBroker,
 		leaderRouteGate:     opts.LeaderRouteGate,
+		editionRouteGate:    opts.EditionRouteGate,
 	}
 	if s.log == nil {
 		s.log = slog.Default()
 	}
 	if opts.DR != nil {
+		s.applianceDR = opts.DR.Appliance
 		s.drSvc = newDRService(*opts.DR)
 		// Restore policy must load before DR is available; unreadable state
 		// disables DR without taking unrelated API services down.
@@ -727,6 +744,11 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	if s.leaderRouteGate {
 		mw = append(mw, s.leaderGate)
 	}
+	// The edition's route gate runs after authentication, so an anonymous request still
+	// gets its route's 401, and before the rate limiter, so a refusal spends no token.
+	if s.editionRouteGate != nil {
+		mw = append(mw, s.editionRoutes)
+	}
 	// The rate limiter runs after authenticate (it needs the principal) and
 	// before setupGate (it also shields the setup-gate store query); inserted only
 	// when configured (nil => unmetered, e.g. tests/embedders). It sits inside
@@ -788,9 +810,13 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 
 	v1.Route("/auth", func(r chi.Router) {
 		coreRoute(r, "POST", "/login", publicRoute, s.handleLogin)
-		coreRoute(r, "GET", "/browser-session", s.browserRoute, s.handleBrowserSession)
-		coreRoute(r, "POST", "/browser-session", s.browserRoute, s.handleBrowserSession)
+		coreRoute(r, "GET", "/browser-session", s.humanSessionRoute, s.handleBrowserSession)
+		coreRoute(r, "POST", "/browser-session", s.humanSessionRoute, s.handleBrowserSession)
 		coreRoute(r, "POST", "/logout", s.authenticatedRoute, s.handleLogout)
+		coreRoute(r, "GET", "/sessions", s.humanSessionRoute, s.handleAuthSessions)
+		coreRoute(r, "POST", "/sessions/pairing", s.humanSessionRoute, s.handleSessionPairing)
+		coreRoute(r, "POST", "/sessions/pairing/accept", publicRoute, s.handleSessionPairingAccept)
+		coreRoute(r, "DELETE", "/sessions/{id}", s.humanSessionRoute, s.handleAuthSessionDelete)
 		// Renew the calling session credential without a full re-login (rotates the
 		// token, extends expiry). Deny-closed for non-session principals.
 		coreRoute(r, "POST", "/refresh", s.authenticatedRoute, s.handleRefresh)
@@ -863,11 +889,12 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	// FASE X /: the scoping-plane console CRUD. Shipped the workspace and
 	// agent-group entities + store CRUD but no HTTP surface; these routes let the
 	// console manage them. Workspace has no DELETE (its lifecycle is Status:
-	// archiving, never delete, so scoped entities are not orphaned); creating one is
-	// owner-only + AAL3 (handlers_scoping.go).
+	// archiving, never delete, so scoped entities are not orphaned); creating a root
+	// is owner-only + AAL3, creating under a parent_id is admitted at that parent
+	// (workspaceCreateRoute, handlers_scoping.go).
 	v1.Route("/workspaces", func(r chi.Router) {
 		coreRoute(r, "GET", "/", s.tenantRoute("tenant:read"), s.handleListWorkspaces)
-		coreRoute(r, "POST", "/", s.tenantRoute("tenant:admin"), s.handleCreateWorkspace)
+		coreRoute(r, "POST", "/", s.workspaceCreateRoute(), s.handleCreateWorkspace)
 		coreRoute(r, "GET", "/{id}", s.entityRoute("tenant:read", "", "id"), s.handleGetWorkspace)
 		coreRoute(r, "PATCH", "/{id}", s.entityRoute("tenant:admin", "", "id"), s.handleUpdateWorkspace)
 		// C4.4: place a department under another one (or make it a root). Owner +
@@ -1028,6 +1055,7 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	// disaster-recovery console surface — backup trigger, list, download,
 	// restore, schedule, and job stream. Superadmin-gated (system:admin). The DR
 	// service is optional: nil ⇒ each handler answers 501 honestly.
+	coreRoute(v1, "POST", "/console/appliance/storage/authorize", s.systemRoute("system:admin"), s.handleAuthorizeStorage)
 	v1.Route("/console/dr", func(r chi.Router) {
 		coreRoute(r, "POST", "/backup", s.systemRoute("system:admin"), s.handleTriggerBackup)
 		coreRoute(r, "GET", "/backups", s.systemRoute("system:admin"), s.handleListBackups)
@@ -1082,10 +1110,11 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 		coreRoute(r, "POST", "/{id}/disable", s.systemRoute("user:write"), s.handleDisableSuperadmin)
 		coreRoute(r, "POST", "/{id}/enable", s.systemRoute("user:write"), s.handleEnableSuperadmin)
 		// an administrator's view and reset of another account's TOTP
-		// factor (tenant-scoped membership permission + AAL3, the onboarding
-		// gates — the population that may issue an invite may clear a factor).
+		// factor (tenant-scoped authenticator permission + AAL3; this grants
+		// no onboarding or membership writes).
 		coreRoute(r, "GET", "/{id}/totp", s.tenantRoute("membership:read"), s.handleUserTOTPStatus)
-		coreRoute(r, "POST", "/{id}/totp/reset", s.tenantRoute("membership:write"), s.handleUserTOTPReset)
+		coreRoute(r, "POST", "/{id}/totp/reset", s.tenantRoute(auth.PermAuthenticatorWrite), s.handleUserTOTPReset)
+		coreRoute(r, "DELETE", "/{id}/sessions", s.tenantRoute("user:write"), s.handleUserSessionsDelete)
 	})
 	v1.Route("/tokens", func(r chi.Router) {
 		coreRoute(r, "GET", "/", s.authenticatedRoute, s.handleListTokens)
@@ -1279,6 +1308,9 @@ func (s *Server) mountModules(r chi.Router, modules []Module) error {
 			sub.NotFound(s.moduleGate(ns)(http.HandlerFunc(routeNotFound)).ServeHTTP)
 		}
 		r.Mount("/m/"+ns, sub)
+		if wa, ok := m.(WorkspaceAdministration); ok {
+			s.workspaceAdmin = wa
+		}
 		if sr, ok := m.(Searcher); ok {
 			for _, k := range sr.SearchKinds() {
 				if k.Kind == "" || k.Permission == "" || k.Search == nil {

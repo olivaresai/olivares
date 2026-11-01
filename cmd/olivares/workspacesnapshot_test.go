@@ -17,6 +17,7 @@ import (
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/governance/testsupport"
 	"github.com/olivaresai/olivares/modules/sourcescope"
 )
 
@@ -93,4 +94,47 @@ type wireFutureReadScope struct {
 
 func (s wireFutureReadScope) TransactionNow(context.Context) (model.Timestamp, error) {
 	return model.NewTimestamp(s.future), nil
+}
+
+func TestWorkspaceSnapshotFolderForbid(t *testing.T) {
+	eng, token, tenant := wireBoot(t, store.Config{Engine: store.EngineSQLite, DSN: ":memory:", Debug: true}, t.TempDir())
+	code, workspace, _ := doDemoViewJSON(t, eng.api.Handler(), "POST", "/v1/m/sessions/workspaces", token, tenant.String(), map[string]any{"root_path": t.TempDir(), "mount_mode": "ro"})
+	if code != http.StatusCreated {
+		t.Fatalf("register = %d", code)
+	}
+	ref := workspace["workspace_ref"].(string)
+	principal, err := eng.authr.Authenticate(t.Context(), token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var registration model.ID
+	if err := eng.store.View(t.Context(), tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext("sessions.workspace")
+		if err != nil {
+			return err
+		}
+		rows, _, err := repo.List(t.Context(), model.Query{Filters: []model.Filter{{Column: "workspace_ref", Op: model.OpEq, Value: ref}}})
+		if err == nil && len(rows) == 1 {
+			registration = model.ID(rows[0].String(model.ColID))
+		}
+		return err
+	}); err != nil || registration.IsZero() {
+		t.Fatalf("registration id: %v", err)
+	}
+	scope := sourcescope.New()
+	scope.UseData(api.NewModuleData(eng.store))
+	checker := workspaceSnapshotAuthority{data: eng.store, principals: eng.authr, authz: eng.authz, scopes: scope.Resolver()}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	if stamp, err := checker.Check(ctx, tenant, principal, ref, registration); err != nil || stamp == "" {
+		t.Fatalf("ordinary read denied: %v", err)
+	}
+	for _, action := range []string{"resource:read", "sessions:workspace:read"} {
+		t.Run(action, func(t *testing.T) {
+			testsupport.SeedCedar(t, eng.store, tenant, `forbid(principal, action == Action::"`+action+`", resource);`, eng.nhiEnforcer)
+			if stamp, err := checker.Check(ctx, tenant, principal, ref, registration); err == nil || stamp != "" {
+				t.Fatal("snapshot bypassed the folder Read forbid")
+			}
+		})
+	}
 }

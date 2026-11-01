@@ -16,23 +16,32 @@ import (
 
 // runDTO is the API shape of one operated Claude Code session. It carries NO
 // secret, env value, prompt or transcript — only references and non-sensitive
-// lifecycle facts (minimal-data, docs/SECURITY-HARDENING.md). `state` is the DERIVED state:
-// stored `running` shows as `idle` when activity is stale (a read-time
-// projection, never a stored flip-flop — mirrors the observe overlay's cc_state).
+// lifecycle facts (minimal-data, docs/SECURITY-HARDENING.md), but for `title`: the person's own first
+// words, which showTitle (run_title.go) adds only for a caller who may read the
+// output. `state` is the DERIVED state: stored `running` shows as `idle` when
+// activity is stale (a read-time projection, never a stored flip-flop — mirrors the
+// observe overlay's cc_state).
 type runDTO struct {
 	// Completion belongs only to an originating in-process launch call.
-	Completion     RuntimeLaunchCompletion `json:"-"`
-	RunRef         string                  `json:"run_ref"`
-	Peers          []string                `json:"peers"`
-	PeersRule      string                  `json:"peers_rule,omitempty"`
-	Name           string                  `json:"name,omitempty"`
-	Transport      string                  `json:"transport"`
-	PermissionMode string                  `json:"permission_mode"`
-	Effort         string                  `json:"effort,omitempty"`
-	ModelRef       string                  `json:"model_ref,omitempty"`
-	FastMode       *bool                   `json:"fast_mode,omitempty"`
-	ServiceTier    string                  `json:"service_tier,omitempty"`
-	WorkspaceRef   string                  `json:"workspace_ref,omitempty"`
+	Completion RuntimeLaunchCompletion `json:"-"`
+	RunRef     string                  `json:"run_ref"`
+	Peers      []string                `json:"peers"`
+	PeersRule  string                  `json:"peers_rule,omitempty"`
+	Name       string                  `json:"name,omitempty"`
+	// Title is a phrase cut from the first message (run_title.go), shown where the run has no
+	// name; it is never the name and never an address. toRunDTO leaves it empty: only
+	// showTitle sets it, for a caller who may read the conversation it was cut from.
+	Title           string `json:"title,omitempty"`
+	Transport       string `json:"transport"`
+	PermissionMode  string `json:"permission_mode"`
+	Effort          string `json:"effort,omitempty"`
+	ModelRef        string `json:"model_ref,omitempty"`
+	FastMode        *bool  `json:"fast_mode,omitempty"`
+	ServiceTier     string `json:"service_tier,omitempty"`
+	CostCapMicroUSD int64  `json:"cost_cap_micro_usd,omitempty"`
+	RunDeadlineAt   string `json:"run_deadline_at,omitempty"`
+	WorkspaceRef    string `json:"workspace_ref,omitempty"`
+	RunOn           string `json:"run_on,omitempty"`
 	// AuthzWorkspaceID is the stored core authorization scope, separate from the folder.
 	AuthzWorkspaceID string `json:"authz_workspace_id,omitempty"`
 	// WorkspacePath is the HOST directory this session's child was started in: the
@@ -47,7 +56,11 @@ type runDTO struct {
 	WorktreeBranch string `json:"worktree_branch,omitempty"`
 	// HandoffOf is the session this one was handed off from, when a handoff started it.
 	// A reference: the transcript the handoff attached is not part of the resource.
-	HandoffOf       string `json:"handoff_of,omitempty"`
+	HandoffOf string `json:"handoff_of,omitempty"`
+	// SourceURL is the page of the GitHub issue or pull request the session was started
+	// from (session_source_item.go), shown on the session as a link. Empty for a session
+	// started any other way.
+	SourceURL       string `json:"source_url,omitempty"`
 	TemplateID      string `json:"template_id,omitempty"`
 	TemplateVersion int64  `json:"template_version,omitempty"`
 	// SecretEnv names the vault secrets this session receives as environment
@@ -90,6 +103,10 @@ type runDTO struct {
 	// only while the snooze is still to end.
 	Done         *bool  `json:"done,omitempty"`
 	SnoozedUntil string `json:"snoozed_until,omitempty"`
+	// DiscardedQueue is what a release of the session threw away: the messages that
+	// were still waiting in its queue (run_queue.go), so the person can copy them.
+	// Present only on the answer of that release, and only when there were some.
+	DiscardedQueue []queuedMessageDTO `json:"discarded_queue,omitempty"`
 
 	// Governance posture, the non-sensitive launch-decision facts the portal
 	// renders per session. AgentRef lets the client query the kill-switch/budget scoped on
@@ -167,6 +184,10 @@ type runDTO struct {
 	// permission_mode the launch asked for. Absent until the tool says.
 	ToolMode string `json:"tool_mode,omitempty"`
 
+	// A server-owned continuation; cancellation remains visible until a turn succeeds.
+	ResumeCancelled bool   `json:"resume_cancelled,omitempty"`
+	ResumeAt        string `json:"resume_at,omitempty"`
+
 	// Limit is the usage or rate limit the tool ended its last turn with, from the
 	// tool's own result (runtime_limit.go). Absent until a turn ends on one, and again
 	// after a later turn succeeds.
@@ -198,26 +219,29 @@ type runDTO struct {
 // toRunDTO projects a run record, deriving the displayed state at read time.
 func (m *Module) toRunDTO(rec model.Record) runDTO {
 	out := runDTO{
-		RunRef:                 rec.String(colRunRef),
-		Peers:                  runPeers(rec),
-		PeersRule:              rec.String(colRunPeersRule),
-		Name:                   rec.String(colRunName),
-		Transport:              rec.String(colTransport),
-		PermissionMode:         rec.String(colPermissionMode),
-		Effort:                 rec.String(colEffort),
-		ModelRef:               rec.String(colRunModelRef),
-		FastMode:               runFastMode(rec),
-		ServiceTier:            rec.String(colRunServiceTier),
+		RunRef:          rec.String(colRunRef),
+		Peers:           runPeers(rec),
+		PeersRule:       rec.String(colRunPeersRule),
+		Name:            rec.String(colRunName),
+		Transport:       rec.String(colTransport),
+		PermissionMode:  rec.String(colPermissionMode),
+		Effort:          rec.String(colEffort),
+		ModelRef:        rec.String(colRunModelRef),
+		FastMode:        runFastMode(rec),
+		ServiceTier:     rec.String(colRunServiceTier),
+		CostCapMicroUSD: rec.Int(colRunCostCap), RunDeadlineAt: rec.String(colRunDeadline),
 		WorkspaceRef:           rec.String(colWorkspaceRef),
+		RunOn:                  rec.String(colRunOn),
 		AuthzWorkspaceID:       rec.String(colRunAuthzWorkspaceID),
 		WorkspacePath:          rec.String(colRunWorkspacePath),
 		WorktreeBranch:         rec.String(colRunWorktreeBranch),
 		HandoffOf:              rec.String(colRunHandoffOf),
+		SourceURL:              rec.String(colRunSourceURL),
 		TemplateID:             rec.String(colTemplateID),
 		TemplateVersion:        rec.Int(colTemplateVersion),
 		SecretEnv:              storedSecretEnvNames(rec),
 		GitRead:                rec.String(colRunGitRead),
-		Credentials:            storedCredentialNames(rec),
+		Credentials:            m.storedCredentialNames(rec),
 		MaxDurationSecs:        rec.Int(colTemplateCeiling),
 		Isolation:              rec.String(colIsolation),
 		State:                  m.deriveRunState(rec),
@@ -259,6 +283,8 @@ func (m *Module) toRunDTO(rec model.Record) runDTO {
 		UsageModelRef:          rec.String(colRunUsageModelRef),
 		ToolMode:               rec.String(colRunToolMode),
 		Limit:                  storedRunLimit(rec),
+		ResumeAt:               rec.String(colRunResumeAt),
+		ResumeCancelled:        rec.Bool(colRunResumeCancelled),
 	}
 	if sid := rec.String(colRunClaimSID); validCanonicalSID(sid) {
 		out.CanonicalSID = sid
@@ -282,7 +308,7 @@ func (m *Module) toRunDTO(rec model.Record) runDTO {
 func mcpGovernanceWarning(driver string) string {
 	const base = "MCP servers configured in this tool's own settings are not governed by Olivares."
 	switch driver {
-	case providerDriverGrok, providerDriverOpenCode:
+	case providerDriverGrok, providerDriverOpenCode, providerDriverCursor:
 		return base
 	case providerDriverGemini:
 		return base + " Gemini CLI starts no MCP server in a folder it does not trust, so the Olivares session tools are missing there." +
@@ -368,17 +394,22 @@ func toRunEventDTO(rec model.Record) runEventDTO {
 // a caller who could post an allowlist could post an empty one, and the body is
 // exactly the surface the whole pack exists to stop being authoritative.
 type createRunRequest struct {
-	Name           string   `json:"name"`
-	Transport      string   `json:"transport"`
-	PermissionMode string   `json:"permission_mode"`
-	Effort         string   `json:"effort"`
-	Model          string   `json:"model"`
-	FastMode       *bool    `json:"fast_mode"`
-	ServiceTier    string   `json:"service_tier"`
-	WorkspaceRef   string   `json:"workspace_ref"`
-	TemplateID     string   `json:"template_id"`
-	Isolation      string   `json:"isolation"`
-	EnvAllow       []string `json:"env_allow"`
+	RepositoryURL   string   `json:"repository_url"`
+	RepositoryRef   string   `json:"repository_ref"`
+	CostCapMicroUSD int64    `json:"cost_cap_micro_usd"`
+	TimeoutSeconds  float64  `json:"timeout_seconds"`
+	Name            string   `json:"name"`
+	Transport       string   `json:"transport"`
+	PermissionMode  string   `json:"permission_mode"`
+	Effort          string   `json:"effort"`
+	Model           string   `json:"model"`
+	FastMode        *bool    `json:"fast_mode"`
+	ServiceTier     string   `json:"service_tier"`
+	WorkspaceRef    string   `json:"workspace_ref"`
+	TemplateID      string   `json:"template_id"`
+	Isolation       string   `json:"isolation"`
+	EnvAllow        []string `json:"env_allow"`
+	RunOn           string   `json:"run_on"`
 	// Worktree opts the session into a git worktree and branch of its own, made from
 	// the workspace's repository. Absent or false keeps today's default: the session
 	// runs in the workspace folder itself (runtime_worktree.go).
@@ -388,6 +419,9 @@ type createRunRequest struct {
 	// workspace's repository instead of the workspace's HEAD (the work a handoff names).
 	// Absent keeps today's start; it needs Worktree.
 	WorktreeFrom string `json:"worktree_from"`
+	// SourceURL is the page of a GitHub issue or pull request to start from. It implies
+	// Worktree and names the branch after the item (session_source_item.go).
+	SourceURL string `json:"source_url"`
 	// SecretEnv names vault secrets (env/…) the child receives as environment
 	// variables. Names only; the server opens the values and needs tenant
 	// administration from the caller.
@@ -435,6 +469,29 @@ type inputRequest struct {
 	// (POST /runs/{ref}/attachments), sent with Text as one message.
 	Attachments    []string `json:"attachments,omitempty"`
 	WorkLeaseFence *int64   `json:"work_lease_fence,omitempty"`
+	// ReviewComment says the input is a comment on one line of the session's branch diff
+	// (GET /runs/{ref}/diff). The message itself is the input as usual; this only names
+	// the place, so the ledger records it once the input was accepted.
+	ReviewComment *reviewCommentPlace `json:"review_comment,omitempty"`
+}
+
+// reviewCommentPlace is where on a session's branch diff a comment was made: a file of
+// the branch, a line number, and the version the line belongs to (the base the branch
+// started from, or the branch tip).
+type reviewCommentPlace struct {
+	Path string `json:"path"`
+	Line int    `json:"line"`
+	Side string `json:"side"`
+}
+
+// reviewCommentMaxPath is the longest path git and the diff route accept.
+const reviewCommentMaxPath = 4096
+
+// valid reports whether the place can be a line of the diff: the same shape of path the
+// diff route reads, a line from 1, and one of the two versions.
+func (p reviewCommentPlace) valid() bool {
+	return isRepoRelativePath(p.Path) && len(p.Path) <= reviewCommentMaxPath &&
+		p.Line >= 1 && (p.Side == "original" || p.Side == "modified")
 }
 
 // stopRunRequest is optional for backward compatibility: the original stop

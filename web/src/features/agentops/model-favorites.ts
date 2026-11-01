@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE MODELS THIS PERSON PICKS MOST, kept where session pins are kept: the browser,
-// partitioned per (origin, user, tenant). A favorite is a preference, not a fact about
+// THE MODELS THIS PERSON PICKS MOST, kept in the user's server preferences,
+// partitioned per user and tenant. A favorite is a preference, not a fact about
 // the tool, so a model the tool stops listing is simply not shown (groupModels). With no
 // user principal or no tenant there is no partition and favoriting is not offered.
+import { preferenceStorage } from '@/lib/preference-storage'
 import { useCallback, useState } from 'react'
 import { preferenceStorageKey } from '@/features/sessions/session-pins'
 import { useAuth } from '@/lib/auth/context'
@@ -58,7 +59,7 @@ export function toggleFavorite(
 function read(key: string | null): readonly string[] {
   if (!key || typeof window === 'undefined') return []
   try {
-    return decodeFavorites(window.localStorage.getItem(key))
+    return decodeFavorites(preferenceStorage.getItem(key))
   } catch {
     // Private mode or a blocked store: no favorites, and nothing thrown over a preference.
     return []
@@ -93,10 +94,10 @@ export function useModelFavorites(driver: string): ModelFavorites {
   const toggle = useCallback(
     (id: string) => {
       if (!key) return
-      // Read before writing: two tabs share one origin.
+      // Read this visit’s current values before writing; other tabs may be stale.
       const next = toggleFavorite(read(key), entry(driver, id))
       try {
-        window.localStorage.setItem(
+        preferenceStorage.setItem(
           key,
           JSON.stringify({ version: VERSION, favorites: next }),
         )

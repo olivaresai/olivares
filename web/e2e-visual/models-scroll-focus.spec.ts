@@ -88,6 +88,8 @@ for (const { theme, width, populated } of [
     }, testInfo) => {
       await prepare(page, baseURL, theme, populated)
       await page.goto('/models')
+      // Available is the first tab; the catalog tables sit under Catalog.
+      await page.getByRole('tab', { name: 'Catalog', exact: true }).click()
       const tables = page.getByRole('main').getByRole('table')
       await expect(tables).toHaveCount(2)
       await expect(

@@ -46,6 +46,12 @@ func TestSessionIssuanceCensus(t *testing.T) {
 		"auth/totp.go:CompleteTOTPLogin->mintSession":           {"TestTOTPLoginJourney", "TestTOTPThrottleLocksOut", "TestTOTPPolicyRequiresAdministrators"},
 		"auth/totp.go:CompleteExternalLogin->mintSession":       {"TestTOTPContinuationDirectMintWithoutFactor", "TestTOTPContinuationRefusesWithdrawnSource"},
 		"auth/totp.go:FinishTOTPEnrolmentForLogin->mintSession": {"TestTOTPPolicyRequiresAdministrators"},
+		// Pairing links are non-authenticating pending rows; acceptance is
+		// serialized and revalidates source standing and login policy.
+		"auth/session_pairing.go:CreateSessionPairing->Sessions.Create":                    {"TestSessionPairingOneTimeNamedAndRevocable", "TestSessionPairingRefusesExpiredRevokedAndWithdrawnSources"},
+		"auth/session_pairing.go:CreateSessionPairing->AuthSession":                        {"TestSessionPairingOneTimeNamedAndRevocable", "TestSessionPairingRefusesExpiredRevokedAndWithdrawnSources"},
+		"auth/session_pairing.go:AcceptSessionPairing->NewCredential(PrefixSession)":       {"TestSessionPairingOneTimeNamedAndRevocable", "TestSessionPairingRefusesExpiredRevokedAndWithdrawnSources"},
+		"auth/session_pairing.go:AcceptSessionPairing->NewCredential(PrefixScopedSession)": {"TestSessionPairingScopedSource"},
 		// Store decoding constructs the typed value of an already persisted row.
 		"internal/store/sqlstore/authcatalog.go:authSessionCodec->AuthSession": {"TestInviteLoginPolicyAllowedAndNil"},
 	}

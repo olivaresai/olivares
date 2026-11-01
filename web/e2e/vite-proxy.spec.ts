@@ -30,7 +30,9 @@ async function browserSessionFlow(page: Page, origin: string) {
   await signInFixture(page, credentials, 30_000)
   await expect(page).toHaveURL(`${origin}/`)
   await expect(
-    page.getByLabel('Journeys').getByRole('link', { name: 'Now', exact: true }),
+    page
+      .getByLabel('Main navigation')
+      .getByRole('link', { name: 'Now', exact: true }),
   ).toBeVisible()
   const cookies = await page.context().cookies()
   const cookie = cookies.find(
@@ -41,7 +43,9 @@ async function browserSessionFlow(page: Page, origin: string) {
   ).toBe(true)
   await page.reload()
   await expect(
-    page.getByLabel('Journeys').getByRole('link', { name: 'Now', exact: true }),
+    page
+      .getByLabel('Main navigation')
+      .getByRole('link', { name: 'Now', exact: true }),
   ).toBeVisible()
 
   async function sessionRequest(

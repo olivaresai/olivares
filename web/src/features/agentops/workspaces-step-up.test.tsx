@@ -10,6 +10,11 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { fakeRouter } from '@/test/fake-router'
+
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 
 import { ApiError } from '@/lib/api/errors'
 import { useStepUpStore } from '@/stores/step-up'
@@ -76,6 +81,7 @@ async function createWorkspace() {
 
 describe('Sessions workspace mutation error routing', () => {
   beforeEach(() => {
+    fakeRouter.reset('/workspaces')
     vi.clearAllMocks()
     useStepUpStore.getState().clear()
     api.listWorkspaces.mockResolvedValue({ items: [], has_more: false })

@@ -17,7 +17,12 @@ import { providerKeys } from '@/features/providers/api'
 import { ApiError } from '@/lib/api/errors'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { useTenantStore } from '@/stores/tenant'
-import { agentToolsApi, type OllamaPull, type OllamaStatus } from './api'
+import {
+  agentToolsApi,
+  OLLAMA_AVAILABLE_KEY,
+  type OllamaPull,
+  type OllamaStatus,
+} from './api'
 import './i18n'
 
 const STATUS_KEY = ['agent-tools', 'ollama'] as const
@@ -56,6 +61,9 @@ export function OllamaService() {
   const refresh = () =>
     Promise.all([
       qc.invalidateQueries({ queryKey: STATUS_KEY, exact: true }),
+      qc.invalidateQueries({
+        predicate: (q) => q.queryKey.includes(OLLAMA_AVAILABLE_KEY),
+      }),
       readinessChanged(),
     ])
   // The engine registers this server in Providers once it is up, after the start request
@@ -77,7 +85,7 @@ export function OllamaService() {
     mutationFn: () => agentToolsApi.ollamaStop(),
     onSettled: () => void refresh(),
   })
-  // HU2-07: the field starts on a small model a first session can use, not empty.
+  // acceptance: the field starts on a small model a first session can use, not empty.
   const [name, setName] = useState(RECOMMENDED_MODEL)
   const [pullID, setPullID] = useState<string | null>(null)
   const pull = usePrivilegedMutation<string, OllamaPull>({

@@ -404,6 +404,7 @@ type cliScopedGrant struct {
 	ScopeClass  string `json:"scope_class,omitempty"`
 	Note        string `json:"note,omitempty"`
 	CreatedBy   string `json:"created_by,omitempty"`
+	ExpiresAt   string `json:"expires_at,omitempty"`
 }
 
 type cliScopedGrantList struct {
@@ -498,6 +499,11 @@ func rbacGrantsCmd(flags *authClientFlags) *cobra.Command {
 					observeCell(g.ScopeRef), observeCell(g.ScopeClass), observeCell(g.CreatedBy)); err != nil {
 					return err
 				}
+				if g.ExpiresAt != "" {
+					if _, err := fmt.Fprintf(out, "expires:     %s\n", g.ExpiresAt); err != nil {
+						return err
+					}
+				}
 				if g.Note != "" {
 					_, err := fmt.Fprintf(out, "note:        %s\n", g.Note)
 					return err
@@ -512,6 +518,30 @@ func rbacGrantsCmd(flags *authClientFlags) *cobra.Command {
 // effectiveRightsPath is the engine's one effective-rights read (handlers_effective_rights.go).
 const effectiveRightsPath = "/v1/auth/effective-rights"
 
+type cliEffectiveRightsStep struct {
+	Kind string `json:"kind"`
+	Ref  string `json:"ref"`
+}
+
+type cliEffectiveRightsSubject struct {
+	Kind  string                   `json:"kind"`
+	Ref   string                   `json:"ref"`
+	Chain []cliEffectiveRightsStep `json:"chain,omitempty"`
+}
+
+type cliEffectiveRightsGrant struct {
+	GrantID  string                    `json:"grant_id,omitempty"`
+	PolicyID string                    `json:"policy_id,omitempty"`
+	Node     cliEffectiveRightsStep    `json:"node"`
+	Subject  cliEffectiveRightsSubject `json:"subject"`
+}
+
+type cliEffectiveRightsRemoval struct {
+	Kind string                  `json:"kind"`
+	ID   string                  `json:"id,omitempty"`
+	Node *cliEffectiveRightsStep `json:"node,omitempty"`
+}
+
 type cliEffectiveRights struct {
 	Subject struct {
 		Kind string `json:"kind"`
@@ -521,15 +551,40 @@ type cliEffectiveRights struct {
 		Kind string `json:"kind"`
 		ID   string `json:"id"`
 	} `json:"node"`
-	Path []struct {
+	MembershipAsOf string `json:"membership_as_of,omitempty"`
+	Path           []struct {
 		Kind      string `json:"kind"`
 		Ref       string `json:"ref"`
 		Workspace string `json:"workspace,omitempty"`
 	} `json:"path"`
 	Rights []struct {
-		Name  string `json:"name"`
-		State string `json:"state"`
+		Name      string                      `json:"name"`
+		State     string                      `json:"state"`
+		Because   []cliEffectiveRightsGrant   `json:"because,omitempty"`
+		RemovedBy []cliEffectiveRightsRemoval `json:"removed_by,omitempty"`
 	} `json:"rights"`
+}
+
+func cliEffectiveRightsGrantID(grant cliEffectiveRightsGrant) string {
+	if grant.GrantID != "" {
+		return grant.GrantID
+	}
+	return grant.PolicyID
+}
+
+func cliEffectiveRightsNode(node cliEffectiveRightsStep) string {
+	return node.Kind + " " + node.Ref
+}
+
+func cliEffectiveRightsChain(subject cliEffectiveRightsSubject) string {
+	if len(subject.Chain) == 0 {
+		return subject.Kind + " " + subject.Ref
+	}
+	steps := make([]string, 0, len(subject.Chain))
+	for _, step := range subject.Chain {
+		steps = append(steps, cliEffectiveRightsNode(step))
+	}
+	return strings.Join(steps, " > ")
 }
 
 // rbacRightsCmd — what one subject holds at one node, and the path that explains it. The engine
@@ -577,11 +632,15 @@ func rbacRightsCmd(flags *authClientFlags) *cobra.Command {
 					}
 					steps = append(steps, step)
 				}
-				renderTo(out).Fields([]termrender.Field{
+				fields := []termrender.Field{
 					{Key: "subject", Value: observeCell(r.Subject.Kind) + " " + observeCell(r.Subject.ID)},
 					{Key: "node", Value: observeCell(r.Node.Kind) + " " + observeCell(r.Node.ID)},
 					{Key: "path", Value: strings.Join(steps, " > ")},
-				})
+				}
+				if r.MembershipAsOf != "" {
+					fields = append(fields, termrender.Field{Key: "membership as of", Value: observeCell(r.MembershipAsOf)})
+				}
+				renderTo(out).Fields(fields)
 				t := termrender.Table{Header: []string{"right", "state"}, Empty: "no right"}
 				unknown := false
 				for _, x := range r.Rights {
@@ -589,6 +648,30 @@ func rbacRightsCmd(flags *authClientFlags) *cobra.Command {
 					t.Rows = append(t.Rows, []string{observeCell(x.Name), observeCell(strings.ReplaceAll(x.State, "_", " "))})
 				}
 				renderTo(out).Table(t)
+				for _, right := range r.Rights {
+					for _, grant := range right.Because {
+						id := cliEffectiveRightsGrantID(grant)
+						if id == "" {
+							continue
+						}
+						if _, err := fmt.Fprintf(out, "%s: grant %s at %s via %s\n",
+							observeCell(right.Name), observeCell(id), observeCell(cliEffectiveRightsNode(grant.Node)), observeCell(cliEffectiveRightsChain(grant.Subject))); err != nil {
+							return err
+						}
+					}
+					for _, removal := range right.RemovedBy {
+						if removal.ID == "" {
+							continue
+						}
+						line := fmt.Sprintf("%s: removed by %s %s", observeCell(right.Name), observeCell(removal.Kind), observeCell(removal.ID))
+						if removal.Node != nil {
+							line += " at " + observeCell(cliEffectiveRightsNode(*removal.Node))
+						}
+						if _, err := fmt.Fprintln(out, line); err != nil {
+							return err
+						}
+					}
+				}
 				if unknown {
 					_, err := fmt.Fprintln(out, "unknown: the engine could not decide that right; see the engine log (not a deny)")
 					return err

@@ -128,7 +128,9 @@ var (
 	ErrReservedAuditAction = errors.New("audit action is reserved")
 	// ErrStoreUnavailable wraps a backend-availability failure at the SQL
 	// boundary: a lost/refused connection or a Postgres SQLSTATE class-08
-	// "Connection Exception". It distinguishes "the database is unreachable
+	// "Connection Exception". A store transaction that cannot start on a pooled
+	// connection the server ended (a restart or failover, the regression) is wrapped
+	// too. It distinguishes "the database is unreachable
 	// right now" (transient - the evidence taxonomy maps it to
 	// ledger_unavailable, sdk/evidence.go) from a genuine write fault
 	// (constraint, serialization, bad statement), which stays unwrapped.

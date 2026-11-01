@@ -92,10 +92,10 @@ func TestWorkSessionCredentialCannotBypassPurposeCeilingAtMembershipEdges(t *tes
 		r.Header.Set("Authorization", "Bearer "+token)
 		return r
 	}
-	if _, ok := apps.authenticateBearer(context.Background(), requestFor(workToken)); ok {
+	if _, err := apps.authenticateBearer(context.Background(), requestFor(workToken)); err == nil {
 		t.Fatal("apps bearer authentication admitted purpose-restricted token")
 	}
-	if _, ok := apps.authenticateBearer(context.Background(), requestFor(ordinaryToken)); !ok {
+	if _, err := apps.authenticateBearer(context.Background(), requestFor(ordinaryToken)); err != nil {
 		t.Fatal("apps bearer authentication rejected ordinary control")
 	}
 

@@ -255,6 +255,25 @@ func EnsureTLSCertForHost(certPath, keyPath, publicHost string, operatorProvided
 		fp, err := certFingerprint(certPath)
 		return false, fp, err
 	}
+	dns, ips := localTLSNames(publicHost)
+	return ensureTLSCert(certPath, keyPath, dns, ips)
+}
+
+// EnsureTLSCertSignedBy is EnsureTLSCert for a second server on the same host, the Appliance
+// Console: its pair names the same host and addresses and is signed by the local CA that already
+// exists at caPath and caKeyPath, the engine's, so the operator trusts one CA for both. It makes
+// no CA, and refuses while the engine has not made its own. A key already at keyPath is the
+// key certified, so a caller that places the file itself keeps its own custody of it; a pair
+// another CA signed is left as it is, and a changed host or address is re-issued from the same
+// CA and key.
+func EnsureTLSCertSignedBy(certPath, keyPath, caPath, caKeyPath string) (created bool, fingerprint string, err error) {
+	dns, ips := localTLSNames("")
+	return ensureTLSCertSignedBy(certPath, keyPath, caPath, caKeyPath, dns, ips)
+}
+
+// localTLSNames are the names a managed leaf carries: localhost, this host's name, loopback and
+// every LAN address, and the host the operator declared clients reach it at, when there is one.
+func localTLSNames(publicHost string) ([]string, []net.IP) {
 	dns := []string{"localhost"}
 	if host, err := os.Hostname(); err == nil && host != "" && host != "localhost" {
 		dns = append(dns, host)
@@ -272,7 +291,7 @@ func EnsureTLSCertForHost(certPath, keyPath, publicHost string, operatorProvided
 			ips = append(ips, ip)
 		}
 	}
-	return ensureTLSCert(certPath, keyPath, dns, ips)
+	return dns, ips
 }
 
 // certFingerprint returns the SHA-256 fingerprint of the leaf certificate in a

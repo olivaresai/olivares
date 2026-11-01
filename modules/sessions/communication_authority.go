@@ -385,6 +385,42 @@ func bindCommunicationRequestAuthority(
 		return communicationRequestAuthority{}, err
 	}
 
+	return bindResolvedCommunicationRequestAuthority(ctx, source, resolved, principal, question)
+}
+
+// bindSystemCommunicationRequestAuthority authorizes an engine-sealed system
+// principal without manufacturing the credential reference humans require.
+func (m *Module) bindSystemCommunicationRequestAuthority(
+	ctx context.Context,
+	resolved auth.Principal,
+	principal CommunicationPrincipal,
+	question communicationAuthorityQuestion,
+) (communicationRequestAuthority, error) {
+	sources := m.CommunicationAuthority
+	if !sources.bound() || !resolved.IsSystemOperator() || !principal.System {
+		return communicationRequestAuthority{}, communicationError(
+			ErrCommunicationEvidenceUnknown, "system communication authority is unavailable",
+		)
+	}
+	return bindResolvedCommunicationRequestAuthority(ctx, sources.source, resolved, principal, question)
+}
+
+func bindResolvedCommunicationRequestAuthority(
+	ctx context.Context,
+	source communicationAuthorizationEvidenceSource,
+	resolved auth.Principal,
+	principal CommunicationPrincipal,
+	question communicationAuthorityQuestion,
+) (communicationRequestAuthority, error) {
+	deadline, hasDeadline := ctx.Deadline()
+	if !hasDeadline || deadline.IsZero() {
+		return communicationRequestAuthority{}, communicationError(
+			ErrCommunicationEvidenceUnknown, "communication authority requires a finite deadline",
+		)
+	}
+	if err := question.validate(); err != nil {
+		return communicationRequestAuthority{}, err
+	}
 	request := auth.Request{
 		Principal:  resolved,
 		Permission: question.permission,

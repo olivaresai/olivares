@@ -31,6 +31,17 @@ func TestPrepareClaudeHooksWiresTheHookSettings(t *testing.T) {
 		t.Fatalf("hook settings not written: %v", err)
 	}
 
+	remote := LaunchSpec{Env: pepEnv, RunOn: "node-remote"}
+	if err := m.prepareClaudeHooks(&remote, CreateRunParams{RunOn: "node-remote", Transport: TransportStreamJSON, ProviderHome: &ProviderHomeSnapshot{Driver: providerDriverClaude}}, "run-remote"); err != nil {
+		t.Fatal(err)
+	}
+	if remote.HelperPath != "/usr/local/bin/olivares" || len(remote.LaunchFiles) != 1 {
+		t.Fatalf("remote launch files = %v, helper = %q; want the hook settings and engine path", remote.LaunchFiles, remote.HelperPath)
+	}
+	if got := remote.LaunchFiles[0]; got.Path != filepath.Join(dataDir, "run", "run-remote", "pep-settings.json") || len(got.Data) == 0 || got.Mode != 0o600 {
+		t.Fatalf("remote hook file = %#v, want bounded mode-0600 settings", got)
+	}
+
 	plain := LaunchSpec{}
 	if err := m.prepareClaudeHooks(&plain, CreateRunParams{Transport: TransportStreamJSON, ProviderHome: &ProviderHomeSnapshot{Driver: providerDriverClaude}}, "run-2"); err != nil || len(plain.Args) != 0 {
 		t.Fatalf("no PEP mounted: args=%v err=%v, want untouched", plain.Args, err)

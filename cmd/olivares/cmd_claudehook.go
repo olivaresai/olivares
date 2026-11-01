@@ -6,6 +6,7 @@ package main
 
 import (
 	"errors"
+	"net/http"
 	"os"
 	"time"
 
@@ -62,6 +63,12 @@ func newClaudeHookCmd() *cobra.Command {
   printf '%s\n' '{"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"/repo/README.md"}}' | olivares claude-hook`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			// On the Server, before any input or dial: exit 2 blocks the tool call.
+			if err := hookDomainEndpoint(resolveServer()); err != nil {
+				// stdout is Claude Code's decision channel: no usage text on it.
+				cmd.SilenceUsage = true
+				return exitcode.New(exitcode.Usage, err)
+			}
 			clientTimeout := timeout
 			if !cmd.Flags().Changed("timeout") {
 				// The published managed command has no flags and a 5s outer
@@ -82,6 +89,24 @@ func newClaudeHookCmd() *cobra.Command {
 				// Code interpreta, y su campo de razón es un contrato. Sin esto, un certificado que no
 				// verifica y un puerto cerrado eran el mismo mensaje.
 				Diag: cmd.ErrOrStderr(),
+			}
+			if inDomain, _ := inHookDomain(); inDomain {
+				transport := http.DefaultTransport.(*http.Transport).Clone()
+				transport.Proxy = nil
+				// cli-transport-exempt: in the hook domain the PEP endpoint is pinned to
+				// loopback (hookDomainEndpoint refused every other host before this
+				// dial), and the governed request must never leave it: no environment
+				// proxy, and no followed redirect — a 3xx comes back as the response
+				// itself and the decision path denies closed. cliTransport keeps the
+				// environment proxy and follows same-origin redirects, so it must not
+				// carry this call.
+				cfg.Client = &http.Client{
+					Timeout:   clientTimeout,
+					Transport: transport,
+					CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+						return http.ErrUseLastResponse
+					},
+				}
 			}
 			// The decision travels in stdout, never the exit code (how Claude Code reads a
 			// hook). A write error is the only failure surfaced.

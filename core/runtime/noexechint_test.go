@@ -33,7 +33,7 @@ func TestLaPistaDeNoexecSoloSeEmiteConElBitPuestoYUnEACCES(t *testing.T) {
 	// ⛔ EUID EXPLICITO, NO EL DEL AMBIENTE. Estas aserciones describen el caso SIN privilegios
 	// —el binario tiene su bit, sus directorios son atravesables por su dueno, luego lo que queda
 	// es el montaje—, y con `noexecHint` leyendo os.Geteuid() dejaban de describirlo en cuanto la
-	// suite corria como root. Paso el 2026-08-19 en ci-runner-7, cuyo servicio corre con
+	// suite corria como root. Paso el 2026-08-19 en build-host, cuyo servicio corre con
 	// HOME=/root: `t.TempDir()` es 0700, y para root el bit que manda es el de OTROS, asi que la
 	// pista nombraba —correctamente— el directorio en vez del montaje, y este test lo llamo fallo.
 	//

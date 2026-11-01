@@ -20,6 +20,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
 // ActionConflict is the plan action when the destination is occupied by
@@ -59,8 +61,15 @@ type Engine struct {
 
 // SetChildCommand wires how the engine builds the version probe of a staged or
 // detected tool. The composition sets the agent tools module's confined builder,
-// so an install job's probe runs like the module's other children.
-func (e *Engine) SetChildCommand(f ChildCommand) { e.childCommand.Store(&f) }
+// so an install job's probe runs like the module's other children. A nil f
+// unwires the builder; the probe then runs unconfined, as the engine user.
+func (e *Engine) SetChildCommand(f ChildCommand) {
+	if f == nil {
+		e.childCommand.Store(nil)
+		return
+	}
+	e.childCommand.Store(&f)
+}
 
 // probeContext carries the engine's ChildCommand to the probes of one call.
 func (e *Engine) probeContext(ctx context.Context) context.Context {
@@ -386,6 +395,9 @@ func (e *Engine) Install(ctx context.Context, req Request, approved *Plan, progr
 	}
 	exeAbs := filepath.Join(req.DestRoot, final)
 	fmt.Fprintf(progress, "probing the staged executable: %s --version\n", exeAbs)
+	if err := e.refuseUnconfinedUnsigned(plan.Driver); err != nil {
+		return nil, plan, err
+	}
 	probe, err := p.Probe(e.probeContext(ctx), exeAbs, filepath.Join(req.DestRoot, scratch), plan.Version)
 	if err != nil {
 		return nil, plan, err
@@ -705,4 +717,43 @@ func (e *Engine) VerificationLevels() map[string]string {
 		}
 	}
 	return levels
+}
+
+// hostConfinement is how this package reads what the host can enforce; tests
+// substitute it.
+var hostConfinement = confine.Probe
+
+// RefuseUnconfinedUnsigned is the node-wide rule for the first run of an
+// unsigned tool install: none-origin-only (Grok Build) and origin-tarball
+// (Cursor CLI) carry no publisher signature, so the engine runs their bytes
+// only in a confined child. While the host cannot confine (no Landlock), the
+// probe, the login, the status read and the model catalog are refused instead
+// of running unverified vendor bytes with the engine user's rights. Signed installs
+// (openpgp, sigstore-cosign, github-release-sha256, catalog-sha256) never
+// meet this refusal. level is the driver's fixed policy
+// (Engine.VerificationLevels); state is what the host can enforce.
+func RefuseUnconfinedUnsigned(level, driver string, state confine.State) error {
+	if level != VerificationNoneOriginOnly && level != VerificationOriginTarball {
+		return nil
+	}
+	if state.Mode == confine.ModeLandlock {
+		return nil
+	}
+	return refuse(KindVerificationUnavailable,
+		"%s installs carry no publisher signature, and this node cannot confine them without Landlock (%s); enable Landlock and run olivares doctor", driver, state.Reason)
+}
+
+// refuseUnconfinedUnsigned applies the node-wide rule to one driver of this
+// engine's catalog, before its bytes are first run. An engine with no
+// ChildCommand wired probes as the engine user, so it reads as a host that
+// cannot confine.
+func (e *Engine) refuseUnconfinedUnsigned(driver string) error {
+	state := hostConfinement()
+	if e.childCommand.Load() == nil {
+		state.Mode = confine.ModeNone
+		if state.Reason == "" {
+			state.Reason = "no confined child command is wired"
+		}
+	}
+	return RefuseUnconfinedUnsigned(e.VerificationLevels()[driver], driver, state)
 }

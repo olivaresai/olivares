@@ -9,6 +9,7 @@
 // suggestions that link to their own pages; none of them is pending or blocking, and
 // one whose module is off on this installation is not offered.
 // Dismiss hides the guide on this browser and is reversible.
+import { preferenceStorage } from '@/lib/preference-storage'
 import './i18n'
 import { Link } from '@tanstack/react-router'
 import { Rocket } from 'lucide-react'
@@ -31,8 +32,8 @@ const DISMISS_KEY = 'olivares.onboarding.dismissed'
 // a page of a module that is off has nothing to show (stores/modules.ts), and a fresh
 // install runs with most modules off.
 const NEXT: readonly { key: string; to: string; view?: string }[] = [
-  { key: 'invite', to: '/console?tab=people' },
-  { key: 'identity', to: '/console?tab=sso' },
+  { key: 'invite', to: '/identity?tab=people' },
+  { key: 'identity', to: '/identity?tab=sso' },
   // Managed settings, not the page's default Drift tab: drift reads the Security
   // module's findings, and a fresh install runs without Security.
   {
@@ -40,7 +41,7 @@ const NEXT: readonly { key: string; to: string; view?: string }[] = [
     to: '/claude-policy?tab=managed-settings',
     view: 'claudePolicy',
   },
-  { key: 'mcp', to: '/console?tab=mcpGateway' },
+  { key: 'mcp', to: '/capabilities?tab=servers' },
   // Stored budgets remain useful after an edition change; Community offers their read view.
   { key: 'budgets', to: COST_VIEW.path, view: COST_VIEW.id },
 ]
@@ -76,15 +77,15 @@ export function OnboardingView() {
   const moduleEnabled = useModuleEnabled()
   const [dismissed, setDismissed] = useState<boolean>(() => {
     try {
-      return localStorage.getItem(DISMISS_KEY) === 'true'
+      return preferenceStorage.getItem(DISMISS_KEY) === 'true'
     } catch {
       return false
     }
   })
   const remember = (value: boolean) => {
     try {
-      if (value) localStorage.setItem(DISMISS_KEY, 'true')
-      else localStorage.removeItem(DISMISS_KEY)
+      if (value) preferenceStorage.setItem(DISMISS_KEY, 'true')
+      else preferenceStorage.removeItem(DISMISS_KEY)
     } catch {
       // localStorage unavailable: the choice still holds for this visit
     }

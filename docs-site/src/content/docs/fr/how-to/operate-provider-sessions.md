@@ -87,7 +87,7 @@ docker compose exec olivares olivares session follow first-hour
 
 ## Approuver, interrompre, arrêter et reprendre
 
-Sous **Plus d’options**, **Demander avant chaque action** fait demander à l’outil une
+Sous **Plus d’options**, **Supervisé** fait demander à l’outil une
 confirmation avant d’agir. Dans **Règles**, la demande qui attend votre décision est
 ouverte à côté de la file d’attente, avec sa commande, ce qu’elle atteint et la règle
 qui l’a déclenchée. Choisissez **Approuver une fois** (`A`), ou **Rejeter** (`D`) puis
@@ -132,8 +132,11 @@ créer le worktree.
 
 Un dossier peut stocker une commande de préparation pour les nouveaux worktrees. Une
 personne doit approuver son texte exact, par SHA-256, avant qu’un démarrage de worktree
-soit accepté ; modifier un seul caractère exige une nouvelle approbation. Rien n’exécute
-encore la commande. Voir
+soit accepté ; modifier un seul caractère exige une nouvelle approbation. La commande
+approuvée s’exécute une fois dans le nouveau worktree avant le premier tour de la session ;
+un échec arrête le démarrage et affiche sa sortie. Si la préparation échoue, la reprise
+exécute la commande à nouveau ; après une préparation réussie ou un démarrage avec
+`--no-setup` enregistré, elle ne le fait pas. Voir
 [Approuver la commande de préparation d’un dossier](/reference/session-runtime-api/#approving-a-folders-setup-command).
 
 Le nettoyage refuse de supprimer un travail non commité ou non fusionné. **Supprimer

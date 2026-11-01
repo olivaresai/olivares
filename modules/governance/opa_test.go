@@ -466,3 +466,32 @@ func TestOPAReadErrorPropagatesThroughChain(t *testing.T) {
 		t.Errorf("Close called %d times, want 1", body.closed)
 	}
 }
+
+func TestOPASessionPermissionCompatibility(t *testing.T) {
+	for _, pair := range [][2]string{{"sessions:output:read", "sessions:run:read"}, {"sessions:stop:write", "sessions:run:write"}} {
+		for _, denied := range pair {
+			t.Run(denied, func(t *testing.T) {
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					var body struct {
+						Input opaInput `json:"input"`
+					}
+					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+						t.Error(err)
+					}
+					_ = json.NewEncoder(w).Encode(map[string]bool{"result": body.Input.Permission != denied})
+				}))
+				defer srv.Close()
+				evaluator, err := NewOPAEvaluator(srv.URL, "authz.allow", "", nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				req := opaReq()
+				req.Permission = auth.Permission(pair[0])
+				d, err := evaluator.Evaluate(t.Context(), req)
+				if err != nil || d.Allow {
+					t.Fatalf("permission=%s deny=%s decision=%+v err=%v", pair[0], denied, d, err)
+				}
+			})
+		}
+	}
+}

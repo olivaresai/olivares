@@ -158,11 +158,12 @@ func (m *Module) previewPorts(tenant model.TenantID, ref string) (Process, []lis
 	if !live {
 		return nil, nil, nil
 	}
-	if _, ok := lr.proc.(previewDialer); !ok || lr.proc.PID() <= 0 {
+	proc := liveProcess(lr)
+	if _, ok := proc.(previewDialer); !ok || proc.PID() <= 0 {
 		return nil, nil, nil
 	}
-	ports, err := sessionPorts(lr.proc.PID())
-	return lr.proc, ports, err
+	ports, err := sessionPorts(proc.PID())
+	return proc, ports, err
 }
 
 // handleRunPreviewPorts lists the loopback ports the run's own processes listen
@@ -423,7 +424,7 @@ func (m *Module) previewLive(g *previewGrant) bool {
 // previewRun returns the live run the grant's process belongs to.
 func (m *Module) previewRun(g *previewGrant) (*liveRun, bool) {
 	lr, live := m.rt.getLive(g.tenant, g.runRef)
-	if !live || lr.proc != g.proc {
+	if !live || liveProcess(lr) != g.proc {
 		return nil, false
 	}
 	return lr, true

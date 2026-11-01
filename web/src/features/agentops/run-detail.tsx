@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { KvList, KvRow } from '@/components/ui/kv'
+import { PathText } from '@/components/ui/path-text'
 import {
   Sheet,
   SheetContent,
@@ -32,6 +33,7 @@ import { RelTimeLabel } from '@/features/shared'
 import { NamedRef } from '@/features/shared/named-ref'
 import { useClientSettings } from '@/features/settings/preferences'
 import { ApiError } from '@/lib/api/errors'
+import { governanceKeys } from '@/features/governance/api'
 import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
 import { agentOpsApi, agentOpsKeys } from './api'
@@ -48,6 +50,7 @@ import {
   type RunDTO,
   type RunEventDTO,
 } from './types'
+import { useDiscardedQueueNotice } from './run-queue'
 import { currentControlFence } from './work-fence'
 import './i18n'
 
@@ -79,7 +82,7 @@ export function RunDetailSheet({
   const run = runQuery.data
   const ledger = useRunLedger(run)
   const runNaming = run
-    ? sessionNameLadder(run.name, null, t('untitled'))
+    ? sessionNameLadder(run.name, null, t('untitled'), run.title)
     : null
 
   return (
@@ -194,6 +197,9 @@ export function RunDetailSheet({
         agentOpsApi.stop(run.run_ref, await currentControlFence(run)),
       onSuccess: () => {
         setConfirm(null)
+        void qc.invalidateQueries({
+          queryKey: governanceKeys.approvals(activeTenant),
+        })
         invalidate()
       },
       onError: onErr,
@@ -203,9 +209,11 @@ export function RunDetailSheet({
       onSuccess: () => invalidate(),
       onError: onErr,
     })
+    const noticeDiscarded = useDiscardedQueueNotice()
     const cleanup = useMutation({
       mutationFn: () => agentOpsApi.cleanup(run.run_ref, discardWorktree),
-      onSuccess: () => {
+      onSuccess: (released) => {
+        noticeDiscarded(released.discarded_queue)
         closeConfirm()
         invalidate()
       },
@@ -486,16 +494,19 @@ export function RunInfo({ run }: { run: RunDTO }) {
       <KvRow label={t('info.workspace')} mono align="start">
         {run.workspace_ref || none}
       </KvRow>
-      <KvRow label={t('info.workspaceDirectory')} mono align="start">
-        {run.workspace_path
-          ? run.workspace_ref
-            ? run.workspace_path
-            : `${run.workspace_path} (${t('info.workspaceDirectoryOwn')})`
-          : none}
+      <KvRow label={t('info.workspaceDirectory')} align="start">
+        {run.workspace_path ? (
+          <>
+            <PathText value={run.workspace_path} wrap />
+            {run.workspace_ref ? null : ` (${t('info.workspaceDirectoryOwn')})`}
+          </>
+        ) : (
+          none
+        )}
       </KvRow>
       {run.worktree_branch && (
-        <KvRow label={t('info.worktreeBranch')} mono align="start">
-          {run.worktree_branch}
+        <KvRow label={t('info.worktreeBranch')} align="start">
+          <PathText value={run.worktree_branch} wrap />
         </KvRow>
       )}
       <KvRow label={t('info.claudeSessionId')} mono align="start">

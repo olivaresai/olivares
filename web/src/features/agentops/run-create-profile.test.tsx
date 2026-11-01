@@ -24,6 +24,7 @@ vi.mock('./api', async (orig) => {
       createRun: vi.fn(),
       listWorkspaces: vi.fn(),
       listProfiles: vi.fn(),
+      listAccounts: vi.fn(),
       profileLaunchReadiness: vi.fn(),
       profileModels: vi.fn(),
     },
@@ -135,6 +136,10 @@ beforeEach(() => {
     items: [homeA, codexHome],
     has_more: false,
   })
+  vi.mocked(agentOpsApi.listAccounts).mockResolvedValue({
+    items: [],
+    has_more: false,
+  })
   vi.mocked(templatesApi.list).mockResolvedValue({
     items: [],
     has_more: false,
@@ -155,6 +160,56 @@ beforeEach(() => {
 })
 
 describe('RunCreateDialog — provider profiles', () => {
+  it('shows each account its use in the picker and marks the chosen one at its limit before Start', async () => {
+    const window = (name: string, utilization: number, resets_at?: string) => ({
+      window: name,
+      label: name,
+      utilization,
+      observed_at: '2026-10-29T10:00:00Z',
+      ...(resets_at ? { resets_at } : {}),
+    })
+    vi.mocked(agentOpsApi.listAccounts).mockResolvedValue({
+      items: [
+        {
+          account_ref: 'ppf_a',
+          name: 'home-a',
+          driver: 'claude',
+          environment_ref: 'xenv_1',
+          state: 'active',
+          home_mode: 'managed',
+          home_generation: 1,
+          home_relative: '',
+          isolation_level: 'shared',
+          auth_source: 'provider_account_home',
+          identity: '',
+          identity_source: 'none',
+          usage: [
+            window('five_hour', 100, '2030-01-01T10:00:00Z'),
+            window('seven_day', 62),
+          ],
+          created_at: '2026-10-01T10:00:00Z',
+          updated_at: '2026-10-01T10:00:00Z',
+        },
+      ],
+      has_more: false,
+    })
+    const user = userEvent.setup()
+    wrap()
+    await user.click(await screen.findByLabelText('Provider profile'))
+    // The account that reported figures shows them; the one that did not shows none.
+    expect(
+      await screen.findByRole('option', { name: /Home A/ }),
+    ).toHaveTextContent('5-hour 100% · Weekly 62%')
+    expect(
+      screen.getByRole('option', { name: /Codex home/ }),
+    ).not.toHaveTextContent('%')
+    await user.click(screen.getByRole('option', { name: /Home A/ }))
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      /5-hour limit reached, resets /,
+    )
+    // Marked, not blocked.
+    expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
+  })
   it('launches with a handed-over Codex service tier', async () => {
     const user = userEvent.setup()
     vi.mocked(agentOpsApi.listProfiles).mockResolvedValue({
@@ -443,7 +498,7 @@ describe('RunCreateDialog — provider profiles', () => {
     expect(agentOpsApi.createRun).not.toHaveBeenCalled()
   })
 
-  // HU 043: a Grok Build profile opened "New Claude Code session". The title names the
+  // acceptance: a Grok Build profile opened "New Claude Code session". The title names the
   // tool of the profile chosen, and no tool until one is.
   it('the title names the chosen tool, and no tool before a profile is chosen', async () => {
     const user = userEvent.setup()

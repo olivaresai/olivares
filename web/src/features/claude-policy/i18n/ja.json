@@ -115,9 +115,9 @@
   "ref": {
     "ms": {
       "paths": "managed-settings.json のパス",
-      "legacyPath": "レガシーな Windows の C:\\ProgramData\\ClaudeCode パスはサポートされなくなりました（{{since}} で削除）。",
+      "legacyPath": "レガシーな Windows の <path /> パスはサポートされなくなりました（{{since}} で削除）。",
       "precedence": "設定の優先順位（高い順）",
-      "dropIn": "ドロップインディレクトリ: {{dir}}",
+      "dropIn": "ドロップインディレクトリ: <path />",
       "serverManaged": "サーバーマネージドティア",
       "failClosed": "Fail-closed",
       "noMerge": "No-merge",

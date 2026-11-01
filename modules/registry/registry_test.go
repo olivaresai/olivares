@@ -10,6 +10,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/modulespec"
+	"github.com/olivaresai/olivares/modules/aiterms"
 	"github.com/olivaresai/olivares/modules/eventing"
 	"github.com/olivaresai/olivares/modules/sessioncockpit"
 	"github.com/olivaresai/olivares/sdk"
@@ -24,7 +25,7 @@ func TestModuleSpecConstructorsAreCurrent(t *testing.T) {
 func TestModuleSpecBuildPreservesConfiguredInstances(t *testing.T) {
 	evt := eventing.New()
 	cockpit := sessioncockpit.NewPlaceholder()
-	modules, err := Build([]api.Module{evt}, []api.Module{cockpit})
+	modules, err := Build([]api.Module{evt}, []api.Module{cockpit, aiterms.New()})
 	if err != nil {
 		t.Fatal(err)
 	}

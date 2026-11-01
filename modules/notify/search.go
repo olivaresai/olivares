@@ -14,7 +14,7 @@ import (
 )
 
 // SearchKinds contributes notification routes to the federated console search
-//. Gated on the SAME read permission as GET /routes, so search can never
+// . Gated on the SAME read permission as GET /routes, so search can never
 // widen what a caller could already list. Results carry name + enabled state
 // only — never destinations or match criteria.
 func (m *Module) SearchKinds() []api.SearchKind {

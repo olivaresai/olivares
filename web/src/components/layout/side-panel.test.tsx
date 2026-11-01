@@ -47,7 +47,34 @@ function Shell({ declare }: { declare: boolean }) {
   )
 }
 
+/** A viewport `wide` (at least 1100 px) or not, as matchMedia answers it. */
+function viewport(wide: boolean) {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query.includes('min-width') ? wide : !wide,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }))
+}
+
 describe('the side panel', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('is a layer over the work only while it covers it, below 1100 px', async () => {
+    const user = userEvent.setup()
+    viewport(true)
+    const wide = render(<Shell declare />)
+    expect(
+      await screen.findByRole('complementary', { name: 'Changes' }),
+    ).not.toHaveAttribute('data-layer')
+    wide.unmount()
+    viewport(false)
+    render(<Shell declare />)
+    await user.click(screen.getByRole('button', { name: /Changes/ }))
+    expect(
+      await screen.findByRole('complementary', { name: 'Changes' }),
+    ).toHaveAttribute('data-layer')
+  })
+
   it('draws nothing and offers no toggle while no page declares a panel', () => {
     render(<Shell declare={false} />)
     expect(document.querySelector('[data-slot="side-panel"]')).toBeNull()
@@ -156,5 +183,38 @@ describe('the side panel', () => {
         screen.getByRole('separator', { name: 'Resize Changes' }),
       ).toBeInTheDocument()
     })
+  })
+
+  it('opens again when the page reveals another row, and only then', async () => {
+    const user = userEvent.setup()
+    function Rows() {
+      const [picked, setPicked] = useState<string | undefined>(undefined)
+      return (
+        <SidePanelProvider>
+          <SidePanelToggle />
+          {['a', 'b'].map((row) => (
+            <button key={row} type="button" onClick={() => setPicked(row)}>
+              pick {row}
+            </button>
+          ))}
+          <SidePanelContent title="Entry" reveal={picked}>
+            <p>row {picked ?? 'none'}</p>
+          </SidePanelContent>
+          <SidePanelHost />
+        </SidePanelProvider>
+      )
+    }
+    render(<Rows />)
+    await user.click(await screen.findByRole('button', { name: 'Hide Entry' }))
+    expect(document.querySelector('[data-slot="side-panel"]')).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'pick a' }))
+    expect(
+      await screen.findByRole('complementary', { name: 'Entry' }),
+    ).toHaveTextContent('row a')
+    await user.click(screen.getByRole('button', { name: 'Hide Entry' }))
+    await user.click(screen.getByRole('button', { name: 'pick b' }))
+    expect(
+      await screen.findByRole('complementary', { name: 'Entry' }),
+    ).toHaveTextContent('row b')
   })
 })

@@ -141,6 +141,7 @@
     "actorHint": "审计操作者标识 —— 绝不会是电子邮件地址。身份从目录中解析得出，此处不予显示。",
     "expiredAt": "已过期 {{time}}",
     "approveOnce": "仅批准这一次",
+    "approveForSession": "在本次会话中始终批准",
     "approving": "正在批准…",
     "deny": "拒绝",
     "noMatch": "没有与搜索匹配的请求",
@@ -218,6 +219,7 @@
     "trailEmpty": "尚无决策记录",
     "trailEmptyHint": "关于该审批的每一次决定——谁在何时因何决定——都会记录在这里。目前还没有人做出决定。",
     "decisionApprove": "已批准",
+    "decisionApproveForSession": "已批准本次会话",
     "decisionReject": "已拒绝",
     "reenableNeedsAdmins": "需要另外两个管理员账户批准。请在“身份与访问”中创建，或使用 `olivares users create`。",
     "openIdentity": "打开“身份与访问”",
@@ -681,14 +683,19 @@
     "matched": "匹配规则：{{rule}}",
     "matchedDefault": "匹配规则：无，因此使用默认设置",
     "matchedUnreadable": "匹配规则：您无权查看的规则",
-    "reaches": "可访问：{{list}}",
+    "reaches": "可访问：",
     "reachFolder": {
-      "write": "{{path}}（写入）",
-      "read": "{{path}}（只读）",
-      "unknown": "{{path}}（访问权限未知）"
+      "write": "<path />（写入）",
+      "read": "<path />（只读）",
+      "unknown": "<path />（访问权限未知）"
     },
     "matchedUnknown": "匹配规则：无法读取的规则",
-    "reachIncomplete": "以及无法读取的部分"
+    "reachIncomplete": "以及无法读取的部分",
+    "rule": {
+      "default": "无规则，因此适用默认值",
+      "unreadable": "你无权查看的规则",
+      "unknown": "无法读取的规则"
+    }
   },
   "list": {
     "loadedOnly": "搜索仅涵盖已加载的行；请继续加载更多。"

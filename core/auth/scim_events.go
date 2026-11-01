@@ -186,7 +186,7 @@ func (a *Authenticator) ConfigureSCIMSet(ctx context.Context, actor Principal, t
 			settings = map[string]any{}
 		}
 		settings[orgSettingSCIMSet] = asMap
-		if _, err := sc.SetOrgSettings(ctx, settings); err != nil {
+		if _, err := sc.SetOrgSettings(ctx, settings, org.Version); err != nil {
 			return err
 		}
 		_, err = sc.Audit().Append(ctx, model.AuditDraft{

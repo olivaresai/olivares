@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { describe, expect, it } from 'vitest'
-import { sendBlockedReason, sessionTurnBody } from './session-turn'
+import { describe, expect, it, vi } from 'vitest'
+import { sendBlockedReason, sessionTurnBody, sendTurn } from './session-turn'
 import type { RunDTO } from './types'
 
 const claude: Pick<RunDTO, 'provider_driver'> = { provider_driver: 'claude' }
@@ -94,4 +94,30 @@ describe('sendBlockedReason — a disabled Send says why', () => {
       sendBlockedReason({ live: true, draft: 'hello', sending: false }),
     ).toBeNull()
   })
+})
+
+const sendApi = vi.hoisted(() => ({
+  input: vi.fn().mockResolvedValue({ accepted: true }),
+  inputText: vi.fn().mockResolvedValue({ accepted: true }),
+  fence: vi.fn(),
+}))
+vi.mock('./api', () => ({ agentOpsApi: sendApi }))
+vi.mock('./work-fence', () => ({ currentControlFence: sendApi.fence }))
+
+it('does not send a compacted turn if its owner leaves during the fence read', async () => {
+  const controller = new AbortController()
+  sendApi.fence.mockImplementationOnce(async () => {
+    controller.abort()
+    return 7
+  })
+  await expect(
+    sendTurn(
+      { run_ref: 'run_live', provider_driver: 'codex' } as RunDTO,
+      'continue',
+      false,
+      controller.signal,
+    ),
+  ).rejects.toThrow()
+  expect(sendApi.inputText).not.toHaveBeenCalled()
+  expect(sendApi.input).not.toHaveBeenCalled()
 })

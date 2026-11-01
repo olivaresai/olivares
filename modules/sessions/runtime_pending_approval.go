@@ -60,6 +60,7 @@ func (m *Module) BeginApprovalWait(ctx context.Context, principal auth.Principal
 	}
 	lr.pendingApprovals = append(lr.pendingApprovals, wait)
 	lr.mu.Unlock()
+	m.pushAttention(tenant, rec, pushApproval)
 	var once sync.Once
 	return func() {
 		once.Do(func() {

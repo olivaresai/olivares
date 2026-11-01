@@ -64,6 +64,8 @@ func TestRunHTTPWorkspaceConfinement(t *testing.T) {
 	confined := member("confined-run@test.io", auth.RoleAdmin, workspaceA)
 	unconfined := member("tenant-reader@test.io", auth.RoleViewer, "")
 	sameWorkspace := member("same-workspace-run@test.io", auth.RoleViewer, workspaceB)
+	unconfinedOutput := member("tenant-output@test.io", auth.RoleEditor, "")
+	sameWorkspaceOutput := member("workspace-output@test.io", auth.RoleEditor, workspaceB)
 	principal, err := auth.NewAuthenticator(h.st, nil).Authenticate(context.Background(), confined)
 	if err != nil {
 		t.Fatal(err)
@@ -183,8 +185,8 @@ func TestRunHTTPWorkspaceConfinement(t *testing.T) {
 			{"missing content", unconfined, model.NewID().String(), http.StatusNotFound},
 			{"confined missing content", sameWorkspace, model.NewID().String(), http.StatusNotFound},
 			{"primary ID is not content reference", sameWorkspace, rowID.String(), http.StatusNotFound},
-			{"same workspace read", sameWorkspace, runRef, http.StatusOK},
-			{"tenant wide read", unconfined, runRef, http.StatusOK},
+			{"same workspace read", sameWorkspaceOutput, runRef, http.StatusOK},
+			{"tenant wide read", unconfinedOutput, runRef, http.StatusOK},
 		} {
 			t.Run(tc.name+suffix, func(t *testing.T) {
 				before := reads.views.Load()
@@ -211,7 +213,7 @@ func TestRunHTTPWorkspaceConfinement(t *testing.T) {
 		}
 	}
 	t.Run("event query cannot replace the authorized parent", func(t *testing.T) {
-		r := h.do("GET", "/v1/m/sessions/runs/"+runRef+"/events?run_ref="+rowID.String()+"&workspace_id="+workspaceA.String(), sameWorkspace, tenantHdr(tenant))
+		r := h.do("GET", "/v1/m/sessions/runs/"+runRef+"/events?run_ref="+rowID.String()+"&workspace_id="+workspaceA.String(), sameWorkspaceOutput, tenantHdr(tenant))
 		if r.code != http.StatusOK || !strings.Contains(r.raw, marker) || strings.Contains(r.raw, unrelatedMarker) {
 			t.Fatalf("caller selected the event parent: %d %s", r.code, r.raw)
 		}
@@ -303,8 +305,8 @@ func TestRunHTTPWorkspaceConfinement(t *testing.T) {
 			})
 		}
 	})
-	t.Run("tenant-wide reader still receives live output", func(t *testing.T) { attach(t, unconfined, runRef, 200) })
-	t.Run("same-workspace reader receives live output", func(t *testing.T) { attach(t, sameWorkspace, runRef, 200) })
+	t.Run("tenant-wide reader still receives live output", func(t *testing.T) { attach(t, unconfinedOutput, runRef, 200) })
+	t.Run("same-workspace reader receives live output", func(t *testing.T) { attach(t, sameWorkspaceOutput, runRef, 200) })
 }
 
 // Preserve the real store's confinement behavior while observing whether the

@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 # Evaluation guide — proof of value in 10 business days
 
-Audit SIEM export, directory archives and external archive verification require Business. Community retains the signed ledger and `olivares audit verify`; `olivares dr backup` remains available. See [edition placement](../editions.md).
+Audit SIEM export, ledger verification (`olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`), directory archives and external archive verification require Business. Community retains the signed ledger and its reads; `olivares dr backup` remains available. See [edition placement](../editions.md).
 
 > For platform engineering, security and compliance teams evaluating Olivares AI.
 > Every step runs against the real binary serving real data. The demo estate is

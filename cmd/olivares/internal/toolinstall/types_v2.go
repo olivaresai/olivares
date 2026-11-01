@@ -19,8 +19,9 @@ import (
 const PlanSchemaV2 = "olivares.ai/tool-install/plan/v2"
 
 const (
-	DriverCodex = "codex"
-	DriverGrok  = "grok"
+	DriverCodex  = "codex"
+	DriverGrok   = "grok"
+	DriverCursor = "cursor"
 
 	DigestStateExact   = "exact"
 	DigestStateUnknown = "unknown"
@@ -39,6 +40,10 @@ const (
 
 	VerificationSigstoreCosign = "sigstore-cosign"
 	VerificationNoneOriginOnly = "none-origin-only"
+	// VerificationOriginTarball: the vendor publishes a tarball on its own origin and no
+	// checksum or signature. The digest is observed at fetch and recorded in the receipt;
+	// it is not a publisher claim.
+	VerificationOriginTarball = "origin-tarball"
 
 	CosignModeOffline = "offline"
 	CosignModeOnline  = "online"
@@ -50,8 +55,9 @@ const (
 
 	BundleFormatCosignLegacy = "cosign-legacy-simple-signing"
 
-	PackagePolicyCodexMixedV1 = "codex-mixed-v1"
-	PackagePolicyOriginOnlyV1 = "origin-only-v1"
+	PackagePolicyCodexMixedV1    = "codex-mixed-v1"
+	PackagePolicyOriginOnlyV1    = "origin-only-v1"
+	PackagePolicyOriginTarballV1 = "origin-tarball-v1"
 
 	LayoutIDCodexPackageV1 = "codex-package-layout-v1"
 	LayoutIDGrokBinV1      = "grok-bin-v1"
@@ -228,7 +234,7 @@ func (s *SelectionV2) validate() error {
 	if s.Tool != nil {
 		return validateDeclaredSelection(s)
 	}
-	if err := closedToken(s.Driver, "driver", DriverCodex, DriverGrok, DriverOpenCode, DriverOllama, DriverGemini); err != nil {
+	if err := closedToken(s.Driver, "driver", DriverCodex, DriverGrok, DriverOpenCode, DriverOllama, DriverGemini, DriverCursor); err != nil {
 		return err
 	}
 	if err := closedToken(s.Channel, "channel", ChannelExact, ChannelLatest, ChannelStable); err != nil {
@@ -255,7 +261,7 @@ func (s *SelectionV2) validate() error {
 	if !vendorPlatformV2Re.MatchString(s.VendorPlatform) {
 		return refuse(KindInvalidRequest, "vendor_platform %q is not a bounded vendor key", s.VendorPlatform)
 	}
-	if err := closedToken(s.PackagePolicyID, "package_policy_id", PackagePolicyCodexMixedV1, PackagePolicyOriginOnlyV1, PackagePolicyReleaseArchiveV1); err != nil {
+	if err := closedToken(s.PackagePolicyID, "package_policy_id", PackagePolicyCodexMixedV1, PackagePolicyOriginOnlyV1, PackagePolicyReleaseArchiveV1, PackagePolicyOriginTarballV1); err != nil {
 		return err
 	}
 	if err := s.Source.validate(); err != nil {
@@ -318,7 +324,7 @@ func (p PlatformV2) validate(driver string) error {
 		if p.Libc != "glibc" && p.Libc != "musl" {
 			return refuse(KindInvalidRequest, "opencode platform libc must be glibc or musl, got %q", p.Libc)
 		}
-	case DriverGrok, DriverOllama, DriverGemini:
+	case DriverGrok, DriverOllama, DriverGemini, DriverCursor:
 		if p.Libc != "" {
 			return refuse(KindInvalidRequest, "grok platform libc must be empty, got %q", p.Libc)
 		}
@@ -441,6 +447,9 @@ func (f FetchedObjectExpectation) validate() error {
 }
 
 func (l ExpectedLayout) validate() error {
+	if l.ID == LayoutIDCursorPackageV1 {
+		return validateCursorLayout(l)
+	}
 	if releaseArchiveLayoutID(l.ID) {
 		return validateReleaseArchiveLayout(l)
 	}
@@ -580,7 +589,7 @@ func (s SubjectExpectation) validate() error {
 }
 
 func (v VerificationProfileV2) validate() error {
-	if err := closedToken(v.Kind, "verification.kind", VerificationSigstoreCosign, VerificationNoneOriginOnly, VerificationGitHubReleaseSHA256); err != nil {
+	if err := closedToken(v.Kind, "verification.kind", VerificationSigstoreCosign, VerificationNoneOriginOnly, VerificationGitHubReleaseSHA256, VerificationOriginTarball); err != nil {
 		return err
 	}
 	switch v.Kind {
@@ -589,7 +598,7 @@ func (v VerificationProfileV2) validate() error {
 			return refuse(KindInvalidRequest, "verification.cosign is required for %s", v.Kind)
 		}
 		return v.Cosign.validate()
-	case VerificationNoneOriginOnly, VerificationGitHubReleaseSHA256:
+	case VerificationNoneOriginOnly, VerificationGitHubReleaseSHA256, VerificationOriginTarball:
 		if v.Cosign != nil {
 			return refuse(KindInvalidRequest, "verification.cosign must be null for %s", v.Kind)
 		}
@@ -639,6 +648,9 @@ func (c *CosignProfileV2) validate() error {
 }
 
 func (s SelectionV2) validateClosedCombination() error {
+	if s.Driver == DriverCursor {
+		return s.validateCursorSelection()
+	}
 	if s.Driver == DriverOpenCode || s.Driver == DriverOllama || s.Driver == DriverGemini ||
 		(s.Driver == DriverCodex && s.PackagePolicyID == PackagePolicyReleaseArchiveV1) {
 		return s.validateReleaseArchiveSelection()

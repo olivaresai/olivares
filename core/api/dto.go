@@ -170,9 +170,10 @@ type loginInput struct {
 }
 
 type setupInput struct {
-	Token    string `json:"token"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	BackupKeySaved bool   `json:"backup_key_saved,omitempty"`
+	Token          string `json:"token"`
+	Email          string `json:"email"`
+	Password       string `json:"password"`
 	// Organization OPTIONALLY names the first organization first-boot setup
 	// creates and grants the new superadmin ownership of. Empty falls back to
 	// firstOrgDefaultName — an install must be usable whether or not the operator

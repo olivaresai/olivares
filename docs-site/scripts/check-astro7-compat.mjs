@@ -4,7 +4,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit
 // liability: see DISCLAIMER.md at the repository root.
 //
-// test:astro7-compat — bounded Astro 7.3.2 / Starlight 0.42 assertions on the
+// test:astro7-compat — bounded Astro 7.3.3 / Starlight 0.42 assertions on the
 // lockfile, config and built dist/. Exit 0 clean, 1 finding, 2 could not look.
 
 import { readFile } from 'node:fs/promises'
@@ -45,7 +45,7 @@ const resolved = {
   satteri: pkgVersion('@astrojs/markdown-satteri'),
 }
 
-if (resolved.astro !== '7.3.2') fail(`astro resuelto ${resolved.astro}, se exige 7.3.2`)
+if (resolved.astro !== '7.3.3') fail(`astro resuelto ${resolved.astro}, se exige 7.3.3`)
 if (resolved.starlight !== '0.42.0') fail(`starlight resuelto ${resolved.starlight}, se exige 0.42.0`)
 if (resolved.openapi !== '0.26.2') fail(`starlight-openapi resuelto ${resolved.openapi}, se exige 0.26.2`)
 if (resolved.versions !== '0.10.1') fail(`starlight-versions resuelto ${resolved.versions}, se exige 0.10.1`)

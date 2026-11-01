@@ -49,19 +49,24 @@ const (
 	colRunGitRead                 = "git_read"
 	colRunCredentials             = "credential_names"
 	colRunRegistrySecrets         = "registry_secret_names"
+	colRunStandardsRefs           = "standards_refs"
 	colRunQueuedIntent            = "queued_intent"
 	colRunRef                     = "run_ref"
 	colRunPeers                   = "peers"
 	colRunPeersRule               = "peers_rule"
 	colRunName                    = "name"
+	colRunTitle                   = "title"
 	colRunArchivedAt              = "archived_at"
 	colTransport                  = "transport"
 	colPermissionMode             = "permission_mode"
 	colEffort                     = "effort"
 	colRunFastMode                = "fast_mode"
 	colRunServiceTier             = "service_tier"
+	colRunCostCap                 = "cost_cap_micro_usd"
+	colRunDeadline                = "run_deadline_at"
 	colRunModelRef                = "model_ref"
 	colWorkspaceRef               = "workspace_ref"
+	colRunOn                      = "run_on"
 	// colRunWorkspacePath is the EFFECTIVE working directory this run's child was
 	// started in: the canonical root of the registered workspace it named, or the
 	// directory of its own this plane created under the data directory when it
@@ -115,10 +120,29 @@ const (
 	// and resume and release leave its directory alone.
 	colRunWorktreeBranch = "worktree_branch"
 
+	// colRunSetupPending says the run is a new worktree whose approved setup command has
+	// not yet been settled: it is set when the run is made (false when this start skipped
+	// setup) and cleared when the setup finishes or the session's first process starts,
+	// whichever is first. A start of such a run, whether a create, an approved queued
+	// start or a resume after a failed first start, runs the setup (runtime_worktree_setup.go).
+	// Nullable: a run that predates the column has none; resume derives it from an empty
+	// started_at instead, because legacy no_setup was not recorded.
+	colRunSetupPending = "worktree_setup_pending"
+
+	// colRunSetupCleanupFailed records that the setup guard exited without proving
+	// its detached descendants were gone. Resume is then refused: a new setup must
+	// never start beside a process whose custody was lost. Nullable for legacy rows.
+	colRunSetupCleanupFailed = "worktree_setup_cleanup_failed"
+
 	// colRunHandoffOf is the run_ref of the session this one was handed off from
 	// (session_handoff.go): a reference, never content. Nullable: a run that was not
 	// started by a handoff, or predates the column, names none.
 	colRunHandoffOf = "handoff_of"
+
+	// colRunSourceURL is the page of the GitHub issue or pull request the session was
+	// started from (session_source_item.go): a link kept on the session, never the
+	// item's text. Nullable: a session started any other way has none.
+	colRunSourceURL = "source_url"
 
 	// Governance facts: the non-sensitive launch-decision posture persisted
 	// on the run so the portal renders the per-session governance panel without the
@@ -250,6 +274,10 @@ const (
 	// policy and sandbox. It is not colPermissionMode, which is what the launch
 	// asked for. NULL means the tool has not said.
 	colRunToolMode = "tool_mode"
+
+	// A nullable proof: false means this engine has never attempted Codex input.
+	// Old rows remain NULL; failure to record true must refuse input.
+	colRunCodexInputAttempted = "codex_input_attempted"
 )
 
 // sessions.run_event columns (append-only ledger; per-session hash anchor).
@@ -308,9 +336,14 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			// Nullable for the expand-contract reason: an existing sessions_run gains it on the
 			// next boot. A launch records "[]" when it opens none, so a row with no value
 			// predates it and is unknown (usedRegistryTokens).
+			{Name: colRunStandardsRefs, Kind: model.KindText, Nullable: true, Principal: model.None("JSON array of the ids of the session templates whose instructions a launch of the run was given as its department and group standards; template ids, never an account: department_standards.go:325, runtime.go:1647, runtime.go:3169")},
 			{Name: colRunRegistrySecrets, Kind: model.KindText, Nullable: true, Principal: model.None("JSON array of {env, secret} NAMES of the vault secrets holding the package registry tokens a launch of the run used; never their values: provider_profile_packages.go:331, provider_profile_packages.go:345, runtime.go:2908, runtime.go:1673")},
 			{Name: colRunQueuedIntent, Kind: model.KindText, Nullable: true, Principal: model.None("references-only launch question pinned to the original approval: runtime_approval_wait.go:53")},
 			{Name: colRunName, Kind: model.KindText, Nullable: true, Principal: model.None("an operator-chosen run label, shown only: runtime_dto.go:119")},
+			// A phrase cut from the first message (run_title.go), shown where the run has no name.
+			// Nullable for the expand-contract reason: an existing sessions_run gains it on the next
+			// boot (reconcileColumns) and a row that predates it has none.
+			{Name: colRunTitle, Kind: model.KindText, Nullable: true, Principal: model.None("a display title cut from the first message the person sent: text the person typed, shown to readers of the session's output: run_title.go:175, run_title.go:218, run_title.go:206")},
 			// When the session was archived (run_name_archive.go): the session's own
 			// state, shared by everyone who reads it, not a person's mark. Nullable for
 			// the expand-contract reason: an existing sessions_run gains it on the next
@@ -321,8 +354,11 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			{Name: colEffort, Kind: model.KindText, Nullable: true, Principal: model.None("an effort level, a closed set: runtime_ports.go:98-100, runtime_dto.go:122")},
 			{Name: colRunModelRef, Kind: model.KindText, Nullable: true, Principal: model.None("a model id the launch passes to the child, shown only: runtime_dto.go:123")},
 			{Name: colRunFastMode, Kind: model.KindBool, Nullable: true},
+			{Name: colRunCostCap, Kind: model.KindInt, Nullable: true},
+			{Name: colRunDeadline, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colRunServiceTier, Kind: model.KindText, Nullable: true, Principal: model.None("a provider service tier passed to the owned tool, not an identity: driver_codex.go:349")},
 			{Name: colWorkspaceRef, Kind: model.KindText, Nullable: true, Principal: model.None("the id of a registered host workspace, never an account: workspace.go:82, runtime_dto.go:124")},
+			{Name: colRunOn, Kind: model.KindText, Nullable: true, Principal: model.None("the enrolled remote node selected for this run, never an account: one node name validated at runtime_placement.go:32, read at runtime.go:1674")},
 			// Nullable for the expand-contract reason every stamp below gives: an
 			// existing sessions_run gains it on the next boot (reconcileColumns) and a
 			// row that predates it carries no recorded directory.
@@ -334,9 +370,17 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			// Nullable for the same expand-contract reason: an existing sessions_run gains
 			// it on the next boot and a row that predates it names no worktree.
 			{Name: colRunWorktreeBranch, Kind: model.KindText, Nullable: true, Principal: model.None("a git branch name this plane made for the run's worktree, read for resume and release, never an account: runtime_worktree.go:442-443, runtime_worktree.go:523-524, runtime_dto.go:169")},
+			// Nullable for the same expand-contract reason: an existing sessions_run gains
+			// it on the next boot. A legacy never-started worktree row runs its setup once.
+			{Name: colRunSetupPending, Kind: model.KindBool, Nullable: true},
+			// A run that predates the cleanup flag has none and keeps the legacy behavior.
+			{Name: colRunSetupCleanupFailed, Kind: model.KindBool, Nullable: true},
 			// The session this one was handed off from. Nullable for the same
 			// expand-contract reason: an existing sessions_run gains it on the next boot.
 			{Name: colRunHandoffOf, Kind: model.KindText, Nullable: true, Principal: model.None("the run_ref of the session a handoff started this one from, a reference and never content: runtime.go:2874, runtime_dto.go:173")},
+			// The GitHub issue or pull request page the session was started from. Nullable for
+			// the same expand-contract reason: an existing sessions_run gains it on the next boot.
+			{Name: colRunSourceURL, Kind: model.KindText, Nullable: true, Principal: model.None("the public page URL of a GitHub issue or pull request the person named, kept as a link and never an account: runtime.go:3355, runtime_dto.go:225")},
 			// the template this run was last launched under. A reference, never the
 			// template's body — the terms are re-resolved from the template row on every
 			// launch and resume, so a tightened template governs the next relaunch rather
@@ -354,6 +398,7 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			{Name: colTemplateCeiling, Kind: model.KindInt, Nullable: true},
 			{Name: colIsolation, Kind: model.KindText, Principal: model.None("an isolation posture, a closed set: runtime_ports.go:70-72, runtime_dto.go:129")},
 			{Name: colState, Kind: model.KindText, Indexed: true, Principal: pdeclNoneRunState},
+			{Name: colRunCodexInputAttempted, Kind: model.KindBool, Nullable: true},
 			{Name: colClaudeSessionID, Kind: model.KindText, Nullable: true, Principal: model.None("the provider's own conversation id captured from the child's stream, shown only: runtime_bridge.go:180, runtime_dto.go:131")},
 			{Name: colPID, Kind: model.KindInt, Nullable: true},
 			{Name: colCredentialID, Kind: model.KindText, Nullable: true, Principal: model.None("the id of the per-run credential, a revocation handle and never the bearer value: runtime.go:2412, runtime_dto.go:133")},
@@ -420,6 +465,15 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			{Name: colRunCostMicroUSD, Kind: model.KindInt, Nullable: true},
 			{Name: colRunUsageModelRef, Kind: model.KindText, Nullable: true, Principal: model.None("the model id reported with the run's usage, shown only: runtime_usage.go:374, runtime_dto.go:160")},
 			{Name: colRunContextWindows, Kind: model.KindJSON, Nullable: true, Principal: model.None("model/window numbers reported by Claude Code, shown only: runtime_usage.go:411, session_activity.go:375")},
+			{Name: colRunResumeCancelled, Kind: model.KindBool, Nullable: true},
+			{Name: colRunResumeAfterLimit, Kind: model.KindBool, Nullable: true},
+			{Name: colRunResumeDismissed, Kind: model.KindBool, Nullable: true},
+			{Name: colLimitResumeUser, Kind: model.KindUUID, Nullable: true, Principal: model.Ref(model.EncodeUserID, model.ClassEvidence)},
+			{Name: colLimitResumeCredentialID, Kind: model.KindUUID, Nullable: true, Principal: model.Ref(model.EncodeCredentialID, model.ClassAuthority)},
+			{Name: colLimitResumeCredentialKind, Kind: model.KindText, Nullable: true, Principal: model.None("credential kind discriminator, not an identity: runtime_limit_resume.go:313")},
+			{Name: colLimitResumeCredentialVersion, Kind: model.KindInt, Nullable: true},
+			{Name: colLimitResumeCredentialSeal, Kind: model.KindText, Nullable: true, Principal: model.None("irreversible verifier fingerprint, never bearer material or identity: runtime_limit_resume.go:313")},
+			{Name: colRunResumeAt, Kind: model.KindTimestamp, Nullable: true, Indexed: true},
 			{Name: colRunUsageLimit, Kind: model.KindJSON, Nullable: true, Principal: model.None("the limit kind, reset time and profile reference the tool reported, shown only: runtime_limit.go:51, runtime_limit.go:198, runtime_dto.go:231")},
 			{Name: colRunToolMode, Kind: model.KindText, Nullable: true, Principal: model.None("the session's mode as the tool reported it, shown only: runtime_tool_mode.go:29-39, runtime_tool_mode.go:45-51, runtime_dto.go:211")},
 		},

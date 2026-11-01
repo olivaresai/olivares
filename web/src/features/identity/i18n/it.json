@@ -272,6 +272,43 @@
       "lastCredential": "Non puoi eliminare la tua unica passkey. Registrane prima un'altra."
     }
   },
+  "sessions": {
+    "title": "I tuoi accessi",
+    "description": "Browser e client su cui hai effettuato l'accesso. Termina le sessioni che non usi o riconosci più.",
+    "endAll": "Termina tutte le altre",
+    "none": "Nessun accesso attivo",
+    "noneHint": "I tuoi accessi attuali e recenti appariranno qui.",
+    "client": "Client",
+    "lastUsed": "Ultimo utilizzo",
+    "created": "Creato",
+    "expires": "Scade",
+    "actionsColumn": "Azioni",
+    "current": "Questa sessione",
+    "end": "Termina",
+    "endLabel": "Termina l'accesso {{kind}} del {{created}}",
+    "endTitle": "Terminare l'accesso?",
+    "endBody": "Questo accesso smetterà di funzionare su quel browser o client. Potrai accedere di nuovo più tardi.",
+    "endAllTitle": "Terminare tutti gli altri accessi?",
+    "endAllBody": "Le altre sessioni elencate qui verranno terminate. Questa sessione resta attiva.",
+    "endAllFailed_one": "{{count}} accesso non è stato terminato. Controlla l'elenco e riprova.",
+    "endAllFailed_many": "{{count}} accessi non sono stati terminati. Controlla l'elenco e riprova.",
+    "endAllFailed_other": "{{count}} accessi non sono stati terminati. Controlla l'elenco e riprova.",
+    "ended": "Accesso terminato.",
+    "kinds": {
+      "browser": "Browser",
+      "token": "Token",
+      "unknown": "Sconosciuto",
+      "pairing": "Associazione in attesa"
+    },
+    "deviceName": "Nome del dispositivo",
+    "pair": "Associa un dispositivo",
+    "pairLink": "Link monouso",
+    "pairHint": "Copia questo link privato sul dispositivo. Scade tra 10 minuti e funziona una sola volta.",
+    "pairTitle": "Associa questo dispositivo",
+    "acceptHint": "Continua solo se hai richiesto questo link dal tuo account. Questo dispositivo potrà accedere a tale account.",
+    "pairInvalid": "Il link manca, è scaduto o è già stato usato. Creane un altro nelle impostazioni di accesso.",
+    "accept": "Associa questo dispositivo"
+  },
   "totp": {
     "title": "Secondo fattore TOTP",
     "description": "Una password monouso basata sul tempo (RFC 6238) come fattore aggiuntivo del tuo account locale. Si aggiunge alle tue passkey, non le sostituisce mai.",

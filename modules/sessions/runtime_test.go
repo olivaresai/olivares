@@ -32,8 +32,15 @@ type fakeProc struct {
 	exit    int
 	done    bool
 	// onStop, when set, runs as the process is stopped: a tool writing its last
-	// record while it exits.
-	onStop func()
+	// record while it exits. stopErr is a synthetic cleanup failure.
+	onStop  func()
+	stopErr error
+	// guardCleanupFailed is the typed guard outcome, never parsed from output.
+	guardCleanupFailed bool
+	// stopLeavesLive keeps Wait blocked after Stop, as an unreaped child does.
+	stopLeavesLive bool
+	// waitErr is returned by Wait, as a process whose outcome cannot be collected.
+	waitErr error
 }
 
 func (p *fakeProc) Send(_ context.Context, line []byte) error {
@@ -46,15 +53,22 @@ func (p *fakeProc) Send(_ context.Context, line []byte) error {
 	return nil
 }
 func (p *fakeProc) Output() <-chan OutputFrame { return p.out }
-func (p *fakeProc) Wait() (int, error)         { <-p.stopped; return p.exit, nil }
+func (p *fakeProc) Wait() (int, error)         { <-p.stopped; return p.exit, p.waitErr }
 func (p *fakeProc) Stop(context.Context) error { // SIGTERM-like
+	stopErr := p.stopErr
 	if p.onStop != nil {
 		p.onStop()
 	}
-	p.finish(143)
-	return nil
+	if !p.stopLeavesLive {
+		p.finish(143)
+	}
+	return stopErr
 }
 func (p *fakeProc) PID() int { return 4242 }
+
+func (p *fakeProc) WorktreeSetupCleanup() (failed, known bool) {
+	return p.guardCleanupFailed, true
+}
 
 func (p *fakeProc) finish(code int) {
 	p.mu.Lock()

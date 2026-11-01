@@ -290,13 +290,20 @@ class ReleaseFirstHourTest(unittest.TestCase):
             fd = os.open(env['FIRST_HOUR_LOCK'], os.O_CREAT | os.O_RDWR)
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX)
-                result = subprocess.run(['bash', str(root / 'scripts/release-first-hour.sh')],
-                                        env=env, capture_output=True, text=True, timeout=30)
+                with subprocess.Popen(['bash', str(root / 'scripts/release-first-hour.sh')],
+                                      env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                      text=True) as child:
+                    try:
+                        with self.assertRaises(subprocess.TimeoutExpired):
+                            child.communicate(timeout=0.2)
+                        self.assertFalse((root / 'calls.jsonl').exists())
+                    finally:
+                        fcntl.flock(fd, fcntl.LOCK_UN)
+                    out, err = child.communicate(timeout=30)
+                    self.assertEqual(child.returncode, 0, out + err)
+                    self.assertTrue((root / 'browser-ran').exists())
             finally:
                 os.close(fd)
-            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-            self.assertIn('owns this Docker daemon', result.stderr)
-            self.assertFalse((root / 'calls.jsonl').exists())
 
     def test_console_must_be_on_loopback(self) -> None:
         self.run_case('port-public', 1, message='console is not published on loopback')

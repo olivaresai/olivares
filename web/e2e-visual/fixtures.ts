@@ -11,7 +11,13 @@ import type {
   EgressPolicyStatus,
 } from '../src/features/eventing/types'
 import type { ToolReadinessDTO } from '../src/features/agentops/types'
-import { SESSION_TOOLS } from '../src/features/agentops/tool-names.ts'
+// The engine's tool table (GET /v1/m/sessions/tools), held to the engine by
+// modules/sessions/tools_api_test.go.
+import engineTools from '../src/features/agentops/engine-tools.fixture.json' with { type: 'json' }
+
+const SESSION_TOOLS = engineTools.tools
+  .filter((tool) => tool.session)
+  .map((tool) => tool.key)
 
 // The first-hour card asks readiness as an object with tools[], not a list envelope.
 // No synthetic account is configured here; each tool reports why it cannot start.
@@ -835,6 +841,19 @@ export const modelsList = {
     },
   ],
   has_more: false,
+}
+
+export const modelsAvailability = {
+  items: [
+    {
+      source_ref: 'provider:1',
+      provider_ref: 'provider:1',
+      provider_kind: 'openai_compatible',
+      state: 'fresh',
+      models: [{ id: 'api-stub-model', seen_at: '2026-10-25T10:00:00Z' }],
+    },
+  ],
+  refresh_interval_seconds: 3600,
 }
 
 export const securityFindings = {
@@ -2495,6 +2514,7 @@ export function fixtureFor(pathname: string): unknown | null {
         { kind: 'core.user_group', count: 1, capped: false },
       ],
     }
+  if (pathname === '/v1/m/sessions/tools') return engineTools
   if (pathname === '/v1/m/sessions/provider-profiles/readiness')
     return toolsReadiness
   if (pathname === '/v1/m/agenttools/inventory')
@@ -2535,6 +2555,7 @@ export function fixtureFor(pathname: string): unknown | null {
   if (pathname.endsWith('/v1/m/finops/spend')) return finopsSpendTeam
   if (pathname.endsWith('/v1/m/finops/forecast')) return finopsForecast
   if (pathname.endsWith('/v1/console/mcp-gateway')) return mcpGateway
+  if (pathname.endsWith('/v1/m/models/availability')) return modelsAvailability
   if (pathname.endsWith('/v1/m/models/models')) return modelsList
   if (pathname.endsWith('/v1/m/security/findings')) return securityFindings
   if (pathname.endsWith('/v1/m/redteam/runs')) return redteamRuns

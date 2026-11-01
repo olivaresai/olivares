@@ -112,6 +112,10 @@ func (m *Module) InputForWork(
 	presentedFence int64,
 	data []byte,
 ) error {
+	// A first input waits for the session's start outside the lock, so a stop can reach it.
+	if err := m.awaitLaunch(ctx, tenant, runRef); err != nil {
+		return err
+	}
 	// Admission is cancellation-aware: a fenced caller that has gone away stops
 	// waiting for the key instead of queueing ahead of its own request.
 	release, err := m.rt.lockRunContext(ctx, liveKey(tenant, runRef))
@@ -173,6 +177,9 @@ func (m *Module) TextForWork(
 ) error {
 	if !boundedText(text, 1, maxWorkTextInputBytes) {
 		return broken(400, "invalid_command")
+	}
+	if err := m.awaitLaunch(ctx, tenant, runRef); err != nil {
+		return err
 	}
 	// Admission is cancellation-aware: a fenced caller that has gone away stops
 	// waiting for the key instead of queueing ahead of its own request.

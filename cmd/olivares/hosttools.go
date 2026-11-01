@@ -21,12 +21,12 @@ import (
 // hostToolObserver is the production sessions.HostToolObserver (HC1 revision 1):
 // the existing official-CLI Detect over locations captured once at composition.
 //
-// ⛔ IT IS NOT toolInstallEngine. That engine wires a GPG verifier, and Detect
-// calls List, which re-verifies retained signed material — so Probe=false alone
-// would still let a console read run gpg. This observer builds the same tool
-// catalog with an explicitly UNAVAILABLE verifier and an HTTP client that refuses
-// every request: nothing here constructs or invokes gpg, a detected CLI, a shell
-// or a network connection. A managed release whose signature is not re-verified
+// ⛔ IT IS NOT toolInstallEngine. That engine wires a signature verifier, and
+// Detect calls List, which re-verifies retained signed material — so Probe=false
+// alone would still let a console read verify signatures. This observer builds the
+// same tool catalog with an explicitly UNAVAILABLE verifier and an HTTP client that
+// refuses every request: nothing here verifies a signature or invokes a detected
+// CLI, a shell or a network connection. A managed release whose signature is not re-verified
 // therefore stays unverified; it is never reported registered.
 //
 // ⛔ AND AN EMPTY DETECT RESULT IS NOT ABSENCE BY ITSELF (Root correction C1).
@@ -193,8 +193,8 @@ func (o *hostToolObserver) ObserveHostTools(ctx context.Context, driver, configu
 
 // examineHostToolScope re-examines the search locations Detect used for this
 // driver: the catalog's vendor default paths under the captured home, the
-// directory whose enumeration feeds them, and each absolute PATH entry (Detect
-// ignores relative ones). A location is acceptable only when it is present or
+// directory whose enumeration feeds them, and the driver's PathProgram in each
+// absolute PATH entry (Detect ignores relative ones). A location is acceptable only when it is present or
 // fs.ErrNotExist. It uses Lstat and one directory listing, so it never opens a
 // FIFO, a candidate file or provider configuration, and it executes nothing.
 func examineHostToolScope(driver, home, pathEnv string, defaultPaths []string) error {
@@ -208,11 +208,12 @@ func examineHostToolScope(driver, home, pathEnv string, defaultPaths []string) e
 			return err
 		}
 	}
+	program := toolinstall.PathProgram(driver)
 	for _, dir := range filepath.SplitList(pathEnv) {
 		if !filepath.IsAbs(dir) {
 			continue
 		}
-		if err := presentOrMissing(filepath.Join(dir, driver)); err != nil {
+		if err := presentOrMissing(filepath.Join(dir, program)); err != nil {
 			return err
 		}
 	}

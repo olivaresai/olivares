@@ -309,11 +309,11 @@ func TestPublicProvidersAreNotKeyedAndAreBounded(t *testing.T) {
 		t.Fatalf("destinations = %+v, want the bound provider keyed and open, the listed host public and unkeyed", ds)
 	}
 	many := Policy{Providers: []string{"https://api.z.ai/"}}
-	for i := 0; i < 16; i++ {
+	for i := 0; i < maxEndpoints; i++ {
 		many.PublicProviders = append(many.PublicProviders, fmt.Sprintf("https://h%d.example/", i))
 	}
 	if _, err := destinations(many); err == nil {
-		t.Fatal("17 endpoints were admitted")
+		t.Fatalf("%d endpoints were admitted", 1+maxEndpoints)
 	}
 	if _, err := destinations(Policy{Offline: true, PublicProviders: []string{"https://github.com/"}}); err == nil {
 		t.Fatal("an offline policy granted a listed host")
@@ -566,6 +566,47 @@ func TestProxyCheckedPublicFailover(t *testing.T) {
 				t.Errorf("DNS resolved %d times, want 1", resolver.calls)
 			}
 		})
+	}
+}
+
+func TestProxyControlDialServesOnlyDeclaredControls(t *testing.T) {
+	control := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	defer control.Close()
+	ds, err := destinations(Policy{Providers: []string{"http://provider.example:8080"}, Controls: []string{control.URL + "/permission-prompt"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver := &changingResolver{ip: net.ParseIP("127.0.0.1")}
+	var relayed []string
+	p, err := startProxyWithDialer(context.Background(), ds, resolver, func(ctx context.Context, network, address string, timeout time.Duration) (net.Conn, error) {
+		return nil, errors.New("ordinary dial must not carry a control connection")
+	}, withControlDial(func(ctx context.Context, network, address string) (net.Conn, error) {
+		relayed = append(relayed, address)
+		return (&net.Dialer{}).DialContext(ctx, network, control.Listener.Addr().String())
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.close()
+	transport := &http.Transport{Proxy: http.ProxyURL(&url.URL{Scheme: "http", Host: "proxy"}), DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "unix", p.socket)
+	}}
+	defer transport.CloseIdleConnections()
+	req, err := http.NewRequest(http.MethodGet, control.URL+"/permission-prompt", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer fixture-control")
+	resp, err := (&http.Client{Transport: transport, Timeout: 5 * time.Second}).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("control status = %d, want %d", resp.StatusCode, http.StatusNoContent)
+	}
+	if len(relayed) != 1 || relayed[0] != control.Listener.Addr().String() {
+		t.Fatalf("control relay addresses = %v, want only %s", relayed, control.Listener.Addr())
 	}
 }
 

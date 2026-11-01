@@ -50,7 +50,7 @@ fi
 # Se compila y se ejecuta, que sí propaga. El directorio del binario NO puede ser `/tmp`: en este
 # contenedor está montado noexec (medido: execve da 126 allí y 7 en `$HOME`, `$HOME/.cache` y el
 # propio repo). Si no se puede compilar o ejecutar, el veredicto es 2 — no un verde.
-# ⛔ Y `$HOME` NO SE DA POR SUPUESTO. Medido el 2026-08-18 en ci-runner-9: este guion murio en
+# ⛔ Y `$HOME` NO SE DA POR SUPUESTO. Medido el 2026-08-18 en build-host: este guion murio en
 # «HOME: unbound variable» bajo `set -u`, ANTES de llegar a su propio respaldo, porque el runner
 # corre sin `$HOME`. El gate contesto 2 —«no he podido mirar»— que es lo correcto, pero la
 # consecuencia es que el gate no corre en seis de las nueve maquinas.

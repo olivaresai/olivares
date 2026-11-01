@@ -43,6 +43,16 @@ const (
 	// or this engine does not have. It is not a failure of the request or of the
 	// engine; the answer names where the capability is described.
 	Edition = 9
+	// SessionFailed is a pipeline turn or session that failed.
+	SessionFailed = 10
+	// ApprovalRequired means the session is waiting for a human decision.
+	ApprovalRequired = 11
+	// RunTimeout means the run reached its requested deadline.
+	RunTimeout = 12
+	// CostCap means the engine stopped the run at its requested cost ceiling.
+	CostCap = 13
+	// SessionLimit means another tool or policy limit stopped the run.
+	SessionLimit = 14
 )
 
 // coded wraps an error with the exit code the process must return.

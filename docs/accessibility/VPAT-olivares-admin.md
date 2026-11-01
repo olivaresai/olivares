@@ -74,7 +74,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 | 2.4.2 Page Titled | A | Supports | `<title>` set; the page header `<h1>` names the current view. |
 | 2.4.3 Focus Order | A | Supports | Logical tab order; dialogs move focus in and return it to the trigger. |
 | 2.4.4 Link Purpose (In Context) | A | Supports | Links/nav items are labelled; icon-only items carry `aria-label`. |
-| 2.4.5 Multiple Ways | AA | Supports | The top bar's places + ⌘K command palette + All areas provide multiple ways to reach views. |
+| 2.4.5 Multiple Ways | AA | Supports | The left navigation, the row of a place's pages above each view and the ⌘K command palette provide multiple ways to reach views. |
 | 2.4.6 Headings and Labels | AA | Supports | Descriptive headings (`PageHeader` `<h1>`), nav group labels, form labels. |
 | 2.4.7 Focus Visible | AA | Supports | Global `:focus-visible` ring (`ring-ring`, offset) on all focusables; the active grid cell shows an inset ring. |
 | 2.5.1 Pointer Gestures | A | Supports | No multipoint/path gestures required (graph drag has single-pointer button alternatives — see 2.5.7). |

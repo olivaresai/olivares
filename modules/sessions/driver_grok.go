@@ -530,14 +530,19 @@ func (s *grokSession) resumeConversation(ctx context.Context, resume, state stri
 	return DriverHandshake{ConversationID: resume, AuthState: state}, nil
 }
 
-func (s *grokSession) selectPresetMode(ctx context.Context, id string, response grokSessionIDResponse) error {
-	want := ""
-	switch s.cfg.Preset {
+// grokModeFor is the native ACP mode a permission preset selects ("" for none).
+func grokModeFor(preset string) string {
+	switch preset {
 	case PresetReadOnly:
-		want = "plan"
+		return "plan"
 	case PresetAsk, PresetEditsOnly, PresetEditsAndCommands, PresetFull:
-		want = "default"
+		return "default"
 	}
+	return ""
+}
+
+func (s *grokSession) selectPresetMode(ctx context.Context, id string, response grokSessionIDResponse) error {
+	want := grokModeFor(s.cfg.Preset)
 	if want == "" || response.Modes == nil {
 		return nil // No native mode equivalent: the live provider gate still applies.
 	}

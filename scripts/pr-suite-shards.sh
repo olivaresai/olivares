@@ -28,13 +28,11 @@
 #                           whole number, default 1: only the scheduled batteries set it), or
 #                           what is left of the step ceiling times the factor, whichever is less.
 #
-# A NAME GROUP splits ONE package across shards by test NAME, for the case no package-level
-# split reaches: a single package longer than the job that carries it. A named group is a
-# list of prefixes and resolves to `-run '^Test(<alternation>)'`; the REMAINDER group, written
-# `*`, resolves to the EXACT names of everything the other groups of that package do not
-# name — computed here from the source enumeration, never written by hand, so a test added
-# tomorrow is in the partition the moment it is written. `-run` selects fuzz targets and
-# examples too, so they are in the universe and the remainder carries them.
+# A NAME GROUP splits ONE package across shards by generated test NAME, for the case no
+# package-level split reaches: a single package longer than the job that carries it. The
+# declared groups share one deterministic SHA-256 assignment, emitted as fully anchored exact
+# names. Adding a test needs no spec edit and moves no existing test. `-run` selects fuzz
+# targets and examples too, so they are in the same universe.
 #
 # THE PACKAGE UNIVERSE is enumerated module by module, because `go test ./...` in a
 # workspace only covers the CURRENT module (golang/go#50745) — the same reason
@@ -54,14 +52,16 @@
 # own progress to stderr, so its stdout is exactly the event stream a scheduled report reads.
 set -uo pipefail
 
-ROOT="${OLIVARES_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+SCRIPT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="${OLIVARES_ROOT:-$SCRIPT_ROOT}"
 cd "$ROOT" || { echo "pr-suite-shards: COULD NOT LOOK — cannot enter $ROOT" >&2; exit 2; }
 
 SPEC="${OLIVARES_PR_SUITE_SHARDS:-ci/pr-suite-shards.txt}"
+SHARDER="$SCRIPT_ROOT/scripts/lib/test_name_shard.py"
 SPEC_TESTS="${OLIVARES_PR_SUITE_TESTS:-}"
 # ⛔ ONE ARGUMENT, NOT ONE COMMAND LINE. Linux caps a SINGLE argv entry at MAX_ARG_STRLEN —
-# 32 pages, 131072 bytes — independently of ARG_MAX, and the remainder's expression is the
-# one that grows with the tree. The limit is checked where it can still be read as a
+# 32 pages, 131072 bytes — independently of ARG_MAX, and a generated exact-name expression is
+# the one that grows with the tree. The limit is checked where it can still be read as a
 # partition problem; over it, `exec` fails with a message about the argument list and never
 # about the tests.
 RUN_EXPR_LIMIT=100000
@@ -70,6 +70,8 @@ RUN_EXPR_LIMIT=100000
 GOLIST_ERR=""
 fail()   { printf 'pr-suite-shards: FAIL — %s\n' "$*" >&2; exit 1; }
 cannot() { printf 'pr-suite-shards: COULD NOT LOOK — %s\n' "$*" >&2; exit 2; }
+[ -r "$SHARDER" ] || cannot "cannot read $SHARDER"
+export SHARDER
 # In JSON mode the caller's stdout is the report's event stream, so progress goes to stderr:
 # one prose line there is one artifact error in scripts/main-suite-report.py.
 say() {
@@ -266,7 +268,7 @@ tests_source() {
 # ── The spec ──────────────────────────────────────────────────────────────────────────
 # One python reader, used by every subcommand. It prints records the shell can consume:
 #   SHARD <name> · PKG <shard> <pattern> · LEG <shard> <task> · OPTIONAL <pattern>
-#   GROUP <shard> <package> <name> <family…> · NUM <key> <value> · BAD <reason>
+#   GROUP <shard> <package> <name> · NUM <key> <value> · BAD <reason>
 # A line it cannot classify is a BAD record, never a skipped one: a directive with a typo
 # would otherwise remove packages from the partition without removing them from the tree.
 spec_records() {
@@ -298,22 +300,8 @@ with open(path, encoding="utf-8") as fh:
             out.append(f"{kind.upper()} {f[1]} {f[2]}")
         elif kind == "optional" and len(f) == 2:
             out.append(f"OPTIONAL {f[1]}")
-        elif kind == "group" and len(f) >= 5:
-            fams = f[4:]
-            # A family becomes part of a regular expression, so anything that is not a plain
-            # identifier would change what `-run` selects without changing what the file
-            # says. `*` is the remainder and is the only family that may stand alone.
-            if "*" in fams and len(fams) > 1:
-                bad.append(f"line {n}: group {f[3]!r} mixes the remainder `*` with families: "
-                           "the remainder is whatever the others do not name, so it cannot "
-                           "name anything itself")
-            else:
-                for fam in fams:
-                    if fam != "*" and not re.fullmatch(r"[A-Za-z0-9_]+", fam):
-                        bad.append(f"line {n}: the family {fam!r} of group {f[3]!r} is not a "
-                                   "plain identifier: it would change what -run selects "
-                                   "without changing what this line says")
-                out.append(f"GROUP {f[1]} {f[2]} {f[3]} " + " ".join(fams))
+        elif kind == "group" and len(f) == 4:
+            out.append(f"GROUP {f[1]} {f[2]} {f[3]}")
         elif kind in NUM_KEYS and len(f) == 2:
             if not re.fullmatch(r"[0-9]+", f[1]) or int(f[1]) <= 0:
                 bad.append(f"line {n}: {kind} is {f[1]!r}, not a positive whole number of minutes")
@@ -375,14 +363,6 @@ partitioned_packages() {
 }
 shard_groups() {
   printf '%s\n' "$RECORDS" | awk -v s="$1" '$1 == "GROUP" && $2 == s { print $3, $4 }'
-}
-group_families() {
-  printf '%s\n' "$RECORDS" |
-    awk -v pkg="$1" -v g="$2" '$1 == "GROUP" && $3 == pkg && $4 == g {
-      out = ""
-      for (i = 5; i <= NF; i++) out = out (out == "" ? "" : " ") $i
-      print out
-    }'
 }
 known_shard() {
   local s names
@@ -451,57 +431,41 @@ PY
 }
 
 
-# ── A group becomes a `-run` expression ───────────────────────────────────────────────
-# A NAMED group is its families, anchored at the front: `^Test(Alpha|Beta)` selects every
-# top-level test whose name begins with TestAlpha or TestBeta. It is not anchored at the end
-# on purpose — a family is a prefix, which is what makes it survive a test being added to it.
-#
-# The REMAINDER is the complement, and the complement of a set of prefixes is not a prefix:
-# there is no negation in RE2, so it is written as the EXACT names, anchored at both ends.
-# That expression is COMPUTED from the source enumeration every time it runs, so the day a
-# test is added it is already in it, and no hand-written "everything else" can be wrong.
-#
-# Neither form carries a `/`, so neither filters SUBTESTS: `go test` splits a -run pattern on
-# unbracketed slashes and matches each element against one level of the test's name. With one
-# element, a selected test runs with every subtest it has, which is the behaviour the whole
-# suite has today.
+# ── A group becomes a generated exact-name `-run` expression ───────────────────────
+# The group names and their order stay declared. SHA-256 assigns every Test/Fuzz/Example
+# exactly once across those groups, so adding a name needs no spec edit and moves no other
+# name. Exact anchors also make prefix overlap impossible. With no `/`, every selected test
+# keeps all of its subtests, as before.
 run_expression() {
-  local pkg="$1" g="$2" fams tests named
-  fams="$(group_families "$pkg" "$g")" ||
-    cannot "cannot read the families of group $g of $pkg, so its -run expression cannot be built"
-  [ -n "$fams" ] || fail "the package $pkg declares no group called $g"
-  if [ "$fams" != "*" ]; then
-    printf '%s' "$fams" | python3 -c '
-import sys
-fams = sorted(set(sys.stdin.read().split()), key=lambda f: (-len(f), f))
-print("^Test(" + "|".join(fams) + ")")
-'
-    return
-  fi
+  local pkg="$1" g="$2" groups tests found_rc
+  groups="$(printf '%s\n' "$RECORDS" | awk -v pkg="$pkg" '$1 == "GROUP" && $3 == pkg { print $4 }')" ||
+    cannot "cannot read the groups of $pkg"
+  [ -n "$groups" ] || fail "the package $pkg declares no group called $g"
+  found_rc=0
+  printf '%s\n' "$groups" | awk -v g="$g" '$0 == g { found = 1 } END { exit !found }' || found_rc=$?
+  case "$found_rc" in
+    0) ;;
+    1) fail "the package $pkg declares no group called $g" ;;
+    *) cannot "cannot check group $g of $pkg (awk exited $found_rc)" ;;
+  esac
   tests="$(package_tests "$pkg")" || exit $?
-  # The substitution used to sit in the environment assignment of the pipeline, where its status
-  # was thrown away: a failed family read left NAMED empty and every test looked unnamed.
-  named="$(named_of "$pkg")" ||
-    cannot "cannot read the named families of $pkg, so its remainder cannot be computed"
-  printf '%s\n' "$tests" | NAMED="$named" python3 -c '
-import os, sys
-named = [f.split() for f in os.environ["NAMED"].splitlines() if f.strip()]
-tests = sys.stdin.read().split()
-rest = [t for t in tests
-        if not any(t.startswith("Test" + fam) for fams in named for fam in fams)]
-print("^(" + "|".join(sorted(rest)) + ")$" if rest else "")
-'
-}
+  printf '%s\n' "$tests" | SHARD_GROUPS="$groups" WANT="$g" DOMAIN="pr-suite:$pkg" python3 -c '
+import importlib.util
+import os
+import sys
 
-# The families of every group of a package EXCEPT the remainder, one group per line. What the
-# remainder is the complement OF.
-named_of() {
-  printf '%s\n' "$RECORDS" |
-    awk -v pkg="$1" '$1 == "GROUP" && $3 == pkg {
-      out = ""
-      for (i = 5; i <= NF; i++) out = out (out == "" ? "" : " ") $i
-      if (out != "*") print out
-    }'
+helper_spec = importlib.util.spec_from_file_location("test_name_shard", os.environ["SHARDER"])
+sharder = importlib.util.module_from_spec(helper_spec)
+helper_spec.loader.exec_module(sharder)
+groups = os.environ["SHARD_GROUPS"].split()
+tests = sys.stdin.read().split()
+try:
+    assigned = sharder.assign(os.environ["DOMAIN"], groups, tests)
+    print(sharder.expression(assigned[os.environ["WANT"]]))
+except ValueError as exc:
+    print("pr-suite-shards: FAIL — " + str(exc), file=sys.stderr)
+    sys.exit(1)
+'
 }
 
 UNIVERSE_FILE=""
@@ -590,19 +554,16 @@ case "${1:-}" in
     P="${2:-}"; G="${3:-}"
     { [ -n "$P" ] && [ -n "$G" ]; } || cannot "usage: $0 run-expr <package> <group>"
     RE="$(run_expression "$P" "$G")" || exit $?
-    # A remainder every one of whose names some other group already claims resolves to
-    # NOTHING, and this prints nothing rather than `^()$` — an expression that matches no test
-    # and that `go test` answers 0 to. Printing nothing is how a caller tells the two apart,
-    # and no caller treats it as an ordinary case: the runner refuses the shard on it and the
-    # gate reports it as a finding, because a group that selects nothing is a job that reports
-    # success having run none of its tests. Exit 0 here says "there is no expression", not
-    # "there is nothing wrong".
+    # A generated group with no assigned names has no expression. Printing nothing rather than
+    # `^()$` lets the caller distinguish it: the runner refuses the shard and the gate reports
+    # a finding, because a group that selects nothing is a job that reports success having run
+    # none of its tests. Exit 0 here says "there is no expression", not "there is nothing wrong".
     [ -n "$RE" ] || exit 0
     # Bytes, not characters: the kernel's limit is on bytes and a name outside ASCII costs
     # more than one, so ${#RE} would under-count exactly the expressions that are at risk.
     RE_BYTES="$(printf '%s' "$RE" | wc -c)"
     [ "$RE_BYTES" -le "$RUN_EXPR_LIMIT" ] ||
-      fail "the -run expression of group ${G} of ${P} is ${RE_BYTES} bytes, over the ${RUN_EXPR_LIMIT}-byte limit this reader declares (the kernel refuses a single argument over MAX_ARG_STRLEN, 131072 bytes): the shard would die on exec with a message about the argument list and never about the tests. Split the remainder by naming more families."
+      fail "the -run expression of group ${G} of ${P} is ${RE_BYTES} bytes, over the ${RUN_EXPR_LIMIT}-byte limit this reader declares (the kernel refuses a single argument over MAX_ARG_STRLEN, 131072 bytes): the shard would die on exec with a message about the argument list and never about the tests. Declare more shards for this package so each generated expression stays below the limit."
     printf '%s\n' "$RE"
     ;;
 
@@ -626,6 +587,42 @@ case "${1:-}" in
     S="${2:-${OLIVARES_TEST_SHARD:-}}"
     [ -n "$S" ] || cannot "no shard given: pass one as an argument or set OLIVARES_TEST_SHARD"
     known_shard "$S" || fail "unknown shard: $S (declared: $(shard_names | paste -sd, -))"
+    # ⛔ A DISK THAT IS DYING REPORTS AS FAILING TESTS — the worst red there is, because the
+    # failing lines name tests and never the disk, and the failure goes to a code lane.
+    # Measured on main run 40185355549 (2026-10-25): seven cmd/olivares tests red across
+    # two shards — postgres could not extend a data file, sqlite answered "database or
+    # disk is full", TempDir's mkdir failed — and every one of them is green on the same
+    # tree with free disk. Below the floor this refuses to LOOK, so the step's failure
+    # report carries the cause instead of a test list.
+    #
+    # THE FLOOR IS A DEATH CERTIFICATE, NOT A CAPACITY MODEL: half of the smallest free
+    # space a green shard was measured STARTING with (18187 MiB on the sweep's runner,
+    # run 35081963451), rounded down. It catches a disk that is already dying; it does
+    # not certify one that is merely small. TMPDIR is NOT measured: the workflow places
+    # it on this same work disk, and refusing on a divergent small /tmp would red healthy
+    # machines the suite runs on today. A df that cannot answer is refused too, with the
+    # digits check measured on release.yml's floor: a df that succeeds and prints no
+    # digits passed that guard. A shard that cannot look at its disk must not start.
+    MIN_FREE_MIB=8192
+    low_disk=""
+    for probe in "$PWD" ${HOME:+"$HOME"} ${GOCACHE:+"$GOCACHE"} ${GOMODCACHE:+"$GOMODCACHE"}; do
+      # The cache directories may not exist before the build; measure the nearest
+      # ancestor that does.
+      while [ ! -e "$probe" ]; do
+        parent="${probe%/*}"
+        if [ -z "$parent" ] || [ "$parent" = "$probe" ]; then probe="/"; break; fi
+        probe="$parent"
+      done
+      avail_kib="$(df -Pk "$probe" 2>/dev/null | awk 'NR==2{print $4}')"
+      case "$avail_kib" in
+        ''|*[!0-9]*) cannot "cannot measure the free space of $probe: a shard that cannot look at its disk must not start" ;;
+      esac
+      if [ "$((avail_kib / 1024))" -lt "$MIN_FREE_MIB" ]; then
+        low_disk="$low_disk $probe=$((avail_kib / 1024))MiB"
+      fi
+    done
+    [ -z "$low_disk" ] ||
+      cannot "free space below the shard floor of ${MIN_FREE_MIB} MiB:$low_disk — a disk below the floor reports as failing TESTS, never as itself (main run 40185355549 red-flagged seven cmd/olivares tests, all ENOSPC, all green with disk). Free the runner's work disk or move the job; no test verdict exists below the floor."
     JSON_ARGS=()
     case "${OLIVARES_SHARD_JSON:-0}" in
       1) JSON_ARGS=(-json) ;;
@@ -640,7 +637,7 @@ case "${1:-}" in
     STEPC="$(printf '%s\n' "$RECORDS" | sed -n 's/^NUM step-ceiling-minutes //p')"
     # ⛔ THE BATTERIES' CLOCKS ARE A MULTIPLE OF THE DECLARED ONES, NEVER A SECOND SET. The
     # batteries run off the merge path (merge-gate-check), where a clock is a hang detector and
-    # not a speed gate, and the same shards swung 2x with host load (dev#2503). The workflow
+    # not a speed gate, and the same shards swung 2x with host load. The workflow
     # that wants more time sets this factor and a step ceiling that is the declared one times
     # it; a pull request's own run sets nothing and keeps the declared clocks.
     # 1 to 99: a longer number wraps the arithmetic below into a clock nobody declared. The spec
@@ -718,11 +715,10 @@ case "${1:-}" in
       GPKG="${entry%% *}"; GNAME="${entry##* }"
       RE="$("$0" run-expr "$GPKG" "$GNAME")" || exit $?
       # ⛔ COUNT WHAT IT SELECTS, BEFORE RUNNING IT. `go test -run` over an expression that
-      # matches no test prints ok and EXITS 0, so a group whose families went stale in a
-      # rename — or a remainder with nothing left in it — would report a success having run
-      # none of its tests, and the required check would be green over a suite that did not
-      # run. Counting first is what the race partition does for the same reason, and it is
-      # the only check that still stands when the gate was never run at all.
+      # matches no test prints ok and EXITS 0, so an empty generated group would report a
+      # success having run none of the package's tests, and the required check would be green
+      # over a suite that did not run. Counting first is the guard that still stands when the
+      # gate was never run at all.
       GTESTS="$("$0" tests "$GPKG")" || exit $?
       # `wc` cannot fail the way `grep -c` can, and this number only goes in the message.
       GTOTAL="$(printf '%s\n' "$GTESTS" | sed '/^[[:space:]]*$/d' | wc -l)"

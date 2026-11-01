@@ -5,6 +5,8 @@
 package sessions
 
 import (
+	"context"
+	"errors"
 	"io"
 	"net/http"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 // Permission tiers for the WORKSPACE / governed file surface. Read covers
@@ -37,23 +40,141 @@ func workspacePermissions() []auth.Permission {
 // /v1/m/sessions/. The relative file path travels as ?path=<rel> (never a URL
 // segment) so the jail is unambiguous and a slash cannot break routing.
 func (m *Module) workspaceRoutes(reg api.RouteRegistrar) {
-	reg.HandleEntity("PUT", "/workspaces/{ref}/setup-command", permWsAdmin, api.EntityRef{Kind: workspaceKind, IDParam: "ref", LookupColumn: colWsRef, ConcealDeniedAsNotFound: true}, m.handleSetWorkspaceSetup)
-	reg.HandleEntity("POST", "/workspaces/{ref}/setup-command/approve", permWsAdmin, api.EntityRef{Kind: workspaceKind, IDParam: "ref", LookupColumn: colWsRef, ConcealDeniedAsNotFound: true}, m.handleApproveWorkspaceSetup)
-	reg.HandleEntity("POST", "/workspaces/{ref}/wiki", permWsAdmin, api.EntityRef{Kind: workspaceKind, IDParam: "ref", LookupColumn: colWsRef, ConcealDeniedAsNotFound: true}, m.handleInitWiki)
+	folder := api.EntityRef{Kind: workspaceKind, IDParam: "ref", LookupColumn: colWsRef, ResourceKind: "resource"}
+	concealedFolder := folder
+	concealedFolder.ConcealDeniedAsNotFound = true
+	reg.HandleEntity("PUT", "/workspaces/{ref}/setup-command", permWsAdmin, concealedFolder, m.handleSetWorkspaceSetup)
+	reg.HandleEntity("POST", "/workspaces/{ref}/setup-command/approve", permWsAdmin, concealedFolder, m.handleApproveWorkspaceSetup)
+	reg.HandleEntity("POST", "/workspaces/{ref}/wiki", permWsAdmin, concealedFolder, m.handleInitWiki)
 	reg.Handle("POST", "/workspaces", permWsAdmin, m.handleCreateWorkspace)
 	reg.Handle("GET", "/workspaces", permWsRead, m.handleListWorkspaces)
-	reg.Handle("GET", "/workspaces/{ref}", permWsRead, m.handleGetWorkspace)
-	reg.Handle("PATCH", "/workspaces/{ref}", permWsAdmin, m.handlePatchWorkspace)
-	reg.Handle("DELETE", "/workspaces/{ref}", permWsAdmin, m.handleDeleteWorkspace)
-	reg.Handle("GET", "/workspaces/{ref}/files", permWsRead, m.handleListFiles)
-	reg.Handle("GET", "/workspaces/{ref}/files/stat", permWsRead, m.handleStatFile)
-	reg.Handle("GET", "/workspaces/{ref}/files/raw", permWsRead, m.handleReadFile)
-	reg.Handle("PUT", "/workspaces/{ref}/files/raw", permWsWrite, m.handleWriteFile)
-	reg.Handle("POST", "/workspaces/{ref}/files/dir", permWsWrite, m.handleMkdir)
-	reg.Handle("POST", "/workspaces/{ref}/files/move", permWsWrite, m.handleMoveFile)
-	reg.Handle("DELETE", "/workspaces/{ref}/files", permWsWrite, m.handleDeleteFile)
-	reg.HandleEntity("GET", "/workspaces/{ref}/project-config", permWsAdmin, api.EntityRef{Kind: workspaceKind, IDParam: "ref", LookupColumn: colWsRef, ConcealDeniedAsNotFound: true}, m.handleGetProjectConfig)
-	reg.HandleEntity("POST", "/workspaces/{ref}/project-config/approve", permWsAdmin, api.EntityRef{Kind: workspaceKind, IDParam: "ref", LookupColumn: colWsRef, ConcealDeniedAsNotFound: true}, m.handleApproveProjectConfig)
+	reg.HandleEntity("GET", "/workspaces/{ref}", permWsRead, folder, m.workspaceRight(permWsRead, auth.TrusteeRead, m.handleGetWorkspace))
+	reg.HandleEntity("PATCH", "/workspaces/{ref}", permWsAdmin, folder, m.handlePatchWorkspace)
+	reg.HandleEntity("DELETE", "/workspaces/{ref}", permWsAdmin, folder, m.handleDeleteWorkspace)
+	reg.HandleEntity("GET", "/workspaces/{ref}/files", permWsRead, folder, m.workspaceRight(permWsRead, auth.TrusteeRead, m.handleListFiles))
+	reg.HandleEntity("GET", "/workspaces/{ref}/files/stat", permWsRead, folder, m.workspaceRight(permWsRead, auth.TrusteeRead, m.handleStatFile))
+	reg.HandleEntity("GET", "/workspaces/{ref}/files/raw", permWsRead, folder, m.workspaceRight(permWsRead, auth.TrusteeRead, m.handleReadFile))
+	reg.HandleEntity("PUT", "/workspaces/{ref}/files/raw", permWsWrite, folder, m.workspaceRight(permWsWrite, auth.TrusteeWrite, m.handleWriteFile))
+	reg.HandleEntity("POST", "/workspaces/{ref}/files/dir", permWsWrite, folder, m.workspaceRight(permWsWrite, auth.TrusteeCreate, m.handleMkdir))
+	reg.HandleEntity("POST", "/workspaces/{ref}/files/move", permWsWrite, folder, m.workspaceRight(permWsWrite, auth.TrusteeErase, m.handleMoveFile))
+	reg.HandleEntity("DELETE", "/workspaces/{ref}/files", permWsWrite, folder, m.workspaceRight(permWsWrite, auth.TrusteeErase, m.handleDeleteFile))
+	reg.HandleEntity("GET", "/workspaces/{ref}/project-config", permWsAdmin, concealedFolder, m.handleGetProjectConfig)
+	reg.HandleEntity("POST", "/workspaces/{ref}/project-config/approve", permWsAdmin, concealedFolder, m.handleApproveProjectConfig)
+	m.terminalRoutes(reg, folder)
+}
+
+// workspaceRight checks the canonical trustee action at the folder Resource.
+// The published module permission still bounds the caller's credential.
+func (m *Module) workspaceRight(permission auth.Permission, right auth.TrusteeRight, next api.ModuleHandler) api.ModuleHandler {
+	return func(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+		if m.workspaceAllowed(w, r, mc, permission, right) {
+			next(w, r, mc)
+		}
+	}
+}
+
+// workspaceAllowed is the HTTP door shared by named administration handlers and
+// file-route wrappers. Named handlers retain their published operation prose.
+func (m *Module) workspaceAllowed(w http.ResponseWriter, r *http.Request, mc api.ModuleContext, permission auth.Permission, right auth.TrusteeRight) bool {
+	if _, err := m.loadWorkspaceRec(r.Context(), mc.Tenant, chi.URLParam(r, "ref")); err != nil {
+		writeRunErr(w, err)
+		return false
+	}
+	if err := m.authorizeWorkspaceRight(r.Context(), mc, permission, right, mc.Resource); err != nil {
+		var denied *runErr
+		if permission == permWsAdmin && errors.As(err, &denied) && denied.status == http.StatusForbidden {
+			err = &runErr{http.StatusNotFound, "not found"}
+		}
+		writeRunErr(w, err)
+		return false
+	}
+	return true
+}
+
+func (m *Module) authorizeWorkspaceRight(ctx context.Context, mc api.ModuleContext, permission auth.Permission, right auth.TrusteeRight, node auth.ResourceAttrs) error {
+	return CheckFolderRight(ctx, m.Data, auth.Request{Principal: mc.Principal, Tenant: mc.Tenant, Permission: permission, Resource: node}, right, func(q auth.Request) error {
+		if mc.Admission == nil || !mc.Admission(ctx, q) {
+			return forbiddenErr("you do not have this right on the folder")
+		}
+		return nil
+	})
+}
+
+// CheckFolderRight validates the stored anchor and asks both the published module
+// action and the canonical Resource right. CedarAction replaces an action; one
+// decision cannot enforce forbids on both. The caller retains decision evidence.
+func CheckFolderRight(ctx context.Context, data api.ModuleData, request auth.Request, right auth.TrusteeRight, decide func(auth.Request) error) error {
+	if data == nil {
+		return &runErr{http.StatusServiceUnavailable, "folder resource is unavailable"}
+	}
+	if err := data.View(ctx, request.Tenant, func(sc store.Scope) error {
+		resource, err := sc.Resources().Get(ctx, model.ID(request.Resource.ID))
+		if err != nil {
+			return err
+		}
+		if resource.Kind != "folder" {
+			return store.ErrConflict
+		}
+		return nil
+	}); err != nil {
+		return errors.Join(&runErr{http.StatusServiceUnavailable, "folder resource is unavailable"}, err)
+	}
+	canonical, ok := right.Question(request.Principal, request.Tenant, request.Resource)
+	if !ok || decide == nil {
+		return auth.ErrRouteDenied
+	}
+	if err := decide(request); err != nil {
+		return err
+	}
+	request.Route.CedarAction = string(canonical.Permission)
+	return decide(request)
+}
+
+// launchFolderRights are the rights a session exercises in a folder, as the file routes
+// ask them for the same actions: it reads, and writes unless the mount is read-only.
+func launchFolderRights(mountMode string) []auth.TrusteeRight {
+	switch mountMode {
+	case mountRO:
+		return []auth.TrusteeRight{auth.TrusteeRead}
+	case mountNoDelete:
+		return []auth.TrusteeRight{auth.TrusteeRead, auth.TrusteeWrite, auth.TrusteeCreate}
+	}
+	return []auth.TrusteeRight{auth.TrusteeRead, auth.TrusteeWrite, auth.TrusteeCreate, auth.TrusteeErase}
+}
+
+// askWorkspaceRights is the launcher's question about the folder a session starts in:
+// the module permission and the canonical right for each action it will take there, so a
+// person cannot do through a session what the file routes refuse them. An unknown ref is
+// left to the launch, which refuses it. admits is the caller's own admission: the request's
+// for a person, the authorizer's for a launcher restored from a queue or the engine's resume.
+func (m *Module) askWorkspaceRights(ctx context.Context, tenant model.TenantID, principal auth.Principal, admits func(auth.Request) bool) func(ref string) error {
+	return func(ref string) error {
+		rec, err := m.loadWorkspaceRec(ctx, tenant, ref)
+		if err != nil {
+			var missing *runErr
+			if errors.As(err, &missing) && missing.status == http.StatusNotFound {
+				return nil
+			}
+			return err
+		}
+		node := auth.ResourceAttrs{Kind: "resource", ID: rec.String(model.ColID)}
+		for _, right := range launchFolderRights(rec.String(colWsMountMode)) {
+			permission := permWsRead
+			if right.Verb != auth.VerbRead {
+				permission = permWsWrite
+			}
+			err := CheckFolderRight(ctx, m.Data, auth.Request{Principal: principal, Tenant: tenant, Permission: permission, Resource: node}, right, func(q auth.Request) error {
+				if !admits(q) {
+					return forbiddenErr("you do not have this right on the folder")
+				}
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 }
 
 func (m *Module) handleCreateWorkspace(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
@@ -66,10 +187,11 @@ func (m *Module) handleCreateWorkspace(w http.ResponseWriter, r *http.Request, m
 		return
 	}
 	dto, err := m.createWorkspace(r.Context(), mc.Tenant, CreateWorkspaceParams{
-		Name: body.Name, RootPath: body.RootPath, MountMode: body.MountMode,
+		Backup: body.Backup,
+		Name:   body.Name, RootPath: body.RootPath, MountMode: body.MountMode,
 		ContainerTarget: body.ContainerTarget, AllowSubpaths: body.AllowSubpaths,
 		ReadOnlyFolders: body.ReadOnlyFolders,
-		MaxReadBytes:    body.MaxReadBytes, DLPMode: body.DLPMode,
+		MaxReadBytes:    body.MaxReadBytes, DLPMode: body.DLPMode, DataClass: body.DataClass,
 		Actor: mc.Principal.Actor(), ActorKind: mc.Principal.ActorKind(),
 	})
 	if err != nil {
@@ -79,26 +201,34 @@ func (m *Module) handleCreateWorkspace(w http.ResponseWriter, r *http.Request, m
 	writeJSON(w, http.StatusCreated, dto)
 }
 
-// handlePatchWorkspace changes a workspace's read-only host folders or DLP mode.
+// handlePatchWorkspace changes a workspace's read-only host folders, DLP mode or
+// default permission.
 // Requires workspace administrator permission; a setting left out is not changed
 // and an empty folder array removes access.
 func (m *Module) handlePatchWorkspace(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if !m.workspaceAllowed(w, r, mc, permWsAdmin, auth.TrusteeModify) {
+		return
+	}
 	if m.Data == nil {
 		writeJSON(w, http.StatusServiceUnavailable, errorBody("workspace registry not available"))
 		return
 	}
 	var body struct {
-		ReadOnlyFolders *[]string `json:"read_only_folders"`
-		DLPMode         *string   `json:"dlp_mode"`
+		ReadOnlyFolders   *[]string `json:"read_only_folders"`
+		Backup            *bool     `json:"backup"`
+		DataClass         *string   `json:"data_class"`
+		DLPMode           *string   `json:"dlp_mode"`
+		DefaultPermission *string   `json:"default_permission"`
 	}
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	if body.ReadOnlyFolders == nil && body.DLPMode == nil {
-		writeRunErr(w, badRequest("send read_only_folders (an array; [] removes access) and/or dlp_mode (label|deny|off)"))
+	if body.ReadOnlyFolders == nil && body.DLPMode == nil && body.DefaultPermission == nil && body.DataClass == nil && body.Backup == nil {
+		writeRunErr(w, badRequest("send read_only_folders, dlp_mode, default_permission, data_class and/or backup"))
 		return
 	}
-	dto, err := m.patchWorkspace(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), body.ReadOnlyFolders, body.DLPMode, mc.Principal.Actor(), mc.Principal.ActorKind())
+	mayRunUnrestricted := body.DefaultPermission != nil && m.mayRunUnrestricted(r.Context(), mc)
+	dto, err := m.patchWorkspace(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), body.ReadOnlyFolders, body.DLPMode, body.DefaultPermission, mayRunUnrestricted, body.DataClass, body.Backup, mc.Principal.Actor(), mc.Principal.ActorKind())
 	if err != nil {
 		writeRunErr(w, err)
 		return
@@ -118,6 +248,20 @@ func (m *Module) handleListWorkspaces(w http.ResponseWriter, r *http.Request, mc
 		writeRunErr(w, err)
 		return
 	}
+	visible := out.Items[:0]
+	for _, folder := range out.Items {
+		err := m.authorizeWorkspaceRight(r.Context(), mc, permWsRead, auth.TrusteeRead, auth.ResourceAttrs{Kind: "resource", ID: folder.resourceID.String()})
+		if err == nil {
+			visible = append(visible, folder)
+		} else {
+			var denied *runErr
+			if !errors.As(err, &denied) || (denied.status != http.StatusForbidden && !(denied.status == http.StatusServiceUnavailable && (errors.Is(err, store.ErrNotFound) || errors.Is(err, store.ErrConflict)))) {
+				writeRunErr(w, err)
+				return
+			}
+		}
+	}
+	out.Items = visible
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -131,6 +275,9 @@ func (m *Module) handleGetWorkspace(w http.ResponseWriter, r *http.Request, mc a
 }
 
 func (m *Module) handleDeleteWorkspace(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if !m.workspaceAllowed(w, r, mc, permWsAdmin, auth.TrusteeModify) {
+		return
+	}
 	if err := m.deleteWorkspace(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), mc.Principal.Actor(), mc.Principal.ActorKind()); err != nil {
 		writeRunErr(w, err)
 		return

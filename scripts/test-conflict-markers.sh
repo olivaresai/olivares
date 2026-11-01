@@ -164,7 +164,7 @@ run "$d/sub" 2 "a SUBDIRECTORY of a repo is refused, not silently graded" "not t
 
 # An empty census is an unperformed probe, not a clean tree.
 # The the model review on 2026-08-15
-# (an internal design note (not shipped)) removed the empty-census
+# (an internal audit) removed the empty-census
 # rejection, yet all 15 cases still passed with “CLEAN — 0 file(s) examined”, rc 0.
 # No case used an empty repository. Create one directly: repo() deliberately commits
 # a README and cannot supply the missing condition.

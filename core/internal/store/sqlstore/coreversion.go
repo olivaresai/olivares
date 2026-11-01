@@ -61,7 +61,9 @@ var ErrCoreSchemaVersionAhead = errors.New("sqlstore: the database records a cor
 // v25 adds the workspace parent and materialized path.
 // v26 promotes the audit tree's canonical immutability guard to ALWAYS.
 // v27 adds the optional workspace place of a user group.
-const coreSupportedMigrationVersion = coreUserGroupWorkspaceVersion
+// v28 adds nullable session last-used and client-kind metadata without backfill.
+// v29 adds issue-time API-token role provenance and a roster-based backfill for legacy rows.
+const coreSupportedMigrationVersion = coreGroupDerivedTokenRoleVersion
 
 // ErrCoreSchemaVersionUnrecognized is returned before any boot DDL when the database
 // records a version at or below the supported ceiling that this binary's compiled plan

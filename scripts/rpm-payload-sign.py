@@ -56,7 +56,7 @@ FINGERPRINT = re.compile(r"[0-9A-F]{40}")
 # The signature-header queries, oldest tag first: the four pgpsig tags rpm 4 answers and the
 # bare OPENPGP tag rpm 6.0 added. Not every rpm answers every tag: Debian 13's rpm 4.20.1
 # rejects %{OPENPGP} as unknown, yields nothing for the whole query, and a signed header read
-# as unsigned (measured 2026-10-20, dev#2711). The query is built from the tags the rpm's own
+# as unsigned (measured 2026-10-20, the regression). The query is built from the tags the rpm's own
 # --querytags lists, so each generation is asked what it can answer.
 SIGNATURE_QUERY_TAGS = ("RSAHEADER", "DSAHEADER", "SIGPGP", "SIGGPG", "OPENPGP")
 

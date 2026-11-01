@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package sops is the Olivares AI connector for SOPS+age GitOps secrets
-//. It reads ONLY the cleartext METADATA SOPS already records in
+// . It reads ONLY the cleartext METADATA SOPS already records in
 // a repository — the recipient public identifiers — and NEVER decrypts anything,
 // NEVER reads the encrypted file body, and NEVER emits the encrypted data key.
 //

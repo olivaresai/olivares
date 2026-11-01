@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { readConsolePreferences } from './console-preferences'
 import { Buffer } from 'node:buffer'
 import { readFile } from 'node:fs/promises'
 import { expect, test, type Locator, type Page } from '@playwright/test'
@@ -399,15 +400,10 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     ).toBe('dark')
 
     await page.getByRole('radio', { name: 'Compact', exact: true }).click()
-    expect(
-      await page.evaluate(() => {
-        const stored = localStorage.getItem('olivares.prefs')
-        return stored
-          ? (JSON.parse(stored) as { state?: { density?: string } }).state
-              ?.density
-          : null
-      }),
-    ).toBe('compact')
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-density',
+      'compact',
+    )
 
     await page.locator('#language').click()
     await page.getByRole('option', { name: 'Español', exact: true }).click()
@@ -415,9 +411,9 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     await expect(
       page.getByRole('heading', { name: 'General', exact: true }),
     ).toBeVisible()
-    expect(
-      await page.evaluate(() => localStorage.getItem('olivares.lang')),
-    ).toBe('es')
+    await expect
+      .poll(async () => (await readConsolePreferences(page))['olivares.lang'])
+      .toBe('es')
 
     await page.reload()
     await expect(page.locator('html')).toHaveClass(/dark/)
@@ -471,21 +467,112 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
       (await page.locator('html').getAttribute('lang')) ?? 'en',
       { maximumFractionDigits: 0 },
     )
-    const auditGrid = page.getByRole('grid', { name: 'Audit ledger' })
-    await expect(auditGrid).toBeVisible()
-    await expect(auditGrid).not.toHaveAttribute('aria-busy', 'true')
+    // The Ledger place (issue #2554): the entries are sentences in one list, the filters
+    // are tokens in the top bar's query field, and an entry opens beside the list.
+    const ledger = page.getByRole('list', { name: 'Ledger entries' })
+    const entries = ledger.locator('[data-slot="entry"]')
+    const query = page.getByRole('textbox', { name: 'Ledger query' })
+    await expect(ledger).toBeVisible()
+    // The query takes the room of the search it replaces and grows with its filters. The
+    // page title is never under it, with no filter, with filters applied or with an entry
+    // open: the title gives way and truncates.
+    const viewport = page.viewportSize() ?? { width: 1280, height: 720 }
+    // The field itself, not its slot, against the title the bar shows.
+    const coveredPlaces = async () => {
+      const read = await page.evaluate(() => {
+        const field = document
+          .querySelector('[data-slot="topbar-search"] [role="search"]')!
+          .getBoundingClientRect()
+        const title = document
+          .querySelector('[data-slot="topbar-title"]')!
+          .getBoundingClientRect()
+        return {
+          field: field.width,
+          covered:
+            title.width > 0 &&
+            title.left < field.right &&
+            field.left < title.right,
+        }
+      })
+      expect(read.field).toBeGreaterThan(0)
+      return read.covered ? ['the page title'] : []
+    }
+    // Every applied filter's key and value, and how many px of each do not read whole.
+    const clippedTokens = async () => {
+      const parts = await page
+        .locator('[data-slot="topbar-search"] li')
+        .evaluateAll((items) =>
+          items.flatMap((li) =>
+            [...li.querySelectorAll('span')]
+              .filter((s) => s.children.length === 0)
+              .map((s) => s.scrollWidth - s.clientWidth),
+          ),
+        )
+      expect(parts.length).toBeGreaterThan(0)
+      return parts.filter((px) => px > 0)
+    }
+    // With no filter: the title at the reference width and where room is short.
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await expect(page.locator('[data-slot="topbar-search"]')).toBeVisible()
+    expect(await coveredPlaces()).toEqual([])
+    await page.setViewportSize({ width: 1101, height: 900 })
+    await expect(page.locator('[data-slot="topbar-search"]')).toBeVisible()
+    expect(await coveredPlaces()).toEqual([])
+    await page.setViewportSize(viewport)
     // DTO cardinality checks below intentionally inspect the complete loaded ledger.
     const showInternal = page.getByRole('button', {
       name: 'Show internal records',
       exact: true,
     })
     if (await showInternal.isVisible()) await showInternal.click()
-    const witnessRow = auditGrid.getByRole('row').filter({
-      has: page.getByRole('gridcell', {
-        name: displayedInt.format(witness.seq),
-        exact: true,
-      }),
-    })
+    const witnessRow = ledger.locator(`li[data-seq="${witness.seq}"]`)
+
+    await page.setViewportSize({ width: 1440, height: 900 })
+    try {
+      const twoTokens = page.waitForResponse((response) => {
+        const url = new URL(response.url())
+        return (
+          url.pathname === '/v1/audit' &&
+          url.searchParams.get('action') === witness.action &&
+          url.searchParams.has('since')
+        )
+      })
+      await query.fill(`action:${witness.action} since:7d`)
+      await query.press('Enter')
+      expect((await twoTokens).status()).toBe(200)
+      await expect(page.locator('[data-slot="topbar-search"] li')).toHaveCount(
+        2,
+      )
+      expect(await coveredPlaces()).toEqual([])
+      // At the reference width the applied filters read whole: the title gives way.
+      expect(await clippedTokens()).toEqual([])
+      // Where room is short the filters take it from the title, never cover it.
+      await page.setViewportSize({ width: 1101, height: 900 })
+      expect(await coveredPlaces()).toEqual([])
+      expect(await clippedTokens()).toEqual([])
+      await page.setViewportSize({ width: 1440, height: 900 })
+      await witnessRow.locator('[data-slot="entry"]').click()
+      await expect(
+        page.getByRole('complementary', {
+          name: `Entry ${displayedInt.format(witness.seq)}`,
+        }),
+      ).toBeVisible()
+      expect(await coveredPlaces()).toEqual([])
+      await page.getByRole('button', { name: 'Close the panel' }).click()
+      // The action token goes first: an action-only read here would be the cached answer
+      // of the typed action query below, which must reach the engine.
+      const applied = page.locator('[data-slot="topbar-search"] li')
+      await page
+        .getByRole('button', { name: `Remove action:${witness.action}` })
+        .click()
+      await expect(applied).toHaveCount(1)
+      await query.press('Backspace')
+      await expect(applied).toHaveCount(0)
+      // The filters gone, the title is still clear of the field.
+      expect(await coveredPlaces()).toEqual([])
+    } finally {
+      await page.setViewportSize(viewport)
+    }
 
     const systemRead = page.waitForResponse((response) => {
       const url = new URL(response.url())
@@ -525,11 +612,17 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     // This is the already-proven tenant key and may be served from Query cache;
     // requiring a second HTTP response would make cache freshness a test input.
     await expect(witnessRow).toHaveCount(1)
+    const info = await page.request.get('/v1/server-info', {
+      headers: authHeaders(session),
+    })
+    expect(info.status()).toBe(200)
+    const { edition } = (await info.json()) as { edition: string }
     await expect(
       page.getByRole('button', { name: 'Verify chain' }),
-    ).toBeVisible()
+    ).toHaveCount(edition === 'community' ? 0 : 1)
 
-    // Opening a row is intentionally a pure projection of the already-read DTO.
+    // Opening an entry projects the already-read DTO: its next entry is in the window
+    // the list read, so the entry costs no read of its own.
     let auditGets = 0
     const countAuditGets = (request: { method(): string; url(): string }) => {
       const url = new URL(request.url())
@@ -538,34 +631,26 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
       }
     }
     page.on('request', countAuditGets)
-    await expect(witnessRow).toHaveCount(1)
-    await witnessRow.click()
-    const evidence = page.getByRole('dialog')
+    await witnessRow.locator('[data-slot="entry"]').click()
+    const evidence = page.getByRole('complementary', {
+      name: `Entry ${displayedInt.format(witness.seq)}`,
+    })
     await expect(evidence.getByRole('heading').first()).toBeVisible()
-    await evidence.getByText('Details', { exact: true }).click()
     const sequence = evidence
       .locator('dl > div')
       .filter({ has: page.getByText('Sequence', { exact: true }) })
     await expect(sequence.locator('dd')).toHaveText(String(witness.seq))
     await expect(evidence).toContainText(witness.action)
-    await expect(evidence).toContainText('Chain integrity')
-    expect(auditGets).toBe(0)
-    await evidence.getByRole('button', { name: 'Close' }).click()
-    await expect(evidence).toHaveCount(0)
-
-    // Audit does not opt in local table search. The pure Details projection
-    // above must still make zero reads; exercise its real server filters below.
-    const auditTable = page
-      .locator('[data-slot="data-table"]')
-      .filter({ has: auditGrid })
     await expect(
-      auditTable.getByRole('textbox', { name: 'Search', exact: true }),
-    ).toHaveCount(0)
+      evidence.getByRole('group', { name: 'Position in the chain' }),
+    ).toContainText(witness.hash.slice(0, 6))
     expect(auditGets).toBe(0)
     page.off('request', countAuditGets)
+    await page.getByRole('button', { name: 'Close the panel' }).click()
+    await expect(evidence).toHaveCount(0)
 
-    await page.getByRole('button', { name: 'Filters', exact: true }).click()
-    const actionInput = page.getByLabel('Action prefix', { exact: true })
+    // A typed token is the API filter of the same name: the request carries it and the
+    // list shows exactly what the engine answered.
     const actionRead = page.waitForResponse((response) => {
       const url = new URL(response.url())
       return (
@@ -573,7 +658,8 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
         url.searchParams.get('action') === witness.action
       )
     })
-    await actionInput.fill(witness.action)
+    await query.fill(`action:${witness.action}`)
+    await query.press('Enter')
     const actionResponse = await actionRead
     expect(actionResponse.status()).toBe(200)
     const matching = (await actionResponse.json()) as ListBody<AuditItem>
@@ -581,35 +667,38 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     expect(
       matching.items.every((item) => item.action.startsWith(witness.action)),
     ).toBe(true)
-    await expectGridCardinality(
-      auditGrid,
-      matching.items.length,
-      'No evidence yet',
-    )
+    await expect(entries).toHaveCount(matching.items.length)
+    // The applied filter reads whole: what is being typed gives way, the filter does not.
+    await expect(
+      page
+        .locator('[data-slot="topbar-search"] li')
+        .filter({ hasText: witness.action }),
+    ).toBeVisible()
+    expect(await clippedTokens()).toEqual([])
 
     await page
-      .getByRole('button', { name: 'Clear Action prefix filter' })
+      .getByRole('button', { name: `Remove action:${witness.action}` })
       .click()
     await expect
       .poll(() => new URL(page.url()).searchParams.has('action'))
       .toBe(false)
-    await expect(actionInput).toHaveValue('')
     await expect(witnessRow).toHaveCount(1)
 
     const textFilters = [
-      ['Search ledger', witness.action, 'q'],
-      ['Actor', 'l4-no-such-actor', 'actor'],
-      ['Target kind', 'l4-no-such-kind', 'target_kind'],
-      ['Target ID', 'l4-no-such-id', 'target_id'],
+      [witness.action, witness.action, 'q'],
+      ['person:user:l4-no-such-actor', 'user:l4-no-such-actor', 'actor'],
+      ['kind:l4-no-such-kind', 'l4-no-such-kind', 'target_kind'],
+      ['target:l4-no-such-id', 'l4-no-such-id', 'target_id'],
     ] as const
-    for (const [label, value, key] of textFilters) {
+    for (const [typed, value, key] of textFilters) {
       const filtered = page.waitForResponse((response) => {
         const url = new URL(response.url())
         return (
           url.pathname === '/v1/audit' && url.searchParams.get(key) === value
         )
       })
-      await page.getByLabel(label, { exact: true }).fill(value)
+      await query.fill(typed)
+      await query.press('Enter')
       const filteredResponse = await filtered
       expect(filteredResponse.status()).toBe(200)
       const filteredBody =
@@ -626,73 +715,88 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
               .includes(q),
           ),
         ).toBe(true)
+        await expect(entries).toHaveCount(filteredBody.items.length)
       } else {
         // These exact sentinels do not exist in the fresh ledger. If the handler
         // ignores a filter, its unfiltered rows make this assertion red.
         expect(filteredBody.items).toHaveLength(0)
+        await expect(page.getByText('No evidence yet')).toBeVisible()
       }
-      await expectGridCardinality(
-        auditGrid,
-        filteredBody.items.length,
-        'No evidence yet',
-      )
-      await page.getByRole('button', { name: `Clear ${label} filter` }).click()
+      await page.getByRole('button', { name: `Remove ${typed}` }).click()
       await expect
         .poll(() => new URL(page.url()).searchParams.has(key))
         .toBe(false)
-      await expect(page.getByLabel(label, { exact: true })).toHaveValue('')
       await expect(witnessRow).toHaveCount(1)
     }
 
-    for (const [label, value, key] of [
-      ['Since', '2099-01-01T00:00', 'since'],
-      ['Until', '2000-01-01T00:00', 'until'],
+    for (const [typed, key] of [
+      ['since:2099-01-01T00:00', 'since'],
+      ['until:2000-01-01T00:00', 'until'],
     ] as const) {
       const filtered = page.waitForResponse((response) => {
         const url = new URL(response.url())
         return url.pathname === '/v1/audit' && url.searchParams.has(key)
       })
-      await page.getByLabel(label, { exact: true }).fill(value)
+      await query.fill(typed)
+      await query.press('Enter')
       const filteredResponse = await filtered
       expect(filteredResponse.status()).toBe(200)
       const filteredBody =
         (await filteredResponse.json()) as ListBody<AuditItem>
       expect(filteredBody.items).toHaveLength(0)
-      await expectGridCardinality(auditGrid, 0, 'No evidence yet')
-      await expect(page.getByLabel(label, { exact: true })).toHaveValue(value)
-      await page.getByRole('button', { name: `Clear ${label} filter` }).click()
+      await expect(page.getByText('No evidence yet')).toBeVisible()
+      await page
+        .getByRole('button', { name: `Remove ${typed}:00.000Z` })
+        .click()
       await expect
         .poll(() => new URL(page.url()).searchParams.has(key))
         .toBe(false)
-      await expect(page.getByLabel(label, { exact: true })).toHaveValue('')
       await expect(witnessRow).toHaveCount(1)
     }
 
-    // Clear-all is one shared bridge in the inventory; exercise it once, explicitly.
-    const ledgerSearch = page.getByLabel('Search ledger', { exact: true })
-    await ledgerSearch.fill('audit')
-    await actionInput.fill(witness.action)
-    await expect(ledgerSearch).toHaveValue('audit')
-    await expect(actionInput).toHaveValue(witness.action)
+    // One typed query carries several filters; Backspace in the empty field takes them
+    // back, the last first.
+    await query.fill(`audit action:${witness.action}`)
+    await query.press('Enter')
     await expect
       .poll(() => {
         const url = new URL(page.url())
         return [url.searchParams.get('q'), url.searchParams.get('action')]
       })
       .toEqual(['audit', witness.action])
-    await page.getByRole('button', { name: 'Clear all filters' }).click()
+    await query.press('Backspace')
+    await query.press('Backspace')
     await expect
       .poll(() => {
         const url = new URL(page.url())
         return url.searchParams.has('q') || url.searchParams.has('action')
       })
       .toBe(false)
-    await expect(ledgerSearch).toHaveValue('')
-    await expect(actionInput).toHaveValue('')
     await expect(witnessRow).toHaveCount(1)
-    // Escape closes the filters popover and unmounts its inputs.
-    await page.keyboard.press('Escape')
-    await expect(actionInput).toHaveCount(0)
+
+    // A key the API has no filter for is refused out loud and asks nothing.
+    await query.fill('tool:codex')
+    await query.press('Enter')
+    await expect(page.getByRole('alert')).toContainText(
+      'tool:codex is not a ledger filter',
+    )
+    await query.fill('')
+
+    if (edition === 'community') {
+      await expect(
+        page.getByRole('button', { name: 'Export', exact: true }),
+      ).toHaveCount(0)
+      for (const route of ['/v1/audit/verify', '/v1/audit/export']) {
+        const refused = await page.request.get(route, {
+          headers: authHeaders(session),
+        })
+        expect(refused.status()).toBe(501)
+      }
+      await page.screenshot({
+        path: 'playwright-report/l4-audit-community.png',
+      })
+      return
+    }
 
     const verifyRead = page.waitForResponse((response) => {
       return new URL(response.url()).pathname === '/v1/audit/verify'
@@ -722,7 +826,17 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
         `Checkpoints · ${displayedInt.format(verdict.checkpoints.count)} signed`,
       )
     }
+    await page.keyboard.press('Escape')
 
+    // Export one known event through the browser and then observe its audit side effect.
+    await query.fill(`action:${witness.action}`)
+    await query.press('Enter')
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('action'))
+      .toBe(witness.action)
+    await expect(witnessRow).toHaveCount(1)
+
+    // The key that verifies an export offline is read once, when Export opens.
     let pubkeyGets = 0
     const countPubkey = (request: { method(): string; url(): string }) => {
       if (
@@ -736,7 +850,7 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     const pubkeyRead = page.waitForResponse((response) => {
       return new URL(response.url()).pathname === '/v1/audit/pubkey'
     })
-    await page.getByRole('button', { name: 'Verification key' }).click()
+    await page.getByRole('button', { name: 'Export', exact: true }).click()
     const pubkeyResponse = await pubkeyRead
     expect(pubkeyResponse.status()).toBe(200)
     const pubkey = (await pubkeyResponse.json()) as {
@@ -751,23 +865,7 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
       'the browser must receive one canonical Ed25519 key, not permissively decoded garbage',
     ).toBe(pubkey.public_key)
     await expect(page.getByText('Ledger signing key')).toBeVisible()
-    await page.getByRole('button', { name: 'Verification key' }).click()
-    await expect(page.getByText('Ledger signing key')).toHaveCount(0)
-    await page.waitForTimeout(500)
-    expect(pubkeyGets).toBe(1)
-    page.off('request', countPubkey)
 
-    // Export one known event through the browser and then observe its audit side effect.
-    await page.getByRole('button', { name: 'Filters', exact: true }).click()
-    await actionInput.fill(witness.action)
-    await expect
-      .poll(() => new URL(page.url()).searchParams.get('action'))
-      .toBe(witness.action)
-    await expect(witnessRow).toHaveCount(1)
-    await actionInput.press('Escape')
-    await page
-      .getByRole('button', { name: 'Export options', exact: true })
-      .click()
     await page.getByLabel('From seq').fill(String(witness.seq))
     await page.getByLabel('To seq').fill(String(witness.seq))
     await page.getByRole('combobox', { name: 'Export format' }).click()
@@ -780,7 +878,8 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     await expect(useCurrent).not.toBeChecked()
     await useCurrent.click()
     await expect(useCurrent).toBeChecked()
-    await useCurrent.press('Escape')
+    expect(pubkeyGets).toBe(1)
+    page.off('request', countPubkey)
 
     // verify reports how many contiguous links existed before this export. Use
     // the next sequence as the lower bound so a row left by an earlier retry
@@ -798,35 +897,9 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
         url.searchParams.get('action') === witness.action
       )
     })
-    const info = await page.request.get('/v1/server-info', {
-      headers: authHeaders(session),
-    })
-    expect(info.status()).toBe(200)
-    const { edition } = (await info.json()) as { edition: string }
-    const downloadReady =
-      edition === 'community' ? null : page.waitForEvent('download')
-    await page.getByRole('button', { name: 'Export', exact: true }).click()
+    const downloadReady = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Download', exact: true }).click()
     const exportResponse = await exportRead
-    if (downloadReady === null) {
-      // Audit export is Business (core/audit/business_community.go): a Community build
-      // refuses it with 501 before it writes the evidence row or sends a byte.
-      expect(exportResponse.status()).toBe(501)
-      expect(await exportResponse.text()).toContain('audit_export_unavailable')
-      const written = await page.request.get(
-        `/v1/audit?from=${exportAuditFloor}&action=audit.export&limit=100`,
-        { headers: authHeaders(session) },
-      )
-      assertSessionAccepted(written)
-      expect(written.ok()).toBe(true)
-      expect(((await written.json()) as ListBody<AuditItem>).items).toEqual([])
-      test.info().annotations.push({
-        type: 'not-exercised',
-        description:
-          'export download and evidence row: a Community build refuses audit export',
-      })
-      await page.screenshot({ path: 'playwright-report/l4-audit-export.png' })
-      return
-    }
     // The read is judged before the download is awaited: a refused export draws a toast and
     // saves nothing, and would otherwise surface only as a download that never comes.
     expect(exportResponse.status()).toBe(200)

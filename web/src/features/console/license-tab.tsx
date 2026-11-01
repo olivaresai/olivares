@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Field } from '@/components/ui/field'
+import { PathText } from '@/components/ui/path-text'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { AAL, RequireAssurance } from '@/features/identity/assurance'
@@ -208,7 +209,12 @@ function LicenseFacts({
             {t(`console:license.sources.${license.source}`, {
               defaultValue: license.source,
             })}
-            {license.source_path ? ` (${license.source_path})` : ''}
+            {license.source_path ? (
+              <>
+                {' '}
+                (<PathText value={license.source_path} />)
+              </>
+            ) : null}
           </span>
         </Row>
       </dl>

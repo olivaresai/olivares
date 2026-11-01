@@ -22,9 +22,10 @@ const (
 	ContainerRuntimeEnv = "OLIVARES_SESSION_CONTAINER_RUNTIME"
 	// ContainerImageEnv names the image container sessions run in.
 	ContainerImageEnv = "OLIVARES_SESSION_CONTAINER_IMAGE"
-	// DefaultContainerImage is the name an Olivares Server image is meant to carry its
-	// session image under, so a container session needs nothing typed there. Nothing in
-	// this repository builds it: on any other host, name an image of your own.
+	// DefaultContainerImage is the name the session image is built under, so a container
+	// session needs nothing typed there. It is built from
+	// packaging/container/session/Containerfile, which the packages install at
+	// /usr/share/olivares/session-image.
 	DefaultContainerImage = "localhost/olivares-session:latest"
 )
 
@@ -39,6 +40,42 @@ var (
 // selinuxEnforcePath is where the kernel says whether SELinux enforces.
 var selinuxEnforcePath = "/sys/fs/selinux/enforce"
 
+// ContainerCLI is the container runtime a node has, before any image is chosen. It is
+// what a service that runs its own image (the Ollama service) needs.
+type ContainerCLI struct {
+	// Path is the podman or docker executable. Its base name tells the two apart.
+	Path string
+	// SELinux is true when the host enforces SELinux: mounts then need a label (z).
+	SELinux bool
+}
+
+// DetectContainerCLI resolves the runtime from the same setting container sessions use.
+// ErrNoContainerRuntime and ErrContainerRuntimeOff are expected answers; any other
+// error is a setting the operator must fix and says which.
+func DetectContainerCLI(getenv func(string) string, lookPath func(string) (string, error)) (ContainerCLI, error) {
+	choice := strings.ToLower(strings.TrimSpace(getenv(ContainerRuntimeEnv)))
+	var candidates []string
+	switch choice {
+	case "", "auto":
+		candidates = []string{"podman", "docker"}
+	case "podman", "docker":
+		candidates = []string{choice}
+	case "off":
+		return ContainerCLI{}, ErrContainerRuntimeOff
+	default:
+		return ContainerCLI{}, fmt.Errorf("%s is %q; use auto, podman, docker or off", ContainerRuntimeEnv, choice)
+	}
+	for _, name := range candidates {
+		if path, err := lookPath(name); err == nil {
+			return ContainerCLI{Path: path, SELinux: selinuxEnforcingAt(selinuxEnforcePath)}, nil
+		}
+	}
+	if choice == "podman" || choice == "docker" {
+		return ContainerCLI{}, fmt.Errorf("%s is %q but it is not installed", ContainerRuntimeEnv, choice)
+	}
+	return ContainerCLI{}, ErrNoContainerRuntime
+}
+
 // DetectContainerRuntime resolves the runtime and the image from the two settings.
 // ErrNoContainerRuntime and ErrContainerRuntimeOff are expected answers; any other
 // error is a setting the operator must fix and says which.
@@ -51,27 +88,11 @@ func DetectContainerRuntime(getenv func(string) string, lookPath func(string) (s
 	if strings.HasPrefix(image, "-") || strings.ContainsAny(image, " \t\r\n\x00") {
 		return ContainerRuntime{}, fmt.Errorf("%s is %q, which is not an image name", ContainerImageEnv, image)
 	}
-	choice := strings.ToLower(strings.TrimSpace(getenv(ContainerRuntimeEnv)))
-	var candidates []string
-	switch choice {
-	case "", "auto":
-		candidates = []string{"podman", "docker"}
-	case "podman", "docker":
-		candidates = []string{choice}
-	case "off":
-		return ContainerRuntime{}, ErrContainerRuntimeOff
-	default:
-		return ContainerRuntime{}, fmt.Errorf("%s is %q; use auto, podman, docker or off", ContainerRuntimeEnv, choice)
+	cli, err := DetectContainerCLI(getenv, lookPath)
+	if err != nil {
+		return ContainerRuntime{}, err
 	}
-	for _, name := range candidates {
-		if path, err := lookPath(name); err == nil {
-			return ContainerRuntime{Path: path, Image: image, SELinux: selinuxEnforcingAt(selinuxEnforcePath)}, nil
-		}
-	}
-	if choice == "podman" || choice == "docker" {
-		return ContainerRuntime{}, fmt.Errorf("%s is %q but it is not installed", ContainerRuntimeEnv, choice)
-	}
-	return ContainerRuntime{}, ErrNoContainerRuntime
+	return ContainerRuntime{Path: cli.Path, Image: image, SELinux: cli.SELinux}, nil
 }
 
 // selinuxEnforcingAt reads the kernel's own answer; a host without SELinux has no file.

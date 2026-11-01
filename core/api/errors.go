@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -319,11 +320,17 @@ func statusFor(err error) (int, string) {
 		// to upgrade. 403 + distinct code so the login UI routes to the SSO button.
 		return http.StatusForbidden, "sso_required"
 	case errors.Is(err, auth.ErrSSOGroupsIndeterminate):
-		// Group overage: the IdP did not send the user's full group list, so a sign-in
-		// that relies on group membership is refused rather than admitted with none.
-		// 403 with a distinct code; the 4xx body is the error's own text, which names the
-		// fix in Entra and carries nothing from the assertion.
+		// The user's group list is unknown (Entra group overage, a claim that cannot be
+		// read, a UserInfo that failed), so a sign-in that relies on group membership is
+		// refused rather than admitted with none. 403 with a distinct code; the 4xx body
+		// is the error's own text, which names the usual fix in Entra and carries nothing
+		// from the assertion. The operator's log names the cause.
 		return http.StatusForbidden, "sso_groups_indeterminate"
+	case errors.Is(err, auth.ErrSSOGroupReconcile):
+		// The asserted groups could not be stored after the session was issued, so the
+		// sign-in was withdrawn. A deliberate, usually transient refusal: 503, a fixed
+		// message, the cause only in the log.
+		return http.StatusServiceUnavailable, "sso_group_reconcile_failed"
 	case errors.Is(err, auth.ErrNetworkNotAllowed):
 		// login refused because the peer IP is outside the deployment's network
 		// allow-list (a deny-closed perimeter control over the login surface). 403 +
@@ -603,6 +610,7 @@ var honestSeamMessage = map[string]string{
 	"updates_unavailable":              "Updates from the console are not available on this engine. Run `olivares upgrade` on the server.",
 	"update_restart_unavailable":       "The new version is installed, but this engine cannot restart itself. Restart the engine with its service manager to run it.",
 	"sso_not_configured":               "SSO is not configured on this deployment.",
+	"sso_group_reconcile_failed":       "Sign-in was refused because the groups your identity provider sent could not be saved. Try again; if it keeps failing, ask an administrator to check the engine log.",
 	"sso_builder_unavailable":          "This build can store SSO configuration but has no provider builder to activate it.",
 	"sso_unavailable":                  "SSO is unavailable: no secret sealer is wired, so an SSO secret cannot be sealed or opened.",
 	"login_enforcement_unavailable":    "Login is unavailable: this deployment has login enforcement configured, and this build cannot enforce it.",
@@ -737,7 +745,15 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 		// The cause goes to the log, never to the client: for a wrapped refusal such
 		// as setup_token_unreadable it is the only place the operator learns the
 		// file and the errno (#530).
-		s.log.Info("api: refused by design", "code", code, "status", status,
+		level, message := slog.LevelInfo, "api: refused by design"
+		if code == "store_unavailable" {
+			// Not a refusal by design: the operator has to hear about a database
+			// outage. The 503 would otherwise take the Info line above, and an
+			// alert on Error (where an outage logged "api: request failed" before
+			// it had its own code) would go quiet during one.
+			level, message = slog.LevelError, "api: store unavailable"
+		}
+		s.log.Log(r.Context(), level, message, "code", code, "status", status,
 			"path", logPath(r.URL.Path), "request_id", requestID(r.Context()), "err", err)
 	}
 	var body errorBody

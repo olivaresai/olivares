@@ -175,6 +175,52 @@ func TestSkillsSessionEvidenceOutageRecoversAsConsole(t *testing.T) {
 	}
 }
 
+func TestSkillsSessionFolderCanonicalForbids(t *testing.T) {
+	for _, verb := range []string{"read", "write"} {
+		t.Run(verb, func(t *testing.T) {
+			c := bootSkillsComposition(t)
+			revision := c.installPack("session-folder-forbid-pack")
+			code, raw := c.do("POST", "/v1/m/sessions/workspaces", c.token, map[string]any{"root_path": t.TempDir()})
+			if code != http.StatusCreated {
+				t.Fatalf("folder = %d %s", code, raw)
+			}
+			ref := decodeField(t, raw, "workspace_ref")
+			principal := skillsSessionLauncher(t, c, c.token)
+			request := func() *httptest.ResponseRecorder {
+				method, route := "GET", "/v1/m/skills/assignments?target_kind=folder&target_id="+ref
+				var body []byte
+				if verb == "write" {
+					method, route = "POST", "/v1/m/skills/assignments"
+					var err error
+					body, err = json.Marshal(map[string]any{"target_kind": "folder", "target_id": ref, "pack_revision_id": revision})
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				req := httptest.NewRequest(method, route, bytes.NewReader(body))
+				req.Header.Set("Content-Type", "application/json")
+				rec := httptest.NewRecorder()
+				c.eng.api.ServeSession(rec, req, principal)
+				return rec
+			}
+			allowed := http.StatusOK
+			if verb == "write" {
+				allowed = http.StatusCreated
+			}
+			if rec := request(); rec.Code != allowed {
+				t.Fatalf("session folder %s positive control = %d %s", verb, rec.Code, rec.Body.String())
+			}
+			if verb == "write" {
+				revision = c.installPack("session-folder-forbid-fresh-pack")
+			}
+			testsupport.SeedCedar(t, c.eng.store, model.TenantID(c.tenant), `forbid(principal, action == Action::"resource:`+verb+`", resource);`, c.eng.nhiEnforcer)
+			if rec := request(); rec.Code != http.StatusNotFound {
+				t.Errorf("session folder %s = %d %s, want 404", verb, rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
 func skillsSessionLauncher(t *testing.T, c skillsComposition, token string) auth.Principal {
 	t.Helper()
 	tenant, err := model.ParseTenantID(c.tenant)

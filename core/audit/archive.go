@@ -12,7 +12,7 @@ import (
 )
 
 // ArchiveFormat is the versioned format tag stamped on every segment manifest
-//. The field names below are pinned by this tag and future readers
+// . The field names below are pinned by this tag and future readers
 // depend on them.
 //
 // v2 adds meta_blind: the per-record blind of the metadata commitment, without

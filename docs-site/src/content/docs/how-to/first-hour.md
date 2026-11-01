@@ -37,6 +37,13 @@ The tools report the account, plan, models and usage windows they expose.
 An unavailable value is not a zero balance; a failed refresh shows the last
 snapshot as stale with the command that failed.
 
+Each saved account shows its own reported usage before you start a session.
+This includes monthly spend caps when Claude Code reports them and Codex credit
+balances, alongside the 5-hour and weekly windows. Usage at 80% or above is
+highlighted. A credit balance is separate from a percentage limit: an unknown
+balance is never displayed as zero. Account selection keeps these readings with
+the selected login, including when you override the default for a session.
+
 To use an API key instead, open **Tools**, add the provider under **API keys**,
 and test the connection. For a local model, add an Ollama endpoint reachable
 from the engine; no API key is needed. See
@@ -65,7 +72,7 @@ instruction in **Tools**, then return to the session.
 
 ## 4. Approve an action
 
-To try an approval, choose **More options → Ask before each action** when
+To try an approval, choose **More options → Supervised** when
 starting the session. Ask the tool to run a harmless command in the project.
 When it requests permission, open **Rules**. The request waiting for you is
 marked in orange and open beside the queue, with the command, what it reaches

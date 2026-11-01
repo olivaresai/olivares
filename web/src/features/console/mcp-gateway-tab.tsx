@@ -842,7 +842,7 @@ function GatewayForm({
         ...authority,
         tenant,
       })
-      // A Save is done when the engine's answer holds what was sent (HU 026: the dialog
+      // A Save is done when the engine's answer holds what was sent (acceptance: the dialog
       // closed and the tool permission was not there). Otherwise it stays open and says so.
       const missing = unkeptPolicies(snapshot, input, row?.id)
       if (missing.length > 0) throw new PoliciesNotKept(missing)

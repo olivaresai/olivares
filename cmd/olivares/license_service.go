@@ -215,6 +215,9 @@ func (s *licenseService) UninstallLicense(ctx context.Context, acknowledge bool)
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return api.LicenseStatus{}, fmt.Errorf("remove license %q: %w", path, err)
 	}
+	if err := notifyLicenseChanged(s.dataDir); err != nil {
+		return api.LicenseStatus{}, err
+	}
 	return s.reconcileLocked(ctx)
 }
 
@@ -287,5 +290,5 @@ func (s *licenseService) writeLicenseFile(blob string) error {
 	if err := os.WriteFile(path, []byte(blob+"\n"), 0o600); err != nil {
 		return fmt.Errorf("write license %q: %w", path, err)
 	}
-	return nil
+	return notifyLicenseChanged(s.dataDir)
 }

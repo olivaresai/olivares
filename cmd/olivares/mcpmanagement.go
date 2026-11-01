@@ -596,6 +596,9 @@ func (m *mcpManagement) ServeSessionHTTP(w http.ResponseWriter, r *http.Request)
 		checkOrchestration: func(ctx context.Context, p auth.Principal, tenant model.TenantID) error {
 			return scope.WithScope(ctx, p, tenant, false, func(store.Scope) error { return nil })
 		}}
+	if m.eng.sessionsMod != nil {
+		h.connections = m.eng.sessionsMod
+	}
 	h.ServeHTTP(w, r)
 }
 

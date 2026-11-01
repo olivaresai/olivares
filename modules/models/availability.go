@@ -46,7 +46,8 @@ type AvailabilitySource struct {
 // ModelDiscovery lists configured sources and reads models without inference,
 // prompts or remote mutations. Discover must honor cancellation and must not
 // publish a result after its source configuration changed. Errors are never
-// logged or returned to a browser: provider errors can contain credential echoes.
+// logged. Only an error's ClientMessage may reach a browser; every other error
+// stays generic because provider errors can contain credential echoes.
 type ModelDiscovery interface {
 	Sources(context.Context, model.TenantID) ([]AvailabilitySource, error)
 	Discover(context.Context, model.TenantID, AvailabilitySource) ([]string, error)
@@ -236,6 +237,10 @@ func (m *Module) RefreshAvailability(ctx context.Context, tenant model.TenantID)
 		state, message := "fresh", ""
 		if probeErr != nil {
 			state, message = "failed", availabilityFailure
+			var clientErr interface{ ClientMessage() string }
+			if errors.As(probeErr, &clientErr) {
+				message = clientErr.ClientMessage()
+			}
 		}
 		if errors.Is(probeErr, ErrModelDiscoveryUnsupported) {
 			state, message = "unsupported", "Automatic model discovery is unavailable for this tool. Use its default model."

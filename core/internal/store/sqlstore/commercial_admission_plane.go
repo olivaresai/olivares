@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"github.com/olivaresai/olivares/core/internal/store/dialect"
 	"github.com/olivaresai/olivares/core/store"
-	"strconv"
 	"strings"
 )
 
@@ -584,52 +583,6 @@ func guardAdmissionVerifyControlPlane(ctx context.Context, q guardEditionQuerier
 	return verifyGuardControlPlaneCatalog(ctx, q, dia, m.Format)
 }
 
-func guardAdmissionBootstrapVariants(graph guardEditionGraph, epoch int64) ([]guardBootstrapReceiptVariant, error) {
-	node, ok := graph.node(epoch)
-	if !ok {
-		return nil, fmt.Errorf("%w: edition %d is not in this graph", ErrGuardManifestNoEdge, epoch)
-	}
-	variants, err := guardBootstrapVariantsAtNode(node)
-	if err != nil {
-		return nil, err
-	}
-	empty, err := emptyRetainedDigest()
-	if err != nil {
-		return nil, err
-	}
-	for _, parent := range guardAdmissionParentEpochs(graph, epoch) {
-		edge, eerr := guardAdmissionEdge(graph, parent, epoch)
-		if eerr != nil {
-			return nil, eerr
-		}
-		sources, serr := guardAdmissionBootstrapVariants(graph, parent)
-		if serr != nil {
-			return nil, serr
-		}
-		parentNode, _ := graph.node(parent)
-		for _, source := range sources {
-			if !guardEditionSealEligible(edge, source) {
-				continue
-			}
-			seal, sealErr := guardEditionTransitionSeal(edge, 0, empty, source.TerminalReceiptID)
-			if sealErr != nil {
-				return nil, sealErr
-			}
-			variants = append(variants, guardBootstrapReceiptVariant{
-				State:             guardEditionReceiptsSealed,
-				Receipts:          append(append([]guardReceipt(nil), source.Receipts...), seal),
-				Path:              source.Path + guardEditionPath(">") + guardEditionPath(strconv.FormatInt(epoch, 10)),
-				CompletedV7:       true,
-				CompletedV9:       source.CompletedV9 || node.Membership.has(guardDeltaAccessEvidence),
-				TerminalReceiptID: seal.ReceiptID,
-				Epoch:             epoch,
-			})
-			_ = parentNode
-		}
-	}
-	return variants, nil
-}
-
 func guardAdmissionClassifyReceipts(
 	ctx context.Context,
 	q guardEditionQuerier,
@@ -649,11 +602,12 @@ func guardAdmissionClassifyReceipts(
 		}
 		return variant, actual, nil
 	}
-	graph, err := guardAdmissionGraphFor(current)
+	boot, err := guardAdmissionCompiled.get(current)
 	if err != nil {
 		return guardBootstrapReceiptVariant{}, nil, err
 	}
-	variants, err := guardAdmissionBootstrapVariants(graph, current.CodeEpoch)
+	graph := boot.graph
+	variants, err := boot.variants(current.CodeEpoch)
 	if err != nil {
 		return guardBootstrapReceiptVariant{}, nil, err
 	}
@@ -671,7 +625,7 @@ func guardAdmissionClassifyReceipts(
 		if eerr != nil {
 			return guardBootstrapReceiptVariant{}, nil, eerr
 		}
-		sources, serr := guardAdmissionBootstrapVariants(graph, parent)
+		sources, serr := boot.variants(parent)
 		if serr != nil {
 			return guardBootstrapReceiptVariant{}, nil, serr
 		}
@@ -722,10 +676,10 @@ func guardAdmissionVerifyCompletedV7History(
 	var attempts []string
 	var causes []error
 	for _, epoch := range graph.epochsDescending() {
-		if epoch < 2 {
+		node, _ := graph.node(epoch)
+		if node.Manifest.CodeEpoch < 2 {
 			continue
 		}
-		node, _ := graph.node(epoch)
 		history, verr := guardAdmissionVerifyHistory(ctx, q, dia, node.Manifest)
 		if verr == nil && guardEditionHistoryCompletesV7(history.Kind) {
 			return history, nil

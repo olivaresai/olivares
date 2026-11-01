@@ -1,0 +1,63 @@
+{
+  "tools": [
+    {
+      "key": "claude",
+      "name": "Claude Code",
+      "name_stem": "claude",
+      "session": true,
+      "bindings": [{ "kind": "anthropic", "egress": "configured-endpoint" }]
+    },
+    {
+      "key": "codex",
+      "name": "Codex",
+      "name_stem": "codex",
+      "session": true,
+      "bindings": [
+        { "kind": "openai", "egress": "configured-endpoint" },
+        { "kind": "openai_compatible", "egress": "configured-endpoint" },
+        { "kind": "ollama", "egress": "configured-endpoint" }
+      ]
+    },
+    {
+      "key": "grok",
+      "name": "Grok Build",
+      "name_stem": "grok",
+      "session": true,
+      "bindings": [{ "kind": "xai", "egress": "configured-endpoint" }]
+    },
+    {
+      "key": "opencode",
+      "name": "OpenCode",
+      "name_stem": "opencode",
+      "session": true,
+      "bindings": [
+        { "kind": "anthropic", "egress": "vendor-default-only" },
+        { "kind": "openai", "egress": "vendor-default-only" },
+        { "kind": "xai", "egress": "vendor-default-only" },
+        { "kind": "ollama", "egress": "configured-endpoint" },
+        { "kind": "openai_compatible", "egress": "local-endpoint-only" }
+      ]
+    },
+    {
+      "key": "gemini-cli",
+      "name": "Gemini CLI",
+      "name_stem": "gemini",
+      "session": true,
+      "bindings": [{ "kind": "gemini", "egress": "vendor-default-only" }]
+    },
+    {
+      "key": "cursor",
+      "name": "Cursor CLI",
+      "name_stem": "cursor",
+      "session": true,
+      "bindings": []
+    },
+    {
+      "key": "ollama",
+      "name": "Ollama",
+      "name_stem": "ollama",
+      "session": false,
+      "bindings": []
+    }
+  ]
+}

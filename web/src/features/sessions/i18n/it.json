@@ -1,4 +1,13 @@
 {
+  "compact": {
+    "context": "Contesto",
+    "now": "Compatta ora",
+    "beforeSend": "Compatta prima di inviare",
+    "working": "Compattazione…",
+    "hint": "Riassume i turni precedenti per liberare contesto. La bozza viene conservata fino alla conferma della compattazione.",
+    "unavailable": "Disponibile quando la sessione è inattiva e lo strumento segnala la compattazione nativa.",
+    "failed": "La compattazione non è stata confermata. Il messaggio non è stato inviato."
+  },
   "git": {
     "title": "Git",
     "branch": "Branch",
@@ -310,16 +319,17 @@
     "currentSession": "Sessione corrente",
     "besideSession": "Sessione accanto",
     "switchSession": "Cambia sessione",
-    "closeContext": "Chiudi il contesto",
+    "details": "Dettagli della sessione",
+    "closeContext": "Chiudi i dettagli",
     "backTo": "Torna a {{pane}}",
     "pane": {
       "rail": "Sessioni",
       "narrative": "Lavoro",
-      "context": "Contesto"
+      "context": "Dettagli"
     },
     "resize": {
       "rail": "Ridimensiona l'elenco delle sessioni",
-      "context": "Ridimensiona il pannello di contesto",
+      "context": "Ridimensiona il pannello dei dettagli",
       "beside": "Ridimensiona la sessione accanto"
     }
   },
@@ -354,7 +364,9 @@
     "planNotRead": "finestra del piano non letta",
     "resets": "Si azzera {{when}} ({{at}})",
     "stale": "ultimo valore noto",
-    "readAt": "Letto {{at}}"
+    "readAt": "Letto {{at}}",
+    "permission": "{{name}}: {{what}}",
+    "full": "Accesso completo: funziona senza chiedere, confinato dalla <policy>policy di Olivares</policy>"
   },
   "evidence": {
     "checks": {
@@ -435,7 +447,7 @@
       "worker": "Worker",
       "orchestrator": "Orchestrator"
     },
-    "details": "Dettagli",
+    "details": "Riferimenti",
     "echoes": "Riportata anche come",
     "folder": "Cartella",
     "temporaryFolder": "Cartella temporanea per questa sessione",
@@ -447,12 +459,29 @@
     "noChanges": "Olivares non ha avviato questa sessione, quindi non ha modifiche da mostrare.",
     "filesUnavailable": "Questa cartella non è disponibile da sfogliare.",
     "filesNoAccess": "Il tuo ruolo non può sfogliare questa cartella.",
-    "filesFailed": "Non è stato possibile leggere la cartella."
+    "filesFailed": "Non è stato possibile leggere la cartella.",
+    "facts": {
+      "title": "Sessione",
+      "state": "Stato",
+      "workspace": "Area di lavoro",
+      "tool": "Strumento",
+      "account": "Account",
+      "model": "Modello",
+      "access": "Accesso",
+      "cost": "Costo"
+    },
+    "usage": {
+      "title": "Utilizzo dell’account",
+      "fiveHour": "{{percent}}% di 5 ore",
+      "week": "{{percent}}% della settimana"
+    }
   },
   "conversation": {
     "log": "Conversazione",
     "waiting": "In attesa della sessione…",
     "empty": "Ancora nessun messaggio.",
+    "earlier": "Mostra l'output precedente",
+    "earlierFailed": "Impossibile caricare l'output precedente.",
     "ended": "La sessione è terminata.",
     "lag_one": "{{count}} frame perso: l'output qui sotto riprende dopo l'interruzione.",
     "lag_many": "{{count}} frame persi: l'output qui sotto riprende dopo l'interruzione.",
@@ -482,8 +511,8 @@
     "startedTools_many": "{{count}} strumenti",
     "startedTools_other": "{{count}} strumenti",
     "notSent": "Non inviato: {{reason}}",
-    "waitingApproval": "Inviato quando l'avvio è approvato e la sessione parte.",
-    "workingFolder": "Cartella di lavoro: {{cwd}}",
+    "waitingApproval": "Inviato quando la sessione è pronta.",
+    "workingFolder": "Cartella di lavoro: <path />",
     "temporaryFolder": "Cartella di lavoro: cartella temporanea per questa sessione",
     "workedFor": "Ha lavorato per {{duration}}",
     "modelChanged": "Modello cambiato: {{from}} → {{to}}",
@@ -531,8 +560,11 @@
       "command_many": "Esecuzione di {{count}} comandi shell",
       "command_other": "Esecuzione di {{count}} comandi shell",
       "edit": "Modifica di {{target}}",
+      "editPath": "Modifica di <path/>",
       "read": "Lettura di {{target}}",
+      "readPath": "Lettura di <path/>",
       "search": "Ricerca di {{target}}",
+      "searchPath": "Ricerca di <lead/><path/>",
       "agent": "{{name}} è al lavoro",
       "tool": "Esecuzione di {{tool}}"
     },
@@ -549,6 +581,14 @@
         "extra": "limite di utilizzo extra",
         "usage": "limite di utilizzo"
       }
+    },
+    "card": {
+      "question": "Domanda",
+      "plan": "Piano proposto",
+      "todos": "Elenco attività ({{done}} di {{total}} completate)",
+      "send": "Invia risposta",
+      "answered": "Risposta inviata: {{answer}}",
+      "sendFailed": "Impossibile inviare la risposta."
     }
   },
   "changes": {
@@ -597,6 +637,22 @@
       "added": "Aggiunto",
       "modified": "Modificato",
       "deleted": "Eliminato"
+    },
+    "comment": {
+      "title": "Commenta una riga",
+      "line": "Riga",
+      "version": "Versione",
+      "text": "Commento",
+      "send": "Invia alla sessione",
+      "sent": "Commento inviato alla sessione.",
+      "failed": "Non è stato possibile inviare il commento. Riprova tra un momento.",
+      "notLive": "Riprendi la sessione per inviare un commento.",
+      "noPermission": "Ti serve il permesso di scrivere nelle sessioni per inviare un commento.",
+      "needLine": "Scegli una riga: fai clic sul suo numero o digitalo.",
+      "noSuchLine": "Il file non ha la riga {{line}} {{version}}.",
+      "empty": "Scrivi il commento.",
+      "atBase": "alla base",
+      "atTip": "in cima al branch"
     }
   },
   "peers": {
@@ -724,6 +780,13 @@
     "unreadable": "{{n}} record della trascrizione non hanno potuto essere letti."
   },
   "limit": {
+    "settingsSaved": "Preferenza di ripresa automatica salvata.",
+    "resumeAtReset": "Riprendi al ripristino",
+    "snoozeUntilReset": "Nascondi fino al ripristino",
+    "automatic": "Riprendi automaticamente al ripristino di un limite",
+    "resumes": "Ripresa {{time}}",
+    "cancel": "Annulla",
+    "cancelled": "Ripresa programmata annullata.",
     "usageUntil": "Quota esaurita fino a {{time}}",
     "usage": "Quota esaurita",
     "rate": "Limite di frequenza imposto dal provider. Riprova tra un momento."
@@ -734,6 +797,10 @@
   },
   "rowActions": {
     "rename": "Rinomina…",
+    "regenerateTitle": "Rigenera il titolo",
+    "titleShort": "Corto",
+    "titleSentence": "Normale",
+    "titleLong": "Lungo",
     "renameTitle": "Rinomina la sessione",
     "renameDescription": "Il nome è salvato sul server e mostrato ovunque compaia questa sessione. Lascialo vuoto per tornare al nome che le dà Olivares.",
     "renameLabel": "Nome",
@@ -755,6 +822,52 @@
     "copiedPartial": "Copiato. {{n}} record della trascrizione non sono leggibili e non sono inclusi.",
     "clipped": "Alcuni messaggi superano i 64 KiB e sono stati troncati nella copia; ognuno termina con [...].",
     "noWholeText": "Il motore ha inviato solo la prima riga di ogni messaggio, quindi la trascrizione non è stata copiata.",
-    "transcriptChanged": "La trascrizione è cambiata durante la copia. Riprova."
+    "transcriptChanged": "La trascrizione è cambiata durante la copia. Riprova.",
+    "undo": "Annulla"
+  },
+  "approval": {
+    "declineSend": "Rifiuta e invia",
+    "feedbackUnsupported": "Questo strumento non può ricevere il tuo feedback. La risposta verrà salvata con il rifiuto.",
+    "title": "Serve un’approvazione",
+    "why": "Perché",
+    "rule": "Regola",
+    "reach": "Portata",
+    "requestedBy": "Richiesto da",
+    "reachUnknown": "Non indicato",
+    "notYours": "Decide un’altra persona con diritti di approvazione.",
+    "approved": "Approvata",
+    "denied": "Negata",
+    "ended": "Non è più in attesa",
+    "unreadable": "Non è stato possibile leggere la richiesta."
+  },
+  "terminal": {
+    "title": "Terminale",
+    "hint": "Una shell nella cartella di questa sessione, con gli stessi limiti della sessione. Viene eseguita come te; ogni riga di comando digitata viene registrata.",
+    "open": "Apri terminale",
+    "close": "Chiudi",
+    "copy": "Copia",
+    "paste": "Incolla",
+    "again": "Apri un nuovo terminale",
+    "reconnecting": "Riconnessione…",
+    "ended": "Il terminale è terminato.",
+    "endedWith": "Il terminale è terminato (uscita {{code}}).",
+    "input": "Input del terminale",
+    "label": "Terminale",
+    "noFolder": "Questa sessione non ha una cartella, quindi non c’è dove aprire un terminale.",
+    "unavailable": "La cartella della sessione non è disponibile qui, quindi non vi si può aprire un terminale.",
+    "problem": {
+      "step_up": "Conferma prima la tua identità, poi riapri il terminale.",
+      "refused": "Non hai il diritto di aprire un terminale in questa cartella.",
+      "busy": "Hai troppi terminali aperti. Chiudine uno prima.",
+      "failed": "Impossibile aprire il terminale. Riprova tra un momento."
+    },
+    "keys": {
+      "esc": "Esc",
+      "tab": "Tab",
+      "ctrlC": "Ctrl+C",
+      "up": "Su",
+      "down": "Giù"
+    },
+    "closeLabel": "Chiudi terminale"
   }
 }

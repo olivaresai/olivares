@@ -118,9 +118,9 @@
   "ref": {
     "ms": {
       "paths": "Пути managed-settings.json",
-      "legacyPath": "Устаревший путь Windows C:\\ProgramData\\ClaudeCode больше не поддерживается (удалён в {{since}}).",
+      "legacyPath": "Устаревший путь Windows <path /> больше не поддерживается (удалён в {{since}}).",
       "precedence": "Приоритет настроек (сначала наивысший)",
-      "dropIn": "Каталог drop-in: {{dir}}",
+      "dropIn": "Каталог drop-in: <path />",
       "serverManaged": "Уровень управления сервером",
       "failClosed": "Отказ в закрытое состояние",
       "noMerge": "Без слияния",

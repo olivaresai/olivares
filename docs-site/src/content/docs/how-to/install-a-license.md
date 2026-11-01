@@ -11,11 +11,13 @@ goes, how to apply it to a running engine, how to read what is installed, and �
 bought a Business plan — how to swap the Community binary for the commercial one
 without reinstalling anything.
 
-:::note[A license is an attestation, not a runtime switch]
-**It gates no feature in the software you are running.** An expired or absent license does
-not turn functionality off, and no license caps user accounts — self-hosted users are
-unlimited in every tier. It is a signed statement of what you are entitled to, not a key
-that unlocks code already on your disk.
+:::note[The license, not the binary, turns the commercial capabilities on]
+**The Business build runs a commercial capability only while a valid license whose grants
+include it is installed.** It checks the license offline, on the machine, each time. With no
+license, or an expired or revoked one, that capability's new work answers
+`addon_requires_license`; reading, verifying and exporting your data keep working, and no
+license caps user accounts — self-hosted users are unlimited in every tier. The Community
+binary never reads a license to turn anything on or off.
 
 **A live license grants access to commercial artifacts.** Offline bundle installation (`olivares upgrade --bundle`) requires the Enterprise binary. Enterprise installs a signed Community bundle without a license; a commercial bundle requires a live license, verified offline. Community and Business support `--bundle --check` without reading a license or installing the bundle.
 :::
@@ -130,7 +132,7 @@ identity fetches one. The console button needs one of the two, the token in the 
 environment or this connection; with neither, the view shows the command instead.
 `--enterprise` is the older spelling of the same route and keeps working.
 Later releases come the same way, with `olivares upgrade` or the console's
-**Settings → Updates** page.
+**Operations → Updates** page (`/updates`).
 
 :::caution[Package installs]
 On a deb, rpm, apk or AUR install the package manager owns `/usr/bin/olivares`, so this command is

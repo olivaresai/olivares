@@ -18,6 +18,7 @@ const (
 	PresetAsk              = "ask"                // permission mode default: ask before each action
 	PresetEditsOnly        = "edits_only"         // permission mode acceptEdits
 	PresetEditsAndCommands = "edits_and_commands" // dontAsk under a built-in template's allowlist
+	PresetAuto             = "auto"               // permission mode auto: Claude Code's own reviewed automatic mode
 	PresetFull             = "full"               // bypassPermissions (a run administrator's choice)
 	PresetCustom           = "custom"             // dontAsk under any other allowlist
 )
@@ -37,6 +38,8 @@ func (i LaunchIntent) Preset() string {
 		return PresetAsk
 	case "acceptEdits":
 		return PresetEditsOnly
+	case "auto":
+		return PresetAuto
 	case permModeBypass:
 		return PresetFull
 	case "dontAsk":

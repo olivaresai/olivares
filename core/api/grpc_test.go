@@ -226,6 +226,12 @@ func TestGRPCControlPlane(t *testing.T) {
 
 	// VerifyAudit returns a healthy report.
 	vr, err := cl.VerifyAudit(authCtx, &apiv1.VerifyAuditRequest{Tenant: tenant.String()})
+	if auditExportStatus == http.StatusNotImplemented {
+		if status.Code(err) != codes.Unimplemented {
+			t.Fatalf("Community verify = %v, want Unimplemented", err)
+		}
+		return
+	}
 	if err != nil || !vr.GetChainOk() {
 		t.Fatalf("verify audit = %v %v", vr, err)
 	}

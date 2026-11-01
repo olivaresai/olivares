@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // This file declares the Anthropic PLATFORM LIMITS as versioned reference data
-//: the API spend-tier ladder, the per-model-class rate limits and the
+// : the API spend-tier ladder, the per-model-class rate limits and the
 // 2026-05-06 subscription limit change. Like adminAPIFamilies (analytics.go) it is
 // DESCRIPTIVE, AsOf-stamped data for governance/FinOps consumers — declared
 // knowledge, never telemetry, never fabricated: every number below is verbatim from

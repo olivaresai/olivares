@@ -23,7 +23,7 @@ export interface AttentionSnapshot {
   address: string
   aliases?: string[]
   name: string
-  state: 'working' | 'needs-you' | 'finished' | 'quiet' | 'ended'
+  state: 'working' | 'needs-you' | 'finished' | 'failed' | 'quiet' | 'ended'
 }
 
 /**
@@ -48,7 +48,7 @@ export function attentionEvent(
     now: number
     lastNotified?: number
   },
-): 'needsYou' | 'finished' | null {
+): 'needsYou' | 'finished' | 'failed' | null {
   if (!previous || !current || previous.run !== current.run) return null
   if (!context.hidden && isOnScreen(current, context.opened)) return null
   if (
@@ -58,6 +58,7 @@ export function attentionEvent(
     return null
   if (current.state === previous.state) return null
   if (current.state === 'needs-you') return 'needsYou'
+  if (current.state === 'failed') return 'failed'
   if (current.state === 'finished' && previous.state === 'working')
     return 'finished'
   return null
@@ -122,16 +123,21 @@ export function attentionSnapshots(
         name:
           operatorName(session) ||
           (place ? `${place} ${sessionShortId(session)}` : session.key),
-        state: ended
-          ? 'ended'
-          : needsYou
-            ? 'needs-you'
-            : run?.state === 'running' ||
-                (!run && session.live?.cc_state === 'active')
-              ? 'working'
-              : run && turnEnded(run, now)
-                ? 'finished'
-                : 'quiet',
+        state:
+          run?.state === 'failed'
+            ? 'failed'
+            : run?.state === 'completed'
+              ? 'finished'
+              : ended
+                ? 'ended'
+                : needsYou
+                  ? 'needs-you'
+                  : run?.state === 'running' ||
+                      (!run && session.live?.cc_state === 'active')
+                    ? 'working'
+                    : run && turnEnded(run, now)
+                      ? 'finished'
+                      : 'quiet',
       }
     })
 }

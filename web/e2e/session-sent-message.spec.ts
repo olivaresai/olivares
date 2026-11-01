@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// A SENT MESSAGE SHOWS AT ONCE (dev#2787). Claude Code shows the person's message only
+// A SENT MESSAGE SHOWS AT ONCE. Claude Code shows the person's message only
 // when it takes the turn, so a message sent to a busy tool appeared seconds later. The
 // console shows it as soon as the engine takes it, then only the tool's own row.
 //

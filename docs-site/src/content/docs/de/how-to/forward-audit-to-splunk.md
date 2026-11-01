@@ -7,7 +7,7 @@ description: >-
 ---
 
 :::note[Business]
-Audit-Export (`GET /v1/audit/export`, `olivares audit export`), Verzeichnisarchive und die Prüfung externer Archive erfordern Business. Community behält das signierte Ledger, `olivares audit verify` und `olivares dr backup`; Export liefert HTTP 501 oder Exit-Code 9. Audit-Weiterleitung und der DDIL-Air-Gap-Transfer erfordern ebenfalls Business.
+Audit-Export (`GET /v1/audit/export`, `olivares audit export`), Ledger-Prüfung (`GET /v1/audit/verify`, `olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`), Verzeichnisarchive und die Prüfung externer Archive erfordern Business. Community behält das signierte Ledger, dessen Lesezugriff und `olivares dr backup`; die entsprechenden Routen und Befehle liefern HTTP 501 oder Exit-Code 9. Audit-Weiterleitung und DDIL-Transfers mit Audit-Segmenten erfordern ebenfalls Business.
 :::
 
 Sie können Olivares-AI-Daten **heute** in Splunk bekommen, ohne auf einen nativen

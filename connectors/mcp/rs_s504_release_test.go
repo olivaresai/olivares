@@ -19,7 +19,7 @@ import (
 //
 // RED-FIRST: every exploit test in this file was written and RUN against the
 // stage-4 tree BEFORE the stage-5 implementation existed; the literal failing
-// output lives in an internal design note (not shipped) The exploits pin
+// output lives in an internal audit The exploits pin
 // the design's RED matrix rows (2026-07-24-gpt5-q1-mcp-design.md):
 //
 //   - "Response-release anchor failure → upstream result withheld";
@@ -422,7 +422,7 @@ func TestS504SamplingReleaseSettledCompleted(t *testing.T) {
 // the ReleaseBinding member of the completed-settlement GateOutcome was
 // neutralized (removed from the composite literal, block kept) and this test
 // observed RED; the literal output is appended to
-// an internal design note (not shipped)
+// an internal audit
 func TestS504DispatchSettlementNamesReleaseChild(t *testing.T) {
 	token, jwks := mintAccessToken(t, "k1", rsResource, "tools:read", validExp())
 	up := &fakeUpstream{result: json.RawMessage(`{"role":"assistant","content":{"type":"text","text":"ok"}}`)}

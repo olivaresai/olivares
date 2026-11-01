@@ -483,12 +483,21 @@ export interface SourceScopeBindingDTO {
   scope_tree: SourceScopeTree
   scope_ref?: string
   effect?: BindingEffect
+  expires_at?: string
   folder_path?: string
   cred_name?: string
   cred_ref_kind?: CredentialRefKind
   cred_ref?: string
   cred_hint?: string
   enabled: boolean
+  note?: string
+}
+
+export interface AccessRequestInput {
+  source_type: SourceScopeSourceType
+  source_ref: string
+  workspace_ref: string
+  expires_at?: string
   note?: string
 }
 
@@ -659,6 +668,7 @@ export interface ScopedGrantDTO {
   scope_class?: string
   note?: string
   created_by?: string
+  expires_at?: string
 }
 
 // An inheritance filter (modules/governance/inheritance_filter.go): on a container node, rights
@@ -804,12 +814,43 @@ export interface EffectiveRightsRequest {
   id: string
 }
 
+export interface EffectiveRightsStep {
+  kind: string
+  ref: string
+  workspace?: string
+}
+
+export interface EffectiveRightsSubject {
+  kind: string
+  ref: string
+  chain?: EffectiveRightsStep[]
+}
+
+export interface EffectiveRightsGrant {
+  grant_id?: string
+  policy_id?: string
+  node: EffectiveRightsStep
+  subject: EffectiveRightsSubject
+}
+
+export interface EffectiveRightsRemoval {
+  kind: string
+  id?: string
+  node?: EffectiveRightsStep
+}
+
 export interface EffectiveRightsResponse {
   subject: { kind: string; id: string }
   node: { kind: string; id: string }
   assurance: number
-  path: { kind: string; ref: string; workspace?: string }[]
-  rights: { name: string; state: EffectiveRightState }[]
+  membership_as_of?: string
+  path: EffectiveRightsStep[]
+  rights: {
+    name: string
+    state: EffectiveRightState
+    because?: EffectiveRightsGrant[]
+    removed_by?: EffectiveRightsRemoval[]
+  }[]
 }
 
 // --- live edition / license ---------------------------------------------
@@ -1195,6 +1236,16 @@ export const consoleApi = {
       `/v1/users/${encodeURIComponent(userId)}/totp/reset`,
       {},
     ),
+  /** End every live sign-in of a member (user:write + step-up). */
+  endMemberSessions: (
+    userId: string,
+    opts?: Pick<RequestOptions, 'signal' | 'dispatchGuard'>,
+  ) =>
+    http.delete<void>(
+      `/v1/users/${encodeURIComponent(userId)}/sessions`,
+      undefined,
+      opts,
+    ),
   /** Remove a member from the organization (a scoped offboard; the account and
    * its other organizations stay). Every edition serves it. */
   removeMember: (userId: string) =>
@@ -1440,6 +1491,8 @@ export const consoleApi = {
     >(`${SOURCESCOPE}/bindings`, input)
     return bindingApplyResult(status, data)
   },
+  createAccessRequest: (input: AccessRequestInput) =>
+    http.post<PostureRequestDTO>(`${SOURCESCOPE}/access-requests`, input),
   updateBinding: async (id: string, input: SourceScopeBindingDTO) => {
     const { status, data } = await http.putWithMeta<
       SourceScopeBindingDTO | PostureRequestDTO
@@ -1486,6 +1539,10 @@ export const consoleApi = {
   approvePostureRequest: (id: string) =>
     http.post<PostureRequestDTO>(
       `${SOURCESCOPE}/posture-requests/${encodeURIComponent(id)}/approve`,
+    ),
+  approveAccessRequest: (id: string) =>
+    http.post<PostureRequestDTO>(
+      `${SOURCESCOPE}/access-requests/${encodeURIComponent(id)}/approve`,
     ),
   rejectPostureRequest: (id: string) =>
     http.post<PostureRequestDTO>(

@@ -426,10 +426,11 @@ if (views.length < MIN_VIEWS) {
 
 // --- the routes mounted OUTSIDE the registry ---------------------------------------
 // The public legs (/login, /setup, /accept-invite, /status-page) and /settings are
-// literal createRoute() calls in app/routes.tsx; the area directories are mounted there
-// from NAV_AREAS in registry.tsx, so their paths come from the one NAV_AREAS read above.
-// They are routes the operator can reach and the census records them, so a guide that
-// covered only FEATURE_VIEWS would be short by those screens and would not know it.
+// literal createRoute() calls in app/routes.tsx; the area directory paths come from the one
+// NAV_AREAS read above. They are routes the operator can reach and the census records them,
+// so a guide that covered only FEATURE_VIEWS would be short by those screens and would not
+// know it; one that ROUTE_ALIASES redirects (0.5 retired the directories) is not a screen
+// and is dropped from the output below.
 // `getParentRoute: () => rootRoute` is what makes a leg public: rootRoute has no auth
 // guard, appRoute is the guarded shell.
 const ROUTES_REL = 'web/src/app/routes.tsx'
@@ -521,7 +522,10 @@ process.stdout.write(
       areaOrder,
       census: [...guideCensus].sort(),
       views: views.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
-      standalone: standalone.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
+      // A retired area directory is an alias now (it redirects to its place), not a screen.
+      standalone: standalone
+        .filter((r) => !aliasSources.has(r.path))
+        .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
     },
     null,
     2,

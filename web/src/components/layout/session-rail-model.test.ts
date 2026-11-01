@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { describe, expect, it } from 'vitest'
-import { aliveSessions, railGroups } from './session-rail-model'
+import { aliveSessions, openSessions, railGroups } from './session-rail-model'
 
 describe('observed sessions of one tool in the rail (#2266)', () => {
   const observed = (ref: string) =>
@@ -294,7 +294,7 @@ describe('operated runs in the rail', () => {
     expect(earlier.rows[0]).toMatchObject({ title: 'Old', to: '/sessions' })
   })
 
-  it('two sessions with the same name are told apart by their tail (HU 029)', () => {
+  it('two sessions with the same name are told apart by their tail', () => {
     const name =
       'Read the repository and write a short summary of what each package'
     const [, working] = railGroups(
@@ -344,5 +344,26 @@ describe('aliveSessions: what a stop of every agent would end (#3161)', () => {
         ],
       }),
     ).toBe(3)
+  })
+})
+
+describe('openSessions: the total the list shows', () => {
+  it('leaves out what the list folds away, archived and snoozed, as the list does', () => {
+    const run = (run_ref: string, state: string, more: object = {}) =>
+      ({ run_ref, name: run_ref, state, provider_driver: '', ...more }) as never
+    const sources = {
+      live: [],
+      handoffs: [],
+      runs: [
+        run('working', 'running'),
+        run('idle', 'idle'),
+        run('archived', 'running', { archived_at: '2026-10-21T12:00:00Z' }),
+        run('snoozed', 'running', { snoozed_until: '2030-01-02T09:00:00Z' }),
+        run('ended', 'stopped'),
+      ],
+    }
+    expect(openSessions(sources)).toBe(2)
+    // Stop all still counts every session it would end.
+    expect(aliveSessions(sources)).toBe(4)
   })
 })

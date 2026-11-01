@@ -99,7 +99,7 @@ func TestAPolicyThatForbidsTheChosenPresetRefusesWithItsSentence(t *testing.T) {
 			if statusOf(err) != http.StatusForbidden {
 				t.Fatalf("launch = %v, want 403", err)
 			}
-			for _, allowed := range []string{"ask", "read only", "edits only", "edits and commands"} {
+			for _, allowed := range []string{"supervised", "read only", "auto-accept edits", "edits and commands"} {
 				if !strings.Contains(err.Error(), allowed) {
 					t.Fatalf("the refusal %q does not name %q", err.Error(), allowed)
 				}
@@ -111,7 +111,7 @@ func TestAPolicyThatForbidsTheChosenPresetRefusesWithItsSentence(t *testing.T) {
 	}
 }
 
-// SR2 on FH 031 (P2): a template's mode composed AFTER the person's choice widened it
+// SR2 on first-hour check (P2): a template's mode composed AFTER the person's choice widened it
 // (ask -> edits, read only -> full). The person's narrower preset stands; a template
 // narrower than the choice still narrows it, as its approved terms always did.
 func TestATemplateNeverWidensTheNamedPreset(t *testing.T) {
@@ -161,7 +161,7 @@ func TestAnAllowlistTemplateRefusesANarrowerNamedPreset(t *testing.T) {
 	}
 }
 
-// SR2 on FH 031 (P1): a resume re-applies today's template, and full permissions are
+// SR2 on first-hour check (P1): a resume re-applies today's template, and full permissions are
 // judged on that result. A template widened to full after the launch does not let a
 // resume without run administration (or a launch that never ran full) become full.
 func TestAResumeIntoATemplateWidenedToFullNeedsRunAdministration(t *testing.T) {
@@ -213,7 +213,7 @@ func TestAResumeIntoATemplateWidenedToFullNeedsRunAdministration(t *testing.T) {
 	}
 }
 
-// Root on FH 048: a queued launch that asked for full permissions is judged, when its
+// Root on first-hour check: a queued launch that asked for full permissions is judged, when its
 // approval arrives, on the launcher's CURRENT run administration, not on the authority
 // it had when it queued. Demoted to editor in between: refused, declined, no child.
 // Still an administrator: it runs full.
@@ -291,7 +291,7 @@ func TestAQueuedFullLaunchAsksTheLaunchersCurrentRunAdministration(t *testing.T)
 	}
 }
 
-// Root on FH 048, #371: a principal confined to one workspace does not run full, even
+// Root on first-hour check, #371: a principal confined to one workspace does not run full, even
 // with run administration, and a live launch or resume gets the same answer as a
 // queued launch restored at its approval. The live answer asked run administration
 // only, so a confined administrator was full live and refused once queued. It asks

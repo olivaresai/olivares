@@ -1181,7 +1181,7 @@ func (a *Authenticator) ResetTOTP(ctx context.Context, actor Principal, accountI
 // ResetTOTPInTenant resets a member's account-wide factor only while this
 // tenant alone governs the account. Membership and custody are checked under
 // the native directory writer lock in the same transaction as the deletion.
-// The API supplies membership:write authority; this backstop also requires a
+// The API supplies authenticator:write authority; this backstop also requires a
 // current AAL3 session and refuses a workspace-confined caller.
 func (a *Authenticator) ResetTOTPInTenant(ctx context.Context, actor Principal, tenant model.TenantID, accountID model.ID) error {
 	if actor.Kind != KindUser || actor.CredID.IsZero() {
@@ -1195,6 +1195,9 @@ func (a *Authenticator) ResetTOTPInTenant(ctx context.Context, actor Principal, 
 	}
 	if _, confined := actor.ConfinedWorkspaceIn(tenant); confined {
 		return ErrWorkspaceConfined
+	}
+	if _, err := a.SCIMGetMember(ctx, tenant, accountID); err != nil {
+		return err
 	}
 	return a.deleteTOTPFactorChecked(ctx, actor.Actor(), accountID, func(as store.AuthScope) error {
 		if err := prepareUserAuthorityWrite(ctx, as, accountID); err != nil {

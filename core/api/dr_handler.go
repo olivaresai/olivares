@@ -43,7 +43,9 @@ type DRBackupSnapshot struct {
 // DRConfig enables the disaster-recovery console surface when set in Options.
 // PostgreSQL snapshots are supplied by the native command composition root.
 type DRConfig struct {
-	DataDir          string
+	DataDir string
+	// Appliance enables first-boot recovery custody and unattended backup defaults.
+	Appliance        bool
 	EngineKind       string
 	BackupDir        string
 	PostgresSnapshot func(context.Context, string) (DRBackupSnapshot, error)
@@ -71,6 +73,8 @@ type DRConfig struct {
 type drService struct {
 	cfg  DRConfig
 	jobs *drJobTracker
+	// An explicit file remains operator-owned even when it names the default path.
+	autoRecoveryKey bool
 	// Serving stays unavailable once promotion starts; restart reloads custody.
 	restartRequired atomic.Bool
 	maintenanceJob  string // protected by smu
@@ -88,16 +92,29 @@ type drService struct {
 // NextRun is DERIVED from the cron spec on read; the rest round-trips through
 // the persisted estate settings (dr_schedule.go).
 type drSchedule struct {
-	Enabled bool   `json:"enabled"`
-	Cron    string `json:"cron"`
-	Retain  int    `json:"retain_days"`
-	LastRun string `json:"last_run,omitempty"`
-	NextRun string `json:"next_run,omitempty"`
+	drProtection
+	drVerificationResult
+	LastBundle       string  `json:"-"`
+	LastBackup       string  `json:"last_backup,omitempty"`
+	BackupAgeSeconds *int64  `json:"backup_age_seconds,omitempty"`
+	RPOExceeded      *bool   `json:"rpo_exceeded,omitempty"`
+	TargetFreeBytes  *uint64 `json:"target_free_bytes,omitempty"`
+	Enabled          bool    `json:"enabled"`
+	Cron             string  `json:"cron"`
+	Retain           int     `json:"retain_days"`
+	LastRun          string  `json:"last_run,omitempty"`
+	NextRun          string  `json:"next_run,omitempty"`
 	// LastRunStatus/LastRunError record the outcome of the most recent SCHEDULED
 	// run ("completed"/"failed"), so the console shows a failing schedule honestly
 	// instead of a silent gap in the backup directory.
 	LastRunStatus string `json:"last_run_status,omitempty"`
 	LastRunError  string `json:"last_run_error,omitempty"`
+	// OffsiteLock is the offsite bucket's S3 Object Lock as the last scheduled copy
+	// read it: "compliance", "governance", "no_default" (Object Lock without a
+	// default retention), "none" or "unknown" (not readable). The engine's puts
+	// carry no lock of their own, so only "compliance" keeps its copies from a
+	// stolen server credential. Absent until a copy ran against this bucket.
+	OffsiteLock string `json:"offsite_lock,omitempty"`
 	// RequireDualControl reports the effective console restore gate. When armed,
 	// a distinct administrator account must approve; two accounts need not be
 	// two humans. CLI restore uses a declared-operator record, not this gate,
@@ -112,6 +129,19 @@ type drSchedule struct {
 	// It survives a spent DisarmAt and clears only on re-arming; the next disarm
 	// records its requester again. Other administrators can restore after the delay.
 	DisarmBy string `json:"dual_control_disarm_requested_by,omitempty"`
+}
+
+// setOffsite applies a saved offsite target; an empty bucket disables the copy.
+// OffsiteLock describes the bucket last read, so another bucket clears it until
+// the next copy reads that one.
+func (d *drSchedule) setOffsite(o *drOffsite) {
+	if o.Bucket == "" {
+		o = nil
+	}
+	if o == nil || d.Offsite == nil || o.Endpoint != d.Offsite.Endpoint || o.Bucket != d.Offsite.Bucket {
+		d.OffsiteLock = ""
+	}
+	d.Offsite = o
 }
 
 // drDualControlDisarmDelay is the fixed cool-down before a restore-gate disarm.
@@ -212,14 +242,19 @@ type pendingRestore struct {
 }
 
 func newDRService(cfg DRConfig) *drService {
+	autoRecoveryKey := cfg.Appliance && cfg.PassphraseFile == ""
+	if autoRecoveryKey {
+		cfg.PassphraseFile = filepath.Join(cfg.DataDir, "dr-recovery.key")
+	}
 	if cfg.BackupDir == "" {
 		cfg.BackupDir = filepath.Join(cfg.DataDir, "backups")
 	}
 	return &drService{
-		cfg:      cfg,
-		jobs:     newDRJobTracker(),
-		schedule: &drSchedule{},
-		pending:  make(map[string]*pendingRestore),
+		cfg:             cfg,
+		jobs:            newDRJobTracker(),
+		autoRecoveryKey: autoRecoveryKey,
+		schedule:        &drSchedule{},
+		pending:         make(map[string]*pendingRestore),
 	}
 }
 
@@ -272,7 +307,11 @@ func (ds *drService) approvePending(requestID, uploadID string, approver auth.Pe
 }
 
 func (ds *drService) ensureBackupDir() error {
-	return os.MkdirAll(ds.cfg.BackupDir, 0o700)
+	pin, err := ds.openBackupDirectory()
+	if err != nil {
+		return err
+	}
+	return pin.Close()
 }
 
 // minDRPassphraseLen is the creation floor in runes for encrypted bundles.
@@ -339,19 +378,31 @@ type restoreApproveRequest struct {
 // drScheduleRequest preserves the gate when RequireDualControl is omitted.
 // The server owns the disarm instant and run bookkeeping.
 type drScheduleRequest struct {
-	Enabled            bool   `json:"enabled"`
-	Cron               string `json:"cron"`
-	Retain             int    `json:"retain_days"`
-	RequireDualControl *bool  `json:"require_dual_control_restore"`
+	LocalTarget        *string    `json:"local_target"`
+	VerifyCron         *string    `json:"verify_cron"`
+	RPOHours           *int       `json:"rpo_hours"`
+	Offsite            *drOffsite `json:"offsite"`
+	Enabled            bool       `json:"enabled"`
+	Cron               string     `json:"cron"`
+	Retain             int        `json:"retain_days"`
+	RequireDualControl *bool      `json:"require_dual_control_restore"`
 
 	// Accept read-modify-write round trips, but ignore server-owned fields.
 	// A client must not choose an earlier disarm instant or another requester.
-	IgnoredDisarmAt      string `json:"dual_control_disarm_effective_at"`
-	IgnoredDisarmBy      string `json:"dual_control_disarm_requested_by"`
-	IgnoredLastRun       string `json:"last_run"`
-	IgnoredNextRun       string `json:"next_run"`
-	IgnoredLastRunStatus string `json:"last_run_status"`
-	IgnoredLastRunError  string `json:"last_run_error"`
+	IgnoredDisarmAt         string  `json:"dual_control_disarm_effective_at"`
+	IgnoredDisarmBy         string  `json:"dual_control_disarm_requested_by"`
+	IgnoredLastRun          string  `json:"last_run"`
+	IgnoredNextRun          string  `json:"next_run"`
+	IgnoredLastRunStatus    string  `json:"last_run_status"`
+	IgnoredLastRunError     string  `json:"last_run_error"`
+	IgnoredOffsiteLock      string  `json:"offsite_lock"`
+	IgnoredLastVerify       string  `json:"last_verify"`
+	IgnoredLastVerifyStatus string  `json:"last_verify_status"`
+	IgnoredLastVerifyError  string  `json:"last_verify_error"`
+	IgnoredLastBackup       string  `json:"last_backup"`
+	IgnoredBackupAge        *int64  `json:"backup_age_seconds"`
+	IgnoredRPOExceeded      *bool   `json:"rpo_exceeded"`
+	IgnoredTargetFree       *uint64 `json:"target_free_bytes"`
 }
 
 // ---------- handlers ----------
@@ -433,6 +484,13 @@ func (s *Server) runBackup(ctx context.Context, jobID, passphrase, notes, actor 
 		}
 	}
 
+	pin, err := svc.openBackupDirectory()
+	if err != nil {
+		fail(err)
+		return
+	}
+	defer pin.Close()
+	backupDir := pin.Path
 	update("preparing", 5)
 
 	cipher, err := dr.NewPassphraseCipher([]byte(passphrase))
@@ -497,7 +555,7 @@ func (s *Server) runBackup(ctx context.Context, jobID, passphrase, notes, actor 
 
 	if svc.cfg.EngineKind == "sqlite" {
 		dbPath := filepath.Join(dataDir, "olivares.db")
-		snapshotPath = filepath.Join(svc.cfg.BackupDir, fmt.Sprintf("snapshot-%s.db", jobID))
+		snapshotPath = filepath.Join(backupDir, fmt.Sprintf("snapshot-%s.db", jobID))
 		if err := dr.SnapshotSQLite(ctx, dbPath, snapshotPath); err != nil {
 			fail(fmt.Errorf("snapshot: %w", err))
 			return
@@ -516,7 +574,7 @@ func (s *Server) runBackup(ctx context.Context, jobID, passphrase, notes, actor 
 			SHA256:    hash,
 		}
 	} else if svc.cfg.EngineKind == "postgres" && svc.cfg.PostgresSnapshot != nil {
-		snapshotPath = filepath.Join(svc.cfg.BackupDir, fmt.Sprintf("snapshot-%s.pgcustom", jobID))
+		snapshotPath = filepath.Join(backupDir, fmt.Sprintf("snapshot-%s.pgcustom", jobID))
 		defer func() { _ = os.Remove(snapshotPath) }()
 		snapshot, err := svc.cfg.PostgresSnapshot(ctx, snapshotPath)
 		if err != nil {
@@ -549,7 +607,7 @@ func (s *Server) runBackup(ctx context.Context, jobID, passphrase, notes, actor 
 
 	manifestStore := s.st
 	if svc.cfg.EngineKind == "sqlite" {
-		scratchDir, err := os.MkdirTemp(svc.cfg.BackupDir, "manifest-*")
+		scratchDir, err := os.MkdirTemp(backupDir, "manifest-*")
 		if err != nil {
 			fail(fmt.Errorf("stage snapshot manifest: %w", err))
 			return
@@ -592,7 +650,7 @@ func (s *Server) runBackup(ctx context.Context, jobID, passphrase, notes, actor 
 
 	ts := time.Now().UTC().Format("20060102-150405")
 	bundleName := fmt.Sprintf("olivares-%s-%s.drbundle", ts, svc.cfg.EngineKind)
-	bundlePath := filepath.Join(svc.cfg.BackupDir, bundleName)
+	bundlePath := filepath.Join(backupDir, bundleName)
 
 	if validateSnapshot != nil {
 		if err := validateSnapshot(); err != nil {
@@ -623,7 +681,38 @@ func (s *Server) runBackup(ctx context.Context, jobID, passphrase, notes, actor 
 	}
 
 	update("complete", 100)
-	failure, bundleID, bundleFile = nil, bundleName, bundlePath
+	failure, bundleID, bundleFile = nil, bundleName, filepath.Join(pin.Target, bundleName)
+}
+
+type bundleFile struct {
+	dir   string
+	entry os.DirEntry
+}
+
+// listBundleFiles returns each backup bundle once; an earlier directory wins.
+func listBundleFiles(dirs []string) ([]bundleFile, error) {
+	var files []bundleFile
+	seen := map[string]bool{}
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(dir)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range entries {
+			if seen[e.Name()] {
+				continue
+			}
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".drbundle") {
+				continue
+			}
+			seen[e.Name()] = true
+			files = append(files, bundleFile{dir: dir, entry: e})
+		}
+	}
+	return files, nil
 }
 
 func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
@@ -632,34 +721,25 @@ func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request, mc Mo
 		return
 	}
 
-	dir := s.drSvc.cfg.BackupDir
-	entries, err := os.ReadDir(dir)
+	files, err := listBundleFiles(s.drSvc.backupReadDirectories())
 	if err != nil {
-		if os.IsNotExist(err) {
-			writeJSON(w, http.StatusOK, map[string]any{"items": []any{}})
-			return
-		}
 		s.writeError(w, r, err)
 		return
 	}
-
 	var items JSONArray[backupListItem]
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".drbundle") {
-			continue
-		}
-		info, err := e.Info()
+	for _, f := range files {
+		info, err := f.entry.Info()
 		if err != nil {
 			continue
 		}
 		item := backupListItem{
-			ID:        e.Name(),
-			Filename:  e.Name(),
+			ID:        f.entry.Name(),
+			Filename:  f.entry.Name(),
 			SizeBytes: info.Size(),
 			CreatedAt: info.ModTime().UTC().Format(time.RFC3339),
 		}
 
-		manifest := s.inspectBundle(filepath.Join(dir, e.Name()))
+		manifest := s.inspectBundle(filepath.Join(f.dir, f.entry.Name()))
 		if manifest != nil {
 			item.CreatedAt = manifest.CreatedAt
 			item.EngineKind = manifest.EngineKind
@@ -669,7 +749,6 @@ func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request, mc Mo
 		}
 		items = append(items, item)
 	}
-
 	sort.Slice(items, func(i, j int) bool {
 		return items[i].CreatedAt > items[j].CreatedAt
 	})
@@ -707,7 +786,7 @@ func (s *Server) handleGetBackup(w http.ResponseWriter, r *http.Request, mc Modu
 		return
 	}
 
-	bundlePath := filepath.Join(s.drSvc.cfg.BackupDir, id)
+	bundlePath := s.drSvc.bundlePath(id)
 	manifest := s.inspectBundle(bundlePath)
 	if manifest == nil {
 		s.writeError(w, r, fmt.Errorf("not found: %w", errBadRequest))
@@ -740,7 +819,7 @@ func (s *Server) handleDownloadBackup(w http.ResponseWriter, r *http.Request, mc
 		return
 	}
 
-	bundlePath := filepath.Join(s.drSvc.cfg.BackupDir, id)
+	bundlePath := s.drSvc.bundlePath(id)
 	f, err := os.Open(bundlePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -778,7 +857,16 @@ func (s *Server) handleDeleteBackup(w http.ResponseWriter, r *http.Request, mc M
 		return
 	}
 
-	bundlePath := filepath.Join(s.drSvc.cfg.BackupDir, id)
+	bundlePath := s.drSvc.bundlePath(id)
+	if target := s.drSvc.scheduleSnapshot().LocalTarget; target != "" && filepath.Dir(bundlePath) == target {
+		pin, err := pinDRBackupDirectory(target, true)
+		if err != nil {
+			s.writeError(w, r, err)
+			return
+		}
+		defer pin.Close()
+		bundlePath = filepath.Join(pin.Path, id)
+	}
 	if _, err := os.Stat(bundlePath); os.IsNotExist(err) {
 		s.writeError(w, r, fmt.Errorf("not found: %w", errBadRequest))
 		return
@@ -805,7 +893,7 @@ func (s *Server) handleRestoreUpload(w http.ResponseWriter, r *http.Request, mc 
 	r.Body = http.MaxBytesReader(w, r.Body, maxBundleUpload)
 
 	// A fresh install has never made a backup, so the directory may not exist yet.
-	if err := s.drSvc.ensureBackupDir(); err != nil {
+	if err := os.MkdirAll(s.drSvc.cfg.BackupDir, 0o700); err != nil {
 		s.writeError(w, r, fmt.Errorf("backup dir: %w", err))
 		return
 	}
@@ -1076,6 +1164,12 @@ func (s *Server) runRestore(ctx context.Context, jobID, bundlePath, passphrase, 
 	}
 	preservation := fmt.Sprintf("previous state preserved as *%s in %s (remove once satisfied)", suffix, dataDir)
 	svc.jobs.update(jobID, func(j *drJob) { j.Notes = preservation })
+	// The restart that loads this estate applies the erasures its backup predates
+	// before it serves (dr.ErasureReplayMarker).
+	if err := dr.MarkErasureReplay(dataDir); err != nil {
+		fail(fmt.Errorf("mark the erasure replay: %w; live data and keys were not replaced; restart the engine before retrying", err))
+		return
+	}
 	update("restoring_store", 50)
 	snapshotPath := filepath.Join(tmpDir, filepath.FromSlash(manifest.Store.File))
 	if err := promoteSQLiteSnapshot(ctx, snapshotPath, filepath.Join(dataDir, "olivares.db")); err != nil {
@@ -1365,7 +1459,25 @@ func (s *Server) handlePutDRSchedule(w http.ResponseWriter, r *http.Request, mc 
 		s.badRequest(w, r, "an enabled schedule needs a cron expression")
 		return
 	}
+	if err := validateDRProtection(req); err != nil {
+		s.badRequest(w, r, err.Error())
+		return
+	}
 
+	if req.LocalTarget != nil {
+		if !p.Superadmin {
+			s.forbidden(w, r, "A system administrator is required to select a backup disk.")
+			return
+		}
+		if *req.LocalTarget != "" {
+			pin, err := pinDRBackupDirectory(*req.LocalTarget, true)
+			if err != nil {
+				s.badRequest(w, r, "The selected backup disk must be mounted and writable.")
+				return
+			}
+			_ = pin.Close()
+		}
+	}
 	// Persist the schedule and restore policy before publishing in-memory state.
 	s.drSvc.scheduleOpMu.Lock()
 	defer s.drSvc.scheduleOpMu.Unlock()
@@ -1374,6 +1486,18 @@ func (s *Server) handlePutDRSchedule(w http.ResponseWriter, r *http.Request, mc 
 	next.Enabled = req.Enabled
 	next.Cron = req.Cron
 	next.Retain = req.Retain
+	if req.LocalTarget != nil {
+		next.LocalTarget = *req.LocalTarget
+	}
+	if req.VerifyCron != nil {
+		next.VerifyCron = strings.TrimSpace(*req.VerifyCron)
+	}
+	if req.RPOHours != nil {
+		next.RPOHours = *req.RPOHours
+	}
+	if req.Offsite != nil {
+		next.setOffsite(req.Offsite)
+	}
 	dualControlChange := applyDualControlRequest(&next, req.RequireDualControl, now, auth.PersonRefOf(p).User)
 	if err := s.saveDRSchedule(r.Context(), next); err != nil {
 		s.writeError(w, r, fmt.Errorf("persist DR schedule: %w", err))
@@ -1430,6 +1554,28 @@ func applyDualControlRequest(next *drSchedule, want *bool, now time.Time, accoun
 func (s *Server) drScheduleView() drSchedule {
 	now := s.clock.Now().Time().UTC()
 	sched := s.drSvc.scheduleSnapshot()
+	sched.TargetFreeBytes = drTargetFreeBytes(s.drSvc.cfg.BackupDir)
+	if sched.LocalTarget != "" {
+		sched.TargetFreeBytes = nil
+		if pin, err := pinDRBackupDirectory(sched.LocalTarget, true); err == nil {
+			sched.TargetFreeBytes = drTargetFreeBytes(pin.Path)
+			_ = pin.Close()
+		}
+	}
+	// Status reads use the persisted scheduled restore point, never extracting
+	// every retained database snapshot just to display an age.
+	latest, parseErr := time.Parse(time.RFC3339, sched.LastBackup)
+	if parseErr == nil {
+		age := int64(now.Sub(latest) / time.Second)
+		if age < 0 {
+			age = 0
+		}
+		sched.BackupAgeSeconds = &age
+		if sched.RPOHours > 0 {
+			exceeded := age > int64(sched.RPOHours)*3600
+			sched.RPOExceeded = &exceeded
+		}
+	}
 	sched.NextRun = ""
 	if sched.Enabled && sched.Cron != "" {
 		if spec, err := cron.Parse(sched.Cron); err == nil {

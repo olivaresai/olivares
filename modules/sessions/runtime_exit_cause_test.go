@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// A tool that exits as it starts leaves its reason on the run (HU-06): Claude
+// A tool that exits as it starts leaves its reason on the run: Claude
 // Code's error result first, else its last stderr line; one line, bounded, and
 // never a credential.
 func TestExitCause_SaysWhatTheToolSaidLast(t *testing.T) {

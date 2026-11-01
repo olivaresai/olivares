@@ -163,7 +163,7 @@ describe('the empty DLP rule list', () => {
   })
 
   /**
-   * ONE ORANGE PER FIRST SCREEN (dev#2673's console rule 2026-10-17): the DLP
+   * ONE ORANGE PER FIRST SCREEN (the regression's console rule 2026-10-17): the DLP
    * card header already carries "Add rule" in orange, so the empty state offers
    * the same verb in the secondary style.
    */

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { preferenceStorage } from '@/lib/preference-storage'
 import i18n, { type BackendModule, type ResourceKey } from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
@@ -219,7 +220,7 @@ export const i18nReady = i18n
     react: { useSuspense: false },
     detection: {
       order: ['localStorage', 'navigator', 'htmlTag'],
-      caches: ['localStorage'],
+      caches: [],
       lookupLocalStorage: 'olivares.lang',
     },
   })
@@ -234,14 +235,21 @@ i18n.on('languageChanged', syncHtmlLang)
 // The person's latest choice wins: a dictionary that arrives late must not switch back to it.
 let latestChoice = 0
 
-/** Switch UI language (persisted by the detector's localStorage cache). A dictionary that could
+/** Switch UI language (kept in the user's server preferences). A dictionary that could
  * not load before (offline) is fetched again first: i18next never reads a failed namespace a
  * second time, and loading before switching keeps the words and the language together. */
-export async function setLanguage(code: LanguageCode): Promise<void> {
+export async function setLanguage(
+  code: LanguageCode,
+  remember = true,
+): Promise<void> {
+  const epoch = preferenceStorage.epoch
   const choice = ++latestChoice
   if (!i18n.hasResourceBundle(code, 'auth'))
     await i18n.reloadResources(code, 'auth')
-  if (choice === latestChoice) await i18n.changeLanguage(code)
+  if (choice === latestChoice && epoch === preferenceStorage.epoch) {
+    await i18n.changeLanguage(code)
+    if (remember) preferenceStorage.setItem('olivares.lang', code)
+  }
 }
 
 /**

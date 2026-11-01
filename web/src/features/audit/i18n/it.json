@@ -1,26 +1,8 @@
 {
   "title": "Registro di audit",
-  "subtitle": "La catena di evidenze a prova di manomissione. Verificala ed esportala verso il tuo WORM/SIEM.",
+  "subtitle": "Consulta il registro firmato delle attività di IA.",
   "subtitleSystem": "La catena del tenant di sistema delle operazioni amministrative tra tenant (sola lettura).",
   "searchLoaded": "Filtra solo le righe caricate (lato client)…",
-  "filters": {
-    "open": "Filtri",
-    "title": "Filtri del registro lato server",
-    "q": "Cerca nel registro",
-    "qPlaceholder": "Azione, attore, tipo o ID del target",
-    "actor": "Attore",
-    "actorPlaceholder": "Attore esatto",
-    "action": "Prefisso dell'azione",
-    "actionPlaceholder": "es. agent.",
-    "targetKind": "Tipo di target",
-    "targetKindPlaceholder": "Tipo di target esatto",
-    "targetId": "ID del target",
-    "targetIdPlaceholder": "ID del target esatto",
-    "since": "Dal",
-    "until": "Al",
-    "clearOne": "Rimuovi il filtro {{filter}}",
-    "clearAll": "Rimuovi tutti i filtri"
-  },
   "scan": {
     "incomplete": "Scansione fino al seq {{seq}}: non è l'intero registro; Carica altri prosegue la scansione."
   },
@@ -29,14 +11,6 @@
     "tenant": "Registro del tenant",
     "system": "Registro di sistema",
     "systemHint": "La catena del tenant di sistema registra le operazioni amministrative tra tenant ed è in sola lettura qui. Verifica ed esportazione operano sui registri dei tenant."
-  },
-  "cols": {
-    "seq": "Seq",
-    "occurred": "Quando",
-    "action": "Azione",
-    "actor": "Attore",
-    "target": "Target",
-    "hash": "Hash"
   },
   "actorKind": {
     "user": "Utente",
@@ -55,7 +29,6 @@
     "checkpointBreak": "Firma del checkpoint non valida al seq {{seq}}"
   },
   "pubkey": {
-    "action": "Chiave di verifica",
     "label": "Chiave di firma del registro",
     "key": "chiave",
     "hint": "Condividi questa chiave pubblica Ed25519 perché una parte esterna possa verificare offline sia gli eventi esportati sia i checkpoint: la stessa chiave firma entrambi.",
@@ -63,7 +36,6 @@
   },
   "export": {
     "action": "Esporta",
-    "options": "Opzioni di esportazione",
     "formatLabel": "Formato di esportazione",
     "fromSeq": "Dal seq",
     "toSeq": "Al seq",
@@ -80,7 +52,8 @@
     },
     "done": "Esportazione scaricata.",
     "failed": "Esportazione non riuscita.",
-    "forbidden": "Non hai l'autorizzazione per esportare il registro."
+    "forbidden": "Non hai l'autorizzazione per esportare il registro.",
+    "download": "Scarica"
   },
   "detail": {
     "title": "Evento di evidenza",
@@ -93,15 +66,12 @@
     "actorSystem": "sistema",
     "target": "Target",
     "id": "ID evento",
-    "chainTitle": "Integrità della catena",
     "prevHash": "Hash precedente",
     "prev": "prec.",
     "hash": "Hash dell'evento",
     "this": "questo",
     "sig": "Firma dell'evento",
     "checkpoint": "firma",
-    "chainHint": "L'hash di ogni evento si concatena a quello precedente. Dietro un'impronta non c'è alcun payload: l'hash è l'evidenza (dati minimi per progettazione).",
-    "details": "Dettagli",
     "actorMember": "Un membro"
   },
   "empty": {
@@ -144,5 +114,64 @@
     "show": "Mostra i record interni",
     "hide": "Nascondi i record interni",
     "allHidden": "Tutto ciò che è stato caricato finora è un record interno."
+  },
+  "ledger": {
+    "query": "Query del registro",
+    "placeholder": "person:  action:  since:7d  o parole",
+    "addFilter": "Aggiungi un filtro",
+    "remove": "Rimuovi {{token}}",
+    "add": "Aggiungi {{token}} alla query",
+    "commands": "Cerca e comandi",
+    "problem": {
+      "key": "{{token}} non è un filtro del registro. Usa person:, action:, kind:, target:, since:, until: o parole.",
+      "time": "{{token}} non è un tempo. Usa 90m, 24h, 7d, 2w o una data come 2026-10-20.",
+      "person": "Nessuno corrisponde a {{token}}. Usa un nome, un'email o user:<id>.",
+      "several": "{{token}} corrisponde a più persone. Usa il nome completo, un'email o user:<id>.",
+      "names": "Impossibile cercare {{token}} qui. Usa user:<id>."
+    },
+    "entries": "Voci del registro",
+    "group": {
+      "label": "Mostra",
+      "session": "Per sessione",
+      "events": "Ogni voce"
+    },
+    "needsYou": "Ti aspetta",
+    "outside": "Fuori da una sessione",
+    "session": "Sessione {{ref}}",
+    "count_one": "{{count}} voce",
+    "count_many": "{{count}} voci",
+    "count_other": "{{count}} voci",
+    "sentence": "{{what}} da {{who}}",
+    "signed": "Firmata",
+    "histogram": {
+      "hour": "Voci per ora",
+      "day": "Voci per giorno",
+      "week": "Voci per settimana",
+      "bar_one": "{{at}}, {{count}} voce",
+      "bar_many": "{{at}}, {{count}} voci",
+      "bar_other": "{{at}}, {{count}} voci",
+      "loaded_one": "{{count}} voce caricata",
+      "loaded_many": "{{count}} voci caricate",
+      "loaded_other": "{{count}} voci caricate",
+      "sessions_one": "{{count}} sessione",
+      "sessions_many": "{{count}} sessioni",
+      "sessions_other": "{{count}} sessioni",
+      "people_one": "{{count}} persona",
+      "people_many": "{{count}} persone",
+      "people_other": "{{count}} persone",
+      "more": "altre da caricare",
+      "now": "Ora"
+    },
+    "entry": {
+      "title": "Voce {{seq}}",
+      "chain": "Posizione nella catena",
+      "previous": "Precedente · {{seq}}",
+      "this": "Questa voce · {{seq}}",
+      "next": "Successiva · {{seq}}",
+      "newest": "Voce più recente",
+      "nextUnread": "Successiva non letta",
+      "chainHint": "Ogni voce porta l'hash della precedente. Cambiarne una rompe ogni hash successivo.",
+      "signedEntry": "La voce firmata"
+    }
   }
 }

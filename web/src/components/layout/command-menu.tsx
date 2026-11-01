@@ -4,16 +4,7 @@
 import { EditionBadge } from '@/features/console/edition-badge'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useRouterState } from '@tanstack/react-router'
-import {
-  Circle,
-  LogOut,
-  Moon,
-  LayoutGrid,
-  Play,
-  Search,
-  Sun,
-  Columns2,
-} from 'lucide-react'
+import { Circle, LogOut, Moon, Play, Search, Sun, Columns2 } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -30,7 +21,8 @@ import {
 } from '@/features/navigation/command-actions'
 import { useViewAccess } from '@/features/navigation/authorization'
 import { agentToolsApi, agentToolsKeys } from '@/features/agent-tools/api'
-import { toolFacts, toolLabel } from '@/features/agent-tools/inventory'
+import { toolFacts } from '@/features/agent-tools/inventory'
+import { toolName } from '@/features/agentops/engine-tools'
 import { useProviderBoundary } from '@/features/providers/auth-boundary'
 import { settingsSearchEntries } from '@/features/settings/sections'
 import { useAuth } from '@/lib/auth/context'
@@ -44,12 +36,12 @@ import {
 import { FEATURE_VIEWS, type FeatureView } from '@/features/registry'
 import {
   authorizedEntries,
-  buildNavSearchIndex,
   fold,
   rankNavMatches,
   viewById,
   type NavSearchEntry,
 } from '@/features/navigation/model'
+import { buildNavSearchIndex } from '@/features/navigation/places'
 import {
   chordKeys,
   isTypingTarget,
@@ -63,8 +55,8 @@ import {
 } from '@/lib/keybindings/table'
 import { useCommandStore } from '@/stores/command'
 import { useThemeStore } from '@/stores/theme'
-import { useAreasSheet } from './areas-sheet-store'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useStatusWord } from '@/features/sessions/session-status'
 import type { RailRow } from './session-rail-model'
 import { useSessionRail } from './use-session-rail'
 import {
@@ -124,12 +116,12 @@ const SEARCH_DEBOUNCE_MS = 250
  * the shortcut or the topbar search.
  *
  * N1: the navigation half is the SAME index and the SAME ranking the sidebar filter uses
- * (features/navigation/model.ts) — exact label first, then label prefix and words, then
- * former names and the English label, then path, then area/section/noun vocabulary, then
- * description; ties in registry order. cmdk's own fuzzy re-ordering is switched off
+ * (features/navigation/places.ts, model.ts) — exact label first, then label prefix and
+ * words, then former names and the English label, then path, then place, retired area
+ * and noun vocabulary, then description; ties in registry order. cmdk's own fuzzy re-ordering is switched off
  * (`shouldFilter={false}`) so the two surfaces can never disagree about what "session"
- * finds. Each result shows `Area › Section` so two doors into one screen stay
- * distinguishable. Hidden (deep-link-only) views are never offered. */
+ * finds. Each result shows `Group › Place`, the sidebar's own words, so two doors into
+ * one screen stay distinguishable. Hidden (deep-link-only) views are never offered. */
 export function CommandMenu() {
   const { t } = useTranslation(['nav', 'common', 'auth', 'settings'])
   const open = useCommandStore((s) => s.open)
@@ -197,6 +189,7 @@ function searchStrings(raw: unknown): Record<string, string> {
 
 function PaletteBody() {
   const { t } = useTranslation(['nav', 'common', 'auth'])
+  const statusWord = useStatusWord()
   const permissionWords = usePermissionWords()
   const setOpen = useCommandStore((s) => s.setOpen)
   const navigate = useNavigate()
@@ -346,11 +339,8 @@ function PaletteBody() {
     () => rankNavMatches(authorized, matchQuery),
     [authorized, matchQuery],
   )
-  // Areas and modules stay in ONE ranked list. Splitting them would put a weak area
-  // hit above an exact module hit. Settings is its own group, after Go to.
-  const goToHits = commandOnly
-    ? []
-    : ranked.filter((e) => e.kind === 'area' || e.kind === 'view')
+  // Pages stay in ONE ranked list; Settings is its own group, after Go to.
+  const goToHits = commandOnly ? [] : ranked.filter((e) => e.kind === 'view')
   const settingsHits = commandOnly
     ? []
     : rankNavMatches(
@@ -371,7 +361,7 @@ function PaletteBody() {
           providersQ.isError ? [] : (providersQ.data?.providers ?? []),
         ).filter(
           (tool) =>
-            tool.installed && shows(`${toolLabel(tool.driver)} ${tool.driver}`),
+            tool.installed && shows(`${toolName(tool.driver)} ${tool.driver}`),
         )
   const recentSessions = commandOnly
     ? []
@@ -425,7 +415,7 @@ function PaletteBody() {
   }
   const renderNav = (e: NavSearchEntry) => {
     const Icon = e.icon
-    const context = e.kind === 'area' ? t('nav:directory.area') : e.context
+    const context = e.context
     return (
       <CommandItem
         key={`${e.kind}:${e.id}`}
@@ -554,9 +544,6 @@ function PaletteBody() {
   const showDark = shows(`${themeLabel} ${darkLabel}`)
   const showBlack = shows(`${themeLabel} ${blackLabel}`)
   const showSignOut = shows(signOutLabel)
-  // All areas: the directory of every page the top bar does not name as a place.
-  const areasLabel = t('nav:shell.allAreas')
-  const showAreas = shows(areasLabel)
   const anyAction =
     besideSessions.length > 0 ||
     actionItems.length > 0 ||
@@ -564,7 +551,6 @@ function PaletteBody() {
     showLight ||
     showDark ||
     showBlack ||
-    showAreas ||
     showSignOut
   const visibleSearch = commandOnly
     ? []
@@ -722,22 +708,6 @@ function PaletteBody() {
                 </span>
               </CommandItem>
             ) : null}
-            {showAreas ? (
-              <CommandItem
-                value={`areas:all ${areasLabel}`}
-                onSelect={() => {
-                  // The palette's opener, not the palette input that is about to unmount.
-                  const opener = useCommandStore.getState().opener
-                  setOpen(false)
-                  useAreasSheet.getState().show(opener)
-                }}
-              >
-                <LayoutGrid />
-                <span className="truncate" data-slot="palette-name">
-                  {markMatch(areasLabel, matchQuery)}
-                </span>
-              </CommandItem>
-            ) : null}
             {showSignOut ? (
               <CommandItem
                 value={`signout ${signOutLabel}`}
@@ -765,7 +735,7 @@ function PaletteBody() {
           <CommandGroup heading={t('common:commandPalette.recentSessions')}>
             {recentSessions.map((row, index) => {
               const title = row.title ?? row.reference
-              const state = t(`nav:shell.rail.state.${row.state}`)
+              const state = statusWord(row.status)
               return (
                 <CommandItem
                   key={row.key}
@@ -803,7 +773,7 @@ function PaletteBody() {
             {tools.map((tool) => (
               <CommandItem
                 key={`tool:${tool.driver}`}
-                value={`tool:${tool.driver} ${toolLabel(tool.driver)}`}
+                value={`tool:${tool.driver} ${toolName(tool.driver)}`}
                 onSelect={() =>
                   go(
                     `${toolsView!.path}#tool-${encodeURIComponent(tool.driver)}`,
@@ -813,7 +783,7 @@ function PaletteBody() {
                 <ToolIcon />
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate" data-slot="palette-name">
-                    {markMatch(toolLabel(tool.driver), matchQuery)}
+                    {markMatch(toolName(tool.driver), matchQuery)}
                   </span>
                   <span
                     className="truncate text-caption leading-4 text-muted-foreground"

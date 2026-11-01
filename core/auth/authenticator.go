@@ -5,6 +5,7 @@
 package auth
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -128,11 +129,13 @@ type Authenticator struct {
 	// wrapped in guards that hide it (retirement.go); nil reads it from st.
 	census store.CompositionCensus
 
-	// tokenUses is when this process last tried to record each API token's use
-	// (recordTokenUse), and when it last dropped the expired attempts.
-	tokenUses struct {
+	// uses is when this process last tried to record each credential's use
+	// (recordTokenUse and recordSessionUse), and when it last dropped the
+	// expired attempts. Session entries include the observed transport so a
+	// browser migration does not leave the previous bearer kind behind.
+	uses struct {
 		mu     sync.Mutex
-		last   map[model.ID]time.Time
+		last   map[string]time.Time
 		pruned time.Time
 	}
 }
@@ -156,9 +159,14 @@ func NewAuthenticator(st store.Store, clock model.Clock) *Authenticator {
 }
 
 // Authenticate resolves a bearer credential string to a Principal, or returns
-// ErrUnauthenticated. It resolves in a read-only view, so it is cheap on the hot
-// path of every API request; the only write is an API token's last use, at most
-// once per tokenUseInterval (recordTokenUse).
+// ErrUnauthenticated. A store that could not be read is not a bad credential: that
+// error comes back as the store's own, wrapping store.ErrStoreUnavailable when
+// the backend was unreachable, and a caller must not report it as
+// ErrUnauthenticated. It resolves in a read-only view, so it is cheap
+// on the hot path. Observed token and session use is recorded synchronously
+// at most once per credentialUseInterval (per transport for sessions). Session
+// bookkeeping takes the directory-writer lock, bounded by a 100 ms context;
+// a failed bookkeeping write never refuses an authenticated credential.
 func (a *Authenticator) Authenticate(ctx context.Context, token string) (Principal, error) {
 	prefix, selector, secret, ok := ParseToken(token)
 	if !ok {
@@ -202,13 +210,14 @@ func (a *Authenticator) authSession(ctx context.Context, selector, secret string
 	if err != nil {
 		return Principal{}, err
 	}
+	a.recordSessionUse(ctx, p.CredID, sessionClientKind(ctx))
 	return p, nil
 }
 
 // principalFromSession is the shared, current authority reconstruction for both
 // login bearers and a running session's retained launcher credential.
 func (a *Authenticator) principalFromSession(ctx context.Context, as store.AuthScope, s model.AuthSession) (Principal, error) {
-	if s.Revoked || s.DeletedAt != nil || !a.clock.Now().Time().Before(s.ExpiresAt.Time()) {
+	if !s.PairingSourceID.IsZero() || s.Revoked || s.DeletedAt != nil || !a.clock.Now().Time().Before(s.ExpiresAt.Time()) {
 		return Principal{}, ErrUnauthenticated
 	}
 	var p Principal
@@ -310,14 +319,16 @@ func (a *Authenticator) authToken(ctx context.Context, selector, secret string) 
 				t.SessionFence != 0 {
 				return ErrUnauthenticated
 			}
+			role, ok, err := currentTokenRole(ctx, as, t)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return ErrUnauthenticated
+			}
 			grants := map[model.TenantID]string{}
 			if !t.IsSuperadmin {
-				// A bound token must name exactly one valid tenant+role; anything else
-				// is a misconfigured token and authenticates to nothing.
-				if t.BoundTenantID.IsZero() || !IsRole(t.Role) {
-					return ErrUnauthenticated
-				}
-				grants[t.BoundTenantID] = t.Role
+				grants[t.BoundTenantID] = role
 			}
 			p = newPrincipal(KindToken, t.UserID, t.ID, t.IsSuperadmin, t.Name, grants, nil)
 			if p, err = withTokenStanding(ctx, as, p, t); err != nil {
@@ -360,11 +371,11 @@ func (a *Authenticator) authToken(ctx context.Context, selector, secret string) 
 	return p, nil
 }
 
-// tokenUseInterval is how often this process tries to record one API token's
+// credentialUseInterval is how often this process tries to record one credential's
 // use: the first authentication writes, later ones at most once a minute, whether
-// the write succeeded or not, so neither a busy token nor a store that refuses
-// the write (a standby, a held writer) costs a write and a log line per request.
-const tokenUseInterval = time.Minute
+// the write succeeded or not, so neither a busy credential nor a store that
+// refuses the write costs a write and a log line per request.
+const credentialUseInterval = time.Minute
 
 // recordTokenUse stamps token id's last use after it authenticated. A failure is
 // logged, not returned: the bearer has proved itself, and a bookkeeping write
@@ -373,7 +384,7 @@ const tokenUseInterval = time.Minute
 // the request if writer contention ever shows in token authentication latency.
 func (a *Authenticator) recordTokenUse(ctx context.Context, id model.ID) {
 	now := a.clock.Now()
-	if !a.claimTokenUse(id, now.Time()) {
+	if !a.claimCredentialUse(id.String(), now.Time()) {
 		return
 	}
 	if err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
@@ -383,30 +394,45 @@ func (a *Authenticator) recordTokenUse(ctx context.Context, id model.ID) {
 	}
 }
 
-// claimTokenUse reports whether this call records id's use now: the token's last
-// attempt is at least tokenUseInterval old, or unknown. Once an interval it drops
-// the attempts that no longer hold anything back, so the map stays the size of
-// the tokens used in the last minute or two.
-func (a *Authenticator) claimTokenUse(id model.ID, now time.Time) bool {
-	a.tokenUses.mu.Lock()
-	defer a.tokenUses.mu.Unlock()
-	if at, ok := a.tokenUses.last[id]; ok {
-		if age := now.Sub(at); age >= 0 && age < tokenUseInterval {
+// recordSessionUse applies the same non-authoritative bookkeeping rule to a
+// human session, including the transport observed for this authentication.
+func (a *Authenticator) recordSessionUse(ctx context.Context, id model.ID, clientKind string) {
+	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+	now := a.clock.Now()
+	if !a.claimCredentialUse(id.String()+"\x00"+clientKind, now.Time()) {
+		return
+	}
+	if err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		return as.RecordAuthSessionUse(ctx, id, now, clientKind)
+	}); err != nil {
+		a.log.Warn("auth: recording session use", "session", id.String(), "err", err)
+	}
+}
+
+// claimCredentialUse reports whether this call records key's use now: its last
+// attempt is at least credentialUseInterval old, or unknown. Once an interval it
+// drops old attempts, so the map stays bounded to recently used credentials.
+func (a *Authenticator) claimCredentialUse(key string, now time.Time) bool {
+	a.uses.mu.Lock()
+	defer a.uses.mu.Unlock()
+	if at, ok := a.uses.last[key]; ok {
+		if age := now.Sub(at); age >= 0 && age < credentialUseInterval {
 			return false
 		}
 	}
-	if a.tokenUses.last == nil || now.Sub(a.tokenUses.pruned) >= tokenUseInterval {
-		for other, at := range a.tokenUses.last {
-			if now.Sub(at) >= tokenUseInterval {
-				delete(a.tokenUses.last, other)
+	if a.uses.last == nil || now.Sub(a.uses.pruned) >= credentialUseInterval {
+		for other, at := range a.uses.last {
+			if now.Sub(at) >= credentialUseInterval {
+				delete(a.uses.last, other)
 			}
 		}
-		if a.tokenUses.last == nil {
-			a.tokenUses.last = make(map[model.ID]time.Time)
+		if a.uses.last == nil {
+			a.uses.last = make(map[string]time.Time)
 		}
-		a.tokenUses.pruned = now
+		a.uses.pruned = now
 	}
-	a.tokenUses.last[id] = now
+	a.uses.last[key] = now
 	return true
 }
 
@@ -588,6 +614,50 @@ func loadStanding(ctx context.Context, as store.AuthScope, userID, session model
 		}
 	}
 	return st, nil
+}
+
+// currentTokenRole re-evaluates the owner's CURRENT effective role for an ordinary
+// bound token. The token never widens past its stored role, and it carries no group
+// subjects: removal of a group-derived elevation takes effect on the next request,
+// while a direct membership keeps its own role.
+func currentTokenRole(ctx context.Context, as store.AuthScope, t model.APIToken) (string, bool, error) {
+	if t.IsSuperadmin {
+		return t.Role, true, nil
+	}
+	if t.BoundTenantID.IsZero() || !IsRole(t.Role) {
+		return "", false, nil
+	}
+	if !t.GroupDerivedRole {
+		return t.Role, true, nil
+	}
+	grants, _, _, err := loadGrants(ctx, as, t.UserID, false)
+	if err != nil {
+		return "", false, err
+	}
+	current, ok := grants[t.BoundTenantID]
+	if !ok {
+		return "", false, nil
+	}
+	if RoleRank(current) < RoleRank(t.Role) {
+		return current, true, nil
+	}
+	return t.Role, true, nil
+}
+
+// directMembershipRole is the role a user holds directly in tenant, without any
+// directory-group elevation. Group-derived token roles fall back to it when the
+// group is removed; a direct token role does not depend on this lookup.
+func directMembershipRole(ctx context.Context, as store.AuthScope, userID model.ID, tenant model.TenantID) (string, bool, error) {
+	rows, err := drainList(ctx, as.Memberships().List, byEq("user_id", userID.String(), 0))
+	if err != nil {
+		return "", false, err
+	}
+	for _, membership := range rows {
+		if membership.TargetTenantID == tenant && IsRole(membership.Role) {
+			return membership.Role, true, nil
+		}
+	}
+	return "", false, nil
 }
 
 // withTokenStanding applies the owner's standing to an ordinary token
@@ -974,6 +1044,8 @@ func (a *Authenticator) mintSessionTx(ctx context.Context, as store.AuthScope, u
 		AAL:         1,
 		AMR:         amr,
 		TenantScope: scope,
+		LastUsedAt:  &now,
+		ClientKind:  sessionClientKind(ctx),
 	})
 	if err != nil {
 		return "", model.AuthSession{}, err
@@ -1087,10 +1159,17 @@ func (a *Authenticator) rotateSession(ctx context.Context, actor Principal, rene
 // RevokeSession marks a session revoked (logout), recording it with the acting
 // principal as actor.
 func (a *Authenticator) RevokeSession(ctx context.Context, actor Principal, sessionID model.ID) error {
+	return a.revokeSession(ctx, actor, sessionID, false)
+}
+
+func (a *Authenticator) revokeSession(ctx context.Context, actor Principal, sessionID model.ID, ownerOnly bool) error {
 	return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
 		s, err := as.Sessions().Get(ctx, sessionID)
 		if err != nil {
 			return err
+		}
+		if ownerOnly && !ownsSession(actor, s) {
+			return store.ErrNotFound
 		}
 		if s.Revoked {
 			return nil
@@ -1099,10 +1178,16 @@ func (a *Authenticator) RevokeSession(ctx context.Context, actor Principal, sess
 		if _, err := as.Sessions().Update(ctx, s); err != nil {
 			return err
 		}
-		_, err = as.Audit().Append(ctx, model.AuditDraft{
+		draft := model.AuditDraft{
 			Actor: actor.Actor(), ActorKind: actor.ActorKind(),
 			Action: "auth.logout", TargetKind: "core.auth_session", TargetID: sessionID,
-		})
+		}
+		if ownerOnly {
+			// Ending another sign-in is not signing out: the ledger says which.
+			draft.Action = "auth.session.end"
+			draft.Meta = map[string]any{"kind": cmp.Or(s.ClientKind, model.SessionClientUnknown)}
+		}
+		_, err = as.Audit().Append(ctx, draft)
 		return err
 	})
 }

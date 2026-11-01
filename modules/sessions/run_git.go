@@ -22,6 +22,8 @@ import (
 	"github.com/olivaresai/olivares/connectors/gitpublish"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions/egress"
 	"github.com/olivaresai/olivares/sdk/gitlayout"
 )
@@ -167,58 +169,94 @@ type runGitRequest struct {
 	WorkLeaseFence *int64   `json:"work_lease_fence,omitempty"`
 }
 
-func (m *Module) handleRunGit(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	if m.Data == nil {
-		writeJSON(w, http.StatusServiceUnavailable, errorBody("runtime not available"))
-		return
-	}
-	runRef := chi.URLParam(r, "ref")
-	release, err := m.rt.lockRunContext(r.Context(), liveKey(mc.Tenant, runRef))
+// openRunGit is the confined Git of one run: the run's folder, bound to its
+// workspace and permission preset. release frees the run lock and the
+// workspace's read-only handles. The run's workspace must still be the folder's.
+func (m *Module) openRunGit(ctx context.Context, tenant model.TenantID, runRef string) (g sessionGit, rec model.Record, release func(), err error) {
+	unlock, err := m.rt.lockRunContext(ctx, liveKey(tenant, runRef))
 	if err != nil {
-		writeRuntimeControlErr(w, err)
-		return
+		return g, nil, nil, err
 	}
-	defer release()
-	rec, err := m.loadRun(r.Context(), mc.Tenant, runRef)
+	// held, not the named release: a bare return below overwrites release with nil.
+	held := unlock
+	defer func() {
+		if err != nil {
+			held()
+		}
+	}()
+	rec, err = m.loadRun(ctx, tenant, runRef)
 	if err != nil {
-		writeRunErr(w, err)
-		return
+		return g, nil, nil, err
 	}
 	if isolation := rec.String(colIsolation); isolation != "" && isolation != string(IsolationNative) {
-		writeJSON(w, http.StatusUnprocessableEntity, errorBody("session Git requires native session isolation"))
-		return
+		return g, nil, nil, &runErr{http.StatusUnprocessableEntity, "session Git requires native session isolation"}
 	}
-	ws, err := m.resolveLaunchWorkspace(r.Context(), mc.Tenant, rec.String(colWorkspaceRef))
+	ws, err := m.resolveLaunchWorkspace(ctx, tenant, rec.String(colWorkspaceRef))
 	if err != nil {
-		writeRunErr(w, err)
-		return
+		return g, nil, nil, err
 	}
 	if ws != nil {
-		defer ws.closeReadOnlyHandles()
+		held = func() { ws.closeReadOnlyHandles(); unlock() }
 	}
 	dir := rec.String(colRunWorkspacePath)
 	if dir == "" {
-		writeJSON(w, http.StatusNotFound, errorBody("this session has no folder"))
-		return
+		return g, nil, nil, &runErr{http.StatusNotFound, "this session has no folder"}
 	}
 	// A changed registration must never grant access to yesterday's folder.
 	if ws != nil && rec.String(colRunWorktreeBranch) == "" && resolvedPath(dir) != ws.rootReal {
-		writeJSON(w, http.StatusConflict, errorBody("this session folder no longer matches its workspace"))
-		return
+		return g, nil, nil, &runErr{http.StatusConflict, "this session folder no longer matches its workspace"}
 	}
 	if ws != nil && rec.String(colRunWorktreeBranch) != "" {
 		linked, linkedOK := gitlayout.Read(dir)
 		registered, registeredOK := gitlayout.Read(ws.rootReal)
 		if !linkedOK || !registeredOK || !linked.Linked() || linked.CommonDir != registered.CommonDir {
-			writeJSON(w, http.StatusConflict, errorBody("this session worktree no longer belongs to its workspace"))
-			return
+			return g, nil, nil, &runErr{http.StatusConflict, "this session worktree no longer belongs to its workspace"}
 		}
 	}
 	preset := (LaunchIntent{PermissionMode: rec.String(colPermissionMode)}).Preset()
 	if ws != nil && ws.mountMode == mountRO {
 		preset = PresetReadOnly
 	}
-	g := sessionGit{module: m, dir: dir, preset: preset, workspace: ws}
+	return sessionGit{module: m, dir: dir, preset: preset, workspace: ws}, rec, held, nil
+}
+
+// beginRunGitWrite admits one change of the run's folder: no unfenced active
+// work (or the caller's fence), a writable folder, and the audit intent sealed
+// before the index, refs or worktree are touched. Neither a commit message nor
+// file contents enter the ledger, only the hash of the request.
+func (m *Module) beginRunGitWrite(ctx context.Context, tenant model.TenantID, rec model.Record, g sessionGit, p auth.Principal, op string, request any, fence *int64) error {
+	var err error
+	if fence != nil {
+		_, err = m.assertRunWorkLease(ctx, tenant, rec.String(colRunRef), *fence)
+	} else {
+		err = m.refuseUnfencedActiveWork(ctx, tenant, rec)
+	}
+	if err != nil {
+		return err
+	}
+	if !g.writable() {
+		return &runErr{http.StatusForbidden, "this session folder is read-only or has restricted folder access; Git changes are unavailable"}
+	}
+	payload, _ := json.Marshal(request)
+	hash := sha256.Sum256(payload)
+	audit := wsMutationInput{workspaceRef: rec.String(colWorkspaceRef), op: "git-" + op, path: rec.String(colRunRef), contentHash: hex.EncodeToString(hash[:]), actor: p.Actor(), actorKind: p.ActorKind()}
+	if g.workspace != nil {
+		audit.workspaceID = g.workspace.id
+	}
+	return m.sealWorkspaceMutation(ctx, tenant, audit)
+}
+
+func (m *Module) handleRunGit(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if m.Data == nil {
+		writeJSON(w, http.StatusServiceUnavailable, errorBody("runtime not available"))
+		return
+	}
+	g, rec, release, err := m.openRunGit(r.Context(), mc.Tenant, chi.URLParam(r, "ref"))
+	if err != nil {
+		writeRuntimeControlErr(w, err)
+		return
+	}
+	defer release()
 	if r.Method == http.MethodGet {
 		status, err := g.status(r.Context())
 		if err != nil {
@@ -236,31 +274,9 @@ func (m *Module) handleRunGit(w http.ResponseWriter, r *http.Request, mc api.Mod
 		writeRunErr(w, badRequest("work_lease_fence must be positive"))
 		return
 	}
-	if body.WorkLeaseFence != nil {
-		_, err = m.assertRunWorkLease(r.Context(), mc.Tenant, runRef, *body.WorkLeaseFence)
-	} else {
-		err = m.refuseUnfencedActiveWork(r.Context(), mc.Tenant, rec)
-	}
-	if err != nil {
-		writeRuntimeControlErr(w, err)
-		return
-	}
-	if !g.writable() {
-		writeJSON(w, http.StatusForbidden, errorBody("this session folder is read-only or has restricted folder access; Git changes are unavailable"))
-		return
-	}
 	action := path.Base(r.URL.Path)
-	payload, _ := json.Marshal(body)
-	hash := sha256.Sum256(payload)
-	// Audit intent before touching the index, refs or worktree. Neither a commit
-	// message nor file contents enter the ledger.
-	audit := wsMutationInput{workspaceRef: rec.String(colWorkspaceRef), op: "git-" + action, path: runRef, contentHash: hex.EncodeToString(hash[:]), actor: mc.Principal.Actor(), actorKind: mc.Principal.ActorKind()}
-	if ws != nil {
-		audit.workspaceID = ws.id
-	}
-	err = m.sealWorkspaceMutation(r.Context(), mc.Tenant, audit)
-	if err != nil {
-		writeRunErr(w, err)
+	if err := m.beginRunGitWrite(r.Context(), mc.Tenant, rec, g, mc.Principal, action, body, body.WorkLeaseFence); err != nil {
+		writeRuntimeControlErr(w, err)
 		return
 	}
 	switch action {
@@ -279,6 +295,63 @@ func (m *Module) handleRunGit(w http.ResponseWriter, r *http.Request, mc api.Mod
 	}
 	// colRunWorktreeBranch records the branch cleanup owns, not today's checkout.
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// CommitRun commits every change of a run's folder as the caller and names the
+// branch, commit and tree to publish: the local half of shipping a worktree
+// session. It is the Git routes' own door (the confined Git, the work-lease and
+// read-only checks, the audit intent), and the run is read in workspace only,
+// so a run elsewhere is store.ErrNotFound. A refusal of the folder (read-only,
+// active work, a missing profile or message) wraps gitpublish.ErrLocalInput, and
+// a folder with no branch or no commit answers ErrNoBranch or ErrNoCommit.
+func (m *Module) CommitRun(ctx context.Context, p auth.Principal, tenant model.TenantID, workspace model.ID, runRef, message string) (gitpublish.LocalHead, error) {
+	if m == nil || m.Data == nil {
+		return gitpublish.LocalHead{}, errors.New("sessions: run Git has no data handle")
+	}
+	dir, err := m.ReadRunWorkspacePath(ctx, tenant, workspace, runRef)
+	if err != nil {
+		return gitpublish.LocalHead{}, err
+	}
+	g, rec, release, err := m.openRunGit(ctx, tenant, runRef)
+	if err != nil {
+		return gitpublish.LocalHead{}, refusedRunGit(err)
+	}
+	defer release()
+	if g.dir != dir {
+		return gitpublish.LocalHead{}, store.ErrNotFound
+	}
+	if p.Kind != auth.KindUser {
+		return gitpublish.LocalHead{}, fmt.Errorf("%w: sign in with your user profile to commit", gitpublish.ErrLocalInput)
+	}
+	// Only a folder with changes is written to: a clean one is read, and a refused
+	// message or profile is answered before the audit intent is sealed.
+	status, err := g.status(ctx)
+	if err != nil {
+		return gitpublish.LocalHead{}, refusedRunGit(err)
+	}
+	if len(status.Files) > 0 {
+		if err := gitpublish.CommitInput(message, p.DisplayName, p.Email); err != nil {
+			return gitpublish.LocalHead{}, err
+		}
+		if err := m.beginRunGitWrite(ctx, tenant, rec, g, p, "ship", runGitRequest{Message: message}, nil); err != nil {
+			return gitpublish.LocalHead{}, refusedRunGit(err)
+		}
+	}
+	head, err := (gitpublish.LocalRepository{Run: g.exec}).CommitAll(ctx, message, p.DisplayName, p.Email)
+	return head, refusedRunGit(err)
+}
+
+// refusedRunGit turns a refusal of the run's folder, which the Git routes
+// answer with a status, into gitpublish.ErrLocalInput; anything else stays.
+func refusedRunGit(err error) error {
+	var re *runErr
+	switch {
+	case errors.As(err, &re):
+		return fmt.Errorf("%w: %s", gitpublish.ErrLocalInput, re.msg)
+	case asWorkError(err) != nil:
+		return fmt.Errorf("%w: %s", gitpublish.ErrLocalInput, err)
+	}
+	return err
 }
 
 func writeSessionGitErr(w http.ResponseWriter, err error) {

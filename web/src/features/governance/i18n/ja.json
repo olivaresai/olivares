@@ -141,6 +141,7 @@
     "actorHint": "監査アクターのハンドルであり、メールアドレスではありません。アイデンティティはディレクトリから解決され、ここには表示されません。",
     "expiredAt": "期限切れ {{time}}",
     "approveOnce": "今回だけ承認",
+    "approveForSession": "このセッション中は承認",
     "approving": "承認中…",
     "deny": "却下",
     "noMatch": "検索に一致するリクエストはありません",
@@ -218,6 +219,7 @@
     "trailEmpty": "まだ決定は記録されていません",
     "trailEmptyHint": "この承認に関する判断は、誰が・いつ・なぜ判断したかまで、すべてここに記録されます。まだ誰も判断していません。",
     "decisionApprove": "承認済み",
+    "decisionApproveForSession": "このセッション中は承認済み",
     "decisionReject": "却下",
     "reenableNeedsAdmins": "ほかの管理者アカウント 2 つの承認が必要です。「アイデンティティとアクセス」または `olivares users create` で作成してください。",
     "openIdentity": "「アイデンティティとアクセス」を開く",
@@ -681,14 +683,19 @@
     "matched": "該当ルール: {{rule}}",
     "matchedDefault": "該当ルール: なし（既定値を適用）",
     "matchedUnreadable": "該当ルール: 閲覧権限のないルール",
-    "reaches": "到達先: {{list}}",
+    "reaches": "到達先:",
     "reachFolder": {
-      "write": "{{path}}（書き込み）",
-      "read": "{{path}}（読み取り専用）",
-      "unknown": "{{path}}（アクセス不明）"
+      "write": "<path />（書き込み）",
+      "read": "<path />（読み取り専用）",
+      "unknown": "<path />（アクセス不明）"
     },
     "matchedUnknown": "該当ルール: 読み取れなかったルール",
-    "reachIncomplete": "読み取れなかった項目あり"
+    "reachIncomplete": "読み取れなかった項目あり",
+    "rule": {
+      "default": "ルールなし（既定が適用されます）",
+      "unreadable": "閲覧できないルール",
+      "unknown": "読み込めなかったルール"
+    }
   },
   "list": {
     "loadedOnly": "検索は読み込み済みの行のみが対象です。続きを読み込んでください。"

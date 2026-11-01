@@ -157,10 +157,16 @@ func waitRead(t *testing.T, f *os.File, timeout time.Duration) bool {
 
 // readScreen reads the pty until the visible screen contains want.
 func readScreen(t *testing.T, master *os.File, want string) string {
+	return readScreenWithin(t, master, want, ptyWait)
+}
+
+// readScreenWithin is readScreen with its own budget, for a step that waits on work the
+// engine does, such as an install.
+func readScreenWithin(t *testing.T, master *os.File, want string, wait time.Duration) string {
 	t.Helper()
 	var raw strings.Builder
 	buf := make([]byte, 4096)
-	deadline := time.Now().Add(ptyWait)
+	deadline := time.Now().Add(wait)
 	for time.Now().Before(deadline) {
 		if !waitRead(t, master, 200*time.Millisecond) {
 			continue

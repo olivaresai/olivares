@@ -70,8 +70,8 @@ export function RequestHistory({ entries, onClear }: RequestHistoryProps) {
               'h-5 w-12 justify-center font-mono text-[10px]',
               entry.status >= 200 &&
                 entry.status < 300 &&
-                'border-emerald-500/40 text-emerald-600',
-              entry.status >= 400 && 'border-red-500/40 text-red-600',
+                'border-success-line text-success',
+              entry.status >= 400 && 'border-danger-line text-danger',
             )}
           >
             {entry.status || t('historyPanel.statusError')}

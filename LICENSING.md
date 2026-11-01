@@ -54,7 +54,7 @@ MinIO, Grafana).
 
 Where each capability ships (the open AGPL build, a Business family or Enterprise) and why is the placement table in [`docs/editions.md`](docs/editions.md). That table is the only one. Maturity per capability is stated in [Honesty & limits](docs-site/src/content/docs/start/honesty-and-limits.md). The full list of reserved seams is declared in the public tree itself ([`cmd/olivares/wire_noenterprise.go`](cmd/olivares/wire_noenterprise.go)): a capability the open binary reserves answers `501` or no-ops, and its comment says so — nothing is hidden and nothing open is removed.
 
-The AGPL build is the whole platform and is never feature-capped from within. The commercial modules are additive new code, never features removed from the open product. A subscription is the credential you download signed module packs with — a distribution-style model of signed module packs — not a key that unlocks code already sitting on your disk. User accounts are unlimited in the self-hosted engine: no edition of it enforces a seat cap, and the binary's seat seam is an unconditional no-op. The hosted Cloud tier is the one exception — its control plane admits seats per tenant, which is a property of that service and not of this binary.
+The AGPL build is the whole platform and is never feature-capped from within. The commercial modules are additive new code, never features removed from the open product. A subscription is the credential you download signed module packs with — a distribution-style model of signed module packs. User accounts are unlimited in the self-hosted engine: no edition of it enforces a seat cap, and the binary's seat seam is an unconditional no-op. The hosted Cloud tier is the one exception — its control plane admits seats per tenant, which is a property of that service and not of this binary.
 
 ## License by directory (the frontier)
 
@@ -175,6 +175,13 @@ licence never calls anyone. Downloading what you paid for does.**
 - **Commercial.** The subscription is the credential with which modules, updates and patches are
   downloaded. Phone-home is approved for licence issuance and updates. There is no mandatory
   telemetry and no control-plane egress by default.
+- **The licence turns the commercial capabilities on, not the binary.** A Business or Enterprise
+  build runs a commercial capability only while a valid licence whose grants include it is
+  installed, and it checks that licence offline, on the machine, at each use. With no licence, or
+  one that has expired, been removed or been revoked by the list an OTA manifest carries, that work
+  is refused with `addon_requires_license`; reading, verifying and exporting your data, removing
+  what you already have, and the protections already in force keep working. The AGPL core and the
+  Community build never read a licence to turn anything on or off.
 
 That is the shape of a subscription that grants access to the enterprise repositories — the model
 this line was designed against — and not a licence that checks in on you while you work. What you

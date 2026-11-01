@@ -9,7 +9,8 @@ export const estateOwnerPaths: Record<EstateFamily, string> = {
   session: '/agentops',
   work: '/work',
   connector: '/console',
-  mcp: '/mcp-servers',
+  // MCP servers are added and listed on MCP & skills' Servers tab (#3388).
+  mcp: '/capabilities',
   policy: '/permissions',
 }
 
@@ -22,5 +23,6 @@ export function estateOwnerHref(node: EstateNode): string {
   if (node.kind === 'policy') return `${path}?tab=policies`
   if (node.kind === 'workspace') return `${path}?tab=scopes`
   if (node.kind === 'connector') return `${path}?tab=connectors`
+  if (node.kind === 'mcp') return `${path}?tab=servers`
   return path
 }

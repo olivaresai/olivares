@@ -167,10 +167,13 @@ func runHookClientRequest(ctx context.Context, in io.Reader, out io.Writer, cfg 
 	if cfg.pathCalls != nil {
 		calls = *cfg.pathCalls
 	}
-	body = canonicalizeHookPayloadPathsWith(ctx, body, calls)
+	body, canonErr := canonicalizeHookPayloadPathsWith(ctx, body, calls)
 	// A recovered filesystem must not dispatch a request after the helper denied.
 	if ctx.Err() != nil {
 		return denyClosed("governed PEP decision timed out; tool-call denied")
+	}
+	if canonErr != nil {
+		return denyClosed("path could not be resolved")
 	}
 
 	endpoint := strings.TrimSpace(cfg.Endpoint)

@@ -34,9 +34,14 @@ vi.mock('./api', async (importOriginal) => {
 
 const { ModelsView } = await import('./models-view')
 
+// Residency left the keys tab (the keys moved to AI tools, #3388): it is under Governance,
+// next to the GPAI posture.
 async function abrirClaves(user: ReturnType<typeof userEvent.setup>) {
   renderIntel(<ModelsView />)
-  await user.click(await screen.findByRole('tab', { name: /keys/i }))
+  await user.click(await screen.findByRole('tab', { name: 'Governance' }))
+  await user.click(
+    await screen.findByRole('tab', { name: 'Workspace residency' }),
+  )
 }
 
 beforeEach(() => {

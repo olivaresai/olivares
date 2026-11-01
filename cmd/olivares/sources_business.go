@@ -45,8 +45,14 @@ func businessKindUnavailable(kind string) bool {
 }
 
 // errBusinessSourceKind is the one refusal for a Business kind: 501 connector_unavailable
-// through the API, a startup error naming the kind on the command line.
+// through the API, a startup error naming the kind on the command line. Community is told
+// to run the Business edition; a commercial build already runs it, and the Business kind
+// it cannot construct is built by an add-on (conjur: identity-scale), so the refusal
+// names the add-on the build lacks.
 func errBusinessSourceKind(kind string) error {
+	if thisEdition.name != "community" {
+		return fmt.Errorf("%w: the %q connector requires Business Identity & Scale, which this build does not include; remove it from the configuration", api.ErrConnectorUnavailable, kind)
+	}
 	return fmt.Errorf("%w: the %q connector is a Business capability; run the Business edition or remove it from the configuration", api.ErrConnectorUnavailable, kind)
 }
 

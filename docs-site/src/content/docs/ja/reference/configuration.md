@@ -4,7 +4,7 @@ description: "Olivares AI コントロールプレーンの検証済み設定サ
 ---
 
 :::note[Business]
-監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、`olivares audit verify`、`olivares dr backup` を引き続き利用できます。エクスポートは HTTP 501 または終了コード 9 を返します。監査転送およびエアギャップ間の DDIL 転送にも Business が必要です。
+監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、台帳の検証（`GET /v1/audit/verify`、`olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、その読み取り、`olivares dr backup` を引き続き利用できます。証拠の操作は HTTP 501 または終了コード 9 を返します。監査転送および監査セグメントを含む DDIL 転送にも Business が必要です。
 :::
 
 0.1 以降、KMS で封印した署名鍵と設定ファイル（CMEK）には Business バイナリが必要です。オペレーターが用意した署名鍵と `keys status` は Community に残ります。保管の宣言 BYOK（`OLIVARES_KEY_CUSTODY=byok`）と HYOK（`OLIVARES_LEDGER_CUSTODY=hyok`）、ホスト外でのチェックポイント署名（`OLIVARES_LEDGER_SIGNER`）、`olivares audit key-transition` には Business バイナリが必要で、Community は終了コード 9 で拒否します。Community は CMEK が設定された環境で、ストアを開く前や鍵を作成する前に処理を拒否します。`dr backup` と `keys unseal` には、お客様の KMS と Business を使用してください。復旧に有効なライセンスは不要です。
@@ -357,6 +357,7 @@ The table below is generated from the product's own sources: 296 variables and 1
 | `OLIVARES_SECRET_STORE_KEY` | No | — | Key that encrypts operator secrets held in the store. |
 | `OLIVARES_SERVERTOOL_EGRESS_CONFIG` | No | — | インラインプロキシ内のプロバイダーのサーバーツール（Web 検索、Web フェッチ、コード実行）に対する egress ゲートの JSON 許可（grants）ファイルへのパス。`enterprise` と `addon_airs` のビルドタグ付きでコンパイルされたビルドだけが読み取ります。未設定の場合、それらのツールは観測のみのままです。ファイルを読み取れない場合や解析できない場合は、ファイルを修正してエンジンを再起動するまで、認識されたすべての egress サーバーツールを拒否します。 |
 | `OLIVARES_SERVER_URL` | No | — | Base URL of the engine the CLI talks to, when `--server` is not given. |
+| `OLIVARES_SESSIONS_AGENT_BOOTSTRAP_LISTEN` | No | — | エージェント登録エンドポイントの待ち受けアドレス。`host:port` 形式で、ノードエージェントが証明書を持つ前にワンタイムトークンで登録する、サーバー側のみの TLS エンドポイントです。起動時に読み込まれ、デフォルトの空の値ではリスナーを開きません。Community ビルドはこの変数を読み込みません。 |
 | `OLIVARES_SESSIONS_AGENT_LINK_LISTEN` | No | — | エージェントリンクの待ち受けアドレス。`host:port` 形式で、このソースツリーを基にしたエディションがノードエージェントに提供する相互 TLS エンドポイントです。起動時に読み込まれ、デフォルトの空の値ではリスナーを開きません。Community ビルドはこの変数を読み込みません。 |
 | `OLIVARES_SESSIONS_MANAGED_STOP_ADMISSION_TIMEOUT` | No | `10s` | 管理対象の Stop リクエストを受け付けるまでの最大時間。単位付きの正の Go duration で指定します。起動時に読み取られ、無効な値または正でない値は起動を阻止します。プロセス終了処理の時間は制限しません。 |
 | `OLIVARES_SESSION_BUDGET_AVAILABILITY` | No | — | Whether session budget enforcement is required, and what happens when the budget service cannot answer. |

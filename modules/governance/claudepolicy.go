@@ -6,11 +6,16 @@ package governance
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 
@@ -23,6 +28,7 @@ import (
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/sdk"
 )
 
@@ -56,6 +62,7 @@ type PolicyConsole struct {
 	clock       model.Clock
 	distributor ManagedDistributor
 	observed    ObservedConfigProvider
+	instruct    InstructionsSource
 }
 
 // Compile-time proof PolicyConsole satisfies the SDK + API seams.
@@ -97,8 +104,23 @@ type ObservedConfigProvider interface {
 	Observed(ctx context.Context, tenant model.TenantID, surface string) ([]ObservedConfig, error)
 }
 
+// InstructionsSource renders the instructions a department carries (#530): the document of the
+// managed-instructions@<department> surface. It is the composition root's, over the same
+// source a session of the department is given, so a workstation file and a session cannot
+// differ. "" means the department carries none; an error is a refusal, never an empty
+// department.
+type InstructionsSource interface {
+	Instructions(ctx context.Context, tenant model.TenantID, department string) (string, error)
+}
+
 // PolicyConsoleOption configures a PolicyConsole.
 type PolicyConsoleOption func(*PolicyConsole)
+
+// WithInstructionsSource wires the source a per-department instructions document is rendered
+// from. Without it such a surface authors only the document typed in the request.
+func WithInstructionsSource(s InstructionsSource) PolicyConsoleOption {
+	return func(c *PolicyConsole) { c.instruct = s }
+}
 
 // WithManagedDistributor wires the distribution seam.
 func WithManagedDistributor(d ManagedDistributor) PolicyConsoleOption {
@@ -202,13 +224,90 @@ type dryRunResult struct {
 	Resolved []managedsettings.DryRunLine `json:"resolved,omitempty"`
 	Changes  []dryRunChange               `json:"changes,omitempty"`
 	Notes    []string                     `json:"notes,omitempty"`
+	// Content and SHA256 are the document a per-department surface was rendered from its
+	// department and its digest: the bytes a publish would sign and a workstation would write.
+	Content string `json:"content,omitempty"`
+	SHA256  string `json:"sha256,omitempty"`
 }
 
 // validSurface reports whether s is a managed-* authoring surface of the
-// revision store's registry.
+// revision store's registry: a base surface, or a per-department one.
 func validSurface(s string) bool {
-	e, ok := surfaces.base(s)
+	e, _, ok := surfaces.resolve(s)
 	return ok && e.family == surfaceFamilyManaged
+}
+
+// ManagedSurface reports whether name is a managed-* surface of the claude-policy console: a
+// base surface, or a per-department one such as managed-instructions@<department>. The CLI asks
+// it so a typo costs a usage error and no request, with the engine's own rule.
+func ManagedSurface(name string) bool { return validSurface(name) }
+
+// departmentDocument renders the document of a per-department surface from its department. found
+// is false when surface is not one (or names no department), or no source is wired: the request's
+// own document then stands. A failed read is an error, never an empty document.
+func (c *PolicyConsole) departmentDocument(ctx context.Context, tenant model.TenantID, surface string) (doc, department string, found bool, err error) {
+	e, department, ok := surfaces.resolve(surface)
+	if !ok || !e.perDepartment || department == "" || c.instruct == nil {
+		return "", "", false, nil
+	}
+	doc, err = c.instruct.Instructions(ctx, tenant, department)
+	return doc, department, true, err
+}
+
+// clientError is an error whose status and message are meant for the caller: a department that
+// does not exist, instructions over the budget, a template that is archived.
+type clientError interface {
+	ClientStatus() int
+	ClientMessage() string
+}
+
+// writeDepartmentUnreadable answers a department whose instructions could not be read. What the
+// administrator can act on (the source says so with a client error) is told as it is; anything
+// else is a 503, so a failed read is never taken for a department with none.
+func (c *PolicyConsole) writeDepartmentUnreadable(w http.ResponseWriter, err error) {
+	var ce clientError
+	if errors.As(err, &ce) && ce.ClientStatus() >= http.StatusBadRequest && ce.ClientStatus() < http.StatusInternalServerError {
+		writeJSON(w, ce.ClientStatus(), errorBody(ce.ClientMessage()))
+		return
+	}
+	if c.log != nil {
+		c.log.Warn("claude-policy: a department's instructions could not be read", "err", err)
+	}
+	writeJSON(w, http.StatusServiceUnavailable, errorBody("the department's instructions could not be read"))
+}
+
+// noteAgainstPublished says how a department's rendered document stands against what its
+// workstations were last given, which is the newest published revision of its surface: the file
+// is a snapshot that publishing takes, while sessions read the department live.
+func (c *PolicyConsole) noteAgainstPublished(r *http.Request, mc api.ModuleContext, surface, doc string, out *dryRunResult) {
+	var (
+		latest revisionDTO
+		found  bool
+	)
+	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
+		revs, e := listRevisions(r.Context(), sc, surface)
+		if e != nil || len(revs) == 0 {
+			return e
+		}
+		latest, found, e = getRevision(r.Context(), sc, surface, revs[0].Revision)
+		return e
+	})
+	switch {
+	case err != nil:
+		out.Notes = append(out.Notes, "the published revision could not be read, so the document is not compared with it")
+	case !found:
+		out.Notes = append(out.Notes, "nothing is published for this department yet: publish to give its workstations this file")
+	case latest.Content == doc:
+		out.Notes = append(out.Notes, "matches published revision "+itoa(int(latest.Revision))+", the file its workstations have")
+	default:
+		out.Notes = append(out.Notes, "differs from published revision "+itoa(int(latest.Revision))+", the file its workstations still have: publish to update them")
+	}
+	out.Notes = append(out.Notes, "instructions assigned to a directory group are given to its members' sessions; they are not in a department's file")
+}
+
+// noInstructions is the diagnostic of a department that carries none.
+func noInstructions(department string) string {
+	return "department " + department + " carries no instructions"
 }
 
 // managedSurfaceNames lists the managed-* authoring surfaces in registry order.
@@ -237,7 +336,7 @@ func surfaceOf(w http.ResponseWriter, r *http.Request) (string, bool) {
 
 // handleValidate validates a document server-side (defense in depth — the UI is never
 // the security boundary). No effect, no persistence; read tier.
-func (c *PolicyConsole) handleValidate(w http.ResponseWriter, r *http.Request, _ api.ModuleContext) {
+func (c *PolicyConsole) handleValidate(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	surface, ok := surfaceOf(w, r)
 	if !ok {
 		return
@@ -246,7 +345,25 @@ func (c *PolicyConsole) handleValidate(w http.ResponseWriter, r *http.Request, _
 	if !decodeJSON(w, r, &in) {
 		return
 	}
+	// A per-department surface asked about with no document is asked about its department's.
+	var empty string
+	if strings.TrimSpace(in.Content) == "" {
+		doc, department, found, err := c.departmentDocument(r.Context(), mc.Tenant, surface)
+		if err != nil {
+			c.writeDepartmentUnreadable(w, err)
+			return
+		}
+		if found {
+			in.Content = doc
+			if strings.TrimSpace(doc) == "" {
+				empty = noInstructions(department)
+			}
+		}
+	}
 	issues, notes := validateSurfaceContent(surface, in.Content)
+	if empty != "" {
+		issues = []string{empty}
+	}
 	res := validateResult{OK: len(issues) == 0, Surface: surface, Notes: notes, Diagnostics: []validateDiag{}}
 	for _, msg := range issues {
 		res.Diagnostics = append(res.Diagnostics, validateDiag{Message: msg, Severity: "error"})
@@ -266,11 +383,29 @@ func (c *PolicyConsole) handleDryRun(w http.ResponseWriter, r *http.Request, mc 
 	if !decodeJSON(w, r, &in) {
 		return
 	}
+	out := dryRunResult{Surface: surface, Changes: []dryRunChange{}, Notes: []string{}}
+	rendered := "" // the department's document, when this dry-run rendered it
+	if strings.TrimSpace(in.Content) == "" {
+		doc, department, found, err := c.departmentDocument(r.Context(), mc.Tenant, surface)
+		if err != nil {
+			c.writeDepartmentUnreadable(w, err)
+			return
+		}
+		if found {
+			if strings.TrimSpace(doc) == "" {
+				writeJSON(w, http.StatusBadRequest, errorBody("document is invalid: "+noInstructions(department)))
+				return
+			}
+			in.Content, out.Content = doc, doc
+			sum := sha256.Sum256([]byte(doc))
+			out.SHA256 = hex.EncodeToString(sum[:])
+			rendered = doc
+		}
+	}
 	if issues, _ := validateSurfaceContent(surface, in.Content); len(issues) > 0 {
 		writeJSON(w, http.StatusBadRequest, errorBody("document is invalid: "+strings.Join(issues, "; ")))
 		return
 	}
-	out := dryRunResult{Surface: surface, Changes: []dryRunChange{}, Notes: []string{}}
 	if surface == surfaceManagedSettings {
 		nonEmpty := managedsettings.HasAnyKeys([]byte(in.Content))
 		out.Resolved = managedsettings.DeliveryPreview(nonEmpty)
@@ -285,6 +420,9 @@ func (c *PolicyConsole) handleDryRun(w http.ResponseWriter, r *http.Request, mc 
 		out.Notes = append(out.Notes, "no observed-config source in this edition — "+resolvedOrValidated(surface)+", effect not diffed")
 	default:
 		c.dryRunDiff(r, mc, surface, in.Content, &out)
+	}
+	if rendered != "" {
+		c.noteAgainstPublished(r, mc, surface, rendered, &out)
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -336,7 +474,12 @@ func validateSurfaceContent(surface, content string) (issues, notes []string) {
 	if strings.TrimSpace(content) == "" {
 		return []string{"document is empty"}, nil
 	}
+	if e, _, ok := surfaces.resolve(surface); ok {
+		surface = e.name // a per-department surface is validated as its base
+	}
 	switch surface {
+	case surfaceManagedInstructions:
+		return validateInstructionsContent(content)
 	case surfaceManagedSettings:
 		return managedsettings.ValidateJSON([]byte(content)), nil
 	case surfaceHooks:
@@ -360,11 +503,30 @@ func validateSurfaceContent(surface, content string) (issues, notes []string) {
 	}
 }
 
+// validateInstructionsContent validates an instructions document. It is prose the tool reads, so
+// the only structure it has to have is that a process can read it: no NUL byte, valid UTF-8.
+func validateInstructionsContent(content string) (issues, notes []string) {
+	if strings.ContainsRune(content, 0) {
+		issues = append(issues, "instructions must not contain a NUL byte")
+	}
+	if !utf8.ValidString(content) {
+		issues = append(issues, "instructions must be valid UTF-8")
+	}
+	if importRef.MatchString(content) {
+		notes = append(notes, "Claude Code reads an @path in a CLAUDE.md as an import of that file: write a name that is not a path without the @, or a workstation may read the file it names")
+	}
+	return issues, notes
+}
+
+// importRef matches the @path a CLAUDE.md imports: an @ that starts a word and is followed by what
+// begins a path.
+var importRef = regexp.MustCompile(`(^|\s)@[~./A-Za-z0-9_]`)
+
 // validateHooksContent structurally validates a hooks config and applies the VERIFIED
 // PermissionRequest correction: the permission-rule persistence field
 // (applyPermissionRule) belongs to PermissionRequest, NOT PreToolUse. Unknown event
 // names are a WARNING (note), never a hard error (the event set is version-dated; see
-//).
+// ).
 func validateHooksContent(content string) (issues, notes []string) {
 	var root map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(content), &root); err != nil {

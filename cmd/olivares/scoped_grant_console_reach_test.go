@@ -128,6 +128,9 @@ func (r entityReachRecorder) HandleSealed(method, pattern string, perm auth.Perm
 // the console to show that action as denied. Missing or unreadable runs remain concealed
 // as 404. Reading a run never grants authority to act on it, and the flat whoami set still
 // cannot express the workspace boundary of a grant.
+// Stop and output retain the stored-run lineage. Workspace-specific authority
+// stays out of the console's flat tenant permission set; tenant-scope grants are
+// reported through the existing unconditional-grant projection.
 var moduleScopeTreeReach = []string{
 	"gitpublish:target:read",
 	"sessions:channel:admin",
@@ -143,12 +146,14 @@ var moduleScopeTreeReach = []string{
 	"sessions:lease:write",
 	"sessions:message-send:write",
 	"sessions:message:read",
+	"sessions:output:read",
 	"sessions:protocol-binding:admin",
 	"sessions:protocol-binding:read",
 	"sessions:protocol-binding:write",
 	"sessions:run:admin",
 	"sessions:run:read",
 	"sessions:run:write",
+	"sessions:stop:write",
 	"sessions:work:admin",
 	"sessions:work:read",
 	"sessions:work:write",

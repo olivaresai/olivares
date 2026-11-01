@@ -23,7 +23,10 @@
     "signing": "报告签名",
     "tracing": "跟踪",
     "sessionIdle": "会话内存",
-    "updates": "更新"
+    "updates": "更新",
+    "permissions": "权限",
+    "newSessions": "新建会话",
+    "notifications": "通知"
   },
   "general": {
     "title": "常规",
@@ -42,17 +45,26 @@
     "startPageHint": "登录后打开的页面。默认：主页。",
     "confirmStop": "停止会话前确认",
     "confirmStopHint": "在停止结束仍在工作的会话之前，询问一次。",
+    "editor": "文件链接使用的编辑器",
+    "editorHint": "此电脑上“在…中打开”链接启动的编辑器。默认：VS Code。",
+    "editorSsh": "编辑器的 SSH 主机",
+    "editorSshHint": "编辑器连接另一台机器上会话文件夹的方式，格式为 user@host 或 user@host:port。留空则使用提供此控制台的地址；若为本机则不使用 SSH。",
     "reduceMotion": "减少动态效果",
     "reduceMotionHint": "用淡入淡出代替移动。系统要求时开启。"
   },
   "sessionNotifications": {
     "title": "会话通知",
-    "hint": "此标签页在后台时，如果会话需要我处理或已完成，就通知我。仅适用于此浏览器。",
+    "hint": "在后台通知所选的会话事件。选项会同步，但每个浏览器都需要授权。",
     "notifyMe": "通知我",
     "denied": "此浏览器已屏蔽通知。",
     "unavailable": "此处无法使用浏览器通知。",
     "needsYou": "此会话需要您处理。",
-    "finished": "本轮已完成。"
+    "finished": "本轮已完成。",
+    "ended": "会话已结束。",
+    "failed": "会话因错误而停止。",
+    "pushOn": "即使关闭标签页，此设备也会收到通知。",
+    "pushUnavailable": "仅在标签页打开时通知：此设备未能注册推送。",
+    "installHint": "通知需要将应用添加到主屏幕：点按“分享”，再选择“添加到主屏幕”。"
   },
   "keyboard": {
     "title": "键盘",
@@ -340,5 +352,31 @@
     "switched": "切换已安装。",
     "terminal": "在服务器终端中执行同样的操作",
     "orTerminal": "或在服务器终端中执行"
+  },
+  "permissions": {
+    "description": "智能体在会话中可以做什么，以及每个工具为此收到什么。相同的名称可用于新建会话表单和 olivares session start --permission。",
+    "caption": "每种权限交给每个工具的内容",
+    "permission": "权限",
+    "what": "作用",
+    "default": "默认",
+    "asksInstead": "没有自动模式：像“{{name}}”一样询问",
+    "note": "对于 Claude Code 以外的工具，工具每次请求批准时，由 Olivares 按权限作答。单元格中工具自带的“ask”并不表示会询问你。"
+  },
+  "newSessions": {
+    "tool": "默认工具",
+    "account": "默认账户",
+    "model": "默认模型",
+    "folder": "默认文件夹",
+    "automatic": "自动",
+    "unavailable": "已不可用",
+    "reset": "重置{{name}}",
+    "readFailed": "无法读取选项。请重新打开此页面重试。",
+    "fallback": "保存的默认值已不可用。将使用第一个可用选项。",
+    "scope": "新建会话的默认值。保存在此服务器上的账户中。"
+  },
+  "notificationEvents": {
+    "needsYou": "需要处理",
+    "finished": "已完成",
+    "failed": "已失败"
   }
 }

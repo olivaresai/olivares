@@ -1164,7 +1164,7 @@ func TestCommunicationCommitOutcomeRetryHTTPPostgres(t *testing.T) {
 				// publishes in the background and is itself a writer of this
 				// tenant. Under load it is still draining when the original takes
 				// the tenant's writer lock, queues behind it next to the resend,
-				// and leaves two proxy-owned backends blocked (dev#2502). Start it
+				// and leaves two proxy-owned backends blocked. Start it
 				// late, as a loaded host does, and join it before the original, so
 				// the original and the resend are the only writers.
 				commitOutcomeDelayOutboxDrain(t, f.estate.eng, commitOutcomeLateDrain)

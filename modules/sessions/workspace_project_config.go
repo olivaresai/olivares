@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"math"
 	"net/http"
 	"net/url"
@@ -21,11 +22,14 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"syscall"
+	"unicode"
 
 	"github.com/BurntSushi/toml"
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -44,6 +48,13 @@ const (
 	// maxProjectConfigBytes bounds the file that is parsed; a larger one is
 	// flagged and bound by the hash of its whole content.
 	maxProjectConfigBytes = 1 << 20
+	// maxProjectConfigTreeFiles, maxProjectConfigTreeBytes, maxProjectConfigTreeLinks
+	// and maxProjectConfigTreeDirs bound the folder of a "tree" entry that is hashed at each launch; a larger
+	// folder cannot be bound and is refused.
+	maxProjectConfigTreeFiles = 8192
+	maxProjectConfigTreeBytes = 64 << 20
+	maxProjectConfigTreeLinks = 8
+	maxProjectConfigTreeDirs  = 1024
 )
 
 // projectConfigFile is one repo-resident file a tool reads, relative to the
@@ -52,7 +63,7 @@ const (
 type projectConfigFile struct {
 	driver string
 	path   string
-	format string // "json" (comments allowed), "toml" or "dotenv"
+	format string // "json" (comments allowed), "toml", "dotenv" or "tree" (a folder, every file bound)
 	rules  projectConfigRules
 }
 
@@ -65,6 +76,12 @@ type projectConfigRules struct {
 	baseURL bool // any top-level key that ends in _base_url
 	profile bool // named [profiles.<name>] tables carry the same keys
 	allEnv  bool // the document is itself a table of environment variables
+	// allowKeys, when set, flags every top-level key that is not one of them.
+	allowKeys []string
+	// substitutions flags every {file:path} and {env:NAME} in the raw text, which
+	// the tool replaces before it parses the file; a {file:} is bound to the
+	// content of the file it names.
+	substitutions bool
 }
 
 var claudeSettingsRules = projectConfigRules{
@@ -74,6 +91,17 @@ var claudeSettingsRules = projectConfigRules{
 		"enabledPlugins", "extraKnownMarketplaces",
 	},
 	envKeys: []string{"env"},
+}
+
+// openCodeConfigRules flag every opencode.json key but the few that only shape
+// how OpenCode looks or which model it asks (OpenCode 1.19.4's configuration
+// schema): rules, agents, plugins, MCP servers, providers, commands, skills and
+// the programs it starts are all configuration that changes what a session may
+// do, run or reach. OpenCode substitutes {file:} and {env:} in the raw text, so
+// every one of those is flagged too, wherever it is.
+var openCodeConfigRules = projectConfigRules{
+	allowKeys:     []string{"$schema", "theme", "keybinds", "logLevel", "model", "small_model", "username", "share", "autoupdate", "snapshot", "layout"},
+	substitutions: true,
 }
 
 var projectConfigFiles = []projectConfigFile{
@@ -90,9 +118,20 @@ var projectConfigFiles = []projectConfigFile{
 		keys:  []string{"hooks", "mcpServers", "toolDiscoveryCommand", "toolCallCommand", "proxy"},
 		paths: []string{"tools.discoveryCommand", "tools.callCommand", "mcp.serverCommand", "telemetry.otlpEndpoint"},
 	}},
+	// OpenCode merges the session folder's opencode.json(c) under the launch's own
+	// configuration, so a key the launch does not set is added (#3076), and it loads
+	// .opencode/ (agents, commands, modes, plugins and tools, which run inside it).
+	{driver: providerDriverOpenCode, path: "opencode.json", format: "json", rules: openCodeConfigRules},
+	{driver: providerDriverOpenCode, path: "opencode.jsonc", format: "json", rules: openCodeConfigRules},
+	{driver: providerDriverOpenCode, path: ".opencode", format: "tree"},
 	// Gemini CLI loads these as environment variables, where its base URL is set.
 	{driver: providerDriverGemini, path: ".gemini/.env", format: "dotenv", rules: projectConfigRules{allEnv: true}},
 	{driver: providerDriverGemini, path: ".env", format: "dotenv", rules: projectConfigRules{allEnv: true}},
+	// Cursor CLI: project permissions and the two other settings that approve work
+	// without asking, its MCP servers and its hooks, which can answer "allow".
+	{driver: providerDriverCursor, path: ".cursor/cli.json", format: "json", rules: projectConfigRules{keys: []string{"permissions", "approvalMode", "autoAcceptWebSearch"}}},
+	{driver: providerDriverCursor, path: ".cursor/mcp.json", format: "json", rules: projectConfigRules{keys: []string{"mcpServers"}}},
+	{driver: providerDriverCursor, path: ".cursor/hooks.json", format: "json", rules: projectConfigRules{keys: []string{"hooks"}}},
 }
 
 // flaggedEnvNames load code into a tool or change what it trusts.
@@ -118,6 +157,12 @@ type projectConfigEntry struct {
 	File       string         `json:"file"`
 	Flagged    map[string]any `json:"flagged,omitempty"`
 	Unreadable string         `json:"unreadable,omitempty"`
+	// Refused names why no approval can let this file be used: what the tool
+	// would load cannot be bound by a hash (a folder over its limits, a link out).
+	Refused string `json:"refused,omitempty"`
+	// contentSHA256 is the canonical document hash without OpenCode's generated
+	// $schema key. Nested config uses it so every other edit voids approval.
+	contentSHA256 string
 }
 
 func projectConfigFileDriver(path string) string {
@@ -127,6 +172,23 @@ func projectConfigFileDriver(path string) string {
 		}
 	}
 	return ""
+}
+
+// projectConfigFlaggedFor is what a launch of driver is held for in one entry: the entry's own
+// flags for the tool whose row names the file. Cursor also loads the hooks of Claude Code's two
+// project settings files (cursor.com/docs/reference/third-party-hooks), so those files hold a
+// Cursor launch for their hooks, or when they cannot be read; their other keys are Claude's.
+func projectConfigFlaggedFor(e projectConfigEntry, driver string) (map[string]any, bool) {
+	if projectConfigFileDriver(e.File) == driver {
+		return e.Flagged, true
+	}
+	if driver != providerDriverCursor || (e.File != ".claude/settings.json" && e.File != ".claude/settings.local.json") {
+		return nil, false
+	}
+	if hooks, ok := e.Flagged["hooks"]; ok {
+		return map[string]any{"hooks": hooks}, true
+	}
+	return nil, e.Unreadable != ""
 }
 
 // readProjectConfig reads every known file of dir. It opens files read-only
@@ -164,6 +226,15 @@ func readProjectConfigFile(root *os.Root, dir string, f projectConfigFile) (proj
 		entry.Unreadable = fmt.Sprintf(format, args...)
 		return entry, true
 	}
+	// cannotBind is a file whose content this reader cannot take: for OpenCode's
+	// files, which the tool reads through its own substitutions, no approval can bind
+	// what it would load.
+	cannotBind := func(format string, args ...any) (projectConfigEntry, bool) {
+		if f.rules.substitutions {
+			entry.Refused = "cannot be read inside the folder as a regular file, so no approval can bind what the tool would load"
+		}
+		return unreadable(format, args...)
+	}
 	info, err := root.Stat(rel)
 	if errors.Is(err, os.ErrNotExist) {
 		if _, lerr := root.Lstat(rel); lerr != nil {
@@ -173,29 +244,45 @@ func readProjectConfigFile(root *os.Root, dir string, f projectConfigFile) (proj
 	if err != nil {
 		// A link that leaves the folder, a loop or a permission error: the tool
 		// follows it where this reader may not, so it is flagged by what names it.
+		// For OpenCode's files nothing a hash could bind is in the folder, so no
+		// approval can let them be used.
+		if f.rules.substitutions || f.format == "tree" {
+			entry.Refused = "is a link out of the folder or cannot be read inside it, so no approval can bind what the tool would load"
+		}
 		if target, lerr := os.Readlink(filepath.Join(dir, rel)); lerr == nil {
 			return unreadable("symbolic link to %s cannot be read inside the folder", target)
 		}
 		return unreadable("cannot be read inside the folder")
 	}
-	if !info.Mode().IsRegular() {
-		return unreadable("is not a regular file (%s)", strings.ToLower(info.Mode().Type().String()))
+	if f.format == "tree" {
+		if !info.IsDir() {
+			entry.Refused = "is not a folder, so no approval can bind what OpenCode would load"
+			return unreadable("is not a folder (%s)", strings.ToLower(info.Mode().Type().String()))
+		}
+		return readProjectConfigTree(root, dir, entry, rel)
 	}
-	file, err := root.Open(rel)
+	if !info.Mode().IsRegular() {
+		return cannotBind("is not a regular file (%s)", strings.ToLower(info.Mode().Type().String()))
+	}
+	file, err := openRegularWithin(root, f.path)
 	if err != nil {
-		return unreadable("cannot be opened")
+		return cannotBind("cannot be opened")
 	}
 	defer file.Close()
 	raw, err := io.ReadAll(io.LimitReader(file, maxProjectConfigBytes+1))
 	if err != nil {
-		return unreadable("cannot be read")
+		return cannotBind("cannot be read")
 	}
 	if len(raw) > maxProjectConfigBytes {
+		if f.rules.substitutions {
+			entry.Refused = "is too large for its {file:} and {env:} tokens to be read, so no approval can bind what the tool would load"
+			return unreadable("is larger than %d bytes (%d bytes)", maxProjectConfigBytes, info.Size())
+		}
 		// The hash covers every byte: a change anywhere voids an approval.
 		sum := sha256.New()
 		sum.Write(raw)
 		if _, err := io.Copy(sum, file); err != nil {
-			return unreadable("cannot be read")
+			return cannotBind("cannot be read")
 		}
 		return unreadable("is larger than %d bytes (%d bytes); sha256 of its content %s", maxProjectConfigBytes, info.Size(), hex.EncodeToString(sum.Sum(nil)))
 	}
@@ -203,12 +290,416 @@ func readProjectConfigFile(root *os.Root, dir string, f projectConfigFile) (proj
 	if len(bytes.TrimSpace(raw)) == 0 {
 		return entry, false
 	}
+	// The tool substitutes tokens in the raw text before it parses it, so they are
+	// read first, and bound also in a file this reader cannot decode.
+	var subs map[string]any
+	var substituted []byte
+	if f.rules.substitutions {
+		subs, entry.Refused, substituted = configSubstitutions(root, filepath.ToSlash(filepath.Dir(rel)), raw)
+	}
 	doc, err := decodeProjectConfig(raw, f.format)
 	if err != nil {
+		entry.Flagged = subs
+		if f.rules.substitutions {
+			entry.Refused = "is not valid JSONC, so no approval can inspect what OpenCode would load"
+		}
 		return unreadable("is not valid %s (%v); sha256 of its content %s", f.format, err, sha256Hex(raw))
 	}
+	if f.rules.substitutions {
+		entry.contentSHA256 = openCodeConfigContentSHA256(doc)
+		if entry.Refused == "" {
+			effectiveDoc := doc
+			if !bytes.Equal(substituted, raw) {
+				effectiveDoc, err = decodeProjectConfig(substituted, "json")
+				if err != nil {
+					entry.Refused = "uses {file:} whose substituted configuration cannot be inspected"
+				}
+			}
+			if entry.Refused == "" {
+				entry.Refused = openCodeExternalReferenceRefusal(effectiveDoc)
+			}
+		}
+	}
 	entry.Flagged = f.rules.flag(doc)
+	for token, bound := range subs {
+		entry.Flagged[token] = bound
+	}
 	return entry, len(entry.Flagged) > 0
+}
+
+// openCodeExternalReferenceRefusal names configuration that points OpenCode at
+// code or instruction files outside the approval hash. A {file:} token only
+// substitutes another path; it does not bind that path's target. Reviewed plugin
+// files under .opencode remain supported.
+func openCodeExternalReferenceRefusal(doc map[string]any) string {
+	for _, key := range []string{"plugin", "instructions"} {
+		if meaningful(doc[key]) {
+			return key + " names content outside the files in the approval hash, so no approval can bind it"
+		}
+	}
+	return ""
+}
+
+// openCodeConfigContentSHA256 covers every value, not only the flagged subset,
+// but excludes the $schema key OpenCode adds itself. Canonical JSON makes the
+// hash independent of that generated edit's formatting.
+func openCodeConfigContentSHA256(doc map[string]any) string {
+	withoutSchema := make(map[string]any, len(doc))
+	for key, value := range doc {
+		if key != "$schema" {
+			withoutSchema[key] = value
+		}
+	}
+	canonical, _ := json.Marshal(withoutSchema)
+	return sha256Hex(canonical)
+}
+
+// openCodeSubstitutionContent is OpenCode's trim followed by
+// JSON.stringify(content).slice(1,-1), so inserted text cannot change JSON structure.
+func openCodeSubstitutionContent(content []byte) []byte {
+	// ECMAScript's trim set includes U+FEFF but not U+0085, unlike Go's
+	// unicode.IsSpace. Match it before applying JSON.stringify's escaping.
+	trimmed := strings.TrimFunc(string(content), func(r rune) bool {
+		return r == 0xFEFF || (unicode.IsSpace(r) && r != '\u0085')
+	})
+	quoted, _ := json.Marshal(trimmed)
+	return quoted[1 : len(quoted)-1]
+}
+
+// configSubstitutionToken is OpenCode's {file:path} and {env:NAME}.
+var configSubstitutionToken = regexp.MustCompile(`\{(file|env):([^}]*)\}`)
+
+// configSubstitutions names each {file:} and {env:} token of raw, wherever it is (a
+// key, a value or a comment), a {file:} with the sha256 of the file it names, read
+// inside the folder, and says why no approval can bind them when that is so: an
+// {env:} (OpenCode replaces it first, and its value, or an empty string that joins
+// the text around it into a new token, is not in the folder), a {file:} path the
+// tool would read as written with its spaces, from the home folder or from an
+// absolute path (none of them is in the folder), one not readable inside the folder,
+// or more files or bytes than a folder tree may hold.
+//
+// Each is named "token <token>", apart from the file's keys: a key may itself be a
+// token (OpenCode substitutes keys too), and its value stays bound under its own
+// name. A {file:} path is read from base, the folder of the file that names it, once
+// however many tokens name it, and all of them under one budget: a config of a
+// hundred thousand tokens must not make every check read a hundred thousand files.
+// The third return is OpenCode's effective substituted text, built in one pass so
+// external configuration introduced by a substitution can be inspected too. Content
+// is trimmed and JSON-escaped, and capped at 64 MiB before it can expand further.
+func configSubstitutions(root *os.Root, base string, raw []byte) (map[string]any, string, []byte) {
+	out, refused := map[string]any{}, ""
+	if bytes.Contains(raw, []byte("{env:")) {
+		refused = "uses {env:}, whose value no approval can bind"
+	}
+	sums := map[string]string{} // cleaned path -> "sha256:...", or "" when it cannot be read inside the folder
+	contents := map[string][]byte{}
+	effective := bytes.NewBuffer(make([]byte, 0, len(raw)))
+	last := 0
+	var read, effectiveBytes int64
+	for _, m := range configSubstitutionToken.FindAllSubmatchIndex(raw, -1) {
+		token, kind, arg := string(raw[m[0]:m[1]]), string(raw[m[2]:m[3]]), string(raw[m[4]:m[5]])
+		if kind == "env" {
+			out["token "+token] = "the environment variable " + arg
+			continue
+		}
+		unbound := func() {
+			out["token "+token] = "a file that cannot be read inside the folder"
+			refused = token + " names a file that cannot be read inside the folder, so no approval can bind what the tool would read"
+		}
+		if arg == "" || arg != strings.TrimSpace(arg) || strings.HasPrefix(arg, "~") || filepath.IsAbs(arg) {
+			unbound()
+			continue
+		}
+		path := filepath.ToSlash(filepath.Join(base, arg))
+		sum, seen := sums[path]
+		if !seen {
+			content, err := readSmallRegularWithin(root, path)
+			if read += int64(len(content)); len(sums) >= maxProjectConfigTreeFiles || read > maxProjectConfigTreeBytes {
+				refused = fmt.Sprintf("names more than %d files or %d bytes through {file:}, so no approval can bind what the tool would read", maxProjectConfigTreeFiles, maxProjectConfigTreeBytes)
+				break
+			}
+			if err == nil {
+				sum = "sha256:" + sha256Hex(content)
+				contents[path] = content
+			}
+			sums[path] = sum
+		}
+		if sum == "" {
+			unbound()
+			continue
+		}
+		out["token "+token] = sum
+		content := openCodeSubstitutionContent(contents[path])
+		if effectiveBytes+int64(len(content)) > maxProjectConfigTreeBytes {
+			refused = "substitutes more than 64 MiB through {file:}, so no approval can inspect the expanded configuration"
+			break
+		}
+		effectiveBytes += int64(len(content))
+		effective.Write(raw[last:m[0]])
+		effective.Write(content)
+		last = m[1]
+	}
+	if last == 0 {
+		return out, refused, raw
+	}
+	effective.Write(raw[last:])
+	return out, refused, effective.Bytes()
+}
+
+// readProjectConfigTree flags a folder the tool loads as a whole: every file in it,
+// a linked one included, is named with the sha256 of its content, so an approval
+// binds those reviewed files and a change anywhere voids it. The folder's .gitignore, which
+// OpenCode writes itself, is left out. Dependencies must already be prepared so
+// OpenCode will not install code outside the approved tree. A folder
+// that cannot be bound this way (over its file or byte limit, a link out of it or a
+// link loop) is refused whatever is approved.
+func readProjectConfigTree(root *os.Root, dir string, entry projectConfigEntry, rel string) (projectConfigEntry, bool) {
+	files := map[string]any{}
+	refusedWhy := ""
+	var total int64
+	dirs := 0
+	type subdir struct {
+		at, prefix string
+		depth      int
+	}
+	var walk func(at, prefix string, depth int) error
+	walk = func(at, prefix string, depth int) error {
+		if dirs++; depth > maxProjectConfigTreeLinks || dirs > maxProjectConfigTreeDirs {
+			return errProjectConfigTreeUnbound
+		}
+		folder, err := openDirWithin(root, at)
+		if err != nil {
+			// A folder this check cannot list may still be reached by OpenCode by name.
+			return errProjectConfigTreeUnbound
+		}
+		defer func() {
+			if folder != nil {
+				_ = folder.Close()
+			}
+		}()
+		var subdirs []subdir
+		for {
+			// Read in batches: a huge directory is refused before fs.ReadDir could
+			// allocate for every entry it holds.
+			items, readErr := folder.ReadDir(64)
+			for _, d := range items {
+				path, name := at+"/"+d.Name(), prefix+d.Name()
+				info, err := fs.Stat(root.FS(), path) // follows a link, inside the folder only
+				if err != nil {
+					return errProjectConfigTreeUnbound
+				}
+				// Only the generated regular file at .opencode/.gitignore is
+				// exempt. A directory of that name, at any depth, is configuration.
+				if name == ".gitignore" && at == filepath.ToSlash(rel) && d.Type().IsRegular() {
+					continue
+				}
+				switch {
+				case info.IsDir():
+					deeper := depth
+					if d.Type()&fs.ModeSymlink != 0 {
+						deeper++ // a link may loop: only links count toward the depth
+					}
+					subdirs = append(subdirs, subdir{path, name + "/", deeper})
+					if dirs+len(subdirs) > maxProjectConfigTreeDirs {
+						return errProjectConfigTreeUnbound
+					}
+					continue
+				case !info.Mode().IsRegular():
+					return errProjectConfigTreeUnbound
+				}
+				if len(files) >= maxProjectConfigTreeFiles {
+					return errProjectConfigTreeUnbound
+				}
+				if prefix == "" && (d.Name() == "opencode.json" || d.Name() == "opencode.jsonc") {
+					// OpenCode loads these through the same substituting reader as the
+					// session folder's own: they are read and bound the same way, their
+					// {file:} tokens from .opencode/, by canonical content without "$schema"
+					// (which OpenCode writes itself), plus the values it flags.
+					total += info.Size()
+					if total > maxProjectConfigTreeBytes {
+						return errProjectConfigTreeUnbound
+					}
+					sub, _ := readProjectConfigFile(root, dir, projectConfigFile{driver: providerDriverOpenCode, path: path, format: "json", rules: openCodeConfigRules})
+					if sub.Refused != "" {
+						refusedWhy = name + " " + sub.Refused
+						return errProjectConfigTreeUnbound
+					}
+					files[name] = map[string]any{"sha256": sub.contentSHA256, "flagged": sub.Flagged, "unreadable": sub.Unreadable}
+					continue
+				}
+				sum, n, err := fileSHA256Within(root, path, maxProjectConfigTreeBytes-total)
+				if err != nil {
+					return errProjectConfigTreeUnbound
+				}
+				total += n
+				files[name] = "sha256:" + sum
+			}
+			if errors.Is(readErr, io.EOF) {
+				break
+			}
+			if readErr != nil {
+				return errProjectConfigTreeUnbound
+			}
+		}
+		err = folder.Close()
+		folder = nil
+		if err != nil {
+			return errProjectConfigTreeUnbound
+		}
+		// Keep the old lexical traversal, but do not hold parent directories open
+		// while descending. An approval's hash does not depend on this order.
+		slices.SortFunc(subdirs, func(a, b subdir) int { return strings.Compare(a.at, b.at) })
+		for _, sub := range subdirs {
+			if err := walk(sub.at, sub.prefix, sub.depth); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := walk(filepath.ToSlash(rel), "", 0); err != nil {
+		if refusedWhy != "" {
+			entry.Refused = refusedWhy
+			return entry, true
+		}
+		entry.Refused = fmt.Sprintf("holds more than %d entries, %d bytes or %d folders, a link out of the folder, a link loop or a folder or file this check cannot read, so no approval can bind what OpenCode would load", maxProjectConfigTreeFiles, maxProjectConfigTreeBytes, maxProjectConfigTreeDirs)
+		return entry, true
+	}
+	entry.Flagged = files
+	entry.Refused = openCodeDependencyRefusal(root, rel)
+	return entry, len(files) > 0 || entry.Refused != ""
+}
+
+// openCodeDependencyRefusal mirrors pinned OpenCode's Npm.install decision: it
+// reifies when node_modules is absent or a declared dependency is not locked.
+// Refuse that state before approval, since reify resolves and writes new code.
+// A prepared tree is hashed in full above and Npm.install leaves it unchanged.
+func openCodeDependencyRefusal(root *os.Root, rel string) string {
+	const reason = "requires preparation: install dependencies in .opencode with the pinned OpenCode version before reviewing and approving; its automatic installer would otherwise load code outside the approved hash"
+	modules, err := openDirWithin(root, filepath.ToSlash(filepath.Join(rel, "node_modules")))
+	if err != nil {
+		return reason
+	}
+	if err := modules.Close(); err != nil {
+		return reason
+	}
+
+	// Maps preserve JSON's case-sensitive keys; Go struct fields would accept
+	// "Packages" even though OpenCode reads only "packages" and would reinstall.
+	var pkg, lock map[string]json.RawMessage
+	for name, target := range map[string]any{"package.json": &pkg, "package-lock.json": &lock} {
+		raw, err := readSmallRegularWithin(root, filepath.ToSlash(filepath.Join(rel, name)))
+		if err != nil || json.Unmarshal(raw, target) != nil {
+			return reason
+		}
+	}
+	var packages map[string]map[string]json.RawMessage
+	if json.Unmarshal(lock["packages"], &packages) != nil {
+		return reason
+	}
+	names := func(pkg map[string]json.RawMessage) (map[string]bool, bool) {
+		out := map[string]bool{}
+		for _, key := range []string{"dependencies", "devDependencies", "peerDependencies", "optionalDependencies"} {
+			raw, exists := pkg[key]
+			if !exists {
+				continue
+			}
+			var deps map[string]json.RawMessage
+			if json.Unmarshal(raw, &deps) != nil {
+				return nil, false
+			}
+			for name := range deps {
+				out[name] = true
+			}
+		}
+		return out, true
+	}
+	locked, valid := names(packages[""])
+	if !valid || !locked["@opencode-ai/plugin"] {
+		return reason
+	}
+	declared, valid := names(pkg)
+	if !valid {
+		return reason
+	}
+	for name := range declared {
+		if !locked[name] {
+			return reason
+		}
+	}
+
+	return ""
+}
+
+// errProjectConfigTreeUnbound is a folder no approval can bind.
+var errProjectConfigTreeUnbound = errors.New("project configuration folder cannot be bound")
+
+// openRegularWithin opens a regular file of the folder.
+func openRegularWithin(root *os.Root, path string) (*os.File, error) {
+	return openWithin(root, path, true)
+}
+
+// openDirWithin opens a directory of the folder.
+func openDirWithin(root *os.Root, path string) (*os.File, error) {
+	return openWithin(root, path, false)
+}
+
+// openWithin opens without blocking and judges the type on the open handle, so
+// an entry swapped for a FIFO after a stat cannot hang the check.
+func openWithin(root *os.Root, path string, regular bool) (*os.File, error) {
+	f, err := root.OpenFile(filepath.FromSlash(path), os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	info, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	if (regular && !info.Mode().IsRegular()) || (!regular && !info.IsDir()) {
+		f.Close()
+		return nil, fmt.Errorf("%s is not the expected file type", path)
+	}
+	return f, nil
+}
+
+// readSmallRegularWithin reads a file of the folder that a configuration names: only
+// a regular file is opened (a FIFO would hang the check), and only up to the parse
+// limit is read (a large file is not loaded to be refused). A file over the limit
+// returns what was read of it along with the error, so a caller can charge the work.
+func readSmallRegularWithin(root *os.Root, path string) ([]byte, error) {
+	f, err := openRegularWithin(root, path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	raw, err := io.ReadAll(io.LimitReader(f, maxProjectConfigBytes+1))
+	if err != nil {
+		return raw, err
+	}
+	if len(raw) > maxProjectConfigBytes {
+		return raw, fmt.Errorf("%s is larger than %d bytes", path, maxProjectConfigBytes)
+	}
+	return raw, nil
+}
+
+// fileSHA256Within hashes at most maxBytes of a file of the folder. A file
+// that grew after its stat, or that exceeds the remaining tree budget, is not
+// read to EOF: its content cannot be approved within that budget.
+func fileSHA256Within(root *os.Root, path string, maxBytes int64) (string, int64, error) {
+	f, err := openRegularWithin(root, path)
+	if err != nil {
+		return "", 0, err
+	}
+	defer f.Close()
+	h := sha256.New()
+	n, err := io.Copy(h, io.LimitReader(f, maxBytes+1))
+	if err != nil {
+		return "", n, err
+	}
+	if n > maxBytes {
+		return "", n, errProjectConfigTreeUnbound
+	}
+	return hex.EncodeToString(h.Sum(nil)), n, nil
 }
 
 // maxProjectConfigDepth bounds the nesting a file may have: a parser that
@@ -411,7 +902,7 @@ func (r projectConfigRules) flag(doc map[string]any) map[string]any {
 		return out
 	}
 	for key, value := range doc {
-		if slices.Contains(r.keys, key) || (r.baseURL && strings.HasSuffix(strings.ToLower(key), "_base_url")) {
+		if (r.allowKeys != nil && !slices.Contains(r.allowKeys, key)) || slices.Contains(r.keys, key) || (r.baseURL && strings.HasSuffix(strings.ToLower(key), "_base_url")) {
 			if meaningful(value) {
 				out[key] = value
 			}
@@ -479,7 +970,7 @@ func stripJSONComments(raw []byte) []byte {
 			inString = true
 			out = append(out, c)
 		case c == '/' && i+1 < len(raw) && raw[i+1] == '/':
-			for i < len(raw) && raw[i] != '\n' {
+			for i < len(raw) && raw[i] != '\n' && raw[i] != '\r' {
 				i++
 			}
 			out = append(out, '\n')
@@ -575,6 +1066,9 @@ type projectConfigDTO struct {
 
 // handleGetProjectConfig lists the repo-resident agent configuration of a registered folder that runs programs or redirects traffic, with the SHA-256 of that flagged part and whether a person approved it; the files are read and never executed.
 func (m *Module) handleGetProjectConfig(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if !m.workspaceAllowed(w, r, mc, permWsAdmin, auth.TrusteeRead) {
+		return
+	}
 	ref := chi.URLParam(r, "ref")
 	ws, err := m.resolveWorkspace(r.Context(), mc.Tenant, ref)
 	if err != nil {
@@ -604,6 +1098,9 @@ func (m *Module) handleGetProjectConfig(w http.ResponseWriter, r *http.Request, 
 
 // handleApproveProjectConfig records that a person approved the SHA-256 of a folder's flagged agent configuration, so sessions of the tools that read it may start until one character of it changes.
 func (m *Module) handleApproveProjectConfig(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if !m.workspaceAllowed(w, r, mc, permWsAdmin, auth.TrusteeModify) {
+		return
+	}
 	var body struct {
 		SHA256 string `json:"sha256"`
 	}
@@ -694,14 +1191,19 @@ func (m *Module) checkProjectConfig(ctx context.Context, tenant model.TenantID, 
 		return projectConfigVerdict{refusal: denyClosedErr("project configuration could not be read", err)}
 	}
 	v := projectConfigVerdict{hash: hash}
+	var refused []string
 	for _, e := range entries {
-		if projectConfigFileDriver(e.File) != driver {
+		flagged, ok := projectConfigFlaggedFor(e, driver)
+		if !ok {
 			continue
 		}
+		if e.Refused != "" {
+			refused = append(refused, e.File+" "+e.Refused)
+		}
 		name := e.File
-		if len(e.Flagged) > 0 {
-			keys := make([]string, 0, len(e.Flagged))
-			for key := range e.Flagged {
+		if len(flagged) > 0 {
+			keys := make([]string, 0, len(flagged))
+			for key := range flagged {
 				keys = append(keys, key)
 			}
 			slices.Sort(keys)
@@ -711,6 +1213,10 @@ func (m *Module) checkProjectConfig(ctx context.Context, tenant model.TenantID, 
 	}
 	if len(v.files) == 0 {
 		return projectConfigVerdict{}
+	}
+	if len(refused) > 0 {
+		v.refusal = conflictErr(fmt.Sprintf("This folder carries %s configuration that cannot be approved: %s. Change or remove what it names, then start the session again.", driver, strings.Join(refused, "; ")))
+		return v
 	}
 	if ws == nil {
 		v.refusal = conflictErr(fmt.Sprintf("This session has no registered folder to hold an approval, and its directory carries %s configuration (%s) that can run programs or redirect traffic; remove it, or run the session in a registered folder.", driver, strings.Join(v.files, "; ")))

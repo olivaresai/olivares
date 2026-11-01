@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/dialog'
 import { Kbd } from '@/components/ui/kbd'
 import { useViewAccess } from '@/features/navigation/authorization'
-import { RAIL_KEYS } from '@/features/navigation/rail-keys'
 import { FEATURE_VIEWS } from '@/features/registry'
 import {
   auditKeybindings,
@@ -325,35 +324,6 @@ export function GlobalShortcuts() {
               })}
             </p>
           ) : null}
-
-          {/* THE RAIL'S OWN KEYS, from the module that implements them. They are not in
-              the chord table because the shell does not resolve them — `railKey` does,
-              inside the rail, the way `DataTable` owns the arrows of a grid. Printing
-              them here from their own source is what keeps the page honest about `p`. */}
-          <section>
-            <h3 className="mb-2 text-caption font-medium tracking-wider text-muted-foreground uppercase">
-              {t('common:keys.group.navRail')}
-            </h3>
-            <dl className="flex flex-col gap-1.5 text-body">
-              {RAIL_KEYS.map(({ command, keys }) => (
-                <div
-                  key={command}
-                  className="flex items-center justify-between gap-3"
-                  data-testid={`keybinding-${command}`}
-                >
-                  <dt className="min-w-0 break-words">
-                    {t(`common:keys.command.${command}`)}
-                  </dt>
-                  <dd className="flex shrink-0 gap-1">
-                    <Kbd>{keys}</Kbd>
-                  </dd>
-                </div>
-              ))}
-            </dl>
-            <p className="mt-2 text-caption text-muted-foreground">
-              {t('common:keys.navRailNote')}
-            </p>
-          </section>
 
           <section>
             <h3 className="mb-2 text-caption font-medium tracking-wider text-muted-foreground uppercase">

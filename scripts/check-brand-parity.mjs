@@ -14,7 +14,7 @@
 // verified they stay agreed, and a drift is exactly the kind users see: the
 // console and the marketing site wearing two different brands.
 //
-// AND THE SECOND TIME (dev#2543, 2026-10-19). This gate used to read the brand JSON
+// AND THE SECOND TIME (the regression, 2026-10-19). This gate used to read the brand JSON
 // directly under web/tokens/, which the console build had stopped reading: the console
 // rendered #111113 in Geist while the gate stayed green against the website's #28282b.
 // It now reads the file the build EMITS, web/src/styles/tokens.css — the :root block
@@ -105,7 +105,7 @@ const WEB_VENDORED_REL = 'src/data/hub/brand-tokens.json'
 // WHAT IS IN: the brand anchors both surfaces must share (the single orange in
 // its two AA-tuned values, the two brand neutrals in both roles, ink-on-orange)
 // plus the surfaces, borders, muted text and semantic status of BOTH themes. Until
-// dev#2543 the dark set was out, because the console wore its own dark tuning
+// the regression the dark set was out, because the console wore its own dark tuning
 // (#111113, #52c98f, …); the console now takes the website's B2 values, so the
 // dark surface, borders and status are pinned like the light ones.
 //
@@ -162,7 +162,7 @@ const BRAND_MAP = [
   entry('warn-light', ':root', 'warning', '--color-warn', 'light'),
   entry('danger-light', ':root', 'danger', '--color-danger', 'light'),
   entry('info-light', ':root', 'info', '--color-info', 'light'),
-  // The DARK set, pinned since the console took the B2 values (dev#2543).
+  // The DARK set, pinned since the console took the B2 values.
   entry('surface-dark', '.dark', 'surface', '--color-surface', 'dark'),
   entry('border-dark', '.dark', 'border', '--color-border', 'dark'),
   entry('border-strong-dark', '.dark', 'border-strong', '--color-border-strong', 'dark'),
@@ -817,7 +817,7 @@ function selftest(root) {
     expect('a stale vendored site manifest is detected', checkWebTree(manifest, vendoredDrift).errors, true)
 
     // Hub fixtures: the emitted console stylesheet + committed manifest copied, then one
-    // value the console RENDERS flipped. This is the case dev#2543 was about: before it,
+    // value the console RENDERS flipped. This is the case the regression was about: before it,
     // the gate read JSON the build no longer used, so this exact edit stayed green.
     const hubCopy = (name) => {
       const d = join(base, name)

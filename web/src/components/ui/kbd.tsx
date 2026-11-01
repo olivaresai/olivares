@@ -6,7 +6,8 @@ import { cn } from '@/lib/utils'
 
 /**
  * Kbd — a keyboard-key chip for shortcut hints (command menu, tooltips, docs). A small
- * mono cap on the surface with the strong hairline; render the glyphs as children
+ * cap in the key-hint size (10 px, the text face: a key is not code) on the surface with
+ * the strong hairline; render the glyphs as children
  * (e.g. `⌘`, `K`, `Esc`). Use one Kbd per key and separate with a literal `+` for
  * chords so each key reads as its own physical cap.
  */
@@ -15,7 +16,7 @@ export function Kbd({ className, ...props }: ComponentProps<'kbd'>) {
     <kbd
       className={cn(
         'inline-flex h-5 min-w-5 items-center justify-center gap-0.5 rounded-[5px] border border-line-strong bg-surface px-[5px]',
-        'text-[0.6875rem] font-mono font-medium leading-none text-text-2',
+        'text-metadata-s font-medium leading-none text-text-2',
         className,
       )}
       {...props}

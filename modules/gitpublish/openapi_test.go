@@ -13,8 +13,8 @@ func TestGitpublishRequestBodyCensus(t *testing.T) {
 	t.Parallel()
 	bodyful := []string{
 		http.MethodPost + " /targets", http.MethodPut + " /targets/{id}",
-		http.MethodPost + " /targets/{id}/pushes", http.MethodPost + " /targets/{id}/pull-requests",
-		http.MethodPost + " /targets/{id}/merges", http.MethodPost + " /intents/{id}/abandon",
+		http.MethodPost + " /targets/{id}/pushes", http.MethodPost + " /targets/{id}/ships", http.MethodPost + " /targets/{id}/pull-requests",
+		http.MethodPost + " /targets/{id}/merges", http.MethodPost + " /targets/{id}/issue-comments", http.MethodPost + " /intents/{id}/abandon",
 	}
 	bodyless := []string{http.MethodDelete + " /targets/{id}", http.MethodPost + " /intents/{id}/reconcile"}
 	check := func(route string, want gitpublishRequestBodyKind) {
@@ -43,7 +43,7 @@ func TestGitpublishRequestBodyCensus(t *testing.T) {
 	for _, r := range bodyless {
 		check(r, gitpublishBodyless)
 	}
-	for _, s := range []map[string]any{gitpublishTargetSchema(true), gitpublishPushSchema(), gitpublishPullRequestSchema(), gitpublishMergeSchema()} {
+	for _, s := range []map[string]any{gitpublishTargetSchema(true), gitpublishPushSchema(), gitpublishPullRequestSchema(), gitpublishMergeSchema(), gitpublishIssueCommentSchema()} {
 		props := s["properties"].(map[string]any)
 		for _, forbidden := range []string{"credential_ref", "api_base", "installation_id", "local_path", "repo_path"} {
 			if _, ok := props[forbidden]; ok {

@@ -119,7 +119,7 @@
     "detach": "デタッチ"
   },
   "discardWorktree": {
-    "label": "worktree とブランチ {{branch}} も破棄する",
+    "label": "worktree とブランチ <branch /> も破棄する",
     "hint": "ブランチがマージ済みで worktree がクリーンな場合に削除されます。未マージまたは未コミットの作業を破棄するにはチェックしてください。"
   },
   "create": {
@@ -148,8 +148,11 @@
     "worktree": "新しい git worktree で作業する",
     "worktreeHint": "専用の worktree に新しいブランチを作成し、同じリポジトリのセッション同士でファイルを共有しません。フォルダはリポジトリの最上位フォルダである必要があります。",
     "worktreeFrom": "開始位置",
+    "sourceUrl": "GitHub の Issue またはプルリクエスト",
+    "sourceUrlHint": "その名前のブランチの worktree で開始し、タイトルと本文を最初のメッセージとして送ります。このフォルダー用に登録されたリポジトリ認証情報が必要です。",
+    "sourceUrlPlaceholder": "https://github.com/owner/repo/issues/17",
     "isolation": "分離",
-    "isolationContainerHint": "コンテナは、このサーバー上の podman または Docker でセッションを実行します。プロバイダー画面のプロバイダーを使うセッションには native が必要です。",
+    "isolationContainerHint": "コンテナは、このサーバー上の podman または Docker でセッションを実行します。",
     "envAllow": "ホスト環境変数を転送（名前）",
     "envAllowPlaceholder": "PATH, HOME, TERM",
     "envAllowHint": "通過させるホスト環境変数の名前の許可リスト（値は決して送信されません）。",
@@ -231,6 +234,7 @@
     "workspaceDirectory": "作業ディレクトリ",
     "workspaceDirectoryOwn": "このセッション専用のディレクトリ",
     "worktreeBranch": "worktree のブランチ",
+    "sourceItem": "開始元",
     "created": "作成日時",
     "started": "開始日時",
     "lastActivity": "最終アクティビティ",
@@ -387,6 +391,15 @@
       "discard": "変更を破棄",
       "save": "フォルダーを保存",
       "saved": "読み取り専用フォルダーを保存しました。"
+    },
+    "defaultPermission": {
+      "title": "既定の権限",
+      "description": "このフォルダーで開始するセッションには、まずこの権限が提示されます。開始する人は別の権限を選べます。",
+      "label": "既定の権限",
+      "none": "既定なし",
+      "save": "既定を保存",
+      "saved": "既定の権限を保存しました。",
+      "discard": "変更を破棄"
     }
   },
   "browser": {
@@ -397,6 +410,9 @@
     "newFile": "新規ファイル",
     "refresh": "更新",
     "download": "ダウンロード",
+    "source": "ソース",
+    "rendered": "レンダリング",
+    "htmlPreview": "HTML プレビュー: {{name}}",
     "edit": "編集",
     "save": "保存",
     "saving": "保存中…",
@@ -419,7 +435,7 @@
     "moveTitle": "移動／名前変更",
     "moveFromLabel": "移動元",
     "moveToLabel": "移動先（相対パス）",
-    "deleteTitle": "{{name}} を削除",
+    "deleteTitle": "<path /> を削除",
     "deleteBody": "これはホストワークスペースからエントリを削除します。元に戻すことはできません。",
     "deleteRecursive": "フォルダーとそのすべての内容を削除（再帰的）",
     "created": "作成済み",
@@ -892,6 +908,7 @@
       "runner_ready": "セッション Runner を検査できます。",
       "runner_not_configured": "セッション Runner はこのランタイムに構成されていません。",
       "isolation_unsupported": "このサーバーはこの隔離を提供できません。native のままにするか、コンテナ用にサーバーへ podman または Docker をインストールしてください。",
+      "container_image_missing": "このサーバーにはコンテナセッションの実行イメージがまだありません。一度ビルドするか（方法は olivares doctor に表示されます）、native のままにしてください。",
       "runner_inspection_unavailable": "設定済みの Runner は起動せずに検査できません。インストール欠如ではありません。",
       "program_present": "解決されたプログラムは存在し、この識別情報で実行可能です。",
       "program_missing": "解決されたプログラムがありません。既存の手順で公式 CLI を構成してください。Claude では OLIVARES_SESSION_RUNTIME_CLAUDE_BIN を指定する場合があります。この読み取りでは何もインストールしません。",
@@ -930,6 +947,7 @@
       "configure_provider_credential_adapter": "このツールの資格情報アダプターを設定してください。",
       "review_runtime_credential_composition": "work/K3 のランタイム資格情報の構成を確認してください。",
       "select_supported_selection": "このランタイムが実証するトランスポートと隔離を選んでください。",
+      "provide_session_image": "セッションイメージをビルド: コマンドは olivares doctor に表示されます。",
       "retry_inspection": "要件を再読み込みしてください。"
     },
     "remainingCheck": {
@@ -947,6 +965,7 @@
       "grok_acp": "Grok ACP",
       "opencode_acp": "OpenCode ACP",
       "gemini_acp": "Gemini CLI ACP",
+      "cursor_acp": "Cursor CLI ACP",
       "unknown": "不明なプロトコル"
     }
   },
@@ -1016,5 +1035,19 @@
     "fullSize": "添付した画像の原寸表示",
     "unavailable": "画像を表示できません",
     "movedOn": "保存の前に別のセッションへ移動しました"
+  },
+  "usage": {
+    "fiveHour": "5時間",
+    "week": "週間",
+    "percent": "{{window}} {{percent}}%",
+    "unknown": "使用量は不明",
+    "limit": {
+      "fiveHour": "5時間の上限に達しました",
+      "fiveHourResets": "5時間の上限に達しました。リセット: {{time}}",
+      "week": "週間の上限に達しました",
+      "weekResets": "週間の上限に達しました。リセット: {{time}}",
+      "other": "{{label}}の上限に達しました",
+      "otherResets": "{{label}}の上限に達しました。リセット: {{time}}"
+    }
   }
 }

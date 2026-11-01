@@ -36,6 +36,9 @@ func engineResumeFrom(ctx context.Context) (auth.Principal, bool) {
 
 // engineResumeNote is the ledger detail of a resume made by the engine's own recovery.
 func engineResumeNote(ctx context.Context) string {
+	if _, ok := ctx.Value(limitResumeKey{}).(limitResumeAttempt); ok {
+		return "resumed by schedule after usage reset"
+	}
 	if _, ok := engineResumeFrom(ctx); ok {
 		return engineResumeDetail
 	}

@@ -131,13 +131,13 @@ func TestToolAccountStatusOffersAValidInstallCommand(t *testing.T) {
 
 // The tools `tool login` accepts are the ones whose facts declare a sign-in. Its
 // usage line and its refusal are built from them, so a tool that gains a sign-in
-// needs no edit here; the sentences themselves still name the four of today.
+// needs no edit here; the sentences themselves still name the six of today.
 func TestToolLoginNamesTheToolsThatCanSignIn(t *testing.T) {
-	if want := "login <claude|codex|grok|opencode|gemini>"; newToolLoginCmd().Use != want {
+	if want := "login <claude|codex|grok|opencode|gemini|cursor>"; newToolLoginCmd().Use != want {
 		t.Errorf("Use = %q, want %q", newToolLoginCmd().Use, want)
 	}
 	_, _, err := execSessionCLI(t, nil, "tool", "login", "ollama", "--server", "http://127.0.0.1:1", "--token", "t", "--tenant", "tenant-a")
-	if exitcode.From(err) != exitcode.Usage || err == nil || !strings.Contains(err.Error(), "Use claude, codex, grok, opencode or gemini.") {
+	if exitcode.From(err) != exitcode.Usage || err == nil || !strings.Contains(err.Error(), "Use claude, codex, grok, opencode, gemini or cursor.") {
 		t.Errorf("login of a tool without sign-in = %v, want a usage refusal that lists the tools that can", err)
 	}
 }

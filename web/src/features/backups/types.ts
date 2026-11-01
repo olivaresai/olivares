@@ -89,6 +89,22 @@ export interface RestoreUploadResponse {
 
 /** GET/PUT /v1/console/dr/schedule — automated backup cadence + DR policy. */
 export interface DRSchedule {
+  verify_cron?: string
+  rpo_hours?: number
+  offsite?: DROffsite
+  last_backup?: string
+  backup_age_seconds?: number
+  rpo_exceeded?: boolean
+  target_free_bytes?: number
+  last_run?: string
+  last_run_status?: string
+  last_run_error?: string
+  /** The offsite bucket's S3 Object Lock as the last scheduled copy read it.
+   *  Only `compliance` keeps the engine's copies from a stolen server credential. */
+  offsite_lock?: 'compliance' | 'governance' | 'no_default' | 'none' | 'unknown'
+  last_verify?: string
+  last_verify_status?: string
+  last_verify_error?: string
   enabled: boolean
   cron: string
   retain_days: number
@@ -122,6 +138,21 @@ export interface DRSchedule {
    *  NOT YET SURFACED in this console: the operator learns it from their restore
    *  coming back `awaiting_approval`, not from the schedule screen. */
   dual_control_disarm_requested_by?: string
+}
+
+export interface DROffsite {
+  endpoint?: string
+  bucket: string
+  region?: string
+  prefix?: string
+  credential_ref: string
+  gfs: {
+    daily: number
+    weekly: number
+    monthly: number
+    yearly: number
+    keep_last: number
+  }
 }
 
 /** One restore awaiting a second approver (GET /v1/console/dr/restore/pending). */

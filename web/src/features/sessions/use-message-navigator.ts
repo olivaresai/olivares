@@ -41,7 +41,7 @@ export interface MessageNavigator {
   runRef: string
   /** The index has messages and the conversation shows some: the rail, the count and
    * the panel are offered. A count beside an empty conversation ("Messages 2" over "No
-   * messages yet") counted what the person could not see (dev#3120). */
+   * messages yet") counted what the person could not see. */
   available: boolean
   problem: MessageProblem | null
   total: number
@@ -71,6 +71,7 @@ export function useMessageNavigator({
   items,
   scrollRef,
   onJump,
+  reveal,
 }: {
   runRef: string
   /** False for a session whose tool keeps no transcript the engine reads: it would
@@ -79,15 +80,19 @@ export function useMessageNavigator({
   items: readonly ConversationItem[]
   scrollRef: RefObject<HTMLElement | null>
   onJump: () => void
+  /** Brings a row the page does not hold (a long conversation keeps only the rows near the screen) into it. */
+  reveal?: (itemId: string) => Promise<void>
 }): MessageNavigator {
   const { t } = useTranslation('sessions')
   const { activeTenant } = useAuth()
   const itemsRef = useRef(items)
   const onJumpRef = useRef(onJump)
+  const revealRef = useRef(reveal)
   const runRefNow = useRef(runRef)
   useEffect(() => {
     itemsRef.current = items
     onJumpRef.current = onJump
+    revealRef.current = reveal
     runRefNow.current = runRef
   })
   const [open, setOpen] = useState(false)
@@ -132,7 +137,7 @@ export function useMessageNavigator({
   const status = index.error instanceof ApiError ? index.error.status : 0
   let problem: MessageProblem | null = null
   // A missing transcript matters only under messages the conversation shows: a session
-  // stopped before its first turn has none yet, and its empty state says so (dev#3120).
+  // stopped before its first turn has none yet, and its empty state says so.
   if (index.data?.transcript === 'missing')
     problem = items.length > 0 ? 'missing' : null
   else if (index.isError && status === 409) problem = 'refused'
@@ -164,13 +169,18 @@ export function useMessageNavigator({
           return
         }
         const item = itemForMessage(itemsRef.current, full)
-        const row = item
-          ? Array.from(
-              scrollRef.current?.querySelectorAll<HTMLElement>(
-                '[data-item-id]',
-              ) ?? [],
-            ).find((el) => el.dataset.itemId === item.id)
-          : undefined
+        const rowOf = (id: string) =>
+          Array.from(
+            scrollRef.current?.querySelectorAll<HTMLElement>(
+              '[data-item-id]',
+            ) ?? [],
+          ).find((el) => el.dataset.itemId === id)
+        let row = item ? rowOf(item.id) : undefined
+        if (item && !row && revealRef.current) {
+          await revealRef.current(item.id)
+          if (runRefNow.current !== asked) return
+          row = rowOf(item.id)
+        }
         const target = row?.closest<HTMLElement>('li') ?? row
         if (!target) {
           setFar(full)

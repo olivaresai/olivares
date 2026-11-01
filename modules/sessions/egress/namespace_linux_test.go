@@ -270,3 +270,19 @@ if "$1" --silent --fail --max-time 3 -H "Authorization: Bearer $4" "$2"; then ex
 	}
 	t.Logf("engine sha256=%x; own key forwarded twice, another key refused in X-Api-Key and Authorization", sha256.Sum256(body))
 }
+
+// the regression: on the Olivares Server a session's relay may bind only a labeled local model
+// runtime port; a refusal names the command that labels a custom one.
+func TestARefusedRelayPortNamesTheLabelCommand(t *testing.T) {
+	refused := relayListenError(&net.OpError{Op: "listen", Net: "tcp", Err: os.NewSyscallError("bind", unix.EACCES)}, "1235")
+	if !errors.Is(refused, unix.EACCES) {
+		t.Fatalf("the cause is kept: %v", refused)
+	}
+	if !strings.Contains(refused.Error(), "semanage port -a -t olivares_model_runtime_port_t -p tcp 1235") {
+		t.Fatalf("a refused port must name the command that labels it: %v", refused)
+	}
+	inUse := relayListenError(&net.OpError{Op: "listen", Net: "tcp", Err: os.NewSyscallError("bind", unix.EADDRINUSE)}, "1235")
+	if strings.Contains(inUse.Error(), "semanage") {
+		t.Fatalf("only a refusal is about the label: %v", inUse)
+	}
+}

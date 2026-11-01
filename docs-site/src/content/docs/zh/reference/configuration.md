@@ -4,7 +4,7 @@ description: "Olivares AI control plane 经过验证的配置接口面：serve �
 ---
 
 :::note[Business]
-审计导出（`GET /v1/audit/export`、`olivares audit export`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、`olivares audit verify` 和 `olivares dr backup`；导出返回 HTTP 501 或退出码 9。审计转发和物理隔离网络之间的 DDIL 传输也需要 Business。
+审计导出（`GET /v1/audit/export`、`olivares audit export`）、账本验证（`GET /v1/audit/verify`、`olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、账本读取和 `olivares dr backup`；证据操作返回 HTTP 501 或退出码 9。审计转发和携带审计段的 DDIL 传输也需要 Business。
 :::
 
 从 0.1 起，由 KMS 密封的签名密钥和配置文件（CMEK）需要 Business 二进制文件。由运维人员提供的签名密钥和 `keys status` 仍属于 Community。托管声明 BYOK（`OLIVARES_KEY_CUSTODY=byok`）与 HYOK（`OLIVARES_LEDGER_CUSTODY=hyok`）、主机外的检查点签名（`OLIVARES_LEDGER_SIGNER`）以及 `olivares audit key-transition` 需要 Business 二进制文件；Community 会以退出码 9 拒绝它们。Community 会在打开存储或创建密钥之前拒绝已配置 CMEK 的安装。请使用 Business 和客户的 KMS 执行 `dr backup` 和 `keys unseal`；恢复不需要有效许可证。
@@ -357,6 +357,7 @@ The table below is generated from the product's own sources: 296 variables and 1
 | `OLIVARES_SECRET_STORE_KEY` | No | — | Key that encrypts operator secrets held in the store. |
 | `OLIVARES_SERVERTOOL_EGRESS_CONFIG` | No | — | 内联代理中提供商服务器工具（网页搜索、网页抓取、代码执行）的出站（egress）门控的 JSON 授权（grants）文件路径。仅由使用 `enterprise` 和 `addon_airs` 构建标签编译的构建读取。未设置时这些工具保持仅观察模式；文件无法读取或解析时，会拒绝每个已识别的出站服务器工具，直到修复该文件并重启引擎为止。 |
 | `OLIVARES_SERVER_URL` | No | — | Base URL of the engine the CLI talks to, when `--server` is not given. |
+| `OLIVARES_SESSIONS_AGENT_BOOTSTRAP_LISTEN` | No | — | 节点进程注册端点的监听地址，格式为 `host:port`：仅服务端 TLS 的端点，节点进程在获得证书之前用一次性令牌在此注册。在启动时读取；默认值为空，表示不启用监听器。Community 构建不会读取此变量。 |
 | `OLIVARES_SESSIONS_AGENT_LINK_LISTEN` | No | — | 节点进程连接的监听地址，格式为 `host:port`：基于此源码树构建的版本为其节点进程提供的双向 TLS 端点。在启动时读取；默认值为空，表示不启用监听器。Community 构建不会读取此变量。 |
 | `OLIVARES_SESSIONS_MANAGED_STOP_ADMISSION_TIMEOUT` | No | `10s` | 接纳受管理的 Stop 请求所允许的最长时间，使用带单位的正 Go duration 表示。启动时读取；无效值或非正值会阻止启动。不限制进程终止过程的耗时。 |
 | `OLIVARES_SESSION_BUDGET_AVAILABILITY` | No | — | Whether session budget enforcement is required, and what happens when the budget service cannot answer. |

@@ -110,18 +110,24 @@ type doctorDeps struct {
 	// toolSignIn asks the engine of the saved sign-in whether a tool is signed in,
 	// the answer `olivares tool ls` shows. nil means doctor does not ask.
 	toolSignIn func(driver string) doctorToolState
+	// containerImage asks the container runtime whether the session image is on this
+	// host; the error says why a query that was made gave no answer. nil means doctor
+	// does not ask.
+	containerImage func(context.Context, sessions.ContainerRuntime) (sessions.RunnerImageState, error)
 }
 
 // doctorCommands is the CLOSED SET of external programs `doctor` may run by NAME, and it exists
-// because gosec G204 asked "can an attacker choose what runs" of the two seams below.
+// because gosec G204 asked "can an attacker choose what runs" of the exec seams below.
 //
 // Counted at the call sites rather than assumed: `doctor` reaches exec with a name from exactly
-// two places. One is the service-manager switch of doctorInitCheck, whose five branches assign
-// three literals (systemctl, rc-service, launchctl); the other is `o.binary`, the operator's own
+// three places. One is the service-manager switch of doctorInitCheck, whose five branches assign
+// three literals (systemctl, rc-service, launchctl); the second is `o.binary`, the operator's own
 // `--binary` flag, which resolveDoctorPaths REFUSES unless it is absolute and which defaults to
-// this process's own executable. So the answer was already no — but it was a property of today's
-// call sites, provable only by reading them. The predicate below turns that reading into a
-// refusal: a name is either one of the three managers or an absolute path.
+// this process's own executable; the third is the container runtime's image query, whose path
+// comes from LookPath and is checked absolute by this same predicate before it runs. So the
+// answer was already no — but it was a property of today's call sites, provable only by reading
+// them. The predicate below turns that reading into a refusal: a name is either one of the three
+// managers or an absolute path.
 //
 // ⚠ WHAT THIS DOES NOT CLAIM. An absolute path is not a safe path: an operator who can pass
 // `--binary /anything` can also run `/anything` directly, so this seam is not a privilege
@@ -145,6 +151,12 @@ func defaultDoctorDeps() doctorDeps {
 	return doctorDeps{
 		toolSignIn:  doctorToolSignIn,
 		confinement: confine.Probe,
+		containerImage: func(ctx context.Context, rt sessions.ContainerRuntime) (sessions.RunnerImageState, error) {
+			if err := doctorExecutable(rt.Path); err != nil {
+				return sessions.RunnerImageUnknown, err
+			}
+			return rt.CheckImage(ctx)
+		},
 
 		stat: os.Stat, readFile: os.ReadFile, lookPath: exec.LookPath,
 		run: func(ctx context.Context, name string, args ...string) (int, error) {
@@ -432,6 +444,11 @@ func runDoctor(ctx context.Context, raw *doctorOptions, deps doctorDeps) (doctor
 	add(doctorLicenseCheck(o.dataDir))
 	add(doctorActivationSourceCheck(o.dataDir))
 	add(doctorTracingOverridesCheck())
+	if thisEdition.editionSettingEnvs != nil {
+		if envs := thisEdition.editionSettingEnvs(); len(envs) > 0 {
+			add(doctorEditionOverrides(envs, deps.getenv))
+		}
+	}
 	for _, check := range doctorToolVersionOverrides(deps.getenv) {
 		add(check)
 	}
@@ -445,7 +462,7 @@ func runDoctor(ctx context.Context, raw *doctorOptions, deps doctorDeps) (doctor
 	add(doctorInferenceRouting(deps))
 	add(doctorSessionLaunchGate(deps))
 	add(doctorSessionConfinement(deps))
-	add(doctorContainerRuntime(deps))
+	add(doctorContainerRuntime(ctx, deps))
 	add(doctorFirstHourNextStep(deps, agentHour, pepHour))
 
 	// The required set depends on HOW this installation was made, and the relaxation
@@ -495,10 +512,11 @@ func doctorSessionConfinement(deps doctorDeps) doctorCheck {
 	return c
 }
 
-// doctorContainerRuntime says which container runtime isolation=container would use. It
-// is optional: a host with none runs native sessions as always. Finding the runtime is a
-// lookup; nothing is started.
-func doctorContainerRuntime(deps doctorDeps) doctorCheck {
+// doctorContainerRuntime says which container runtime isolation=container would use, and
+// whether the image its sessions run in is on the host. It is optional: a host with no
+// runtime runs native sessions as always. Finding the runtime is a lookup and the image
+// is one query of the runtime's image store; nothing is started.
+func doctorContainerRuntime(ctx context.Context, deps doctorDeps) doctorCheck {
 	c := doctorCheck{Name: "container-runtime", Status: "pass", Required: false}
 	if deps.getenv == nil || deps.lookPath == nil {
 		c.Status, c.Detail = "unknown", "the container runtime on this host was not checked"
@@ -514,7 +532,40 @@ func doctorContainerRuntime(deps doctorDeps) doctorCheck {
 		c.Status, c.Detail = "warn", err.Error()
 		c.Remediation = "fix the setting, or unset it to let the engine find podman, then docker"
 	default:
-		c.Detail = filepath.Base(rt.Path) + " at " + rt.Path + ", image " + rt.Image + " (looked up, not started: the first container session shows whether the daemon and the image work)"
+		c.Detail = filepath.Base(rt.Path) + " at " + rt.Path + ", image " + rt.Image
+		image := sessions.RunnerImageUnknown
+		var askErr error
+		if deps.containerImage != nil {
+			image, askErr = deps.containerImage(ctx, rt)
+		}
+		// Image stores belong to a user: this asks as the user running doctor, which is
+		// the engine's only when doctor runs as that user.
+		switch {
+		case askErr != nil:
+			c.Status = "warn"
+			c.Detail += "; could not tell whether " + rt.Image + " is on this host: " + askErr.Error()
+			c.Remediation = "run `" + filepath.Base(rt.Path) + " images` as the user the engine runs as, to see why"
+		case image == sessions.RunnerImagePresent:
+			c.Detail += "; " + rt.Image + " is on this host for the user running doctor (looked up, not started: the first container session shows whether the daemon works)"
+		case image == sessions.RunnerImageMissing:
+			c.Status = "warn"
+			c.Detail += "; " + rt.Image + " is not on this host for the user running doctor, so a session started by that user is refused until it is built"
+			if rt.Image == sessions.DefaultContainerImage {
+				// The packages install the recipe; a binary or source install does not,
+				// so name the command that works where doctor is running.
+				c.Remediation = "build " + rt.Image + " from packaging/container/session/Containerfile in a source checkout (or install a package that ships it), as the user the engine runs as"
+				if deps.stat != nil {
+					const installed = "/usr/share/olivares/session-image"
+					if _, err := deps.stat(installed + "/Containerfile"); err == nil {
+						c.Remediation = filepath.Base(rt.Path) + " build -f " + installed + "/Containerfile -t " + rt.Image + " " + installed + " (as the user the engine runs as)"
+					}
+				}
+			} else {
+				c.Remediation = "build or load the image " + sessions.ContainerImageEnv + " names, or unset it to use " + sessions.DefaultContainerImage
+			}
+		default:
+			c.Detail += " (looked up, not started: the first container session shows whether the daemon and the image work)"
+		}
 		if rt.SELinux {
 			c.Detail += "; SELinux enforces, so mounts are labelled"
 		}
@@ -1382,6 +1433,9 @@ func doctorAuditCheck(ctx context.Context, deps doctorDeps, o doctorOptions) doc
 	switch {
 	case err != nil:
 		c.Status, c.Remediation = "unknown", "make the installed binary executable and rerun the audit check"
+	case rc == exitcode.Edition:
+		c.Status, c.Remediation = "not_applicable", "audit verification requires the Business build"
+		c.Required = false
 	case rc != 0:
 		c.Status, c.Remediation = "fail", "run the same audit verify command interactively to inspect its redacted report"
 	default:
@@ -1592,7 +1646,7 @@ func doctorFirstHourNextStep(deps doctorDeps, agent, pep doctorCheck) doctorChec
 	if deps.toolSignIn != nil {
 		state = deps.toolSignIn(driver)
 	}
-	// HU 016: the old sentence said "sign the tool in" after it was signed in.
+	// acceptance: the old sentence said "sign the tool in" after it was signed in.
 	switch state {
 	case toolStateSignedIn:
 		start := "olivares session start <folder>"

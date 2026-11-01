@@ -76,6 +76,7 @@ func launchTermsRows() []launchTermsRow {
 		{driver: providerDriverGrok, impl: NewGrokDriver(), answer: launchTermsGrokAnswer},
 		{driver: providerDriverOpenCode, impl: NewOpenCodeDriver(), answer: launchTermsOpenCodeAnswer},
 		{driver: providerDriverGemini, impl: NewGeminiDriver(), answer: launchTermsGeminiAnswer},
+		{driver: providerDriverCursor, impl: NewCursorDriver(), answer: launchTermsCursorAnswer},
 	}
 }
 
@@ -612,6 +613,23 @@ func launchTermsGeminiAnswer(method string, params map[string]any) (any, bool) {
 	return nil, false
 }
 
+// launchTermsCursorAnswer answers `agent acp`'s handshake with the modes it declares and a model
+// list that offers the probe value.
+func launchTermsCursorAnswer(method string, params map[string]any) (any, bool) {
+	switch method {
+	case acpMethodInitialize:
+		return cursorInitializeResult(), true
+	case acpMethodSessionNew:
+		result := cursorSessionResultFor("ses_probe")
+		models := result["models"].(map[string]any)
+		models["availableModels"] = append(models["availableModels"].([]any), map[string]any{"modelId": launchTermsProbeModel})
+		return result, true
+	case cursorMethodAuthenticate, acpMethodSetMode, acpMethodSetModel:
+		return map[string]any{}, true
+	}
+	return nil, false
+}
+
 // launchTermsOpenCodeOptions is the model and effort selectors of the OpenCode
 // agent, each offering the probe value beside a default.
 func launchTermsOpenCodeOptions(model, effort string) []any {
@@ -646,9 +664,9 @@ func nativeLaunchPermission(t *testing.T, driver string, spec LaunchSpec, frames
 			}
 		}
 	}
-	if driver == providerDriverGemini {
+	if driver == providerDriverGemini || driver == providerDriverCursor {
 		for _, frame := range frames {
-			if frame.method == geminiMethodSetMode {
+			if frame.method == acpMethodSetMode {
 				return fmt.Sprint(frame.body.(map[string]any)["params"].(map[string]any)["modeId"])
 			}
 		}

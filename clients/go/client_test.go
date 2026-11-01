@@ -34,34 +34,42 @@ func newTestClient(t *testing.T, h http.Handler, opts ...Option) (*Client, *[]ti
 	return c, &slept
 }
 
-func TestCleanupKeepsBodylessCallsAndOptions(t *testing.T) {
-	var bodies []string
-	c, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" || r.URL.Path != "/v1/m/sessions/runs/run/cleanup" {
-			t.Errorf("request = %s %s", r.Method, r.URL.Path)
-		}
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			t.Error(err)
-		}
-		bodies = append(bodies, string(body))
-		if len(bodies) > 1 && (r.Header.Get("X-Olivares-Tenant") != "override" || r.URL.Query().Get("probe") != "yes") {
-			t.Errorf("per-call options lost: %v %v", r.Header, r.URL.Query())
-		}
-		_, _ = w.Write([]byte(`{}`))
-	}))
-	ctx := context.Background()
-	if _, err := c.PostV1MSessionsRunsByRefCleanup(ctx, "run"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := c.PostV1MSessionsRunsByRefCleanup(ctx, "run", Tenant("override"), Query("probe", "yes")); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := c.PostV1MSessionsRunsByRefCleanupWithBody(ctx, "run", map[string]any{"force": true}, Tenant("override"), Query("probe", "yes")); err != nil {
-		t.Fatal(err)
-	}
-	if strings.Join(bodies, "|") != `||{"force":true}` {
-		t.Errorf("bodies = %q", bodies)
+func TestSessionLifecycleKeepsBodylessCallsAndOptions(t *testing.T) {
+	for _, action := range []string{"cleanup", "resume"} {
+		t.Run(action, func(t *testing.T) {
+			var bodies []string
+			c, _ := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != "POST" || r.URL.Path != "/v1/m/sessions/runs/run/"+action {
+					t.Errorf("request = %s %s", r.Method, r.URL.Path)
+				}
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Error(err)
+				}
+				bodies = append(bodies, string(body))
+				if len(bodies) > 1 && (r.Header.Get("X-Olivares-Tenant") != "override" || r.URL.Query().Get("probe") != "yes") {
+					t.Errorf("per-call options lost: %v %v", r.Header, r.URL.Query())
+				}
+				_, _ = w.Write([]byte(`{}`))
+			}))
+			call, withBody, field := c.PostV1MSessionsRunsByRefCleanup, c.PostV1MSessionsRunsByRefCleanupWithBody, "force"
+			if action == "resume" {
+				call, withBody, field = c.PostV1MSessionsRunsByRefResume, c.PostV1MSessionsRunsByRefResumeWithBody, "at_reset"
+			}
+			ctx := context.Background()
+			if _, err := call(ctx, "run"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := call(ctx, "run", Tenant("override"), Query("probe", "yes")); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := withBody(ctx, "run", map[string]any{field: true}, Tenant("override"), Query("probe", "yes")); err != nil {
+				t.Fatal(err)
+			}
+			if want := `||{"` + field + `":true}`; strings.Join(bodies, "|") != want {
+				t.Errorf("bodies = %q, want %s", bodies, want)
+			}
+		})
 	}
 }
 

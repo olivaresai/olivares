@@ -184,12 +184,24 @@ export function ProfileSignInDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const { t } = useTranslation('agentTools')
+  const qc = useQueryClient()
   // The key write must not be cut off by a Radix-initiated close (X, Escape, overlay).
   const keyBeingStored = useKeyBeingStored()
+  // A login can outlive its dialog: the rows read the tool again on close, so one still
+  // running shows "Signing in…" there instead of offering a second sign-in (#3388).
+  const close = (open: boolean) => {
+    if (!open) {
+      void qc.invalidateQueries({ queryKey: firstHourKeys.all(tenant) })
+      void qc.invalidateQueries({
+        predicate: (query) => query.queryKey.includes('account-sign-in'),
+      })
+    }
+    onOpenChange(open)
+  }
   return (
     <Dialog
       open
-      onOpenChange={(o) => (keyBeingStored() ? undefined : onOpenChange(o))}
+      onOpenChange={(o) => (keyBeingStored() ? undefined : close(o))}
     >
       <DialogContent className={PHONE_SHEET}>
         <DialogHeader>
@@ -202,10 +214,10 @@ export function ProfileSignInDialog({
           account={account}
           tenant={tenant}
           autoStart
-          onSignedIn={() => onOpenChange(false)}
+          onSignedIn={() => close(false)}
           // A stored key changes what the row shows: close the sheet, the card behind
           // re-reads and shows it ready.
-          onKeyCreated={() => onOpenChange(false)}
+          onKeyCreated={() => close(false)}
         />
       </DialogContent>
     </Dialog>

@@ -59,7 +59,7 @@ function ReviewForm({
   const { activeTenant } = useAuth()
   const [note, setNote] = useState('')
 
-  // HU 047: a 403 (whoever engaged, requested or executed may not review) left the
+  // acceptance: a 403 (whoever engaged, requested or executed may not review) left the
   // dialog open with nothing said. The shared hook reports any 403 as a missing role
   // before a dialog can answer, so the refusal becomes this dialog's own error and the
   // engine's sentence is shown here (a step-up still goes to the hook).

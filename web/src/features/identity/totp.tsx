@@ -135,6 +135,7 @@ function TOTPStatusSection() {
                   alt={t('identity:totp.qrAlt')}
                   width={192}
                   height={192}
+                  // eslint-disable-next-line olivares/no-raw-palette -- a QR code needs a white quiet zone to scan, in every theme
                   className="rounded border border-border bg-white p-2"
                 />
                 <div className="flex flex-col gap-2 break-all">

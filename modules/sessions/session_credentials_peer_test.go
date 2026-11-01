@@ -42,8 +42,8 @@ func TestCredentials_ABrokerWithNoWayToBindItsHelpersStartsNothing(t *testing.T)
 	ctx := context.Background()
 	m, tenant, fr, broker := credentialHarness(t)
 	broker.noBind = true
-	if _, err := createProfiledTestRun(t, m, ctx, tenant, credentialParams(true)); statusOf(err) != http.StatusServiceUnavailable {
-		t.Fatalf("a broker that cannot bind its helpers to the run: create = %v, want 503", err)
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, credentialParams(true)); statusOf(err) != http.StatusUnprocessableEntity {
+		t.Fatalf("a broker that cannot bind its helpers to the run: create = %v, want 422", err)
 	}
 	if n := launchCount(fr); n != 0 {
 		t.Fatalf("%d sessions started with helpers that admit anybody", n)

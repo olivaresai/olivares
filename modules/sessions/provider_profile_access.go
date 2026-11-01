@@ -36,7 +36,7 @@ type ProfileAccess interface {
 
 // ErrProfileNotAssigned is the refusal of a launch under a profile or tool the caller's
 // department, groups and person were not assigned.
-var ErrProfileNotAssigned = forbiddenErr("this provider profile or tool is not assigned to you")
+var ErrProfileNotAssigned = forbiddenErr("this provider profile or tool is not assigned to you; request access from a department admin or owner")
 
 // errKeyLimited is the refusal to share a provider record some assignment limits.
 var errKeyLimited = forbiddenErr("this provider key is limited to the departments its profiles were assigned to; only a profile administrator can use it for another profile")

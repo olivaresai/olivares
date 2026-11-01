@@ -44,13 +44,16 @@ export interface FavoritesResponse {
 
 /** The person's interface state on the engine. Omitted fields retain their saved values. */
 export interface UiState {
+  /** Preference keys merge; null deletes a key. */
+  preferences?: Record<string, string | null>
   sidebar?: 'full' | 'rail'
   show_edition_badge?: boolean
   /** Panel widths in px by pane id. A save merges the panes it names; 0 puts a pane back to its default. */
   pane_widths?: Record<string, number>
 }
 
-export interface UiStateResponse extends Partial<UiState> {
+export interface UiStateResponse extends Partial<Omit<UiState, 'preferences'>> {
+  preferences?: Record<string, string>
   /** False until the person changes the state for the first time. */
   stored: boolean
   updated_at?: string

@@ -36,6 +36,7 @@ corre() { # corre <repo>
 	mkdir -p "$1/scripts/lib"
 	cp -- "$SUT" "$1/scripts/check-taskfile-executable.sh"
 	cp -- "$HERE/lib/git-env.sh" "$1/scripts/lib/git-env.sh" 2>/dev/null || :
+	cp -- "$HERE/lib/taskfile-scan.sh" "$1/scripts/lib/taskfile-scan.sh"
 	SALIDA=$( cd "$1" && OLIVARES_TASKFILE_BASE=base bash scripts/check-taskfile-executable.sh 2>/dev/null ); RC=$?
 	ERRS=$( cd "$1" && OLIVARES_TASKFILE_BASE=base bash scripts/check-taskfile-executable.sh 2>&1 >/dev/null )
 	VERD="${SALIDA%%	*}"; VERD="${VERD%%$'\n'*}"
@@ -170,6 +171,126 @@ tasks:
       - echo z
 '
 corre "$d"; check "message names both outcomes (127 and silent zero)" finding 1 "exits 0"
+
+# 9 — an `includes:` block is NOT a task: its two-space key (`appliance:`) has no `cmds:`, and the
+#     gate read it as an unexecutable task (#2711 measured the include going from clean to finding).
+INC='  appliance:
+    taskfile: ./fragment/Taskfile.yml
+    flatten: true
+    optional: true
+'
+d=$(repo "$SANO")
+encima "$d" 'version: "3"
+
+includes:
+'"$INC"'
+tasks:
+  a:
+    desc: a
+    cmds:
+      - echo a
+
+  z:
+    desc: z
+    cmds:
+      - echo z
+'
+corre "$d"; check "an includes: block is not a task" clean 0
+
+# 10 — the same block AFTER `tasks:` (YAML does not fix the order of top-level keys).
+d=$(repo "$SANO")
+encima "$d" "$SANO"'
+includes:
+'"$INC"
+corre "$d"; check "an includes: block after tasks: is not a task" clean 0
+
+# 11 — MUTANT of 9: with the include present, a task that loses its cmds is still charged.
+#      Without this case, 9 and 10 would pass with the gate turned off.
+d=$(repo "$SANO")
+encima "$d" 'version: "3"
+
+includes:
+'"$INC"'
+tasks:
+  a:
+    desc: a
+
+  z:
+    desc: z
+    cmds:
+      - echo z
+'
+corre "$d"; check "MUTANT: a broken task beside an includes: block is still a finding" finding 1 "· a"
+
+# 12 — a column-0 comment INSIDE `tasks:` does not close the section: the task after it is
+#      still scanned (red on a column-0 rule that treats comments as keys).
+d=$(repo "$SANO")
+encima "$d" 'version: "3"
+
+tasks:
+  a:
+    desc: a
+    cmds:
+      - echo a
+
+# a section comment at column 0
+
+  z:
+    desc: z
+'
+corre "$d"; check "a column-0 comment inside tasks: keeps scanning" finding 1 "· z"
+
+# 13 — a `cmd:` key from ANOTHER block, after `tasks:`, does not pass the last task as
+#      executable. The scan keeps the last task open after `tasks:` ends and the loose key
+#      marks it (red on the current grammar: it excuses `z` and reports clean).
+d=$(repo "$SANO")
+encima "$d" 'version: "3"
+
+tasks:
+  a:
+    desc: a
+    cmds:
+      - echo a
+
+  z:
+    desc: z
+
+vars:
+  cmd: foo
+'
+corre "$d"; check "a cmd: key after tasks: does not excuse the last task" finding 1 "· z"
+
+# 14 — a quoted header is valid YAML: it is recognized, and a broken task is charged
+#      (red on a header regex that only reads a bare tasks: — that exits 2 seeing no task).
+d=$(repo "$SANO")
+encima "$d" 'version: "3"
+
+"tasks":
+  a:
+    desc: a
+    cmds:
+      - echo a
+
+  z:
+    desc: z
+'
+corre "$d"; check "a quoted \"tasks\": header is recognized" finding 1 "· z"
+
+# Every two-space sibling closes the pending task, even when its name is quoted,
+# private, or followed by a comment. Its commands cannot excuse the preceding task.
+for sibling in 'b: # note' '_private:' '"quoted":'; do
+    d=$(repo "$SANO")
+    encima "$d" "version: \"3\"
+
+tasks:
+  a:
+    desc: no command
+  $sibling
+    cmds:
+      - true
+"
+    corre "$d"; check "sibling $sibling cannot excuse a" finding 1 "· a"
+done
 
 if [ -n "${AMB_ROOT:-}" ]; then
 	now=$(git -C "$AMB_ROOT" rev-parse HEAD 2>/dev/null || echo NONE)

@@ -14,7 +14,7 @@ import (
 )
 
 // rs_s504_round3_test.go — Stage-5 round 3 + the design adjudication
-// (an internal design note (not shipped),
+// (an internal audit,
 // PREMISE: UNSOUND). The adjudication moves the "must this be mediated?"
 // decision from the OPEN result body to the AUTHORITATIVE LOCAL CONTEXT the
 // gateway already holds (the method called, the task registration and ledger
@@ -23,7 +23,7 @@ import (
 //
 // RED-FIRST: every test in this file marked RED below was written and RUN
 // against commit 276d6d4e BEFORE the redesign existed; the literal failing
-// output lives in an internal design note (not shipped)
+// output lives in an internal audit
 // Subtests marked CONTROL pin behavior that was already correct and must
 // SURVIVE the redesign (they are green before and after — declared, not
 // hidden).
@@ -461,7 +461,7 @@ func TestS504R3TaskContractRequiresDeclaredCapability(t *testing.T) {
 // The tests below were written after the redesign went green, so they are NOT
 // RED-first evidence. Their non-vacuity is proved by the reproducible mutation
 // records MUT-R3-1 / MUT-R3-2 in
-// an internal design note (not shipped) (exact sed command,
+// an internal audit (exact sed command,
 // full before/mutated/restored sha256, literal failing and passing output).
 
 // TestS504R3ExtractMRTRByAuthority pins the exact discriminator procedure of

@@ -22,7 +22,7 @@
 //    asking to be logged in are both work FOR A PERSON; a session that went quiet
 //    within tolerance is not. Collapsing the two would make the group the operator is
 //    supposed to trust the one they learn to ignore.
-import type { UnifiedSession } from './provenance'
+import { primaryRun, type UnifiedSession } from './provenance'
 import { sessionDisplayState } from './session-display-state'
 
 /**
@@ -34,7 +34,7 @@ export type WorkGroupId = (typeof WORK_GROUPS)[number]
 
 /** The rail's sections: the person's own pinned sessions first, then the three above, then
  * the sessions they snoozed and the archived ones, which the rail keeps folded until asked. */
-/** The rail's sections: what ended today is apart from what ended before (dev#3162). */
+/** The rail's sections: what ended today is apart from what ended before. */
 export type RailGroupId =
   | 'pinned'
   | Exclude<WorkGroupId, 'settled'>
@@ -104,6 +104,16 @@ export function workingCount(sessions: readonly UnifiedSession[]): number {
   ).length
 }
 
+/** When the session began, 0 when no half of it says: the run's start, else its creation
+ * (a run not yet started), else the first event of what was observed. */
+function startedMs(s: UnifiedSession): number {
+  const run = primaryRun(s.runs)
+  const at = Date.parse(
+    run?.started_at ?? run?.created_at ?? s.live?.first_event_at ?? '',
+  )
+  return Number.isFinite(at) ? at : 0
+}
+
 /**
  * The rail, in reading order.
  *
@@ -151,6 +161,10 @@ export function groupSessions(
     else byGroup.get(group)?.push(s)
   }
   const rank = (s: UnifiedSession) => pinOrder.get(s.key) ?? 0
+  // WORKING ROWS KEEP THE ORDER THEY STARTED IN, newest start first. The join sorts by
+  // last activity, and a working session speaks all the time: by activity the rows would
+  // swap under the pointer with every event. A stable sort: equal starts keep the join's.
+  byGroup.get('active')?.sort((a, b) => startedMs(b) - startedMs(a))
   return [
     // A STABLE sort: two rows of one rank keep the incoming order.
     { id: 'pinned', sessions: pinnedRows.sort((a, b) => rank(a) - rank(b)) },
@@ -165,17 +179,23 @@ export function groupSessions(
 
 /** Every row in rail order, which is what an arrow key walks. The snoozed and archived
  * rows are not in it unless the rail is showing them: a session out of the list is not
- * where the screen opens either. */
+ * where the screen opens either. The Working rows are in it unless the caller says its
+ * fold is shut (`withWorking` false): the rail keeps them shut until asked, so
+ * a running session never moves a row under the pointer, and a session leaves the fold
+ * when it finishes, fails or asks for an answer (its group changes) or is pinned. The
+ * surface still opens on a working session, so its default asks with them in. */
 export function railOrder(
   groups: readonly WorkGroup[],
   withSnoozed = false,
   withArchived = false,
+  withWorking = true,
 ): UnifiedSession[] {
   return groups
     .filter(
       (g) =>
         (withSnoozed || g.id !== 'snoozed') &&
-        (withArchived || g.id !== 'archived'),
+        (withArchived || g.id !== 'archived') &&
+        (withWorking || g.id !== 'active'),
     )
     .flatMap((g) => g.sessions)
 }

@@ -9,12 +9,18 @@
 // is honestly absent, and when the approval read fails the meta counts
 // destinations without a waiting number rather than pretending zero requests are
 // pending.
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useQueries } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { PageHeader } from '@/components/ui/page-header'
 import { Button } from '@/components/ui/button'
+import { UrlStateNotice } from '@/features/shared'
 import { useAuth } from '@/lib/auth/context'
+import {
+  type UrlState,
+  type UrlStateDecoded,
+  useValidatedUrlState,
+} from '@/lib/hooks/use-url-state'
 import { moduleEnabled, useModulesStore } from '@/stores/modules'
 import { reachApi, reachKeys } from './api'
 import { buildReach } from './model'
@@ -26,11 +32,27 @@ const REACH_READ = 'accessmap:graph:read'
 const APPROVAL_READ = 'governance:approval:read'
 const SESSIONS_READ = 'sessions:live:read'
 
+type ReachMode = 'graph' | 'table'
+
+/** `?view=table` is the table; no key is the graph. Anything else is refused and said. */
+function decodeReachView(raw: UrlState): UrlStateDecoded<ReachMode> {
+  if (raw.view === undefined) return { value: 'graph', issues: [] }
+  if (raw.view === 'table') return { value: 'table', issues: [] }
+  return { value: 'graph', issues: ['view'] }
+}
+
 export default function ReachView() {
   const auth = useAuth()
   const { t } = useTranslation('reach')
   const off = useModulesStore((state) => state.off)
-  const [mode, setMode] = useState<'graph' | 'table'>('graph')
+  // Graph or table is part of the view, so it lives in the address: a pasted link opens
+  // the same one, and Access map keeps its own selection and filters there too.
+  const [mode, setView, viewIssues] = useValidatedUrlState(
+    ['view'],
+    decodeReachView,
+  )
+  const setMode = (next: ReachMode) =>
+    setView({ view: next === 'table' ? 'table' : undefined })
   const canReadApprovals = auth.can(APPROVAL_READ)
   const canReadSessions = auth.can(SESSIONS_READ)
   const on = moduleEnabled(off, REACH_READ, 'reach')
@@ -125,6 +147,7 @@ export default function ReachView() {
           </div>
         }
       />
+      <UrlStateNotice issues={viewIssues} />
       {!loading && !graphFailed && (
         <p className="text-caption text-text-2">
           {waitingKnown

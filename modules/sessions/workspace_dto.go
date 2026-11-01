@@ -9,6 +9,8 @@ import "github.com/olivaresai/olivares/core/model"
 // workspaceDTO is the API shape of one registered workspace. It carries no file
 // content and no secret — only the operator-chosen configuration and references.
 type workspaceDTO struct {
+	resourceID         model.ID                // Stored Resource anchor; not a caller-supplied selector.
+	Backup             bool                    `json:"backup"`
 	SetupCommand       string                  `json:"setup_command"`
 	SetupCommandSHA256 string                  `json:"setup_command_sha256"`
 	SetupApproval      *workspaceSetupApproval `json:"setup_approval,omitempty"`
@@ -21,7 +23,9 @@ type workspaceDTO struct {
 	AllowSubpaths      []string                `json:"allow_subpaths,omitempty"`
 	ReadOnlyFolders    []string                `json:"read_only_folders"`
 	MaxReadBytes       int64                   `json:"max_read_bytes"`
+	DataClass          string                  `json:"data_class"`
 	DLPMode            string                  `json:"dlp_mode"`
+	DefaultPermission  string                  `json:"default_permission,omitempty"`
 	State              string                  `json:"state"`
 	CreatedAt          string                  `json:"created_at,omitempty"`
 	UpdatedAt          string                  `json:"updated_at,omitempty"`
@@ -38,6 +42,8 @@ func toWorkspaceDTO(rec model.Record) (workspaceDTO, error) {
 	}
 	command, approval := rec.String(colWsSetupCommand), storedSetupApproval(rec)
 	return workspaceDTO{
+		resourceID:         model.ID(rec.String(model.ColID)),
+		Backup:             rec.IsNull(colWsBackup) || rec.Bool(colWsBackup),
 		SetupCommand:       command,
 		SetupCommandSHA256: sha256Hex([]byte(command)),
 		SetupApproval:      approval,
@@ -50,7 +56,9 @@ func toWorkspaceDTO(rec model.Record) (workspaceDTO, error) {
 		AllowSubpaths:      subpaths,
 		ReadOnlyFolders:    folders,
 		MaxReadBytes:       workspaceMaxRead(rec),
+		DataClass:          rec.String(colWsDataClass),
 		DLPMode:            rec.String(colWsDLPMode),
+		DefaultPermission:  rec.String(colWsDefaultPermission),
 		State:              rec.String(colWsState),
 		CreatedAt:          rec.String(model.ColCreatedAt),
 		UpdatedAt:          rec.String(model.ColUpdatedAt),
@@ -70,6 +78,7 @@ func workspaceMaxRead(rec model.Record) int64 {
 
 // createWorkspaceRequest is the POST /workspaces body.
 type createWorkspaceRequest struct {
+	Backup          *bool    `json:"backup"`
 	Name            string   `json:"name"`
 	RootPath        string   `json:"root_path"`
 	MountMode       string   `json:"mount_mode"`
@@ -77,6 +86,7 @@ type createWorkspaceRequest struct {
 	AllowSubpaths   []string `json:"allow_subpaths"`
 	ReadOnlyFolders []string `json:"read_only_folders"`
 	MaxReadBytes    int64    `json:"max_read_bytes"`
+	DataClass       string   `json:"data_class"`
 	DLPMode         string   `json:"dlp_mode"`
 }
 

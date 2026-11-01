@@ -96,6 +96,12 @@ func TestArgumentRefusalsAreUsageErrors(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			code, msg := runArgvForCode(t, tc.newCmd, tc.argv...)
+			if tc.name == "audit verify without a tenant" && !auditVerificationAvailable {
+				if code != exitcode.Edition || !strings.Contains(msg, "Business") {
+					t.Fatalf("verify = %d %s, want Business refusal", code, msg)
+				}
+				return
+			}
 			if code != exitcode.Usage {
 				t.Errorf("exit = %d, want %d (Usage): %s", code, exitcode.Usage, msg)
 			}

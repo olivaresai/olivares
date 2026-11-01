@@ -21,11 +21,13 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { toast } from '@/components/ui/toaster'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { DiscardWorktreeOption } from '@/features/agentops/discard-worktree-option'
+import { useDiscardedQueueNotice } from '@/features/agentops/run-queue'
 import { useTurnInterrupt } from '@/features/agentops/turn-interrupt'
 import type { RunDTO } from '@/features/agentops/types'
 import { currentControlFence } from '@/features/agentops/work-fence'
 import { useClientSettings } from '@/features/settings/preferences'
 import { ApiError } from '@/lib/api/errors'
+import { governanceKeys } from '@/features/governance/api'
 import { useAuth } from '@/lib/auth/context'
 import { sessionsKeys } from './api'
 import { canHandoffSession, startsAgain, type Capability } from './provenance'
@@ -95,6 +97,7 @@ export function RunActions({
   const { t: tOps } = useTranslation('agentops')
   const { activeTenant } = useAuth()
   const turn = useTurnInterrupt(run)
+  const noticeDiscarded = useDiscardedQueueNotice()
   const qc = useQueryClient()
   const { t: tSettings } = useTranslation('settings')
   const confirmStop = useClientSettings((s) => s.confirmStop)
@@ -127,6 +130,9 @@ export function RunActions({
       ),
     onSuccess: () => {
       setConfirm(null)
+      void qc.invalidateQueries({
+        queryKey: governanceKeys.approvals(activeTenant),
+      })
       invalidate()
     },
     onError: onErr,
@@ -139,7 +145,8 @@ export function RunActions({
   const cleanup = useMutation({
     mutationFn: () =>
       agentOpsApi.cleanup(run?.run_ref as string, discardWorktree),
-    onSuccess: () => {
+    onSuccess: (released) => {
+      noticeDiscarded(released.discarded_queue)
       closeConfirm()
       invalidate()
     },
@@ -391,6 +398,7 @@ export function DeleteRunDialog({
   // the dialog mounted while the run changes under it, and a retry after a cleanup that
   // went through must not clean up again (refused: state=cleaned).
   const [cleanedHere, setCleanedHere] = useState(false)
+  const noticeDiscarded = useDiscardedQueueNotice()
   const cleaned = run.state === 'cleaned' || cleanedHere
   const close = () => {
     setDiscardWorktree(false)
@@ -403,8 +411,9 @@ export function DeleteRunDialog({
   const del = useMutation({
     mutationFn: async () => {
       if (!cleaned) {
-        await agentOpsApi.cleanup(run.run_ref, discardWorktree)
+        const released = await agentOpsApi.cleanup(run.run_ref, discardWorktree)
         setCleanedHere(true)
+        noticeDiscarded(released.discarded_queue)
       }
       return agentOpsApi.deleteRun(run.run_ref)
     },

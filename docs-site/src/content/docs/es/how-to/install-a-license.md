@@ -11,11 +11,13 @@ dónde guardar el fichero, cómo aplicarla a un motor en ejecución, cómo leer 
 y, si has comprado un plan Business, cómo cambiar el binario de Community por el
 comercial sin reinstalar nada.
 
-:::note[Una licencia es una atestación, no un interruptor en tiempo de ejecución]
-**No bloquea ninguna función del software que estás ejecutando.** Una licencia caducada o
-ausente no desactiva funcionalidades, y ninguna licencia limita las cuentas de usuario: los
-usuarios autoalojados son ilimitados en todos los niveles. Es una declaración firmada de
-aquello a lo que tienes derecho, no una clave que desbloquee código que ya está en tu disco.
+:::note[La licencia, no el binario, activa las funciones comerciales]
+**El build Business ejecuta una función comercial solo mientras haya instalada una licencia
+válida cuyos derechos la incluyan.** Comprueba la licencia offline, en la máquina, en cada uso.
+Sin licencia, o con una caducada o revocada, el trabajo nuevo de esa función responde
+`addon_requires_license`; leer, verificar y exportar tus datos sigue funcionando, y ninguna
+licencia limita las cuentas de usuario: los usuarios autoalojados son ilimitados en todos los
+niveles. El binario Community nunca lee una licencia para activar o desactivar nada.
 
 **Una licencia vigente permite acceder a los artefactos comerciales.** La instalación offline (`olivares upgrade --bundle`) requiere el binario Enterprise. Enterprise instala un bundle Community firmado sin licencia; un bundle comercial necesita una licencia vigente, verificada offline. Community y Business admiten `--bundle --check` sin leer una licencia ni instalar el bundle.
 :::

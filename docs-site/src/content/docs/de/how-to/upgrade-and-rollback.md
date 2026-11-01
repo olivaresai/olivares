@@ -56,7 +56,7 @@ Schutzmechanismen aktiv:
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.4
+olivares upgrade --check --current-version 0.5
 ```
 <!-- /release -->
 
@@ -180,7 +180,7 @@ Olivares-Appliance `systemctl start olivares-appliance-update.service`. Mit `--e
 `install.sh --bindir /usr/bin` dort abgelegt hat, wird also ebenfalls verweigert.
 
 Die Konsole bietet die schreibgeschützte Hälfte derselben Information:
-**Settings → update status** ruft `POST /v1/console/update-check` auf und führt bei
+**Betrieb → Updates** (`/updates`) ruft `POST /v1/console/update-check` auf und führt bei
 Bedarf eine Prüfung gegen den konfigurierten Channel aus. Eine Air-Gap-Bereitstellung
 oder eine ohne konfigurierten Channel antwortet mit `501` und nennt den Grund, statt
 zu melden, es gebe kein Update.

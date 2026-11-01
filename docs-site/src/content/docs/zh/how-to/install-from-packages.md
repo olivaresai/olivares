@@ -7,10 +7,10 @@ description: >-
 draft: false
 ---
 
-下一个版本是 <!-- release -->`0.4`<!-- /release -->，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 <!-- release -->`docs/releases/0.4-install-surfaces.json`<!-- /release -->。
+下一个版本是 <!-- release -->`0.5`<!-- /release -->，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 <!-- release -->`docs/releases/0.5-install-surfaces.json`<!-- /release -->。
 
 :::note[已发布的软件包名称]
-GitHub 的 Olivares <!-- release -->0.4<!-- /release --> 发行发布 `amd64` 与 `arm64` 的 `.deb`、`.rpm` 和 `.apk`，并附带
+GitHub 的 Olivares <!-- release -->0.5<!-- /release --> 发行发布 `amd64` 与 `arm64` 的 `.deb`、`.rpm` 和 `.apk`，并附带
 `checksums.txt`、`checksums.txt.sig` 和 `checksums.txt.pem`。下面的命令使用该发行的字面
 `amd64` 名称；在 64 位 ARM 主机上将 `amd64` 换成 `arm64`。请从这些已验证的发行产物安装。
 源码树中的仓库元数据生成器不是本指南的安装说明。
@@ -65,13 +65,13 @@ Sigstore 信任根材料，尚未缓存时由 cosign 获取。`--offline` 只去
 <!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_0.4_linux_amd64.deb
+sudo dpkg -i olivares_0.5_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_0.4_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.5_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_0.4_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.5_linux_amd64.apk
 ```
 <!-- /release -->
 

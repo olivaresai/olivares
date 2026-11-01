@@ -297,7 +297,7 @@ describe('ExecutiveView — the usage pillar pretends the workspace filter for n
 
   /**
    * Until 2026-09-08 this case asserted that a double failure REMOVED the pillar, the
-   * same way a missing permission does. Root's follow-up (dashboard-usage-availability)
+   * same way a missing permission does. the maintainer's follow-up (dashboard-usage-availability)
    * separates the two: an outage is represented, not hidden. The scope note stays —
    * it describes what the reads cover, and the reads are still the role's to make.
    * The full availability matrix lives in executive.usage-availability.test.tsx.

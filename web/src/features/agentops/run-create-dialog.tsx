@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { useProfileList } from '@/features/agent-tools/use-profiles'
+import { AccountUsage, AtLimit } from './account-usage'
 import { ProviderAccent } from './provider-accent'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
@@ -41,17 +43,23 @@ import { toast } from '@/components/ui/toaster'
 import { useAuth } from '@/lib/auth/context'
 import { ApiError } from '@/lib/api/errors'
 import { templatesApi, templatesKeys } from '@/features/workspace-templates/api'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { ListTruncationBadge } from '@/features/_intel'
 import { agentOpsApi, agentOpsKeys } from './api'
+import { RUN_ON_EXTENSION } from '@/features/extensions'
 import { launchSession } from './session-launch'
 import { profileOwnedEnvNames } from './provider-contract'
-import { SESSION_TOOLS, toolName } from './tool-names'
+import { sessionTools, toolName } from './engine-tools'
 import { useReadyTools } from '@/features/first-hour/first-hour'
 import { useReuseProfile } from '@/features/first-hour/session-profiles'
 import { LaunchSpeedFields } from './launch-speed-fields'
 import { useAuthBoundary } from './auth-boundary'
 import { useStepUpOwner, type StepUpAttempt } from '@/stores/step-up'
-import { LaunchIdentityFields, useLaunchIdentities } from './launch-identity'
+import {
+  LaunchIdentityFields,
+  LaunchPreflight,
+  useLaunchIdentities,
+} from './launch-identity'
 import {
   LaunchReadinessPanel,
   useProfileLaunchReadiness,
@@ -105,6 +113,7 @@ export function RunCreateDialog({
   initialEffort,
   initialFastMode,
   initialServiceTier,
+  initialRunOn,
   onCloseAutoFocus,
 }: {
   open: boolean
@@ -125,6 +134,7 @@ export function RunCreateDialog({
   initialEffort?: string
   initialFastMode?: boolean
   initialServiceTier?: string
+  initialRunOn?: string
   /** Where focus goes on close, for an opener that is gone by then (the New session
    * form hands over to this dialog and unmounts its own button). */
   onCloseAutoFocus?: (event: Event) => void
@@ -172,7 +182,11 @@ export function RunCreateDialog({
       : undefined,
   )
   const [workspaceRef, setWorkspaceRef] = useState<string>(NONE)
+  const [runOn, setRunOn] = useState(initialRunOn ?? '')
   const [worktree, setWorktree] = useState(!!initialWorktreeFrom)
+  // The page of a GitHub issue or pull request to start from; it needs a folder.
+  const [sourceUrl, setSourceUrl] = useState('')
+  const sourceUrlId = useId()
   const [isolation, setIsolation] = useState<LaunchReadinessIsolation>(
     DEFAULT_READINESS_ISOLATION,
   )
@@ -247,6 +261,10 @@ export function RunCreateDialog({
     () => profilesQuery.data?.items ?? [],
     [profilesQuery.data],
   )
+  // The usage each account's tool reported: the account list every launch surface shares.
+  const accountList = useProfileList(open)
+  const usageOf = (ref: string) =>
+    accountList.data?.accounts.find((a) => a.account_ref === ref)?.usage
   // Defaults follow what exists: the only active profile of the
   // current boundary's list is the one a session can run on, so it is the choice until
   // the operator picks another. With several, the default is the profile the New session
@@ -263,9 +281,9 @@ export function RunCreateDialog({
     open && canReadProfiles && chosen === NONE && profiles.length > 1
   const { ready: readyTools, boundKey } = useReadyTools(needsDefault)
   const formTool =
-    SESSION_TOOLS.find((tool) => tool === initialDriver) ??
+    sessionTools().find((tool) => tool === initialDriver) ??
     readyTools[0] ??
-    SESSION_TOOLS[0]
+    sessionTools()[0]
   const reuse = useReuseProfile(
     formTool,
     needsDefault && readyTools.includes(formTool) && !boundKey(formTool),
@@ -496,7 +514,7 @@ export function RunCreateDialog({
           </Button>
         ),
       }
-    if (worktree && !selectedWs)
+    if ((worktree || sourceUrl.trim()) && !selectedWs)
       return { reason: t('create.blocked.worktreeFolder') }
     if (requiresAgent && agentRef === '')
       return { reason: t('create.identity.required') }
@@ -534,7 +552,9 @@ export function RunCreateDialog({
     setModelPick({ profile: NONE, model: '', effort: '' })
     setSpeedChoice(undefined)
     setWorkspaceRef(NONE)
+    setRunOn('')
     setWorktree(false)
+    setSourceUrl('')
     setIsolation(DEFAULT_READINESS_ISOLATION)
     setEnvAllow('')
     setTemplateId(NONE)
@@ -552,6 +572,7 @@ export function RunCreateDialog({
     ...(speed?.fastMode !== undefined ? { fast_mode: speed.fastMode } : {}),
     ...(speed?.serviceTier ? { service_tier: speed.serviceTier } : {}),
     workspace_ref: workspaceRef === NONE ? '' : workspaceRef,
+    ...(runOn ? { run_on: runOn } : {}),
     isolation,
     env_allow: envAllow
       .split(',')
@@ -568,6 +589,8 @@ export function RunCreateDialog({
             : {}),
         }
       : {}),
+    // The engine works in a worktree named after the item; the launch reads it first.
+    ...(sourceUrl.trim() ? { source_url: sourceUrl.trim() } : {}),
     ...(templateId === NONE ? {} : { template_id: templateId }),
     // Only the REFERENCE leaves the browser: the server resolves the homes.
     ...(profileRef === NONE ? {} : { provider_profile_ref: profileRef }),
@@ -629,6 +652,26 @@ export function RunCreateDialog({
     },
   })
 
+  const failureReason = create.isError
+    ? launchFailureMessage(
+        create.error,
+        t('create.title'),
+        (reason) => reason || t('readiness.stoppedSilently'),
+      )
+    : ''
+  const AccessRequestAction = PANEL_EXTENSIONS.accessRequestAction
+  const failedRun = create.variables?.body
+  const failedProfileRef = failedRun?.provider_profile_ref
+  const requestSourceType = failedProfileRef
+    ? 'profile'
+    : profileRef === NONE
+      ? 'tool'
+      : 'profile'
+  const requestSourceRef =
+    failedProfileRef ??
+    (profileRef === NONE ? (selectedProfile?.driver ?? '') : profileRef)
+  const requestWorkspaceRef = failedRun?.workspace_ref ?? ''
+
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
     if (!create.isPending && !blocker)
@@ -679,7 +722,7 @@ export function RunCreateDialog({
       >
         <DialogHeader>
           <DialogTitle>
-            {/* The chosen tool, never a fixed one (HU 043: a Grok profile read "New
+            {/* The chosen tool, never a fixed one (acceptance: a Grok profile read "New
                 Claude Code session"). */}
             {selectedProfile
               ? t('create.titleTool', {
@@ -713,13 +756,14 @@ export function RunCreateDialog({
                   <SelectTrigger aria-label={t('create.profile')}>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-w-[var(--radix-select-content-available-width)]">
                     <SelectItem value={NONE} disabled>
                       {t('create.profileNone')}
                     </SelectItem>
                     {profiles.map((p) => (
                       <SelectItem
                         key={p.profile_ref}
+                        className="h-auto min-h-8 whitespace-normal"
                         value={p.profile_ref}
                         aria-description={p.profile_ref}
                         title={p.profile_ref}
@@ -727,12 +771,26 @@ export function RunCreateDialog({
                         <ProviderAccent accent={p.accent} />
                         {profileName(p) ?? p.profile_ref} · {p.driver}
                         {!p.operable && ` — ${t('create.profileNotOperable')}`}
+                        <AccountUsage
+                          usage={usageOf(p.profile_ref)}
+                          className="ms-2"
+                        />
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {/* An account at its limit is said before Start, with when it resets. */}
+                <AtLimit usage={usageOf(profileRef)} className="mt-1 block" />
               </Field>
             )}
+
+            {RUN_ON_EXTENSION ? (
+              <RUN_ON_EXTENSION
+                value={runOn}
+                onChange={setRunOn}
+                pending={create.isPending}
+              />
+            ) : null}
 
             <LaunchSpeedFields
               driver={selectedProfile?.driver ?? ''}
@@ -766,6 +824,7 @@ export function RunCreateDialog({
               />
             </Field>
 
+            <LaunchPreflight />
             {identityUpFront && identityFields}
 
             {/* THE MOST COMMON LAUNCH CHOICE, IN FRONT: no Advanced step to reach it. */}
@@ -849,6 +908,7 @@ export function RunCreateDialog({
                     value={workspaceRef}
                     onValueChange={(value) => {
                       setWorkspaceRef(value)
+                      if (value === NONE) setSourceUrl('')
                       if (value === NONE && !initialWorktreeFrom)
                         setWorktree(false)
                     }}
@@ -909,6 +969,25 @@ export function RunCreateDialog({
                       ) : null}
                     </div>
                   </div>
+                )}
+
+                {workspaceRef !== NONE && (
+                  <Field
+                    label={t('create.sourceUrl')}
+                    htmlFor={sourceUrlId}
+                    description={t('create.sourceUrlHint')}
+                  >
+                    <Input
+                      id={sourceUrlId}
+                      type="url"
+                      inputMode="url"
+                      value={sourceUrl}
+                      onChange={(e) => setSourceUrl(e.target.value)}
+                      placeholder={t('create.sourceUrlPlaceholder')}
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </Field>
                 )}
 
                 {canReadTemplates && (
@@ -1086,13 +1165,17 @@ export function RunCreateDialog({
                       ? t('readiness.stoppedAtStart')
                       : t('readiness.failedInline')}
                   </p>
-                  <p className="mt-0.5 break-words">
-                    {launchFailureMessage(
-                      create.error,
-                      t('create.title'),
-                      (reason) => reason || t('readiness.stoppedSilently'),
+                  <p className="mt-0.5 break-words">{failureReason}</p>
+                  {AccessRequestAction &&
+                    failureReason.includes('request access') &&
+                    requestSourceRef && (
+                      <AccessRequestAction
+                        key={`${requestSourceType}:${requestSourceRef}:${requestWorkspaceRef}`}
+                        sourceType={requestSourceType}
+                        sourceRef={requestSourceRef}
+                        workspaceRef={requestWorkspaceRef}
+                      />
                     )}
-                  </p>
                   {isProfileChangedError(create.error) && (
                     <Button
                       type="button"

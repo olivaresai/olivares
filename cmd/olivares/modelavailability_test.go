@@ -9,8 +9,10 @@ import (
 	"encoding/json"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
+	coreengine "github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/secret"
+	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/models"
 	"net/http"
 	"net/http/httptest"
@@ -237,4 +239,125 @@ func TestConfiguredConnectorCatalogConsumption(t *testing.T) {
 			t.Fatal("disabled source still exposed")
 		}
 	}
+}
+
+// mapProviderVault keeps sealed fixture keys in memory; each Seal gets its own locator.
+type mapProviderVault map[string][]byte
+
+func (v mapProviderVault) Seal(_ context.Context, _ auth.Principal, _ model.TenantID, name string, value []byte) (string, error) {
+	v[name] = slices.Clone(value)
+	return name, nil
+}
+func (v mapProviderVault) Open(_ context.Context, _ model.TenantID, locator string) ([]byte, error) {
+	return slices.Clone(v[locator]), nil
+}
+func (v mapProviderVault) Revoke(_ context.Context, _ auth.Principal, _ model.TenantID, locator string) error {
+	delete(v, locator)
+	return nil
+}
+
+// endpointModels answers a probe with the models of the endpoint it was asked about.
+type endpointModels map[string][]string
+
+func (p endpointModels) Probe(_ context.Context, req sessions.ProviderProbeRequest) (sessions.ProviderProbeResult, error) {
+	return sessions.ProviderProbeResult{Models: p[req.BaseURL]}, nil
+}
+
+// A connection test, a new name or a new default model leave what the provider serves
+// unchanged, so its Available row stays Ready. A new endpoint or key does change it, so
+// the row stops offering the old list until discovery reads the provider again.
+func TestProviderAvailabilityChangesOnlyWithEndpointOrKey(t *testing.T) {
+	ctx := context.Background()
+	const first, second = "https://first.example.com/v1", "https://second.example.com/v1"
+	ss := sessions.New(sessions.WithProviderSecretVault(mapProviderVault{}),
+		sessions.WithProviderProbe(endpointModels{first: {"first-model"}, second: {"second-model"}}))
+	st, err := coreengine.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: ":memory:"}, func(reg store.ExtensionRegistry) error {
+		if err := models.New().RegisterSchema(reg); err != nil {
+			return err
+		}
+		return ss.RegisterSchema(reg)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	var tenant model.TenantID
+	if err := st.System(ctx, func(sys store.SystemScope) error {
+		if _, err := sys.EnsureSystemTenant(ctx); err != nil {
+			return err
+		}
+		org, err := sys.CreateOrg(ctx, model.Org{Name: "acme", Slug: "acme", Status: model.StatusActive})
+		tenant = org.TenantID
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ss.UseData(api.NewModuleData(st))
+	m := models.New()
+	m.UseData(api.NewModuleData(st))
+	m.UseAvailabilitySource(configuredModelDiscovery{sessions: ss}, func(context.Context) ([]model.TenantID, error) { return nil, nil })
+	if err := m.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = m.Stop(context.Background()) })
+
+	rec, err := ss.CreateProviderRecord(ctx, tenant, sessions.CreateProviderRecordInput{
+		Kind: sessions.ProviderKindOpenAICompatible, DisplayName: "Gateway", BaseURL: first, APIKey: "fixture-provider-key-0001"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := func(step string) models.Availability {
+		t.Helper()
+		rows, err := m.AvailableModels(ctx, tenant)
+		if err != nil || len(rows) != 1 {
+			t.Fatalf("%s: rows = %+v %v", step, rows, err)
+		}
+		return rows[0]
+	}
+	ready := func(step, want string) {
+		t.Helper()
+		got := row(step)
+		if got.State != "fresh" || len(got.Models) != 1 || got.Models[0].ID != want {
+			t.Fatalf("%s: row = %s %+v %q, want Ready with %s", step, got.State, got.Models, got.Message, want)
+		}
+	}
+	refreshed := func(step, want string) {
+		t.Helper()
+		if got := row(step); got.State == "fresh" {
+			t.Fatalf("%s: the row still offers %+v from before the change", step, got.Models)
+		}
+		if err := m.RefreshAvailability(ctx, tenant); err != nil {
+			t.Fatal(err)
+		}
+		ready(step+", after discovery", want)
+	}
+	if err := m.RefreshAvailability(ctx, tenant); err != nil {
+		t.Fatal(err)
+	}
+	ready("first discovery", "first-model")
+
+	if _, err := ss.TestProviderRecord(ctx, tenant, rec.Ref); err != nil {
+		t.Fatal(err)
+	}
+	ready("Test connection", "first-model")
+	name, none := "Gateway two", ""
+	if _, err := ss.PatchProviderRecord(ctx, tenant, rec.Ref, sessions.ProviderRecordPatch{DisplayName: &name}); err != nil {
+		t.Fatal(err)
+	}
+	ready("rename", "first-model")
+	if _, err := ss.PatchProviderRecord(ctx, tenant, rec.Ref, sessions.ProviderRecordPatch{DefaultModel: &none}); err != nil {
+		t.Fatal(err)
+	}
+	ready("default model", "first-model")
+
+	url := second
+	if _, err := ss.PatchProviderRecord(ctx, tenant, rec.Ref, sessions.ProviderRecordPatch{BaseURL: &url}); err != nil {
+		t.Fatal(err)
+	}
+	refreshed("new endpoint", "second-model")
+	key := "fixture-provider-key-0002"
+	if _, err := ss.PatchProviderRecord(ctx, tenant, rec.Ref, sessions.ProviderRecordPatch{APIKey: &key}); err != nil {
+		t.Fatal(err)
+	}
+	refreshed("new key", "second-model")
 }

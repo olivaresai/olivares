@@ -94,7 +94,7 @@ func (e *evaluator) EvaluateEvidence(
 		}
 		scan, listErr := scanCanonicalABACEvidenceRules(ctx, sc, req.Tenant, req)
 		if listErr == nil {
-			auth.CaptureAuthorizationInputs(ctx, false, "abac-v1", retainedABAC{Rules: scan.rules, Versions: scan.versions})
+			auth.CaptureAuthorizationInputs(ctx, false, "abac-v2", retainedABAC{Rules: scan.rules, Versions: scan.versions})
 		} else {
 			auth.IncompleteAuthorizationInputs(ctx)
 		}
@@ -385,7 +385,7 @@ func (e *scopedEngine) ScopedEvidence(
 		}
 		captureScopedCedar(ctx, before, em, creq, scopedGrantAboveFloor(req.Principal, req.Tenant, before.generation) && !e.grantExpiredState(before, ready, observedAt), found)
 		scopedEM, scopedReq, marks = em, creq, found
-		cedarDecision, diag = cedar.Authorize(before.set.policies, em, creq)
+		cedarDecision, diag = authorizeCedar(before.set.policies, em, creq)
 		return nil
 	})
 	after, afterLoaded := e.tenantState(req.Tenant)

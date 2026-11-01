@@ -63,6 +63,27 @@ func TestTargetKindFacts(t *testing.T) {
 	}
 }
 
+func TestTargetRepositoryKeepsPositionalLiteralCompatibility(t *testing.T) {
+	repo := TargetRepository{"api.github.com/acme/widgets", "acme", "widgets"}
+	if repo.ID != "api.github.com/acme/widgets" || repo.Owner != "acme" || repo.Name != "widgets" {
+		t.Fatalf("repository = %+v", repo)
+	}
+}
+
+func TestTargetKindIssueCommentCapabilities(t *testing.T) {
+	for name, want := range map[string]bool{"github": true, "gitlab": true, "git": false} {
+		t.Run(name, func(t *testing.T) {
+			kind, ok := LookupTargetKind(name)
+			if !ok {
+				t.Fatal("unknown kind")
+			}
+			if got := kind.Capabilities().Supports(EffectIssueComment, ""); got != want {
+				t.Fatalf("issue-comment support = %t, want %t", got, want)
+			}
+		})
+	}
+}
+
 func TestTargetKindValidationStages(t *testing.T) {
 	for _, name := range []string{"github", "gitlab"} {
 		t.Run(name, func(t *testing.T) {

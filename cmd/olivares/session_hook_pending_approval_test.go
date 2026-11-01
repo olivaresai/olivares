@@ -88,7 +88,7 @@ func TestSessionToolApprovalAppearsAndClearsOnTerminalWait(t *testing.T) {
 				d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow"}, Authr: credentials, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Approvals: service, ApprovalWait: m.BeginApprovalWait, Store: h.st, Clock: time.Now, Log: discardLog()})
 				ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 				defer cancel()
-				req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(`{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"printf pending-projection"}}`)).WithContext(ctx)
+				req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(`{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"printf pending-projection","description":"Check the pending projection"}}`)).WithContext(ctx)
 				req.Header.Set("Authorization", "Bearer "+token)
 				rec := httptest.NewRecorder()
 				done := make(chan struct{})
@@ -174,9 +174,15 @@ func TestSessionToolApprovalAppearsAndClearsOnTerminalWait(t *testing.T) {
 					}
 				}
 				assertViews(ref)
+				if family == "claude" && outcome == "approve" {
+					approval, err := service.Read(t.Context(), tenant, ref)
+					if err != nil || approval.Reason != "Check the pending projection" {
+						t.Fatalf("tool purpose=%q err=%v", approval.Reason, err)
+					}
+				}
 				if outcome == "cancel" {
 					cancel()
-				} else if code, _ := h.req(http.MethodPost, "/v1/m/governance/approvals/"+ref+"/decisions", h.adminToken, h.tenantA, map[string]any{"decision": outcome}); code != http.StatusCreated && code != http.StatusOK {
+				} else if code, _ := h.req(http.MethodPost, "/v1/m/governance/approvals/"+ref+"/decisions", h.adminToken, h.tenantA, map[string]any{"decision": outcome, "note": "use pnpm instead"}); code != http.StatusCreated && code != http.StatusOK {
 					t.Fatalf("decision=%d", code)
 				}
 				select {
@@ -212,7 +218,7 @@ func TestSessionToolApprovalAppearsAndClearsOnTerminalWait(t *testing.T) {
 				}
 				want, reason := "deny", map[string]string{
 					"approve": "approved by human review (" + ref + ")",
-					"reject":  "human review did not approve this tool-call (rejected)",
+					"reject":  "human review declined this tool-call: use pnpm instead",
 					"cancel":  "tool-call interrupted while waiting for human approval",
 				}[outcome]
 				if outcome == "approve" {

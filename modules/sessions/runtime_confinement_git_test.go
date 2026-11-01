@@ -22,7 +22,13 @@ import (
 // as the engine's protected paths, read without blocking.
 func layoutPolicy(t *testing.T, folder, protect, preset string) *confine.Policy {
 	t.Helper()
-	m := New(WithConfinement([]string{protect}, true))
+	return layoutPolicyProtecting(t, folder, preset, protect)
+}
+
+// layoutPolicyProtecting is layoutPolicy with several protected paths.
+func layoutPolicyProtecting(t *testing.T, folder, preset string, protect ...string) *confine.Policy {
+	t.Helper()
+	m := New(WithConfinement(protect, true))
 	done := make(chan *confine.Policy, 1)
 	go func() { done <- m.sessionConfinement(folder, nil, preset) }()
 	select {
@@ -72,8 +78,9 @@ func relPath(t *testing.T, from, to string) string {
 // TestSessionGitLayoutGrantsOnlyGitsOwnLinkedWorktree pins which git
 // directories a session folder owns: a linked worktree's entry and its
 // repository's common directory, through the folder or a link to it, with
-// absolute, relative or linked pointers, never beneath a protected path. A
-// plain clone owns nothing outside itself.
+// absolute, relative or linked pointers. A worktree below protected data gets
+// only its own two Git directories; one outside it gets none beneath Protect.
+// A plain clone owns nothing outside itself.
 func TestSessionGitLayoutGrantsOnlyGitsOwnLinkedWorktree(t *testing.T) {
 	for name, plant := range map[string]func(t *testing.T, repo, folder, entry string) string{
 		"a linked worktree": func(t *testing.T, _, folder, _ string) string { return folder },
@@ -130,6 +137,87 @@ func TestSessionGitLayoutGrantsOnlyGitsOwnLinkedWorktree(t *testing.T) {
 		want := []string{folder, filepath.Join(common, "worktrees", filepath.Base(folder)), common}
 		if !slices.Equal(p.ReadOnly, want) || len(p.ReadWrite) != 0 || !slices.Equal(p.Sealed, []string{folder}) {
 			t.Fatalf("read-only policy = ro %q rw %q sealed %q, want ro %q", p.ReadOnly, p.ReadWrite, p.Sealed, want)
+		}
+	})
+	t.Run("a registered workspace beneath protected data", func(t *testing.T) {
+		repo, folder, data, _ := worktreeFixtureLayout(t, t.TempDir(), filepath.Join("data", "workspaces", "repository"), filepath.Join("data", "session-worktrees", "session"))
+		common := realPath(t, filepath.Join(repo, ".git"))
+		entry := filepath.Join(common, "worktrees", filepath.Base(folder))
+		p := layoutPolicy(t, folder, data, PresetAsk)
+		want := []string{folder, entry, common}
+		if !slices.Equal(p.ReadWrite, want) || len(p.ReadOnly) != 0 {
+			t.Fatalf("policy = rw %q ro %q, want only the worktree and its Git directories %q", p.ReadWrite, p.ReadOnly, want)
+		}
+		p = layoutPolicy(t, folder, data, PresetReadOnly)
+		if !slices.Equal(p.ReadOnly, want) || len(p.ReadWrite) != 0 || !slices.Equal(p.Sealed, []string{folder}) {
+			t.Fatalf("read-only policy = ro %q rw %q sealed %q, want ro %q", p.ReadOnly, p.ReadWrite, p.Sealed, want)
+		}
+	})
+	// The folder lies beneath one protected path and its repository beneath
+	// another: only a path the folder shares with the repository is reopened.
+	t.Run("a repository beneath another protected path", func(t *testing.T) {
+		repo, folder, data, _ := worktreeFixtureLayout(t, t.TempDir(), "repository", filepath.Join("data", "session-worktrees", "session"))
+		p := layoutPolicyProtecting(t, folder, PresetAsk, data, repo)
+		if want := []string{folder}; !slices.Equal(p.ReadWrite, want) {
+			t.Fatalf("policy rw = %q, want only the folder %q", p.ReadWrite, want)
+		}
+	})
+	// A session writes every file git checks in its own folder. Named
+	// <common>/worktrees/<id> beneath protected data, a folder that points at
+	// itself claims the data directory as its common directory.
+	t.Run("a folder that names itself as its entry beneath protected data", func(t *testing.T) {
+		data := realPath(t, t.TempDir())
+		folder := filepath.Join(data, "worktrees", "session")
+		writeTestFile(t, filepath.Join(folder, ".git"), "gitdir: .\n")
+		writeTestFile(t, filepath.Join(folder, "commondir"), "../..\n")
+		writeTestFile(t, filepath.Join(folder, "gitdir"), filepath.Join(folder, ".git")+"\n")
+		for _, preset := range []string{PresetAsk, PresetReadOnly} {
+			p := layoutPolicy(t, folder, data, preset)
+			if got := append(slices.Clone(p.ReadWrite), p.ReadOnly...); !slices.Equal(got, []string{folder}) {
+				t.Fatalf("%s policy grants %q, want only the folder %q", preset, got, folder)
+			}
+		}
+	})
+	// The entry is the folder's parent: the session writes the entry's files in
+	// that parent and launches in a child of it.
+	t.Run("a folder whose entry is its parent beneath protected data", func(t *testing.T) {
+		data := realPath(t, t.TempDir())
+		entry := filepath.Join(data, "worktrees", "session")
+		folder := filepath.Join(entry, "sub")
+		writeTestFile(t, filepath.Join(entry, "commondir"), "../..\n")
+		writeTestFile(t, filepath.Join(entry, "gitdir"), filepath.Join(folder, ".git")+"\n")
+		writeTestFile(t, filepath.Join(folder, ".git"), "gitdir: "+entry+"\n")
+		if got := layoutPolicy(t, folder, data, PresetAsk).ReadWrite; !slices.Equal(got, []string{folder}) {
+			t.Fatalf("policy rw = %q, want only the folder %q", got, folder)
+		}
+	})
+	// Another session's folder plays the entry. Git's own two-way link holds, so
+	// only the name of the common directory tells it from a repository's: a
+	// directory that is not a Git directory is never reopened beneath Protect.
+	t.Run("an entry in another folder naming a common directory that is not a Git directory", func(t *testing.T) {
+		data := realPath(t, t.TempDir())
+		entry := filepath.Join(data, "shared", "worktrees", "other")
+		folder := filepath.Join(data, "session-worktrees", "session")
+		writeTestFile(t, filepath.Join(entry, "commondir"), "../..\n")
+		writeTestFile(t, filepath.Join(entry, "gitdir"), filepath.Join(folder, ".git")+"\n")
+		writeTestFile(t, filepath.Join(folder, ".git"), "gitdir: "+entry+"\n")
+		if got := layoutPolicy(t, folder, data, PresetAsk).ReadWrite; !slices.Equal(got, []string{folder}) {
+			t.Fatalf("policy rw = %q, want only the folder %q", got, folder)
+		}
+	})
+	// The same layout with a common directory named like a bare repository is
+	// reopened: the name, not the place, is what tells a Git directory apart.
+	t.Run("a bare repository named like one beneath protected data", func(t *testing.T) {
+		data := realPath(t, t.TempDir())
+		common := filepath.Join(data, "repos", "project.git")
+		entry := filepath.Join(common, "worktrees", "session")
+		folder := filepath.Join(data, "session-worktrees", "session")
+		writeTestFile(t, filepath.Join(entry, "commondir"), "../..\n")
+		writeTestFile(t, filepath.Join(entry, "gitdir"), filepath.Join(folder, ".git")+"\n")
+		writeTestFile(t, filepath.Join(folder, ".git"), "gitdir: "+entry+"\n")
+		want := []string{folder, entry, common}
+		if got := layoutPolicy(t, folder, data, PresetAsk).ReadWrite; !slices.Equal(got, want) {
+			t.Fatalf("policy rw = %q, want the folder and its Git directories %q", got, want)
 		}
 	})
 	t.Run("beneath a protected path", func(t *testing.T) {

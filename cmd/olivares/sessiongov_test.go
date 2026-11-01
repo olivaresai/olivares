@@ -12,6 +12,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/olivaresai/olivares/core/model"
@@ -158,6 +159,11 @@ func TestIsCriticalLaunch(t *testing.T) {
 		// "full" is an administrator's own decision (checked at create/resume), not CRITICAL.
 		{"bypass", sessions.LaunchIntent{PermissionMode: "bypassPermissions"}, false},
 		{"dontAsk", sessions.LaunchIntent{PermissionMode: "dontAsk"}, true},
+		// Auto is the tool's own reviewed automatic mode, chosen from the same picker as the
+		// others. A critical launch always opens a human approval, so classing it so makes
+		// every Auto session wait for one (measured on the built binary: waiting_approval).
+		// The hook policy, the kill switch and the audit apply to it as to every mode.
+		{"auto", sessions.LaunchIntent{PermissionMode: "auto"}, false},
 		// A built-in template's allowlist confines a dontAsk launch: not privileged.
 		{"dontAsk under a built-in allowlist", sessions.LaunchIntent{PermissionMode: "dontAsk", TemplateRef: "tpl", TemplateBuiltin: true, AllowedTools: []string{"Read", "Bash"}}, false},
 		{"dontAsk under a custom template", sessions.LaunchIntent{PermissionMode: "dontAsk", TemplateRef: "tpl", AllowedTools: []string{"Read", "Bash"}}, true},
@@ -809,5 +815,16 @@ func TestSessionLaunchGate_ProbeErrorKeepsReserve(t *testing.T) {
 	}
 	if len(spy.reserveReqs) != 1 {
 		t.Fatalf("a probe error must fall through to Reserve, got %d calls", len(spy.reserveReqs))
+	}
+}
+
+// The approval receipt says every mode in an approver's words, auto included: a
+// read-write mount of a classified workspace is critical in any mode, and "permission
+// mode auto" tells the approver nothing.
+func TestDescribeLaunchSaysEveryModeInWords(t *testing.T) {
+	for _, mode := range []string{"default", "acceptEdits", "plan", "dontAsk", "auto", "bypassPermissions"} {
+		if got := describeLaunch(sessions.LaunchIntent{PermissionMode: mode}); strings.Contains(got, "permission mode") {
+			t.Errorf("%s reads %q, want it in words", mode, got)
+		}
 	}
 }

@@ -1,0 +1,205 @@
+{
+  "tools": [
+    {
+      "driver": "claude",
+      "label": "Claude Code"
+    },
+    {
+      "driver": "codex",
+      "label": "Codex"
+    },
+    {
+      "driver": "opencode",
+      "label": "OpenCode"
+    },
+    {
+      "driver": "grok",
+      "label": "Grok Build"
+    },
+    {
+      "driver": "gemini-cli",
+      "label": "Gemini CLI"
+    }
+  ],
+  "modes": [
+    {
+      "name": "read-only",
+      "label": "Read only",
+      "summary": "Reads and plans. Every change is refused.",
+      "mode": "plan",
+      "tools": [
+        {
+          "driver": "claude",
+          "receives": ["--permission-mode plan"]
+        },
+        {
+          "driver": "codex",
+          "receives": ["sandbox read-only", "approval on-request"]
+        },
+        {
+          "driver": "opencode",
+          "receives": ["permission deny"]
+        },
+        {
+          "driver": "grok",
+          "receives": ["sandbox read-only", "mode plan"]
+        },
+        {
+          "driver": "gemini-cli",
+          "receives": ["mode plan"]
+        }
+      ]
+    },
+    {
+      "name": "supervised",
+      "label": "Supervised",
+      "summary": "Asks before every action that is not a read.",
+      "mode": "default",
+      "aliases": ["ask", "Ask before each action"],
+      "tools": [
+        {
+          "driver": "claude",
+          "receives": ["--permission-mode default"]
+        },
+        {
+          "driver": "codex",
+          "receives": ["sandbox workspace-write", "approval untrusted"]
+        },
+        {
+          "driver": "opencode",
+          "receives": ["permission ask"]
+        },
+        {
+          "driver": "grok",
+          "receives": ["sandbox workspace", "mode default"]
+        },
+        {
+          "driver": "gemini-cli",
+          "receives": ["mode default"]
+        }
+      ]
+    },
+    {
+      "name": "auto-accept-edits",
+      "label": "Auto-accept edits",
+      "summary": "Reads and edits files without asking. Everything else asks.",
+      "mode": "acceptEdits",
+      "aliases": ["edits-only", "Edit files only"],
+      "tools": [
+        {
+          "driver": "claude",
+          "receives": ["--permission-mode acceptEdits"]
+        },
+        {
+          "driver": "codex",
+          "receives": ["sandbox workspace-write", "approval untrusted"]
+        },
+        {
+          "driver": "opencode",
+          "receives": ["permission ask"]
+        },
+        {
+          "driver": "grok",
+          "receives": ["sandbox workspace", "mode default"]
+        },
+        {
+          "driver": "gemini-cli",
+          "receives": ["mode default"]
+        }
+      ]
+    },
+    {
+      "name": "edits-and-commands",
+      "label": "Edit files and run commands",
+      "summary": "Reads, edits files and runs commands without asking. Other tools are refused.",
+      "mode": "",
+      "template": true,
+      "default": true,
+      "tools": [
+        {
+          "driver": "claude",
+          "receives": [
+            "--permission-mode dontAsk",
+            "--allowedTools Bash,Edit,Glob,Grep,LS,MultiEdit,NotebookEdit,Read,TodoWrite,Write"
+          ]
+        },
+        {
+          "driver": "codex",
+          "receives": ["sandbox workspace-write", "approval untrusted"]
+        },
+        {
+          "driver": "opencode",
+          "receives": ["permission ask"]
+        },
+        {
+          "driver": "grok",
+          "receives": ["sandbox workspace", "mode default"]
+        },
+        {
+          "driver": "gemini-cli",
+          "receives": ["mode default"]
+        }
+      ]
+    },
+    {
+      "name": "auto",
+      "label": "Auto",
+      "summary": "The tool's own reviewed automatic mode decides. A tool without one asks, as in Supervised. Needs run administration.",
+      "mode": "auto",
+      "tools": [
+        {
+          "driver": "claude",
+          "receives": ["--permission-mode auto"]
+        },
+        {
+          "driver": "codex",
+          "receives": ["sandbox workspace-write", "approval untrusted"],
+          "asks_instead": true
+        },
+        {
+          "driver": "opencode",
+          "receives": ["permission ask"],
+          "asks_instead": true
+        },
+        {
+          "driver": "grok",
+          "receives": ["sandbox workspace", "mode default"],
+          "asks_instead": true
+        },
+        {
+          "driver": "gemini-cli",
+          "receives": ["mode default"],
+          "asks_instead": true
+        }
+      ]
+    },
+    {
+      "name": "full",
+      "label": "Full",
+      "summary": "Nothing asks. Olivares still confines the session and records every action. Needs run administration.",
+      "mode": "bypassPermissions",
+      "tools": [
+        {
+          "driver": "claude",
+          "receives": ["--permission-mode bypassPermissions"]
+        },
+        {
+          "driver": "codex",
+          "receives": ["sandbox danger-full-access", "approval untrusted"]
+        },
+        {
+          "driver": "opencode",
+          "receives": ["permission ask"]
+        },
+        {
+          "driver": "grok",
+          "receives": ["mode default"]
+        },
+        {
+          "driver": "gemini-cli",
+          "receives": ["mode default"]
+        }
+      ]
+    }
+  ]
+}

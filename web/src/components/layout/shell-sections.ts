@@ -10,7 +10,7 @@ import type { GatedSection } from '@/features/navigation/model'
  * section's search so the view opens on it.
  */
 export interface ShellSection extends GatedSection {
-  /** The label key under `nav:shell.journeys` and the key its count is given under. */
+  /** The section's own key. */
   key: string
   /** The registry view that holds the section. */
   view: string

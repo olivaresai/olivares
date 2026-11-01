@@ -1116,7 +1116,7 @@ def step_sessions(api, ctx):
         raise SeedError("sessions: %d finished, %d live, $%.2f today, %d unpriced; the canonical estate is "
                         "9 finished, 7 live, $6.84 today, 1 unpriced" % (finished, live, total / 1e6, unpriced))
     # The home merges every observed row with the runs: a row the plane did not launch itself is
-    # counted beside these sixteen and moves the captured figures (dev#2562).
+    # counted beside these sixteen and moves the captured figures.
     run_refs = {r.get("run_ref") for r in rows.values()}
     observed = api.items("live", "/v1/m/sessions/live")
     outside = [r for r in observed if r.get("attribution") != "managed" or r.get("run_ref") not in run_refs]

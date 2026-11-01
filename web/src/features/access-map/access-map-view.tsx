@@ -3,9 +3,21 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Panel } from '@xyflow/react'
-import { useQuery } from '@tanstack/react-query'
+import {
+  type UseQueryResult,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import { Eye, Network, RefreshCw } from 'lucide-react'
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  type KeyboardEvent,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -16,9 +28,15 @@ import { CaveatNotice } from '@/features/_intel'
 import { PageHeader } from '@/components/ui/page-header'
 import { Spinner } from '@/components/ui/spinner'
 import { RecordingNotice } from '@/features/recordings/recording-notice'
-import { clusterByHost, GraphCanvas, SigmaGraph } from '@/features/shared'
+import {
+  clusterByHost,
+  GraphCanvas,
+  SigmaGraph,
+  UrlStateNotice,
+} from '@/features/shared'
 import { useAuth } from '@/lib/auth/context'
 import { ApiError } from '@/lib/api/errors'
+import { useValidatedUrlState } from '@/lib/hooks/use-url-state'
 import { cn } from '@/lib/utils'
 import { accessMapApi, accessMapKeys } from './api'
 import {
@@ -39,13 +57,26 @@ import {
   type ResourceNodeData,
   buildGraph,
   distinctSignalSources,
-  emptyFilter,
 } from './graph-model'
 import { AccessLegend } from './legend'
+import { type ArrowKey, connectedNeighbor } from './neighbor-nav'
 import { accessNodeTypes } from './nodes'
 import { selectionFromNodeData } from './selection'
+import {
+  ACCESS_URL_KEYS,
+  type ExpandedNode,
+  MAX_EXPANDED,
+  decodeAccessUrl,
+  expandedValue,
+  filterPatch,
+} from './url-state'
 import './i18n'
-import type { DriftEntry, GraphResponse } from './types'
+import type {
+  AccessNode,
+  DiffResponse,
+  DriftEntry,
+  GraphResponse,
+} from './types'
 import { LEGIBLE_FIT_MIN_ZOOM } from '@/features/shared/graph/graph-canvas'
 import { StaticTable } from '@/components/data/static-table'
 
@@ -79,17 +110,19 @@ function accessNodeColor(node: { data: unknown }): string {
     : 'var(--color-graphite-400)'
 }
 
-/** Merge a neighbors expansion into the base graph, deduping by node/edge id. */
+/** Merge neighbors expansions into the base graph, deduping by node/edge id. */
 function mergeGraphs(
   base: GraphResponse | undefined,
-  extra: GraphResponse | null,
+  extras: readonly GraphResponse[],
 ): GraphResponse {
   if (!base) return { nodes: [], edges: [], has_more: false }
-  if (!extra) return base
+  if (extras.length === 0) return base
   const nodes = new Map(base.nodes.map((n) => [n.id, n]))
-  for (const n of extra.nodes) if (!nodes.has(n.id)) nodes.set(n.id, n)
   const edges = new Map(base.edges.map((e) => [e.id, e]))
-  for (const e of extra.edges) if (!edges.has(e.id)) edges.set(e.id, e)
+  for (const extra of extras) {
+    for (const n of extra.nodes) if (!nodes.has(n.id)) nodes.set(n.id, n)
+    for (const e of extra.edges) if (!edges.has(e.id)) edges.set(e.id, e)
+  }
   return {
     nodes: [...nodes.values()],
     edges: [...edges.values()],
@@ -97,34 +130,109 @@ function mergeGraphs(
   }
 }
 
+/**
+ * What the map shows, and which of the address's expansions it can read: the base graph,
+ * the endpoints of the drift set's unused grants (pass `drift` only while the overlay
+ * shows them) and the nodes of every expansion already read. The last grows as expansions
+ * pass, so the list is walked until nothing changes. Shared by the render and by the
+ * overlay switch, so "on this map" has one definition.
+ */
+function resolveMap(
+  graph: GraphResponse | undefined,
+  drift: DiffResponse | undefined,
+  expanded: readonly ExpandedNode[],
+  read: (node: ExpandedNode) => GraphResponse | undefined,
+) {
+  const onMap = new Map<string, AccessNode>()
+  const putOnMap = (n: AccessNode) => {
+    if (!onMap.has(n.id)) onMap.set(n.id, n)
+  }
+  graph?.nodes.forEach(putOnMap)
+  for (const d of drift?.unused_grants ?? []) {
+    putOnMap({
+      id: d.edge.origin_id,
+      kind: d.edge.origin_kind,
+      ref: d.edge.origin_ref,
+    })
+    putOnMap({
+      id: d.edge.resource_id,
+      kind: d.edge.resource_kind ?? 'resource',
+      ref: d.edge.resource_ref,
+    })
+  }
+  const readable = expanded.map(() => false)
+  for (let changed = true; changed;) {
+    changed = false
+    expanded.forEach((node, i) => {
+      if (readable[i] || onMap.get(node.id)?.kind !== node.kind) return
+      readable[i] = true
+      changed = true
+      read(node)?.nodes.forEach(putOnMap)
+    })
+  }
+  return { onMap, readable }
+}
+
+/** One expansion's read. Keyed by id alone: a node's kind never changes. The view reads
+ * it for as long as the address names it; an expand click fetches it fresh first. */
+const neighborsRead = (tenant: string | null, node: ExpandedNode) => ({
+  queryKey: accessMapKeys.neighbors(tenant, node.id, 'both'),
+  queryFn: () => accessMapApi.neighbors(node.id, 'both', node.kind),
+})
+
+const ARROWS: readonly string[] = [
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+]
+
+const keepResults = (results: UseQueryResult<GraphResponse>[]) => results
+
 export function AccessMapView() {
   const { t } = useTranslation('accessMap')
   const { activeTenant, can } = useAuth()
   const canDrift = can(DRIFT_PERMISSION)
 
-  // Deep-link seam: the NHI roster links here with ?focus=<external_id> so an
-  // operator can jump from an identity straight to its PERMITTED-vs-OBSERVED edges.
-  // external_id == AccessEdge.origin_id/ref and filter.search matches over the refs,
-  // so seeding search focuses the graph on that identity. No route/shell change.
-  const [filter, setFilter] = useState<AccessFilterState>(() => {
-    const base = emptyFilter()
-    if (typeof window === 'undefined') return base
-    const focus = new URLSearchParams(window.location.search).get('focus')
-    return focus ? { ...base, search: focus } : base
+  // The view IS the address (url-state.ts): filters, overlay, selection and expanded
+  // neighbors round-trip through the URL, so a pasted link restores the same map.
+  // Seed from ?focus=<external_id> still works: the NHI roster links here with it
+  // so an operator can jump from an identity straight to its PERMITTED-vs-OBSERVED
+  // edges, and `focus` is read as the search until the operator edits it.
+  const queryClient = useQueryClient()
+  const [view, patchUrl, urlIssues] = useValidatedUrlState(
+    ACCESS_URL_KEYS,
+    decodeAccessUrl,
+  )
+  const { filter, overlay } = view
+  const expanded = view.expanded
+  const addressNode = view.node
+  const addressEdge = view.edge
+  const latest = useRef({ expanded, node: addressNode })
+  useEffect(() => {
+    latest.current = { expanded, node: addressNode }
   })
-  const [overlay, setOverlay] = useState(false)
+  // What the link asked for that is not on this map (below). The hook clears ITS report on
+  // the operator's next deliberate change; this one is held here, so `drive` clears it
+  // on the same occasion. The view's own cleanup of the address goes through `patchUrl`.
+  const [droppedNotice, setDroppedNotice] = useState<string[]>([])
+  const drive: typeof patchUrl = (patch, options) => {
+    setDroppedNotice((now) => (now.length > 0 ? [] : now))
+    patchUrl(patch, options)
+  }
+  const setFilter = (next: AccessFilterState) => drive(filterPatch(next))
   const hasMapFilter =
     filter.search !== '' ||
     filter.modes.size > 0 ||
     filter.confidence !== 'all' ||
     filter.signalSource !== null
   const [listOpen, setListOpen] = useState(false)
-  const [selection, setSelection] = useState<Selection>(null)
-  const [extra, setExtra] = useState<GraphResponse | null>(null)
   const [expandFailure, setExpandFailure] = useState<{
     id: string
     kind: string
     error: unknown
+    /** The map is at MAX_EXPANDED: said as a notice, not as a failed read. */
+    limit?: boolean
   } | null>(null)
   // Bumped on every tenant identity, in layout, so a completion from a previous
   // context is dropped instead of landing. The bump cannot live in render: that
@@ -140,15 +248,69 @@ export function AccessMapView() {
     queryFn: () => accessMapApi.graph({ limit: GRAPH_LIMIT }),
   })
 
+  // `?drift=1` in a pasted link starts this audited read at mount, with no click: the
+  // overlay is part of the view the link restores, opening the map already seals a graph
+  // read, and the page says both reads are audited. It names no id, so a link cannot make
+  // the operator read anything the permission does not already allow.
   const driftQuery = useQuery({
     queryKey: accessMapKeys.drift(activeTenant),
     queryFn: () => accessMapApi.drift({ limit: GRAPH_LIMIT }),
     enabled: overlay && canDrift,
   })
 
+  // The expansions the address names. They are reads of their own, so a link that
+  // names them fetches them, and Back (which removes one from the address) shrinks the
+  // map to the view the operator had.
+  //
+  // An expansion is read only for a node this map shows, with the kind the map gives it:
+  // a read is audited under the signed-in operator, so a pasted link must not make them
+  // seal reads of ids that are not here. "This map shows" is ONE set, what the canvas can
+  // draw: the base graph (it stops at GRAPH_LIMIT), the endpoints of the unused grants
+  // while the overlay shows them (graph-model.ts adds those edges from the drift read,
+  // which is drained; its unexpected accesses are the graph's own edges), and the nodes of every
+  // expansion already read. The last grows as expansions pass, so the list is walked
+  // until nothing changes: where a node sits in the address does not decide it.
+  const shownDrift = overlay && canDrift && driftQuery.isSuccess
+  const readCached = (node: ExpandedNode) =>
+    queryClient.getQueryData<GraphResponse>(
+      neighborsRead(activeTenant, node).queryKey,
+    )
+  const { onMap, readable } = resolveMap(
+    graphQuery.data,
+    shownDrift ? driftQuery.data : undefined,
+    expanded,
+    readCached,
+  )
+  // Turning the overlay off takes the nodes only it drew off the map, so the expansions on
+  // them go in the SAME change: they were the operator's own, and left in the address the
+  // gate would drop them later and blame the link.
+  const setOverlay = (on: boolean) => {
+    const stillReadable = on
+      ? readable
+      : resolveMap(graphQuery.data, undefined, expanded, readCached).readable
+    // A value the gate already refuses is its business, not this switch's.
+    const keep = expanded.filter((_, i) => stillReadable[i] || !readable[i])
+    drive({
+      drift: on ? '1' : undefined,
+      ...(keep.length < expanded.length ? { expand: expandedValue(keep) } : {}),
+    })
+  }
+  const neighborReads = useQueries({
+    queries: expanded.map((node, i) => ({
+      ...neighborsRead(activeTenant, node),
+      staleTime: Infinity,
+      enabled: readable[i],
+    })),
+    combine: keepResults,
+  })
+
   const merged = useMemo(
-    () => mergeGraphs(graphQuery.data, extra),
-    [graphQuery.data, extra],
+    () =>
+      mergeGraphs(
+        graphQuery.data,
+        neighborReads.flatMap((r) => (r.data ? [r.data] : [])),
+      ),
+    [graphQuery.data, neighborReads],
   )
   const signalSources = useMemo(() => distinctSignalSources(merged), [merged])
 
@@ -180,21 +342,125 @@ export function AccessMapView() {
     })
   }, [useWebGL, built.nodes, built.edges])
 
+  // THE SELECTION IS READ FROM THE ADDRESS, never held beside it. A node is looked up on
+  // what the canvas draws (so unused grants and cluster supernodes are addressable), an
+  // edge among the engine's edges and the drift set's (which holds the unused grants).
+  // The engine's own ref rides along for the session link: the canvas label falls back
+  // to a shortened id, and a link must not be built from that.
+  // The drift set is looked up while it holds data, even after a failed re-check: the
+  // sheet then says "could not look" about the edge instead of closing under the operator.
+  const driftHasData = overlay && canDrift && driftQuery.data !== undefined
+  const selectedNode =
+    addressNode === null
+      ? undefined
+      : render.nodes.find((n) => n.id === addressNode)
+  const selectedEdge =
+    addressEdge === null
+      ? undefined
+      : (merged.edges.find((e) => e.id === addressEdge) ??
+        (driftHasData
+          ? findDriftEntry(driftQuery.data ?? null, addressEdge)?.edge
+          : undefined))
+  const selection: Selection = selectedEdge
+    ? { type: 'edge', edge: selectedEdge }
+    : selectedNode
+      ? {
+          ...selectionFromNodeData(selectedNode.id, selectedNode.data),
+          originRef: onMap.get(selectedNode.id)?.ref,
+        }
+      : null
+
+  // The failed expand belongs to the node whose sheet is open, and is said IN that sheet:
+  // it is a modal dialog, so a notice on the page behind it is hidden from assistive
+  // technology and, on a phone, from the eye.
+  const expandFailureOf =
+    selection?.type === 'node' &&
+    expandFailure?.id === selection.id &&
+    expandFailure.kind === selection.kind
+      ? expandFailure
+      : null
+
+  // A link can name a node, an edge or an expansion that is not on this map (another
+  // tenant, an estate that moved on). Say so, and take it out of the address so a copied
+  // link stops carrying it. Only once every read it could be found in has ANSWERED: a
+  // read that failed is not an answer, and the notice for it is the retry below.
+  const settled =
+    graphQuery.isSuccess &&
+    neighborReads.every((r, i) => !readable[i] || r.isSuccess) &&
+    (!overlay || !canDrift || driftQuery.isSuccess)
+  const refusedExpansions = settled && readable.some((ok) => !ok)
+  const dropped =
+    settled &&
+    ((addressNode !== null && !selectedNode) ||
+      (addressEdge !== null && !selectedEdge))
+  const droppedKeys = [
+    ...(dropped ? [addressEdge !== null ? 'edge' : 'node'] : []),
+    ...(refusedExpansions ? ['expand'] : []),
+  ]
+  const [droppedSeen, setDroppedSeen] = useState('')
+  const droppedSignature = droppedKeys.join(',')
+  if (droppedSignature !== droppedSeen) {
+    setDroppedSeen(droppedSignature)
+    if (droppedKeys.length > 0) setDroppedNotice(droppedKeys)
+  }
+  // One array per change, never per render: the notice reads a new array as a new event
+  // and shows itself again, which undoes a dismissal.
+  const noticeIssues = useMemo(
+    () => [...new Set([...urlIssues, ...droppedNotice])],
+    [urlIssues, droppedNotice],
+  )
+  useEffect(() => {
+    if (!dropped && !refusedExpansions) return
+    patchUrl(
+      {
+        ...(dropped ? { node: undefined, edge: undefined } : {}),
+        ...(refusedExpansions
+          ? { expand: expandedValue(expanded.filter((_, i) => readable[i])) }
+          : {}),
+      },
+      { history: 'replace', keepReport: true },
+    )
+    // `readable` is rebuilt every render; the flags and the address are what change it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dropped, refusedExpansions, patchUrl])
+
   const onExpand = async (id: string, kind: string) => {
-    // Same race as the re-check, and a WORSE outcome: this one writes graph state. A
-    // neighbours call started in tenant A closes over A's `merged`; the switch to B clears
-    // `extra`, so the late continuation finds `prev === null` and merges A's WHOLE captured
-    // graph plus A's response into B — and then clears B's selection on top. The recheck
-    // guard does not cover it because it guards a different piece of state. Found by the
-    // second the model contrast, which is right that "closed for settled state and for
-    // recheck" is not "closed for every async write of that state".
+    // Same race as the re-check, and a WORSE outcome: this one writes the address. A
+    // neighbours call started in tenant A must not land its expansion in B's address
+    // after the switch, so the completion is dropped when the generation moved.
     const askedIn = generationRef.current
     setExpandFailure(null)
+    const node = { id, kind }
+    // Expanding a node that is already expanded refreshes its read and keeps its place:
+    // moving it to the end would put a node that sits on its read before it, and the
+    // gate would then see that node first.
+    const nextExpanded = () => {
+      const now = latest.current.expanded
+      return now.some((e) => e.id === id) ? now : [...now, node]
+    }
+    if (nextExpanded().length > MAX_EXPANDED) {
+      setExpandFailure({ id, kind, error: null, limit: true })
+      return
+    }
     try {
-      const res = await accessMapApi.neighbors(id, 'both', kind)
+      // Read it first, so a failure leaves the map and the open sheet as they were.
+      await queryClient.fetchQuery({
+        ...neighborsRead(activeTenant, node),
+        staleTime: 0,
+      })
       if (askedIn !== generationRef.current) return
-      setExtra((prev) => mergeGraphs(prev ?? merged, res))
-      setSelection(null)
+      // A PLACE, not a facet: this is the one change that pushes a history entry, so
+      // Back returns to the map as it was, selection included. The list is read from the
+      // address NOW: another expansion may have landed while this one was in flight.
+      drive(
+        {
+          expand: expandedValue(nextExpanded()),
+          ...(latest.current.node === id
+            ? { node: undefined, edge: undefined }
+            : {}),
+        },
+        { history: 'push' },
+      )
     } catch (error) {
       if (askedIn !== generationRef.current) return
       // Neighbors is privileged/audited too. Preserve the graph, but do not
@@ -203,12 +469,42 @@ export function AccessMapView() {
     }
   }
 
-  const selectEdge = (id: string) => {
-    const e = merged.edges.find((x) => x.id === id)
-    if (e) setSelection({ type: 'edge', edge: e })
+  const selectNode = (id: string) => drive({ node: id, edge: undefined })
+  const selectEdge = (id: string) => drive({ edge: id, node: undefined })
+  const clearSelection = () => drive({ node: undefined, edge: undefined })
+  const selectDrift = (entry: DriftEntry) => selectEdge(entry.edge.id)
+
+  // Arrow keys walk the canvas from node to connected node (React Flow nodes are
+  // focusable); Enter or Space opens the focused one. The list below the graph stays
+  // the path that needs no canvas at all.
+  const onGraphKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const el = (event.target as HTMLElement).closest<HTMLElement>(
+      '.react-flow__node',
+    )
+    const id = el?.dataset.id
+    if (!el || !id) return
+    // Alt+Arrow is the browser's Back and Forward, Ctrl and Meta are the platform's.
+    if (event.altKey || event.ctrlKey || event.metaKey) return
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      selectNode(id)
+      return
+    }
+    if (!ARROWS.includes(event.key)) return
+    const to = connectedNeighbor(
+      render.nodes,
+      render.edges,
+      id,
+      event.key as ArrowKey,
+    )
+    if (to === null) return
+    event.preventDefault()
+    event.currentTarget
+      .querySelector<HTMLElement>(
+        `.react-flow__node[data-id="${CSS.escape(to)}"]`,
+      )
+      ?.focus()
   }
-  const selectDrift = (entry: DriftEntry) =>
-    setSelection({ type: 'edge', edge: entry.edge })
 
   // Step 4 — VERIFY BY RE-ASKING. The button re-fetches /drift and reads the
   // answer out of the FRESH response, never out of the cached one that produced the
@@ -229,14 +525,29 @@ export function AccessMapView() {
   // landing. It is a GENERATION and not the tenant id on purpose — comparing tenants passes a
   // check issued in A, resolved while the operator was in B, and applied after they came back
   // to A, which is the same lie with more steps.
+  //
+  // Selection and expansion now live in the address, which a tenant switch does not
+  // clear by itself: the effect below does, but not on mount (a link opened in a
+  // tenant names its own selection).
   const [seenTenant, setSeenTenant] = useState(activeTenant)
   if (seenTenant !== activeTenant) {
     setSeenTenant(activeTenant)
-    setSelection(null)
-    setExtra(null)
     setExpandFailure(null)
+    setDroppedNotice([])
     setRecheck({ status: 'idle' })
   }
+  const tenantInAddress = useRef(activeTenant)
+  useEffect(() => {
+    const was = tenantInAddress.current
+    if (was === activeTenant) return
+    tenantInAddress.current = activeTenant
+    // The first tenant resolving (null to an id) is the link's own tenant, not a switch.
+    if (was !== null)
+      patchUrl(
+        { node: undefined, edge: undefined, expand: undefined },
+        { history: 'replace' },
+      )
+  }, [activeTenant, patchUrl])
   const onRecheck = async (edgeId: string) => {
     setRecheck({ status: 'checking', edgeId })
     // The context this check was ASKED in. A completion from an older one is dropped, not
@@ -315,7 +626,7 @@ export function AccessMapView() {
             variant="ghost"
             size="sm"
             onClick={() => {
-              setExtra(null)
+              drive({ expand: undefined })
               setExpandFailure(null)
               void graphQuery.refetch()
               if (overlay) void driftQuery.refetch()
@@ -392,6 +703,24 @@ export function AccessMapView() {
         </div>
       )}
 
+      {/* What the link asked for and the map could not give: a refused value, a node or
+          edge that is not on this map, an expansion whose read failed. */}
+      <UrlStateNotice issues={noticeIssues} />
+      {neighborReads.some((r) => r.isError) && (
+        <CaveatNotice tone="warning">
+          {t('expand.partial')}{' '}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              for (const r of neighborReads) if (r.isError) void r.refetch()
+            }}
+          >
+            {t('expand.retry')}
+          </Button>
+        </CaveatNotice>
+      )}
+
       {/* Filters */}
       {!isLoading && !error && (
         <AccessFilters
@@ -443,18 +772,22 @@ export function AccessMapView() {
           <div className="flex min-h-0 flex-1 flex-col gap-3">
             {/* Graph (desktop). React Flow ≤ threshold (the polished view); Sigma
               WebGL above it — SAME built model, same selection/click contract. */}
-            <div className="hidden h-[70vh] min-h-[460px] flex-1 md:block">
+            <div
+              className="hidden h-[70vh] min-h-[460px] flex-1 md:block"
+              onKeyDown={onGraphKeyDown}
+            >
+              {!useWebGL && (
+                <p className="sr-only">{t('graph.keyboardHint')}</p>
+              )}
               {useWebGL ? (
                 <SigmaGraph
                   nodes={render.nodes}
                   edges={render.edges}
                   nodeColor={accessNodeColor}
                   ariaLabel={t('subtitle')}
-                  onNodeClick={(id, data) =>
-                    setSelection(selectionFromNodeData(id, data))
-                  }
+                  onNodeClick={(id) => selectNode(id)}
                   onEdgeClick={(id) => selectEdge(id)}
-                  onPaneClick={() => setSelection(null)}
+                  onPaneClick={clearSelection}
                   fitKey={`${filter.search}|${[...filter.modes].join(',')}|${filter.confidence}|${filter.signalSource}|${overlay}|${render.nodes.length}|${render.clustered}`}
                 >
                   <div className="pointer-events-none absolute bottom-3 left-3 z-10">
@@ -470,11 +803,9 @@ export function AccessMapView() {
                   nodeTypes={accessNodeTypes}
                   edgeTypes={accessEdgeTypes}
                   ariaLabel={t('subtitle')}
-                  onNodeClick={(n) =>
-                    setSelection(selectionFromNodeData(n.id, n.data))
-                  }
+                  onNodeClick={(n) => selectNode(n.id)}
                   onEdgeClick={(e) => selectEdge(e.id)}
-                  onPaneClick={() => setSelection(null)}
+                  onPaneClick={clearSelection}
                   minimapColor={(n) =>
                     (n.data as { hasUnexpected?: boolean }).hasUnexpected
                       ? 'var(--color-danger)'
@@ -545,11 +876,7 @@ export function AccessMapView() {
                                 button. */}
                               <button
                                 type="button"
-                                onClick={() =>
-                                  setSelection(
-                                    selectionFromNodeData(n.id, n.data),
-                                  )
-                                }
+                                onClick={() => selectNode(n.id)}
                                 className="text-left text-foreground underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring"
                               >
                                 {data.label}
@@ -624,15 +951,14 @@ export function AccessMapView() {
       <AccessDetailSheet
         selection={selection}
         onClose={() => {
-          setSelection(null)
+          clearSelection()
           setExpandFailure(null)
         }}
         onExpand={onExpand}
-        expandError={
-          selection?.type === 'node' &&
-          expandFailure?.id === selection.id &&
-          expandFailure.kind === selection.kind
-            ? expandFailure.error
+        expandError={expandFailureOf?.error ?? null}
+        expandNotice={
+          expandFailureOf?.limit
+            ? t('detail.expandLimit', { n: MAX_EXPANDED })
             : null
         }
         drift={driftLookup}

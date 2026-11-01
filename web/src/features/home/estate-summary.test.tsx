@@ -14,9 +14,23 @@ const FULL: EstateSummaryProps = {
   state: 'ready',
   running: 7,
   people: 6,
-  today: { sessions: 9, costMicroUsd: 6_840_000, unpriced: 0 },
+  today: {
+    sessions: 9,
+    costMicroUsd: 6_840_000,
+    unpriced: 0,
+    inputTokens: null,
+    outputTokens: null,
+    tokensUnreported: 0,
+  },
   todayFloor: false,
-  yesterday: { sessions: 5, costMicroUsd: 5_100_000, unpriced: 0 },
+  yesterday: {
+    sessions: 5,
+    costMicroUsd: 5_100_000,
+    unpriced: 0,
+    inputTokens: null,
+    outputTokens: null,
+    tokensUnreported: 0,
+  },
   needs: { count: 3, more: false },
   month: {
     spentMicroUsd: 186_400_000,
@@ -54,7 +68,14 @@ describe('EstateSummary', () => {
       <EstateSummary
         {...FULL}
         todayFloor
-        today={{ sessions: 9, costMicroUsd: 6_840_000, unpriced: 2 }}
+        today={{
+          sessions: 9,
+          costMicroUsd: 6_840_000,
+          unpriced: 2,
+          inputTokens: null,
+          outputTokens: null,
+          tokensUnreported: 0,
+        }}
       />,
     )
     expect(sentence()).toHaveTextContent('at least $6.84 today')
@@ -69,8 +90,22 @@ describe('EstateSummary', () => {
         {...FULL}
         running={0}
         people={0}
-        today={{ sessions: 0, costMicroUsd: null, unpriced: 0 }}
-        yesterday={{ sessions: 0, costMicroUsd: null, unpriced: 0 }}
+        today={{
+          sessions: 0,
+          costMicroUsd: null,
+          unpriced: 0,
+          inputTokens: null,
+          outputTokens: null,
+          tokensUnreported: 0,
+        }}
+        yesterday={{
+          sessions: 0,
+          costMicroUsd: null,
+          unpriced: 0,
+          inputTokens: null,
+          outputTokens: null,
+          tokensUnreported: 0,
+        }}
         needs={{ count: 0, more: false }}
         month={null}
       />,

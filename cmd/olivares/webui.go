@@ -79,8 +79,11 @@ func isAPIPath(p string) bool {
 }
 
 // newSPAHandler wraps the engine API handler with the embedded web UI.
-func newSPAHandler(engineAPI http.Handler, assets fs.FS) http.Handler {
+func newSPAHandler(engineAPI http.Handler, assets fs.FS, localTLS ...func() bool) http.Handler {
 	s := &spaServer{fsys: assets}
+	if len(localTLS) > 0 {
+		s.localTLS = localTLS[0]
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isAPIPath(r.URL.Path) {
 			engineAPI.ServeHTTP(w, r)
@@ -91,6 +94,7 @@ func newSPAHandler(engineAPI http.Handler, assets fs.FS) http.Handler {
 }
 
 type spaServer struct {
+	localTLS  func() bool
 	fsys      fs.FS
 	once      sync.Once
 	indexHTML []byte
@@ -162,6 +166,12 @@ func (s *spaServer) serveIndex(w http.ResponseWriter, r *http.Request) {
 	// Inject the nonce into every placeholder Vite/index.html left, so the header
 	// and the body share it atomically (no drift possible).
 	html := bytes.ReplaceAll(s.indexHTML, noncePlaceholder, []byte(nonce))
+	// Certificate exceptions do not authorize service-worker script fetches. The
+	// browser exposes no trust query, so direct local TLS conservatively omits push.
+	// A TLS-terminating proxy serves its own certificate and receives no hint.
+	if r.TLS != nil && s.localTLS != nil && s.localTLS() {
+		html = bytes.Replace(html, []byte("</head>"), []byte(`<meta name="olivares-local-tls" content="true"></head>`), 1)
+	}
 	http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(html))
 }
 

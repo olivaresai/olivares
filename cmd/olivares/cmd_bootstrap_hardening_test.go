@@ -19,7 +19,7 @@ import (
 )
 
 // The witnesses for the sol-max contrast of 2026-08-16
-// (an internal design note (not shipped)). Each one is written in BOTH
+// (an internal audit). Each one is written in BOTH
 // directions on purpose: the audit's own finding was that the existing tests proved
 // the deny half of things nobody was attacking while the permit half — a valid
 // operator getting in — was the half that was broken.

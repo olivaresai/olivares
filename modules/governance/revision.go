@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -35,8 +36,12 @@ const (
 	surfaceGrokRequirements   = "grok-requirements"    // /etc/grok/requirements.toml
 	surfaceOpenCodeConfig     = "opencode-config"      // /etc/opencode/opencode.json
 	surfaceGeminiCLISettings  = "gemini-cli-settings"  // /etc/gemini-cli/settings.json
-	surfaceCedar              = "cedar"
-	surfaceOPA                = "opa"
+	// The instructions file of Claude Code's managed tier, /etc/claude-code/CLAUDE.md. A
+	// department's workstations read their department's file, so the surface a document is
+	// published under names the department: "managed-instructions@<department>".
+	surfaceManagedInstructions = "managed-instructions"
+	surfaceCedar               = "cedar"
+	surfaceOPA                 = "opa"
 )
 
 // maxPolicyContentBytes bounds an authored document so a hostile/huge paste cannot
@@ -335,8 +340,16 @@ type surfaceEntry struct {
 	format      string // counted content format; empty means the family's own
 	activatable bool
 	engine      bool
-	content     *model.ColumnDecl
+	// perDepartment makes the surface a family: name@<department> is a surface of its own,
+	// with its own revisions, signed artifacts and check-ins, and the bare name authors a
+	// document with no department.
+	perDepartment bool
+	content       *model.ColumnDecl
 }
+
+// departmentSurfaceSep joins a per-department surface to its department. A workspace slug
+// (api.SlugPattern) never holds it.
+const departmentSurfaceSep = "@"
 
 // Surface families.
 const (
@@ -369,6 +382,9 @@ var surfaces = surfaceRegistry{entries: []surfaceEntry{
 	{name: surfaceGrokRequirements, family: surfaceFamilyManaged, format: formatTOML, content: model.Scan(model.ClassAuthority)},
 	{name: surfaceOpenCodeConfig, family: surfaceFamilyManaged, content: model.Scan(model.ClassAuthority)},
 	{name: surfaceGeminiCLISettings, family: surfaceFamilyManaged, content: model.Scan(model.ClassAuthority)},
+	// Prose for the model, written by whoever edits the template: it grants nothing, and a name in
+	// it is not an account reference, so retirement says it was not scanned (ClassThirdPartyText).
+	{name: surfaceManagedInstructions, family: surfaceFamilyManaged, perDepartment: true, content: model.Scan(model.ClassThirdPartyText)},
 	{name: surfaceCedar, family: surfaceFamilyCedar, activatable: true, engine: true, content: model.Scan(model.ClassAuthority)},
 	{name: surfaceOPA, family: surfaceFamilyOPA, activatable: true, engine: true, content: model.Scan(model.ClassRestrict)},
 	{name: surfaceCedarManaged, family: surfaceFamilyCedar, content: model.Scan(model.ClassAuthority)},
@@ -393,10 +409,27 @@ func (r surfaceRegistry) base(name string) (surfaceEntry, bool) {
 	return surfaceEntry{}, false
 }
 
-// accepts reports whether the revision store may hold surface: a base surface,
-// or the activation stream of an activatable one.
+// resolve returns the entry a surface name selects and its department: a base surface (no
+// department), or a per-department surface "name@<department>" with a department that is a
+// workspace slug.
+func (r surfaceRegistry) resolve(name string) (entry surfaceEntry, department string, ok bool) {
+	if e, found := r.base(name); found {
+		return e, "", true
+	}
+	base, department, found := strings.Cut(name, departmentSurfaceSep)
+	if !found || !api.SlugPattern.MatchString(department) {
+		return surfaceEntry{}, "", false
+	}
+	if e, found := r.base(base); found && e.perDepartment {
+		return e, department, true
+	}
+	return surfaceEntry{}, "", false
+}
+
+// accepts reports whether the revision store may hold surface: a base surface, a
+// per-department surface, or the activation stream of an activatable one.
 func (r surfaceRegistry) accepts(surface string) bool {
-	if _, ok := r.base(surface); ok {
+	if _, _, ok := r.resolve(surface); ok {
 		return true
 	}
 	if name, ok := strings.CutSuffix(surface, activationSurfaceSuffix); ok {
@@ -420,9 +453,10 @@ func (r surfaceRegistry) Kinds() []string {
 	return out
 }
 
-// Variant implements model.KindTable.
+// Variant implements model.KindTable. A per-department surface selects its base's variant;
+// Kinds lists the base only, because the departments are not a closed set.
 func (r surfaceRegistry) Variant(kind string) (*model.ColumnDecl, bool) {
-	if e, ok := r.base(kind); ok {
+	if e, _, ok := r.resolve(kind); ok {
 		return e.content, true
 	}
 	if r.accepts(kind) {

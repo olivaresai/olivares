@@ -418,6 +418,16 @@ export interface McpAuthServer {
 // NO NIST/FIPS conformance claim the backend does not guarantee.
 // ---------------------------------------------------------------------------
 
+export interface AuthSessionItem {
+  name?: string
+  id: string
+  created_at: string
+  last_used_at: string | null
+  kind: 'browser' | 'token' | 'unknown' | 'pairing'
+  current: boolean
+  expires_at: string
+}
+
 /** A registered WebAuthn credential as returned by the credentials list endpoint. */
 export interface WebAuthnCredentialItem {
   id: string

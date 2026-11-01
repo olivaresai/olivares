@@ -384,15 +384,48 @@ describe('Scenario authoring — the console calls what the engine already serve
     expect(
       await screen.findByText(/Record the first synthetic fixture/i),
     ).toBeInTheDocument()
-    // TWO doors to one action, and that is the point: the section header carries it
-    // for a populated list, and the empty state carries it where the reader is
-    // actually looking when there is nothing to read. Both open the same editor.
+    // ONE filled primary per first screen: an empty read that SUCCEEDED
+    // hands the verb to the empty state — where the reader is actually looking —
+    // and the section header does not paint a second one. The header takes the
+    // verb back the moment there is a list to add to, or while the read has not
+    // answered (the next two witnesses).
     const nuevos = screen.getAllByRole('button', { name: 'New scenario' })
-    expect(nuevos).toHaveLength(2)
+    expect(nuevos).toHaveLength(1)
+    // The one door left is the FILLED primary (exact class token, not a soft tint).
+    expect(nuevos[0].className).toMatch(/(?:^| )bg-accent(?:$| )/)
     expect(
       within(vacio(/Record the first synthetic fixture/i)).getByRole('button', {
         name: 'New scenario',
       }),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps the header verb while the scenarios read has not answered', async () => {
+    // An unanswered read renders neither rows nor the empty state: without the
+    // header verb the screen would offer no way to act at all.
+    api.scenarios.mockReturnValue(new Promise(() => {}))
+    auth.perms = new Set(['sandbox:scenario:write'])
+    const user = userEvent.setup()
+    renderIntel(<SandboxView />)
+    await user.click(screen.getByRole('tab', { name: 'Scenarios' }))
+    expect(
+      await screen.findByRole('button', { name: 'New scenario' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(/Record the first synthetic fixture/i),
+    ).not.toBeInTheDocument()
+  })
+
+  it('keeps the header verb when the scenarios read fails', async () => {
+    // A failed read is not an empty list; the verb stays reachable for the retry.
+    api.scenarios.mockRejectedValue(new Error('engine unreachable'))
+    auth.perms = new Set(['sandbox:scenario:write'])
+    const user = userEvent.setup()
+    renderIntel(<SandboxView />)
+    await user.click(screen.getByRole('tab', { name: 'Scenarios' }))
+    await screen.findByRole('alert')
+    expect(
+      screen.getByRole('button', { name: 'New scenario' }),
     ).toBeInTheDocument()
   })
 
@@ -591,13 +624,9 @@ describe('SandboxView — las tres acciones y sus dos niveles de permiso', () =>
   })
 })
 
-/**
- * ONE ORANGE PER FIRST SCREEN (dev#2673's console rule 2026-10-17): the scenarios
- * section header already carries "New scenario" in orange, so the empty list repeats
- * the verb in the secondary style.
- */
+// The empty state owns the single filled action after a successful empty read.
 describe('SandboxView — one orange control on an empty scenario list', () => {
-  it('offers the empty-state verb in the secondary style; the header keeps the orange', async () => {
+  it('opens the create dialog from the single filled empty-state verb', async () => {
     api.scenarios.mockResolvedValue({ items: [], has_more: false })
     auth.perms = new Set(['sandbox:scenario:write'])
     const user = userEvent.setup()
@@ -609,10 +638,11 @@ describe('SandboxView — one orange control on an empty scenario list', () => {
     const inEmpty = within(emptyState).getByRole('button', {
       name: 'New scenario',
     })
-    expect(inEmpty.className).not.toContain('bg-accent')
-    const inHeader = screen
-      .getAllByRole('button', { name: 'New scenario' })
-      .find((button) => button !== inEmpty)
-    expect(inHeader?.className).toContain('bg-accent')
+    expect(inEmpty.className).toMatch(/(?:^| )bg-accent(?:$| )/)
+    expect(screen.getAllByRole('button', { name: 'New scenario' })).toEqual([
+      inEmpty,
+    ])
+    await user.click(inEmpty)
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
   })
 })

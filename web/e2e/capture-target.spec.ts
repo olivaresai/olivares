@@ -536,7 +536,7 @@ test.describe('capture target — session surfaces', () => {
     }
   })
 
-  test('rejects the rows the console never paints: thinking tokens and a raw rate-limit report (dev#3119)', async ({
+  test('rejects the rows the console never paints: thinking tokens and a raw rate-limit report', async ({
     page,
   }) => {
     for (const fila of [
@@ -558,7 +558,7 @@ test.describe('capture target — session surfaces', () => {
     }
   })
 
-  test('accepts the sentence of a limit that stopped the turn (dev#3119)', async ({
+  test('accepts the sentence of a limit that stopped the turn', async ({
     page,
   }) => {
     for (const fila of [

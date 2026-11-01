@@ -125,7 +125,7 @@ func TestCommittedWorkerVectorsAreByteIdentical(t *testing.T) {
 	}
 }
 
-// The Worker's vectors at c04256a4 (published to the client by B's PROTOCOL.md and Root's wire
+// The Worker's vectors at c04256a4 (published to the client by B's PROTOCOL.md and the maintainer's wire
 // relay) add the rotate-key dual-proof vector with three mismatch cases.
 const (
 	bRotationVectors = "testdata/canonical-vectors.b-c04256a.json"

@@ -226,7 +226,7 @@ func TestParseConsoleClientCallsDiscoversWhitespaceBeforeDot(t *testing.T) {
 // The Business overlay is not formatted by web/.prettierrc.json (singleQuote), so its
 // client calls spell the route as a double-quoted literal. The census must read them
 // in every form it reads a single-quoted one: an unread call counts a surface the
-// console has as missing (dev#2263, GET /v1/system/residency).
+// console has as missing (the regression, GET /v1/system/residency).
 func TestDoubleQuotedPathLiteralsAreConsoleSurface(t *testing.T) {
 	const source = "import { http } from '@/lib/api/client'\n" +
 		"const BASE = \"/v1/m/exports\"\n" +

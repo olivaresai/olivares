@@ -14,7 +14,7 @@
 #
 # The engine starts as a fresh store and first-boot setup mints the same demo login. --seed-demo is not
 # used because it also writes synthetic observed sessions into the same tenant, and the home would count
-# them beside the canonical sixteen (dev#2562); the snapshot fails if the live list holds more than the
+# them beside the canonical sixteen; the snapshot fails if the live list holds more than the
 # seven canonical sessions. The communications
 # plane needs the directory writer's one-time activation, which scripts/docs-captures.sh performs; this test
 # runs without it and passes --no-communications. The channels and messages are covered by the offline
@@ -82,7 +82,7 @@ login() {
 }
 
 # First-boot setup: the capture harness mints the same demo administrator on a fresh store, so no
-# synthetic --seed-demo observations exist beside the canonical estate (dev#2562).
+# synthetic --seed-demo observations exist beside the canonical estate.
 bootstrap() {
   local token body status
   token="$(awk '/^=== FIRST-BOOT SETUP ===$/ { inside = 1; next }
@@ -254,7 +254,7 @@ runs = get("/v1/m/sessions/runs?limit=100")["items"]
 known = [r for r in runs if r.get("name") in canonical]
 seed = [r for r in runs if r.get("name") not in canonical]
 # The home merges every observed row with the runs: only the plane's own bridge rows of these
-# sixteen runs may exist, or the captured figures count somebody else's sessions (dev#2562).
+# sixteen runs may exist, or the captured figures count somebody else's sessions.
 run_refs = {r.get("run_ref") for r in known}
 live_rows = get("/v1/m/sessions/live?limit=100")["items"]
 outside = [r for r in live_rows if r.get("attribution") != "managed" or r.get("run_ref") not in run_refs]

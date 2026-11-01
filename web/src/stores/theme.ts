@@ -19,7 +19,7 @@ const STORAGE_KEY = 'olivares.theme'
 export const DEFAULT_THEME: Theme = 'system'
 
 /**
- * THE DEFAULT FOLLOWS THE SYSTEM (HU-27, Root 2026-10-01). It was DARK from C1 to
+ * THE DEFAULT FOLLOWS THE SYSTEM (acceptance, Root 2026-10-01). It was DARK from C1 to
  * 26.10; the hands-on review reversed that: an operator who never chose a theme gets
  * the one their operating system asks for, and Light or Dark only when they pick one.
  * The theme toggle still offers all three, and every token pair stays AA+ in both.

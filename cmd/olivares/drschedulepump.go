@@ -111,7 +111,7 @@ func (p *drSchedulePump) runOnce(ctx context.Context) error {
 	p.lastEval = time.Now()
 	ran, err := p.api.RunDueScheduledBackup(ctx, p.clock().UTC())
 	if err != nil {
-		p.log.Warn("dr-schedule: scheduled backup attempt failed; will retry on the next due instant", "err", err)
+		p.log.Warn("dr-schedule: scheduled backup or verification attempt failed; will retry on the next due instant", "err", err)
 		return nil
 	}
 	if ran {

@@ -133,7 +133,7 @@ func TestGovernanceRequestBodiesMatchHandlerDTOs(t *testing.T) {
 		{http.MethodPost, "/policies", []string{"enabled", "kind", "name", "spec"}, []string{"kind", "name"}, true},
 		{http.MethodPut, "/policies/{id}", []string{"enabled", "kind", "name", "spec"}, []string{"kind", "name"}, true},
 		{http.MethodPost, "/approvals", []string{"action", "escalate_in_seconds", "expires_in_seconds", "reason", "required_approvals", "subject_kind", "subject_ref"}, []string{"action"}, true},
-		{http.MethodPost, "/approvals/{id}/decisions", []string{"decision", "note"}, []string{"decision"}, true},
+		{http.MethodPost, "/approvals/{id}/decisions", []string{"decision", "note", "scope"}, []string{"decision"}, true},
 		{http.MethodPost, "/approvals/{id}/consume", []string{"consumer_id", "policy_version"}, []string{"consumer_id"}, true},
 		{http.MethodPost, "/decisions/replay", []string{"action", "action_vocabulary", "at", "decision_id", "principal", "resource", "resource_kind", "source_instance"}, nil, true},
 		{http.MethodPost, "/agents", []string{"criticality", "identity_ref", "source", "sponsor_ref"}, []string{"identity_ref", "sponsor_ref"}, false},
@@ -178,8 +178,8 @@ func TestGovernanceRequestBodyConditions(t *testing.T) {
 	policyBody, _ := governanceRequestBody(http.MethodPost, "/policies")
 	policy := governanceSchemaFromBody(t, policyBody)
 	branches := policy["oneOf"].([]any)
-	if len(branches) != 2 {
-		t.Fatalf("policy kind oneOf has %d branches, want 2", len(branches))
+	if len(branches) != 3 {
+		t.Fatalf("policy kind oneOf has %d branches, want 3", len(branches))
 	}
 	abacBranch := branches[0].(map[string]any)
 	abacProperties := abacBranch["properties"].(map[string]any)
@@ -194,6 +194,15 @@ func TestGovernanceRequestBodyConditions(t *testing.T) {
 	}
 	if rule["additionalProperties"] != false {
 		t.Errorf("ABAC rule is not closed: %#v", rule)
+	}
+
+	grantBranch := branches[2].(map[string]any)
+	grantSpec := grantBranch["properties"].(map[string]any)["spec"].(map[string]any)["anyOf"].([]any)[0].(map[string]any)
+	for _, field := range []string{"default_seconds", "maximum_seconds"} {
+		bounds := grantSpec["properties"].(map[string]any)[field].(map[string]any)
+		if bounds["minimum"] != 0 || bounds["maximum"] != 31536000 {
+			t.Errorf("grant_expiry %s bounds = %#v", field, bounds)
+		}
 	}
 
 	agentBody, _ := governanceRequestBody(http.MethodPost, "/agents")

@@ -22,8 +22,10 @@
 //   - The OTel messaging-semconv instrumentation GATE: default OFF,
 //     and deliberately NOT pinned to a semconv schema version because the
 //     messaging semantic conventions are in Development, not Stable, as of 2026
-//. It is an attribute carrier only — there is NO OTLP emitter
-//     here (that is).
+//
+// . It is an attribute carrier only — there is NO OTLP emitter
+//
+//	here (that is).
 //
 // It imports only the SDK and the shared Apache redact helper — never the engine.
 package brokerobs

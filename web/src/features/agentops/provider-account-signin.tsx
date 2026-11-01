@@ -7,7 +7,12 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { CodeLine } from '@/components/ui/code-line'
 import { SignIn } from '@/features/first-hour/first-hour'
-import { signInApi, type SignInTool } from '@/features/first-hour/api'
+import {
+  isSigningIn,
+  signInApi,
+  SIGNING_IN_POLL_MS,
+  type SignInTool,
+} from '@/features/first-hour/api'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { useStepUpOwner } from '@/stores/step-up'
@@ -75,6 +80,8 @@ export function useAccountSignInStatus(
     enabled,
     gcTime: 0,
     retry: false,
+    refetchInterval: (query) =>
+      isSigningIn(query.state.data) ? SIGNING_IN_POLL_MS : false,
   })
 }
 

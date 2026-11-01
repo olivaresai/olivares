@@ -13,7 +13,7 @@ import (
 )
 
 // rs_s504_round4_test.go — Stage-5 review round 4 (Codex,
-// an internal design note (not shipped), VERDICT:
+// an internal audit, VERDICT:
 // MUST-FIX-BEFORE-LAND): three gaps IN the context-led redesign (b176e795), each
 // pinned by the reviewer's OWN concrete failing transaction.
 //
@@ -21,7 +21,7 @@ import (
 // fix and observed to FAIL (the governed payload was released). Finding 3 is the
 // INVERTED direction — protocol-valid traffic currently REFUSED must go
 // red-then-green. The literal failing output lives in
-// an internal design note (not shipped)
+// an internal audit
 //
 // PRIMARY SOURCE for every protocol shape asserted here is the vendored MCP
 // 2026-07-28 RC schema (an internal design note (not shipped), upstream 76346843):

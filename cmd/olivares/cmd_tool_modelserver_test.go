@@ -145,6 +145,28 @@ func TestToolStartPassesTheEnginesRefusalOn(t *testing.T) {
 	}
 }
 
+// The engine can answer "stopped" while warning that a container it started may still
+// serve (no runtime can be driven to remove it, or another runtime cannot prove it is
+// gone). The person is the one who has to remove it, so `tool stop` says it; JSON-only
+// would turn a warning into a silent success.
+func TestToolStopShowsTheEnginesWarning(t *testing.T) {
+	const warning = "Ollama is stopped, but the engine could not confirm that the container it started is gone, so it may still be serving on http://127.0.0.1:11434; remove it by hand if that address answers."
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"state": "stopped", "models": []string{}, "message": warning})
+	}))
+	defer server.Close()
+	out, _, err := execSessionCLI(t, nil, append([]string{"tool", "stop", "ollama"}, sessionCreds(server.URL)...)...)
+	if err != nil {
+		t.Fatalf("tool stop ollama: %v", err)
+	}
+	for _, want := range []string{"Ollama stopped.", warning} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("tool stop ollama lacks %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestToolStopEndsAModelServerAndOllama(t *testing.T) {
 	for _, tc := range []struct{ tool, route, said string }{
 		{"llama-cpp", "/model-servers/llama-cpp/stop", "llama.cpp stopped."},

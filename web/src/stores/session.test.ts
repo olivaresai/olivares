@@ -131,7 +131,7 @@ describe('session store — why a session ended', () => {
   })
 })
 
-// SR4C on 793f2e30: the client answers one request's 401 twice (the failed refresh, then the
+// review on 793f2e30: the client answers one request's 401 twice (the failed refresh, then the
 // request itself), and the second notice erased the reason.
 describe('session store — a repeated end notice', () => {
   it('keeps the reason a second notice finds, and a sign-out still clears it', () => {

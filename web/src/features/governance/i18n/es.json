@@ -143,6 +143,7 @@
     "actorHint": "Identificador de actor de auditoría — nunca una dirección de correo. La identidad se resuelve desde el directorio, no se muestra aquí.",
     "expiredAt": "Caducada {{time}}",
     "approveOnce": "Aprobar una vez",
+    "approveForSession": "Aprobar para esta sesión",
     "approving": "Aprobando…",
     "deny": "Rechazar",
     "noMatch": "Ninguna solicitud coincide con la búsqueda",
@@ -220,6 +221,7 @@
     "trailEmpty": "Todavía no hay decisiones registradas",
     "trailEmptyHint": "Aquí se registra cada decisión sobre esta aprobación: quién decidió, cuándo y por qué. Todavía no ha decidido nadie.",
     "decisionApprove": "Aprobada",
+    "decisionApproveForSession": "Aprobada para esta sesión",
     "decisionReject": "Rechazada",
     "reenableNeedsAdmins": "Dos cuentas de administrador distintas deben aprobarlo. Créalas en Identidad y acceso, o con `olivares users create`.",
     "openIdentity": "Abrir Identidad y acceso",
@@ -687,14 +689,19 @@
     "matched": "Regla aplicada: {{rule}}",
     "matchedDefault": "Regla aplicada: ninguna, así que se aplica la predeterminada",
     "matchedUnreadable": "Regla aplicada: una regla que no puedes leer",
-    "reaches": "Alcanza: {{list}}",
+    "reaches": "Alcanza:",
     "reachFolder": {
-      "write": "{{path}} (escritura)",
-      "read": "{{path}} (solo lectura)",
-      "unknown": "{{path}} (acceso desconocido)"
+      "write": "<path /> (escritura)",
+      "read": "<path /> (solo lectura)",
+      "unknown": "<path /> (acceso desconocido)"
     },
     "matchedUnknown": "Regla aplicada: una regla que no se pudo leer",
-    "reachIncomplete": "más, que no se pudo leer"
+    "reachIncomplete": "más, que no se pudo leer",
+    "rule": {
+      "default": "Ninguna regla, así que se aplica la predeterminada",
+      "unreadable": "Una regla que no puede leer",
+      "unknown": "Una regla que no se pudo leer"
+    }
   },
   "list": {
     "loadedOnly": "La búsqueda solo abarca las filas cargadas hasta ahora; carga más para seguir."

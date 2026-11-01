@@ -4,7 +4,8 @@
     "codex": "Codex",
     "grok": "Grok Build",
     "opencode": "OpenCode",
-    "gemini-cli": "Gemini CLI"
+    "gemini-cli": "Gemini CLI",
+    "cursor": "Cursor CLI"
   },
   "status": {
     "installed": "Installed",
@@ -26,6 +27,7 @@
     "signInChatGPT": "Sign in with ChatGPT",
     "useApiKey": "Use an API key instead",
     "signInGrok": "Sign in with your xAI account",
+    "signInCursor": "Sign in with your Cursor account",
     "signInGoogle": "Sign in with Google",
     "signIn": "Sign in"
   },
@@ -102,6 +104,12 @@
     "secretUse": "Give this session {{name}}",
     "secretVariable": "Variable for {{name}}",
     "secretsManage": "Manage session secrets",
+    "credentials": "Managed credentials (Business)",
+    "credentialsHint": "The session uses each chosen credential through a helper the engine runs; the sealed value never reaches it. Requires Olivares Business.",
+    "credentialsNone": "No managed credentials yet. Add one with a name that begins with credential/.",
+    "credentialUse": "Give this session {{name}}",
+    "credentialsManage": "Manage managed credentials",
+    "listUnavailable": "The engine did not answer the secrets list. Nothing can be chosen for now.",
     "openTools": "Open AI tools",
     "model": "Model",
     "providerDefault": "Default ({{model}})",
@@ -113,7 +121,9 @@
     "profile": "Profile",
     "profileNotSignedIn": "Not signed in",
     "profileNeedsKey": "Needs a key",
-    "foldersUnreadable": "The registered folders could not be read. Type the path of a folder on this server."
+    "foldersUnreadable": "The registered folders could not be read. Type the path of a folder on this server.",
+    "folderPermission": "Starts as {{name}}, this folder's default.",
+    "autoAsks": "{{tool}} has no automatic mode: it will ask before each action."
   },
   "lists": {
     "runsTruncated": "Recent sessions: {{count}} loaded; there are more.",
@@ -122,10 +132,12 @@
     "foldersHint": "Some registered folders are outside this list."
   },
   "permission": {
-    "editsOnly": "Edit files only",
+    "editsOnly": "Auto-accept edits",
     "editsAndCommands": "Edit files and run commands",
     "readOnly": "Read only",
-    "ask": "Ask before each action"
+    "ask": "Supervised",
+    "auto": "Auto",
+    "full": "Full"
   },
   "next": {
     "title": "Next, when you need them",
@@ -138,5 +150,13 @@
     "cliHint": "On this server, the olivares command is already installed. From another computer, install it with:",
     "copy": "Copy",
     "copied": "Copied"
+  },
+  "permissionSummary": {
+    "readOnly": "Reads and plans. Every change is refused.",
+    "ask": "Asks before every action that is not a read.",
+    "editsOnly": "Reads and edits files without asking. Everything else asks.",
+    "editsAndCommands": "Reads, edits files and runs commands without asking. Other tools are refused.",
+    "auto": "The tool's own reviewed automatic mode decides. A tool without one asks, as in Supervised. Needs run administration.",
+    "full": "Nothing asks. Olivares still confines the session and records every action. Needs run administration."
   }
 }

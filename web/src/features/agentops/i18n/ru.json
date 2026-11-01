@@ -119,7 +119,7 @@
     "detach": "Отключиться"
   },
   "discardWorktree": {
-    "label": "Также удалить worktree и ветку {{branch}}",
+    "label": "Также удалить worktree и ветку <branch />",
     "hint": "Удаляются, когда ветка влита, а worktree чистый. Отметьте, чтобы отбросить невлитую или незакоммиченную работу."
   },
   "create": {
@@ -148,8 +148,11 @@
     "worktree": "Работать в новом git worktree",
     "worktreeHint": "Создаёт новую ветку в отдельном worktree, чтобы сессии одного репозитория не делили файлы. Папка должна быть корневой папкой репозитория.",
     "worktreeFrom": "Начало с",
+    "sourceUrl": "Issue или pull request GitHub",
+    "sourceUrlHint": "Запускается в worktree на ветке с его именем и отправляет заголовок и текст первым сообщением. Нужны учётные данные репозитория, зарегистрированные для этой папки.",
+    "sourceUrlPlaceholder": "https://github.com/owner/repo/issues/17",
     "isolation": "Изоляция",
-    "isolationContainerHint": "Контейнер запускает сессию в podman или Docker на этом сервере. Сессии с провайдером из раздела «Провайдеры» нужен native.",
+    "isolationContainerHint": "Контейнер запускает сессию в podman или Docker на этом сервере.",
     "envAllow": "Передать env хоста (имена)",
     "envAllowPlaceholder": "PATH, HOME, TERM",
     "envAllowHint": "Список разрешённых ИМЁН env-переменных хоста для передачи (значения никогда не отправляются).",
@@ -234,6 +237,7 @@
     "workspaceDirectory": "Рабочий каталог",
     "workspaceDirectoryOwn": "собственный каталог этой сессии",
     "worktreeBranch": "Ветка worktree",
+    "sourceItem": "Запущена из",
     "created": "Создано",
     "started": "Запущено",
     "lastActivity": "Последняя активность",
@@ -393,6 +397,15 @@
       "discard": "Отменить изменения",
       "save": "Сохранить папки",
       "saved": "Папки только для чтения сохранены."
+    },
+    "defaultPermission": {
+      "title": "Разрешение по умолчанию",
+      "description": "Сессии, начатые в этой папке, сначала предлагают это разрешение. Тот, кто начинает сессию, может выбрать другое.",
+      "label": "Разрешение по умолчанию",
+      "none": "Без значения по умолчанию",
+      "save": "Сохранить значение по умолчанию",
+      "saved": "Разрешение по умолчанию сохранено.",
+      "discard": "Отменить изменения"
     }
   },
   "browser": {
@@ -403,6 +416,9 @@
     "newFile": "Новый файл",
     "refresh": "Обновить",
     "download": "Скачать",
+    "source": "Исходный код",
+    "rendered": "Рендеринг",
+    "htmlPreview": "Предпросмотр HTML: {{name}}",
     "edit": "Изменить",
     "save": "Сохранить",
     "saving": "Сохранение…",
@@ -425,7 +441,7 @@
     "moveTitle": "Переместить / переименовать",
     "moveFromLabel": "Из",
     "moveToLabel": "В (относительный путь)",
-    "deleteTitle": "Удалить {{name}}",
+    "deleteTitle": "Удалить <path />",
     "deleteBody": "Это удаляет запись из рабочей области хоста. Отменить нельзя.",
     "deleteRecursive": "Удалить папку и всё её содержимое (рекурсивно)",
     "created": "Создано",
@@ -898,6 +914,7 @@
       "runner_ready": "Runner сессии можно проверить.",
       "runner_not_configured": "Runner сессии не настроен в этом runtime.",
       "isolation_unsupported": "Этот сервер не может обеспечить эту изоляцию. Оставьте native или установите на сервер podman либо Docker для container.",
+      "container_image_missing": "На этом сервере ещё нет образа, в котором работают контейнерные сессии. Соберите его один раз (olivares doctor покажет как) или оставьте native.",
       "runner_inspection_unavailable": "Подключённый runner нельзя проверить без запуска. Это не отсутствующая установка.",
       "program_present": "Разрешённая программа присутствует и исполняема для этой идентичности.",
       "program_missing": "Разрешённая программа отсутствует. Настройте официальный CLI по существующей процедуре; для Claude это может быть OLIVARES_SESSION_RUNTIME_CLAUDE_BIN. Это чтение ничего не устанавливает.",
@@ -936,6 +953,7 @@
       "configure_provider_credential_adapter": "Настройте адаптер учётных данных этого инструмента.",
       "review_runtime_credential_composition": "Просмотрите композицию учётных данных runtime work/K3.",
       "select_supported_selection": "Выберите транспорт и изоляцию, которые демонстрирует этот runtime.",
+      "provide_session_image": "Соберите образ сессии: olivares doctor покажет команду.",
       "retry_inspection": "Прочитайте требования снова."
     },
     "remainingCheck": {
@@ -953,6 +971,7 @@
       "grok_acp": "Grok ACP",
       "opencode_acp": "OpenCode ACP",
       "gemini_acp": "Gemini CLI ACP",
+      "cursor_acp": "Cursor CLI ACP",
       "unknown": "Неизвестный протокол"
     }
   },
@@ -1022,5 +1041,19 @@
     "fullSize": "Прикреплённое изображение в полном размере",
     "unavailable": "Изображение недоступно",
     "movedOn": "вы перешли в другую сессию до сохранения"
+  },
+  "usage": {
+    "fiveHour": "5 часов",
+    "week": "Неделя",
+    "percent": "{{window}} {{percent}}%",
+    "unknown": "Использование неизвестно",
+    "limit": {
+      "fiveHour": "Достигнут лимит за 5 часов",
+      "fiveHourResets": "Достигнут лимит за 5 часов, сброс {{time}}",
+      "week": "Достигнут недельный лимит",
+      "weekResets": "Достигнут недельный лимит, сброс {{time}}",
+      "other": "Достигнут лимит {{label}}",
+      "otherResets": "Достигнут лимит {{label}}, сброс {{time}}"
+    }
   }
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/audit"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/olivaresai/olivares/core/model"
 	obstrace "github.com/olivaresai/olivares/core/observability/trace"
@@ -240,6 +241,7 @@ type moduleSet struct {
 	knowledge           *knowledge.Module
 	knowledgeStatus     *knowledgePlaneStatus
 	knowledgeEmbedder   *governedKnowledgeEmbedder
+	sourceScope         *sourcescope.Module
 	sourceScopeResolver *sourcescope.Resolver
 	workspaceSecrets    *workspaceConnectorSecrets
 	// the enterprise RTBF crypto-shred coordinator (nil / typed-nil in the
@@ -251,6 +253,9 @@ type moduleSet struct {
 	// threads it to the MCP gateway PEP so the reporting tool-pin source and the
 	// gateway enforce over the SAME store.
 	pinVerifier mcpc.ToolPinVerifier
+	// editionGates are this engine's edition gates that an administrator's settings can
+	// change while it runs (edition_live.go). One set per engine, never per process.
+	editionGates *editionLiveGates
 	// the reporting module, held so boot() registers the schedule pump.
 	reporting *reporting.Module
 	// The governed Chat execution adapter (nil unless the explicit development
@@ -350,7 +355,7 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 	if err != nil {
 		return moduleSet{}, err
 	}
-	gov := governance.New(govOpts...)
+	gov := governance.New(append(govOpts, governance.WithBusinessApprovals(thisEdition.businessApprovals))...)
 	// the source-scoping plane. It owns the source→workspace/agent-group binding
 	// table and resolves, at the point an agent/session resolves a source, whether the
 	// actor is in scope (containment ∨ the grant engine ∨ tenant RBAC; a
@@ -359,13 +364,13 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 	// below; its store handle is late-bound by boot() (UseData), exactly like the
 	// scoped-grant engine it consults (gov.ScopedGrants()).
 	workspaceSecrets := &workspaceConnectorSecrets{}
-	ssOpts := []sourcescope.Option{sourcescope.WithScopedAuthorizer(gov.ScopedGrants()), sourcescope.WithWorkspaceSealer(workspaceSecrets)}
-	if thisEdition.name != "community" {
-		// Assigning provider profiles and AI tools to departments and groups is Business;
-		// a Community build keeps applying the assignments already stored.
-		ssOpts = append(ssOpts, sourcescope.WithProfileAssignment())
-	}
-	ss := sourcescope.New(ssOpts...)
+	// Assigning provider profiles and AI tools to departments and groups is Business, under a
+	// licence that covers it; a Community build keeps applying the assignments already stored.
+	ss := sourcescope.New(
+		sourcescope.WithScopedAuthorizer(gov.ScopedGrants()),
+		sourcescope.WithAuthorizer(auth.NewAuthorizer(gov.RequestEvaluator(), auth.WithScopedGrants(gov.ScopedGrants()))),
+		sourcescope.WithWorkspaceSealer(workspaceSecrets),
+		sourcescope.WithProfileAssignment(thisEdition.profileAssignment))
 	ssResolver := ss.Resolver()
 	// CLA-17-A: resolve the Claude inference seams (Judge / model-backed Embedder)
 	// from env. Both stay fail-closed (offline judge / zero-egress local embedder) when
@@ -574,6 +579,7 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 	// honest not-attempted / not-wired defaults and every receipt records the gap.
 	accEraser := &accountEraserAdapter{log: log}
 	compOpts = append(compOpts, compliance.WithAccountEraser(accEraser))
+	compOpts = append(compOpts, compliance.WithTombstoneLog(&erasureTombstoneLog{dir: dataDir}))
 	if provEraser := newProviderEraserAdapter(eraserCfg, bridge, log); provEraser != nil {
 		compOpts = append(compOpts, compliance.WithProviderEraser(provEraser))
 		log.Info("erasure: Provider-side RTBF passthrough wired (dual-control gated)")
@@ -785,8 +791,12 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 	// store/policy/context/residency/secret/approval/bus dependencies are late-bound by
 	// boot() before HTTP serving; until they are, the port refuses rather than serving
 	// half-governed. Its availability is independent of the legacy executor above.
+	editionGates := &editionLiveGates{}
 	chatExecutor := newModelsChatExecutor(modelGatewayChatMode, modelGatewayProfiles, osGetenv, log)
 	if chatExecutor != nil {
+		// The Chat path shares the content firewall with the Messages proxy: a setting
+		// changed while the engine runs governs both from the next request.
+		chatExecutor.inspectorLive = editionGates.contentFirewall.bootFrom(func() contentInspector { return chatExecutor.inspector })
 		modelsOpts = append(modelsOpts, models.WithChatExecutor(chatExecutor))
 	}
 	if rlp := newModelsRateLimitProvider(osGetenv, log); rlp != nil {
@@ -822,6 +832,9 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 	// wifAdapter is created earlier (it feeds both the identity console and the WIF
 	// credential broker); here it backs the read-only WIF graph console.
 	policyOpts, policyBind := governance.FleetPolicyOptions(policySigner)
+	// A department's instructions file (managed-instructions@<department>) is rendered from the
+	// text a session of that department is given, so the two read one source.
+	policyOpts = append(policyOpts, governance.WithInstructionsSource(departmentInstructions{sessions: sm}))
 	claudePolicyConsole := governance.NewPolicyConsole(policyOpts...)
 	// the thread-event provider is always wired (non-nil); its per-tenant
 	// readers are POPULATED post-store by deferredSecretWiring.openAll, because a
@@ -890,7 +903,7 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 	}
 	evtm := eventing.New(append(evtOpts,
 		eventing.WithDeliveryGate(eventingKillSwitchGate{guard: gov, log: log}),
-		eventing.WithSinkRenderer(siemforward.NewRenderer()))...)
+		eventing.WithSinkRenderer(siemforward.NewRenderer()), eventing.WithSinkGate(thisEdition.siemSink))...)
 	// the ledger forwarder walks the tamper-evident ledger from a per-tenant
 	// cursor and hands each sealed record to the eventing engine (IngestAudit), so
 	// the audit ledger reaches SIEM control towers over the SAME durable machinery.
@@ -961,10 +974,12 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 	// exists is logged by target and bounded code; the token never reaches it.
 	gpub := gitpublish.New(gitpublish.Options{OnReleaseFailure: func(target model.ID, code string) {
 		log.Warn("gitpublish: a host capability could not be released", "target", target.String(), "code", code)
+	}, OnLookupFailure: func(target model.ID, cause string) {
+		log.Warn("gitpublish: a host lookup failed; the request was refused with lookup_incomplete", "target", target.String(), "cause", cause)
 	}})
 	// Kept so boot() can late-bind the target authority, which needs the
 	// authorizer built after the module set.
-	skillsMod := skills.New(skills.Options{ArtifactRoot: filepath.Join(dataDir, "skills", "artifacts"), Workspace: skillsWorkspaceReader{owner: sm}, Git: &skills.GitImporter{ScratchRoot: filepath.Join(dataDir, "skills", "imports"), Policy: publicSkillsGitPolicy{}}, Tracer: tracer})
+	skillsMod := skills.New(skills.Options{ArtifactRoot: filepath.Join(dataDir, "skills", "artifacts"), Workspace: skillsWorkspaceReader{owner: sm}, Git: &skills.GitImporter{ScratchRoot: filepath.Join(dataDir, "skills", "imports"), Policy: publicSkillsGitPolicy{}, Start: startGitImport}, Tracer: tracer})
 	// Only instances with configured adapters belong here. The shared spec
 	// supplies the remaining defaults and the complete registration order.
 	catalogBridge := &catalogDeploy{}
@@ -995,10 +1010,11 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 		known = append(known, m.APINamespace())
 	}
 	recmod.UseKnownNamespaces(known)
-	return moduleSet{deploySetup: deploySetup, orchestrationExecutor: deployEngine(deployExec), all: all, catalogDeploy: catalogBridge, gov: gov, approvalBridge: bridge, compliance: comp, deployBinder: deployBinder, deployDrift: deployDrift, knowledgeGuard: knowledgeGuard, vectorIndex: vecAdapter, live: live, wif: wifAdapter, wifBroker: wifBroker, recorder: recmod, accountEraser: accEraser, eventing: evtm, notify: nm, orchestration: orch, siemforward: siemfwd, policyBind: policyBind, sessions: sm, sessionDependencies: sessionDependencies, skills: skillsMod, protocolBindingReconciler: protocolBindingReconciler, finops: fin, finopsBackstop: finBackstop, models: mdl, inferenceProxy: ipx, contentFirewall: contentFirewall,
+	return moduleSet{deploySetup: deploySetup, orchestrationExecutor: deployEngine(deployExec), all: all, catalogDeploy: catalogBridge, gov: gov, approvalBridge: bridge, compliance: comp, deployBinder: deployBinder, deployDrift: deployDrift, knowledgeGuard: knowledgeGuard, vectorIndex: vecAdapter, live: live, wif: wifAdapter, wifBroker: wifBroker, recorder: recmod, accountEraser: accEraser, eventing: evtm, notify: nm, orchestration: orch, siemforward: siemfwd, policyBind: policyBind, sessions: sm, sessionDependencies: sessionDependencies, skills: skillsMod, protocolBindingReconciler: protocolBindingReconciler, finops: fin, finopsBackstop: finBackstop, models: mdl, inferenceProxy: ipx, contentFirewall: contentFirewall, editionGates: editionGates,
 		knowledge:           km,
 		knowledgeStatus:     ci.knowledgeStatus,
 		knowledgeEmbedder:   governedEmbedder,
+		sourceScope:         ss,
 		sourceScopeResolver: ssResolver,
 		workspaceSecrets:    workspaceSecrets,
 		rtbfCoordinator:     rtbfCoord,
@@ -1081,6 +1097,7 @@ var businessProtectionKeys = []struct {
 	{"OLIVARES_CREDENTIAL_MINTER_CONFIG", false},
 	{"OLIVARES_ONBOARDING_CONFIG", false},
 	{"OLIVARES_PQC_POSTURE_CONFIG", false},
+	{"OLIVARES_SESSIONS_AGENT_BOOTSTRAP_LISTEN", false},
 	{"OLIVARES_SESSIONS_AGENT_LINK_LISTEN", false},
 	{"OLIVARES_SIEM_FORWARD_INTERVAL", false},
 	{"OLIVARES_ORCH_CADENCE_INTERVAL", false},

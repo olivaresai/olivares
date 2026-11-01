@@ -22,7 +22,8 @@
     "kind": "Art",
     "key": "Schlüssel",
     "state": "Zustand",
-    "connection": "Verbindung"
+    "connection": "Verbindung",
+    "actions": "Aktionen"
   },
   "kinds": {
     "anthropic": "Anthropic",

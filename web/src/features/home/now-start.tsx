@@ -4,7 +4,7 @@
 //
 // HOW TO START, ON NOW, FROM WHAT THE TOOLS THEMSELVES SAY: installed and signed in. It used
 // to read provider profiles and said "No provider profile is registered" after Claude Code
-// was installed and signed in (HU-19). A ready tool offers New session, the one dialog
+// was installed and signed in. A ready tool offers New session, the one dialog
 // every entry point opens; otherwise the next setup step, in the setup wizard.
 //
 // It holds its place from the first paint (#3121): until the tools answer it offers New
@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { useNewSession } from '@/components/layout/new-session'
 import {
-  TOOL_NAMES,
+  toolName,
   type SessionTool,
   type ToolKey,
 } from '@/features/first-hour/api'
@@ -29,7 +29,7 @@ import './i18n'
  * `undefined` while the status is still loading. */
 export function useReadyTool(): SessionTool | null | undefined {
   // The first-hour rule, the one the New session dialog uses: installed and signed in
-  // with the tool's own login, or with an API key saved in Providers (HU 029).
+  // with the tool's own login, or with an API key saved in Providers.
   const { ready, isLoading } = useReadyTools()
   if (isLoading) return undefined
   return ready[0] ?? null
@@ -51,7 +51,7 @@ export function NowStart({ quiet = false }: { quiet?: boolean } = {}) {
     ['claude', claude.data],
     ['codex', codex.data],
   ]
-  // Any tool the engine can start names the line, Grok Build and OpenCode included (HU 043).
+  // Any tool the engine can start names the line, Grok Build and OpenCode included.
   const ready = readyTools.ready[0]
   const installed = tools.find(([, s]) => s?.installed)
   // The key's refusal leads to Providers, so only a person who can open Providers gets it.
@@ -71,14 +71,14 @@ export function NowStart({ quiet = false }: { quiet?: boolean } = {}) {
   const [text, action] = loading
     ? [null, null]
     : ready
-      ? [t('start.ready', { tool: TOOL_NAMES[ready] }), null]
+      ? [t('start.ready', { tool: toolName(ready) }), null]
       : unknown
         ? [null, null]
         : refusal
           ? [refusal, t('firstHour:start.openProviders')]
           : installed
             ? [
-                t('start.signIn', { tool: TOOL_NAMES[installed[0]] }),
+                t('start.signIn', { tool: toolName(installed[0]!) }),
                 t('start.signInAction'),
               ]
             : [t('start.install'), t('start.installAction')]

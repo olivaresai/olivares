@@ -143,6 +143,7 @@
     "actorHint": "Handle dell'attore di audit — mai un indirizzo email. L'identità viene risolta dalla directory e qui non è mostrata.",
     "expiredAt": "Scaduta {{time}}",
     "approveOnce": "Approva una volta",
+    "approveForSession": "Approva per questa sessione",
     "approving": "Approvazione…",
     "deny": "Rifiuta",
     "noMatch": "Nessuna richiesta corrisponde alla ricerca",
@@ -220,6 +221,7 @@
     "trailEmpty": "Nessuna decisione registrata finora",
     "trailEmptyHint": "Ogni decisione su questa approvazione — chi ha deciso, quando e perché — è registrata qui. Nessuno ha ancora deciso.",
     "decisionApprove": "Approvata",
+    "decisionApproveForSession": "Approvata per questa sessione",
     "decisionReject": "Rifiutata",
     "reenableNeedsAdmins": "Due altri account amministratore devono approvare questa richiesta. Creali in Identità e accesso, oppure con `olivares users create`.",
     "openIdentity": "Apri Identità e accesso",
@@ -687,14 +689,19 @@
     "matched": "Regola applicata: {{rule}}",
     "matchedDefault": "Regola applicata: nessuna, quindi vale quella predefinita",
     "matchedUnreadable": "Regola applicata: una regola che non puoi leggere",
-    "reaches": "Raggiunge: {{list}}",
+    "reaches": "Raggiunge:",
     "reachFolder": {
-      "write": "{{path}} (scrittura)",
-      "read": "{{path}} (sola lettura)",
-      "unknown": "{{path}} (accesso sconosciuto)"
+      "write": "<path /> (scrittura)",
+      "read": "<path /> (sola lettura)",
+      "unknown": "<path /> (accesso sconosciuto)"
     },
     "matchedUnknown": "Regola applicata: una regola che non è stato possibile leggere",
-    "reachIncomplete": "altro che non è stato possibile leggere"
+    "reachIncomplete": "altro che non è stato possibile leggere",
+    "rule": {
+      "default": "Nessuna regola, quindi vale quella predefinita",
+      "unreadable": "Una regola che non può leggere",
+      "unknown": "Una regola che non è stato possibile leggere"
+    }
   },
   "list": {
     "loadedOnly": "La ricerca copre solo le righe caricate finora; carica altre righe per leggere oltre."

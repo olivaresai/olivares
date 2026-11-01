@@ -5,11 +5,19 @@
 // THE THREAD HEADER IS ONE 48 px LINE. The state as a dot, the name, the folder tag, the
 // tool and model, the usage; on the right Interrupt (only while a turn runs), Stop, Context
 // and a `⋯` menu. The badges and the working folder's path are the Context pane's.
-import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
-import type { RunDTO } from '@/features/agentops/types'
+import { agentOpsApi } from '@/features/agentops/api'
+import type { ProviderAccountDTO, RunDTO } from '@/features/agentops/types'
 import { useClientSettings } from '@/features/settings/preferences'
 import { mergeSessions } from './provenance'
 import type { LiveDTO } from './types'
@@ -210,6 +218,18 @@ describe('thread header — one line', () => {
     )
   })
 
+  it('heads a session that has no name with the title the engine cut, and a name wins', () => {
+    renderThread(run({ name: undefined, title: 'Plan the migration' }))
+    expect(
+      within(header()).getByRole('heading', { level: 2 }),
+    ).toHaveTextContent('Plan the migration')
+    cleanup()
+    renderThread(run({ title: 'Plan the migration' }))
+    expect(
+      within(header()).getByRole('heading', { level: 2 }),
+    ).toHaveTextContent('calc-review')
+  })
+
   it('does not print the badges, the mode or the working-folder line in the header', () => {
     renderThread()
     const h = header()
@@ -225,7 +245,7 @@ describe('thread header — one line', () => {
     const side = screen.getByTestId('context-side')
     expect(within(side).queryByText('Managed by Olivares')).toBeNull()
     const mode = within(side).getByTestId('narrative-mode')
-    expect(mode).toHaveTextContent('Ask before each action')
+    expect(mode).toHaveTextContent('Supervised')
     expect(mode.textContent).not.toContain('dangerFullAccess')
     expect(within(side).getByTestId('conversation-folder')).toHaveTextContent(
       'Working folder: /home/olv/work/W320/job-5cfa2f96/projects/demo',
@@ -497,13 +517,13 @@ describe('thread header — the ⋯ menu', () => {
     const { onOpenContext } = renderThread()
     openMenu()
     act(() => {
-      fireEvent.click(screen.getByRole('menuitem', { name: 'Context' }))
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Details' }))
     })
     expect(onOpenContext).toHaveBeenCalledTimes(1)
   })
 })
 
-// dev#3120: two panes beside each other read the same "workspace · Claude Code ·
+// the regression: two panes beside each other read the same "workspace · Claude Code ·
 // claude-opus-5-5 · high" and nothing said which session each was. The header names the
 // session, then its tool; the model and the effort are said once, by the composer.
 describe('thread header — the session, then its tool', () => {
@@ -522,7 +542,7 @@ describe('thread header — the session, then its tool', () => {
   })
 })
 
-// dev#3120, measured at 1280 px with two panes and Context open: each pane was 340 px
+// the regression, measured at 1280 px with two panes and Context open: each pane was 340 px
 // wide, the tool and the folder could not shrink, and the session's name was squeezed to
 // nothing while the controls were cut. The header measures its own pane, not the window.
 describe('thread header — in a narrow pane', () => {
@@ -547,7 +567,7 @@ describe('thread header — in a narrow pane', () => {
   })
 })
 
-// dev#2786: the header said `opus` while every turn ran on claude-opus-4-8.
+// the regression: the header said `opus` while every turn ran on claude-opus-4-8.
 describe('thread header — the model in use', () => {
   const reply = (model: string, seq: number) =>
     act(() =>
@@ -620,3 +640,70 @@ it.each([[''], ['user'], ['Stopped by Ada']])(
     expect(screen.queryByText('Stopped to free memory.')).toBeNull()
   },
 )
+
+// The usage of the account the session runs on: beside the tool, from the account list.
+describe('thread header — the usage of the session account', () => {
+  const account = (five: number, resets_at?: string): ProviderAccountDTO => ({
+    account_ref: 'ppf_codex',
+    name: 'work-codex',
+    driver: 'codex',
+    environment_ref: 'xenv_1',
+    state: 'active',
+    home_mode: 'managed',
+    home_generation: 1,
+    home_relative: '',
+    isolation_level: 'shared',
+    auth_source: 'provider_account_home',
+    identity: '',
+    identity_source: 'none',
+    usage: [
+      {
+        window: 'five_hour',
+        label: '5-hour',
+        utilization: five,
+        observed_at: '2026-10-29T10:00:00Z',
+        ...(resets_at ? { resets_at } : {}),
+      },
+      {
+        window: 'seven_day',
+        label: 'Weekly',
+        utilization: 17,
+        observed_at: '2026-10-29T10:00:00Z',
+      },
+    ],
+    created_at: '2026-10-01T10:00:00Z',
+    updated_at: '2026-10-01T10:00:00Z',
+  })
+
+  it('says the 5-hour and weekly use of the session account beside its tool', async () => {
+    vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue({
+      items: [account(41)],
+      has_more: false,
+    })
+    renderThread()
+    const usage = await within(header()).findByTestId('account-usage')
+    expect(usage).toHaveTextContent('5-hour 41% · Weekly 17%')
+    expect(within(header()).queryByText(/limit reached/)).toBeNull()
+  })
+
+  it('marks the session account at its limit, with when it resets', async () => {
+    vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue({
+      items: [account(100, '2030-01-01T10:00:00Z')],
+      has_more: false,
+    })
+    renderThread()
+    expect(await within(header()).findByRole('status')).toHaveTextContent(
+      /5-hour limit reached, resets /,
+    )
+  })
+
+  it('says nothing for a session whose account reported no usage', async () => {
+    vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue({
+      items: [{ ...account(1), usage: undefined }],
+      has_more: false,
+    })
+    renderThread()
+    await waitFor(() => expect(agentOpsApi.listAccounts).toHaveBeenCalled())
+    expect(within(header()).queryByTestId('account-usage')).toBeNull()
+  })
+})

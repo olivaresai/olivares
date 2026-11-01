@@ -43,9 +43,9 @@ export function PendingRestores() {
   return (
     <>
       {items.length > 0 && (
-        <div className="mb-5 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
+        <div className="mb-5 rounded-lg border border-warning-line bg-warning-soft p-4">
           <div className="mb-3 flex items-center gap-2">
-            <UserCheck className="size-4 text-amber-500" />
+            <UserCheck className="size-4 text-warning" />
             <h3 className="text-body font-medium">{t('pending.title')}</h3>
           </div>
           <ul className="flex flex-col gap-2">

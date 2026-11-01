@@ -53,7 +53,7 @@ const removedCredentialMarker = "[removed: request credential]"
 // cut. A well-behaved authority never echoes, so for one the excerpt is
 // byte-identical (removed == false).
 //
-// EVERY nonempty sent credential is scrubbed, however short (independent security review; Root's
+// EVERY nonempty sent credential is scrubbed, however short (independent security review; the maintainer's
 // adjudication: scrub, do not drop the excerpt — the non-secret status text
 // stays useful). A short configured credential (Vault's documented dev token
 // "root") is still a credential; removing its exact bytes from a diagnostic

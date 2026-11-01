@@ -11,12 +11,15 @@ import { ArrowLeft, FileText } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { PathText } from '@/components/ui/path-text'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import type { RunDTO } from '@/features/agentops/types'
 import { HeadDiff } from '@/features/shared/head-diff'
 import { headUnavailable } from '@/features/shared/head-unavailable'
+import { OpenInEditor } from '@/features/shared/open-in-editor'
 import { RelTimeLabel } from '@/features/shared'
 import { useAuth } from '@/lib/auth/context'
+import { firstChangedLine } from '@/lib/editor-links'
 import { formatBytes } from '@/lib/format'
 import './i18n'
 
@@ -64,6 +67,20 @@ export function SessionChanges({ run }: { run: RunDTO }) {
     refetchOnWindowFocus: false,
   })
   const data = changes.data
+  // What git HEAD holds for the open file, when it can be compared with the file: the
+  // Changes view and the editor link (which lands on the first changed line) read it.
+  const committed =
+    file.data &&
+    !file.data.truncated &&
+    head.data &&
+    !head.data.binary &&
+    !head.data.truncated
+      ? head.data.text
+      : undefined
+  const firstChange =
+    file.data && !file.data.binary
+      ? firstChangedLine(committed, file.data.text)
+      : undefined
   // The folder Olivares created for the run is named by the run's id: no name to show.
   const title =
     data?.folder && data.folder !== run.run_ref
@@ -80,18 +97,20 @@ export function SessionChanges({ run }: { run: RunDTO }) {
       </div>
       {open !== null ? (
         <div className="flex min-w-0 flex-col gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="self-start"
-            onClick={() => setOpen(null)}
-          >
-            <ArrowLeft className="size-3.5" />
-            {t('changes.back')}
-          </Button>
-          <p className="break-all font-mono text-caption text-foreground">
-            {open}
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-x-2">
+            <Button variant="ghost" size="sm" onClick={() => setOpen(null)}>
+              <ArrowLeft className="size-3.5" />
+              {t('changes.back')}
+            </Button>
+            {run.workspace_path ? (
+              <OpenInEditor
+                root={run.workspace_path}
+                file={open}
+                line={firstChange}
+              />
+            ) : null}
+          </div>
+          <PathText value={open} wrap />
           {file.isPending ? (
             <p className="text-caption text-muted-foreground">
               {t('changes.loading')}
@@ -106,14 +125,7 @@ export function SessionChanges({ run }: { run: RunDTO }) {
             <>
               <HeadDiff
                 unavailable={headUnavailable(head.error)}
-                committed={
-                  head.data &&
-                  !head.data.binary &&
-                  !head.data.truncated &&
-                  !file.data.truncated
-                    ? head.data.text
-                    : undefined
-                }
+                committed={committed}
                 current={file.data.text}
               >
                 <pre
@@ -158,9 +170,7 @@ export function SessionChanges({ run }: { run: RunDTO }) {
                   className="size-3.5 shrink-0 text-muted-foreground"
                   aria-hidden
                 />
-                <span className="min-w-0 flex-1 truncate font-mono text-caption text-foreground">
-                  {f.path}
-                </span>
+                <PathText value={f.path} copy={false} className="flex-1" />
                 <RelTimeLabel
                   ts={f.modified_at}
                   className="shrink-0 text-caption text-muted-foreground"

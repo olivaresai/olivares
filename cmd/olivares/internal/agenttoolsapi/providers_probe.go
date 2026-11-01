@@ -6,6 +6,7 @@ package agenttoolsapi
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -20,6 +21,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/driverfacts"
+	"github.com/olivaresai/olivares/modules/sessions"
 )
 
 // What each tool says about its own login, read through the tool's own read-only
@@ -28,6 +30,12 @@ import (
 // model/list, grok `models`, opencode `auth list` and `models`). `get_usage` is
 // marked experimental by Claude Code, so only the documented keys are read and a
 // miss becomes a note, never a failure of the whole snapshot.
+
+// The stable names of the two windows a plan login is judged by.
+const (
+	windowFiveHour = "five_hour"
+	windowSevenDay = "seven_day"
+)
 
 const (
 	providerProbeTimeout = time.Minute
@@ -171,26 +179,54 @@ func (p *prober) status(driver string) (SignInStatus, error) {
 	return st, nil
 }
 
+// readEnv is the environment of a read-only command of the tool. Reading the state
+// of a tool never changes it: no session, none of the user's hooks, plugins or MCP
+// servers, no login. Claude Code and Codex get their switches in the argument line of
+// the one session they open. OpenCode runs the JavaScript plugins of the user's
+// configuration before it answers, even for `models` (measured on 1.19.4), and
+// OPENCODE_PURE=1 is its switch for none (a version without it ignores the variable).
+// A model or provider that only such a plugin supplies is therefore not listed by a
+// read: that is the user's code, and a read does not run it.
+func readEnv(driver string, env []string) []string {
+	if driver != "opencode" {
+		return env
+	}
+	return append(slices.Clone(env), "OPENCODE_PURE=1")
+}
+
 // output runs one read-only command of the tool and returns its stdout.
 func (p *prober) output(timeout time.Duration, args ...string) (string, error) {
 	command := cmdLine(p.program, args...)
 	p.sources = append(p.sources, command)
 	ctx, cancel := context.WithTimeout(p.ctx, timeout)
 	defer cancel()
-	cmd, release, err := p.m.command(ctx, p.snap.Driver, p.program, p.cfgDir, p.env, args...)
+	cmd, release, err := p.m.command(ctx, p.snap.Driver, p.program, p.cfgDir, readEnv(p.snap.Driver, p.env), args...)
 	if err != nil {
 		return "", &probeError{command, err}
 	}
 	defer release()
 	cmd.Dir, cmd.WaitDelay = envValue(p.env, "HOME"), 200*time.Millisecond
-	raw, err := cmd.Output()
+	// A version or model listing past the bound is cut and used as far as it goes: the
+	// first models of a long list are still models.
+	bounded := &boundedStatusOutput{remaining: maxSignInOutput, truncate: true}
+	cmd.Stdout = bounded
+	stderr := &boundedStatusOutput{remaining: maxSignInOutput, truncate: true}
+	cmd.Stderr = stderr
+	err = cmd.Run()
+	retainExitStderr(err, stderr)
+	if ctx.Err() != nil {
+		return "", &probeError{command, ctx.Err()}
+	}
 	if err != nil {
 		return "", &probeError{command, commandFailure(ctx, err)}
 	}
-	if len(raw) > maxSignInOutput {
-		raw = raw[:maxSignInOutput]
+	listing := bounded.buf.Bytes()
+	if bounded.exceeded { // the cut can fall inside a line: keep the whole lines
+		if i := bytes.LastIndexByte(listing, '\n'); i >= 0 {
+			listing = listing[:i+1]
+		}
 	}
-	return ansiEscape.ReplaceAllString(string(raw), ""), nil
+	return ansiEscape.ReplaceAllString(string(listing), ""), nil
 }
 
 // models lists what the tool's `models` command prints: one model per line,
@@ -298,11 +334,15 @@ func (p *prober) claudeUsage(command string, raw []byte) {
 		Plan       string `json:"subscription_type"`
 		Available  bool   `json:"rate_limits_available"`
 		RateLimits struct {
+			ExtraUsage *struct {
+				Utilization *float64 `json:"utilization"`
+			} `json:"extra_usage"`
 			Limits []struct {
-				Kind     string  `json:"kind"`
-				Percent  float64 `json:"percent"`
-				Severity string  `json:"severity"`
-				ResetsAt string  `json:"resets_at"`
+				Kind     string   `json:"kind"`
+				Group    string   `json:"group"`
+				Percent  *float64 `json:"percent"`
+				Severity string   `json:"severity"`
+				ResetsAt string   `json:"resets_at"`
 				Scope    *struct {
 					Model struct {
 						DisplayName string `json:"display_name"`
@@ -322,16 +362,28 @@ func (p *prober) claudeUsage(command string, raw []byte) {
 		p.note("Claude Code reports no plan limits for this login (an API key, Bedrock or Vertex).")
 		return
 	}
+	hasSpend := false
 	for _, l := range u.RateLimits.Limits {
-		limit := ProviderLimit{Label: l.Kind, Percent: l.Percent, Severity: l.Severity}
+		if l.Percent == nil {
+			p.note("plan limits: the " + l.Kind + " window reported no percent")
+			continue
+		}
+		limit := ProviderLimit{Window: l.Kind, Label: l.Kind, Percent: *l.Percent, Severity: l.Severity}
 		switch l.Kind {
 		case "session":
-			limit.Label = "5-hour"
+			limit.Window, limit.Label = windowFiveHour, "5-hour"
 		case "weekly_all":
-			limit.Label = "Weekly"
+			limit.Window, limit.Label = windowSevenDay, "Weekly"
+		case "spend":
+			hasSpend = true
+			limit.Window, limit.Label = l.Group+"_spend", l.Group+" spend"
+			if l.Group == "monthly" {
+				limit.Label = "Monthly spend"
+			}
 		case "weekly_scoped":
-			limit.Label = "Weekly"
+			limit.Window, limit.Label = windowSevenDay+":scoped", "Weekly"
 			if l.Scope != nil && l.Scope.Model.DisplayName != "" {
+				limit.Window = windowSevenDay + ":" + strings.ToLower(strings.ReplaceAll(l.Scope.Model.DisplayName, " ", "-"))
 				limit.Label += " (" + l.Scope.Model.DisplayName + ")"
 			}
 		}
@@ -339,6 +391,10 @@ func (p *prober) claudeUsage(command string, raw []byte) {
 			limit.ResetsAt = &t
 		}
 		p.snap.Limits = append(p.snap.Limits, limit)
+	}
+
+	if e := u.RateLimits.ExtraUsage; !hasSpend && e != nil && e.Utilization != nil {
+		p.snap.Limits = append(p.snap.Limits, ProviderLimit{Window: "monthly_extra_usage", Label: "Monthly extra usage", Percent: *e.Utilization})
 	}
 }
 
@@ -373,22 +429,30 @@ func rpcResult(raw []byte, into any) error {
 
 // codexWindow is one rate-limit window: its length in minutes and when it resets.
 type codexWindow struct {
-	UsedPercent float64 `json:"usedPercent"`
-	Minutes     int     `json:"windowDurationMins"`
-	ResetsAt    int64   `json:"resetsAt"`
+	UsedPercent *float64 `json:"usedPercent"`
+	Minutes     int      `json:"windowDurationMins"`
+	ResetsAt    int64    `json:"resetsAt"`
 }
 
 func (w codexWindow) limit() ProviderLimit {
-	l := ProviderLimit{Percent: w.UsedPercent}
+	var l ProviderLimit
+	if w.UsedPercent != nil {
+		l.Percent = *w.UsedPercent
+	}
 	switch {
 	case w.Minutes == 7*24*60:
-		l.Label = "Weekly"
+		l.Window, l.Label = windowSevenDay, "Weekly"
+	case w.Minutes == 5*60:
+		l.Window, l.Label = windowFiveHour, "5-hour"
 	case w.Minutes > 0 && w.Minutes%(24*60) == 0:
 		l.Label = fmt.Sprintf("%d-day", w.Minutes/(24*60))
 	case w.Minutes > 0 && w.Minutes%60 == 0:
 		l.Label = fmt.Sprintf("%d-hour", w.Minutes/60)
 	default:
 		l.Label = fmt.Sprintf("%d-minute", w.Minutes)
+	}
+	if l.Window == "" {
+		l.Window = fmt.Sprintf("%dm", w.Minutes)
 	}
 	if w.ResetsAt > 0 {
 		t := time.Unix(w.ResetsAt, 0).UTC()
@@ -397,9 +461,13 @@ func (w codexWindow) limit() ProviderLimit {
 	return l
 }
 
-// codex asks one `app-server` for the account, the rate limits and the models.
+// codex asks one `app-server` for the account, the rate limits and the models. It
+// sends no thread/ or turn/ request: a thread starts the user's configured MCP
+// servers and writes a rollout, and no -c switch unloads those servers (`-c
+// mcp_servers={}` merges and removes nothing; `null` stops the app-server; measured
+// on codex-cli 0.162.1). The exchange below starts none of them, with or without it.
 func (p *prober) codex() {
-	args := []string{"app-server", "--disable", "hooks", "-c", "mcp_servers={}"}
+	args := []string{"app-server", "--disable", "hooks"}
 	command := cmdLine(p.program, "app-server") + " (initialize, account/read, account/rateLimits/read, model/list)"
 	call := func(id int, method string, params any) any {
 		return map[string]any{"id": id, "method": method, "params": params}
@@ -449,11 +517,19 @@ func (p *prober) codex() {
 		RateLimits struct {
 			Primary   *codexWindow `json:"primary"`
 			Secondary *codexWindow `json:"secondary"`
+			Credits   *struct {
+				Balance    *string `json:"balance"`
+				HasCredits bool    `json:"hasCredits"`
+				Unlimited  bool    `json:"unlimited"`
+			} `json:"credits"`
 		} `json:"rateLimits"`
 	}
 	if result("3", "plan limits", &limits) {
+		if c := limits.RateLimits.Credits; c != nil {
+			p.snap.Credits = &sessions.AccountCredit{Balance: c.Balance, HasCredits: c.HasCredits, Unlimited: c.Unlimited}
+		}
 		for _, w := range []*codexWindow{limits.RateLimits.Primary, limits.RateLimits.Secondary} {
-			if w != nil {
+			if w != nil && w.UsedPercent != nil {
 				p.snap.Limits = append(p.snap.Limits, w.limit())
 			}
 		}
@@ -490,7 +566,7 @@ func (p *prober) converse(timeout time.Duration, args []string, command string, 
 	got := map[string][]byte{}
 	ctx, cancel := context.WithTimeout(p.ctx, timeout)
 	defer cancel()
-	cmd, release, err := p.m.command(ctx, p.snap.Driver, p.program, p.cfgDir, p.env, args...)
+	cmd, release, err := p.m.command(ctx, p.snap.Driver, p.program, p.cfgDir, readEnv(p.snap.Driver, p.env), args...)
 	if err != nil {
 		return got, &probeError{command, err}
 	}

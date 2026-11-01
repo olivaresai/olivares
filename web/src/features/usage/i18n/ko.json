@@ -1,0 +1,30 @@
+{
+  "title": "계정별 사용량과 비용",
+  "subtitle": "공식 5시간 및 주간 한도를 오늘의 토큰과 비용 옆에 표시합니다.",
+  "windows": {
+    "fiveHour": "5시간",
+    "week": "주간"
+  },
+  "accounts": {
+    "heading": "계정",
+    "loading": "각 도구의 계정을 읽는 중…",
+    "error": "계정의 한도를 읽지 못했습니다.",
+    "empty": "아직 한도를 보고한 계정이 없습니다.",
+    "resets": "{{when}} 재설정",
+    "stale": "마지막으로 읽은 시각 {{at}}",
+    "details": "세부 정보",
+    "detailsFor": "{{account}} 세부 정보",
+    "adminOnly": "계정 한도는 시스템 관리자에게 표시됩니다."
+  },
+  "today": {
+    "heading": "오늘",
+    "loading": "오늘의 세션을 읽는 중…",
+    "error": "오늘의 세션을 읽지 못했습니다.",
+    "sessions_other": "세션 {{count}}개",
+    "tokens": "입력 {{input}} · 출력 {{output}}",
+    "atLeast": "최소",
+    "unpriced_other": "세션 {{count}}개가 비용을 보고하지 않았습니다.",
+    "untokened_other": "세션 {{count}}개가 토큰을 보고하지 않았습니다.",
+    "viewSessions": "세션 보기"
+  }
+}

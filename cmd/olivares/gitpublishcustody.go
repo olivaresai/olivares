@@ -21,6 +21,7 @@ import (
 	gp "github.com/olivaresai/olivares/connectors/gitpublish"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	coreconfine "github.com/olivaresai/olivares/core/runtime/confine"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/gitpublish"
 	"github.com/olivaresai/olivares/modules/sessions"
@@ -64,6 +65,7 @@ var errGitpublishBindingChanged = errors.New("gitpublish custody: the binding ch
 // implements it.
 type gitpublishSourceReader interface {
 	GetByID(ctx context.Context, id model.ID) (model.SourceDef, bool, error)
+	List(ctx context.Context, scope model.TenantID) ([]model.SourceDef, error)
 }
 
 // gitpublishSecretReader is the sealed secret read custody needs;
@@ -201,6 +203,25 @@ func (c *gitpublishCustody) repository(tenant model.TenantID, def gitpublishSour
 	}, nil
 }
 
+// RepositoryWebBase implements gitpublish.WebBaseResolver. The approved row
+// supplies the external origin; the requested repository is validated first.
+func (c *gitpublishCustody) RepositoryWebBase(ctx context.Context, tenant model.TenantID, workspace model.ID, id string) (string, error) {
+	source, path, ok := strings.Cut(id, ":")
+	if !ok {
+		return "", gitpublish.ErrBindingNotApproved
+	}
+	def, err := c.approvedIn(ctx, tenant, workspace, source)
+	if err != nil {
+		return "", err
+	}
+	if _, err := def.row.Repository(path); errors.Is(err, gp.ErrTargetRepository) {
+		return "", gitpublish.ErrBindingNotApproved
+	} else if err != nil {
+		return "", fmt.Errorf("%w: %w", gitpublish.ErrBindingNotApproved, err)
+	}
+	return def.row.WebBase(), nil
+}
+
 // ensure creates the server repository once. An existing entry that is not a
 // directory is refused; the executor checks the repository's state at each use.
 func (c *gitpublishCustody) ensure(ctx context.Context, path string) error {
@@ -289,6 +310,65 @@ func (c *gitpublishCustody) MintSessionGitRead(ctx context.Context, tenant model
 	}, nil
 }
 
+// ReadSessionItem implements sessions.SessionItemSource: one issue or pull
+// request of owner/repo, read with an installation token that can read issues
+// and pull requests and nothing else, through the adapter's own Mint and
+// Release. The row is the first approved GitHub row of the tenant that lists
+// the repository for the workspace; a row of another kind, tenant, owner or
+// workspace is passed over before any secret is read.
+func (c *gitpublishCustody) ReadSessionItem(ctx context.Context, tenant model.TenantID, workspace model.ID, owner, repo string, number int) (sessions.SourceItem, error) {
+	rows, err := c.sources.List(ctx, auth.GlobalSourceScope)
+	if err != nil {
+		return sessions.SourceItem{}, err
+	}
+	for _, row := range rows {
+		def, err := c.approvedIn(ctx, tenant, workspace, row.ID.String())
+		if errors.Is(err, gitpublish.ErrBindingNotApproved) {
+			continue
+		} else if err != nil {
+			return sessions.SourceItem{}, err
+		}
+		if !def.kind.Capabilities().NarrowRead {
+			continue
+		}
+		cb := def.credentialBinding()
+		rb, err := c.repository(tenant, def, owner+"/"+repo)
+		if err != nil || !gitpublishContainsFold(cb.AllowedOwners, rb.Owner) {
+			continue
+		}
+		return c.readItem(ctx, tenant, cb, rb, number)
+	}
+	return sessions.SourceItem{}, sessions.ErrGitReadNotApproved
+}
+
+func (c *gitpublishCustody) readItem(ctx context.Context, tenant model.TenantID, cb gitpublish.CredentialBinding, rb gitpublish.RepositoryBinding, number int) (sessions.SourceItem, error) {
+	host, err := c.OpenHost(ctx, tenant, cb, rb)
+	if err != nil {
+		return sessions.SourceItem{}, err
+	}
+	tok, err := host.Mint(ctx, gp.EffectItemRead)
+	if err != nil {
+		return sessions.SourceItem{}, err
+	}
+	defer func() {
+		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), gitpublishHTTPTimeout)
+		defer cancel()
+		if err := host.Release(rctx, tok); err != nil {
+			slog.Warn("gitpublish custody: an item read token was not revoked; it expires by itself within the hour and can only read", "err", err)
+		}
+	}()
+	item, err := gp.GetItem(ctx, host, tok, number)
+	switch {
+	case errors.Is(err, gp.ErrItemNotFound):
+		return sessions.SourceItem{}, sessions.ErrSourceItemNotFound
+	case errors.Is(err, gp.ErrNotSupported):
+		return sessions.SourceItem{}, sessions.ErrGitReadUnsupported
+	case err != nil:
+		return sessions.SourceItem{}, err
+	}
+	return sessions.SourceItem{Number: item.Number, PullRequest: item.PullRequest, Title: item.Title, Body: item.Body, URL: item.URL}, nil
+}
+
 // gitpublishSecretName accepts only `store:git-host/<name>`.
 func gitpublishSecretName(ref string) (string, bool) {
 	name, ok := strings.CutPrefix(strings.TrimSpace(ref), "store:")
@@ -309,6 +389,18 @@ func gitpublishContainsFold(list []string, v string) bool {
 		}
 	}
 	return false
+}
+
+// startGitPublish starts gitpublish's git in its own SELinux domain on the Olivares Server: its repositories, a
+// session repository read only, https and ssh. Elsewhere it is exec.Cmd.Start.
+func startGitPublish(cmd *exec.Cmd) error {
+	return coreconfine.StartInDomain(cmd, coreconfine.GitPublishDomain)
+}
+
+// startGitImport starts the skills Git import's git in its own SELinux domain on the Olivares Server: its staging and
+// the engine's loopback relay only. Elsewhere it is exec.Cmd.Start.
+func startGitImport(cmd *exec.Cmd) error {
+	return coreconfine.StartInDomain(cmd, coreconfine.GitImportDomain)
 }
 
 // gitpublishLookPath finds the git executable to pin; tests replace it.
@@ -341,6 +433,7 @@ func newGitPublication(dataDir string, sources gitpublishSourceReader, secrets g
 	if err != nil {
 		return nil, nil, err
 	}
+	x.StartWith(startGitPublish)
 	return &gitpublishCustody{sources: sources, secrets: secrets, repos: x, exec: x, root: root, doer: gp.NewHTTPClient(gitpublishHTTPTimeout)}, x, nil
 }
 

@@ -81,7 +81,7 @@ func TestDriverLookupDoesNotHashUnrelatedReleases(t *testing.T) {
 	}
 }
 
-// EU-CB07 (09b) and Root's conditions of 2026-10-02: every read of a tool's status
+// EU-CB07 (09b) and the maintainer's conditions of 2026-10-02: every read of a tool's status
 // re-hashed the installed release (about 1.0 s for Claude Code, 0.5 s for Codex). A
 // release a full check found installed is now kept, in memory, until anything it
 // is made of changes; then it is checked in full again before use. These count the
@@ -341,7 +341,7 @@ type describedUnavailable struct {
 
 func (d describedUnavailable) Describe() string { return d.name }
 
-// dev#2609: an engine whose verifier is unavailable (the host observer) can never call a
+// the regression: an engine whose verifier is unavailable (the host observer) can never call a
 // Claude release installed, so only the executable's digest can be kept. An executable
 // that has not changed is read once; the verdict is still decided at every read, the
 // observer asking first leaves the verifying engine's own check intact, and a rewrite of

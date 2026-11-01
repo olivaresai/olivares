@@ -11,9 +11,11 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/sessions"
 	"github.com/olivaresai/olivares/modules/sourcescope"
 )
 
@@ -43,13 +45,25 @@ func (a workspaceSnapshotAuthority) Check(ctx context.Context, tenant model.Tena
 	if err != nil {
 		return "", err
 	}
-	question := auth.Request{
+	var questions []auth.Request
+	var receipts []auth.RouteReadDecision
+	err = sessions.CheckFolderRight(ctx, api.NewModuleData(a.data), auth.Request{
 		Principal: principal, Tenant: tenant, Permission: "sessions:workspace:read",
-		Resource: auth.ResourceAttrs{Kind: "sessions.workspace", ID: registration.String()},
-	}
-	receipt, err := a.authz.DecideRouteRead(ctx, question)
-	if err != nil || !receipt.Allowed() {
-		return "", store.ErrConflict
+		Resource: auth.ResourceAttrs{Kind: "resource", ID: registration.String()},
+	}, auth.TrusteeRead, func(q auth.Request) error {
+		receipt, err := a.authz.DecideRouteRead(ctx, q)
+		if err != nil {
+			return err
+		}
+		if !receipt.Allowed() {
+			return store.ErrConflict
+		}
+		questions = append(questions, q)
+		receipts = append(receipts, receipt)
+		return nil
+	})
+	if err != nil {
+		return "", err
 	}
 	decision, err := a.scopes.ResolveForAgent(ctx, tenant, principal, "", sourcescope.SourceData, ref)
 	if err != nil || !decision.Allowed {
@@ -75,12 +89,22 @@ func (a workspaceSnapshotAuthority) Check(ctx context.Context, tenant model.Tena
 		if err != nil || now.IsZero() {
 			return store.ErrConflict
 		}
-		bundle, err = receipt.AuthorityFor(now.Time(), question)
-		if err != nil {
-			return err
-		}
-		if err := reader.ValidateAuthoritySnapshotBundle(ctx, bundle); err != nil {
-			return err
+		for i, receipt := range receipts {
+			evidence, err := receipt.AuthorityFor(now.Time(), questions[i])
+			if err != nil {
+				return err
+			}
+			if err := reader.ValidateAuthoritySnapshotBundle(ctx, evidence); err != nil {
+				return err
+			}
+			if i == 0 {
+				bundle = evidence
+			} else {
+				bundle, err = auth.MergeAuthoritySnapshotBundles(bundle, evidence)
+				if err != nil {
+					return err
+				}
+			}
 		}
 		current, err := sourcescope.SourceAuthorityVersion(ctx, sc, principal, sourcescope.SourceData, ref)
 		if err != nil || current != before {
@@ -90,8 +114,12 @@ func (a workspaceSnapshotAuthority) Check(ctx context.Context, tenant model.Tena
 		if err != nil || now.IsZero() {
 			return store.ErrConflict
 		}
-		_, err = receipt.AuthorityFor(now.Time(), question)
-		return err
+		for i, receipt := range receipts {
+			if _, err := receipt.AuthorityFor(now.Time(), questions[i]); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return "", err

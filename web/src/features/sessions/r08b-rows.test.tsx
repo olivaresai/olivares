@@ -113,7 +113,7 @@ describe('the open session reads its echo rows (HU-R24: Last turns 0)', () => {
     api.listRuns.mockResolvedValue({ items: [cliRun], has_more: false })
     api.liveById.mockImplementation(async (ref: string) => byLiveRef.get(ref))
     // The list route filtered by session_ref answers 200 with the rows it has (none yet
-    // for a session whose hook has not written): the card never reads a bare id (FH 057).
+    // for a session whose hook has not written): the card never reads a bare id (first-hour check).
     api.live.mockImplementation(async (params?: { session_ref?: string }) => {
       const row = params?.session_ref
         ? legacyBySessionRef.get(params.session_ref)
@@ -143,8 +143,8 @@ describe('the open session reads its echo rows (HU-R24: Last turns 0)', () => {
     expect(api.liveOne).not.toHaveBeenCalled()
   })
 
-  it('a session with no hook or usage row yet reads an empty list, never a 404 (FH 057)', async () => {
-    // FH 057 on 09: GET /v1/m/sessions/live/<run_ref> answered 404 for a session whose hook
+  it('a session with no hook or usage row yet reads an empty list, never a 404 (first-hour check)', async () => {
+    // first-hour check on 09: GET /v1/m/sessions/live/<run_ref> answered 404 for a session whose hook
     // had not written; the same session answered 200 by its other routes.
     api.live.mockResolvedValue({ items: [], has_more: false })
     const client = createTestQueryClient()

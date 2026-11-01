@@ -5,6 +5,7 @@ import { expect, test } from './fixtures/ollama'
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import type { BrowserContext } from '@playwright/test'
+import { openWorkingFold } from './open-working-fold'
 
 // Real product API, store, verified tool installation and session. Only the local
 // model endpoint is the existing labelled stand-in; product traffic is untouched.
@@ -88,6 +89,7 @@ test('palette opens known sessions, installed tools and settings at both widths'
   ).toBeVisible({ timeout: 60_000 })
   const sessionURL = new URL(page.url())
   expect(sessionURL.searchParams.get('session')).toBeTruthy()
+  await openWorkingFold(page)
   const railTitle = page.getByTestId('rail-row-name').first()
   await expect(railTitle).toBeAttached()
   const title = (await railTitle.textContent())?.trim()
@@ -127,9 +129,11 @@ test('palette opens known sessions, installed tools and settings at both widths'
       await page.setViewportSize({ width, height: 900 })
       for (const object of ['session', 'tool', 'setting'] as const) {
         await page.goto('/sessions')
+        await openWorkingFold(page)
         await expect(
           page
             .getByRole('listbox', { name: 'Work rail' })
+            .first()
             .getByRole('option')
             .first(),
         ).toBeAttached()

@@ -164,6 +164,10 @@ class NativeReleaseVersions(unittest.TestCase):
             (project / 'scripts').mkdir()
             for name in ('ensure-nfpm.sh', 'render-package-systemd.sh'):
                 shutil.copyfile(ROOT / 'scripts' / name, project / 'scripts' / name)
+            # A stale local build at the root must never reach a package: every
+            # copy of the engine comes from that architecture's release archive.
+            (project / 'bin').mkdir()
+            (project / 'bin/olivares').write_bytes(b'stale local build\n')
             template = project / 'packaging/service/systemd.service'
             template.write_text(template.read_text().replace('RestartSec=5s', 'RestartSec=7s'))
             expected = subprocess.check_output(['sh', str(project / 'scripts/render-package-systemd.sh')])
@@ -181,6 +185,9 @@ class NativeReleaseVersions(unittest.TestCase):
                 self.assertEqual(installed.stat().st_mode & 0o777, 0o644)
                 self.assertEqual((extracted / 'usr/share/doc/olivares/NOTICE').read_bytes(),
                                  b'Generated dependency attribution\n')
+                hook = extracted / 'usr/libexec/olivares-container-hook'
+                self.assertEqual(hook.read_bytes(), Path('/bin/true').read_bytes())
+                self.assertEqual(hook.stat().st_mode & 0o777, 0o755)
             self.assertIn(b'RestartSec=5s', (project / 'packaging/systemd/olivares.service').read_bytes())
             before = {path.name: packages.digest_file(path) for path in dist.iterdir()}
             template.write_text(template.read_text() + '@UNRENDERED@\n')

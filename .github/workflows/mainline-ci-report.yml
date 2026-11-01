@@ -4,7 +4,7 @@ name: mainline-ci-report
 
 on:
   workflow_run:
-    workflows: [mainline-ci, merge-gate-check]
+    workflows: [mainline-ci, merge-gate-check, secrets-weekly]
     types: [completed]
     branches: [main]
 
@@ -21,11 +21,11 @@ concurrency:
 jobs:
   reconcile:
     # Tracking issues for mainline-ci only where the repository opts in with CI_NIGHTLIES=true.
-    # The scheduled merge-gate-check run is reported wherever that workflow exists.
+    # Scheduled merge-gate-check and secrets-weekly runs report wherever they exist.
     if: >-
       github.event.workflow_run.head_repository.full_name == github.repository &&
       ((vars.CI_NIGHTLIES == 'true' && github.event.workflow_run.event == 'push') ||
-       (startsWith(github.event.workflow_run.name, 'merge-gate-check') && github.event.workflow_run.event == 'schedule'))
+       ((startsWith(github.event.workflow_run.name, 'merge-gate-check') || github.event.workflow_run.name == 'secrets-weekly') && github.event.workflow_run.event == 'schedule'))
     runs-on: ${{ vars.CI_RUNNER_LIGHT || vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:

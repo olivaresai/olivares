@@ -754,7 +754,7 @@ describe('DataTable — los dos 403 no son el mismo, y esta tabla los ve por 45 
     // el primero; con la suite entera y la caja cargada el segundo aterrizaba DESPUÉS de mi
     // `.focus()` en la cabecera y devolvía el foco a la celda, así que ArrowDown partía de la
     // marca del cuerpo (fila 3) y no de la cabecera. Medido en el hub el 2026-09-16 (run
-    // 35127191064, web, ci-runner-5): 5253 verdes y ésta roja con aria-rowindex 3. Misma clase
+    // 35127191064, web, build-host): 5253 passed; this test failed with aria-rowindex 3. Same cause
     // que la nota de :289-295: una prueba que medía el reloj en vez del código.
     await dosFrames()
     // Y el foco se lleva a la cabecera de la PRIMERA columna, y se comprueba que se QUEDA ahí.

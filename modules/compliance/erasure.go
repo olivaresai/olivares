@@ -1284,23 +1284,8 @@ func (m *Module) executeErasure(ctx context.Context, mc api.ModuleContext, id mo
 	var toPublish []sdkmodel.FindingReport
 	var receipt erasureReceiptDTO
 	err = mc.Data.Mutate(ctx, func(sc store.Scope) error {
-		for _, ref := range key.identifiers() {
-			hdec, herr := evalHolds(ctx, sc, HoldSubject{Kind: key.Kind, Ref: ref})
-			if herr != nil {
-				return herr
-			}
-			if hdec.Held {
-				return errErasureHeld
-			}
-		}
-		for _, class := range classes {
-			hdec, herr := evalHolds(ctx, sc, HoldSubject{DataClass: class})
-			if herr != nil {
-				return herr
-			}
-			if hdec.Held {
-				return errErasureHeld
-			}
+		if err := erasureHeld(ctx, sc, key, classes); err != nil {
+			return err
 		}
 		if err := shredSubjectKey(ctx, sc, key.ID); err != nil {
 			return err
@@ -1439,13 +1424,19 @@ func (m *Module) executeErasure(ctx context.Context, mc api.ModuleContext, id mo
 			return err
 		}
 		toPublish = append(toPublish, rep)
-		return auditEvent(ctx, sc, mc, "compliance.erasure.execute", erasureRequestKind, id, map[string]any{
+		if err := auditEvent(ctx, sc, mc, "compliance.erasure.execute", erasureRequestKind, id, map[string]any{
 			// approvers is the count of distinct HUMANS (the quorum), not of credentials;
 			// unattributed_approvals reports approvals with no person behind them, so the
 			// ledger can never read as "two humans" when it was one human twice.
 			"case_ref": reqRec.String(colCaseRef), "status": status, "approval_ref": dec.ApprovalRef,
 			"approvers": dec.Quorum(), "unattributed_approvals": dec.UnattributedApprovals, "verify_ok": verifyOK,
-		})
+		}); err != nil {
+			return err
+		}
+		// The tombstone is the last write before the commit: a failure here rolls the
+		// shred back, so no key dies without what a later restore needs to erase again,
+		// and only a failed commit leaves a tombstone of an erasure that did not complete.
+		return m.recordTombstone(sc.Tenant(), id, key, classes)
 	})
 	if err != nil {
 		if errors.Is(err, errErasureHeld) {
@@ -1460,6 +1451,28 @@ func (m *Module) executeErasure(ctx context.Context, mc api.ModuleContext, id mo
 	}
 	m.publishFindings(ctx, mc.Tenant, toPublish)
 	return erasureHTTPOutcome{http.StatusOK, receipt}
+}
+
+// erasureHeld answers errErasureHeld when an active hold covers one of the
+// subject's identifiers or one of the request's classes, in sc's transaction.
+func erasureHeld(ctx context.Context, sc store.Scope, key subjectKey, classes []string) error {
+	subjects := make([]HoldSubject, 0, len(classes)+1)
+	for _, ref := range key.identifiers() {
+		subjects = append(subjects, HoldSubject{Kind: key.Kind, Ref: ref})
+	}
+	for _, class := range classes {
+		subjects = append(subjects, HoldSubject{DataClass: class})
+	}
+	for _, sub := range subjects {
+		hdec, err := evalHolds(ctx, sc, sub)
+		if err != nil {
+			return err
+		}
+		if hdec.Held {
+			return errErasureHeld
+		}
+	}
+	return nil
 }
 
 // recheckHoldsForLeg re-runs the full pre-flight hold check at a leg boundary

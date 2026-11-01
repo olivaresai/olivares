@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// HU-12: `olivares session input --text` to a Claude Code session was refused with
+// acceptance: `olivares session input --text` to a Claude Code session was refused with
 // "not driven by a provider protocol driver: send line or message", so the operator
 // had to hand-write the stream-json frame. Text now reaches the child as the one
 // user-message line Claude Code reads, encoded by the server.

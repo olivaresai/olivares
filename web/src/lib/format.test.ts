@@ -73,7 +73,7 @@ describe('tokens / score / latency / duration', () => {
   })
 })
 
-describe('formatDuration: the console says a duration one way (dev#3120)', () => {
+describe('formatDuration: the console says a duration one way', () => {
   it('carries a rounded 60 seconds into the next minute', () => {
     // 16 min 59.6 s read "16m 60s" in the Activity panel.
     expect(formatDuration(16 * 60_000 + 59_600)).toBe('17m')

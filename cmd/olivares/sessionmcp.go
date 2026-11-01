@@ -27,6 +27,7 @@ import (
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions"
 )
 
@@ -66,6 +67,62 @@ type sessionMCPHandler struct {
 	configurer sessionConfigurer
 	// publisher serves the publish proposal tools; nil lists none.
 	publisher sessionPublisher
+	// connections is the Business brokered surface (sessions.Module): the connections
+	// this run's department holds a grant on. nil, and Community's module, offer none.
+	connections sessionConnections
+}
+
+// sessionConnections is the brokered connection surface a session is offered. The
+// engine opens each connection itself; the session sends a name and an operation and
+// never holds the credential. *sessions.Module implements it in both editions.
+// CallConnection answers handled=false with a nil error for every name outside its
+// surface, so the tools after it still see the call.
+type sessionConnections interface {
+	ConnectionTools(context.Context, auth.Principal, model.TenantID) ([]sessions.ConnectionTool, error)
+	CallConnection(context.Context, auth.Principal, model.TenantID, string, json.RawMessage) (sessions.ConnectionOutcome, bool, error)
+}
+
+// connectionTools lists the brokered tools for an issued session credential; any
+// other caller is offered none.
+func (h *sessionMCPHandler) connectionTools(ctx context.Context, p auth.Principal, tenant model.TenantID) ([]mcpc.Tool, error) {
+	if h.connections == nil || !h.issuedSessionOnly {
+		return nil, nil
+	}
+	offered, err := h.connections.ConnectionTools(ctx, p, tenant)
+	if err != nil {
+		return nil, err
+	}
+	tools := make([]mcpc.Tool, 0, len(offered))
+	for _, tool := range offered {
+		read, destructive, open := tool.ReadOnly, !tool.ReadOnly, false
+		tools = append(tools, mcpc.Tool{Name: tool.Name, Title: tool.Name, Description: tool.Description, InputSchema: tool.InputSchema,
+			Annotations: &mcpc.ToolAnnotations{ReadOnlyHint: &read, DestructiveHint: &destructive, IdempotentHint: &read, OpenWorldHint: &open}})
+	}
+	return tools, nil
+}
+
+// callConnectionTool serves a call to a brokered connection tool and reports whether it
+// did; any other name is left to the tools after it. A failure is answered without its
+// cause: the session reads a refusal from the outcome, never an error string that could
+// carry a target or a credential.
+func (h *sessionMCPHandler) callConnectionTool(w http.ResponseWriter, r *http.Request, p auth.Principal, tenant model.TenantID, id json.RawMessage, name string, arguments json.RawMessage) bool {
+	if h.connections == nil || !h.issuedSessionOnly {
+		return false
+	}
+	outcome, handled, err := h.connections.CallConnection(r.Context(), p, tenant, name, arguments)
+	if !handled {
+		return false
+	}
+	if errors.Is(err, auth.ErrUnauthenticated) {
+		sessionRPCError(w, id, -31001, "The session turn has ended")
+		return true
+	}
+	if err != nil {
+		sessionRPCError(w, id, -32001, "Connection tool unavailable")
+		return true
+	}
+	sessionRPCResult(w, id, map[string]any{"content": []any{map[string]any{"type": "text", "text": outcome.Text}}, "isError": outcome.IsError})
+	return true
 }
 
 // issuedWriter reports whether an issued session credential may write work in its
@@ -108,6 +165,12 @@ func (h *sessionMCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, err := h.authr.Authenticate(r.Context(), parts[1])
+	if errors.Is(err, store.ErrStoreUnavailable) {
+		// The credential could not be checked, which says nothing about it: a 401
+		// would tell the session its token is bad.
+		http.Error(w, "session tools unavailable", http.StatusServiceUnavailable)
+		return
+	}
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -184,7 +247,12 @@ func (h *sessionMCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			tools = append(tools, extra...)
 		}
-		sessionRPCListTools(w, in.ID, tools)
+		brokered, err := h.connectionTools(r.Context(), p, tenant)
+		if err != nil {
+			sessionRPCError(w, in.ID, -32001, "Session tools unavailable")
+			return
+		}
+		sessionRPCListTools(w, in.ID, append(tools, brokered...))
 	case "tools/call":
 		if h.managedCall != nil && h.managedCall(w, r, p, tenant, in) {
 			return
@@ -196,6 +264,9 @@ func (h *sessionMCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := strictSessionJSON(bytes.NewReader(in.Params), &call); err != nil {
 			sessionRPCError(w, in.ID, -32602, "Provide name and arguments from tools/list")
+			return
+		}
+		if h.callConnectionTool(w, r, p, tenant, in.ID, call.Name, call.Arguments) {
 			return
 		}
 		if h.callConfigTool(w, r, p, tenant, in.ID, call.Name, call.Arguments, parts[1]) {

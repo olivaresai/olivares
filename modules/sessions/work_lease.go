@@ -26,7 +26,7 @@
 // `principal.Admin` y presentar el fence vigente, o sea un operador retirando un lease de
 // un titular que sigue siendo el dueno. Confundir los dos es lo que este comentario existe
 // para evitar; la evidencia completa esta en
-// `an internal design note (not shipped)`.
+// `an internal audit`.
 
 package sessions
 

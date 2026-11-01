@@ -115,9 +115,9 @@
   "ref": {
     "ms": {
       "paths": "managed-settings.json 경로",
-      "legacyPath": "레거시 Windows C:\\ProgramData\\ClaudeCode 경로는 더 이상 지원되지 않습니다({{since}}에서 제거됨).",
+      "legacyPath": "레거시 Windows <path /> 경로는 더 이상 지원되지 않습니다({{since}}에서 제거됨).",
       "precedence": "설정 우선순위(높은 것부터)",
-      "dropIn": "드롭인 디렉터리: {{dir}}",
+      "dropIn": "드롭인 디렉터리: <path />",
       "serverManaged": "서버 관리 계층",
       "failClosed": "페일 클로즈",
       "noMerge": "병합 안 함",

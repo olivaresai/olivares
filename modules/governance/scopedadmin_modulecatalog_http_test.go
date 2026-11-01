@@ -69,6 +69,14 @@ func TestRBACCatalogWireShape(t *testing.T) {
 		}
 	}
 	kinds, treeKinds, perms := strSet(r.body["kinds"]), strSet(r.body["tree_kinds"]), strSet(r.body["permissions"])
+	for _, p := range []string{"authenticator:write", "audit:read", "authz:read", "accessgraph:read"} {
+		if !perms[p] {
+			t.Errorf("catalog omits exact tenant capability %s", p)
+		}
+	}
+	if perms["authenticator:read"] || perms["audit:write"] {
+		t.Error("catalog invented a non-tree verb")
+	}
 
 	if !treeKinds["agent"] || len(treeKinds) != 15 {
 		t.Errorf("tree_kinds must be the 15 scope-tree kinds, got %d: %v", len(treeKinds), r.body["tree_kinds"])

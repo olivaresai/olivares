@@ -136,7 +136,7 @@ PY
 case_ok "systemd manifest is machine-readable and complete"
 sh "$root/scripts/render-package-systemd.sh" > "$scratch/rendered.service"
 # The release packages ship this render, not the checked-in copy: systemd applies StateDirectoryMode at every start,
-# and 0755 when none is set (dev#2993).
+# and 0755 when none is set.
 expect_rc 0 "the package unit render keeps the data directory private" \
   grep -qx 'StateDirectoryMode=0750' "$scratch/rendered.service"
 expect_rc 0 "checked-in package unit matches the template render" \
@@ -697,6 +697,7 @@ grep -Fq 'result-json: {"schema":"olivares.ai/service-install-result/v1","mode":
   "$scratch/out"
 grep -Fq 'systemctl --user enable --now olivares' "$healthy/init.log"
 grep -Fq "$window" "$scratch/out"
+grep -Fq 'first boot: /livez and /readyz healthy after 0s (1 attempt(s), bounded at 180 attempts and 180s)' "$scratch/out"
 grep -Fq '/livez' "$healthy/requests.log"
 grep -Fq '/readyz' "$healthy/requests.log"
 [[ "$(request_count "$healthy")" -eq 2 ]]
@@ -721,10 +722,10 @@ case_ok "with the whole budget left, a request carries the configured connect an
 # the clock and the attempt cap is what must stop the loop.
 capped="$(start_fixture start-attempt-capped modern)"
 start_run "$capped" 1 "a first boot that never answers stops at its attempt bound and diagnoses locally" 1 0 0 0
-grep -Fq 'gave up after 60 attempt(s)' "$scratch/err"
-grep -Fq 'bounded at 60 attempts and 60s' "$scratch/err"
+grep -Fq 'gave up after 180 attempt(s)' "$scratch/err"
+grep -Fq 'bounded at 180 attempts and 180s' "$scratch/err"
 grep -Fq 'left exactly as installed and nothing was rolled back' "$scratch/err"
-[[ "$(request_count "$capped")" -eq 60 ]]
+[[ "$(request_count "$capped")" -eq 180 ]]
 grep -Fq 'local readiness diagnosis (one 5s probe, separate from the wait above):' "$scratch/err"
 grep -Fq '  diagnosis: first-boot setup is blocked' "$scratch/err"
 grep -Fq '  remedy: provision the admin role' "$scratch/err"
@@ -751,15 +752,15 @@ fi
 case_ok "a failed first boot preserves the unit, config, data and started service"
 
 # Case 3 — the wall-clock bound, and the clip that enforces it. Each request
-# costs 2s and each sleep 1s, so the remaining budget walks 60, 57 … 3: the last
+# costs 2s and each sleep 1s, so the remaining budget walks 180, 177 … 3: the last
 # request must be clipped to the 3s that are left, not the configured 5, and the
 # wait must land ON the deadline rather than past it.
 timed="$(start_fixture start-deadline modern)"
 start_run "$timed" 1 "a first boot that outlasts the deadline stops on wall clock, not on attempts" 1 2 0 0
-grep -Fq 'gave up after 21 attempt(s) over 60s' "$scratch/err"
-grep -Fq 'bounded at 60 attempts and 60s' "$scratch/err"
-[[ "$(request_count "$timed")" -eq 20 ]]
-[[ "$(max_time_of "$timed" 20)" -eq 3 ]]
+grep -Fq 'gave up after 61 attempt(s) over 180s' "$scratch/err"
+grep -Fq 'bounded at 180 attempts and 180s' "$scratch/err"
+[[ "$(request_count "$timed")" -eq 60 ]]
+[[ "$(max_time_of "$timed" 60)" -eq 3 ]]
 case_ok "the wall-clock deadline ends the wait on the deadline, with the last request clipped to it"
 
 # No request may be issued with --max-time 0: curl reads that as NO timeout, so a
@@ -777,14 +778,14 @@ case_ok "a clipped limit never reaches the zero curl reads as no timeout"
 # The first request succeeds and a clock step carries the wait past its end; the
 # second must never be issued.
 crossed="$(start_fixture start-boundary-crossed modern)"
-start_run "$crossed" 1 "a wait that ends mid-attempt issues no further request" 0 0 61 1
+start_run "$crossed" 1 "a wait that ends mid-attempt issues no further request" 0 0 181 1
 [[ "$(request_count "$crossed")" -eq 1 ]]
 grep -Fq '/livez' "$crossed/requests.log"
 if grep -Fq '/readyz' "$crossed/requests.log"; then
   printf 'a request was issued after the wait had ended\n' >&2
   exit 1
 fi
-grep -Fq 'bounded at 60 attempts and 60s' "$scratch/err"
+grep -Fq 'bounded at 180 attempts and 180s' "$scratch/err"
 [[ -f "$crossed/home/.config/systemd/user/olivares.service" ]]
 case_ok "the remaining budget is read before each request, not once per attempt"
 
@@ -792,9 +793,9 @@ case_ok "the remaining budget is read before each request, not once per attempt"
 # wait's result. Both endpoints answer 200; the clock steps past the end during
 # the second. Accepting it would report an unready deployment as healthy.
 late="$(start_fixture start-late-success modern)"
-start_run "$late" 1 "a success that lands after the deadline is refused, not reported healthy" 0 0 61 2
+start_run "$late" 1 "a success that lands after the deadline is refused, not reported healthy" 0 0 181 2
 [[ "$(request_count "$late")" -eq 2 ]]
-grep -Fq 'after the 60s wait had ended' "$scratch/err"
+grep -Fq 'after the 180s wait had ended' "$scratch/err"
 grep -Fq 'left exactly as installed and nothing was rolled back' "$scratch/err"
 if grep -Fq 'result-json' "$scratch/out"; then
   printf 'a late answer was reported as a completed installation\n' >&2
@@ -954,8 +955,8 @@ expect_rc 1 "mutant: accepting an answer that arrived after the deadline is red"
   env OLIVARES_ROOT="$mutant" bash "$root/scripts/check-service-install.sh"
 
 mutant="$(make_mutant attempt-counting-wait)"
-sed -i 's/^  while :; do$/  while [ "$attempts" -lt 60 ]; do/' "$mutant/scripts/install-service.sh"
-expect_rc 1 "mutant: counting 60 attempts again instead of keeping a deadline is red" \
+sed -i 's/^  while :; do$/  while [ "$attempts" -lt 180 ]; do/' "$mutant/scripts/install-service.sh"
+expect_rc 1 "mutant: counting 180 attempts again instead of keeping a deadline is red" \
   env OLIVARES_ROOT="$mutant" bash "$root/scripts/check-service-install.sh"
 
 mutant="$(make_mutant silent-first-boot-failure)"
@@ -983,8 +984,8 @@ expect_rc 1 "mutant: doctor unmeasurable-to-green inversion is red" \
 # Root return 01's defect, kept as a permanent EXECUTABLE witness rather than a
 # source assertion: with the clock read only AFTER both requests, an iteration
 # that begins inside the deadline spends its whole request budget outside it. On
-# the same fixture as the wall-clock case above, this mutant issues a 21st
-# request and reports 61s against the 60s it names — both of which that case
+# the same fixture as the wall-clock case above, this mutant issues a 61st
+# request and reports 181s against the 180s it names — both of which that case
 # forbids. A static flag count cannot see either.
 mutant="$(make_mutant late-clock-read)"
 sed -i '/^      first_boot_tick$/d; /^      if \[ "\$probe_remaining" -lt 1 \]; then probe_ok=0; break; fi$/d' \
@@ -995,8 +996,8 @@ expect_rc 1 "mutant: reading the remaining budget only after both requests still
   env $(start_env "$late_clock" 1 2 0 0) \
   /bin/sh "$mutant/scripts/install-service.sh" --user --init systemd \
   --binary "$late_clock/home/.local/bin/olivares" --start
-[[ "$(request_count "$late_clock")" -eq 21 ]]
-grep -Fq 'over 61s, bounded at 60 attempts and 60s' "$scratch/err"
+[[ "$(request_count "$late_clock")" -eq 61 ]]
+grep -Fq 'over 181s, bounded at 180 attempts and 180s' "$scratch/err"
 case_ok "mutant: it overruns the deadline it names, which the wall-clock case forbids"
 
 printf '1..%d\n' "$passes"

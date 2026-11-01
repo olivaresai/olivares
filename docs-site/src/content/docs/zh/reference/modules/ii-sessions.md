@@ -11,7 +11,7 @@ description: >-
 estate，而模块 II 则在同一条观测流之上为每个会话维护一个**实时运行叠加层**——并且只展示
 该流如实承载的内容。
 
-Olivares <!-- release -->0.4<!-- /release --> 还会在 [提供商配置文件](/how-to/operate-provider-sessions/) 下把官方提供商
+Olivares <!-- release -->0.5<!-- /release --> 还会在 [提供商配置文件](/how-to/operate-provider-sessions/) 下把官方提供商
 CLI **作为自有子进程启动**。该受管路径是同一模块。它不替代叠加层，也不合并两个
 宣布同一提供商会话 id 的主目录（`CHANGELOG.md` `[26.9.0]` B1/B2）。
 
@@ -74,8 +74,9 @@ home 是两行、两条时间线。用 `GET /v1/m/sessions/live/by-id/{live_ref}
 Sessions 是内核模块：即使它不在已保存的模块选择中，也会继续运行。关闭可选模块不会重置会话数据。
 
 `/v1/m/sessions/runs` 下的受管运行 API 与 `olivares session` 使用同一个运行时。读取运行需要
-`sessions:run:read`；启动、输入、停止和 resume 需要 `sessions:run:write`。viewer 可以读取运行，
-而不被允许停止它。租户和工作区权限仍适用于每个运行。
+`sessions:run:read`；输出需要 editor 及以上角色默认拥有的 `sessions:output:read`。启动、输入和 resume
+需要 `sessions:run:write`，停止需要 `sessions:stop:write`。viewer 保留列表和元数据，但未经明确
+授权将失去对会话内容的访问权限。租户和工作区权限仍适用于每个运行。
 
 ```sh
 olivares session ls -o json

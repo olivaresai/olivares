@@ -85,7 +85,13 @@
     "lastSeen": "Zuletzt gesehen",
     "yes": "Ja",
     "no": "Nein",
-    "minimalData": "Es werden nur Metadaten angezeigt. Per Design führt die Engine hier niemals SQL, Nutzdaten oder Geheimnisse mit (Datenminimierung)."
+    "minimalData": "Es werden nur Metadaten angezeigt. Per Design führt die Engine hier niemals SQL, Nutzdaten oder Geheimnisse mit (Datenminimierung).",
+    "open": {
+      "session": "Sitzung öffnen",
+      "agent": "Agenten öffnen",
+      "nhiRoster": "Identitäten öffnen"
+    },
+    "expandLimit": "Diese Karte zeigt bereits {{n}} erweiterte Knoten. Gehen Sie zurück oder aktualisieren Sie, um neu zu beginnen."
   },
   "authority": {
     "title": "Autorität & nächster Schritt",
@@ -190,5 +196,12 @@
     },
     "analyse": "Angriffspfade analysieren (auditiert)",
     "truncated": "Die Engine hat diese Analyse begrenzt; die angezeigten Pfade sind nicht die vollständige Antwort."
+  },
+  "expand": {
+    "partial": "Einige erweiterte Knoten konnten nicht gelesen werden, die Karte ist daher unvollständig.",
+    "retry": "Erneut versuchen"
+  },
+  "graph": {
+    "keyboardHint": "Fokussieren Sie einen Knoten, wechseln Sie mit den Pfeiltasten zu einem verbundenen Knoten und öffnen Sie ihn mit der Eingabetaste. Die Liste unter dem Graphen leistet dasselbe ohne die Zeichenfläche."
   }
 }

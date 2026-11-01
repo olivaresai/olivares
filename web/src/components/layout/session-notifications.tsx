@@ -16,6 +16,11 @@ import {
   SESSION_PARAM,
 } from '@/features/sessions/session-address'
 import { useMinWidth } from '@/lib/hooks/use-min-width'
+import {
+  enablePush,
+  pushSupported,
+  pushTextsFrom,
+} from '@/features/settings/web-push'
 import { setAttentionCount } from './document-title'
 import { useSessionRail } from './use-session-rail'
 import {
@@ -36,6 +41,7 @@ export function SessionNotifications() {
 
 function SessionAttentionObserver() {
   const { t } = useTranslation('settings')
+  const events = useClientSettings((s) => s.notificationEvents)
   const rail = useSessionRail(true)
   const wide = useMinWidth(761)
   const selection = useRouterState({
@@ -63,11 +69,19 @@ function SessionAttentionObserver() {
   const notifications = useRef(
     new Map<
       string,
-      { notification: Notification; event: 'needsYou' | 'finished' }
+      { notification: Notification; event: 'needsYou' | 'finished' | 'failed' }
     >(),
   )
   // A failure while hidden is explained once the person is back and can read it.
   const failed = useRef<'none' | 'pending' | 'shown'>('none')
+
+  // With the switch on, this browser stays registered for push: each visit confirms it with
+  // the engine, so the person's language and a rotated engine key are picked up, and a device
+  // the engine could not register earlier is tried again.
+  useEffect(() => {
+    if (pushSupported() && Notification.permission === 'granted')
+      void enablePush(pushTextsFrom(t)).catch(() => undefined)
+  }, [t])
 
   useEffect(() => {
     const update = () => setHidden(document.hidden)
@@ -90,9 +104,11 @@ function SessionAttentionObserver() {
       const session = current.get(key)
       if (
         !session ||
+        !events[event] ||
         (event === 'needsYou' && session.state !== 'needs-you') ||
         session.run !== previous.current.get(key)?.run ||
         session.state === 'ended' ||
+        (session.state === 'failed' && event !== 'failed') ||
         (!hidden && isOnScreen(session, opened))
       ) {
         notification.close()
@@ -102,7 +118,10 @@ function SessionAttentionObserver() {
     for (const key of delivered.current.keys())
       if (!current.has(key)) delivered.current.delete(key)
     const count = [...current.values()].filter(
-      (s) => s.state === 'needs-you' && (hidden || !isOnScreen(s, opened)),
+      (s) =>
+        events.needsYou &&
+        s.state === 'needs-you' &&
+        (hidden || !isOnScreen(s, opened)),
     ).length
     setAttentionCount(count)
     if (!hidden && failed.current === 'pending') {
@@ -120,6 +139,7 @@ function SessionAttentionObserver() {
       })
       if (
         !event ||
+        !events[event] ||
         !hidden ||
         typeof Notification === 'undefined' ||
         Notification.permission !== 'granted'
@@ -130,7 +150,10 @@ function SessionAttentionObserver() {
         notifications.current.get(session.key)?.notification.close()
         const notification = new Notification(session.name, {
           body: t(`sessionNotifications.${event}`),
-          tag: session.key,
+          // The tag the engine's push for this run carries (modules/sessions/push.go): a tab that
+          // is open but hidden shows one notification, not the page's and the push's.
+          tag:
+            session.aliases?.find((a) => a.startsWith('run:')) ?? session.key,
           silent: true,
         })
         notifications.current.set(session.key, { notification, event })
@@ -141,6 +164,6 @@ function SessionAttentionObserver() {
       }
     }
     previous.current = current
-  }, [rail.attention, rail.attentionReady, hidden, opened, t])
+  }, [rail.attention, rail.attentionReady, hidden, opened, t, events])
   return null
 }

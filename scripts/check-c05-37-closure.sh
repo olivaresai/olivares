@@ -8,7 +8,7 @@
 # This is a closure guard, not a health monitor: 0 means the contract does not contradict
 # its named evidence, not that delivery works now. Both booleans false return 0 without
 # reading a trace. The distinction was missing in the `sol max` review
-# (an internal design note (not shipped)).
+# (an internal audit).
 #
 # The brief requested a SELECT proving host licenses.olivares.ai, but `webhook_events.endpoint`
 # stores only the route `/webhooks/dodo`, from `DODO_WEBHOOK_SOURCE.endpoint` in

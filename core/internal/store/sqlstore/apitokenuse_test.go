@@ -66,6 +66,11 @@ func testRecordAPITokenUse(t *testing.T, st store.Store) {
 	}); err != nil {
 		t.Fatalf("record use: %v", err)
 	}
+	if err := st.AuthMutate(ctx, func(as store.AuthScope) error {
+		return as.RecordAPITokenUse(ctx, token.ID, model.NewTimestamp(usedAt.Time().Add(-time.Minute)))
+	}); err != nil {
+		t.Fatal(err)
+	}
 	var got model.APIToken
 	if err := st.AuthView(ctx, func(as store.AuthScope) error {
 		if err := as.RecordAPITokenUse(ctx, token.ID, usedAt); !errors.Is(err, store.ErrReadOnly) {

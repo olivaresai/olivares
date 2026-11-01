@@ -22,7 +22,8 @@
     "kind": "类型",
     "key": "密钥",
     "state": "状态",
-    "connection": "连接"
+    "connection": "连接",
+    "actions": "操作"
   },
   "kinds": {
     "anthropic": "Anthropic",

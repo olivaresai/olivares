@@ -223,6 +223,10 @@ const FABRICAS = import.meta.glob('./*/api.ts', { eager: true }) as Record<
 
 /** Entradas sin inquilino, con la razón por la que su dato NO es de inquilino. */
 const NO_SON_DE_INQUILINO: Record<string, string> = {
+  'identity.authSessions':
+    '`/v1/auth/sessions` uses humanSessionRoute; handleAuthSessions calls ListOwnSessions ' +
+    "(core/auth/session_inventory.go), which filters by the calling person and the credential's " +
+    'fixed SessionScope, not the active tenant selection',
   // Las tres de `lib/api/query.ts` que de verdad son del DESPLIEGUE, ahora que el trinquete
   // por fin mira ese directorio. Cada una con su razón, que es lo que la exención cuesta.
   'lib-api.serverInfo':

@@ -23,6 +23,7 @@ import {
   Pin,
   PinOff,
   ScrollText,
+  Sparkles,
   SquareAsterisk,
   Trash2,
 } from 'lucide-react'
@@ -39,7 +40,12 @@ import {
 } from '@/components/ui/dialog'
 import {
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -47,10 +53,15 @@ import { Kbd } from '@/components/ui/kbd'
 import { Spinner } from '@/components/ui/spinner'
 import { toast } from '@/components/ui/toaster'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
-import { toolName } from '@/features/agentops/tool-names'
+import { toolName } from '@/features/agentops/engine-tools'
 import type { RunDTO } from '@/features/agentops/types'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
+import {
+  TITLE_STYLES,
+  usePreferencesStore,
+  type TitleStyle,
+} from '@/stores/preferences'
 import { sessionsKeys } from './api'
 import {
   isDeletableRun,
@@ -62,6 +73,13 @@ import {
 import { addressOf, SESSION_PARAM } from './session-address'
 import { DeleteRunDialog } from './run-actions'
 import './i18n'
+
+/** What each title style is called in the menu (`rowActions` keys). */
+const TITLE_STYLE_LABEL = {
+  short: 'rowActions.titleShort',
+  sentence: 'rowActions.titleSentence',
+  long: 'rowActions.titleLong',
+} as const satisfies Record<TitleStyle, string>
 
 /** A transcript page: whole texts, so a page is kept small. */
 const TRANSCRIPT_PAGE = 50
@@ -167,9 +185,11 @@ export function useSessionMenu(
   dialogs: ReactNode
 } {
   const { t } = useTranslation('sessions')
-  const { activeTenant } = useAuth()
+  const { activeTenant, can } = useAuth()
   const qc = useQueryClient()
   const [dialog, setDialog] = useState<MenuDialog>(null)
+  const titleStyle = usePreferencesStore((s) => s.titleStyle)
+  const setTitleStyle = usePreferencesStore((s) => s.setTitleStyle)
 
   const invalidate = () =>
     Promise.all([
@@ -196,13 +216,43 @@ export function useSessionMenu(
     },
     onError: onErr,
   })
+  const retitle = useMutation({
+    mutationFn: ({ run, style }: { run: RunDTO; style: TitleStyle }) =>
+      agentOpsApi.generateTitle(run.run_ref, { style }),
+    onSuccess: () => void invalidate(),
+    onError: onErr,
+  })
   const archive = useMutation({
-    mutationFn: ({ run, on }: { run: RunDTO; on: boolean; address: string }) =>
+    mutationFn: ({
+      run,
+      on,
+      tenant,
+    }: {
+      run: RunDTO
+      on: boolean
+      address: string
+      tenant: string | null
+    }) =>
       on
-        ? agentOpsApi.archive(run.run_ref)
-        : agentOpsApi.unarchive(run.run_ref),
-    onSuccess: (_, { on, address }) => {
-      toast.success(t(on ? 'rowActions.archived' : 'rowActions.unarchived'))
+        ? agentOpsApi.archive(run.run_ref, tenant)
+        : agentOpsApi.unarchive(run.run_ref, tenant),
+    onSuccess: (_, { run, on, address, tenant }) => {
+      // AN ARCHIVE CAN BE UNDONE until the person closes its notice: no timer takes Undo
+      // away from someone who is still reading, and a switch of organization meanwhile
+      // does not send it to the wrong one.
+      toast.success(
+        t(on ? 'rowActions.archived' : 'rowActions.unarchived'),
+        on
+          ? {
+              duration: Infinity,
+              action: {
+                label: t('rowActions.undo'),
+                onClick: () =>
+                  archive.mutate({ run, on: false, address, tenant }),
+              },
+            }
+          : undefined,
+      )
       settle(address)
     },
     onError: onErr,
@@ -278,6 +328,34 @@ export function useSessionMenu(
             {t('rowActions.rename')}
           </DropdownMenuItem>
         ) : null}
+        {run && grants.runWrite && can('sessions:output:read') ? (
+          // The title is cut from the conversation, so the engine asks for the output
+          // permission as well as the write one; the item is left out without both.
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Sparkles />
+              {t('rowActions.regenerateTitle')}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuRadioGroup value={titleStyle}>
+                {TITLE_STYLES.map((style) => (
+                  <DropdownMenuRadioItem
+                    key={style}
+                    value={style}
+                    // A radio group does not report choosing the style it already holds,
+                    // and choosing it again is how a person asks for another go.
+                    onSelect={() => {
+                      setTitleStyle(style)
+                      retitle.mutate({ run, style })
+                    }}
+                  >
+                    {t(TITLE_STYLE_LABEL[style])}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        ) : null}
         {pin.onTogglePin ? (
           <DropdownMenuItem onSelect={pin.onTogglePin}>
             {pin.pinned ? <PinOff /> : <Pin />}
@@ -294,6 +372,7 @@ export function useSessionMenu(
                 run,
                 on: !run.archived_at,
                 address: addressOf(session),
+                tenant: activeTenant,
               })
             }
           >

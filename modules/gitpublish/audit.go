@@ -49,9 +49,14 @@ func intentMeta(in Intent) map[string]any {
 		m["head_ref"], m["base"], m["commit"] = in.Requested.HeadRef, in.Requested.Base, in.Requested.Commit
 	case effectMerge:
 		m["number"], m["expected_head"], m["method"] = strconv.Itoa(in.Requested.Number), in.Requested.ExpectedHead, in.Requested.Method
+	case effectIssueComment:
+		m["number"], m["comment_state"] = strconv.Itoa(in.Requested.Number), in.Requested.CommentState
 	}
 	if in.Observed.Number != 0 {
 		m["observed_number"] = strconv.Itoa(in.Observed.Number)
+	}
+	if in.Observed.CommentID != "" {
+		m["observed_comment_id"] = in.Observed.CommentID
 	}
 	if in.Observed.MergeCommitSHA != "" {
 		m["merge_commit_sha"] = in.Observed.MergeCommitSHA

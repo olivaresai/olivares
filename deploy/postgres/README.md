@@ -148,8 +148,12 @@ OLIVARES_DATA_DIR=/var/lib/olivares \
 OLIVARES_DR_PASSPHRASE_FILE=/run/secrets/dr-pass \
   ./backup/pg-dump.sh /backups/olivares-dr-$(date -u +%Y%m%dT%H%M%SZ).drbundle
 
-# Test the backup WITHOUT touching production (the DR drill — do this on a cadence):
-olivares dr verify --in /backups/olivares-dr-….drbundle --passphrase-file /run/secrets/dr-pass
+# Test the backup WITHOUT touching production (the DR drill — do this on a cadence).
+# --scratch-dsn (a file:/env: reference to a maintenance DSN that may create databases and
+# roles) restores the bundle into a throwaway database and re-verifies the whole ledger there;
+# without it only the digest and the keys are checked, and the output says so:
+olivares dr verify --in /backups/olivares-dr-….drbundle --passphrase-file /run/secrets/dr-pass \
+  --scratch-dsn file:/run/secrets/scratch.dsn
 
 # Restore into an empty target and PROVE continuity:
 OLIVARES_DSN=postgres://olivares_app:***@dr-host:5432/olivares \

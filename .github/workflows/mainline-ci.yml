@@ -3,14 +3,10 @@
 # Build, test and scan the checked-out candidate.
 name: mainline-ci
 
-# Trigger filtering must preserve required status checks and security scans. Classify
-# changed inputs inside the workflow; classification failure runs all checks.
+# Export merges already passed the pull-request and full race checks on this tree.
+# Keep this full suite available for explicit investigation without repeating it on push.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    # Every main push starts this workflow. Classify may skip expensive code jobs
-    # on remaining journal prefixes; it does not skip the run or the secrets job.
 
 permissions:
   contents: read
@@ -29,11 +25,9 @@ defaults:
 # group on each expensive job instead, a run whose code jobs are SKIPPED never enters
 # their groups: journal-only runs cancel nothing, while a newer code push still cancels
 # the superseded code jobs (bounding minutes on rapid merge trains, as before). The
-# `secrets` job carries its own group too: a newer full-history gitleaks scan strictly
-# subsumes the one it cancels.
+# `secrets` jobs keep run-specific groups; each covers everything since the last green run.
 
-# Group workflow runs by ref and event. Supersede pending runs while allowing the active
-# run to finish.
+# Serialize suites; the last successful scan base recovers superseded pending pushes.
 concurrency:
   group: mainline-ci-run-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: false
@@ -281,6 +275,7 @@ jobs:
           {
             echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
             echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
+            echo "GOFLAGS=${GOFLAGS:+$GOFLAGS }-modcacherw"
             echo "GOPATH=$RUNNER_TEMP/gopath"
           # Y su `bin` AL PATH, o mover GOPATH rompe todo lo que se instala con `go install`.
           # Medido en CI: con GOPATH redirigido y sin esta linea, helm-render fallo con
@@ -290,7 +285,7 @@ jobs:
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
-          # Y pnpm IGUAL, por la misma causa y con otro sintoma. Medido en ci-runner-9: el
+          # Y pnpm IGUAL, por la misma causa y con otro sintoma. Medido en build-host: el
           # servicio corre con HOME=/root, asi que pnpm/action-setup se auto-instalo en
           # /root/setup-pnpm y murio con ERR_PNPM_BROKEN_PNPM_INSTALL (exit 127). Ese fallo
           # SALTA los pasos siguientes —incluida la instalacion de go-task— y entonces un
@@ -326,7 +321,7 @@ jobs:
           standalone: true
       - name: install go-task (pinned)
         # MEASURED 2026-09-14 (run 34854565361): `go install …/task@v3.51.1` compiled the tool in
-        # every job, 4m00s–6m20s each on ci-runner-1..9. The composite action installs the pinned
+        # every job, 4m00s–6m20s each on build-host. The composite action installs the pinned
         # release tarball (SHA-256 verified) into the runner tool cache and proves it is reachable.
         id: tools
         uses: ./.github/actions/olivares-tool-cache
@@ -344,19 +339,19 @@ jobs:
           # ejecucion de plugins rompio un test de sockets: las dos condiciones son reales.
           corto=""
           # ⛔ Y DICE POR QUE descarta cada candidato. La primera version solo avisaba «sin candidato
-          # CORTO» y eso no es accionable: en ci-runner-7 los tres fallaron y el aviso no decia si era
+          # CORTO» y eso no es accionable: en build-host los tres fallaron y el aviso no decia si era
           # por no existir, por no poder escribir o por no poder ejecutar. Un aviso que no nombra la
           # causa obliga a reproducir el entorno para saber que mirar.
           # ⛔ DISCO ANTES QUE /dev/shm, MEDIDO el 2026-09-16 (run 35076921214, `race-hot-manifest`
-          # p3 en ci-runner-3): `go build` murio con «vet.cfg: no space left on device» bajo
+          # p3 en build-host): `go build` murio con «vet.cfg: no space left on device» bajo
           # /dev/shm/olv…/go-build…, y `race-modules` p3/p4 y el paso proto de `control-plane`
           # cayeron por lo mismo mientras dos particiones hermanas pasaban en el MISMO host: quien
           # llega primero se lleva la RAM. /dev/shm es UN tmpfs compartido por los doce runners
-          # del host ci-runner-1, cada job con -race le mete gigas de arbol intermedio de Go, y
+          # del host build-host, cada job con -race le mete gigas de arbol intermedio de Go, y
           # nadie borraba /dev/shm/olv$$ al acabar, asi que cada job cancelado dejaba el suyo.
           # $HOME es disco y sigue siendo CORTO (/home/runner/olv1234567 = 23 <= 24). Y /var/tmp DETRAS,
           # porque en los runners Hetzner HOME NO ESTA DEFINIDA (medido: run 35081963451, race-hot p1 en
-          # ci-runner-8 salto el primer candidato y volvio a /dev/shm con 18187 MiB libres de 32039):
+          # build-host salto el primer candidato y volvio a /dev/shm con 18187 MiB libres de 32039):
           # /var/tmp es el disco del host que si existe, mide 8 y la sonda de abajo decide si ejecuta.
           # Barrido de huerfanos ANTES de elegir: un olv* mas viejo que el timeout-minutes mayor
           # de este fichero (320) no puede pertenecer a un job vivo. Mide mtime del directorio,
@@ -995,7 +990,7 @@ jobs:
         run: task lint:commit-msg-scope
       - name: race-full report battery
         id: lint-race-report
-        run: task lint:race-report:selftest
+        run: bash scripts/hub-leg.sh ci:race-full-report:selftest scripts/test-race-full-report.sh
       - name: race groups battery
         id: lint-race-groups
         run: task lint:race-groups:selftest
@@ -1084,7 +1079,7 @@ jobs:
       # public-only condition, in ci/hosted-runners.txt.
       - name: no job on a GitHub-hosted runner outside the allowlist
         id: lint-hosted-runners
-        run: task lint:ci-hosted-runners lint:ci-hosted-runners:selftest
+        run: bash scripts/hub-leg.sh lint:ci-hosted-runners scripts/check-ci-hosted-runners.sh && bash scripts/hub-leg.sh lint:ci-hosted-runners:selftest scripts/test-ci-hosted-runners.sh
       # Release mechanics (2026-08-01). Six hermetic batteries, ~5s, and until today they
       # ran ONLY in .githooks/pre-push — in no workflow at all. That is how they entered
       # main BROKEN with the 2026-07-31 train (their stubs assumed an exec-capable /tmp,
@@ -1148,25 +1143,25 @@ jobs:
       - name: release channel vocabulary parity
         id: lint-channel-parity
         timeout-minutes: 1
-        run: task lint:channel-parity
+        run: bash scripts/hub-leg.sh lint:channel-parity scripts/check-channel-parity.sh
       - name: release channel publication parity battery
         id: lint-channel-parity-selftest
         timeout-minutes: 2
         env:
           TMPDIR: ${{ runner.temp }}
-        run: task lint:channel-parity:selftest
+        run: bash scripts/hub-leg.sh lint:channel-parity:selftest scripts/test-channel-parity.sh
       # DIST-24-08 is contract-only until private repository hosting exists.
       # These legs use decoded examples and local mutants: no bearer, signer or network.
       - name: enterprise repository credential contract
         id: lint-repo-credential-contract
         timeout-minutes: 1
-        run: task lint:repo-credential-contract
+        run: bash scripts/hub-leg.sh lint:repo-credential-contract scripts/check-repo-credential-contract.sh
       - name: enterprise repository credential mutation battery
         id: lint-repo-credential-contract-selftest
         timeout-minutes: 1
         env:
           TMPDIR: ${{ runner.temp }}
-        run: task lint:repo-credential-contract:selftest
+        run: bash scripts/hub-leg.sh lint:repo-credential-contract:selftest scripts/test-repo-credential-contract.sh
       # DIST-24-12 keeps the no-Docker probe fixtures and its actual always-yes
       # source mutant in mainline. The Docker Compose run is compose-ready.yml.
       - name: Compose readiness wiring
@@ -1578,7 +1573,7 @@ jobs:
         run: |
           echo "web-bundle result: $RESULT_BUNDLE"
           echo "functional-shard result: $RESULT"
-          # The shards embed the console that web-bundle builds (dev#2367). When that job is red
+          # The shards embed the console that web-bundle builds. When that job is red
           # the shards are SKIPPED, and the arm below would say a check quietly stopped checking.
           # Name the real cause first; `web` no longer carries the build verdict.
           if [ "$RESULT_BUNDLE" != success ]; then
@@ -1865,6 +1860,7 @@ jobs:
           {
             echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
             echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
+            echo "GOFLAGS=${GOFLAGS:+$GOFLAGS }-modcacherw"
             echo "GOPATH=$RUNNER_TEMP/gopath"
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
@@ -2334,7 +2330,7 @@ jobs:
   # including on the image digest.
   #
   # On 2026-09-11 this job ran out of clock and became four. Job 103097824594 of run
-  # 34545731818 (ci-runner-2) was killed by the 210-minute step ceiling with 28 packages
+  # 34545731818 (build-host) was killed by the 210-minute step ceiling with 28 packages
   # green (governance 6291.626s, finops 5283.827s, compliance 4415.238s), `modules/sessions`
   # still alive and five packages never reported. Those 28 sum 31545 s of package wall inside
   # 12600 s of step wall — average concurrency 2.5 — so the leg did not hang: it did not fit.
@@ -2354,7 +2350,7 @@ jobs:
     # Gated by the internal change gate: journal-only pushes skip this code-input job.
     # On pull_request / dispatch the classify job always answers code=true (no
     # PR-side filtering of any kind).
-    # SCHEDULE (dev#2367): this leg starts after functional-shard and `web`, so a full run does not
+    # SCHEDULE: this leg starts after functional-shard and `web`, so a full run does not
     # hand the eight runners to the -race legs while the functional suite and the web unit tests
     # wait. `!cancelled()` keeps a RED upstream job from skipping the leg: a skipped leg is a red
     # `race-hot`, and its evidence is the point. scripts/test-mainline-ci-schedule.py holds this.
@@ -2366,7 +2362,7 @@ jobs:
       # about the packages they were racing. The aggregate is red either way, so all
       # fail-fast buys here is the loss of three failure reports.
       fail-fast: false
-      # max-parallel (dev#2367, Root's recipe on the issue): four legs of this family on top of the others
+      # max-parallel (the regression, the maintainer's recipe on the issue): four legs of this family on top of the others
       # took all eight runners of a 4-core host and every job slowed past its ceiling (race-core cut at
       # 180 min, race-sessions at 190). Two at a time; the families also run one after the other.
       max-parallel: 2
@@ -2463,7 +2459,7 @@ jobs:
         run: bash scripts/ci-postgres-service.sh resolve
       - name: Go caches under RUNNER_TEMP (this runner may have no $HOME)
         # ⛔ VA ANTES DE `setup-go`, Y ESE ORDEN ES EL ARREGLO. La primera version de este
-        # paso iba DESPUES, y habria sido inutil: cuando se etiqueto `ci-runner-4` el 2026-08-18
+        # paso iba DESPUES, y habria sido inutil: cuando se etiqueto `build-host` el 2026-08-18
         # el job no murio en `go install`, murio dentro de `setup-go` con «GOCACHE is not
         # defined and neither $XDG_CACHE_HOME nor $HOME are defined». Un arreglo colocado
         # despues del paso que falla no arregla nada — sale verde en los runners que ya
@@ -2472,6 +2468,7 @@ jobs:
           {
             echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
             echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
+            echo "GOFLAGS=${GOFLAGS:+$GOFLAGS }-modcacherw"
             echo "GOPATH=$RUNNER_TEMP/gopath"
           # Y su `bin` AL PATH, o mover GOPATH rompe todo lo que se instala con `go install`.
           # Medido en CI: con GOPATH redirigido y sin esta linea, helm-render fallo con
@@ -2481,7 +2478,7 @@ jobs:
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
-          # Y pnpm IGUAL, por la misma causa y con otro sintoma. Medido en ci-runner-9: el
+          # Y pnpm IGUAL, por la misma causa y con otro sintoma. Medido en build-host: el
           # servicio corre con HOME=/root, asi que pnpm/action-setup se auto-instalo en
           # /root/setup-pnpm y murio con ERR_PNPM_BROKEN_PNPM_INSTALL (exit 127). Ese fallo
           # SALTA los pasos siguientes —incluida la instalacion de go-task— y entonces un
@@ -2499,7 +2496,7 @@ jobs:
           cache-dependency-path: go.work.sum
       - name: install go-task (pinned)
         # MEASURED 2026-09-14 (run 34854565361): `go install …/task@v3.51.1` compiled the tool in
-        # every job, 4m00s–6m20s each on ci-runner-1..9. The composite action installs the pinned
+        # every job, 4m00s–6m20s each on build-host. The composite action installs the pinned
         # release tarball (SHA-256 verified) into the runner tool cache and proves it is reachable.
         id: tools
         uses: ./.github/actions/olivares-tool-cache
@@ -2517,19 +2514,19 @@ jobs:
           # ejecucion de plugins rompio un test de sockets: las dos condiciones son reales.
           corto=""
           # ⛔ Y DICE POR QUE descarta cada candidato. La primera version solo avisaba «sin candidato
-          # CORTO» y eso no es accionable: en ci-runner-7 los tres fallaron y el aviso no decia si era
+          # CORTO» y eso no es accionable: en build-host los tres fallaron y el aviso no decia si era
           # por no existir, por no poder escribir o por no poder ejecutar. Un aviso que no nombra la
           # causa obliga a reproducir el entorno para saber que mirar.
           # ⛔ DISCO ANTES QUE /dev/shm, MEDIDO el 2026-09-16 (run 35076921214, `race-hot-manifest`
-          # p3 en ci-runner-3): `go build` murio con «vet.cfg: no space left on device» bajo
+          # p3 en build-host): `go build` murio con «vet.cfg: no space left on device» bajo
           # /dev/shm/olv…/go-build…, y `race-modules` p3/p4 y el paso proto de `control-plane`
           # cayeron por lo mismo mientras dos particiones hermanas pasaban en el MISMO host: quien
           # llega primero se lleva la RAM. /dev/shm es UN tmpfs compartido por los doce runners
-          # del host ci-runner-1, cada job con -race le mete gigas de arbol intermedio de Go, y
+          # del host build-host, cada job con -race le mete gigas de arbol intermedio de Go, y
           # nadie borraba /dev/shm/olv$$ al acabar, asi que cada job cancelado dejaba el suyo.
           # $HOME es disco y sigue siendo CORTO (/home/runner/olv1234567 = 23 <= 24). Y /var/tmp DETRAS,
           # porque en los runners Hetzner HOME NO ESTA DEFINIDA (medido: run 35081963451, race-hot p1 en
-          # ci-runner-8 salto el primer candidato y volvio a /dev/shm con 18187 MiB libres de 32039):
+          # build-host salto el primer candidato y volvio a /dev/shm con 18187 MiB libres de 32039):
           # /var/tmp es el disco del host que si existe, mide 8 y la sonda de abajo decide si ejecuta.
           # Barrido de huerfanos ANTES de elegir: un olv* mas viejo que el timeout-minutes mayor
           # de este fichero (320) no puede pertenecer a un job vivo. Mide mtime del directorio,
@@ -2642,7 +2639,7 @@ jobs:
     # Gated by the internal change gate: journal-only pushes skip this code-input job.
     # On pull_request / dispatch the classify job always answers code=true (no
     # PR-side filtering of any kind).
-    # SCHEDULE (dev#2367): this leg starts after functional-shard and `web`, so a full run does not
+    # SCHEDULE: this leg starts after functional-shard and `web`, so a full run does not
     # hand the eight runners to the -race legs while the functional suite and the web unit tests
     # wait. `!cancelled()` keeps a RED upstream job from skipping the leg: a skipped leg is a red
     # `race-hot`, and its evidence is the point. scripts/test-mainline-ci-schedule.py holds this.
@@ -2752,7 +2749,7 @@ jobs:
         run: bash scripts/ci-postgres-service.sh resolve
       - name: Go caches under RUNNER_TEMP (this runner may have no $HOME)
         # ⛔ VA ANTES DE `setup-go`, Y ESE ORDEN ES EL ARREGLO. La primera version de este
-        # paso iba DESPUES, y habria sido inutil: cuando se etiqueto `ci-runner-4` el 2026-08-18
+        # paso iba DESPUES, y habria sido inutil: cuando se etiqueto `build-host` el 2026-08-18
         # el job no murio en `go install`, murio dentro de `setup-go` con «GOCACHE is not
         # defined and neither $XDG_CACHE_HOME nor $HOME are defined». Un arreglo colocado
         # despues del paso que falla no arregla nada — sale verde en los runners que ya
@@ -2761,6 +2758,7 @@ jobs:
           {
             echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
             echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
+            echo "GOFLAGS=${GOFLAGS:+$GOFLAGS }-modcacherw"
             echo "GOPATH=$RUNNER_TEMP/gopath"
           # Y su `bin` AL PATH, o mover GOPATH rompe todo lo que se instala con `go install`.
           # Medido en CI: con GOPATH redirigido y sin esta linea, helm-render fallo con
@@ -2770,7 +2768,7 @@ jobs:
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
-          # Y pnpm IGUAL, por la misma causa y con otro sintoma. Medido en ci-runner-9: el
+          # Y pnpm IGUAL, por la misma causa y con otro sintoma. Medido en build-host: el
           # servicio corre con HOME=/root, asi que pnpm/action-setup se auto-instalo en
           # /root/setup-pnpm y murio con ERR_PNPM_BROKEN_PNPM_INSTALL (exit 127). Ese fallo
           # SALTA los pasos siguientes —incluida la instalacion de go-task— y entonces un
@@ -2788,7 +2786,7 @@ jobs:
           cache-dependency-path: go.work.sum
       - name: install go-task (pinned)
         # MEASURED 2026-09-14 (run 34854565361): `go install …/task@v3.51.1` compiled the tool in
-        # every job, 4m00s–6m20s each on ci-runner-1..9. The composite action installs the pinned
+        # every job, 4m00s–6m20s each on build-host. The composite action installs the pinned
         # release tarball (SHA-256 verified) into the runner tool cache and proves it is reachable.
         id: tools
         uses: ./.github/actions/olivares-tool-cache
@@ -2806,19 +2804,19 @@ jobs:
           # ejecucion de plugins rompio un test de sockets: las dos condiciones son reales.
           corto=""
           # ⛔ Y DICE POR QUE descarta cada candidato. La primera version solo avisaba «sin candidato
-          # CORTO» y eso no es accionable: en ci-runner-7 los tres fallaron y el aviso no decia si era
+          # CORTO» y eso no es accionable: en build-host los tres fallaron y el aviso no decia si era
           # por no existir, por no poder escribir o por no poder ejecutar. Un aviso que no nombra la
           # causa obliga a reproducir el entorno para saber que mirar.
           # ⛔ DISCO ANTES QUE /dev/shm, MEDIDO el 2026-09-16 (run 35076921214, `race-hot-manifest`
-          # p3 en ci-runner-3): `go build` murio con «vet.cfg: no space left on device» bajo
+          # p3 en build-host): `go build` murio con «vet.cfg: no space left on device» bajo
           # /dev/shm/olv…/go-build…, y `race-modules` p3/p4 y el paso proto de `control-plane`
           # cayeron por lo mismo mientras dos particiones hermanas pasaban en el MISMO host: quien
           # llega primero se lleva la RAM. /dev/shm es UN tmpfs compartido por los doce runners
-          # del host ci-runner-1, cada job con -race le mete gigas de arbol intermedio de Go, y
+          # del host build-host, cada job con -race le mete gigas de arbol intermedio de Go, y
           # nadie borraba /dev/shm/olv$$ al acabar, asi que cada job cancelado dejaba el suyo.
           # $HOME es disco y sigue siendo CORTO (/home/runner/olv1234567 = 23 <= 24). Y /var/tmp DETRAS,
           # porque en los runners Hetzner HOME NO ESTA DEFINIDA (medido: run 35081963451, race-hot p1 en
-          # ci-runner-8 salto el primer candidato y volvio a /dev/shm con 18187 MiB libres de 32039):
+          # build-host salto el primer candidato y volvio a /dev/shm con 18187 MiB libres de 32039):
           # /var/tmp es el disco del host que si existe, mide 8 y la sonda de abajo decide si ejecuta.
           # Barrido de huerfanos ANTES de elegir: un olv* mas viejo que el timeout-minutes mayor
           # de este fichero (320) no puede pertenecer a un job vivo. Mide mtime del directorio,
@@ -2884,7 +2882,7 @@ jobs:
           PGPASSWORD: postgres
         run: bash scripts/ci-postgres-service.sh provision
       # ⛔ EL TECHO DEL PASO TIENE QUE SER MAYOR QUE EL DE `go test`, O EL DIAGNOSTICO DE GO ES
-      # INALCANZABLE. Medido el 2026-08-19 en ci-runner-7: este paso valia 45 y el comando de
+      # INALCANZABLE. Medido el 2026-08-19 en build-host: este paso valia 45 y el comando de
       # dentro es `go test -race -timeout 45m` (Taskfile.yml:302). Los dos relojes arrancan casi a
       # la vez, asi que Go nunca llega a disparar el suyo — y el suyo es el unico que NOMBRA el
       # paquete colgado y vuelca sus goroutines. Lo que salio fue
@@ -2965,11 +2963,11 @@ jobs:
   # Run core separately, with one package binary at a time. Coverage and
   # PostgreSQL remain required. Hosted CI must qualify the revised budgets.
   race-core:
-    # SCHEDULE (dev#2367): this leg starts after functional-shard and `web`, so a full run does not
+    # SCHEDULE: this leg starts after functional-shard and `web`, so a full run does not
     # hand the eight runners to the -race legs while the functional suite and the web unit tests
     # wait. `!cancelled()` keeps a RED upstream job from skipping the leg: a skipped leg is a red
     # `race-hot`, and its evidence is the point. scripts/test-mainline-ci-schedule.py holds this.
-    # CHAIN (dev#2367): after race-sessions as well, so the big families do not start together. `!cancelled()`
+    # CHAIN: after race-sessions as well, so the big families do not start together. `!cancelled()`
     # below keeps a red race-sessions from skipping this one. At most 2 legs of the current family run beside
     # race-hot-manifest (4) and race-rest (1): at most 7 race jobs at once, on 8 runners.
     needs: [classify, functional-shard, web, race-sessions]
@@ -2979,7 +2977,7 @@ jobs:
       # first partition to fail cancels the others, and a cancelled leg reports nothing about
       # the packages it was racing. The aggregate is red either way.
       fail-fast: false
-      # max-parallel (dev#2367, Root's recipe on the issue): four legs of this family on top of the others
+      # max-parallel (the regression, the maintainer's recipe on the issue): four legs of this family on top of the others
       # took all eight runners of a 4-core host and every job slowed past its ceiling (race-core cut at
       # 180 min, race-sessions at 190). Two at a time; the families also run one after the other.
       max-parallel: 2
@@ -3061,6 +3059,7 @@ jobs:
           {
             echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
             echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
+            echo "GOFLAGS=${GOFLAGS:+$GOFLAGS }-modcacherw"
             echo "GOPATH=$RUNNER_TEMP/gopath"
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
@@ -3077,7 +3076,7 @@ jobs:
           cache-dependency-path: go.work.sum
       - name: install go-task (pinned)
         # MEASURED 2026-09-14 (run 34854565361): `go install …/task@v3.51.1` compiled the tool in
-        # every job, 4m00s–6m20s each on ci-runner-1..9. The composite action installs the pinned
+        # every job, 4m00s–6m20s each on build-host. The composite action installs the pinned
         # release tarball (SHA-256 verified) into the runner tool cache and proves it is reachable.
         id: tools
         uses: ./.github/actions/olivares-tool-cache
@@ -3085,15 +3084,15 @@ jobs:
         run: |
           corto=""
           # ⛔ DISCO ANTES QUE /dev/shm, MEDIDO el 2026-09-16 (run 35076921214, `race-hot-manifest`
-          # p3 en ci-runner-3): `go build` murio con «vet.cfg: no space left on device» bajo
+          # p3 en build-host): `go build` murio con «vet.cfg: no space left on device» bajo
           # /dev/shm/olv…/go-build…, y `race-modules` p3/p4 y el paso proto de `control-plane`
           # cayeron por lo mismo mientras dos particiones hermanas pasaban en el MISMO host: quien
           # llega primero se lleva la RAM. /dev/shm es UN tmpfs compartido por los doce runners
-          # del host ci-runner-1, cada job con -race le mete gigas de arbol intermedio de Go, y
+          # del host build-host, cada job con -race le mete gigas de arbol intermedio de Go, y
           # nadie borraba /dev/shm/olv$$ al acabar, asi que cada job cancelado dejaba el suyo.
           # $HOME es disco y sigue siendo CORTO (/home/runner/olv1234567 = 23 <= 24). Y /var/tmp DETRAS,
           # porque en los runners Hetzner HOME NO ESTA DEFINIDA (medido: run 35081963451, race-hot p1 en
-          # ci-runner-8 salto el primer candidato y volvio a /dev/shm con 18187 MiB libres de 32039):
+          # build-host salto el primer candidato y volvio a /dev/shm con 18187 MiB libres de 32039):
           # /var/tmp es el disco del host que si existe, mide 8 y la sonda de abajo decide si ejecuta.
           # Barrido de huerfanos ANTES de elegir: un olv* mas viejo que el timeout-minutes mayor
           # de este fichero (320) no puede pertenecer a un job vivo. Mide mtime del directorio,
@@ -3183,11 +3182,11 @@ jobs:
   # This job owns it, split by ENTRY POINT under an anchored -run. Its four legs are required
   # by race-hot, so removing the package from race-modules cannot silently drop it.
   race-sessions:
-    # SCHEDULE (dev#2367): this leg starts after functional-shard and `web`, so a full run does not
+    # SCHEDULE: this leg starts after functional-shard and `web`, so a full run does not
     # hand the eight runners to the -race legs while the functional suite and the web unit tests
     # wait. `!cancelled()` keeps a RED upstream job from skipping the leg: a skipped leg is a red
     # `race-hot`, and its evidence is the point. scripts/test-mainline-ci-schedule.py holds this.
-    # CHAIN (dev#2367): after race-modules as well, so the big families do not start together. `!cancelled()`
+    # CHAIN: after race-modules as well, so the big families do not start together. `!cancelled()`
     # below keeps a red race-modules from skipping this one. At most 2 legs of the current family run beside
     # race-hot-manifest (4) and race-rest (1): at most 7 race jobs at once, on 8 runners.
     needs: [classify, functional-shard, web, race-modules]
@@ -3197,7 +3196,7 @@ jobs:
       # first partition to fail cancels the others, and a cancelled leg reports nothing about
       # the packages it was racing. The aggregate is red either way.
       fail-fast: false
-      # max-parallel (dev#2367, Root's recipe on the issue): four legs of this family on top of the others
+      # max-parallel (the regression, the maintainer's recipe on the issue): four legs of this family on top of the others
       # took all eight runners of a 4-core host and every job slowed past its ceiling (race-core cut at
       # 180 min, race-sessions at 190). Two at a time; the families also run one after the other.
       max-parallel: 2
@@ -3279,6 +3278,7 @@ jobs:
           {
             echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
             echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
+            echo "GOFLAGS=${GOFLAGS:+$GOFLAGS }-modcacherw"
             echo "GOPATH=$RUNNER_TEMP/gopath"
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
@@ -3295,7 +3295,7 @@ jobs:
           cache-dependency-path: go.work.sum
       - name: install go-task (pinned)
         # MEASURED 2026-09-14 (run 34854565361): `go install …/task@v3.51.1` compiled the tool in
-        # every job, 4m00s–6m20s each on ci-runner-1..9. The composite action installs the pinned
+        # every job, 4m00s–6m20s each on build-host. The composite action installs the pinned
         # release tarball (SHA-256 verified) into the runner tool cache and proves it is reachable.
         id: tools
         uses: ./.github/actions/olivares-tool-cache
@@ -3303,15 +3303,15 @@ jobs:
         run: |
           corto=""
           # ⛔ DISCO ANTES QUE /dev/shm, MEDIDO el 2026-09-16 (run 35076921214, `race-hot-manifest`
-          # p3 en ci-runner-3): `go build` murio con «vet.cfg: no space left on device» bajo
+          # p3 en build-host): `go build` murio con «vet.cfg: no space left on device» bajo
           # /dev/shm/olv…/go-build…, y `race-modules` p3/p4 y el paso proto de `control-plane`
           # cayeron por lo mismo mientras dos particiones hermanas pasaban en el MISMO host: quien
           # llega primero se lleva la RAM. /dev/shm es UN tmpfs compartido por los doce runners
-          # del host ci-runner-1, cada job con -race le mete gigas de arbol intermedio de Go, y
+          # del host build-host, cada job con -race le mete gigas de arbol intermedio de Go, y
           # nadie borraba /dev/shm/olv$$ al acabar, asi que cada job cancelado dejaba el suyo.
           # $HOME es disco y sigue siendo CORTO (/home/runner/olv1234567 = 23 <= 24). Y /var/tmp DETRAS,
           # porque en los runners Hetzner HOME NO ESTA DEFINIDA (medido: run 35081963451, race-hot p1 en
-          # ci-runner-8 salto el primer candidato y volvio a /dev/shm con 18187 MiB libres de 32039):
+          # build-host salto el primer candidato y volvio a /dev/shm con 18187 MiB libres de 32039):
           # /var/tmp es el disco del host que si existe, mide 8 y la sonda de abajo decide si ejecuta.
           # Barrido de huerfanos ANTES de elegir: un olv* mas viejo que el timeout-minutes mayor
           # de este fichero (320) no puede pertenecer a un job vivo. Mide mtime del directorio,
@@ -3433,7 +3433,7 @@ jobs:
   # executable TMPDIR and the role provisioning are race-rest's, unchanged and in the same order:
   # this leg has always run with that posture and moving it must not quietly give it another.
   race-hot-manifest:
-    # SCHEDULE (dev#2367): this leg starts after functional-shard and `web`, so a full run does not
+    # SCHEDULE: this leg starts after functional-shard and `web`, so a full run does not
     # hand the eight runners to the -race legs while the functional suite and the web unit tests
     # wait. `!cancelled()` keeps a RED upstream job from skipping the leg: a skipped leg is a red
     # `race-hot`, and its evidence is the point. scripts/test-mainline-ci-schedule.py holds this.
@@ -3540,7 +3540,7 @@ jobs:
         run: bash scripts/ci-postgres-service.sh resolve
       - name: Go caches under RUNNER_TEMP (this runner may have no $HOME)
         # ⛔ VA ANTES DE `setup-go`, Y ESE ORDEN ES EL ARREGLO. La primera version de este
-        # paso iba DESPUES, y habria sido inutil: cuando se etiqueto `ci-runner-4` el 2026-08-18
+        # paso iba DESPUES, y habria sido inutil: cuando se etiqueto `build-host` el 2026-08-18
         # el job no murio en `go install`, murio dentro de `setup-go` con «GOCACHE is not
         # defined and neither $XDG_CACHE_HOME nor $HOME are defined». Un arreglo colocado
         # despues del paso que falla no arregla nada — sale verde en los runners que ya
@@ -3549,6 +3549,7 @@ jobs:
           {
             echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
             echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
+            echo "GOFLAGS=${GOFLAGS:+$GOFLAGS }-modcacherw"
             echo "GOPATH=$RUNNER_TEMP/gopath"
           # Y su `bin` AL PATH, o mover GOPATH rompe todo lo que se instala con `go install`.
           # Medido en CI: con GOPATH redirigido y sin esta linea, helm-render fallo con
@@ -3558,7 +3559,7 @@ jobs:
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
-          # Y pnpm IGUAL, por la misma causa y con otro sintoma. Medido en ci-runner-9: el
+          # Y pnpm IGUAL, por la misma causa y con otro sintoma. Medido en build-host: el
           # servicio corre con HOME=/root, asi que pnpm/action-setup se auto-instalo en
           # /root/setup-pnpm y murio con ERR_PNPM_BROKEN_PNPM_INSTALL (exit 127). Ese fallo
           # SALTA los pasos siguientes —incluida la instalacion de go-task— y entonces un
@@ -3576,7 +3577,7 @@ jobs:
           cache-dependency-path: go.work.sum
       - name: install go-task (pinned)
         # MEASURED 2026-09-14 (run 34854565361): `go install …/task@v3.51.1` compiled the tool in
-        # every job, 4m00s–6m20s each on ci-runner-1..9. The composite action installs the pinned
+        # every job, 4m00s–6m20s each on build-host. The composite action installs the pinned
         # release tarball (SHA-256 verified) into the runner tool cache and proves it is reachable.
         id: tools
         uses: ./.github/actions/olivares-tool-cache
@@ -3594,19 +3595,19 @@ jobs:
           # ejecucion de plugins rompio un test de sockets: las dos condiciones son reales.
           corto=""
           # ⛔ Y DICE POR QUE descarta cada candidato. La primera version solo avisaba «sin candidato
-          # CORTO» y eso no es accionable: en ci-runner-7 los tres fallaron y el aviso no decia si era
+          # CORTO» y eso no es accionable: en build-host los tres fallaron y el aviso no decia si era
           # por no existir, por no poder escribir o por no poder ejecutar. Un aviso que no nombra la
           # causa obliga a reproducir el entorno para saber que mirar.
           # ⛔ DISCO ANTES QUE /dev/shm, MEDIDO el 2026-09-16 (run 35076921214, `race-hot-manifest`
-          # p3 en ci-runner-3): `go build` murio con «vet.cfg: no space left on device» bajo
+          # p3 en build-host): `go build` murio con «vet.cfg: no space left on device» bajo
           # /dev/shm/olv…/go-build…, y `race-modules` p3/p4 y el paso proto de `control-plane`
           # cayeron por lo mismo mientras dos particiones hermanas pasaban en el MISMO host: quien
           # llega primero se lleva la RAM. /dev/shm es UN tmpfs compartido por los doce runners
-          # del host ci-runner-1, cada job con -race le mete gigas de arbol intermedio de Go, y
+          # del host build-host, cada job con -race le mete gigas de arbol intermedio de Go, y
           # nadie borraba /dev/shm/olv$$ al acabar, asi que cada job cancelado dejaba el suyo.
           # $HOME es disco y sigue siendo CORTO (/home/runner/olv1234567 = 23 <= 24). Y /var/tmp DETRAS,
           # porque en los runners Hetzner HOME NO ESTA DEFINIDA (medido: run 35081963451, race-hot p1 en
-          # ci-runner-8 salto el primer candidato y volvio a /dev/shm con 18187 MiB libres de 32039):
+          # build-host salto el primer candidato y volvio a /dev/shm con 18187 MiB libres de 32039):
           # /var/tmp es el disco del host que si existe, mide 8 y la sonda de abajo decide si ejecuta.
           # Barrido de huerfanos ANTES de elegir: un olv* mas viejo que el timeout-minutes mayor
           # de este fichero (320) no puede pertenecer a un job vivo. Mide mtime del directorio,
@@ -3750,7 +3751,7 @@ jobs:
   # context name. It must FAIL when either leg fails: `needs` alone would skip
   # it, and a skipped required check does not block.
   race-hot:
-    # Seconds-long aggregator (measured 5s on ci-runner-3, run 30728347248): it must
+    # Seconds-long aggregator (measured 5s on build-host, run 30728347248): it must
     # never wait behind hour-long race legs for a HEAVY runner slot. All four runners
     # carry ci-light (srv17 included), so this is strictly more capacity — and the
     # verdict semantics below (red on failure/cancelled/skipped) are untouched.
@@ -4146,7 +4147,7 @@ jobs:
           retention-days: 1
 
   web:
-    # The console bundle is NOT built here (dev#2367). Its upload used to be the last step of
+    # The console bundle is NOT built here. Its upload used to be the last step of
     # this job, behind the 20-minute permission check and the 48-minute vitest run, so a `web`
     # that failed or hit its ceiling left functional-shard, race-rest and race-hot-manifest
     # SKIPPED with no functional verdict (runs 38901745263 and 38860445399). `web-bundle` below
@@ -4184,7 +4185,7 @@ jobs:
     steps:
       - name: Go caches under RUNNER_TEMP (this runner may have no $HOME)
         # ⛔ VA ANTES DE `setup-go`, Y ESE ORDEN ES EL ARREGLO. La primera version de este
-        # paso iba DESPUES, y habria sido inutil: cuando se etiqueto `ci-runner-4` el 2026-08-18
+        # paso iba DESPUES, y habria sido inutil: cuando se etiqueto `build-host` el 2026-08-18
         # el job no murio en `go install`, murio dentro de `setup-go` con «GOCACHE is not
         # defined and neither $XDG_CACHE_HOME nor $HOME are defined». Un arreglo colocado
         # despues del paso que falla no arregla nada — sale verde en los runners que ya
@@ -4193,6 +4194,7 @@ jobs:
           {
             echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
             echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
+            echo "GOFLAGS=${GOFLAGS:+$GOFLAGS }-modcacherw"
             echo "GOPATH=$RUNNER_TEMP/gopath"
           # Y su `bin` AL PATH, o mover GOPATH rompe todo lo que se instala con `go install`.
           # Medido en CI: con GOPATH redirigido y sin esta linea, helm-render fallo con
@@ -4202,7 +4204,7 @@ jobs:
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
-          # Y pnpm IGUAL, por la misma causa y con otro sintoma. Medido en ci-runner-9: el
+          # Y pnpm IGUAL, por la misma causa y con otro sintoma. Medido en build-host: el
           # servicio corre con HOME=/root, asi que pnpm/action-setup se auto-instalo en
           # /root/setup-pnpm y murio con ERR_PNPM_BROKEN_PNPM_INSTALL (exit 127). Ese fallo
           # SALTA los pasos siguientes —incluida la instalacion de go-task— y entonces un
@@ -4219,7 +4221,7 @@ jobs:
       # THROUGH npm, so it needs a node on PATH — and it used to sit ABOVE setup-node because
       # setup-node's `cache: pnpm` needs pnpm to already exist. On the Hetzner runners, which
       # ship no node, that cycle cannot be satisfied: mainline-ci 30982224609 lost `web` on
-      # ci-runner-1 and `control-plane` on ci-runner-3, both at that step, with
+      # build-host and `control-plane` on build-host, both at that step, with
       # `npm ERR! ... paths[0] ... received undefined`. `standalone: true` did NOT help and the
       # action's own docs say why: it installs @pnpm/exe, which is still an npm package.
       # So node is installed FIRST and `cache: pnpm` is dropped — a store cache is worth less
@@ -4313,10 +4315,15 @@ jobs:
       - name: console permission checks agree with the engine
         id: web-console-perms
         run: task lint:console-perms 2>&1 | tee "$RUNNER_TEMP/ci-fail-web-console-perms.log" && rm "$RUNNER_TEMP/ci-fail-web-console-perms.log"
-      # Full ESLint stays out while unrelated pre-existing react-hooks errors
-      # remain. The Vitest suite still runs the exact no-raw-palette ESLint rule
-      # over features/ and filters only that rule's findings, so the new guard is
-      # load-bearing without hiding or expanding the existing lint debt.
+      # Full ESLint stays out while unrelated pre-existing react-hooks errors remain. The
+      # raw color gate runs the real eslint.config.js over web/src and fails only on
+      # olivares/no-raw-palette (or on a file it could not parse), so it is load-bearing
+      # without hiding or expanding the existing lint debt. A raw palette class, arbitrary
+      # color value, color string or named color paints the same in Light, Dark and Black
+      # and escapes the contrast tests. It needs the pnpm install above, so it runs here.
+      - name: console colors come from the design tokens (raw color gate)
+        id: web-raw-palette
+        run: task lint:raw-palette 2>&1 | tee "$RUNNER_TEMP/ci-fail-web-raw-palette.log" && rm "$RUNNER_TEMP/ci-fail-web-raw-palette.log"
       - name: web unit/component tests (vitest)
         id: web-test
         # --maxWorkers=2 bounds the suite's aggregate memory: vitest defaults to one
@@ -4332,7 +4339,7 @@ jobs:
         with:
           steps-json: ${{ toJSON(steps) }}
 
-  # THE CONSOLE BUNDLE, ALONE (dev#2367). functional-shard, race-rest, race-hot-manifest and
+  # THE CONSOLE BUNDLE, ALONE. functional-shard, race-rest, race-hot-manifest and
   # control-plane embed the built console and consume nothing else from `web`: not its
   # typecheck, not the permission check, not vitest. Measured on run 38901745263 `web` ran
   # 4 min 14 s of typecheck, 2 min 21 s of format ratchet, 20 min 04 s of permission checks and
@@ -4344,7 +4351,7 @@ jobs:
   # context. The build needs node, pnpm and go-task only (scripts/build-web.sh), so there is no
   # Go setup here.
   #
-  # CEILINGS, MEASURED (2026-10-16, dev#2367). The same install and `pnpm run build` that
+  # CEILINGS, MEASURED (2026-10-16, the regression). The same install and `pnpm run build` that
   # scripts/build-web.sh runs took 3 s and 59 s on the builder (warm store); `web` spent 20 s on
   # the install and 3 min 40 s on tsc on the contended CI host (run 38860445399), so 2.5 to 4
   # minutes is the expectation here. The capture step carries a 10-minute guard under the
@@ -4431,7 +4438,7 @@ jobs:
   # format from core/license. The job is a few minutes of Node on a dev box; it runs.
   #
   # CEILING, MEASURED (2026-10-16, #2314). The gate is 116 s on the dev box (typecheck 8 s, units
-  # 107 s, hermetic E2E 1 s). On ci-runner-1, dispatch run 38860445399 took 34 s for typecheck and
+  # 107 s, hermetic E2E 1 s). On build-host, dispatch run 38860445399 took 34 s for typecheck and
   # 843 s for the units; the step ended at 06:33:19Z and the old 15-minute job cap fell at 06:33:26Z,
   # during the failure reporter, so the run was reported `cancelled` (a job cap also cancels the
   # reporter) with 20 failing tests behind it. The gate step now carries a 25-minute guard: a slow
@@ -4454,7 +4461,7 @@ jobs:
       pull-requests: write # on-failure pr-failure-report only
       issues: write # the push-run form of the same reporter opens an issue
     # ⛔ GOCACHE EXPLICITO, Y NO ES OPTIMIZACION: SIN EL, ESTE JOB MUERE EN `go env`.
-    # Medido el 2026-08-18, dos veces, en `ci-runner-4`: `setup-go` instala bien —«Successfully set
+    # Medido el 2026-08-18, dos veces, en `build-host`: `setup-go` instala bien —«Successfully set
     # up Go version 1.26.6»— y el comando siguiente cae con
     #   build cache is required, but could not be located: GOCACHE is not defined and neither
     #   $XDG_CACHE_HOME nor $HOME are defined
@@ -4479,14 +4486,15 @@ jobs:
         # empujara la version equivocada: el contexto `runner` NO existe a nivel de job —«context "runner"
         # is not allowed here»— asi que aquel YAML era invalido. Aqui si existe.
         #
-        # POR QUE HACE FALTA: medido dos veces el 2026-08-18 en ci-runner-4, `setup-go` instala bien y el
-        # comando siguiente muere con «GOCACHE is not defined and neither $XDG_CACHE_HOME nor $HOME are
-        # defined». That runner runs WITHOUT $HOME. RUNNER_TEMP is the default value, per job and per runner;
+        # Measured twice on 2026-08-18 on build-host: `setup-go` succeeds, but the next
+        # command fails with "GOCACHE is not defined and neither $XDG_CACHE_HOME nor $HOME are
+        # defined". That runner runs WITHOUT $HOME. RUNNER_TEMP is the default value, per job and per runner;
         # a runner that defines GOCACHE and GOMODCACHE in its service environment keeps them (see above).
         run: |
           {
             echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
             echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
+            echo "GOFLAGS=${GOFLAGS:+$GOFLAGS }-modcacherw"
             echo "GOPATH=$RUNNER_TEMP/gopath"
           # Y su `bin` AL PATH, o mover GOPATH rompe todo lo que se instala con `go install`.
           # Medido en CI: con GOPATH redirigido y sin esta linea, helm-render fallo con
@@ -4496,7 +4504,7 @@ jobs:
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
-          # Y pnpm IGUAL, por la misma causa y con otro sintoma. Medido en ci-runner-9: el
+          # Y pnpm IGUAL, por la misma causa y con otro sintoma. Medido en build-host: el
           # servicio corre con HOME=/root, asi que pnpm/action-setup se auto-instalo en
           # /root/setup-pnpm y murio con ERR_PNPM_BROKEN_PNPM_INSTALL (exit 127). Ese fallo
           # SALTA los pasos siguientes —incluida la instalacion de go-task— y entonces un
@@ -4520,7 +4528,7 @@ jobs:
           cache-dependency-path: go.work.sum
       - name: install go-task (pinned)
         # MEASURED 2026-09-14 (run 34854565361): `go install …/task@v3.51.1` compiled the tool in
-        # every job, 4m00s–6m20s each on ci-runner-1..9. The composite action installs the pinned
+        # every job, 4m00s–6m20s each on build-host. The composite action installs the pinned
         # release tarball (SHA-256 verified) into the runner tool cache and proves it is reachable.
         id: tools
         uses: ./.github/actions/olivares-tool-cache
@@ -4597,6 +4605,7 @@ jobs:
           {
             echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
             echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
+            echo "GOFLAGS=${GOFLAGS:+$GOFLAGS }-modcacherw"
             echo "GOPATH=$RUNNER_TEMP/gopath"
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
             echo "PNPM_HOME=$RUNNER_TEMP/pnpm"
@@ -4640,7 +4649,7 @@ jobs:
       # aplastado por `task` a 201, que no se distingue de una suite rota sin abrir el log.
       # `actions/setup-java` instala el JDK y NO instala Maven: en las imagenes github-hosted
       # `mvn` viene preinstalado y por eso esto nunca se noto, pero los runners self-hosted a
-      # los que apunta CI_RUNNER no lo traen (esta corrida murio en ci-runner-6). Es la misma
+      # los que apunta CI_RUNNER no lo traen (esta corrida murio en build-host). Es la misma
       # clase que `check-workflow-node-setup.sh` fija para node — "el runner trae la
       # herramienta" es una comodidad del runner hospedado, nunca un contrato.
       #
@@ -4718,7 +4727,7 @@ jobs:
           persist-credentials: false
       - name: Go caches under RUNNER_TEMP (this runner may have no $HOME)
         # ⛔ VA ANTES DE `setup-go`, Y ESE ORDEN ES EL ARREGLO. La primera version de este
-        # paso iba DESPUES, y habria sido inutil: cuando se etiqueto `ci-runner-4` el 2026-08-18
+        # paso iba DESPUES, y habria sido inutil: cuando se etiqueto `build-host` el 2026-08-18
         # el job no murio en `go install`, murio dentro de `setup-go` con «GOCACHE is not
         # defined and neither $XDG_CACHE_HOME nor $HOME are defined». Un arreglo colocado
         # despues del paso que falla no arregla nada — sale verde en los runners que ya
@@ -4727,6 +4736,7 @@ jobs:
           {
             echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
             echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
+            echo "GOFLAGS=${GOFLAGS:+$GOFLAGS }-modcacherw"
             echo "GOPATH=$RUNNER_TEMP/gopath"
           # Y su `bin` AL PATH, o mover GOPATH rompe todo lo que se instala con `go install`.
           # Medido en CI: con GOPATH redirigido y sin esta linea, helm-render fallo con
@@ -4736,7 +4746,7 @@ jobs:
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
-          # Y pnpm IGUAL, por la misma causa y con otro sintoma. Medido en ci-runner-9: el
+          # Y pnpm IGUAL, por la misma causa y con otro sintoma. Medido en build-host: el
           # servicio corre con HOME=/root, asi que pnpm/action-setup se auto-instalo en
           # /root/setup-pnpm y murio con ERR_PNPM_BROKEN_PNPM_INSTALL (exit 127). Ese fallo
           # SALTA los pasos siguientes —incluida la instalacion de go-task— y entonces un
@@ -4754,12 +4764,12 @@ jobs:
           cache-dependency-path: go.work.sum
       - name: install go-task (pinned)
         # MEASURED 2026-09-14 (run 34854565361): `go install …/task@v3.51.1` compiled the tool in
-        # every job, 4m00s–6m20s each on ci-runner-1..9. The composite action installs the pinned
+        # every job, 4m00s–6m20s each on build-host. The composite action installs the pinned
         # release tarball (SHA-256 verified) into the runner tool cache and proves it is reachable.
         id: tools
         uses: ./.github/actions/olivares-tool-cache
       - name: pick a temp dir where an extracted binary can actually run
-        # ⛔ NO ES PREVENTIVO. Medido el 2026-08-18 en ci-runner-6 y ci-runner-7: el smoke de
+        # ⛔ NO ES PREVENTIVO. Medido el 2026-08-18 en build-host y build-host: el smoke de
         # otel-genai muere con «fork/exec …: permission denied» sobre un plugin que el extractor
         # deja en 0700 A PROPOSITO (cmd/olivares/firstparty/embed.go:90). El bit esta puesto: lo
         # que falla es que `_work` esta montado NOEXEC en esas maquinas, y ahi cae por defecto
@@ -4773,7 +4783,7 @@ jobs:
           . scripts/lib/exec-workdir.sh
           # ⛔ --traversable-by-others, y NO es una precaucion de mas. El smoke arranca el motor,
           # que si corre como root baja cada plugin a un uid DEDICADO no-root: «yo puedo ejecutar
-          # aqui» y «puede ejecutar aqui ese uid» son preguntas distintas. Medido en ci-runner-7:
+          # aqui» y «puede ejecutar aqui ese uid» son preguntas distintas. Medido en build-host:
           # la sonda pasaba —somos el dueño— y el plugin no arrancaba porque /home/runner es
           # -rwx------ y el hijo no puede ATRAVESARLO. El fallo salia tres capas mas abajo como
           # «source not wired», y solo se supo por la pista del loader, que nombra el ancestro.
@@ -4812,8 +4822,8 @@ jobs:
   # self-check (module #5247 linked, runtime toggle, `version` self-report).
   secrets:
     # DELIBERATELY NOT gated by classify: gitleaks consumes the journal paths (see
-    # the header). Every push gets a full-history secrets verdict.
-    # Job-level superseding (see the concurrency note above the jobs block).
+    # the header). Every push gets a secrets verdict for the commits it introduces.
+    # Run-specific groups preserve in-flight scan verdicts.
     concurrency:
       group: mainline-ci-secrets-${{ github.ref }}-${{ github.run_id }}
       cancel-in-progress: true
@@ -4845,7 +4855,7 @@ jobs:
     # el barrido deduplica por commit. Borrarlas habria sido neutro en cobertura Y en tiempo.
     #
     # CI34678296981 spent 11.8 minutes before the 82-minute scan step.
-    # Bound setup and reporting explicitly: 127 declared minutes (10 + 5 + 25 + 82 + 5) fit within
+    # Bound setup and reporting explicitly: 128 declared minutes (10 + 5 + 25 + 1 + 82 + 5) fit within
     # 135. It was «112 within 120» until the secrets-gate battery cap went 10 -> 25 on 2026-09-16
     # (sized from the measured runs); `lint:ci-timeout-arithmetic` refused the unchanged 120
     # against the new sum (secrets techo 120, suma de pasos 127), which is exactly its job.
@@ -4853,13 +4863,14 @@ jobs:
     timeout-minutes: 135
     permissions:
       contents: read
+      actions: read # find the last successful main push as the trusted scan base
       pull-requests: write # on-failure pr-failure-report only
       issues: write # the push-run form of the same reporter opens an issue
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0 # gitleaks scans the full history
+          fetch-depth: 0 # validate the last green base; full history is the safe fallback
       # ⛔ AQUI HUBO UNA PODA DE REFS MUERTAS. RETIRADA EL 2026-09-03, Y ESTO ES LO MEDIDO.
       #
       # Hacia `git remote prune origin` y publicaba un antes/despues. La justificaba la incidencia
@@ -4905,7 +4916,7 @@ jobs:
       # salida que distinga «no habia nada» de «no pude».
       - name: Go caches under RUNNER_TEMP (this runner may have no $HOME)
         # ⛔ VA ANTES DE `setup-go`, Y ESE ORDEN ES EL ARREGLO. La primera version de este
-        # paso iba DESPUES, y habria sido inutil: cuando se etiqueto `ci-runner-4` el 2026-08-18
+        # paso iba DESPUES, y habria sido inutil: cuando se etiqueto `build-host` el 2026-08-18
         # el job no murio en `go install`, murio dentro de `setup-go` con «GOCACHE is not
         # defined and neither $XDG_CACHE_HOME nor $HOME are defined». Un arreglo colocado
         # despues del paso que falla no arregla nada — sale verde en los runners que ya
@@ -4914,6 +4925,7 @@ jobs:
           {
             echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
             echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
+            echo "GOFLAGS=${GOFLAGS:+$GOFLAGS }-modcacherw"
             echo "GOPATH=$RUNNER_TEMP/gopath"
           # Y su `bin` AL PATH, o mover GOPATH rompe todo lo que se instala con `go install`.
           # Medido en CI: con GOPATH redirigido y sin esta linea, helm-render fallo con
@@ -4923,7 +4935,7 @@ jobs:
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
-          # Y pnpm IGUAL, por la misma causa y con otro sintoma. Medido en ci-runner-9: el
+          # Y pnpm IGUAL, por la misma causa y con otro sintoma. Medido en build-host: el
           # servicio corre con HOME=/root, asi que pnpm/action-setup se auto-instalo en
           # /root/setup-pnpm y murio con ERR_PNPM_BROKEN_PNPM_INSTALL (exit 127). Ese fallo
           # SALTA los pasos siguientes —incluida la instalacion de go-task— y entonces un
@@ -4940,7 +4952,7 @@ jobs:
           cache: ${{ runner.environment == 'github-hosted' }}   # self-hosted runners keep the Go caches on local disk
       - name: install go-task (pinned)
         # MEASURED 2026-09-14 (run 34854565361): `go install …/task@v3.51.1` compiled the tool in
-        # every job, 4m00s–6m20s each on ci-runner-1..9. The composite action installs the pinned
+        # every job, 4m00s–6m20s each on build-host. The composite action installs the pinned
         # release tarball (SHA-256 verified) into the runner tool cache and proves it is reachable.
         # CI34678296981 took 315 seconds; 10 minutes is a provisional ceiling.
         timeout-minutes: 10
@@ -4956,7 +4968,7 @@ jobs:
         with:
           gitleaks: "true"
       - name: secrets-gate battery (the gate has to be able to name what it finds)
-        # CI34678296981 took 311 seconds. Measured 2026-09-15/16 on ci-runner-1 (nine runners on one
+        # CI34678296981 took 311 seconds. Measured 2026-09-15/16 on build-host (nine runners on one
         # host): 9 min 15 s and 9 min 20 s green (runs 35035490468, 34967128097), 10 min 12 s and
         # 10 min 00 s timed out (35004444187, 35053617970). A cap at the battery's own median is a
         # red by construction; 25 keeps a hang bounded at 2.7x the median.
@@ -4968,17 +4980,30 @@ jobs:
         # in RUNNER_TEMP and never touches this checkout.
         run: |
           task lint:secrets-gate 2>&1 | tee "$RUNNER_TEMP/ci-fail-gitleaks-selftest.log" && rm "$RUNNER_TEMP/ci-fail-gitleaks-selftest.log"
-      # Per-commit admission is the script's default HEAD mode (2026-09-14): full history
-      # reachable from this checkout's HEAD. Charging was already HEAD-reachable only; the
-      # all-ref sweep remains `OLIVARES_SECRETS_SCOPE=all` / `--all-refs` for an explicit
-      # whole-repository audit. Observation difference: leftover-ref findings that the
-      # all-ref sweep NAMES (and does not charge) are not observed here. Do not describe
-      # this step as all-ref coverage.
-      #
-      # The 2026-08-16 all-ref CI caller existed to name persistent-runner leftovers.
-      # That naming is the all-ref report, not the admission verdict. Case 77 of
-      # scripts/test-check-secrets.sh holds charged-finding equivalence and this env.
-      - name: gitleaks (full HEAD history, charges what HEAD reaches)
+      - name: choose secrets scan scope
+        timeout-minutes: 1
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          AFTER: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A failed, cancelled or uninspected push never advances the trusted base.
+          # API/tool/history failures conservatively rescan all HEAD history.
+          range=""
+          if [ "$EVENT_NAME" = push ] && base=$(gh api --method GET \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/mainline-ci.yml/runs?branch=main&event=push&status=success&per_page=1" \
+              --jq '.workflow_runs[0].head_sha // empty'); then
+            if [[ "$base" =~ ^[0-9a-f]{40}$ ]] &&
+               git merge-base --is-ancestor "$base" "$AFTER" 2>/dev/null; then
+              if changed=$(git log --full-history --format=%H "$base..$AFTER" -- \
+                  .gitleaks.toml .github/actions/olivares-tool-cache scripts/check-secrets.sh); then
+                if [ -z "$changed" ]; then range="$base..$AFTER"; fi
+              fi
+            fi
+          fi
+          echo "OLIVARES_SECRETS_RANGE=$range" >> "$GITHUB_ENV"
+          echo "secrets scope: ${range:-full HEAD history}"
+      - name: gitleaks (push range, or full HEAD history when required)
         # Medido 32,1 min en la corrida 32598987269 (el job entero, 40,4). 60 da 87 % de holgura
         # sobre lo medido y queda MUY por debajo del techo de job (90), que es el punto: un techo de
         # job cancela los pasos que quedan y el reportero no publica. Aqui el que muerde reporta.
@@ -4986,7 +5011,7 @@ jobs:
         # contra el `timeout --signal=TERM --kill-after=60s 80m` de este mismo paso, NO contra lo que
         # tarda el barrido. Con 60 el que mordia era GitHub y el paso moria MUDO; con 82 muerde el
         # reloj interior y el guion llega a decir «2 · NO PUDE MIRAR: el barrido no cabe». Cabe bajo
-        # The scan keeps 82 minutes within the job's 112-minute declared step budget.
+        # The scan keeps 82 minutes within the job's 128-minute declared step budget.
         timeout-minutes: 82
         id: gitleaks
         env:
@@ -5009,7 +5034,7 @@ jobs:
           rc=${PIPESTATUS[0]}
           set -e
           if [ "$rc" = "124" ] || [ "$rc" = "137" ]; then
-            echo "check-secrets: 2 UNVERIFIED — the HEAD-history sweep does not fit in 80 min."
+            echo "check-secrets: 2 UNVERIFIED — the secrets scan does not fit in 80 min."
             echo "check-secrets:   Not a flake and not a supersession: the work grew and the ceiling did not."
             echo "check-secrets:   This is inability-to-inspect (exit 2), not a clean verdict."
             exit 2
@@ -5057,7 +5082,7 @@ jobs:
           persist-credentials: false
       - name: Go caches under RUNNER_TEMP (this runner may have no $HOME)
         # ⛔ VA ANTES DE `setup-go`, Y ESE ORDEN ES EL ARREGLO. La primera version de este
-        # paso iba DESPUES, y habria sido inutil: cuando se etiqueto `ci-runner-4` el 2026-08-18
+        # paso iba DESPUES, y habria sido inutil: cuando se etiqueto `build-host` el 2026-08-18
         # el job no murio en `go install`, murio dentro de `setup-go` con «GOCACHE is not
         # defined and neither $XDG_CACHE_HOME nor $HOME are defined». Un arreglo colocado
         # despues del paso que falla no arregla nada — sale verde en los runners que ya
@@ -5066,6 +5091,7 @@ jobs:
           {
             echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
             echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
+            echo "GOFLAGS=${GOFLAGS:+$GOFLAGS }-modcacherw"
             echo "GOPATH=$RUNNER_TEMP/gopath"
           # Y su `bin` AL PATH, o mover GOPATH rompe todo lo que se instala con `go install`.
           # Medido en CI: con GOPATH redirigido y sin esta linea, helm-render fallo con
@@ -5075,7 +5101,7 @@ jobs:
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
-          # Y pnpm IGUAL, por la misma causa y con otro sintoma. Medido en ci-runner-9: el
+          # Y pnpm IGUAL, por la misma causa y con otro sintoma. Medido en build-host: el
           # servicio corre con HOME=/root, asi que pnpm/action-setup se auto-instalo en
           # /root/setup-pnpm y murio con ERR_PNPM_BROKEN_PNPM_INSTALL (exit 127). Ese fallo
           # SALTA los pasos siguientes —incluida la instalacion de go-task— y entonces un
@@ -5093,7 +5119,7 @@ jobs:
           cache-dependency-path: go.work.sum
       - name: install go-task (pinned)
         # MEASURED 2026-09-14 (run 34854565361): `go install …/task@v3.51.1` compiled the tool in
-        # every job, 4m00s–6m20s each on ci-runner-1..9. The composite action installs the pinned
+        # every job, 4m00s–6m20s each on build-host. The composite action installs the pinned
         # release tarball (SHA-256 verified) into the runner tool cache and proves it is reachable.
         id: tools
         uses: ./.github/actions/olivares-tool-cache
@@ -5142,7 +5168,7 @@ jobs:
           persist-credentials: false
       - name: Go caches under RUNNER_TEMP (this runner may have no $HOME)
         # ⛔ VA ANTES DE `setup-go`, Y ESE ORDEN ES EL ARREGLO. La primera version de este
-        # paso iba DESPUES, y habria sido inutil: cuando se etiqueto `ci-runner-4` el 2026-08-18
+        # paso iba DESPUES, y habria sido inutil: cuando se etiqueto `build-host` el 2026-08-18
         # el job no murio en `go install`, murio dentro de `setup-go` con «GOCACHE is not
         # defined and neither $XDG_CACHE_HOME nor $HOME are defined». Un arreglo colocado
         # despues del paso que falla no arregla nada — sale verde en los runners que ya
@@ -5151,6 +5177,7 @@ jobs:
           {
             echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
             echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
+            echo "GOFLAGS=${GOFLAGS:+$GOFLAGS }-modcacherw"
             echo "GOPATH=$RUNNER_TEMP/gopath"
           # Y su `bin` AL PATH, o mover GOPATH rompe todo lo que se instala con `go install`.
           # Medido en CI: con GOPATH redirigido y sin esta linea, helm-render fallo con
@@ -5160,7 +5187,7 @@ jobs:
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/gopath/bin" >> "$GITHUB_PATH"
-          # Y pnpm IGUAL, por la misma causa y con otro sintoma. Medido en ci-runner-9: el
+          # Y pnpm IGUAL, por la misma causa y con otro sintoma. Medido en build-host: el
           # servicio corre con HOME=/root, asi que pnpm/action-setup se auto-instalo en
           # /root/setup-pnpm y murio con ERR_PNPM_BROKEN_PNPM_INSTALL (exit 127). Ese fallo
           # SALTA los pasos siguientes —incluida la instalacion de go-task— y entonces un
@@ -5178,7 +5205,7 @@ jobs:
           cache-dependency-path: go.work.sum
       - name: install go-task (pinned)
         # MEASURED 2026-09-14 (run 34854565361): `go install …/task@v3.51.1` compiled the tool in
-        # every job, 4m00s–6m20s each on ci-runner-1..9. The composite action installs the pinned
+        # every job, 4m00s–6m20s each on build-host. The composite action installs the pinned
         # release tarball (SHA-256 verified) into the runner tool cache and proves it is reachable.
         id: tools
         uses: ./.github/actions/olivares-tool-cache
@@ -5203,7 +5230,7 @@ jobs:
     # skip it. Eso es correcto aqui porque ninguno de los cuatro guiones CONSUME una ruta del
     #
     # COMPROBADO, no supuesto — y con su unica salvedad dicha: `check-export-closure.sh` menciona
-    # `an internal design note (not shipped)` DOS veces (`:65` y `:1377`) y las dos son PROSA — un comentario que cita la
+    # `an internal audit` DOS veces (`:65` y `:1377`) y las dos son PROSA — un comentario que cita la
     # auditoria que lo origino y el texto de un mensaje de error. No lee ese directorio. Los otros
     # tres no la mencionan siquiera.
     #
@@ -5355,7 +5382,7 @@ jobs:
           # POLITICA, no una necesidad de `rev-list`. Se dice para que nadie lea «0 o se rompe».
           fetch-depth: 0
       - name: Go caches under RUNNER_TEMP (this runner may have no $HOME)
-        # VA ANTES DE `setup-go`, igual que en los demas jobs: cuando se etiqueto `ci-runner-4`
+        # VA ANTES DE `setup-go`, igual que en los demas jobs: cuando se etiqueto `build-host`
         # el 2026-08-18 un job murio DENTRO de `setup-go` con «GOCACHE is not defined and neither
         # $XDG_CACHE_HOME nor $HOME are defined». Un arreglo colocado despues del paso que falla
         # sale verde en los runners que ya funcionaban y sigue rojo en los que no.
@@ -5363,6 +5390,7 @@ jobs:
           {
             echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
             echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
+            echo "GOFLAGS=${GOFLAGS:+$GOFLAGS }-modcacherw"
             echo "GOPATH=$RUNNER_TEMP/gopath"
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
@@ -5381,7 +5409,7 @@ jobs:
           node-version-file: .node-version
       - name: install go-task (pinned)
         # MEASURED 2026-09-14 (run 34854565361): `go install …/task@v3.51.1` compiled the tool in
-        # every job, 4m00s–6m20s each on ci-runner-1..9. The composite action installs the pinned
+        # every job, 4m00s–6m20s each on build-host. The composite action installs the pinned
         # release tarball (SHA-256 verified) into the runner tool cache and proves it is reachable.
         id: tools
         uses: ./.github/actions/olivares-tool-cache
@@ -5436,15 +5464,15 @@ jobs:
           }
           elegido=""
           # ⛔ DISCO ANTES QUE /dev/shm, MEDIDO el 2026-09-16 (run 35076921214, `race-hot-manifest`
-          # p3 en ci-runner-3): `go build` murio con «vet.cfg: no space left on device» bajo
+          # p3 en build-host): `go build` murio con «vet.cfg: no space left on device» bajo
           # /dev/shm/olv…/go-build…, y `race-modules` p3/p4 y el paso proto de `control-plane`
           # cayeron por lo mismo mientras dos particiones hermanas pasaban en el MISMO host: quien
           # llega primero se lleva la RAM. /dev/shm es UN tmpfs compartido por los doce runners
-          # del host ci-runner-1, cada job con -race le mete gigas de arbol intermedio de Go, y
+          # del host build-host, cada job con -race le mete gigas de arbol intermedio de Go, y
           # nadie borraba /dev/shm/olv$$ al acabar, asi que cada job cancelado dejaba el suyo.
           # $HOME es disco y sigue siendo CORTO (/home/runner/olv1234567 = 23 <= 24). Y /var/tmp DETRAS,
           # porque en los runners Hetzner HOME NO ESTA DEFINIDA (medido: run 35081963451, race-hot p1 en
-          # ci-runner-8 salto el primer candidato y volvio a /dev/shm con 18187 MiB libres de 32039):
+          # build-host salto el primer candidato y volvio a /dev/shm con 18187 MiB libres de 32039):
           # /var/tmp es el disco del host que si existe, mide 8 y la sonda de abajo decide si ejecuta.
           # Barrido de huerfanos ANTES de elegir: un olv* mas viejo que el timeout-minutes mayor
           # de este fichero (320) no puede pertenecer a un job vivo. Mide mtime del directorio,
@@ -5617,9 +5645,9 @@ jobs:
         # ⛔ a repository gate, medido el 2026-09-02 sobre corridas reales. `check-run-block-syntax.sh` contesta
         # `2 NO HE PODIDO MIRAR: no puedo importar yaml` -> rc 201 -> job ROJO. Y el arbol es inocente:
         #
-        #     run 33574829101  hook-only-legs = success   runner ci-runner-3   (296 bloques parsean)
+        #     run 33574829101  hook-only-legs = success   runner build-host   (296 bloques parsean)
         #     run 33571311254  hook-only-legs = FAILURE    runner srv17
-        #     run 33542575488  hook-only-legs = FAILURE    runner ci-runner-6
+        #     run 33542575488  hook-only-legs = FAILURE    runner build-host
         #
         # Mismas etiquetas en todo el pool y distinto entorno: el MISMO commit da dos veredictos segun
         # que maquina lo coja, y un re-run "lo arregla" cayendo en otra. Un job que SUPONE un paquete
@@ -5742,7 +5770,7 @@ jobs:
         if: ${{ !cancelled() && steps.tools.outcome == 'success' && steps.tmpdir.outcome == 'success' }}
         # El banco usa un repositorio y una API loopback propios. No recibe github.token: así prueba
         # el parser de `head.sha` sin red y no puede enviar una credencial real a su servidor.
-        run: task lint:lot-heads:selftest
+        run: bash scripts/hub-leg.sh lint:lot-heads:selftest scripts/test-lot-heads.sh
       - name: prep-gate-pins — adopted battery
         id: leg-prep-gate-pins
         if: ${{ !cancelled() && steps.tools.outcome == 'success' && steps.tmpdir.outcome == 'success' }}
@@ -5767,7 +5795,7 @@ jobs:
         # en ~1 s, asi que 2 son 120x. Y no mas, porque la suma de pasos acotados de este job pasa
         # de 28 a 30 contra un techo de JOB de 35: `lint:ci-timeout-arithmetic` exige techo > suma.
         timeout-minutes: 2
-        run: task lint:js-lexer
+        run: bash scripts/hub-leg.sh lint:js-lexer scripts/test-js-lexer.sh
       - name: public-export closure (the net over the known break patterns) — 384 s cold · run 33296406847 · 2026-08-30T06:49:49Z
         id: leg-export-closure
         if: ${{ !cancelled() && steps.tools.outcome == 'success' && steps.tmpdir.outcome == 'success' }}
@@ -5784,7 +5812,7 @@ jobs:
         # the old 12-minute deadline before cleanup finished. Allow cleanup
         # margin; the complete runtime remains to be measured.
         timeout-minutes: 20
-        run: task lint:export-closure
+        run: bash scripts/hub-leg.sh lint:export-closure scripts/check-export-closure.sh && bash scripts/hub-leg.sh lint:export-closure scripts/test-export-closure.sh && bash scripts/hub-leg.sh lint:export-closure scripts/test-fleet-edition-export.sh --selftest && bash scripts/hub-leg.sh lint:export-closure scripts/test-fleet-edition-export.sh
       - name: leg-disk-residue-selftest
         # La bateria del vigia de residuo. Llego con el arreglo del vigia y NADIE la invocaba: su
         # unica tarea era `disk:residue`, de operaciones, que el gancho no alcanza — asi que
@@ -5800,7 +5828,7 @@ jobs:
         # ni la red, ni AWS, y tarda menos de un segundo — el techo va holgado a proposito, porque
         # una pata barata que agota su plazo se lee como rota.
         timeout-minutes: 4
-        run: task lint:export-closure:selftest
+        run: bash scripts/hub-leg.sh lint:export-closure:selftest scripts/test-check-export-closure.sh
       - name: leg-publisher-contract
         # ⛔ NO ES SOLO-GANCHO, y la razon es la que decide `lint:gate-parity`: esta pata mide EL
         # COMMIT, no el arbol de trabajo. En el gancho lo consigue materializando los tips de
@@ -5819,7 +5847,7 @@ jobs:
         # generador que sale 0 sin escribir, un consumidor derivado, una ausencia sin clasificar),
         # y un gate cuyo modo de fallo es decir que todo esta bien no se verifica solo.
         timeout-minutes: 6
-        run: task lint:publisher-contract:selftest
+        run: bash scripts/hub-leg.sh lint:publisher-contract:selftest scripts/test-check-publisher-contract.sh
       - name: leg-roles-oneshot
         # CLOUD-06b: lint:roles-oneshot existed without a caller, so the orphan
         # battery gate reported it as new. Before wiring, its 29 cases took 8 s
@@ -5831,14 +5859,14 @@ jobs:
         # El banco del PASO de arriba. Corre contra un `task` falso y no construye nada. Va en CI
         # porque el defecto que vigila es de CI: el `run:` de un paso solo se comporta asi bajo el
         # shell que GitHub le pone.
-        run: task lint:ci-int12-step:selftest
+        run: bash scripts/hub-leg.sh lint:ci-int12-step:selftest scripts/test-ci-int12-step.sh
 
       - name: leg-refs-file-readers-selftest
         # Los bancos de los dos sujetos que leian `OLIVARES_PUSH_REFS_FILE` sin tener ninguno.
         # Montan clones de laboratorio: no tocan el clon compartido, y uno de los sujetos hace
         # `git fetch --all`, que en un almacen compartido mata los pushes que estan corriendo.
         timeout-minutes: 5
-        run: task lint:refs-file-readers:selftest
+        run: bash scripts/hub-leg.sh lint:refs-file-readers:selftest scripts/test-check-unpublished-work.sh && bash scripts/hub-leg.sh lint:refs-file-readers:selftest scripts/test-check-web-bundle-freshness.sh
       - name: report failure (PR comment, or issue on a main push; PAT-blind)
         if: ${{ failure() }}
         uses: ./.github/actions/pr-failure-report

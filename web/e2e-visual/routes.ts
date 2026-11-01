@@ -27,6 +27,7 @@ export const PUBLIC_ROUTES = [
   '/login',
   '/setup',
   '/accept-invite',
+  '/pair',
   '/status-page',
 ]
 

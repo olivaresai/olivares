@@ -35,6 +35,7 @@ type guardianFixture struct {
 	st     store.Store
 	host   *capturingHost
 	tenant model.TenantID
+	clock  *intClock
 }
 
 func newGuardianFixture(t *testing.T) *guardianFixture {
@@ -63,7 +64,7 @@ func newGuardianFixture(t *testing.T) *guardianFixture {
 	if err := m.Init(ctx, host); err != nil {
 		t.Fatal(err)
 	}
-	return &guardianFixture{t: t, m: m, st: st, host: host, tenant: tenant}
+	return &guardianFixture{t: t, m: m, st: st, host: host, tenant: tenant, clock: clk}
 }
 
 func (f *guardianFixture) createRule(name, kinds, minSev, action, mode string) model.ID {
@@ -310,6 +311,39 @@ func TestGuardianQuarantineNHI(t *testing.T) {
 	}
 	if f.findingKinds()[findingGuardianFailed] != 1 {
 		t.Fatalf("missing guardian_action_failed finding")
+	}
+}
+
+func TestGuardianAutoQuarantineConflictReportsFailure(t *testing.T) {
+	f := newGuardianFixture(t)
+	f.createRule("quarantine-on-exfil", "exfil_attempt", "high", gaActionQuarantineNHI, gaModeAuto)
+	f.m.UseData(cedarEpochModuleData{st: f.st, mutateWrap: func(sc store.Scope) store.Scope {
+		return &guardianTransitionScope{Scope: sc, repo: &guardianRepoFault{remaining: -1, err: store.ErrConflict}, faultKind: nhiLifecycleKind}
+	}})
+
+	f.fire("exfil_attempt", sdkmodel.SeverityHigh, "identity", "vault:nhi:conflict", "d-conflict")
+	if got := f.findingKinds()[findingGuardianFailed]; got != 1 {
+		t.Fatalf("failure findings after an uncontained conflict = %d, want one", got)
+	}
+	if got := f.findingKinds()[findingGuardianExecuted]; got != 0 {
+		t.Fatalf("execution findings after an uncontained conflict = %d, want none", got)
+	}
+	if got := f.actions(); len(got) != 0 {
+		t.Fatalf("conflict without a committed delivery left actions: %+v", got)
+	}
+	blocked, _, err := f.m.NHIEnforcement(context.Background(), f.tenant, "vault:nhi:conflict")
+	if err != nil || blocked {
+		t.Fatalf("NHI after the conflict: blocked=%t err=%v, want unblocked", blocked, err)
+	}
+
+	f.m.UseData(api.NewModuleData(f.st))
+	f.fire("exfil_attempt", sdkmodel.SeverityHigh, "identity", "vault:nhi:conflict", "d-conflict")
+	if got := f.actions(); len(got) != 1 || got[0].String(colGAStatus) != gaStatusExecuted {
+		t.Fatalf("redelivery after the conflict = %+v, want one executed action", got)
+	}
+	blocked, _, err = f.m.NHIEnforcement(context.Background(), f.tenant, "vault:nhi:conflict")
+	if err != nil || !blocked {
+		t.Fatalf("NHI after redelivery: blocked=%t err=%v, want blocked", blocked, err)
 	}
 }
 

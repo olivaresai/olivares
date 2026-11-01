@@ -281,10 +281,13 @@ def revisa(ruta):
     #    `sin_prosa` sustituye por espacios del MISMO largo, asi que los indices no se mueven y el
     #    recorte por profundidad de mas abajo —que depende de posiciones— sigue valiendo.
     src_sin_prosa = sin_prosa(src)
-    m = re.search(r"const VIEWS:\s*\{(.*?)\}\[\]\s*=", src_sin_prosa, re.S)
+    # The hand-written list is `A_MANO` when the file declares it (Business extensions
+    # are added to `VIEWS` after filtering against it); otherwise the table is `VIEWS`.
+    nombre = "A_MANO" if re.search(r"const A_MANO:", src) else "VIEWS"
+    m = re.search(r"const " + nombre + r":\s*\{(.*?)\}\[\]\s*=", src_sin_prosa, re.S)
     if not m:
-        print("check-capture-view-keys: COULD NOT CHECK: cannot find the declaration "
-              "`const VIEWS: { … }[] =`; if the spec format changed, this check cannot read it "
+        print(f"check-capture-view-keys: COULD NOT CHECK: cannot find the declaration "
+              f"`const {nombre}: {{ … }}[] =`; if the spec format changed, this check cannot read it "
               "and cannot report it as clean", file=sys.stderr)
         return RC_UNAVAILABLE
     declaradas = set(re.findall(r"^\s*(\w+)\??\s*:", m.group(1), re.M))
@@ -296,7 +299,7 @@ def revisa(ruta):
     # ── el USO ────────────────────────────────────────────────────────────────────────────────
     # Se recorta el literal del array por conteo de llaves desde `= [` hasta su cierre, para no
     # arrastrar el resto del fichero (que tiene objetos a patadas y daria claves fantasma).
-    inicio = src.index("const VIEWS:")
+    inicio = src.index("const " + nombre + ":")
     corchete = src.index("[", src.index("= [", inicio))
     prof, fin = 0, None
     for i in range(corchete, len(src)):

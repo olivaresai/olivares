@@ -41,7 +41,7 @@ vi.mock('./api', async (importOriginal) => {
 })
 
 import { DecisionsTable } from './components'
-import { decisionsFixture } from './fixtures'
+import { decisionsFixture, policiesFixture } from './fixtures'
 import { voiceKeys } from './api'
 import { VoiceView } from './voice-view'
 import type { VoiceDecision } from './types'
@@ -267,21 +267,63 @@ describe('Los estados vacíos de /voice llevan su siguiente acción', () => {
     renderIntel(<VoiceView />)
     await user.click(await screen.findByRole('tab', { name: 'Policies' }))
     await screen.findByText('No voice policies')
+    // One filled primary per first screen: a successful empty read gives the
+    // verb to the empty state. The header takes it back when there are rows,
+    // or while the read has not answered (the next two witnesses).
+    const nuevos = screen.getAllByRole('button', { name: 'New policy' })
+    expect(nuevos).toHaveLength(1)
+    // The one door left is the FILLED primary (exact class token, not a soft tint).
+    expect(nuevos[0].className).toMatch(/(?:^| )bg-accent(?:$| )/)
     expect(
       within(vacio('No voice policies')).getByRole('button', {
         name: 'New policy',
       }),
     ).toBeInTheDocument()
   })
+
+  it('keeps the header verb while the policies read has not answered', async () => {
+    // An unanswered read renders neither rows nor the empty state: without the
+    // header verb the screen would offer no way to act at all.
+    api.policies.mockReturnValue(new Promise(() => {}))
+    const user = userEvent.setup()
+    renderIntel(<VoiceView />)
+    await user.click(await screen.findByRole('tab', { name: 'Policies' }))
+    expect(
+      await screen.findByRole('button', { name: 'New policy' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('No voice policies')).not.toBeInTheDocument()
+  })
+
+  it('keeps the header verb when the policies read fails', async () => {
+    // A failed read is not an empty list; the verb stays reachable for the
+    // retry. The mirror of the sandbox witness, so a gate that treats error
+    // differently from pending fails HERE and not only in the other feature.
+    api.policies.mockRejectedValue(new Error('engine unreachable'))
+    const user = userEvent.setup()
+    renderIntel(<VoiceView />)
+    await user.click(await screen.findByRole('tab', { name: 'Policies' }))
+    await screen.findByRole('alert')
+    expect(
+      screen.getByRole('button', { name: 'New policy' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('No voice policies')).not.toBeInTheDocument()
+  })
+
+  it('keeps the header verb when the policies read returns rows', async () => {
+    api.policies.mockResolvedValue({ items: policiesFixture, has_more: false })
+    const user = userEvent.setup()
+    renderIntel(<VoiceView />)
+    await user.click(await screen.findByRole('tab', { name: 'Policies' }))
+    await screen.findByRole('grid')
+    const nuevos = screen.getAllByRole('button', { name: 'New policy' })
+    expect(nuevos).toHaveLength(1)
+    expect(screen.queryByText('No voice policies')).not.toBeInTheDocument()
+  })
 })
 
-/**
- * ONE ORANGE PER FIRST SCREEN (dev#2673's console rule 2026-10-17): the policies
- * section header already carries "New policy" in orange, so the empty list repeats the
- * verb in the secondary style.
- */
+// The empty state owns the single filled action after a successful empty read.
 describe('VoiceView — one orange control on an empty policy list', () => {
-  it('offers the empty-state verb in the secondary style; the header keeps the orange', async () => {
+  it('opens the create dialog from the single filled empty-state verb', async () => {
     const user = userEvent.setup()
     renderIntel(<VoiceView />)
     await user.click(await screen.findByRole('tab', { name: 'Policies' }))
@@ -291,10 +333,11 @@ describe('VoiceView — one orange control on an empty policy list', () => {
     const inEmpty = within(emptyState).getByRole('button', {
       name: 'New policy',
     })
-    expect(inEmpty.className).not.toContain('bg-accent')
-    const inHeader = screen
-      .getAllByRole('button', { name: 'New policy' })
-      .find((button) => button !== inEmpty)
-    expect(inHeader?.className).toContain('bg-accent')
+    expect(inEmpty.className).toMatch(/(?:^| )bg-accent(?:$| )/)
+    expect(screen.getAllByRole('button', { name: 'New policy' })).toEqual([
+      inEmpty,
+    ])
+    await user.click(inEmpty)
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
   })
 })

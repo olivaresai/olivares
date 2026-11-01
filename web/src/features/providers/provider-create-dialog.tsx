@@ -69,7 +69,7 @@ export function ProviderCreateDialog({
   open: boolean
   onOpenChange: (o: boolean) => void
   /** The provider chosen when the form opens: the first one offered, or the one the
-   * tool that sent the person here runs on (HU2-18). The form never opens on nothing. */
+   * tool that sent the person here runs on. The form never opens on nothing. */
   initialKind?: ProviderKind
   /** Called with the new record so the caller can offer the next action — testing
    * it — instead of leaving the operator on a list with nothing to do. */

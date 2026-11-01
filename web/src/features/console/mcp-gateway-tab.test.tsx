@@ -53,7 +53,6 @@ vi.mock('./api', async (original) => ({
   },
 }))
 import { MCPGatewayTab } from './mcp-gateway-tab'
-import { MCPServersView } from './mcp-servers-view'
 const snapshot = {
   version: 1,
   source: 'store',
@@ -484,7 +483,7 @@ describe('MCP console governance', () => {
     expect(within(row).getByText('Asks for approval first')).toBeInTheDocument()
     expect(within(row).getByText('Not allowed')).toBeInTheDocument()
   })
-  it('Allow grants tools:call, and a Save the engine did not keep stays open and says why (HU 026)', async () => {
+  it('Allow grants tools:call, and a Save the engine did not keep stays open and says why', async () => {
     const tested = structuredClone(snapshot)
     Object.assign(tested.servers[0]!, {
       // Complete trust: jsdom's http origin would otherwise prefill an invalid resource.
@@ -564,7 +563,7 @@ describe('MCP console governance', () => {
     const row = await screen.findByRole('article', { name: 'Fixture MCP' })
     await user.click(within(row).getByRole('button', { name: 'Configure' }))
     const dialog = await screen.findByRole('dialog')
-    // The form says what a Save does to a server that exists (HU 034).
+    // The form says what a Save does to a server that exists.
     expect(
       within(dialog).getByText(/^Saving keeps the server as it is\./),
     ).toBeInTheDocument()
@@ -686,7 +685,9 @@ describe('MCP servers page headings', () => {
           new QueryClient({ defaultOptions: { queries: { retry: false } } })
         }
       >
-        <MCPServersView />
+        {/* Its host since #3388: MCP & skills, whose page title is the h1 above it. */}
+        <h1>MCP &amp; skills</h1>
+        <MCPGatewayTab titled={false} />
       </QueryClientProvider>,
     )
     await screen.findByText('Fixture MCP')

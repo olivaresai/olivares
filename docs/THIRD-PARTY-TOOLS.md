@@ -118,8 +118,10 @@ A change applies from the next launch or resume. Declaring or withdrawing hosts
 needs tenant administration, and no host is added by default.
 
 A host is a DNS name such as `github.com`: no scheme, port, path, wildcard or
-address, and at most four per profile. The session reaches HTTPS on port 443 of
-exactly that name, and only at public addresses. A launch whose declared host
+address, and at most four per profile. The session reaches HTTPS on port 443 and
+SSH on port 22 of exactly that name, and only at public addresses. The SSH route
+is a raw tunnel through the session's proxy, so `ssh` and `scp` in the container
+image work without an operator mount; the proxy cannot read inside it. A launch whose declared host
 does not resolve, or resolves to a loopback, private or other reserved address,
 does not start, and the error names the host. Any program the session runs can
 send data to a declared host, its provider key included: the proxy checks which

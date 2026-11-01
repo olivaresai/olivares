@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import { modelName } from './model-name'
 
-describe('modelName: one name for a model everywhere the console says it (dev#3120)', () => {
+describe('modelName: one name for a model everywhere the console says it', () => {
   it('says the name the tool lists for the model first', () => {
     const listed = [{ id: 'claude-opus-5-5', display_name: 'Opus 5.5 (1M)' }]
     expect(modelName('claude-opus-5-5', listed)).toBe('Opus 5.5 (1M)')

@@ -67,6 +67,47 @@ func (f *availabilityFixture) Discover(context.Context, model.TenantID, Availabi
 	return f.ids, f.err
 }
 
+type availabilityClientError struct{ message string }
+
+func (e availabilityClientError) Error() string         { return "SECRET internal discovery detail" }
+func (e availabilityClientError) ClientMessage() string { return e.message }
+
+func TestAvailabilityPreservesClientSafeDiscoveryRefusal(t *testing.T) {
+	for _, source := range []AvailabilitySource{
+		{Ref: "ppf_grok", AccountRef: "ppf_grok", ProviderKind: "grok", Driver: "grok", Revision: "v1"},
+		{Ref: "grok-own-login", ProviderKind: "grok", Driver: "grok", Revision: "v1"},
+	} {
+		t.Run(source.Ref, func(t *testing.T) {
+			m, _, tenant := newMod(t)
+			const remedy = "enable Landlock on the engine host and run olivares doctor"
+			f := &availabilityFixture{sources: []AvailabilitySource{source}, err: availabilityClientError{message: remedy}}
+			now := time.Date(2026, 10, 2, 14, 0, 0, 0, time.UTC)
+			m.UseAvailabilitySource(f, func(context.Context) ([]model.TenantID, error) { return nil, nil })
+			m.availability.now = func() time.Time { return now }
+			if err := m.Start(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = m.Stop(context.Background()) })
+			if err := m.RefreshAvailability(context.Background(), tenant); err != nil {
+				t.Fatal(err)
+			}
+			failed, err := m.AvailableModels(context.Background(), tenant)
+			if err != nil || len(failed) != 1 || failed[0].State != "failed" || failed[0].Message != remedy || strings.Contains(failed[0].Message, "SECRET") {
+				t.Fatalf("client-safe refusal was hidden: %+v %v", failed, err)
+			}
+			f.err = errors.New("SECRET ordinary discovery error")
+			now = now.Add(availabilityRefreshInterval)
+			if err := m.RefreshAvailability(context.Background(), tenant); err != nil {
+				t.Fatal(err)
+			}
+			ordinary, err := m.AvailableModels(context.Background(), tenant)
+			if err != nil || ordinary[0].Message != availabilityFailure || strings.Contains(ordinary[0].Message, "SECRET") {
+				t.Fatalf("ordinary discovery error changed: %+v %v", ordinary, err)
+			}
+		})
+	}
+}
+
 func TestAvailableModelsRefreshAndIdleWrites(t *testing.T) {
 	m, st, tenant := newMod(t)
 	auditRows := func() int {

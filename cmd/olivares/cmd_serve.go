@@ -301,8 +301,10 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	defer func() { _ = eng.Close() }()
 	// Before any child starts: a previous engine's confined children are gone, and so is their need for the private
 	// TMPDIRs they left under <data>/tool-tmp.
-	if err := confine.SweepChildTemp(); err != nil {
-		log.Warn("sessions: the leftover temporary directories of an earlier run could not all be removed", "err", err)
+	if err := confine.SweepChildTemp(); errors.Is(err, confine.ErrChildTempHeld) {
+		log.Warn("sessions: another engine serves this data directory; its sessions' temporary directories were left in place, and this engine holds the folder once that engine exits")
+	} else if err != nil {
+		log.Warn("sessions: the start-up sweep of the confined children's temporary directories did not complete; folders a previous engine left stay until a start-up sweep completes", "err", err)
 	}
 	// Before any listener starts: this node's activation and module profile must
 	// match the deployment settings record, or the engine restarts once to build
@@ -371,7 +373,17 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	// The consoleFS edition port lets the commercial build serve its own console bundle
 	// (the cockpit's terminal) without the public dist moving: the default build serves
 	// base unchanged (COCKPIT-07 §4).
-	httpSrv.Handler = thisEdition.routes(newSPAHandler(eng.api.Handler(), thisEdition.console(webui.FS())), eng, log)
+	httpSrv.Handler = thisEdition.routes(newSPAHandler(eng.api.Handler(), thisEdition.console(webui.FS()), func() bool {
+		if tlsLoader == nil {
+			return false
+		}
+		cert, err := tlsLoader.GetCertificate(nil)
+		if err != nil || cert == nil || cert.Leaf == nil {
+			return true
+		}
+		leaf := cert.Leaf
+		return leaf.Issuer.CommonName == "Olivares AI local CA" || leaf.CheckSignature(leaf.SignatureAlgorithm, leaf.RawTBSCertificate, leaf.Signature) == nil
+	}), eng, log)
 	configurePIVTLS(httpSrv, eng.pivConfig, opts.insecure, log)
 	grpcSrv, gerr := newGRPCServer(eng, tlsLoader, opts.grpcClientCA, opts.insecure)
 	if gerr != nil {
@@ -545,10 +557,12 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	// already enforces the expiry per call). OFF the shutdown path.
 	go watchLicenseExpiry(ctx, eng, log)
 
-	// V269 / COCKPIT-03 §3: auxiliary listeners this edition serves. Empty in every
-	// build today; the seam and its shutdown path land before the engine so the wiring
-	// is already final when it arrives.
-	auxServers := thisEdition.agentServers.get()
+	// V269 / COCKPIT-03 §3: auxiliary listeners this edition serves (the cockpit's
+	// bootstrap and agent listeners). Built here, after the TLS certificate exists.
+	var auxServers []editionAuxServer
+	if thisEdition.agentServers != nil {
+		auxServers = thisEdition.agentServers(editionAgentDepsFrom(eng, tlsLoader, os.Getenv, log))
+	}
 	serveEditionAuxServers(ctx, auxServers, log, errCh)
 	defer shutdownEditionAuxServers(context.Background(), auxServers, log)
 
@@ -566,6 +580,18 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 		return &selfRestartError{reason: reason}
 	}
 	return nil
+}
+
+// editionAgentDepsFrom is the mapping serve applies for the agentServers port, split out so
+// it can be tested: the certificate is the HTTPS listener's own loader (nil when --insecure
+// left none), and config, modules and store are the boot's.
+func editionAgentDepsFrom(eng *engine, loader *secure.CertificateLoader, getenv func(string) string, log *slog.Logger) EditionAgentDeps {
+	deps := EditionAgentDeps{Config: eng.editionConfig, Modules: eng.editionModules, Store: eng.store,
+		Getenv: getenv, Log: log}
+	if loader != nil {
+		deps.Certificate = loader.GetCertificate
+	}
+	return deps
 }
 
 // watchReloadSignal reconciles the source roster on each SIGHUP until ctx is done.

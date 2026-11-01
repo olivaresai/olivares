@@ -33,7 +33,7 @@ func loginCapabilitySuperuserOnDatabase(t *testing.T, pg pgtest.DSNs) string {
 }
 
 // TestPGLoginCapabilityVerifierRefusesDriftAtVerifierAndBoot is the correction-1 red/green
-// control set for Root's INITIAL-FINDINGS: whole CHECK semantics, PUBLIC column ACLs, exact
+// control set for the maintainer's INITIAL-FINDINGS: whole CHECK semantics, PUBLIC column ACLs, exact
 // ownership and the other-operational-role boundary. Every drift must be refused both by the
 // verifier itself and by the actual per-boot path of a real Open on the same database.
 func TestPGLoginCapabilityVerifierRefusesDriftAtVerifierAndBoot(t *testing.T) {

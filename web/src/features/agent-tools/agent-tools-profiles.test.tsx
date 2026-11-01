@@ -55,6 +55,7 @@ vi.mock('@/features/providers/api', async (orig) => ({
 }))
 
 import { agentOpsApi } from '@/features/agentops/api'
+import { modelsApi } from '@/features/models/api'
 import type {
   ProviderAccountDTO,
   ProviderProfileDTO,
@@ -135,6 +136,8 @@ function mount(
 }
 
 beforeEach(() => {
+  // AI tools also lists the provider key references (#3388); this role reads them too.
+  vi.spyOn(modelsApi, 'keys').mockResolvedValue({ items: [], has_more: false })
   vi.clearAllMocks()
   auth.can = () => true
   auth.isSuperadmin = true
@@ -462,6 +465,41 @@ describe('AI tools: one boxed list per installed tool', () => {
       await within(codex).findByTestId('profile-default'),
     ).toHaveTextContent('Default sign-in')
     expect(within(codex).getByText('0.162.0')).toBeInTheDocument()
+  })
+
+  it("shows an account's 5-hour and weekly use on its row, and nothing for one that reported none", async () => {
+    vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue(
+      page([
+        account('ppf_b', 'claude-b', {
+          usage: [
+            {
+              window: 'five_hour',
+              label: '5-hour',
+              utilization: 41,
+              observed_at: '2026-10-29T10:00:00Z',
+            },
+            {
+              window: 'seven_day',
+              label: 'Weekly',
+              utilization: 17,
+              observed_at: '2026-10-29T10:00:00Z',
+            },
+          ],
+        }),
+        account('ppf_c', 'claude-c'),
+      ]),
+    )
+    mount()
+    const claude = await screen.findByTestId('tool-claude')
+    expect(
+      await within(claude).findByTestId('profile-claude-b'),
+    ).toHaveTextContent('5-hour 41% · Weekly 17%')
+    expect(
+      within(claude).getByTestId('profile-claude-c'),
+    ).not.toHaveTextContent('%')
+    expect(within(claude).getByTestId('profile-default')).not.toHaveTextContent(
+      '%',
+    )
   })
 
   it('tells the default login from the profile names the engine gives: the one without a name', async () => {

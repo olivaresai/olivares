@@ -126,9 +126,9 @@ func (pr *procRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, err
 	}
 	var p *procProcess
 	if pr.usePTY {
-		p, err = pr.launchPTY(cmd, spec.WaitDelay, spec.StripImageData, release)
+		p, err = pr.launchPTY(cmd, spec.WaitDelay, spec.StripImageData, release, spec.KillTreeOnExit)
 	} else {
-		p, err = pr.launchPipes(cmd, spec.WaitDelay, spec.StripImageData, release)
+		p, err = pr.launchPipes(cmd, spec.WaitDelay, spec.StripImageData, release, spec.KillTreeOnExit)
 	}
 	if err != nil {
 		release()
@@ -146,13 +146,13 @@ func (pr *procRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, err
 		if err := waitReady(); err != nil {
 			stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			return nil, errors.Join(networkBoundaryErr(err), p.Stop(stopCtx))
+			return p, errors.Join(networkBoundaryErr(err), p.Stop(stopCtx))
 		}
 	}
 	return p, nil
 }
 
-func (pr *procRunner) launchPipes(cmd *exec.Cmd, waitDelay time.Duration, stripImages bool, release func()) (*procProcess, error) {
+func (pr *procRunner) launchPipes(cmd *exec.Cmd, waitDelay time.Duration, stripImages bool, release func(), killTreeOnExit bool) (*procProcess, error) {
 	// Own process group so a graceful/hard stop reaches grandchildren that would
 	// otherwise hold the stdout pipe open and wedge teardown.
 	configureProcGroup(cmd)
@@ -191,9 +191,14 @@ func (pr *procRunner) launchPipes(cmd *exec.Cmd, waitDelay time.Duration, stripI
 	}()
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdinRead, stdoutWrite, stderrWrite
 	program := specProgram(cmd) // the guard replaces cmd.Path
-	engine, err := watchEngine(cmd)
+	engine, err := watchEngine(cmd, killTreeOnExit)
 	if err != nil {
 		return nil, fmt.Errorf("sessions: start %q: %w", program, err)
+	}
+	if engine != nil {
+		// A cancelled launch does not kill the group, which holds the guard: closing
+		// the guard's watch makes it kill every descendant, detached ones included.
+		cmd.Cancel = func() error { engine.endLifetime(); return nil }
 	}
 	if err := cmd.Start(); err != nil {
 		engine.close()
@@ -202,7 +207,7 @@ func (pr *procRunner) launchPipes(cmd *exec.Cmd, waitDelay time.Duration, stripI
 	started = true
 	engine.started()
 	cmd.Env = nil
-	return pr.watch(cmd, stdin, stripImagesFrom(stdout, stripImages), stderr, waitDelay, engine.with(release)), nil
+	return pr.watch(cmd, stdin, stripImagesFrom(stdout, stripImages), stderr, waitDelay, release, engine), nil
 }
 
 func specProgram(cmd *exec.Cmd) string {
@@ -212,18 +217,23 @@ func specProgram(cmd *exec.Cmd) string {
 	return cmd.Path
 }
 
-func (pr *procRunner) watch(cmd *exec.Cmd, stdin io.WriteCloser, stdout, stderr io.ReadCloser, waitDelay time.Duration, release func()) *procProcess {
+func (pr *procRunner) watch(cmd *exec.Cmd, stdin io.WriteCloser, stdout, stderr io.ReadCloser, waitDelay time.Duration, release func(), engine *engineWatch) *procProcess {
+	release = engine.with(release)
 	p := &procProcess{
 		cmd:   cmd,
 		stdin: stdin,
 		// Retain the owned read ends to bound final drain even when a descendant
 		// keeps a writer open after the direct child exits.
-		stdout:    stdout,
-		stderr:    stderr,
-		out:       make(chan OutputFrame, 256),
-		waitDone:  make(chan struct{}),
-		abandon:   make(chan struct{}),
-		waitDelay: waitDelay,
+		stdout:       stdout,
+		stderr:       stderr,
+		out:          make(chan OutputFrame, 256),
+		waitDone:     make(chan struct{}),
+		abandon:      make(chan struct{}),
+		waitDelay:    waitDelay,
+		guardOutcome: engine.guardOutcome(),
+	}
+	if engine != nil {
+		p.endTree = engine.endLifetime
 	}
 
 	// Reaping and output drain have separate ownership. Wait does not own these
@@ -237,6 +247,13 @@ func (pr *procRunner) watch(cmd *exec.Cmd, stdin io.WriteCloser, stdout, stderr 
 	go func() { pumps.Wait(); close(drained) }()
 	go func() {
 		err := cmd.Wait()
+		if p.guardOutcome != nil {
+			var status [1]byte
+			n, readErr := p.guardOutcome.Read(status[:])
+			p.guardOutcomeKnown = n == 1 && (status[0] == 0 || status[0] == 1) && (readErr == nil || errors.Is(readErr, io.EOF))
+			p.guardCleanupFailed = p.guardOutcomeKnown && status[0] == 1
+			_ = p.guardOutcome.Close()
+		}
 		p.closeStdin()
 		delay := waitDelay
 		if delay <= 0 {
@@ -311,7 +328,7 @@ func (pr *procRunner) pump(wg *sync.WaitGroup, p *procProcess, r io.Reader, stre
 			p.outputFailure.Do(func() {
 				p.outputErr = errors.Join(ErrOutputLineTooLong, ErrOutputAbandoned)
 				p.closeStdin()
-				_ = procGroupKill(p.cmd)
+				p.endSessionTree()
 				p.abandonOutput()
 				p.closeOutputPipes()
 			})
@@ -423,6 +440,17 @@ type procProcess struct {
 
 	exit    int
 	waitErr error
+
+	// guardOutcome is the setup guard's typed status pipe, nil for ordinary sessions.
+	guardOutcome       *os.File
+	guardCleanupFailed bool
+	guardOutcomeKnown  bool
+
+	// endTree is the session guard's tree kill, engaged by closing its watch:
+	// the guard SIGKILLs every descendant — a process that left the process
+	// group included — and exits with it. nil where no guard stands (non-Linux),
+	// so Stop's escalation falls back to the process-group kill there.
+	endTree func()
 
 	// confinement is how the child runs (Landlock, or none and why).
 	confinement confine.State
@@ -684,6 +712,14 @@ func (p *procProcess) Wait() (int, error) {
 	return p.exit, p.waitErr
 }
 
+// WorktreeSetupCleanup reports the guard's typed outcome after Wait. known=false
+// means the guard did not deliver a verdict, which setup treats as unconfirmed
+// unless it failed before starting the command.
+func (p *procProcess) WorktreeSetupCleanup() (failed, known bool) {
+	<-p.waitDone
+	return p.guardCleanupFailed, p.guardOutcomeKnown
+}
+
 // Stop closes stdin, signals the process group, and escalates after WaitDelay.
 // If output still cannot finish, it forces pipe closure and joins the pumps.
 // The child is reaped independently; incomplete output is reported by Stop.
@@ -712,9 +748,20 @@ func (p *procProcess) Stop(_ context.Context) error {
 	if p.finishedWithin(delay) {
 		return p.completedStopReport()
 	}
-	_ = procGroupKill(p.cmd) // escalate to SIGKILL
+	// Escalate through the session guard when there is one: it kills the whole
+	// tree, what left the process group included, and exits with it. Killing the
+	// group would kill the guard with the program and leak the rest.
+	p.endSessionTree()
 	if p.finishedWithin(delay) {
 		return p.completedStopReport()
+	}
+	if p.endTree != nil {
+		// The guard did not end the tree within the delay (its watch is gone, or a
+		// process will not die): the group kill is all that is left to send.
+		_ = procGroupKill(p.cmd)
+		if p.finishedWithin(delay) {
+			return p.completedStopReport()
+		}
 	}
 	// A holder outside the group or a blocked consumer survived both signals.
 	// Close readers and release blocked deliveries, then join the owned work. This
@@ -726,6 +773,16 @@ func (p *procProcess) Stop(_ context.Context) error {
 		return p.forcedTeardownReport()
 	}
 	return fmt.Errorf("sessions: the process did not finish after SIGTERM, SIGKILL, a forced close of its output pipes and abandoning its output: %w", ErrChildNotReaped)
+}
+
+// endSessionTree is Stop's escalation: the session guard kills the whole tree
+// and exits with it; without a guard the process-group kill is all there is.
+func (p *procProcess) endSessionTree() {
+	if p.endTree != nil {
+		p.endTree()
+		return
+	}
+	_ = procGroupKill(p.cmd)
 }
 
 // completedStopReport preserves incomplete-output evidence after a natural drain

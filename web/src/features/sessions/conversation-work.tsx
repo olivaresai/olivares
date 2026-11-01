@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE WORK BETWEEN TWO REPLIES (dev#3119). The conversation folds the calls between two
+// THE WORK BETWEEN TWO REPLIES. The conversation folds the calls between two
 // other rows into one work row that says what they did; open, it is one line per call, an
 // edit with its diff, a subagent under its Agent row; while the last row's calls run it is
 // one live line with their clock. session-conversation.tsx paints the rest of the thread.
@@ -15,14 +15,17 @@ import {
   Terminal,
   Wrench,
 } from 'lucide-react'
-import { type MouseEvent } from 'react'
+import { memo, type MouseEvent, type ReactNode } from 'react'
 import type { TFunction } from 'i18next'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
+import { PathText } from '@/components/ui/path-text'
 import { formatDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { ConversationItem } from './conversation-frames'
 import { MarkdownText } from './markdown-text'
+import { samePlain } from './same-plain'
 import { parseMarkdown, plainText } from './markdown'
+import { ToolTarget } from './tool-target'
 import { useNow } from './use-now'
 import './i18n'
 
@@ -35,20 +38,29 @@ interface Nested {
 
 export type Part =
   | { kind: 'item'; item: ConversationItem }
+  | { kind: 'card'; item: ConversationItem }
   | { kind: 'work'; items: ConversationItem[]; nested: Nested }
 
 /**
- * The items as the thread paints them (dev#3119). The calls between two other rows (a reply,
+ * The items as the thread paints them. The calls between two other rows (a reply,
  * the person's turn, the end of a turn, a notice) are one work row; a subagent's calls and
  * replies belong to the Agent call that started it, wherever they arrive. Nothing is
  * dropped: every call is still in the document, one click away.
  */
-export function threadParts(items: readonly ConversationItem[]): Part[] {
+export function threadParts(
+  items: readonly ConversationItem[],
+  authoritativeTodos = false,
+): Part[] {
   const calls = new Set<string>()
   const byCall = new Map<string, ConversationItem[]>()
   const place = new Map<ConversationItem, number>()
   const nested: Nested = { byCall, place }
   const parts: Part[] = []
+  // A todo call sends the whole list each time: only the newest list is a card, the older
+  // calls stay in the work rows.
+  const lastTodos = items
+    .map((i) => i.toolCard?.kind === 'todos' && !i.parentToolId)
+    .lastIndexOf(true)
   for (const [index, item] of items.entries()) {
     place.set(item, index)
     const parent = item.parentToolId
@@ -61,6 +73,12 @@ export function threadParts(items: readonly ConversationItem[]): Part[] {
     }
     const last = parts[parts.length - 1]
     if (item.kind !== 'tool') parts.push({ kind: 'item', item })
+    else if (
+      item.toolCard &&
+      (item.toolCard.kind !== 'todos' ||
+        (!authoritativeTodos && index === lastTodos))
+    )
+      parts.push({ kind: 'card', item })
     else if (last?.kind === 'work') last.items.push(item)
     else parts.push({ kind: 'work', items: [item], nested })
   }
@@ -204,15 +222,52 @@ function workDuration(items: readonly ConversationItem[]): number | undefined {
 const capitalized = (words: string) =>
   words.charAt(0).toLocaleUpperCase() + words.slice(1)
 
-/** The live line of the calls that run: what they do, and for how long. */
+/** Text shown as it is, in a Trans slot: React escapes a child, so nothing in it is markup. */
+function PlainText({ text }: { text: string }) {
+  return <>{text}</>
+}
+
+/** The live line of the calls that run: what they do, and for how long. A file the last
+ * call reads or edits is named through PathText, whole (#3135). */
 function liveWords(
   t: TFunction,
   running: readonly ConversationItem[],
   now: number,
-): string {
+): ReactNode {
   const lastCall = running[running.length - 1]!
   const category = categoryOf(lastCall)
   const target = lastCall.toolArgsSummary ?? ''
+  const seconds = Math.floor(
+    Math.max(...running.map((item) => elapsedSeconds(item, now))),
+  )
+  const duration = seconds >= 1 ? ` · ${formatDuration(seconds * 1000)}` : ''
+  // Every category whose call names a path (read, edit, search) names it through PathText;
+  // the words before it ("TODO · " of a Grep) stay text. Agent, command and other name none.
+  const path = lastCall.toolPath
+  if (
+    path &&
+    target.endsWith(path) &&
+    (category === 'read' || category === 'edit' || category === 'search')
+  )
+    return (
+      <span className="flex min-w-0 items-center whitespace-pre">
+        <Trans
+          t={t}
+          i18nKey={`conversation.running.${category}Path`}
+          components={{
+            // The agent's own text (a Grep's pattern) is a child, never markup: Trans
+            // parses only the catalog sentence.
+            lead: (
+              <PlainText text={target.slice(0, target.length - path.length)} />
+            ),
+            path: (
+              <PathText value={path} copy={false} tone="muted" size="small" />
+            ),
+          }}
+        />
+        {duration}
+      </span>
+    )
   const what =
     category === 'command'
       ? t('conversation.running.command', {
@@ -228,19 +283,16 @@ function liveWords(
               tool: lastCall.toolName ?? t('conversation.tool'),
             })
           : t(`conversation.running.${category}`, { target })
-  const seconds = Math.floor(
-    Math.max(...running.map((item) => elapsedSeconds(item, now))),
-  )
-  return seconds >= 1 ? `${what} · ${formatDuration(seconds * 1000)}` : what
+  return `${what}${duration}`
 }
 
 /**
- * THE WORK BETWEEN TWO REPLIES IS ONE ROW (dev#3119, T3 "Worked for 22s ›"): "Worked for
+ * THE WORK BETWEEN TWO REPLIES IS ONE ROW (the regression, T3 "Worked for 22s ›"): "Worked for
  * 1m 12s · ran 3 commands, edited 2 files", closed. Open, it is one line per call, an edit
  * with its diff, a subagent under its Agent row. While its calls run it is the live line
  * instead: "Running 1 shell command · 1m 30s", with Esc to interrupt where the turn can be.
  */
-export function WorkRow({
+function WorkRowView({
   items,
   nested,
   runRef,
@@ -381,7 +433,7 @@ function CallRow({
 }
 
 /**
- * A SUBAGENT IS ONE ROW UNDER ITS AGENT CALL (dev#3119): its name, and its one-line result
+ * A SUBAGENT IS ONE ROW UNDER ITS AGENT CALL: its name, and its one-line result
  * once it has one; folded, its own calls one line each, and its words.
  */
 function AgentRow({
@@ -547,7 +599,7 @@ function DiffExcerpt({ lines }: { lines: string[] }) {
 }
 
 /**
- * A TOOL CALL IS A 13 px ROW: the glyph, the verb, the target in its short form (dev#3119:
+ * A TOOL CALL IS A 13 px ROW: the glyph, the verb, the target in its short form (the regression:
  * never JSON), an edit's +N −M, and at the right how it stands: failed, in the background,
  * its clock while it runs, a check once it answered. An edit's excerpt sits under it.
  */
@@ -587,7 +639,12 @@ function ToolRow({
           <span className="shrink-0 font-medium">
             {item.toolName ?? t('conversation.tool')}
           </span>
-          {target ? (
+          {item.toolPath && !item.toolCommand ? (
+            // The path whole through PathText; no copy button inside a <summary>.
+            <span className="flex min-w-0 flex-1 items-center whitespace-pre font-mono text-text-2">
+              <ToolTarget item={item} copy={false} />
+            </span>
+          ) : target ? (
             <span
               className="min-w-0 flex-1 truncate font-mono text-text-2"
               title={item.toolCommand ?? target}
@@ -645,7 +702,7 @@ function ToolRow({
               <span className="text-overline uppercase">
                 {t('conversation.args')}{' '}
               </span>
-              {item.toolArgsSummary}
+              <ToolTarget item={item} wrap />
             </p>
           ) : null}
           {item.toolResultSummary ? (
@@ -667,7 +724,7 @@ function ToolRow({
 }
 
 /**
- * A MESSAGE IS ITS WORDS, NOT A BUTTON (dev#2788): words inside a button cannot be selected.
+ * A MESSAGE IS ITS WORDS, NOT A BUTTON: words inside a button cannot be selected.
  * A click on them opens the inspector, but not on a link or a button, not as the second
  * click of a double click, and not while the person is selecting text to copy it;
  * "Inspect" is the keyboard's way in, shown when it has focus.
@@ -711,3 +768,30 @@ export function InspectButton({ onClick }: { onClick?: () => void }) {
     </button>
   )
 }
+
+/** What a work row paints: its calls and, under each Agent call, the subagent's calls and replies that came after it
+ * (CallRow's own reading of `nested`), at every depth. */
+function paints(items: readonly ConversationItem[], nested: Nested): unknown[] {
+  return items.map((item) => {
+    const at = nested.place.get(item) ?? -1
+    const own = (
+      item.toolId ? nested.byCall.get(item.toolId) : undefined
+    )?.filter((child) => (nested.place.get(child) ?? -1) > at)
+    return own?.length ? [item, paints(own, nested)] : item
+  })
+}
+
+type WorkRowProps = Parameters<typeof WorkRowView>[0]
+
+/** A long session gets a frame at a time: only the work row whose content changed paints again. */
+export const WorkRow = memo(
+  WorkRowView,
+  (a: WorkRowProps, b: WorkRowProps) =>
+    a.runRef === b.runRef &&
+    a.selectedId === b.selectedId &&
+    a.onInspect === b.onInspect &&
+    a.live === b.live &&
+    a.canInterrupt === b.canInterrupt &&
+    samePlain(a.running, b.running) &&
+    samePlain(paints(a.items, a.nested), paints(b.items, b.nested)),
+)

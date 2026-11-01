@@ -8,6 +8,7 @@ package sessions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 	"github.com/olivaresai/olivares/modules/sessions/egress"
 )
 
@@ -306,6 +308,25 @@ func TestContainerRunner_UserMapping(t *testing.T) {
 			t.Errorf("--userns=keep-id is podman's: %q", argv)
 		}
 	})
+	t.Run("the generated passwd uses the child's temporary root", func(t *testing.T) {
+		if uid == 0 {
+			t.Skip("the engine user is root: no passwd file is written")
+		}
+		root := t.TempDir()
+		confine.UseChildTempRoot(root)
+		t.Cleanup(func() { confine.UseChildTempRoot("") })
+		f := newFakeRuntime(t, "docker")
+		p := launchContainer(t, f, containerSpec(t))
+		_ = containerFrame(t, p)
+		host, ok := passwdMount(f.argv(t))
+		if !ok {
+			t.Fatalf("argv = %q, want a generated passwd mount", f.argv(t))
+		}
+		rel, err := filepath.Rel(root, host)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			t.Errorf("passwd = %q, want it under the child's temporary root %q", host, root)
+		}
+	})
 	t.Run("docker gives the engine user an entry in /etc/passwd", func(t *testing.T) {
 		if uid == 0 {
 			t.Skip("the engine user is root: the image has root's entry")
@@ -397,7 +418,8 @@ func TestContainerRunner_ARefusedLaunchRemovesItsPasswdDirectory(t *testing.T) {
 		t.Skip("the engine user is root: no passwd file is written")
 	}
 	tmp := t.TempDir()
-	t.Setenv("TMPDIR", tmp)
+	confine.UseChildTempRoot(tmp)
+	t.Cleanup(func() { confine.UseChildTempRoot("") })
 	f := newFakeRuntime(t, "docker")
 	spec := containerSpec(t)
 	spec.Binds = []ContainerBind{{HostPath: "/no/such/host/path", Target: "/workspace/x"}}
@@ -406,7 +428,7 @@ func TestContainerRunner_ARefusedLaunchRemovesItsPasswdDirectory(t *testing.T) {
 	if _, err := NewContainerRunner(f.rt).Launch(ctx, spec); err == nil {
 		t.Fatal("Launch accepted a bind whose host path does not exist")
 	}
-	left, err := filepath.Glob(filepath.Join(tmp, "olivares-container-*"))
+	left, err := filepath.Glob(filepath.Join(tmp, "s-*"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -418,6 +440,9 @@ func TestContainerRunner_ARefusedLaunchRemovesItsPasswdDirectory(t *testing.T) {
 func TestContainerRunner_SELinuxLabelsTheBinds(t *testing.T) {
 	f := newFakeRuntime(t, "podman")
 	f.rt.SELinux = true
+	restore := hostSELinuxType
+	hostSELinuxType = func(string) (string, error) { return "", nil }
+	t.Cleanup(func() { hostSELinuxType = restore })
 	spec := containerSpec(t)
 	homeDir, hooksDir := t.TempDir(), t.TempDir()
 	policy := t.TempDir()
@@ -437,12 +462,128 @@ func TestContainerRunner_SELinuxLabelsTheBinds(t *testing.T) {
 	}
 }
 
+// the regression: on the Olivares Server the daemon labels a :z bind container_file_t, which would take the tool's folder and
+// the session's workspace away from native sessions (olivares_tool_exec_t, olivares_workspace_t). A bind whose host path
+// carries an olivares_* label keeps it; any other bind is still labeled for the container.
+func TestContainerRunner_KeepsOlivaresLabelsOnTheHost(t *testing.T) {
+	f := newFakeRuntime(t, "docker")
+	f.rt.SELinux = true
+	spec := containerSpec(t)
+	tools, workspace, project := t.TempDir(), t.TempDir(), t.TempDir()
+	restore := hostSELinuxType
+	hostSELinuxType = func(path string) (string, error) {
+		switch path {
+		case tools:
+			return "olivares_tool_exec_t", nil
+		case workspace:
+			return "olivares_workspace_t", nil
+		}
+		return "user_home_t", nil
+	}
+	t.Cleanup(func() { hostSELinuxType = restore })
+	spec.Binds = []ContainerBind{
+		{HostPath: tools, Target: tools, ReadOnly: true},
+		{HostPath: workspace, Target: workspace},
+		{HostPath: project, Target: "/project"},
+	}
+	p := launchContainer(t, f, spec)
+	_ = containerFrame(t, p)
+	argv := f.argv(t)
+	for _, mount := range []string{tools + ":" + tools + ":ro", workspace + ":" + workspace, project + ":/project:z"} {
+		if indexOf(argv, mount) < 0 {
+			t.Errorf("no -v %s in %q", mount, argv)
+		}
+	}
+}
+
+// the regression, Root 2026-10-26: on the Olivares Server a session's container runs in the tool's own SELinux domain
+// (olivares_tool_t), which holds exactly a native session's rights; container_t is never given the accounts' files.
+// The engine sets the label from the program's own label, never from the request, and only where the Olivares policy
+// labels the program (olivares_tool_exec_t): another SELinux host keeps the runtime's default.
+func TestContainerRunner_RunsTheSessionInTheToolsDomainOnTheServer(t *testing.T) {
+	for name, c := range map[string]struct {
+		selinux bool
+		label   string
+		want    bool
+	}{
+		"Server: the program is olivares_tool_exec_t": {true, "olivares_tool_exec_t", true},
+		"Server: Claude has its own executable type":  {true, "olivares_tool_claude_exec_t", true},
+		"another SELinux host":                        {true, "bin_t", false},
+		"no SELinux":                                  {false, "olivares_tool_exec_t", false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newFakeRuntime(t, "docker")
+			f.rt.SELinux = c.selinux
+			spec := containerSpec(t)
+			restore := hostSELinuxType
+			hostSELinuxType = func(path string) (string, error) {
+				if !c.selinux {
+					return "", errors.New("security.selinux is not supported")
+				}
+				if path == spec.Program {
+					return c.label, nil
+				}
+				return "", nil
+			}
+			t.Cleanup(func() { hostSELinuxType = restore })
+			p := launchContainer(t, f, spec)
+			_ = containerFrame(t, p)
+			argv := f.argv(t)
+			i, image := indexOf(argv, "label=type:olivares_tool_t"), indexOf(argv, f.rt.Image)
+			if got := i > 0 && argv[i-1] == "--security-opt" && i < image; got != c.want {
+				t.Fatalf("--security-opt label=type:olivares_tool_t before the image: %v, want %v (%q)", got, c.want, argv)
+			}
+		})
+	}
+}
+
+func TestContainerRunner_RefusesWhenTheLabelProbeFails(t *testing.T) {
+	f := newFakeRuntime(t, "docker")
+	f.rt.SELinux = true
+	restore := hostSELinuxType
+	hostSELinuxType = func(string) (string, error) { return "", errors.New("permission denied") }
+	t.Cleanup(func() { hostSELinuxType = restore })
+	p, err := NewContainerRunner(f.rt).Launch(context.Background(), containerSpec(t))
+	if err == nil || !strings.Contains(err.Error(), "permission denied") {
+		t.Fatalf("a label probe failure must refuse the launch, got process %v, error %v", p, err)
+	}
+	if f.ran("argv") {
+		t.Fatal("the container CLI was started despite the label probe failure")
+	}
+}
+
+func TestContainerRunner_RefusesWhenTheProgramLabelProbeFails(t *testing.T) {
+	f := newFakeRuntime(t, "docker")
+	f.rt.SELinux = true
+	spec := containerSpec(t)
+	restore := hostSELinuxType
+	programProbes := 0
+	hostSELinuxType = func(path string) (string, error) {
+		if path != spec.Program {
+			return "bin_t", nil // another bind, including Docker's generated passwd file
+		}
+		programProbes++
+		if programProbes == 1 {
+			return "bin_t", nil // the program's read-only bind
+		}
+		return "", errors.New("program label permission denied")
+	}
+	t.Cleanup(func() { hostSELinuxType = restore })
+	p, err := NewContainerRunner(f.rt).Launch(context.Background(), spec)
+	if err == nil || !strings.Contains(err.Error(), "program label permission denied") || programProbes != 2 {
+		t.Fatalf("the program label probe must refuse the launch, got process %v, error %v after %d program probes", p, err, programProbes)
+	}
+	if f.ran("argv") {
+		t.Fatal("the container CLI was started despite the program label probe failure")
+	}
+}
+
 func TestContainerRunner_RefusesWhatItCannotHoldBeforeStartingAnything(t *testing.T) {
 	cases := map[string]func(*LaunchSpec){
-		"the provider network boundary": func(s *LaunchSpec) { s.NetworkPolicy = &egress.Policy{Providers: []string{"https://api.example/"}} },
-		"native isolation":              func(s *LaunchSpec) { s.Isolation = IsolationNative },
-		"a mount path with a colon":     func(s *LaunchSpec) { s.Binds = []ContainerBind{{HostPath: "/srv/a:b", Target: "/srv/a"}} },
-		"a relative mount target":       func(s *LaunchSpec) { s.Binds = []ContainerBind{{HostPath: os.TempDir(), Target: "a"}} },
+		"an invalid provider network boundary": func(s *LaunchSpec) { s.NetworkPolicy = &egress.Policy{} },
+		"native isolation":                     func(s *LaunchSpec) { s.Isolation = IsolationNative },
+		"a mount path with a colon":            func(s *LaunchSpec) { s.Binds = []ContainerBind{{HostPath: "/srv/a:b", Target: "/srv/a"}} },
+		"a relative mount target":              func(s *LaunchSpec) { s.Binds = []ContainerBind{{HostPath: os.TempDir(), Target: "a"}} },
 		"a mount source that is missing": func(s *LaunchSpec) {
 			s.Binds = []ContainerBind{{HostPath: filepath.Join(os.TempDir(), "olivares-no-such-dir"), Target: "/srv/a"}}
 		},
@@ -509,7 +650,127 @@ func TestContainerRunner_NamesTheCLIOwnsTakeTheSessionsValueInArgvAndOthersTrave
 		t.Errorf("any other name travels by name only: %q", argv)
 	}
 	if indexOf(argv, "--init") < 0 {
-		t.Errorf("docker gets --init for process reaping: %q", argv)
+		t.Errorf("docker keeps its init outside the Olivares tool domain: %q", argv)
+	}
+}
+
+func TestContainerRunner_SkipsDockerInitOnlyForTheOlivaresToolDomain(t *testing.T) {
+	for _, label := range []string{"olivares_tool_exec_t", "olivares_tool_claude_exec_t"} {
+		t.Run(label, func(t *testing.T) {
+			f := newFakeRuntime(t, "docker")
+			f.rt.SELinux = true
+			spec := containerSpec(t)
+			restore := hostSELinuxType
+			hostSELinuxType = func(string) (string, error) { return label, nil }
+			t.Cleanup(func() { hostSELinuxType = restore })
+			p := launchContainer(t, f, spec)
+			_ = containerFrame(t, p)
+			if argv := f.argv(t); indexOf(argv, "--init") >= 0 {
+				t.Errorf("runc, not docker-init, performs the olivares_tool_t transition: %q", argv)
+			}
+		})
+	}
+}
+
+func TestContainerRunner_EgressStartsInTheRelayDomain(t *testing.T) {
+	for _, label := range []string{"olivares_tool_exec_t", "olivares_tool_claude_exec_t"} {
+		t.Run(label, func(t *testing.T) {
+			f := newFakeRuntime(t, "docker")
+			f.rt.SELinux = true
+			spec := containerSpec(t)
+			spec.NetworkPolicy = &egress.Policy{Providers: []string{"http://127.0.0.1:11434"}}
+			restorePrepare := prepareContainer
+			prepareContainer = func(context.Context, egress.Policy, []string) ([]string, string, func() error, func(), error) {
+				return []string{"--print"}, t.TempDir(), func() error { return nil }, func() {}, nil
+			}
+			t.Cleanup(func() { prepareContainer = restorePrepare })
+			restore := hostSELinuxType
+			hostSELinuxType = func(string) (string, error) { return label, nil }
+			t.Cleanup(func() { hostSELinuxType = restore })
+			p := launchContainer(t, f, spec)
+			_ = containerFrame(t, p)
+			argv := f.argv(t)
+			if indexOf(argv, "label=type:olivares_container_relay_t") < 0 {
+				t.Errorf("the egress container does not start in the relay domain: %q", argv)
+			}
+			if indexOf(argv, "label=type:olivares_tool_t") >= 0 {
+				t.Errorf("the egress container still starts in the tool domain: %q", argv)
+			}
+			if indexOf(argv, "--init") >= 0 {
+				t.Errorf("runc, not docker-init, performs the relay transition: %q", argv)
+			}
+		})
+	}
+}
+
+func TestContainerRunner_RefusesEgressForANonToolProgram(t *testing.T) {
+	f := newFakeRuntime(t, "docker")
+	f.rt.SELinux = true
+	spec := containerSpec(t)
+	spec.NetworkPolicy = &egress.Policy{Providers: []string{"http://127.0.0.1:11434"}}
+	restorePrepare := prepareContainer
+	prepareContainer = func(context.Context, egress.Policy, []string) ([]string, string, func() error, func(), error) {
+		return []string{"--print"}, t.TempDir(), func() error { return nil }, func() {}, nil
+	}
+	t.Cleanup(func() { prepareContainer = restorePrepare })
+	restore := hostSELinuxType
+	hostSELinuxType = func(string) (string, error) { return "olivares_exec_t", nil }
+	t.Cleanup(func() { hostSELinuxType = restore })
+	if _, err := newContainerRunner(f.rt).Launch(context.Background(), spec); err == nil {
+		t.Fatal("a non-tool program entered the egress relay")
+	}
+}
+
+func TestContainerRunner_NoPolicyNeverUsesTheRelayLabel(t *testing.T) {
+	f := newFakeRuntime(t, "docker")
+	f.rt.SELinux = true
+	spec := containerSpec(t)
+	restore := hostSELinuxType
+	hostSELinuxType = func(string) (string, error) { return "olivares_tool_exec_t", nil }
+	t.Cleanup(func() { hostSELinuxType = restore })
+	p := launchContainer(t, f, spec)
+	_ = containerFrame(t, p)
+	argv := f.argv(t)
+	if indexOf(argv, "label=type:olivares_container_relay_t") >= 0 {
+		t.Errorf("a launch without a network policy uses the relay label: %q", argv)
+	}
+	if indexOf(argv, "label=type:olivares_tool_t") < 0 {
+		t.Errorf("the ordinary tool label is missing: %q", argv)
+	}
+}
+
+func TestContainerRunner_ProbesTheOriginalProgramBeforeTheEgressWrapper(t *testing.T) {
+	f := newFakeRuntime(t, "docker")
+	f.rt.SELinux = true
+	spec := containerSpec(t)
+	original := spec.Program
+	spec.NetworkPolicy = &egress.Policy{Providers: []string{"http://127.0.0.1:11434"}}
+	restorePrepare := prepareContainer
+	prepareContainer = func(context.Context, egress.Policy, []string) ([]string, string, func() error, func(), error) {
+		return []string{"--print"}, t.TempDir(), func() error { return nil }, func() {}, nil
+	}
+	t.Cleanup(func() { prepareContainer = restorePrepare })
+	var probes []string
+	restore := hostSELinuxType
+	hostSELinuxType = func(path string) (string, error) {
+		probes = append(probes, path)
+		return "olivares_tool_exec_t", nil
+	}
+	t.Cleanup(func() { hostSELinuxType = restore })
+	p := launchContainer(t, f, spec)
+	_ = containerFrame(t, p)
+	if len(probes) == 0 || probes[len(probes)-1] != original {
+		t.Errorf("the label probe saw %v, want original program %q", probes, original)
+	}
+}
+
+func TestContainerRunner_PodmanDoesNotUseDockerInit(t *testing.T) {
+	f := newFakeRuntime(t, "podman")
+	spec := containerSpec(t)
+	p := launchContainer(t, f, spec)
+	_ = containerFrame(t, p)
+	if argv := f.argv(t); indexOf(argv, "--init") >= 0 {
+		t.Errorf("Podman uses its own init support, not Docker's --init: %q", argv)
 	}
 }
 
@@ -670,4 +931,69 @@ func passwdMount(argv []string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func TestContainerRunner_BoundNetworkNeverSharesHost(t *testing.T) {
+	for _, runtime := range []string{"podman", "docker"} {
+		t.Run(runtime, func(t *testing.T) {
+			spec := containerSpec(t)
+			spec.NetworkPolicy = &egress.Policy{Providers: []string{"http://127.0.0.1:11434"}}
+			spec.Env = append(spec.Env, EnvVar{Name: "ANTHROPIC_BASE_URL", Value: "http://127.0.0.1:11434"})
+			args, err := newContainerRunner(ContainerRuntime{Path: runtime, Image: "test"}).runArgs(spec, "test", nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if indexOf(args, "--network=none") < 0 || indexOf(args, "--network=host") >= 0 {
+				t.Fatalf("bound container network is not isolated: %v", args)
+			}
+		})
+	}
+}
+
+func TestContainerBindsKeepsNoRelabelOnDuplicateProgram(t *testing.T) {
+	spec := containerSpec(t)
+	spec.Binds = []ContainerBind{{HostPath: spec.Program, Target: spec.Program, ReadOnly: true, NoRelabel: true}}
+	binds, err := containerBinds(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(binds) != 1 || !binds[0].NoRelabel || strings.Contains(binds[0].volume(true), ",z") {
+		t.Fatalf("engine program would be relabeled: %+v", binds)
+	}
+}
+
+func TestContainerRunner_RefusesWhenRelayDoesNotBecomeReady(t *testing.T) {
+	f := newFakeRuntime(t, "docker")
+	spec := containerSpec(t)
+	spec.NetworkPolicy = &egress.Policy{Providers: []string{"http://127.0.0.1:11434"}}
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	p, err := NewContainerRunner(f.rt).Launch(ctx, spec)
+	if err == nil {
+		if p != nil {
+			_ = p.Stop(context.Background())
+		}
+		t.Fatal("reported launch before the network relay was ready")
+	}
+	if !strings.Contains(err.Error(), "network boundary") {
+		t.Fatalf("lost boundary refusal: %v", err)
+	}
+	if !f.ran("argv") {
+		t.Fatal("runtime was not exercised")
+	}
+	if !f.ran("rm.log") {
+		t.Fatal("failed launch left its container behind")
+	}
+	argv := f.argv(t)
+	for i, arg := range argv {
+		if arg == "-v" && i+1 < len(argv) && strings.Contains(argv[i+1], "eg-") && !strings.Contains(argv[i+1], ":ro") {
+			t.Fatalf("relay directory is writable: %s", argv[i+1])
+		}
+	}
+	if strings.Contains(strings.Join(argv, " "), "pv.sock") {
+		t.Fatal("container exposes a writable preview socket")
+	}
+	if indexOf(argv, "--network=none") < 0 || indexOf(argv, "--network=host") >= 0 {
+		t.Fatalf("unconfined launch: %v", argv)
+	}
 }

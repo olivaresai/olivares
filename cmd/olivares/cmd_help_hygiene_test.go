@@ -85,8 +85,9 @@ func TestConfigHelpEnvironmentDescriptionsSayEngine(t *testing.T) {
 // TestConnectionFlagsAreListedOnlyInLogin: the CLI audit of 09b counted the connection
 // flags as 9 of the 12-18 flags in the help of every basic command, though a person signs
 // in once. Every command that carries the engine connection set hides them; `login` (and
-// `auth login`) lists them. They keep working everywhere: the session tests pass --server,
-// --token and --tenant to commands that now hide them.
+// `auth login`) lists them. A command-specific timeout, such as the session start --wait
+// deadline, is listed where it is documented. The flags keep working everywhere: the session
+// tests pass --server, --token and --tenant to commands that now hide them.
 func TestConnectionFlagsAreListedOnlyInLogin(t *testing.T) {
 	logins := 0
 	walkCommands(newRootCmd(), func(c *cobra.Command) {
@@ -104,12 +105,14 @@ func TestConnectionFlagsAreListedOnlyInLogin(t *testing.T) {
 			if f == nil {
 				continue
 			}
-			// --token is deprecated for --token-file: login hides it too.
+			// --token is deprecated for --token-file: login hides it too. A customized
+			// timeout is command documentation, not the generic connection set.
+			documentedTimeout := name == "timeout" && f.Usage != "request timeout"
 			listed := isLogin && name != "token"
 			if listed && f.Hidden {
 				t.Errorf("%s hides --%s; login is where they are listed", c.CommandPath(), name)
 			}
-			if !listed && !f.Hidden {
+			if !listed && !f.Hidden && !documentedTimeout {
 				t.Errorf("%s shows --%s in its help", c.CommandPath(), name)
 			}
 		}

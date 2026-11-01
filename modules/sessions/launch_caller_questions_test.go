@@ -79,7 +79,7 @@ func callerQuestionsHarness(t *testing.T, allow map[auth.Permission]bool, opts .
 	// callerContext is a new account on every call, so a resume here is always another
 	// person's. These tests measure the questions a launch or resume asks, not the edition
 	// of steering (steering_edition_test.go), so the Business seam is open.
-	m.rt.SteerOthers = true
+	m.rt.SteerOthers = steerOthersLicensed
 	return m, tenant, fr, az
 }
 
@@ -332,7 +332,7 @@ func TestLaunchCallerQuestionsRetainTheirAnswers(t *testing.T) {
 					WithWorkAuthorizer(auth.NewAuthorizer(nil))(m)
 					// The run is launched as a fixed actor and resumed by another account; this
 					// test measures the questions asked, not the edition of steering.
-					m.rt.SteerOthers = true
+					m.rt.SteerOthers = steerOthersLicensed
 					vault.values[tenant.String()+"|env/github"] = secretCanary
 					principal := auth.Principal{Kind: auth.KindUser, UserID: model.NewID(), Superadmin: allow}
 					mc := api.ModuleContext{Tenant: tenant, Principal: principal}

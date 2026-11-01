@@ -60,7 +60,7 @@ export function RecordingNotice({
   //
   // And a Community build is not asked at all: recording is a Business capability, a Community
   // engine answers /v1/m/recording/notice with 501 and records nothing, so the strip and its
-  // consent dialog have nothing to say there (dev#2485: six Community pages made that read).
+  // consent dialog have nothing to say there (the regression: six Community pages made that read).
   const info = useServerInfo()
   const communityBuild = isCommunityEdition(info.data?.edition)
   const storeOn = useModuleOn(RECORDING)

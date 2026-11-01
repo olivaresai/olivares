@@ -13,6 +13,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const { api, toast } = vi.hoisted(() => ({
   api: {
     listProfiles: vi.fn(),
+    limitResumeSettings: vi.fn(),
+    setLimitResumeSettings: vi.fn(),
+    resumeAtReset: vi.fn(),
+    cancelResumeAtReset: vi.fn(),
+    snooze: vi.fn(),
     move: vi.fn(),
     stop: vi.fn(),
     handoffPreview: vi.fn(),
@@ -65,6 +70,7 @@ function show(ui: React.ReactElement) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  api.limitResumeSettings.mockResolvedValue({ automatic: false })
   api.listProfiles.mockResolvedValue({
     items: [
       {
@@ -233,4 +239,84 @@ describe('LimitNotice', () => {
     show(<LimitNotice run={run()} caps={[]} />)
     expect(screen.queryByRole('button', { name: 'Move to…' })).toBeNull()
   })
+})
+
+it('offers a server-owned wait and snooze only for a usage reset', () => {
+  show(<LimitNotice run={run()} caps={caps('resume', 'stop')} />)
+  expect(
+    screen.getByRole('button', { name: 'Resume at reset' }),
+  ).toBeInTheDocument()
+  expect(
+    screen.getByRole('button', { name: 'Snooze until reset' }),
+  ).toBeInTheDocument()
+})
+
+it('schedules the same session on the server', async () => {
+  api.resumeAtReset.mockResolvedValue({})
+  show(<LimitNotice run={run()} caps={caps('stop')} />)
+  await userEvent.click(screen.getByRole('button', { name: 'Resume at reset' }))
+  expect(api.resumeAtReset).toHaveBeenCalledWith('run_1')
+})
+
+it('cancels a stored schedule', async () => {
+  api.cancelResumeAtReset.mockResolvedValue({})
+  show(
+    <LimitNotice
+      run={run({ resume_at: new Date(Date.now() + 90 * 60_000).toISOString() })}
+      caps={caps('resume')}
+    />,
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(api.cancelResumeAtReset).toHaveBeenCalledWith('run_1')
+})
+
+it('snoozes to the provider reset without scheduling a message', async () => {
+  api.snooze.mockResolvedValue({})
+  const limited = run()
+  show(<LimitNotice run={limited} caps={caps('stop')} />)
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Snooze until reset' }),
+  )
+  expect(api.snooze).toHaveBeenCalledWith('run_1', limited.limit!.resets_at)
+  expect(api.resumeAtReset).not.toHaveBeenCalled()
+})
+
+it('stores the automatic preference on the server', async () => {
+  api.setLimitResumeSettings.mockResolvedValue({ automatic: true })
+  show(<LimitNotice run={run()} caps={caps('stop')} />)
+  await userEvent.click(
+    await screen.findByRole('checkbox', {
+      name: 'Resume automatically when a limit resets',
+    }),
+  )
+  expect(api.setLimitResumeSettings).toHaveBeenCalledWith(
+    true,
+    expect.any(Object),
+  )
+})
+
+it('offers no schedule when the usage reset is unknown', () => {
+  show(
+    <LimitNotice run={run({ limit: { kind: 'usage' } })} caps={caps('stop')} />,
+  )
+  expect(
+    screen.queryByRole('button', { name: 'Resume at reset' }),
+  ).not.toBeInTheDocument()
+})
+
+it('offers resume for an ordinary session with its default worker scope', () => {
+  show(
+    <LimitNotice
+      run={run({
+        work_scope: {
+          role: 'worker',
+          workspace_id: '01a18905-54ed-7d17-a82e-64a6fccff8f5',
+        },
+      })}
+      caps={caps('stop')}
+    />,
+  )
+  expect(
+    screen.getByRole('button', { name: 'Resume at reset' }),
+  ).toBeInTheDocument()
 })

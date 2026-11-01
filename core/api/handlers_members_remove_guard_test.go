@@ -30,7 +30,7 @@ func (h *harness) guardMember(root string, tenant model.TenantID, email, role st
 func removeMemberPath(id model.ID) string { return "/v1/members/" + id.String() }
 
 // A member cannot remove itself, whatever its role and however many owners remain: the
-// People tab hides the button (HU-25), and the server refuses the request the button
+// People tab hides the button, and the server refuses the request the button
 // would have sent.
 func TestRemoveMemberRefusesRemovingYourself(t *testing.T) {
 	onEachEngine(t, nil, func(t *testing.T, h *harness) {

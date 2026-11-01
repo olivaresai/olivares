@@ -117,9 +117,9 @@
   "ref": {
     "ms": {
       "paths": "chemins managed-settings.json",
-      "legacyPath": "L’ancien chemin Windows C:\\ProgramData\\ClaudeCode n’est plus pris en charge (supprimé dans {{since}}).",
+      "legacyPath": "L’ancien chemin Windows <path /> n’est plus pris en charge (supprimé dans {{since}}).",
       "precedence": "Précédence des paramètres (la plus élevée d’abord)",
-      "dropIn": "Répertoire drop-in : {{dir}}",
+      "dropIn": "Répertoire drop-in : <path />",
       "serverManaged": "Niveau géré par le serveur",
       "failClosed": "Fail-closed",
       "noMerge": "Sans fusion",

@@ -44,7 +44,7 @@ docker run --rm --name "$container" --read-only --cap-drop ALL \
 test "$(id -u)" = 65532
 test "$HOME" = /var/lib/olivares/home
 test -w "$HOME"
-for tool in vim vi less ps top curl jq ip ss tar gzip; do
+for tool in vim vi less ps top curl jq ip ss tar gzip gh ssh scp nc; do
     command -v "$tool"
 done
 test "$(readlink -f "$(command -v vi)")" = "$(readlink -f "$(command -v vim)")"
@@ -61,6 +61,20 @@ npm --version
 python3 --version
 uvx --version
 git --version
+gh --version
+ssh -V
+# ssh tunnels through the session proxy when one is named, and connects directly otherwise.
+HTTPS_PROXY=http://127.0.0.1:3128 ssh -G build.example.com | grep -q "^proxycommand nc -X connect "
+# ssh expands the proxy command only when it connects: a dead proxy must fail as a refused
+# connection, not as an expansion error.
+if HTTPS_PROXY=http://127.0.0.1:9 ssh -o BatchMode=yes -o ConnectTimeout=5 build.example.com true 2>&1 | grep -q "percent_expand"; then
+    echo "ssh cannot expand its proxy command" >&2
+    exit 1
+fi
+if env -u HTTPS_PROXY ssh -G build.example.com | grep -q "^proxycommand"; then
+    echo "ssh uses a proxy command without HTTPS_PROXY" >&2
+    exit 1
+fi
 /usr/local/bin/olivares version -o json
 git init -q "$HOME/repository"
 git -C "$HOME/repository" -c user.name=Runtime -c user.email=runtime@example.invalid \
@@ -189,6 +203,7 @@ docker run --rm --name "$container" --read-only --cap-drop ALL \
 	--env TMPDIR=/var/lib/olivares/home \
 	--mount "type=volume,src=$volume,dst=/var/lib/olivares" \
 	--mount "type=bind,src=$journey,dst=/opt/olivares-ci/scripts/session-journey-smoke.sh,readonly" \
+	--mount "type=bind,src=$root/scripts/install-service.sh,dst=/opt/olivares-ci/scripts/install-service.sh,readonly" \
 	--entrypoint /bin/bash "$image" \
 	/opt/olivares-ci/scripts/session-journey-smoke.sh \
 	--binary /usr/local/bin/olivares --label image

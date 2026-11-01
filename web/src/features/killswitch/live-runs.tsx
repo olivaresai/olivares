@@ -7,7 +7,7 @@ import { ListTruncationBadge } from '@/features/_intel'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { RunStateBadge } from '@/features/agentops/run-state-badge'
 import type { RunDTO } from '@/features/agentops/types'
-import { isLiveRun } from '@/features/sessions/provenance'
+import { isLiveRun, LIVE_RUN_STATES } from '@/features/sessions/provenance'
 import { RelTime } from '@/features/shared/rel-time'
 import { useAuth } from '@/lib/auth/context'
 import './i18n'
@@ -18,7 +18,6 @@ const RUNS_PAGE = 1000
 // The runs list pages newest first, so a long-lived session falls off an unfiltered page
 // first. Each live state is therefore its own STORE-filtered read (runtime_api.go
 // handleListRuns): idle is derived from stored running, so it is asked for by name.
-const LIVE_STATES = ['pending', 'running', 'idle'] as const
 // While a stop is ending sessions the engine finishes every run within 15 s
 // (modules/sessions/runtime_killswitch.go), so the list follows it closely; otherwise
 // it keeps the page's calm cadence.
@@ -64,7 +63,7 @@ export function LiveRunsSection({ active }: { active: KillSwitchDTO[] }) {
   const { activeTenant } = useAuth()
   const since = estateSince(active)
   const states: string[] =
-    since === null ? [...LIVE_STATES] : [...LIVE_STATES, 'stopped']
+    since === null ? [...LIVE_RUN_STATES] : [...LIVE_RUN_STATES, 'stopped']
 
   const runs = useQuery({
     // Under the runs key, so the engage's invalidation refreshes it at once.

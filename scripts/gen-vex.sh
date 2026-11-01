@@ -87,6 +87,20 @@ fi
 # govulncheck stamps author "Unknown Author"; this VEX is OUR assertion — attribute it.
 jq --arg a "$AUTHOR" '.author = $a' "$OUT.tmp" > "$OUT.tmp2" && mv "$OUT.tmp2" "$OUT.tmp"
 
+# govulncheck also names the product "Unknown Product" and escapes the slashes of module
+# purls (pkg:golang/golang.org%2Fx%2Fcrypto), so no scanner can tie a statement to the binary
+# it found: Trivy 0.76.1 kept GO-2026-5932 open on the engine binary, although its
+# golang.org/x/crypto/openpgp packages are not linked. Trivy matched only with the binary's
+# main module as the product and the module purl as Trivy writes it, with plain slashes.
+if [ "$MODE" = "source" ]; then
+  MODULE="$(awk '$1 == "module" { print $2; exit }' "$DIR/go.mod")"
+  [ -n "$MODULE" ] || { echo "error: no module line in $DIR/go.mod"; rm -f "$OUT.tmp"; exit 1; }
+  jq --arg p "pkg:golang/$MODULE" '.statements |= map(.products |= map(
+      (if .["@id"] == "Unknown Product" then .["@id"] = $p else . end)
+      | if has("subcomponents") then .subcomponents |= map(.["@id"] |= gsub("%2[Ff]"; "/")) else . end))' \
+    "$OUT.tmp" > "$OUT.tmp2" && mv "$OUT.tmp2" "$OUT.tmp"
+fi
+
 mv "$OUT.tmp" "$OUT"
 
 # Merge any hand-authored supplemental statements (fixes / inline mitigations).

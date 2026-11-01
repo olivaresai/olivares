@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ForbiddenState } from '@/components/ui/error-state'
 import { KvList, KvRow } from '@/components/ui/kv'
+import { PathText } from '@/components/ui/path-text'
 import {
   Sheet,
   SheetContent,
@@ -268,8 +269,8 @@ export function HandoffSheet({
                       <p className="text-body font-medium">
                         {t('handoff.detail.branch')}
                       </p>
-                      <p className="break-all text-body">
-                        <Mono>{git.branch}</Mono>
+                      <p className="text-body">
+                        <PathText value={git.branch} wrap />
                       </p>
                     </div>
                   ) : null}

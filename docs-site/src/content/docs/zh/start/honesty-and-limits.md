@@ -6,7 +6,7 @@ description: >-
 ---
 
 :::note[Business]
-审计导出（`GET /v1/audit/export`、`olivares audit export`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、`olivares audit verify` 和 `olivares dr backup`；导出返回 HTTP 501 或退出码 9。审计转发和物理隔离网络之间的 DDIL 传输也需要 Business。
+审计导出（`GET /v1/audit/export`、`olivares audit export`）、账本验证（`GET /v1/audit/verify`、`olivares audit verify`, `olivares audit tree verify`, `olivares audit tree prove`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、账本读取和 `olivares dr backup`；证据操作返回 HTTP 501 或退出码 9。审计转发和携带审计段的 DDIL 传输也需要 Business。
 :::
 
 面向 AI 的控制平面（control plane）是一款安全产品。如果它夸大其所覆盖的范围，
@@ -39,7 +39,7 @@ description: >-
   append-only（仅追加）且哈希链式（hash-chained）的，并带有 Ed25519 签名的检查点，
   可导出为多种 SIEM 格式。
 - **发布版本经过签名且可验证。** 签名、SLSA 来源、SBOM 和 OpenVEX 都可[验证](/zh/how-to/verify-a-release/)。
-  验证目前还不能完全离线：无密钥验证需要 Sigstore 信任根材料，SLSA 步骤没有离线模式。产品提供[气隙（air-gap）包](/zh/how-to/air-gap-install/)。下一个版本是 **<!-- release -->0.4<!-- /release -->**，尚未发布。发布前请从源码构建。
+  验证目前还不能完全离线：无密钥验证需要 Sigstore 信任根材料，SLSA 步骤没有离线模式。产品提供[气隙（air-gap）包](/zh/how-to/air-gap-install/)。下一个版本是 **<!-- release -->0.5<!-- /release -->**，尚未发布。发布前请从源码构建。
 
 ## 开放内核 —— 哪些开放、哪些属于 Business
 

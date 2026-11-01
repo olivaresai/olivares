@@ -154,7 +154,7 @@ case "$verb" in
   *) echo "systemctl stub: unmodelled verb $verb" >&2; exit 1 ;;
 esac
 STUB
-	# restorecon: logged; an SELinux host relabels the snapshot request with the type the engine may read (dev#3048).
+	# restorecon: logged; an SELinux host relabels the snapshot request with the type the engine may read.
 	# selinuxenabled: an SELinux host unless the cell says state/selinux-disabled.
 	cat >"$box/bin/selinuxenabled" <<'STUB'
 #!/bin/sh
@@ -208,6 +208,16 @@ STUB
 	cat >"$box/usr/bin/olivares" <<'STUB'
 #!/bin/sh
 printf 'olivares %s\n' "$*" >>"$OLIVARES_TEST_BOX/calls"
+# __place-install-manifest STAGE TARGET: the model of the product's placement helper, which writes a
+# temporary file inside TARGET's directory and renames it there, then prints the placed inode and
+# mtime as the script records them.
+if [ "$1" = __place-install-manifest ]; then
+  [ ! -f "$OLIVARES_TEST_BOX/state/place-refused" ] || exit 1
+  /usr/bin/cp "$2" "$3.olv-place" && /usr/bin/mv -T "$3.olv-place" "$3" || exit 1
+  printf '%s %s\n' "$(/usr/bin/stat -c %i "$3")" "$(/usr/bin/stat -c %y "$3" | tr ' ' '_')"
+  [ ! -f "$OLIVARES_TEST_BOX/state/place-extra-line" ] || echo 'a notice the script must not record'
+  exit 0
+fi
 [ "$1" = uninstall ] || exit 0
 if [ -f "$OLIVARES_TEST_BOX/state/record-refused" ]; then
   echo "local install manifest must be a regular file owned by root, not a link" >&2
@@ -249,7 +259,7 @@ STUB
 		printf '#!/bin/sh\nprintf "%%s %%s\\n" %s "$*" >>"$OLIVARES_TEST_BOX/calls"\nexit 0\n' "$tool" >"$box/bin/$tool"
 	done
 	# The service account resolves to the unprivileged test user.
-	printf '#!/bin/sh\ncase "$1" in -u) exec /usr/bin/id -u ;; -g) exec /usr/bin/id -g ;; esac\nexit 1\n' >"$box/bin/id"
+	printf '#!/bin/sh\ncase "$1" in -u) exec /usr/bin/id -u ;; -g) exec /usr/bin/id -g ;; -nG) printf "olivares docker users\\n" ;; esac\nexit 1\n' >"$box/bin/id"
 	# Observing shadows (r3b): rm, mv, chown, chmod and stat log each call and then run the
 	# real tool with the same arguments. They never stand in for the operation under test.
 	# A cell may drop one-shot hooks in $box/hooks: window-<name> fires when root removes
@@ -548,7 +558,7 @@ for fmt in deb rpm; do
 done
 
 # SELinux: the request is created under the package state directory's label, so the script relabels it after the
-# rename; without that the engine is denied it and its first start after the upgrade refuses (dev#3048).
+# rename; without that the engine is denied it and its first start after the upgrade refuses.
 case_id="upgrade relabels the published snapshot request"
 new_box relabel-request
 if seed_install deb new; then
@@ -1450,14 +1460,39 @@ elif ! grep -q '^hook after ' "$box/calls"; then not_ok "$case_id: root never pu
 elif [[ -n "$late" ]]; then not_ok "$case_id: root operated on the manifest name after placing it: $(tr '\n' ';' <<<"$late")"
 elif ! victim_ok; then not_ok "$case_id: the victim was changed"
 else ok "$case_id: no root path operation on the name after the rename; the victim untouched"; fi
-case_id="m2-2 install-manifest.json: the staging directory on another filesystem refuses by name"
+case_id="m2-2 install-manifest.json: the data directory on its own filesystem gets the manifest from the product's placement helper"
+# The appliance: /var/lib/olivares is its own volume, so root's staging cannot be renamed into it (the regression, measured:
+# 'refused: manifest-staging-cross-filesystem' on every install, upgrade and edition swap). The product's helper writes
+# and renames inside the data directory, and the upgrade marker records what it placed.
 new_box m22b-cross-fs
 ship deb
 : >"$box/state/stage-other-fs"
 run new postinstall.sh configure ''
-if refused_as "$case_id" manifest-staging-cross-filesystem; then
+if [[ "$last_rc" -ne 0 ]]; then not_ok "$case_id: rc=$last_rc: $(tail -1 "$last_out.stderr" 2>/dev/null)"
+elif ! grep -q "^olivares __place-install-manifest " "$box/calls"; then not_ok "$case_id: the placement helper was not called"
+elif [[ ! -f "$box/$M" ]] || ! grep -q '"manifest": ".*/var/lib/olivares/install-manifest.json"' "$box/$M"; then not_ok "$case_id: no manifest in place"
+elif grep -qE "^mv .*install-manifest.json.new .*$M\$" "$box/calls"; then not_ok "$case_id: root renamed the stage across filesystems"
+elif [[ "$(sed -n 's/^manifest_ino=//p' "$box/var/lib/olivares-package/scripts-contract")" != "$(stat -c %i "$box/$M")" ]]; then not_ok "$case_id: the upgrade marker does not name the placed manifest's inode"
+else ok "$case_id: placed by the helper; the marker names it"; fi
+case_id="m2-2 install-manifest.json: a refusing placement helper refuses the package step by name"
+new_box m22b-cross-fs-refused
+ship deb
+: >"$box/state/stage-other-fs"
+: >"$box/state/place-refused"
+run new postinstall.sh configure ''
+if refused_as "$case_id" manifest-placement-failed; then
 	if [[ -e "$box/$M" ]]; then not_ok "$case_id: a manifest was put in place anyway"
-	else ok "$case_id: refused by name; nothing renamed across filesystems"; fi
+	else ok "$case_id: refused by name; nothing in place"; fi
+fi
+case_id="m2-2 install-manifest.json: a placement helper that prints more than its one line refuses by name"
+new_box m22b-cross-fs-extra
+ship deb
+: >"$box/state/stage-other-fs"
+: >"$box/state/place-extra-line"
+run new postinstall.sh configure ''
+if refused_as "$case_id" manifest-placement-failed; then
+	if grep -q 'notice' "$box/var/lib/olivares-package/scripts-contract" 2>/dev/null; then not_ok "$case_id: the extra line reached the upgrade marker"
+	else ok "$case_id: refused by name; the marker not rewritten"; fi
 fi
 case_id="m2-2 install-manifest.json: an mv without -T refuses by name"
 new_box m22b-no-T

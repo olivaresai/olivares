@@ -553,8 +553,36 @@ func TestReleaseArchiveCodexWithoutAPackageKeepsTheSingleBinaryArchive(t *testin
 	}
 }
 
-// A member outside the package's known layout is still refused, including a binary
-// named like the single-binary archive's (SR5C on da79cb63: it was renamed to bin/codex).
+// New packages carry an exec server; older packages still install without it.
+func TestReleaseArchiveCodexPackageInstallsExecServer(t *testing.T) {
+	payload := archiveFixture(t, DriverCodex, &tar.Header{Name: "bin/codex-exec-server", Mode: 0755, Size: 4, Typeflag: tar.TypeReg})
+	engine, req, _ := archiveEngine(t, DriverCodex, payload, false)
+	plan, err := engine.PlanV2(t.Context(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, _, err := engine.InstallV2(t.Context(), req, plan, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt == nil {
+		t.Fatal("missing receipt")
+	}
+	helper := filepath.Join(receipt.Destination.ReleaseDir, "bin/codex-exec-server")
+	info, err := os.Stat(helper)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0755 {
+		t.Fatalf("exec server not installed as executable: %v %v", info, err)
+	}
+	if err := os.WriteFile(helper, []byte("changed"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	inv, err := engine.List(t.Context(), req.DestRoot)
+	if err != nil || len(inv.Installed) != 1 || inv.Installed[0].State != StateDamaged {
+		t.Fatalf("modified exec server was not detected: %+v %v", inv, err)
+	}
+}
+
+// Unknown and duplicate members remain refused.
 func TestReleaseArchiveCodexPackageRefusesAnUnknownMember(t *testing.T) {
 	var raw, compressed bytes.Buffer
 	tw := tar.NewWriter(&raw)

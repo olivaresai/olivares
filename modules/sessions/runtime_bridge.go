@@ -103,6 +103,10 @@ func (m *Module) bridge(lr *liveRun) {
 		// are withheld before the ring (the attach stream), the recorder and the
 		// frame parser see the line (session_secret_env.go).
 		frame.Data = lr.redact.apply(frame.Data)
+		// Cursor CLI's one-time login link is withheld the same way.
+		if lr.driver != nil && lr.driver.Key() == providerDriverCursor {
+			frame.Data = withholdCursorLoginLink(frame.Data)
+		}
 		// The tool's answer to the engine's own request for its commands is handed to
 		// the waiter and goes no further (tool_commands.go).
 		if frame.Stream == streamStdout && lr.takeCommandsResponse(frame.Data) {
@@ -222,6 +226,9 @@ type stderrTaker interface {
 // onStdout drives stored state from a stream-json output line: it captures the
 // resumable session id from the init message and tracks activity (throttled).
 func (m *Module) onStdout(ctx context.Context, lr *liveRun, data []byte, at time.Time) {
+	// turnEnded: this frame ended the tool's turn, so the first queued message may go
+	// (run_queue.go) once the frame has been applied.
+	turnEnded := false
 	if lr.session != nil {
 		// Correlation happens first and is never deferred. An owned RPC child is
 		// blocked waiting for the answer to a request this process sent, and the
@@ -236,12 +243,14 @@ func (m *Module) onStdout(ctx context.Context, lr *liveRun, data []byte, at time
 		if turn != "" && lr.session.ActiveTurn() != turn {
 			lr.setDriverTurnEnded(true)
 			m.finishSessionCalls(lr, turn)
+			turnEnded = true
 		}
 	} else if frame, ok := parseStreamJSON(data); ok && frame.isResult() {
 		// The read result ends the turn for a refusal before its calls are cancelled,
 		// which can wait on their owners: no refusal may act on it meanwhile.
 		lr.endCredentialRefusal()
 		m.finishSessionCalls(lr, "")
+		turnEnded = true
 	} else if ok && frame.refusedCredential() {
 		if turn, first := lr.beginCredentialRefusal(); first {
 			// Off the bridge: the interrupt's answer arrives through this very loop.
@@ -290,6 +299,14 @@ func (m *Module) onStdout(ctx context.Context, lr *liveRun, data []byte, at time
 			}
 		}
 		m.touchActivity(ctx, lr, at)
+	}
+	if turnEnded {
+		// After the frame's own writes, so a limit it recorded holds the queue.
+		applied := aplicar
+		aplicar = func() {
+			applied()
+			m.queueTurnEnded(lr)
+		}
 	}
 	// Only this is deferred. The ring and the recorder have already run above, in the
 	// same turn of the loop: the deferral takes out of the way EXACTLY the writes that
@@ -471,9 +488,11 @@ func (m *Module) finalize(lr *liveRun, exit int, waitErr error) {
 	lr.processReaped = childWasReaped(waitErr)
 	processReaped := lr.processReaped
 	requested := lr.stopRequested
+	stopActor := lr.stopActor
 	requestedReason := lr.stopReason
 	ioEvidenceFailure := lr.ioEvidenceFailure
 	accessStopCause := lr.accessStopCause
+	launchErr, failureDetail := lr.launchErr, lr.failureDetail
 	lr.mu.Unlock()
 	// The process is gone, so the template's duration ceiling has nothing left to
 	// end. Released here rather than at the timer's own expiry so a session that exits
@@ -550,6 +569,17 @@ func (m *Module) finalize(lr *liveRun, exit int, waitErr error) {
 		if requestedReason != "" {
 			detail = requestedReason
 		}
+		if failureDetail != "" {
+			// A start that ended before the tool ran says why, as the synchronous start's refusal does.
+			detail = failureDetail
+		}
+		if errors.Is(waitErr, ErrRemoteNodeUnavailable) {
+			if rec, err := m.loadRun(ctx, lr.tenant, lr.runRef); err == nil && rec.String(colRunOn) != "" {
+				detail = "node " + rec.String(colRunOn) + " unavailable"
+			} else {
+				detail = "remote node unavailable"
+			}
+		}
 		if !requested && exit != 0 {
 			if cause := exitCause(lr.ring); cause != "" {
 				driver := providerDriverClaude // the historical frame-driven path
@@ -569,7 +599,7 @@ func (m *Module) finalize(lr *liveRun, exit int, waitErr error) {
 			m.warnf("sessions: the session's tool exited on its own",
 				"run_ref", lr.runRef, "exit", exit, "reason", detail)
 		}
-		if _, err := m.transition(ctx, lr.tenant, lr.runRef, transitionInput{
+		settled, err := m.transition(ctx, lr.tenant, lr.runRef, transitionInput{
 			event: event, toState: state,
 			detail: detail, guard: guardRuntimeLaunch(lr.launchID),
 			terminalObservation: observation,
@@ -579,10 +609,24 @@ func (m *Module) finalize(lr *liveRun, exit int, waitErr error) {
 				rec[colStoppedAt] = model.NewTimestamp(m.now()).String()
 				rec[colPID] = nil
 				rec[colRuntimeLaunchID] = nil
+				if lr.setupProcess && worktreeSetupCleanupUnconfirmed(lr.proc, exit) {
+					rec[colRunSetupCleanupFailed] = true
+				}
+				markWorktreeSetupCleanupFailure(rec, launchErr)
 			},
-		}); runtimeSettleWarrantsWarning(err) {
+		})
+		if runtimeSettleWarrantsWarning(err) {
 			m.warnf("sessions: could not settle the runtime row after the process died",
 				"run_ref", lr.runRef, "err", redactErr(err))
+		}
+		// Only the launcher's own stop needs no message. Policies and other
+		// operators can end a session while its launcher is away.
+		if err == nil && stopActor != "user:"+settled.String(colRunLauncherUserID) {
+			kind := pushFinished
+			if state == stateFailed {
+				kind = pushFailed
+			}
+			m.pushAttention(lr.tenant, settled, kind)
 		}
 	}
 	// The run's GenAI invoke_agent span covers the process lifetime; it ends

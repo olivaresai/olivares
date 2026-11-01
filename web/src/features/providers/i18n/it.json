@@ -22,7 +22,8 @@
     "kind": "Tipo",
     "key": "Chiave",
     "state": "Stato",
-    "connection": "Connessione"
+    "connection": "Connessione",
+    "actions": "Azioni"
   },
   "kinds": {
     "anthropic": "Anthropic",

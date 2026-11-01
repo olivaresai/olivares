@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next'
 import { AccessModeBadge, ConfidenceBadge } from '@/components/data/badges'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { CaveatNotice } from '@/features/_intel'
 import { Separator } from '@/components/ui/separator'
 import {
   Sheet,
@@ -38,6 +39,7 @@ import {
 } from './authority'
 import type { AccessEdge } from './types'
 import { AttackPathsPanel } from './attack-paths'
+import { originLinks } from './origin-links'
 
 /** What the detail sheet is showing: a single edge, or a node (for expansion). */
 export type Selection =
@@ -50,6 +52,9 @@ export type Selection =
       role: 'origin' | 'resource'
       /** Aggregate graph nodes have no engine resource id and cannot root exfil. */
       cluster?: boolean
+      /** The engine's own ref, absent when it sent none. `ref` falls back to a shortened
+       * id for display, which no link may be built from. */
+      originRef?: string
     }
   | null
 
@@ -78,6 +83,7 @@ export function AccessDetailSheet({
   onClose,
   onExpand,
   expandError,
+  expandNotice,
   drift,
   recheck,
   onRecheck,
@@ -90,6 +96,8 @@ export function AccessDetailSheet({
   onExpand?: (id: string, kind: string) => void
   /** A failed neighbors read is distinct from a successfully empty expansion. */
   expandError?: unknown | null
+  /** Why an expand was not attempted (the map is at its limit): not a failed read. */
+  expandNotice?: string | null
   /** What is known about this edge's drift state — including that nothing is. */
   drift: DriftLookup
   recheck?: RecheckState
@@ -131,6 +139,9 @@ export function AccessDetailSheet({
                 <Mono>{selection.id}</Mono>
               </Row>
             </div>
+            {selection.role === 'origin' && !selection.cluster && (
+              <OpenLinks kind={selection.kind} refValue={selection.originRef} />
+            )}
             {onExpand && !selection.cluster && (
               <>
                 <Button
@@ -147,6 +158,11 @@ export function AccessDetailSheet({
                     className="py-4"
                     retry={() => onExpand(selection.id, selection.kind)}
                   />
+                ) : null}
+                {expandNotice ? (
+                  <CaveatNotice tone="warning" className="mt-2">
+                    {expandNotice}
+                  </CaveatNotice>
                 ) : null}
               </>
             )}
@@ -246,6 +262,11 @@ function EdgeDetail({
               </span>
             </Row>
           )}
+          <OpenLinks
+            kind={edge.origin_kind}
+            refValue={edge.origin_ref}
+            skip={authority.targets.map((target) => target.key)}
+          />
         </Section>
 
         <Section title={t('detail.resource')}>
@@ -547,6 +568,47 @@ function AuthoritySection({
         )}
       </div>
     </Section>
+  )
+}
+
+/** Where the origin leads, for those who may open it. Without permission there is no
+ * link: the destination would be a Forbidden page. */
+function OpenLinks({
+  kind,
+  refValue,
+  skip = [],
+}: {
+  kind: string
+  refValue: string | undefined
+  /** Keys already offered elsewhere on the sheet (the authority section's own targets). */
+  skip?: readonly string[]
+}) {
+  const { t } = useTranslation('accessMap')
+  const { can } = useAuth()
+  const navigate = useNavigate()
+  const links = originLinks(kind, refValue).filter(
+    (link) => can(link.permission) && !skip.includes(link.key),
+  )
+  if (links.length === 0) return null
+  return (
+    <div className="flex flex-wrap gap-1.5 py-1.5">
+      {links.map((link) => (
+        <Button
+          key={link.key}
+          variant="secondary"
+          size="sm"
+          className="w-fit"
+          onClick={() =>
+            // Feature routes are generated from the registry, so their paths are not in
+            // the statically-typed route tree (see AuthoritySection).
+            navigate({ to: link.to, search: link.search } as never)
+          }
+        >
+          <ArrowUpRight className="size-3.5" aria-hidden />
+          {t(`detail.open.${link.key}`)}
+        </Button>
+      ))}
+    </div>
   )
 }
 

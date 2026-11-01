@@ -6,6 +6,7 @@ import { consoleApi, consoleKeys } from '@/features/console/api'
 import { useTranslation } from 'react-i18next'
 import { KvList, KvRow } from '@/components/ui/kv'
 import { QueryErrorState } from '@/components/layout/query-error-state'
+import { AuthSessionsSection } from '@/features/identity/auth-sessions'
 import {
   AssuranceStatusSection,
   PasskeysManagementSection,
@@ -113,6 +114,7 @@ export function SignInSettings() {
         </KvList>
       )}
       <AssuranceStatusSection />
+      <AuthSessionsSection />
       <PasskeysManagementSection />
       <TOTPTab />
     </div>

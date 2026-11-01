@@ -123,11 +123,31 @@ type EnvVar struct {
 	Value string
 }
 
+// LaunchFile is one bounded, non-secret helper file a remote node materializes
+// before launch. Paths name the central original only so arguments and read grants
+// can be rewritten; the node chooses the destination under its own data directory.
+type LaunchFile struct {
+	Path string
+	Data []byte
+	Mode os.FileMode
+}
+
 // LaunchSpec is the neutral, transport-agnostic launch request the module builds
 // from a run's parameters and hands to the Runner. The module owns argv
 // construction (a proper []string, never a shell-split string); the Runner only
 // spawns and bridges.
 type LaunchSpec struct {
+	// RunOn is the enrolled node selected for this launch. Empty is the local engine.
+	RunOn string `json:"run_on,omitempty"`
+	// TenantID is the already authenticated tenant, verified again at the transport boundary.
+	TenantID string `json:"tenant_id,omitempty"`
+	// RunRef and WorkspaceDirOwned let a remote runner recreate an owned workspace
+	// under its own data directory instead of using the central host's path.
+	RunRef            string `json:"run_ref,omitempty"`
+	WorkspaceDirOwned bool   `json:"workspace_dir_owned,omitempty"`
+	// LaunchFiles and HelperPath carry governed hook configuration, never credentials.
+	LaunchFiles []LaunchFile `json:"launch_files,omitempty"`
+	HelperPath  string       `json:"helper_path,omitempty"`
 	// Program is the executable ("claude").
 	Program string
 	// Args is the fully-formed argv (no shell, no quoting hazards).
@@ -154,6 +174,10 @@ type LaunchSpec struct {
 	Isolation Isolation
 	// WaitDelay bounds how long a graceful stop waits before SIGKILL.
 	WaitDelay time.Duration
+	// KillTreeOnExit selects the guard's one-shot stage for a setup command: it also
+	// reports, on a channel of its own, whether it could kill every descendant. On Linux
+	// every session's guard ends what the session left running when its program exits.
+	KillTreeOnExit bool `json:"-"`
 	// Workspace is the RESOLVED, governed workspace mount. It is nil for a
 	// session with no workspace and for the NATIVE runner (which uses Dir directly).
 	// A container/sandbox runner binds Workspace.HostPath at
@@ -305,6 +329,14 @@ type Process interface {
 // outputCompletionReporter is optional evidence available after Wait. It keeps
 // explicit Stop's successful-collection Wait contract while exposing output loss.
 type outputCompletionReporter interface{ OutputIncomplete() bool }
+
+// RunPlacement checks and launches on an enrolled remote node. Implementations
+// belong to Business; the local Runner remains the only path when RunOn is empty.
+type RunPlacement interface {
+	// Check returns ErrRunNodeUnavailable for a placement refusal; other errors are service outages.
+	Check(ctx context.Context, tenant model.TenantID, node string, principal auth.Principal) error
+	Launch(ctx context.Context, spec LaunchSpec) (Process, error)
+}
 
 // Runner launches a `claude` process and returns a live handle. The default
 // (unwiredRunner) denies; the composition root wires a real one.
@@ -488,6 +520,9 @@ const (
 // determination reads. The workspace flags are derived by the module from the
 // RESOLVED workspace so the gate need not re-read the workspace table.
 type LaunchIntent struct {
+	CostCapMicroUSD int64  `json:",omitempty"`
+	RunDeadlineAt   string `json:",omitempty"`
+
 	// LauncherPrincipal is the authenticated current launch authority, carried
 	// only in memory to the single session credential issuer. A queued launch
 	// rebuilds it from its pinned initiating credential after approval.
@@ -501,6 +536,7 @@ type LaunchIntent struct {
 	Transport      Transport
 	PermissionMode string
 	Model          string
+	RunOn          string `json:",omitempty"`
 	WorkspaceRef   string
 	// FolderPath is the RESOLVED folder the child works in, as the child sees it: the
 	// workspace's real host path for a native run, its mount target in a container, or

@@ -17,7 +17,7 @@ import { render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FEATURE_VIEWS, type FeatureView } from '@/features/registry'
 import type { CapabilityAccess } from '@/lib/auth/capabilities'
-import { APPROVALS_SECTION } from '@/components/layout/shell-destinations'
+import { APPROVALS_SECTION } from '@/components/layout/shell-sections'
 import { useModulesStore } from '@/stores/modules'
 import { useWorkspaceStore } from '@/stores/workspace'
 
@@ -62,10 +62,10 @@ vi.mock('@tanstack/react-router', () => ({
 import {
   authorizedEntries,
   authorizedSections,
-  buildNavSearchIndex,
   visibleAreas,
   type ViewGate,
 } from './model'
+import { buildNavSearchIndex } from './places'
 import i18n from 'i18next'
 import {
   useRouteAccess,

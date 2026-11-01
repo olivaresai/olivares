@@ -12,9 +12,10 @@ its **tamper-evident ledger provably intact**. `olivares dr` is built
 around that requirement — every bundle records per-tenant chain tips, restore
 **fails non-zero if the restored ledger is not continuity-safe**, and
 `dr drill` checks backup-to-restore ledger continuity on a synthetic ledger
-in a scratch directory and prints the measured RTO. It does not check grants,
-key custody or effects after the restore point, and it does not touch a
-production data directory.
+in a scratch directory and prints the measured RTO; with `--scratch-dsn` it
+runs the same round trip on PostgreSQL, in throwaway databases, and prints that
+RTO next to the SQLite one. It does not check grants, key custody or effects
+after the restore point, and it does not touch a production data directory.
 
 The bundle is encrypted under a **KEK you provide** — an Argon2id-derived
 passphrase (`--passphrase-file`) or a raw 32-byte key from your KMS
@@ -61,10 +62,10 @@ the Helm chart a
 [CronJob](/tutorials/getting-started/kubernetes/#4-scheduled-encrypted-backups);
 on bare metal, cron the command above. The figures in the table are
 targets. For the cron tiers, the RPO target is the cron interval. `dr drill`
-measures SQLite RTO on a synthetic ledger (restore, boot and verify). It does
-not measure RPO, and it does not measure a Postgres restore. The measured
-SQLite RTO values, with their event counts and the host they were taken on,
-are in `docs/DR-RUNBOOK.md`; they are not the targets in this table.
+measures the RTO on a synthetic ledger (restore, boot and verify): SQLite
+always, PostgreSQL when you give it `--scratch-dsn`. It does not measure RPO.
+The measured RTO values, with their event counts and the host they were taken
+on, are in `docs/DR-RUNBOOK.md`; they are not the targets in this table.
 
 | Tier | Mechanism | Target RPO | Target RTO |
 |---|---|---|---|
@@ -80,14 +81,24 @@ with its passphrase is not encrypted in any sense that matters.
 
 `dr verify` checks a bundle **without touching your data directory**.
 On SQLite it restores into a scratch directory and verifies ledger continuity,
-and exits non-zero when that check fails. On Postgres it checks the bundle
-digest and that the keys decrypt. Full chain verification for a Postgres
-bundle needs a restore onto a scratch Postgres. Run the check with:
+and exits non-zero when that check fails. On Postgres, give it a scratch
+server with `--scratch-dsn`: it creates a throwaway database with its own
+roles there, restores the bundle into it, verifies the ledger and drops
+both. Run the check with:
 
 ```bash
 olivares dr verify --in /backups/olivares-dr-<ts>.drbundle \
   --passphrase-file <your-dr-passphrase-file>
+
+# Postgres: a maintenance DSN of a server where databases and roles may be created
+olivares dr verify --in /backups/olivares-pg-<ts>.drbundle \
+  --passphrase-file <your-dr-passphrase-file> \
+  --scratch-dsn file:/run/secrets/scratch.dsn
 ```
+
+The DSN is a `file:` or `env:` reference, never an inline credential. Without
+`--scratch-dsn` a Postgres bundle is checked for its digest and that its keys
+decrypt, and the output says the ledger was not restored.
 
 `dr inspect --in <bundle>` prints the manifest (no KEK needed, no secrets
 shown) — what engine, which tenants, which chain tips. Run the drill on the
@@ -108,6 +119,14 @@ non-zero if the chain is not safe. After any restore, re-verify against your
 **off-box** checkpoint pin — a restored older snapshot can pass a naive walk
 yet fail the off-box comparison
 ([troubleshooting § ledger](/how-to/troubleshooting/#the-ledger-fails-verification)).
+
+On Postgres, restoring into a database that already holds an estate is refused
+unless you declare it: `--operator` and `--reason` (recorded in the restored
+ledger) and `--force`. Then the backup's objects replace the database's in a
+single transaction, so the old estate is replaced whole or not at all. Before
+it touches anything it saves a `pg_dump` of the database (through `--admin-dsn`,
+which is required here) beside the previous signing keys, which stay as
+`*.pre-restore-*`; remove them once you are satisfied.
 
 ## The two keys that decide everything
 

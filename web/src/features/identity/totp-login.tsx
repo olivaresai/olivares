@@ -119,6 +119,7 @@ export function SecondFactorPanel({ challenge, onDone, onRestart }: Props) {
                 alt={t('auth:secondFactor.qrAlt')}
                 width={192}
                 height={192}
+                // eslint-disable-next-line olivares/no-raw-palette -- a QR code needs a white quiet zone to scan, in every theme
                 className="rounded border border-border bg-white p-2"
               />
               <div className="flex flex-col gap-2 break-all">

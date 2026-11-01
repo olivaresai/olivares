@@ -15,7 +15,7 @@ import (
 // A profile that asks for the tool's saved login and names no home runs on the
 // tenant's own login of the tool, in the home the product made for it
 // (<tool-logins>/<tenant>/<driver>/.claude, where the console's sign-in runs the
-// tool's login), and with a HOME the product creates for the profile. FH 036: the
+// tool's login), and with a HOME the product creates for the profile. first-hour check: the
 // configuration home used to be the ENGINE USER's own ~/.claude, which handed a
 // vendor login nobody gave the product to every own-login session. Neither home is
 // ever the engine user's.

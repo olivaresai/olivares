@@ -61,8 +61,8 @@ for token in ('/livez', '/readyz', 'install-manifest.json', 'result-json:'):
 
 # The first-boot wait is bounded in three independent places, and the diagnosis
 # it produces on failure comes from the installed binary, never from a response
-# body. Counting 60 attempts of an unbounded request is not a 60-second wait.
-assert 'while [ "$attempts" -lt 60 ]' not in service
+# body. Counting attempts of an unbounded request is not a wall-clock wait, whatever the count.
+assert 'while [ "$attempts" -lt' not in service
 for token in ('FIRST_BOOT_DEADLINE=', 'FIRST_BOOT_MAX_ATTEMPTS=',
               'FIRST_BOOT_DIAGNOSIS_TIMEOUT=',
               '--connect-timeout "$(first_boot_clip "$FIRST_BOOT_CONNECT_TIMEOUT")"',

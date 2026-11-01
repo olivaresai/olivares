@@ -14,7 +14,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// HU-28: adding a provider key follows the deployment's administrative step-up, as adding a
+// acceptance: adding a provider key follows the deployment's administrative step-up, as adding a
 // person does. Under the passkey policy a password-only session is refused with
 // step_up_required and nothing is stored; under the default policy (none) it is added as before.
 func TestAddingAProviderFollowsTheStepUpPolicy(t *testing.T) {

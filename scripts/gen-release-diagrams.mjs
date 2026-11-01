@@ -585,14 +585,14 @@ function editions(t) {
   }
 
   const foot = c.zone({ x: 36, y: 470, w: 1088, h: 128, label: 'HOW YOU GET THE BYTES' })
-  c.text(58, 528, 13, t.ink, 'a subscription is the credential you download signed artifacts with — never a key that', { on: foot })
+  c.text(58, 528, 13, t.ink, 'a subscription downloads signed artifacts; a valid license, checked offline, turns a paid', { on: foot })
   // ⛔ THIS LINE USED TO END "what you did not buy is not in the binary", and the canon says in as
   // many words that today's release assembles ONE artefact carrying all four add-on tags, so the
   // set cut is OFF in the release. That sentence is a claim about the DESIGN which the current
   // publisher does not deliver, and a diagram is the worst place to make one: it outlives the
   // paragraph that would have qualified it. What replaces it is the README's own claim, which is
   // true today and gated — the add-ons are absent from the OPEN binary.
-  c.text(58, 554, 13, t.ink, 'unlocks code already sitting on your disk. the add-ons are absent from the open binary.', { on: foot })
+  c.text(58, 554, 13, t.ink, 'capability on in the business build. the add-ons are absent from the open binary.', { on: foot })
   c.text(58, 580, 11, t.dim, 'self-hosted user accounts are unlimited; the cloud service applies plan quotas', { on: foot })
 
   c.legend(38, 636, KEY)

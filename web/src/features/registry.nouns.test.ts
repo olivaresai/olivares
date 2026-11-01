@@ -58,7 +58,7 @@ describe('the thirteen nouns', () => {
     // finding AND poison the filter, since every noun would then return the evidence
     // surfaces. Named here, the gap is visible and pinned.
     //
-    // Written up in an internal design note (not shipped) The
+    // Written up in an internal audit The
     // thirteen nouns are the MANAGED OBJECTS; these views are about them rather than
     // being them, which is why no noun fits.
     //
@@ -91,6 +91,8 @@ describe('the thirteen nouns', () => {
       'team-costs': 'value',
       dashboards: 'value',
       adoption: 'value',
+      // Usage & cost's lead: each account's limits and what today's sessions used.
+      usage: 'value',
     }
 
     const unnamed = FEATURE_VIEWS.filter((v) => nounsForView(v.id).length === 0)

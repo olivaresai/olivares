@@ -5,6 +5,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import sessions from '@/features/sessions/i18n/en.json'
+import common from '@/lib/i18n/locales/en/common.json'
 import nav from '@/lib/i18n/locales/en/nav.json'
 
 const WEB = join(__dirname, '..')
@@ -24,8 +25,8 @@ const SPEC_DIRS = readdirSync(WEB, { withFileTypes: true })
 
 /** The nav catalogue read the other way round: the address a name is reached at. */
 const NAV_NAME_BY_SEGMENT = nav.items as Record<string, string>
-/** The overview's place in the top bar: the first link a sign-in paints. */
-const ESTATE = nav.shell.journeys.home
+/** The overview's place in the left navigation: the first link a sign-in paints. */
+const ESTATE = nav.places.now
 
 /**
  * THE FIRST LINK A SPEC WAITS FOR AFTER SIGNING IN, AND WHETHER IT CAN BE PAINTED.
@@ -80,12 +81,12 @@ function waitsASignInCannotPaint(file: string, src: string): string[] {
  *    crumb went with the sidebar (#2544); a page's own links still share names with the
  *    places, so the wait stays scoped. Measured on the supported demo run
  *    (#1181): nine cases failed at their sign-in helper. The wait is read inside the
- *    Journeys navigation, as the specs that already passed read it.
+ *    left navigation, as the specs that already passed read it.
  */
-function overviewLinksOutsideJourneys(file: string, src: string): string[] {
-  const label = nav.shell.journeysLabel
+function overviewLinksOutsideNavigation(file: string, src: string): string[] {
+  const label = common.a11y.mainNavigation
   const link = `getByRole('link', { name: '${ESTATE}', exact: true })`
-  const inJourneys = [
+  const inNavigation = [
     `getByRole('navigation', { name: '${label}', exact: true }).`,
     `getByLabel('${label}').`,
   ]
@@ -94,7 +95,7 @@ function overviewLinksOutsideJourneys(file: string, src: string): string[] {
   const found: string[] = []
   for (let at = flat.indexOf(link); at >= 0; at = flat.indexOf(link, at + 1)) {
     const before = flat.slice(0, at)
-    if (!inJourneys.some((scope) => before.endsWith(scope)))
+    if (!inNavigation.some((scope) => before.endsWith(scope)))
       found.push(
         `${file}: ${flat.slice(Math.max(0, at - 60), at + link.length)}`,
       )
@@ -108,7 +109,7 @@ describe('live end-to-end specs name what the console paints', () => {
     const src = spec('sessions-unified.spec.ts').replace(/\s+/g, ' ')
     // The top bar has one Sessions place, and /agentops is its second door: the spec
     // reads the place, which is what the top bar paints for either door.
-    const destination = nav.shell.journeys.sessions
+    const destination = nav.places.sessions
     expect(src).toContain(`getByRole('link', { name: '${destination}'`)
     // The entry lives inside a nav AREA, and a fresh sign-in leaves the console at
     // the root with every area but the active one closed. The spec must reach the
@@ -150,10 +151,10 @@ describe('live end-to-end specs name what the console paints', () => {
     expect(waits).toEqual([])
   })
 
-  it('the shared overview locator names the exact link inside Journeys', () => {
+  it('the shared overview locator names the exact link inside the left navigation', () => {
     const src = spec('browser-session.ts').replace(/\s+\./g, '.')
     expect(src).toContain(
-      `getByRole('navigation', { name: '${nav.shell.journeysLabel}', exact: true }).getByRole('link', { name: '${ESTATE}', exact: true })`,
+      `getByRole('navigation', { name: '${common.a11y.mainNavigation}', exact: true }).getByRole('link', { name: '${ESTATE}', exact: true })`,
     )
   })
 
@@ -200,14 +201,14 @@ describe('live end-to-end specs name what the console paints', () => {
     ])
   })
 
-  it('the overview link is read inside the Journeys navigation, never at page level', () => {
+  it('the overview link is read inside the left navigation, never at page level', () => {
     expect(SPEC_DIRS).toEqual(expect.arrayContaining(['e2e', 'e2e-release']))
     const loose: string[] = []
     for (const dir of SPEC_DIRS) {
       for (const file of readdirSync(join(WEB, dir))) {
         if (!file.endsWith('.spec.ts')) continue
         loose.push(
-          ...overviewLinksOutsideJourneys(
+          ...overviewLinksOutsideNavigation(
             `${dir}/${file}`,
             spec(file, join(WEB, dir)),
           ),
@@ -224,13 +225,13 @@ describe('live end-to-end specs name what the console paints', () => {
       1,
     ],
     [
-      'a link inside the Journeys navigation',
-      "await expect(page.getByRole('navigation', { name: 'Journeys', exact: true }).getByRole('link', { name: 'Now', exact: true })).toBeVisible()",
+      'a link inside the left navigation',
+      "await expect(page.getByRole('navigation', { name: 'Main navigation', exact: true }).getByRole('link', { name: 'Now', exact: true })).toBeVisible()",
       0,
     ],
     [
-      'a wrapped chain inside the Journeys label',
-      "page\n  .getByLabel('Journeys')\n  .getByRole('link', { name: 'Now', exact: true })",
+      'a wrapped chain inside the left navigation label',
+      "page\n  .getByLabel('Main navigation')\n  .getByRole('link', { name: 'Now', exact: true })",
       0,
     ],
     [
@@ -239,7 +240,7 @@ describe('live end-to-end specs name what the console paints', () => {
       1,
     ],
   ])('classifies %s', (_name, src, loose) => {
-    expect(overviewLinksOutsideJourneys('probe.spec.ts', src)).toHaveLength(
+    expect(overviewLinksOutsideNavigation('probe.spec.ts', src)).toHaveLength(
       loose,
     )
   })

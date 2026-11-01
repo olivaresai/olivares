@@ -23,8 +23,8 @@ func TestCredentials_ASuccessThatNamesNoHelperStartsNothing(t *testing.T) {
 	ctx := context.Background()
 	m, tenant, fr, broker := credentialHarness(t)
 	broker.noEnv = true
-	if _, err := createProfiledTestRun(t, m, ctx, tenant, credentialParams(true)); statusOf(err) != http.StatusServiceUnavailable {
-		t.Fatalf("a broker that located no helper: create = %v, want 503", err)
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, credentialParams(true)); statusOf(err) != http.StatusUnprocessableEntity {
+		t.Fatalf("a broker that located no helper: create = %v, want 422", err)
 	}
 	broker.awaitRelease(t)
 	if got := launchCount(fr); got != 0 {
@@ -69,8 +69,8 @@ func TestCredentials_ABrokerMayGrantOnlyAbsoluteCleanReadPaths(t *testing.T) {
 			t.Parallel()
 			m, tenant, fr, broker := credentialHarness(t)
 			broker.read = []string{path}
-			if _, err := createProfiledTestRun(t, m, ctx, tenant, credentialParams(true)); statusOf(err) != http.StatusServiceUnavailable {
-				t.Fatalf("a broker that granted read of %q: create = %v, want 503", path, err)
+			if _, err := createProfiledTestRun(t, m, ctx, tenant, credentialParams(true)); statusOf(err) != http.StatusUnprocessableEntity {
+				t.Fatalf("a broker that granted read of %q: create = %v, want 422", path, err)
 			}
 			broker.awaitRelease(t)
 			if got := launchCount(fr); got != 0 {

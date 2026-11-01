@@ -47,7 +47,7 @@ const defaultLeaderPoll = 2 * time.Second
 // context.Background() — and the fast-handoff contract (store.LeaderElector)
 // cannot be honored by a resignation that waits indefinitely behind a wedged
 // fence read on an alive-but-stuck server. Found by the 2026-07-26 fence-fix
-// audit (an internal design note (not shipped)).
+// audit (an internal audit).
 const resignDeadline = 5 * time.Second
 
 // errLockSessionTerminationFailed marks the ONE failure a resignation must not
@@ -477,7 +477,7 @@ type pgLockBackend struct {
 
 	// kill is the SERVER-side identity of the held lock session, captured at
 	// acquisition: the backend PID and pgx's protocol cancel handle. Round-3
-	// audit (an internal design note (not shipped)):
+	// audit (an internal audit):
 	// closing the client socket does NOT bound server-side termination — with
 	// client_connection_check_interval at its default 0, a backend blocked in
 	// a query notices the dead socket only at its next socket interaction,

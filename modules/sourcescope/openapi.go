@@ -42,6 +42,10 @@ func sourceScopeRequestBodyDeclarationFor(method, pattern string) (sourceScopeRe
 		return sourceScopeBodyDeclaration(sourceScopeBindingSchema(true)), true
 	case http.MethodPut + " /bindings/{id}":
 		return sourceScopeBodyDeclaration(sourceScopeBindingSchema(false)), true
+	case http.MethodPost + " /access-requests":
+		return sourceScopeBodyDeclaration(sourceScopeAccessRequestSchema()), true
+	case http.MethodPost + " /access-requests/{id}/approve":
+		return sourceScopeRequestBodyDeclaration{kind: sourceScopeBodyless}, true
 	case http.MethodPost + " /sources/disable-scoping":
 		return sourceScopeBodyDeclaration(sourceScopeDisableScopingSchema()), true
 	case http.MethodPut + " /guard-postures":
@@ -57,6 +61,7 @@ func sourceScopeRequestBodyDeclarationFor(method, pattern string) (sourceScopeRe
 	case http.MethodDelete + " /bindings/{id}",
 		http.MethodPost + " /posture-requests/{id}/approve",
 		http.MethodPost + " /posture-requests/{id}/reject",
+		http.MethodPost + " /expiry/sweep",
 		http.MethodDelete + " /assignments/{id}",
 		http.MethodDelete + " /workspace-connectors/{id}":
 		return sourceScopeRequestBodyDeclaration{kind: sourceScopeBodyless}, true
@@ -90,7 +95,7 @@ func sourceScopeBindingSchema(create bool) map[string]any {
 		"id", sourceScopeOptionalString("Accepted by the DTO but ignored on input; identity comes from the store."),
 		"source_type", oas.Obj(
 			"type", "string",
-			"description", "Case-insensitive after trimming: mcp, model, provider, knowledge, data, profile, or tool. On update the stored value wins.",
+			"description", "Case-insensitive after trimming: mcp, model, provider, knowledge, data, profile, tool, instructions, or template. On update the stored value wins.",
 		),
 		"source_ref", oas.Obj("type", "string", "description", "After trimming it must be non-empty. On update the stored value wins."),
 		"scope_tree", oas.Obj(
@@ -99,6 +104,7 @@ func sourceScopeBindingSchema(create bool) map[string]any {
 		),
 		"scope_ref", sourceScopeOptionalString("Required for every scope_tree except workspace; a blank workspace ref selects the default workspace."),
 		"effect", sourceScopeOptionalString("Case-insensitive after trimming. Empty defaults to allow; otherwise allow or forbid."),
+		"expires_at", sourceScopeOptionalString("Optional RFC3339 expiry; null or omitted preserves a grant that never expires."),
 		"folder_path", sourceScopeOptionalString("Output-only projection accepted by the DTO but ignored; the store resolves it from scope_ref."),
 		"cred_name", sourceScopeOptionalString("Credential-reference tuple. When any tuple field is non-empty, name, ref_kind, and ref are all required."),
 		"cred_ref_kind", sourceScopeOptionalString("Case-insensitive after trimming: env, vault, secret_manager, file, or other."),
@@ -115,11 +121,21 @@ func sourceScopeBindingSchema(create bool) map[string]any {
 	return sourceScopeClosedObject(properties, "scope_tree")
 }
 
+func sourceScopeAccessRequestSchema() map[string]any {
+	return sourceScopeClosedObject(oas.Obj(
+		"source_type", oas.Obj("type", "string", "description", "The refused source type."),
+		"source_ref", oas.Obj("type", "string", "description", "The refused source reference."),
+		"workspace_ref", oas.Obj("type", "string", "description", "The workspace whose department admin or owner may approve."),
+		"expires_at", sourceScopeOptionalString("Optional RFC3339 expiry; tenant default and maximum apply."),
+		"note", sourceScopeOptionalString("Optional bounded reason."),
+	), "source_type", "source_ref")
+}
+
 func sourceScopeDisableScopingSchema() map[string]any {
 	return sourceScopeClosedObject(oas.Obj(
 		"source_type", oas.Obj(
 			"type", "string",
-			"description", "Case-insensitive after trimming: mcp, model, provider, knowledge, data, profile, or tool.",
+			"description", "Case-insensitive after trimming: mcp, model, provider, knowledge, data, profile, tool, instructions, or template.",
 		),
 		"source_ref", oas.Obj("type", "string", "description", "After trimming it must be non-empty."),
 	), "source_type", "source_ref")

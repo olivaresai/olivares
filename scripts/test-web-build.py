@@ -222,13 +222,16 @@ class WebConsumerTests(unittest.TestCase):
         command = re.search(r'^        run: (.+)$', first_step, re.M)
         self.assertIsNotNone(command, "check the producer result before checkout or download")
         self.assertIn('${{ needs.pr-web.result }}', command[1])
-        for result in ['success', 'failure', 'cancelled', 'skipped', '']:
-            with self.subTest(producer_result=result):
-                script = command[1].replace('${{ needs.pr-web.result }}', result)
-                run = subprocess.run(['bash', '-euo', 'pipefail', '-c', script],
-                                     capture_output=True, text=True, timeout=5)
-                self.assertEqual(run.returncode, 0 if result == 'success' else 1,
-                                 run.stdout + run.stderr)
+        self.assertIn('${{ needs.pr-lint.result }}', command[1])
+        for web in ['success', 'failure', 'cancelled', 'skipped', '']:
+            for lint in ['success', 'failure', 'cancelled', 'skipped', '']:
+                with self.subTest(web=web, lint=lint):
+                    script = command[1].replace('${{ needs.pr-web.result }}', web)
+                    script = script.replace('${{ needs.pr-lint.result }}', lint)
+                    run = subprocess.run(['bash', '-euo', 'pipefail', '-c', script],
+                                         capture_output=True, text=True, timeout=5)
+                    self.assertEqual(run.returncode, 0 if web == lint == 'success' else 1,
+                                     run.stdout + run.stderr)
 
     def test_docker_web_stages_need_only_tracked_source(self):
         # A local generated index can conceal a broken clean Docker context.

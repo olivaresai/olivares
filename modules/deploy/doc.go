@@ -11,7 +11,7 @@
 // agent uses to reach a resource.
 //
 // Because it mutates, the security bar is the highest in the product (alongside
-//). Every operation that mutates infrastructure is governed: it passes
+// ). Every operation that mutates infrastructure is governed: it passes
 // through the human-in-the-loop (HITL) approval gate of (deny-by-default
 // when no approval / an expired approval is present), runs plan/dry-run before
 // apply, acts with least privilege and no default credentials (docs/SECURITY-HARDENING.md,§4),

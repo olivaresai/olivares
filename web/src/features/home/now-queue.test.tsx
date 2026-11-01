@@ -423,7 +423,7 @@ describe('NowQueue — what needs a person', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
-  // dev#3268: while the decision is sent, Approve once shows it is working.
+  // the regression: while the decision is sent, Approve once shows it is working.
   it('shows Approve once working while the decision is sent', async () => {
     vi.spyOn(governanceApi, 'getPolicy').mockResolvedValue({
       id: 'pol-migrations',
@@ -659,5 +659,285 @@ describe('NowQueue — what needs a person', () => {
     expect(screen.queryByRole('button', { name: 'Approve once' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Deny' })).toBeNull()
     expect(screen.getByTestId('now-approval-row')).toHaveTextContent('1 of 2')
+  })
+})
+describe('NowQueue — the person’s marks on a run take a session out (#2901)', () => {
+  const needsPerson = {
+    code: 'repeated_policy_denials',
+    consecutive_denials: 3,
+    total_denials: 3,
+    reasons: ['Bash'],
+  }
+  const run = (over: Record<string, unknown>) =>
+    ({
+      run_ref: 'r',
+      state: 'running',
+      claude_session_id: 'sess-x',
+      needs_person: needsPerson,
+      ...over,
+    }) as never
+
+  it('leaves out a session the person archived, snoozed, marked done or sent to an approval, and counts what is left', async () => {
+    renderIntel(
+      <Queue
+        state="ready"
+        sessions={[
+          live({
+            session_ref: 'sess-archived',
+            live_ref: 'l-ar',
+            cc_state: 'silent_evasion',
+            goal: 'archived one',
+          }),
+          live({
+            session_ref: 'sess-snoozed',
+            live_ref: 'l-s',
+            cc_state: 'silent_evasion',
+            goal: 'snoozed one',
+          }),
+          live({
+            session_ref: 'sess-done',
+            live_ref: 'l-d',
+            cc_state: 'silent_evasion',
+            goal: 'done one',
+          }),
+          live({
+            session_ref: 'sess-needs',
+            live_ref: 'l-n',
+            cc_state: 'silent_evasion',
+            goal: 'still needs me',
+          }),
+          live({
+            session_ref: 'sess-approval',
+            live_ref: 'l-a',
+            cc_state: 'active',
+            goal: 'waits on approval',
+          }),
+        ]}
+        runs={[
+          run({
+            run_ref: 'r-ar',
+            claude_session_id: 'sess-archived',
+            archived_at: '2026-10-20T09:00:00Z',
+          }),
+          run({
+            run_ref: 'r-s',
+            claude_session_id: 'sess-snoozed',
+            snoozed_until: '2030-01-02T09:00:00Z',
+          }),
+          run({ run_ref: 'r-d', claude_session_id: 'sess-done', done: true }),
+          run({
+            run_ref: 'r-a',
+            claude_session_id: 'sess-approval',
+            state: 'waiting_approval',
+            approval_ref: 'ap-9',
+            needs_person: undefined,
+          }),
+          // A run the page does not hold is not a row Now lists today.
+          run({
+            run_ref: 'r-p',
+            claude_session_id: 'sess-not-on-page',
+            state: 'pending',
+            needs_person: undefined,
+          }),
+        ]}
+        approvals={[
+          {
+            id: 'ap-9',
+            action: 'sessions.provider.approval',
+            subject_kind: 'session_run',
+            subject_ref: 'r-a',
+            requested_by: 'user:ada',
+            status: 'pending',
+            required_approvals: 1,
+            approve_count: 0,
+            reject_count: 0,
+            escalated: false,
+          },
+        ]}
+      />,
+    )
+    // The one listed approval is the flagged card, not a second session row.
+    await screen.findByTestId('now-flagged-request')
+    const rows = screen.getAllByTestId('now-needs-row')
+    expect(rows.map((r) => r.textContent)).toEqual([
+      expect.stringContaining('still needs me'),
+    ])
+    expect(screen.queryByText('waits on approval')).toBeNull()
+    // The count is what the section lists: one session and one approval.
+    expect(
+      within(screen.getByTestId('now-needs')).getByText('2'),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps a session waiting on an approval the queue does not list, so it is not lost', () => {
+    renderIntel(
+      <Queue
+        state="ready"
+        sessions={[
+          live({
+            session_ref: 'sess-gone',
+            live_ref: 'l-g',
+            cc_state: 'active',
+            goal: 'approval not listed',
+          }),
+        ]}
+        runs={[
+          run({
+            run_ref: 'r-g',
+            claude_session_id: 'sess-gone',
+            state: 'waiting_approval',
+            approval_ref: 'ap-not-listed',
+            needs_person: undefined,
+          }),
+        ]}
+        approvals={[]}
+      />,
+    )
+    expect(screen.getAllByTestId('now-needs-row')).toHaveLength(1)
+    expect(screen.getByTestId('now-needs-row')).toHaveTextContent(
+      'approval not listed',
+    )
+  })
+
+  it('shows a session that needs the person even after eight rows that are not its own', async () => {
+    // Eight sessions wait on approvals the queue lists: their rows are the approval rows.
+    const waiting = Array.from({ length: 8 }, (_, i) => i + 1)
+    renderIntel(
+      <Queue
+        state="ready"
+        sessions={[
+          ...waiting.map((i) =>
+            live({
+              session_ref: `sess-ap-${i}`,
+              live_ref: `l-ap-${i}`,
+              cc_state: 'active',
+            }),
+          ),
+          live({
+            session_ref: 'sess-needs',
+            live_ref: 'l-needs',
+            cc_state: 'silent_evasion',
+            goal: 'still needs me after the cap',
+          }),
+        ]}
+        runs={waiting.map((i) =>
+          run({
+            run_ref: `r-ap-${i}`,
+            claude_session_id: `sess-ap-${i}`,
+            state: 'waiting_approval',
+            approval_ref: `ap-${i}`,
+            needs_person: undefined,
+          }),
+        )}
+        approvals={waiting.map((i) => ({
+          id: `ap-${i}`,
+          action: 'deploy.promote',
+          requested_by: 'user:ada',
+          status: 'pending',
+          required_approvals: 1,
+          approve_count: 0,
+          reject_count: 0,
+          escalated: false,
+        }))}
+      />,
+    )
+    // One approval leads as the flagged card; the other seven are quiet rows.
+    await screen.findByTestId('now-flagged-request')
+    expect(screen.getAllByTestId('now-approval-row')).toHaveLength(7)
+    expect(screen.getByTestId('now-needs-row')).toHaveTextContent(
+      'still needs me after the cap',
+    )
+  })
+
+  it.each([
+    [
+      'may not read approvals',
+      () => {
+        auth.can = (p) => p !== 'governance:approval:read'
+      },
+    ],
+    [
+      'cannot open the Permissions view',
+      () => {
+        auth.can = (p) => p !== 'governance:identity:read'
+      },
+    ],
+  ])(
+    'opens a waiting session on /sessions for a principal who %s',
+    (_, deny) => {
+      deny()
+      renderIntel(
+        <Queue
+          state="ready"
+          sessions={[
+            live({
+              session_ref: 'sess-g',
+              live_ref: 'l-g',
+              cc_state: 'active',
+              goal: 'waits on an approval I cannot open',
+            }),
+          ]}
+          runs={[
+            run({
+              run_ref: 'r-g',
+              claude_session_id: 'sess-g',
+              state: 'waiting_approval',
+              approval_ref: 'ap-1',
+              needs_person: undefined,
+            }),
+          ]}
+        />,
+      )
+      expect(screen.getByTestId('now-needs-row').getAttribute('href')).toMatch(
+        /^\/sessions\?/,
+      )
+    },
+  )
+
+  it('keeps a session whose live row is an echo of a run, as the rail and the top bar do', () => {
+    renderIntel(
+      <Queue
+        state="ready"
+        sessions={[
+          live({
+            session_ref: 'r-e',
+            live_ref: 'l-e',
+            cc_state: 'silent_evasion',
+            goal: 'echo of a run',
+          }),
+        ]}
+        runs={[run({ run_ref: 'r-e', claude_session_id: 'sess-other' })]}
+      />,
+    )
+    expect(screen.getAllByTestId('now-needs-row')).toHaveLength(1)
+    expect(screen.getByTestId('now-needs-row').getAttribute('href')).toMatch(
+      /^\/sessions\?/,
+    )
+    expect(
+      within(screen.getByTestId('now-needs')).getByText('1'),
+    ).toBeInTheDocument()
+  })
+})
+
+describe('NowQueue — the state vocabulary', () => {
+  it('says each row as the Sessions list does: the mark, the word and its age', () => {
+    renderIntel(
+      <Queue
+        state="ready"
+        sessions={[
+          live({
+            session_ref: 's-silent',
+            live_ref: 'l2',
+            cc_state: 'silent_evasion',
+            goal: 'gone quiet',
+          }),
+        ]}
+      />,
+    )
+    const row = screen.getByTestId('now-needs-row')
+    const status = within(row).getByTestId('now-needs-row-status')
+    expect(status).toHaveAttribute('data-status', 'needs-you')
+    expect(status).toHaveTextContent(/^Needs you \d+[mhd]$/)
+    expect(row).toHaveAccessibleName(/Needs you/)
   })
 })

@@ -240,7 +240,8 @@ type codexRequestScope struct {
 
 // codexApprovalCodec is one method's complete answer contract.
 type codexApprovalCodec struct {
-	kind string
+	kind                string
+	sessionScopeAllowed bool
 	// scope extracts the conversation and (when the method carries one) the turn.
 	scope func(json.RawMessage) codexRequestScope
 	// tokens lists what the provider asked for (permissions only; nil elsewhere).
@@ -320,8 +321,9 @@ const codexRefusalReason = "denied by the Olivares session policy for this run"
 // protocol ERROR: never a hang, and never an approval.
 var codexApprovalCodecs = map[string]codexApprovalCodec{
 	codexReqCommandApproval: {
-		kind:  codexKindCommand,
-		scope: codexScopeThreadTurn,
+		sessionScopeAllowed: true,
+		kind:                codexKindCommand,
+		scope:               codexScopeThreadTurn,
 		grant: func(_ json.RawMessage, dec ProviderApprovalDecision) any {
 			// `acceptForSession` is a PERSISTENT grant and needs the authority to have
 			// asked for session scope; the execpolicy/network amendment objects are
@@ -336,8 +338,9 @@ var codexApprovalCodecs = map[string]codexApprovalCodec{
 		timeout: func() any { return codexDecisionReply{Decision: "decline"} },
 	},
 	codexReqFileChangeApproval: {
-		kind:  codexKindFileChange,
-		scope: codexScopeThreadTurn,
+		sessionScopeAllowed: true,
+		kind:                codexKindFileChange,
+		scope:               codexScopeThreadTurn,
 		grant: func(_ json.RawMessage, dec ProviderApprovalDecision) any {
 			if dec.SessionScope {
 				return codexDecisionReply{Decision: "acceptForSession"}
@@ -349,8 +352,9 @@ var codexApprovalCodecs = map[string]codexApprovalCodec{
 		timeout: func() any { return codexDecisionReply{Decision: "decline"} },
 	},
 	codexReqPermissionsApproval: {
-		kind:  codexKindPermissions,
-		scope: codexScopeThreadTurn,
+		sessionScopeAllowed: true,
+		kind:                codexKindPermissions,
+		scope:               codexScopeThreadTurn,
 		tokens: func(params json.RawMessage) []string {
 			var p struct {
 				Permissions codexPermissionProfile `json:"permissions"`
@@ -376,8 +380,9 @@ var codexApprovalCodecs = map[string]codexApprovalCodec{
 		timeout: codexNoGrant,
 	},
 	codexReqLegacyExecApproval: {
-		kind:  codexKindLegacyExec,
-		scope: codexScopeLegacy,
+		sessionScopeAllowed: true,
+		kind:                codexKindLegacyExec,
+		scope:               codexScopeLegacy,
 		grant: func(_ json.RawMessage, dec ProviderApprovalDecision) any {
 			if dec.SessionScope {
 				return codexDecisionReply{Decision: "approved_for_session"}
@@ -391,8 +396,9 @@ var codexApprovalCodecs = map[string]codexApprovalCodec{
 		timeout: func() any { return codexDecisionReply{Decision: "timed_out"} },
 	},
 	codexReqLegacyPatchApproval: {
-		kind:  codexKindLegacyPatch,
-		scope: codexScopeLegacy,
+		sessionScopeAllowed: true,
+		kind:                codexKindLegacyPatch,
+		scope:               codexScopeLegacy,
 		grant: func(_ json.RawMessage, dec ProviderApprovalDecision) any {
 			if dec.SessionScope {
 				return codexDecisionReply{Decision: "approved_for_session"}
@@ -542,7 +548,8 @@ func (s *codexSession) resolveServerRequest(req *codexServerRequest, key string,
 			// cannot see the turn cannot scope its decision to it.
 			ConversationID: thread, TurnID: boundTurn,
 			Method: req.method, Kind: req.codec.kind, Requested: tokens,
-			CommandLine: facts.CommandLine, FilePaths: facts.FilePaths, FactsComplete: facts.Complete,
+			SessionScopeAllowed: req.codec.sessionScopeAllowed,
+			CommandLine:         facts.CommandLine, FilePaths: facts.FilePaths, FactsComplete: facts.Complete,
 			EffectiveCommandLine: facts.EffectiveCommandLine, EffectiveFilePaths: facts.EffectiveFilePaths,
 		})
 		if err != nil {

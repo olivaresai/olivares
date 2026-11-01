@@ -130,9 +130,9 @@ const (
 // A leg that FORGOT to declare its major is a real gap and it is the JOB's to close,
 // not the harness's: the harness has no way to tell a CI leg from a developer running
 // the same matrix locally, and CI-detection variables are set by mainline-ci too. The
-// spec already states the closing condition as four PG_MAJOR_ASSERTED receipts (§5.4);
-// scripts/pg-majors-evaluate.py consumes only PG_MAJOR_DSN_VERIFIED today, which is
-// another tool's file and a proposal rather than a change made here.
+// spec already states the closing condition as four PG_MAJOR_ASSERTED receipts (§5.4),
+// and scripts/pg-majors-evaluate.py now requires one per leg in the ABI emitted below,
+// rejecting a receipt that names a different server than the leg declares.
 func classifyMajorClaim(expectMajor string) majorClaim {
 	if strings.TrimSpace(expectMajor) != "" {
 		return majorClaimDeclared

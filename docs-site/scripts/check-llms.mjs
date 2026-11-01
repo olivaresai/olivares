@@ -52,7 +52,7 @@ const FACTS = here('../../core/driverfacts/facts.go')
 const DOCS = here('../src/content/docs')
 const OTHER_TREES = new Set([...PUBLISHED_LOCALES, ...ARCHIVED_SLUGS])
 // Tools that are not shipped as sessions: planned ones, and ones only observed through connectors.
-const NOT_SHIPPED = /\b(Cursor|Antigravity|OpenHands|goose|Cline|Windsurf)\b/g
+const NOT_SHIPPED = /\b(Antigravity|OpenHands|goose|Cline|Windsurf)\b/g
 const FENCE = /^[\s>]*(`{3,}|~{3,})/
 // What must not survive in the prose of llms-full.txt.
 const LEAKS = [
@@ -315,7 +315,7 @@ if (process.argv.includes('--self-test')) {
     ['with a page on the wrong host', { llms: real.llms.replace(firstPage, firstPage.replace('docs.olivares.ai', 'docs.olivares.com')) }],
     ['with two sections swapped', { llms: real.llms.replace('## Tutorials', '## @@').replace('## How-to guides', '## Tutorials').replace('## @@', '## How-to guides') }],
     ['with two pages out of order', { llms: real.llms.replace(`${pageLines[0]}\n${pageLines[1]}`, `${pageLines[1]}\n${pageLines[0]}`) }],
-    ['with an unshipped tool in the summary', { llms: real.llms.replace('Claude Code,', 'Cursor, Claude Code,') }],
+    ['with an unshipped tool in the summary', { llms: real.llms.replace('Claude Code,', 'Antigravity, Claude Code,') }],
     ['with a list line that has no description', { llms: real.llms.replace(pageLines[0], pageLines[0].replace(/\):.*$/, ')')) }],
     ['with an invalid date', { llms: real.llms.replace(/^Last updated: .*$/m, 'Last updated: 18/10/2026') }],
     ['with a tool list that differs from facts.go', { factsTools: real.factsTools.slice(1) }],

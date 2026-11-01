@@ -41,6 +41,7 @@
   "retryIn": "Try again in {{seconds}} s.",
   "signIn": "Sign in to compare.",
   "diffLabel": "Unified diff of {{path}}",
+  "diffLabelRich": "Unified diff of <path />",
   "colOld": "Old",
   "colNew": "New",
   "colChange": "Change",

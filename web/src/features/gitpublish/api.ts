@@ -20,6 +20,8 @@ import type {
   PublicationTarget,
   PullRequestInput,
   PushInput,
+  ShipInput,
+  ShipResult,
   UpdateTargetInput,
 } from './types'
 
@@ -58,6 +60,10 @@ export const gitpublishApi = {
       body,
       request,
     ),
+  // A ship answers 200 shipped, or 202 while a second person has to approve it or a step has
+  // not settled.
+  ship: (targetId: string, body: ShipInput, request: TenantRequestOptions) =>
+    http.post<ShipResult>(`${targetPath(targetId)}/ships`, body, request),
   merge: (targetId: string, body: MergeInput, request: TenantRequestOptions) =>
     http.post<PublicationIntent>(
       `${targetPath(targetId)}/merges`,

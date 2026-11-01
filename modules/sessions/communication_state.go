@@ -427,6 +427,8 @@ func CanonicalPrincipalRecipient(principal CommunicationPrincipal) (recipient Re
 		return RecipientRef{}, false
 	}
 	switch {
+	case principal.System:
+		return RecipientRef{Kind: RecipientAgent, Ref: principal.SystemGrantAgentID.String()}, true
 	case principal.UserID != "":
 		return RecipientRef{Kind: RecipientUser, Ref: principal.UserID.String()}, true
 	case principal.SessionID != "":

@@ -4,7 +4,8 @@
 import { useTranslation } from 'react-i18next'
 import { Badge, type BadgeVariant } from '@/components/ui/badge'
 import { CodeLine } from '@/components/ui/code-line'
-import { toolName } from '@/features/agentops/tool-names'
+import { PathText } from '@/components/ui/path-text'
+import { toolName } from '@/features/agentops/engine-tools'
 import { ConsumptionBar } from '@/features/_intel/consumption'
 import { formatDateTime, formatRelativeTime } from '@/lib/format'
 import type { ProviderSnapshot } from './api'
@@ -43,9 +44,7 @@ export function ProviderDetails({ snap }: { snap: ProviderSnapshot }) {
           )}
         </div>
         {snap.config_dir && (
-          <p className="break-all font-mono text-xs text-muted-foreground">
-            {snap.config_dir}
-          </p>
+          <PathText value={snap.config_dir} tone="muted" size="small" />
         )}
       </div>
       {snap.state === 'ready' && (

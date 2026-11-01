@@ -12,13 +12,7 @@ description: >-
 本页是控制台的地图。它列出**应用挂载的每条路由**——不是选集，也不是某人记得
 写下的那些——以及主体进入路由所需的权限和更多信息所在的位置。
 
-控制台只有**一个导航结构：带分区的九个区域**。每个屏幕都位于一个区域及其中的一个
-分区，所有显示屏幕位置的地方都指向同一处：“所有区域”（账户菜单和命令面板中，手机上为
-“更多”）、区域目录页、命令面板，以及屏幕上方的链接行——它列出同一分区的其他屏幕。
-顶部栏列出五个位置，首要工作在前（主页、会话、工具、规则、账本；Business 另加
-组织），一个位置在其分区的其他屏幕上也保持选中标记。“所有区域”以两级列出每个区域及其屏幕，不重复顶部栏已显示的位置。导航过滤会把分组树替换成已授权匹配项的排序列表；命令面板使用同一索引、
-同一排序和同一权限投影。区域目录是链接页——列出你的权限允许的条目——不是能力、
-可用性或就绪状态的实时读数。
+控制台只有**一个导航：左侧边栏**。它把各个位置分为四组（**工作**（主页、会话、文件与工作区、工作与沟通）、**工具**（AI 工具、模型、MCP 与技能、来源）、**控制**（规则与审批、用量与成本、活动与审计、访问映射）、**管理**（人员与组、安全、运维、许可证）），设置位于底部。每个屏幕都属于一个位置，屏幕上方的链接行列出该位置的其他屏幕。只有当你的权限至少允许其中一个屏幕时，位置才会出现；Business 屏幕只在 Business 版本中出现。侧边栏可以收起为图标并重新展开；在窄屏上，同一个侧边栏通过菜单按钮以抽屉形式打开。顶栏包含页面标题、搜索（⌘K 或 Ctrl+K）、通知和账户菜单。命令面板用相同的权限搜索相同的屏幕。原区域目录地址（`/areas/…`）会打开现在包含其屏幕的位置，并保留查询和片段。
 
 新安装只列出首要工作：主页、会话、AI 工具、审批、配置向导和设置。其他屏幕在新安装中
 属于预览：其地址、API 和 CLI 照常可用，但导航、命令面板和快捷键不会列出它们。升级前已存在的
@@ -29,8 +23,8 @@ description: >-
 清单，`registry.route-conservation.test.ts` 会将它与构建后的路由器固定比对，因此
 任何屏幕的新增、移动或丢失都会引起本页变化。每个屏幕的名称和单行描述都是
 **控制台自己的字符串**，来自控制台使用的同一翻译目录，所以你在这里读到的就是
-在产品中看到的内容。下面的表格按区域分组这些行：主页（概览）在前，登录、设置和账户在后。九个区域
-目录页与功能注册表之外挂载的路由列在同一张表中。
+在产品中看到的内容。下面的表格按区域分组这些行：主页（概览）在前，登录、设置和账户在后。九个原区域
+目录地址与功能注册表之外挂载的路由列在同一张表中，现在各自重定向到所属位置。
 
 :::note[权限由引擎强制实施，而不是由此表实施]
 `需要`列说明控制台在提供路由前，根据引擎返回的有效权限检查哪些权限。
@@ -40,19 +34,19 @@ description: >-
 
 ## 如何阅读本页
 
-- **屏幕**——“所有区域”、区域目录和命令面板使用的名称。
+- **屏幕**——屏幕上方链接行和命令面板使用的名称。
 - **路径**——相对于部署控制台 origin 的 URL。它是已发布契约：书签、runbook
   深层链接和文档交叉引用都使用这段字符串。
 - **需要**——RBAC 权限。`任何已登录用户`表示路由向所有已认证主体开放；
   **无需登录**表示它在建立任何会话前即可提供。
 - **参考**——控制台为该屏幕提供的帮助链接所打开的页面。
 
-下面的标题就是各个区域，顺序与“所有区域”一致：基础设施、AI、数据与上下文、
+下面的标题是路由清单用来分组屏幕的注册表区域：基础设施、AI、数据与上下文、
 工作与通信、自动化、安全与身份、交付、监督，然后是系统与设置。
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-控制台发布 **74 条路由**。以下表格列出了每一条路由、所需权限，以及产品内帮助链接
+控制台发布 **66 条路由**。以下表格列出了每一条路由、所需权限，以及产品内帮助链接
 打开的参考页面。
 
 ### 主页
@@ -75,9 +69,8 @@ description: >-
 |---|---|---|---|---|
 | 智能体工具 | `/agent-tools` | 查看会话所用的账户和 API 密钥；安装工具并登录仅限部署管理员 | `sessions:account:read` | [how-to/add-a-provider](/zh/how-to/add-a-provider/) |
 | 运营会话 | `/agentops` | 启动会话并跟踪每个会话的工作，包括 Olivares 发现的会话 | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/zh/how-to/run-claude-code-with-olivares/) |
-| MCP 服务器 | `/mcp-servers` | 将远程 MCP 服务器连接到此组织，测试它们，并选择会话可以使用哪些工具 | `tenant:admin` | [how-to/connectors/mcp-governance](/zh/how-to/connectors/mcp-governance/) |
 | 模型运维 | `/model-operations` | 自有模型、准入和部署 | `models:registry:read` | [reference/modules/xxiii-model-operations](/zh/reference/modules/xxiii-model-operations/) |
-| 模型 | `/models` | 模型、路由和提供商密钥 | `models:catalog:read` | [reference/modules/x-models](/zh/reference/modules/x-models/) |
+| 模型 | `/models` | 模型、路由与治理 | `models:catalog:read` | [reference/modules/x-models](/zh/reference/modules/x-models/) |
 | 平台 | `/platforms` | 部署表面、合规矩阵和各平台模型生命周期 | `models:platforms:read` | [reference/modules/x-models](/zh/reference/modules/x-models/) |
 | 提供商账户 | `/provider-accounts` | 列出已命名的提供商账户，并将现有提供商配置文件采纳为账户 | `sessions:account:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 来源绑定 | `/provider-bindings` | 将已配置的来源关联到提供商配置文件 | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
@@ -98,7 +91,6 @@ description: >-
 | MCP 与技能 | `/capabilities` | 治理 MCP 服务器、技能和工具 | `capabilities:catalog:read` | [reference/modules/v-capabilities](/zh/reference/modules/v-capabilities/) |
 | 目录 | `/catalog` | 策展并获批准的 Agent 和能力 | `catalog:entry:read` | [reference/modules/xiv-catalog](/zh/reference/modules/xiv-catalog/) |
 | 知识 | `/knowledge` | 知识库、RAG 和数据沿袭 | `knowledge:kb:read` | [reference/modules/viii-knowledge](/zh/reference/modules/viii-knowledge/) |
-| 技能目录 | `/skills` | 浏览技能包并分配给部门、agent 组和 agent | `skills:catalog:read` | [reference/console](/zh/reference/console/) |
 
 ### 工作与通信
 
@@ -153,6 +145,7 @@ description: >-
 | 可观测性 | `/observability` | 按标准查看摄取健康状况和追踪下钻 | `health:status:read` | [reference/modules/observability](/zh/reference/modules/observability/) |
 | 保留策略 | `/retention` | 每类记录的保留期限、执行保留的清理以及已封存的证书 | `compliance:retention:read` | [reference/modules/xiii-compliance](/zh/reference/modules/xiii-compliance/) |
 | 预算 | `/stored-budgets` | 针对每个已保存限额的消耗情况。预留容量计入限额。 | `finops:budget:read` | [reference/modules/xi-finops](/zh/reference/modules/xi-finops/) |
+| 用量 | `/usage` | 每个账户的官方 5 小时和每周限额（最接近限额的在前），以及今天的令牌和费用。 | `sessions:run:read` | [reference/console](/zh/reference/console/) |
 
 ### 系统与设置
 
@@ -164,6 +157,7 @@ description: >-
 | 源差异 | `/console/sources/diff` | 逐个文件比较已连接 Git 仓库的基准修订与 head 修订 | `system:admin` | [reference/console](/zh/reference/console/) |
 | 日志 | `/logs` | 实时引擎日志流，可按级别和模块过滤，并支持搜索和暂停。 | `system:admin` | [how-to/troubleshooting](/zh/how-to/troubleshooting/) |
 | 设置向导 | `/onboarding` | 分步部署配置 | `system:admin` | [start/quickstart](/zh/start/quickstart/) |
+| 更新 | `/updates` | 此引擎正在运行的版本、其通道中最新的已签名版本，以及安装它的一个操作 | `system:admin` | [how-to/upgrade-and-rollback](/zh/how-to/upgrade-and-rollback/) |
 
 ### 登录、设置与账户
 
@@ -173,16 +167,8 @@ description: >-
 | 屏幕 | 路径 | 用途 | 需要 | 参考 |
 |---|---|---|---|---|
 | 接受邀请 | `/accept-invite` | 电子邮件邀请链接的落点：受邀者设置密码并加入工作区，无需预先建立会话。 | **无需登录** | — |
-| AI | `/areas/ai` | AI区域目录：会话观测与操作、提供商配置文件与环境、模型、专项执行和提供商参考。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
-| 自动化 | `/areas/automation` | 自动化区域目录：流程与编排、事件与通知。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
-| 数据与上下文 | `/areas/data-context` | 数据与上下文区域目录：能力、知识与工件。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
-| 交付 | `/areas/deployment` | 交付区域目录：部署的准备与控制。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
-| 基础设施 | `/areas/infrastructure` | 基础设施区域目录：环境清单与工作区。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
-| 监督 | `/areas/observation` | 监督区域目录：状态与活动、成本与采用、审计、评估与证据。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
-| 安全与身份 | `/areas/security-identity` | 安全与身份区域目录：身份与访问、策略与治理边界、防护与响应。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
-| 系统与设置 | `/areas/system` | 系统与设置区域目录：管理、安装与维护、开发者工具和个人偏好。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
-| 工作与通信 | `/areas/work-communications` | 工作与通信区域目录：持久保存的跨会话工作清单与受治理的通信。列出您的权限允许访问的条目。 | 任何已登录用户 | — |
 | 登录 | `/login` | 已配置账户使用凭据和令牌登录的页面。 | **无需登录** | — |
+| 配对设备 | `/pair` | 一次性设备配对链接的目标页面：新设备无需已有会话即可登录。 | **无需登录** | — |
 | 设置 | `/settings` | 工作区和账户设置 | 任何已登录用户 | — |
 | 首次运行设置 | `/setup` | 将全新部署变为可用部署的一次性页面：使用设置令牌并创建第一个所有者账户。 | **无需登录** | — |
 | 公共状态 | `/status-page` | 面向未登录用户的组件健康状态，在页面打开时自动刷新。 | **无需登录** | — |

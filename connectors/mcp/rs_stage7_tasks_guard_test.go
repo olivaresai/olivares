@@ -26,7 +26,7 @@ import (
 //     by the TASK STATUS (`status:"input_required"` + `inputRequests`), never by
 //     the core result discriminator. `UpdateTaskResult = Result` is an ack.
 //
-// The finding this closes (an internal design note (not shipped),
+// The finding this closes (an internal audit,
 // §"P0-3 pendiente"): the common readers accepted the core discriminator under
 // ANY authority profile, so `tasks/get` and `tasks/cancel` mediated and RELEASED
 // a result the extension forbids — and the release child was claimed for bytes

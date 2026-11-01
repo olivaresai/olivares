@@ -537,9 +537,10 @@ func TestDirectoryRetirementPostgresSplitOwnerPrincipalMatrixAndReopen(t *testin
 }
 
 func TestRetireUserPostgresSplitOwnerAdminAttestationOnReopen(t *testing.T) {
+	// Each subtest's 45 s budget starts after its setup (the harness, enforcement and any
+	// reopen). Setup has its own bounds (postgresBootBudget); a budget started before it
+	// expired inside setup on a loaded runner, and the operation then ran on a dead context.
 	t.Run("exact boot role succeeds", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-		defer cancel()
 		h := newDirectoryRetirementPostgresHarness(t)
 		provisionTenant(t, h.raw, "retirement-pg-admin-exact")
 		user := retirementCreateUser(t, h.raw, "retirement-pg-admin-exact")
@@ -553,14 +554,14 @@ func TestRetireUserPostgresSplitOwnerAdminAttestationOnReopen(t *testing.T) {
 			t.Fatalf("close before exact-role reopen: %v", err)
 		}
 		reopened := retirementOpenPostgres(t, h.cfg)
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancel()
 		if _, err := RetireUser(ctx, reopened, retirementPostgresUserRequest(user)); err != nil {
 			t.Fatalf("RetireUser with exact live boot role: %v", err)
 		}
 	})
 
 	t.Run("live role drift is refused before mutation", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-		defer cancel()
 		primary := newDirectoryRetirementPostgresHarness(t)
 		foreign := newDirectoryRetirementPostgresHarness(t)
 		tenant := provisionTenant(t, primary.raw, "retirement-pg-admin-role-drift")
@@ -595,6 +596,8 @@ func TestRetireUserPostgresSplitOwnerAdminAttestationOnReopen(t *testing.T) {
 				t.Errorf("drop primary grants owned by alternate AdminDSN role: %v", cleanupErr)
 			}
 		})
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancel()
 		for _, statement := range []string{
 			"GRANT CONNECT ON DATABASE " + quoteIdent(primary.pg.Database) + " TO " + quoteIdent(foreignRole),
 			"GRANT USAGE ON SCHEMA public TO " + quoteIdent(foreignRole),
@@ -645,8 +648,6 @@ func TestRetireUserPostgresSplitOwnerAdminAttestationOnReopen(t *testing.T) {
 	// base MANTENIENDO el rol fijado, de modo que la postura de rol sigue siendo
 	// correcta y lo único falso es la identidad de la base.
 	t.Run("live foreign database with the pinned role is refused before mutation", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-		defer cancel()
 		primary := newDirectoryRetirementPostgresHarness(t)
 		foreign := newDirectoryRetirementPostgresHarness(t)
 		tenant := provisionTenant(t, primary.raw, "retirement-pg-live-foreign-db")
@@ -678,6 +679,8 @@ func TestRetireUserPostgresSplitOwnerAdminAttestationOnReopen(t *testing.T) {
 				t.Errorf("drop foreign grants owned by the pinned role: %v", cleanupErr)
 			}
 		})
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancel()
 		for _, statement := range []string{
 			"GRANT CONNECT ON DATABASE " + quoteIdent(foreign.pg.Database) + " TO " + quoteIdent(pinnedRole),
 			"GRANT USAGE ON SCHEMA public TO " + quoteIdent(pinnedRole),
@@ -728,7 +731,7 @@ func TestRetireUserPostgresSplitOwnerAdminAttestationOnReopen(t *testing.T) {
 	//
 	// Antes exigía que el reopen con un AdminDSN ajeno TUVIERA ÉXITO y que el refuso
 	// tipado llegara en RetireUser. Contrastado con Codex sol max el 2026-08-20
-	// (an internal design note (not shipped)), gana el
+	// (an internal audit), gana el
 	// contrato contrario, y no por recuento de tests:
 	//
 	//   · La spec decidida concede el testigo incompleto SÓLO a "sin AdminDSN" y exige
@@ -752,8 +755,6 @@ func TestRetireUserPostgresSplitOwnerAdminAttestationOnReopen(t *testing.T) {
 	// "live foreign database with the pinned role is refused before mutation" de más
 	// arriba, escrito primero y verificado por mutación.
 	t.Run("foreign database is refused at reopen after enforcement", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-		defer cancel()
 		primary := newDirectoryRetirementPostgresHarness(t)
 		foreign := newDirectoryRetirementPostgresHarness(t)
 		tenant := provisionTenant(t, primary.raw, "retirement-pg-admin-foreign")
@@ -788,6 +789,8 @@ func TestRetireUserPostgresSplitOwnerAdminAttestationOnReopen(t *testing.T) {
 		// refused boot must have left both the epoch and the User untouched, and the
 		// database must still be usable.
 		good := retirementOpenPostgres(t, primary.cfg)
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancel()
 		if got := directoryWriterTestEpoch(t, good, tenant).Version; got != beforeEpoch {
 			t.Fatalf("foreign AdminDSN refusal epoch = %d, want %d", got, beforeEpoch)
 		}
@@ -806,8 +809,6 @@ func TestRetireUserPostgresSplitOwnerAdminAttestationOnReopen(t *testing.T) {
 	})
 
 	t.Run("write capable admin closure is refused live", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-		defer cancel()
 		h := newDirectoryRetirementPostgresHarness(t)
 		tenant := provisionTenant(t, h.raw, "retirement-pg-admin-writable")
 		user := retirementCreateUser(t, h.raw, "retirement-pg-admin-writable")
@@ -821,12 +822,16 @@ func TestRetireUserPostgresSplitOwnerAdminAttestationOnReopen(t *testing.T) {
 			t.Fatalf("open owner for writable AdminDSN grant: %v", err)
 		}
 		defer owner.Close() //nolint:errcheck
-		if _, err := owner.ExecContext(ctx,
+		grantCtx, cancelGrant := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancelGrant()
+		if _, err := owner.ExecContext(grantCtx,
 			"GRANT INSERT ON TABLE public."+quoteIdent(directoryTombstoneDescriptor.Table)+
 				" TO "+quoteIdent(h.pg.Result.AdminPosture.Role)); err != nil {
 			t.Fatalf("grant AdminDSN write authority: %v", err)
 		}
 		reopened := retirementOpenPostgres(t, h.cfg)
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancel()
 		_, retireErr := RetireUser(ctx, reopened, retirementPostgresUserRequest(user))
 		if !errors.Is(retireErr, store.ErrEnumerationNotAuthoritative) ||
 			!strings.Contains(retireErr.Error(), "not read-only") {
@@ -845,14 +850,14 @@ func TestRetireUserPostgresSplitOwnerAdminAttestationOnReopen(t *testing.T) {
 }
 
 func TestRetireUserPostgresSplitOwnerRLSReplayRejectsResidualAuthority(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-	defer cancel()
 	h := newDirectoryRetirementPostgresHarness(t)
 	provisionTenant(t, h.raw, "retirement-pg-replay-rls-a")
 	provisionTenant(t, h.raw, "retirement-pg-replay-rls-b")
 	user := retirementCreateUser(t, h.raw, "retirement-pg-replay-rls")
 	h.enforce(t)
 	req := retirementPostgresUserRequest(user)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
 	if _, err := RetireUser(ctx, h.raw, req); err != nil {
 		t.Fatalf("initial PostgreSQL User retirement: %v", err)
 	}
@@ -1053,22 +1058,24 @@ func TestRetireUserPostgresSplitOwnerGlobalInterleavings(t *testing.T) {
 
 func TestDirectoryRetirementPostgresSplitOwnerAuditFailureAndRollback(t *testing.T) {
 	t.Run("forced User rollback restores complete tuple", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-		defer cancel()
 		h := newDirectoryRetirementPostgresHarness(t)
 		tenantA := provisionTenant(t, h.raw, "retirement-pg-rollback-a")
 		tenantB := provisionTenant(t, h.raw, "retirement-pg-rollback-b")
-		victim, err := directoryEpochTestSeedRetainedAuth(ctx, h.raw, "retirement-pg-rollback")
+		seedCtx, cancelSeed := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancelSeed()
+		victim, err := directoryEpochTestSeedRetainedAuth(seedCtx, h.raw, "retirement-pg-rollback")
 		if err != nil {
 			t.Fatalf("seed PostgreSQL rollback User: %v", err)
 		}
 		estate, err := directoryEpochTestSeedAuthEstate(
-			ctx, h.raw, tenantA, "retirement-pg-rollback-estate", victim.user.ID,
+			seedCtx, h.raw, tenantA, "retirement-pg-rollback-estate", victim.user.ID,
 		)
 		if err != nil {
 			t.Fatalf("seed PostgreSQL rollback authority: %v", err)
 		}
 		h.enforce(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancel()
 		beforeA := directoryWriterTestEpoch(t, h.raw, tenantA).Version
 		beforeB := directoryWriterTestEpoch(t, h.raw, tenantB).Version
 		beforeAudit := retirementPostgresRowCount(
@@ -1126,8 +1133,6 @@ func TestDirectoryRetirementPostgresSplitOwnerAuditFailureAndRollback(t *testing
 	})
 
 	t.Run("degraded audit cannot commit Identity retirement", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-		defer cancel()
 		h := newDirectoryRetirementPostgresHarness(t)
 		tenant := provisionTenant(t, h.raw, "retirement-pg-audit-degrade")
 		identity := retirementCreateIdentity(t, h.raw, tenant, "retirement-pg-audit-degrade")
@@ -1143,6 +1148,8 @@ func TestDirectoryRetirementPostgresSplitOwnerAuditFailureAndRollback(t *testing
 		degradedCfg.AuditSpoolMaxBytes = 1
 		degradedCfg.AuditSpoolOnFull = store.AuditSpoolDegrade
 		degraded := retirementOpenPostgres(t, degradedCfg)
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancel()
 		_, err := RetireDirectoryPrincipal(ctx, degraded,
 			retirementPostgresPrincipalRequest(
 				tenant, model.DirectoryPrincipalIdentity, identity.ID, identity.Version,

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/api/oas"
 )
@@ -56,6 +57,29 @@ func (*Module) OperationDocumentation(method, pattern string) (api.ModuleOperati
 // sessionsResponses is the whole responses object of every sessions route
 // whose answers differ from the generic envelope.
 func sessionsResponses(method, pattern string) (map[string]any, bool) {
+	if pattern == "/limit-resume-settings" && (method == http.MethodGet || method == http.MethodPut) {
+		out := api.GenericModuleResponses()
+		out["200"] = oas.JSONRespSchema("The person's automatic usage-reset preference", sessionsClosureClosedObject(oas.Obj("automatic", oas.Obj("type", "boolean")), "automatic"))
+		return out, true
+	}
+
+	if method == http.MethodGet && pattern == "/provider-presets" {
+		text := oas.Obj("type", "string")
+		row := sessionsClosureClosedObject(oas.Obj(
+			"ref", text, "title", text,
+			"kind", oas.Obj("type", "string", "enum", oas.Enum(modelprovider.KindAnthropic, modelprovider.KindOpenAICompatible)),
+			"base_url", text, "models_url", text,
+			"auth", oas.Obj("type", "string", "enum", oas.Enum(string(modelprovider.AuthBearer), string(modelprovider.AuthAnthropicKey))),
+			"models", sessionsClosureClosedObject(oas.Obj("default", text)),
+			"docs_url", text, "key_url", text,
+		), "ref", "title", "kind", "base_url", "auth", "models", "docs_url")
+		responses := api.GenericModuleResponses()
+		responses["200"] = oas.JSONRespSchema("Vendor preset catalog", sessionsClosureClosedObject(oas.Obj(
+			"items", oas.Obj("type", "array", "items", row),
+			"has_more", oas.Obj("type", "boolean"),
+		), "items", "has_more"))
+		return responses, true
+	}
 	if (method == http.MethodPut && pattern == "/workspaces/{ref}/setup-command") || (method == http.MethodPost && pattern == "/workspaces/{ref}/setup-command/approve") || (method == http.MethodGet && pattern == "/workspaces/{ref}") {
 		responses := api.GenericModuleResponses()
 		approval := sessionsClosureClosedObject(oas.Obj("sha256", oas.Obj("type", "string", "pattern", "^[0-9a-f]{64}$"), "actor", oas.Obj("type", "string"), "at", sessionsTimestampSchema()), "sha256", "actor", "at")
@@ -101,6 +125,9 @@ func sessionsResponses(method, pattern string) (map[string]any, bool) {
 	if responses, ok := sessionsProjectConfigResponses(method, pattern); ok {
 		return responses, true
 	}
+	if responses, ok := sessionsPushResponses(method, pattern); ok {
+		return responses, true
+	}
 	if sessionsRunPinRoute(method, pattern) {
 		// The caller's own pin state (run_pin.go): a closed answer, because the
 		// handlers write exactly these fields and nothing else.
@@ -128,6 +155,10 @@ func sessionsResponses(method, pattern string) (map[string]any, bool) {
 			"description", "the run resource after the change",
 			"content", oas.Obj("application/json", oas.Obj("schema", sessionsRunResourceSchema())),
 		)
+		return resp, true
+	}
+	if resp, ok := sessionsRunQueueResponses(method, pattern); ok {
+		// The message queue (run_queue.go): closed answers, like the marks'.
 		return resp, true
 	}
 	if !sessionsWorkRoute(pattern) && !sessionsProtocolBindingReconcile(method, pattern) &&
@@ -433,6 +464,14 @@ func sessionsRequestBody(method, pattern string) (map[string]any, bool) {
 						"items", oas.Obj("type", "string"),
 						"description", "Ids of images stored with this session (POST /runs/{ref}/attachments), sent with text as one message. The engine encodes the message for the session's tool; a tool that takes no images refuses it. Not accepted with line, message or work_lease_fence."),
 					"work_lease_fence", oas.Obj("type", "integer", "format", "int64", "minimum", 1),
+					"review_comment", oas.Obj("type", "object", "additionalProperties", false,
+						"required", []string{"path", "line", "side"},
+						"description", "Says the input is a comment on one line of the session's branch diff (GET /runs/{ref}/diff). The message is sent as usual; this names the place, and the ledger records it as sessions.run.review_comment once the input was accepted. Not accepted with attachments.",
+						"properties", oas.Obj(
+							"path", oas.Obj("type", "string", "minLength", 1, "maxLength", reviewCommentMaxPath, "description", "A path of the diff, relative to the repository's top folder."),
+							"line", oas.Obj("type", "integer", "minimum", 1),
+							"side", oas.Obj("type", "string", "enum", oas.Enum("original", "modified"), "description", "original is the file at the base the branch started from; modified is the file at the branch tip."),
+						)),
 				),
 			)
 		case "/runs/{ref}/interrupt":
@@ -531,11 +570,12 @@ func sessionsRunPinRoute(method, pattern string) bool {
 	return method == http.MethodPost || method == http.MethodDelete
 }
 
-// sessionsRunNameArchiveRoute is the rename and the archive toggle
-// (run_name_archive.go).
+// sessionsRunNameArchiveRoute is the rename, the archive toggle (run_name_archive.go)
+// and the title (run_title.go): each answers the run as it now is.
 func sessionsRunNameArchiveRoute(method, pattern string) bool {
 	switch method + " " + pattern {
-	case http.MethodPut + " /runs/{ref}/name", http.MethodPost + " /runs/{ref}/archive", http.MethodDelete + " /runs/{ref}/archive":
+	case http.MethodPut + " /runs/{ref}/name", http.MethodPost + " /runs/{ref}/archive", http.MethodDelete + " /runs/{ref}/archive",
+		http.MethodPost + " /runs/{ref}/title":
 		return true
 	}
 	return false

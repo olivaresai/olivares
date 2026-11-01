@@ -4,7 +4,7 @@
 // Package edugain consumes multilateral Research & Education (R&E) federation
 // metadata — eduGAIN interfederation and InCommon aggregates — extending the
 // single-IdP SAML of to the multilateral trust a university estate runs on
-//. It is the Apache, dep-light half: it VERIFIES the aggregate's
+// . It is the Apache, dep-light half: it VERIFIES the aggregate's
 // enveloped XML signature against a pinned trust certificate, parses the entities
 // and their REFEDS entity-categories (Sirtfi incident-response trust, Research &
 // Scholarship), and maps released eduPerson attributes to a local federated

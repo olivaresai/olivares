@@ -63,7 +63,7 @@
 #
 # ⛔ Y SOBRE `gh`: NO esta instalado en los runners autoalojados
 # (`.github/actions/pr-failure-report/action.yml:60`, medido por otro carril: «`gh: command not
-# found` on ci-runner-2»). Asi que este guion sirve para el hub y para quien nombre el candidato,
+# found` on build-host»). Asi que este guion sirve para el hub y para quien nombre el candidato,
 # y si alguna vez lo quiere un job, tendra que alimentarlo por fichero en vez de dar por hecho el
 # binario. Sin `gh` responde 2, nunca 0.
 #

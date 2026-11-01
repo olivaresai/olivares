@@ -31,9 +31,12 @@ package dr
 import (
 	"context"
 	"crypto/hmac"
+	"crypto/md5"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -75,6 +78,23 @@ type OffsiteConfig struct {
 	// Timeout bounds each HTTP request (0 → offsiteDefaultTO). A bundle PUT can be
 	// large, so this is generous by default.
 	Timeout time.Duration
+	// Immutable makes the client an append-only writer: Put locks every object in
+	// S3 Object Lock COMPLIANCE mode until now + RetainFor, and Delete is refused
+	// before any request is sent. Pruning then needs a separate client (and, on the
+	// bucket, a separate credential), so a stolen writer credential cannot destroy
+	// the copies it wrote.
+	Immutable bool
+	RetainFor time.Duration
+}
+
+// ErrOffsiteImmutable is returned by Delete on an append-only (Immutable) client.
+var ErrOffsiteImmutable = errors.New("the immutable offsite writer never deletes; prune with a separate credential")
+
+// OffsiteLockStatus is the bucket's S3 Object Lock configuration: whether Object
+// Lock is enabled and the mode of its default retention rule ("" when none).
+type OffsiteLockStatus struct {
+	Enabled     bool
+	DefaultMode string
 }
 
 // OffsiteObject is one bundle in the offsite store (a ListObjectsV2 entry, scoped to
@@ -119,6 +139,9 @@ func NewOffsiteClient(cfg OffsiteConfig) (*OffsiteClient, error) {
 		// A custom endpoint (R2/MinIO/Wasabi) is addressed path-style.
 		cfg.PathStyle = true
 	}
+	if cfg.Immutable && cfg.RetainFor <= 0 {
+		return nil, fmt.Errorf("dr offsite: an immutable writer needs a retention period")
+	}
 	timeout := cfg.Timeout
 	if timeout <= 0 {
 		timeout = offsiteDefaultTO
@@ -144,8 +167,20 @@ func (c *OffsiteClient) objectKey(name string) string {
 // Put streams size bytes from r to the offsite object for name. It signs with
 // UNSIGNED-PAYLOAD so the body is never buffered to compute a digest; the bundle's
 // manifest SHA-256 is the integrity anchor a restore checks.
+//
+// On an Immutable client the object is put under a COMPLIANCE lock. S3 requires a
+// Content-MD5 on such a put, so r must be an io.ReadSeeker: it is read once for the
+// digest and rewound, never held in memory.
 func (c *OffsiteClient) Put(ctx context.Context, name string, r io.Reader, size int64) error {
 	key := c.objectKey(name)
+	var contentMD5 string
+	if c.cfg.Immutable {
+		sum, err := md5Rewind(r)
+		if err != nil {
+			return fmt.Errorf("dr offsite: locked PUT %s: %w", key, err)
+		}
+		contentMD5 = sum
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.objectURL(key, ""), r)
 	if err != nil {
 		return fmt.Errorf("dr offsite: build PUT: %w", err)
@@ -154,6 +189,11 @@ func (c *OffsiteClient) Put(ctx context.Context, name string, r io.Reader, size 
 		req.ContentLength = size
 	}
 	req.Header.Set("Content-Type", "application/octet-stream")
+	if c.cfg.Immutable {
+		req.Header.Set("Content-MD5", contentMD5)
+		req.Header.Set("X-Amz-Object-Lock-Mode", "COMPLIANCE")
+		req.Header.Set("X-Amz-Object-Lock-Retain-Until-Date", c.now().Add(c.cfg.RetainFor).UTC().Format(time.RFC3339))
+	}
 	c.sign(req, offsiteUnsignedBody)
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -184,6 +224,9 @@ func (c *OffsiteClient) Get(ctx context.Context, name string) (io.ReadCloser, er
 // is not an error (S3 DELETE is idempotent — 204 whether or not the key existed).
 func (c *OffsiteClient) Delete(ctx context.Context, name string) error {
 	key := c.objectKey(name)
+	if c.cfg.Immutable {
+		return fmt.Errorf("dr offsite: DELETE %s: %w", key, ErrOffsiteImmutable)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.objectURL(key, ""), nil)
 	if err != nil {
 		return fmt.Errorf("dr offsite: build DELETE: %w", err)
@@ -194,6 +237,23 @@ func (c *OffsiteClient) Delete(ctx context.Context, name string) error {
 		return fmt.Errorf("dr offsite: DELETE %s: %w", key, err)
 	}
 	return closeExpecting(resp, http.StatusNoContent, http.StatusOK)
+}
+
+// RetentionBundles lists dated bundle files directly under the configured prefix.
+// Other objects remain visible through List, but must never enter a deletion plan.
+func (c *OffsiteClient) RetentionBundles(ctx context.Context) ([]BundleMeta, error) {
+	objects, err := c.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	bundles := make([]BundleMeta, 0, len(objects))
+	for _, object := range objects {
+		if strings.Contains(object.Name, "/") || !strings.HasSuffix(object.Name, ".drbundle") || object.LastModified.IsZero() {
+			continue
+		}
+		bundles = append(bundles, BundleMeta{Name: object.Name, CreatedAt: object.LastModified})
+	}
+	return bundles, nil
 }
 
 // List returns every bundle under the configured prefix, following ListObjectsV2
@@ -251,10 +311,88 @@ func (c *OffsiteClient) List(ctx context.Context) ([]OffsiteObject, error) {
 	return out, nil
 }
 
+// LockStatus reads the bucket's Object Lock configuration (GetObjectLockConfiguration).
+// A bucket without Object Lock answers 404 ObjectLockConfigurationNotFoundError,
+// which is a status, not an error; any other failure is returned.
+func (c *OffsiteClient) LockStatus(ctx context.Context) (OffsiteLockStatus, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.bucketURL("object-lock"), nil)
+	if err != nil {
+		return OffsiteLockStatus{}, fmt.Errorf("dr offsite: build object-lock GET: %w", err)
+	}
+	c.sign(req, offsiteEmptyBodyHash)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return OffsiteLockStatus{}, fmt.Errorf("dr offsite: object-lock GET: %w", err)
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
+		_ = resp.Body.Close()
+		if strings.HasPrefix(xmlErrorCode(body), "ObjectLockConfigurationNotFoundError") {
+			return OffsiteLockStatus{}, nil
+		}
+		return OffsiteLockStatus{}, fmt.Errorf("dr offsite: object-lock returned HTTP 404: %s", strings.TrimSpace(string(body)))
+	}
+	body, err := readAllExpecting(resp, "object-lock")
+	if err != nil {
+		return OffsiteLockStatus{}, err
+	}
+	var parsed struct {
+		ObjectLockEnabled string `xml:"ObjectLockEnabled"`
+		Mode              string `xml:"Rule>DefaultRetention>Mode"`
+	}
+	if err := xml.Unmarshal(body, &parsed); err != nil {
+		return OffsiteLockStatus{}, fmt.Errorf("dr offsite: parse ObjectLockConfiguration: %w", err)
+	}
+	return OffsiteLockStatus{Enabled: parsed.ObjectLockEnabled == "Enabled", DefaultMode: parsed.Mode}, nil
+}
+
+// ExtendRetention sets the object's COMPLIANCE retention to until
+// (PutObjectRetention). COMPLIANCE retention can only grow: the bucket refuses a
+// date earlier than the one the object already carries.
+func (c *OffsiteClient) ExtendRetention(ctx context.Context, name string, until time.Time) error {
+	key := c.objectKey(name)
+	body := []byte("<Retention><Mode>COMPLIANCE</Mode><RetainUntilDate>" + until.UTC().Format(time.RFC3339) + "</RetainUntilDate></Retention>")
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.objectURL(key, "retention"), strings.NewReader(string(body)))
+	if err != nil {
+		return fmt.Errorf("dr offsite: build retention PUT: %w", err)
+	}
+	sum := md5.Sum(body)
+	req.Header.Set("Content-MD5", base64.StdEncoding.EncodeToString(sum[:]))
+	req.Header.Set("Content-Type", "application/xml")
+	c.sign(req, hexSHA256(body))
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("dr offsite: retention PUT %s: %w", key, err)
+	}
+	return closeExpecting(resp, http.StatusOK, http.StatusNoContent)
+}
+
+// md5Rewind returns the base64 MD5 of what remains in r and rewinds r to where it
+// was, so the same body can then be streamed.
+func md5Rewind(r io.Reader) (string, error) {
+	rs, ok := r.(io.ReadSeeker)
+	if !ok {
+		return "", fmt.Errorf("the body must be seekable to compute its Content-MD5")
+	}
+	start, err := rs.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return "", err
+	}
+	h := md5.New()
+	if _, err := io.Copy(h, rs); err != nil {
+		return "", err
+	}
+	if _, err := rs.Seek(start, io.SeekStart); err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(h.Sum(nil)), nil
+}
+
 // ---- signing ---------------------------------------------------------------
 
-// sign applies AWS SigV4 to req in place, signing host;x-amz-content-sha256;
-// x-amz-date (plus x-amz-security-token when a session token is set). payloadHash is
+// sign applies AWS SigV4 to req in place, signing host, content-md5 when set and
+// every x-amz-* header (x-amz-content-sha256, x-amz-date, the session token and the
+// object-lock headers). payloadHash is
 // the hex SHA-256 of the body, or the sentinel "UNSIGNED-PAYLOAD" for a streamed PUT.
 func (c *OffsiteClient) sign(req *http.Request, payloadHash string) {
 	t := c.now().UTC()
@@ -299,13 +437,12 @@ func (c *OffsiteClient) canonicalHeaders(req *http.Request) (signed, canonical s
 	if host == "" {
 		host = req.URL.Host
 	}
-	pairs := map[string]string{
-		"host":                 host,
-		"x-amz-content-sha256": req.Header.Get("X-Amz-Content-Sha256"),
-		"x-amz-date":           req.Header.Get("X-Amz-Date"),
-	}
-	if c.cfg.SessionToken != "" {
-		pairs["x-amz-security-token"] = req.Header.Get("X-Amz-Security-Token")
+	pairs := map[string]string{"host": host}
+	for name, values := range req.Header {
+		n := strings.ToLower(name)
+		if strings.HasPrefix(n, "x-amz-") || n == "content-md5" {
+			pairs[n] = strings.Join(values, ",")
+		}
 	}
 	names := make([]string, 0, len(pairs))
 	for n := range pairs {

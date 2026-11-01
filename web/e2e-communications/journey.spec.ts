@@ -26,6 +26,7 @@
 // K3 I3 — the WORK HANDOFF through the real console — follows the I1 tests in the
 // section headed "K3 I3" at the end of this file: four finite tests selected with
 // `--grep 'K3 I3:'`, their own request-only beforeAll and their own typed helpers.
+import { setConsoleLanguage } from '../e2e/console-preferences'
 import {
   expect,
   test,
@@ -1160,14 +1161,14 @@ test('keyboard-only Ack, mobile viewport, light and dark themes, English and Spa
   await shot(b, '25-b-inbox-light')
 
   // Spanish, through the language the console persists.
-  await b.evaluate(() => localStorage.setItem('olivares.lang', 'es'))
+  await setConsoleLanguage(b, 'es')
   await b.reload()
   await expect(
     b.getByRole('heading', { name: 'Bandeja de comunicaciones' }),
   ).toBeVisible()
   await expect(b.getByRole('tab', { name: 'Bandeja' })).toBeVisible()
   await shot(b, '26-b-inbox-es')
-  await b.evaluate(() => localStorage.setItem('olivares.lang', 'en'))
+  await setConsoleLanguage(b, 'en')
   await b.context().close()
 
   // Mobile.
@@ -3491,10 +3492,7 @@ test('K3 I3: handoff views support keyboard focus, narrow layout, themes and nin
     // Nine locales through the persisted language preference; the actual
     // translated H1 and tab, no raw key presentation.
     for (const lng of I3_LOCALES) {
-      await b.evaluate(
-        (code) => localStorage.setItem('olivares.lang', code),
-        lng,
-      )
+      await setConsoleLanguage(b, lng)
       await b.reload()
       const strings = handoffLocaleStrings(lng)
       const title = b.getByRole('heading', {
@@ -3519,7 +3517,7 @@ test('K3 I3: handoff views support keyboard focus, narrow layout, themes and nin
         html_lang: lng,
       })
     }
-    await b.evaluate(() => localStorage.setItem('olivares.lang', 'en'))
+    await setConsoleLanguage(b, 'en')
     responsePosts = posts.count()
   } finally {
     await wide.close()

@@ -43,7 +43,7 @@
 # (creating /workspace on a CI runner would be rude, and there it simply fails and falls
 # through to nothing).
 # ⛔ SEGUNDA PREGUNTA, OPT-IN: ¿lo puede atravesar OTRO uid? Medido el 2026-08-19 en
-# ci-runner-7: la sonda de abajo se ejecuta perfectamente —somos el dueño— y aun asi el motor
+# build-host: the probe below succeeds as the owner, but the engine
 # no pudo lanzar su plugin, porque `/home/runner` es `-rwx------` y plugjail baja el hijo a un
 # uid dedicado no-root que no puede ATRAVESARLO. La sonda respondia por el usuario equivocado.
 #

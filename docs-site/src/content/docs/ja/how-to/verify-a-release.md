@@ -10,7 +10,7 @@ description: >-
 
 > Helm, Kubernetes operators, Terraform, appliance and FIPS/STIG images are Business deployment artifacts. The source paths below are in the Business distribution. Air-gapped installation requires Enterprise.
 
-次のリリースは <!-- release -->`0.4`<!-- /release --> で、GitHub ではまだ公開されていません。以下のコマンドは予定されている成果物を示します。公開まではソースからビルドし、公開後も使用前に各成果物を検証してください。観測した公開状況は <!-- release -->`docs/releases/0.4-install-surfaces.json`<!-- /release --> に記録されています。
+次のリリースは <!-- release -->`0.5`<!-- /release --> で、GitHub ではまだ公開されていません。以下のコマンドは予定されている成果物を示します。公開まではソースからビルドし、公開後も使用前に各成果物を検証してください。観測した公開状況は <!-- release -->`docs/releases/0.5-install-surfaces.json`<!-- /release --> に記録されています。
 
 control plane はセキュリティ製品なので、リリースに対して最初にすべきことは、それが
 **プロジェクトが公開したものであると証明すること** です。Olivares AI のリリースは、
@@ -55,7 +55,7 @@ control plane はセキュリティ製品なので、リリースに対して最
 /path/to/olivares/scripts/verify-release.sh
 
 # Pin the SLSA provenance to a specific source tag.
-/path/to/olivares/scripts/verify-release.sh --source-tag 0.4
+/path/to/olivares/scripts/verify-release.sh --source-tag 0.5
 
 # Key-based: only for files signed with a private key you control.
 # Releases are signed keyless and do not publish a public key.

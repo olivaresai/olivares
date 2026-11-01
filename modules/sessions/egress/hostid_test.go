@@ -13,7 +13,7 @@ import (
 
 // The egress proxy links github.com/rs/xid (through smokescreen), whose init reads a machine id. Up to v1.2.1 it reads
 // /sys/class/dmi/id/product_uuid, which the appliance's policy denies to the product and to first boot (lab, the 0.5
-// candidate: avc denied { read } name="id" for olivares_t and olivares_firstboot_t; dev#2992). v1.6.0 reads
+// candidate: avc denied { read } name="id" for olivares_t and olivares_firstboot_t; the regression). v1.6.0 reads
 // /etc/machine-id first and the DMI file only when that is empty (measured in its hostid_linux.go).
 func TestTheLinkedXIDReadsTheMachineIDBeforeDMI(t *testing.T) {
 	// The workspace builds with the highest requirement among its modules, and a module built alone with its own; the

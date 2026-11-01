@@ -8,6 +8,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -44,6 +46,9 @@ type GitImporter struct {
 	Resolver    egress.Resolver
 	Dialer      egress.Dialer
 	TLSConfig   *tls.Config // engine trust configuration, never a source input
+	// Start starts each git; the composition root runs it in its own SELinux domain on the Olivares Server
+	//. Nil is exec.Cmd.Start.
+	Start func(*exec.Cmd) error
 }
 
 var gitHash = regexp.MustCompile(`^[0-9a-f]{40}$`)
@@ -77,6 +82,20 @@ func validateGitSource(raw, ref, subdir string) (*url.URL, error) {
 	}
 	return u, nil
 }
+
+// run1 runs one git through the importer's start.
+func (g GitImporter) run1(cmd *exec.Cmd) error {
+	if g.Start == nil {
+		return cmd.Run()
+	}
+	if err := g.Start(cmd); err != nil {
+		return fmt.Errorf("%w: %v", errGitStart, err)
+	}
+	return cmd.Wait()
+}
+
+// errGitStart: git never ran, because its start refused (on the Olivares Server, it could not enter its domain).
+var errGitStart = errors.New("git could not start")
 
 func (g GitImporter) Import(ctx context.Context, tenant model.TenantID, raw, ref, subdir string) (pack *ValidatedPack, resolved string, importErr error) {
 	origin, err := validateGitSource(raw, ref, subdir)
@@ -127,8 +146,11 @@ func (g GitImporter) Import(ctx context.Context, tenant model.TenantID, raw, ref
 		out.max = max
 		cmd.Stdout = &out
 		cmd.Stderr = io.Discard
-		runErr := cmd.Run()
+		runErr := g.run1(cmd)
 		stopGitGroup(cmd)
+		if errors.Is(runErr, errGitStart) {
+			return nil, refuse("source_unavailable", "git could not start on this server")
+		}
 		if err := runErr; err != nil {
 			if out.exceeded {
 				return nil, refuse("import_limit", "git output")

@@ -22,7 +22,8 @@
     "kind": "種類",
     "key": "キー",
     "state": "状態",
-    "connection": "接続"
+    "connection": "接続",
+    "actions": "操作"
   },
   "kinds": {
     "anthropic": "Anthropic",

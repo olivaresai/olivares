@@ -20,7 +20,7 @@ import (
 )
 
 func TestWorkspaceSetupApprovalBindsExactTextAndGuardsWorktreeStart(t *testing.T) {
-	runner := &fakeRunner{}
+	runner := &setupRunner{session: &fakeRunner{}}
 	m := New(WithRunner(runner), WithCredentialSource(staticCred()))
 	root := t.TempDir()
 	if err := m.UseSessionWorktrees(root, ""); err != nil {

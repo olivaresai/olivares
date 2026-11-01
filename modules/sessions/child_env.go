@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/core/secret"
 )
@@ -618,8 +619,8 @@ func adapterCredentialEnvName(driver, name string) bool {
 //
 // Two closed sets, each proving its own property, cost twelve lines and prove more
 // than one rule with an exception carved into it.
-func validateRecordCredentialEnv(kind string, env []EnvVar) error {
-	allowed := providerRecordEnvNames(kind)
+func validateRecordCredentialEnv(kind string, env []EnvVar, auth ...modelprovider.AuthScheme) error {
+	allowed := providerRecordEnvNames(kind, auth...)
 	for _, item := range env {
 		if _, ok := allowed[item.Name]; !ok {
 			return forbiddenErr("launch denied: a " + kind + " provider may not set " + item.Name)

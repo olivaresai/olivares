@@ -175,7 +175,7 @@ var historicalBusinessNoneCitations = map[historicalNoneDeclaration][]string{
 	{"governance.breakglass_use", "the consumed action name, rendered only: breakglass.go:412"}:                                                                                       {"breakglass.go:412"},
 	{"governance.breakglass_use", "the id of the break-glass grant that was used: breakglass.go:406"}:                                                                                 {"breakglass.go:406"},
 
-	// Fleet managed settings moved to Business (dev#2349): the truth loop's readers now live in
+	// Fleet managed settings moved to Business: the truth loop's readers now live in
 	// claudepolicy_truth_enterprise.go of the Business overlay. Each citation was checked in that
 	// change's parent, where the file was public.
 	{"governance.policy_distribution", "a hex digest of the distributed bytes, compared at claudepolicy_truth.go:678"}:                                        {"claudepolicy_truth.go:678"},
@@ -240,7 +240,14 @@ var historicalBusinessNoneCitations = map[historicalNoneDeclaration][]string{
 	{"deploy.wiring", "the bound identity's external id (modules/governance/identity.go:132), which the governance endpoint refuses for a human identity (modules/governance/identity.go:188), else the declared identity or agent subject ref (wiring.go:74, wiring.go:79); only rendered: wiring.go:223"}: {"wiring.go:74", "wiring.go:79", "wiring.go:223"},
 	{"deploy.wiring", "the deployed agent or MCP server reference (subject_kind is refused unless agent or mcp_server: definitions.go:101), resolved against the agent roster by external id or name (cmd/olivares/deployidentity.go:189) and used as the kill-switch agent dimension (lifecycle.go:603); wiring.go:128 copies it into agent_ref"}: {"definitions.go:101", "lifecycle.go:603", "wiring.go:128"},
 	{"deploy.wiring", "the kind or natural reference of the enterprise resource a wiring reaches, published only as the edge resource: spec.go:50, wiring.go:144"}:                                                                                                                                                                                 {"wiring.go:144"},
-	{"deploy.wiring", "the owning deploy.definition row id, written from that row's own id: definitions.go:576, wiring.go:103, lifecycle.go:680"}:                                                                                                                                                                                                  {"definitions.go:576", "wiring.go:103", "lifecycle.go:680"},
+	// AI terms: Community registers the schema only; the one reader of these columns is the Business
+	// module enterprise/aiterms, which resolves the same citations in its own tree.
+	{"aiterms.policy", "server generated terms version; reader enterprise/aiterms/terms.go:78"}:                                                   {"enterprise/aiterms/terms.go:78"},
+	{"aiterms.policy", "organization-authored terms, rendered as plain text; reader enterprise/aiterms/terms.go:78"}:                              {"enterprise/aiterms/terms.go:78"},
+	{"aiterms.policy", "SHA-256 of the terms text; reader enterprise/aiterms/terms.go:78"}:                                                        {"enterprise/aiterms/terms.go:78"},
+	{"aiterms.acceptance", "accepted server-generated terms version; reader enterprise/aiterms/terms.go:221"}:                                     {"enterprise/aiterms/terms.go:221"},
+	{"aiterms.acceptance", "accepted text SHA-256; reader enterprise/aiterms/terms.go:221"}:                                                       {"enterprise/aiterms/terms.go:221"},
+	{"deploy.wiring", "the owning deploy.definition row id, written from that row's own id: definitions.go:576, wiring.go:103, lifecycle.go:680"}: {"definitions.go:576", "wiring.go:103", "lifecycle.go:680"},
 }
 
 func TestHistoricalBusinessNoneCitationsAreExact(t *testing.T) {

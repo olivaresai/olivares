@@ -5,9 +5,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -16,10 +18,20 @@ import (
 )
 
 // effectiveRightsFixture is an answer of GET /v1/auth/effective-rights: an agent reached
-// through an agent group of another workspace, with one right the engine could not decide.
-const effectiveRightsFixture = `{"subject":{"kind":"user","id":"u-1"},"node":{"kind":"agent","id":"a-1"},"assurance":3,` +
-	`"path":[{"kind":"workspace","ref":"payments"},{"kind":"agent_group","ref":"ops","workspace":"default"},{"kind":"agent","ref":"a-1"}],` +
-	`"rights":[{"name":"Supervisor","state":"not_held"},{"name":"Browse","state":"held"},{"name":"Write","state":"unknown"}]}`
+// through an agent group of another workspace, with grant, filter and forbid explanations,
+// fresh directory membership data, and one right the engine could not decide.
+func effectiveRightsFixture(t *testing.T) string {
+	t.Helper()
+	data, err := os.ReadFile("../../web/src/features/console/testdata/effective-rights.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, data); err != nil {
+		t.Fatal(err)
+	}
+	return compact.String()
+}
 
 // rightsServer answers the effective-rights read with body and status, recording each request.
 func rightsServer(t *testing.T, status int, body string) (*httptest.Server, *[]*http.Request) {
@@ -41,7 +53,7 @@ func rightsArgs(server string, extra ...string) []string {
 }
 
 func TestGovernanceRBACRightsReadsTheEngineAnswer(t *testing.T) {
-	server, seen := rightsServer(t, http.StatusOK, effectiveRightsFixture)
+	server, seen := rightsServer(t, http.StatusOK, effectiveRightsFixture(t))
 
 	out, stderr, err := execRoot(t, rightsArgs(server.URL, "--subject", "u-1")...)
 	if err != nil {
@@ -62,6 +74,10 @@ func TestGovernanceRBACRightsReadsTheEngineAnswer(t *testing.T) {
 	for _, want := range []string{
 		"workspace payments > agent_group ops (workspace default) > agent a-1",
 		"user u-1", "agent a-1", "not a deny",
+		"MEMBERSHIP AS OF  2026-10-27T06:30:00Z",
+		"Browse: grant g-1 at workspace payments via user u-1 > group g-1 > group g-2",
+		"Supervisor: removed by irf irf-1 at workspace payments",
+		"Read: removed by forbid forbid-1 at workspace payments",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
@@ -90,7 +106,7 @@ func TestGovernanceRBACRightsRefusesABodyThatIsNotAnAnswer(t *testing.T) {
 }
 
 func TestGovernanceRBACRightsAsksForATokenSubject(t *testing.T) {
-	server, seen := rightsServer(t, http.StatusOK, effectiveRightsFixture)
+	server, seen := rightsServer(t, http.StatusOK, effectiveRightsFixture(t))
 
 	if _, stderr, err := execRoot(t, rightsArgs(server.URL, "--subject", "t-9", "--subject-type", "token")...); err != nil {
 		t.Fatalf("rights: %v %s", err, stderr)
@@ -101,7 +117,7 @@ func TestGovernanceRBACRightsAsksForATokenSubject(t *testing.T) {
 }
 
 func TestGovernanceRBACRightsJSONIsTheEngineAnswer(t *testing.T) {
-	server, _ := rightsServer(t, http.StatusOK, effectiveRightsFixture)
+	server, _ := rightsServer(t, http.StatusOK, effectiveRightsFixture(t))
 
 	out, stderr, err := execRoot(t, rightsArgs(server.URL, "--subject", "u-1", "-o", "json")...)
 	if err != nil {
@@ -111,7 +127,7 @@ func TestGovernanceRBACRightsJSONIsTheEngineAnswer(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("output is not JSON: %v\n%s", err, out)
 	}
-	_ = json.Unmarshal([]byte(effectiveRightsFixture), &want)
+	_ = json.Unmarshal([]byte(effectiveRightsFixture(t)), &want)
 	gotJSON, _ := json.Marshal(got)
 	wantJSON, _ := json.Marshal(want)
 	if string(gotJSON) != string(wantJSON) {
@@ -119,8 +135,26 @@ func TestGovernanceRBACRightsJSONIsTheEngineAnswer(t *testing.T) {
 	}
 }
 
+// The previous response had no explanation fields. It remains a valid answer, with no
+// fabricated grant or membership line.
+func TestGovernanceRBACRightsAcceptsThePreviousResponse(t *testing.T) {
+	previous := `{"subject":{"kind":"user","id":"u-1"},"node":{"kind":"agent","id":"a-1"},"assurance":3,` +
+		`"path":[{"kind":"agent","ref":"a-1"}],"rights":[{"name":"Read","state":"held"}]}`
+	server, _ := rightsServer(t, http.StatusOK, previous)
+
+	out, stderr, err := execRoot(t, rightsArgs(server.URL, "--subject", "u-1")...)
+	if err != nil {
+		t.Fatalf("previous response: %v %s", err, stderr)
+	}
+	for _, unwanted := range []string{"MEMBERSHIP AS OF", ": grant ", ": removed by "} {
+		if strings.Contains(out, unwanted) {
+			t.Errorf("previous response gained %q:\n%s", unwanted, out)
+		}
+	}
+}
+
 func TestGovernanceRBACRightsNoUnknownNoteWhenEveryRightWasDecided(t *testing.T) {
-	decided := strings.Replace(effectiveRightsFixture, `"unknown"`, `"not_held"`, 1)
+	decided := strings.Replace(effectiveRightsFixture(t), `"unknown"`, `"not_held"`, 1)
 	server, _ := rightsServer(t, http.StatusOK, decided)
 
 	out, stderr, err := execRoot(t, rightsArgs(server.URL, "--subject", "u-1")...)
@@ -133,7 +167,7 @@ func TestGovernanceRBACRightsNoUnknownNoteWhenEveryRightWasDecided(t *testing.T)
 }
 
 func TestGovernanceRBACRightsRequiresASubject(t *testing.T) {
-	server, seen := rightsServer(t, http.StatusOK, effectiveRightsFixture)
+	server, seen := rightsServer(t, http.StatusOK, effectiveRightsFixture(t))
 
 	_, _, err := execRoot(t, rightsArgs(server.URL)...)
 	if err == nil || !strings.Contains(err.Error(), "subject") {
@@ -157,7 +191,7 @@ func TestGovernanceRBACRightsKeepsTheEngineRefusal(t *testing.T) {
 }
 
 func TestGovernanceRBACRightsStripsControlCharactersFromTheAnswer(t *testing.T) {
-	hostile := strings.Replace(effectiveRightsFixture, `"ref":"payments"`, `"ref":"pay\u001b[2Jments"`, 1)
+	hostile := strings.Replace(effectiveRightsFixture(t), `"ref":"payments"`, `"ref":"pay\u001b[2Jments"`, 1)
 	server, _ := rightsServer(t, http.StatusOK, hostile)
 
 	out, stderr, err := execRoot(t, rightsArgs(server.URL, "--subject", "u-1")...)

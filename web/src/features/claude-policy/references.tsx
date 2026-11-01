@@ -5,8 +5,9 @@
 // The verified-facts reference panels for each managed-* surface. Everything here
 // is rendered from the verified schema constants (no inventes claves) —
 // these are the authoritative facts the operator authors against.
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
+import { PathText } from '@/components/ui/path-text'
 import { CaveatNotice, SectionCard } from '@/features/_intel'
 import { ReferenceRow } from './components'
 import {
@@ -39,19 +40,30 @@ export function ManagedSettingsReference() {
       <SectionCard title={t('ref.ms.paths')}>
         <dl>
           <ReferenceRow label="macOS" mono>
-            {MANAGED_SETTINGS_PATHS.macos}
+            <PathText value={MANAGED_SETTINGS_PATHS.macos} wrap />
           </ReferenceRow>
           <ReferenceRow label="Linux / WSL" mono>
-            {MANAGED_SETTINGS_PATHS.linux}
+            <PathText value={MANAGED_SETTINGS_PATHS.linux} wrap />
           </ReferenceRow>
           <ReferenceRow label="Windows" mono>
-            {MANAGED_SETTINGS_PATHS.windows}
+            <PathText value={MANAGED_SETTINGS_PATHS.windows} wrap />
           </ReferenceRow>
         </dl>
         <CaveatNotice className="mt-2">
-          {t('ref.ms.legacyPath', {
-            since: MANAGED_SETTINGS_PATHS.windowsLegacyRemovedSince,
-          })}
+          <Trans
+            i18nKey="ref.ms.legacyPath"
+            ns="claudePolicy"
+            values={{ since: MANAGED_SETTINGS_PATHS.windowsLegacyRemovedSince }}
+            components={{
+              path: (
+                <PathText
+                  value={MANAGED_SETTINGS_PATHS.windowsLegacyRemoved}
+                  wrap
+                  copy={false}
+                />
+              ),
+            }}
+          />
         </CaveatNotice>
       </SectionCard>
 
@@ -73,7 +85,17 @@ export function ManagedSettingsReference() {
         </CaveatNotice>
       </SectionCard>
 
-      <SectionCard title={t('ref.ms.dropIn', { dir: DROP_IN_MERGE.dir })}>
+      <SectionCard
+        title={
+          <Trans
+            i18nKey="ref.ms.dropIn"
+            ns="claudePolicy"
+            components={{
+              path: <PathText value={DROP_IN_MERGE.dir} copy={false} />,
+            }}
+          />
+        }
+      >
         <ul className="flex list-disc flex-col gap-1 pl-4 text-caption text-muted-foreground">
           {DROP_IN_MERGE.rules.map((r) => (
             <li key={r}>{r}</li>
@@ -179,13 +201,13 @@ export function ManagedMcpReference() {
       <SectionCard title={t('ref.mcp.paths')}>
         <dl>
           <ReferenceRow label="macOS" mono>
-            {MANAGED_MCP_PATHS.macos}
+            <PathText value={MANAGED_MCP_PATHS.macos} wrap />
           </ReferenceRow>
           <ReferenceRow label="Linux / WSL" mono>
-            {MANAGED_MCP_PATHS.linux}
+            <PathText value={MANAGED_MCP_PATHS.linux} wrap />
           </ReferenceRow>
           <ReferenceRow label="Windows" mono>
-            {MANAGED_MCP_PATHS.windows}
+            <PathText value={MANAGED_MCP_PATHS.windows} wrap />
           </ReferenceRow>
         </dl>
       </SectionCard>

@@ -1,13 +1,15 @@
 {
-  "title": "Modelli e provider",
-  "description": "Il parco dei modelli governati: capacità e prezzi dichiarati, policy di routing e riferimenti alle chiavi dei provider. I segreti non vengono mai mostrati, solo riferimenti mascherati.",
+  "title": "Modelli",
+  "description": "Modelli che i tuoi strumenti e provider possono eseguire ora, le sessioni che li usano e la governance dei modelli.",
   "tabs": {
+    "available": "Disponibili",
     "catalog": "Catalogo",
     "estate": "Parco",
     "routing": "Routing",
     "keys": "Chiavi dei provider",
     "gpai": "Posizione GPAI",
-    "access": "Accesso"
+    "access": "Accesso",
+    "governance": "Governance"
   },
   "catalog": {
     "title": "Matrice delle capacità",
@@ -271,5 +273,61 @@
     "truncatedHint": "Le regole di accesso sono più di quelle mostrate; questa pagina prende le righe per id. I contrassegni su queste righe riflettono SOLO le regole caricate: possono mancare consensi che introdurrebbero un confinamento o aggiungerebbero destinazioni consentite, e possono mancare anche divieti che sottraggono accesso. Quindi questa pagina può risultare più ampia O più stretta della realtà, e un soggetto senza regole caricate non compare affatto. Non dedurne l'accesso effettivo: il motore scorre tutte le pagine prima di decidere e risolve un principal tra utente, ruolo e gruppo, cosa che una riga non può mostrare.",
     "groupsTruncated": "Caricati {{n}} gruppi; ce ne sono altri",
     "groupsTruncatedHint": "I gruppi di modelli sono più di quelli mostrati; questa pagina prende le righe per id. Un gruppo non elencato qui non dimostra che non esista: una regola potrebbe ancora averlo come destinazione."
+  },
+  "available": {
+    "title": "Disponibili ora",
+    "description": "I modelli che i tuoi strumenti e provider possono eseguire ora, e le sessioni che li usano.",
+    "columns": {
+      "model": "Modello",
+      "runsOn": "Strumento o provider",
+      "source": "Origine",
+      "state": "Stato",
+      "sessions": "Sessioni"
+    },
+    "source": {
+      "tool": "Elenco live dello strumento",
+      "ollama": "Installato in Ollama",
+      "providerList": "Elenco modelli del provider",
+      "provider": "Provider API",
+      "session": "Sessione attiva"
+    },
+    "state": {
+      "ready": "Pronto",
+      "checkingModels": "Verifica dei modelli",
+      "stopped": "Ollama fermo",
+      "unlisted": "Non elenca i suoi modelli",
+      "listsNone": "Non elenca alcun modello",
+      "failed": "Elenco non disponibile",
+      "starting": "Ollama in avvio",
+      "ollamaFailed": "Ollama non riuscito"
+    },
+    "ownDefault": "Il suo modello predefinito",
+    "providerModels": "Elenco modelli",
+    "ollamaModels": "Modelli installati",
+    "openAiTools": "Apri Strumenti AI",
+    "sessions_one": "{{count}} sessione",
+    "sessions_many": "{{count}} sessioni",
+    "sessions_other": "{{count}} sessioni",
+    "openSessions": "Sessioni che usano {{model}}",
+    "empty": "Nessun modello disponibile per ora",
+    "emptyHint": "Installa un modello in Ollama o aggiungi un provider e comparirà qui.",
+    "noAccess": "Nessun accesso agli elenchi dei modelli",
+    "noAccessHint": "Il tuo ruolo non può leggere gli elenchi dei modelli di strumenti, provider, Ollama e sessioni. Chiedi l'accesso a un amministratore.",
+    "installModel": "Installa un modello",
+    "addProvider": "Aggiungi un provider",
+    "sourceFailed": "Impossibile leggere {{source}}. Le altre fonti restano visibili.",
+    "sources": {
+      "tools": "Gli elenchi di modelli degli strumenti",
+      "ollama": "Ollama",
+      "availability": "I modelli dei provider",
+      "runs": "Le sessioni in corso"
+    },
+    "profilesTruncated": "Sono mostrati i primi {{n}} profili degli strumenti; ce ne sono altri.",
+    "runsTruncated": "I conteggi coprono le {{n}} sessioni più recenti per stato; ce ne sono altre.",
+    "runsFailed": "Impossibile leggere le sessioni in corso; mancano i conteggi.",
+    "sessionsUnknown": "I conteggi delle sessioni non sono disponibili.",
+    "unmatched_one": "{{count}} sessione attiva usa un modello non elencato qui.",
+    "unmatched_many": "{{count}} sessioni attive usano modelli non elencati qui.",
+    "unmatched_other": "{{count}} sessioni attive usano modelli non elencati qui."
   }
 }

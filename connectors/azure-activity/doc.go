@@ -8,7 +8,7 @@
 // tri-cloud management-plane parity with the AWS connector: where
 // connectors/aws reaches an AWS account for IAM inventory + CloudTrail, this
 // reaches an Azure tenant for Resource Graph inventory + the Activity Log
-//.
+// .
 //
 // Inventory (signal "azure"). A Bearer-authorized Resource Graph projection query
 // (Resources | project id, subscriptionId | order by id asc) across the scoped subscriptions, plus

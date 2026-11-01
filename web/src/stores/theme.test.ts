@@ -37,7 +37,7 @@ describe('theme store', () => {
     expect(resolveDark('system')).toBe(false)
   })
 
-  it('follows the system when nothing is stored (HU-27)', () => {
+  it('follows the system when nothing is stored', () => {
     localStorage.clear()
     expect(readStoredThemeForTest()).toBe('system')
     // `matchMedia` is stubbed to no-match here: an OS asking for light gets light.

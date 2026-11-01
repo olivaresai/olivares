@@ -146,6 +146,30 @@ func TestSkillsGitImportPinsCommitAndPreservesBytes(t *testing.T) {
 	}
 }
 
+// The composition root decides how git starts (on the Olivares Server, in its own SELinux domain, the regression): an import
+// runs every git through that start, and a start that refuses fails the import and leaves nothing staged.
+func TestSkillsGitImportStartsEveryGitThroughItsStart(t *testing.T) {
+	_, commit, handler := gitFixture(t)
+	g, _ := gitImporter(t, handler)
+	starts := 0
+	g.Start = func(cmd *exec.Cmd) error { starts++; return cmd.Start() }
+	if _, _, err := g.Import(t.Context(), model.SystemTenantID, "https://example.com/fixture.git", commit, ""); err != nil {
+		t.Fatal(err)
+	}
+	if starts == 0 {
+		t.Fatal("the import ran git without its start")
+	}
+	g.Start = func(*exec.Cmd) error { return errors.New("refused") }
+	_, _, err := g.Import(t.Context(), model.SystemTenantID, "https://example.com/fixture.git", commit, "")
+	var refused *skills.ImportError
+	if !errors.As(err, &refused) || !strings.Contains(refused.Detail, "git could not start") {
+		t.Fatalf("an import whose start refuses = %v, want the refusal that git could not start", err)
+	}
+	if entries, err := os.ReadDir(g.ScratchRoot); err != nil || len(entries) != 0 {
+		t.Fatalf("staging survives a refused start: %v %v", entries, err)
+	}
+}
+
 func TestSkillsGitSelectedFolderPreservesMember(t *testing.T) {
 	_, commit, handler := gitFixture(t)
 	g, _ := gitImporter(t, handler)

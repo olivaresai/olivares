@@ -9,11 +9,13 @@ package policytext
 import "strings"
 
 // Rule describes a permit with an already rendered subject and optional condition.
-// Actions are emitted in the supplied order.
+// Actions are emitted in the supplied order. GrantID, when present, is preserved
+// as the stored scoped-grant annotation for effective-rights attribution.
 type Rule struct {
 	Subject string
 	Actions []string
 	When    string
+	GrantID string
 }
 
 // Render emits each permit in the supplied order, with one trailing newline per rule.
@@ -21,6 +23,11 @@ type Rule struct {
 func Render(rules []Rule) string {
 	var b strings.Builder
 	for _, rule := range rules {
+		if rule.GrantID != "" {
+			b.WriteString("@olivares_grant_id(")
+			b.WriteString(Str(rule.GrantID))
+			b.WriteString(")\n")
+		}
 		b.WriteString("permit(principal in ")
 		b.WriteString(rule.Subject)
 		b.WriteString(", action in [")

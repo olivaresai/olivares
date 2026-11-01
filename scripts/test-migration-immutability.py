@@ -607,15 +607,54 @@ var guardedDescriptor = model.EntityDescriptor{Fields: []model.FieldSpec{
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertIn('UNVERIFIED', result.stdout + result.stderr)
 
+    def commit(self, message):
+        self.git('add', '.')
+        self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+                 'commit', '-qm', message)
+
+    def point_origin_main_at_head(self):
+        del self.env['OLIVARES_MIGRATION_BASE']
+        self.git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+
+    def start_own_history(self):
+        # The merge gate's Community tree is a fresh `git init` commit; the published tag it
+        # compares with is fetched into it and origin/main points at that unrelated commit.
+        self.point_origin_main_at_head()
+        self.git('checkout', '-q', '--orphan', 'candidate')
+        self.commit('candidate with its own history')
+
+    def test_origin_main_without_a_common_ancestor_is_the_baseline(self):
+        self.start_own_history()
+        result = self.gate()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        # Committed, so HEAD as the baseline would accept it; only origin/main rejects it.
+        self.sql.write_text('CREATE TABLE example (id TEXT PRIMARY KEY, label TEXT);\n')
+        self.commit('edit an applied migration')
+        self.assert_rejected('0001_create.sql')
+
+    def test_shallow_clone_without_a_merge_base_refuses(self):
+        self.start_own_history()
+        (self.root / '.git/shallow').write_text(self.git('rev-parse', 'HEAD').stdout)
+        result = self.gate()
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn('UNVERIFIED: shallow clone', result.stdout + result.stderr)
+
+    def test_origin_main_ancestor_is_the_baseline_by_default(self):
+        self.point_origin_main_at_head()
+        self.sql.write_text('CREATE TABLE example (id TEXT PRIMARY KEY, label TEXT);\n')
+        self.commit('edit an applied migration')
+        self.assert_rejected('0001_create.sql')
+
 
 PLAN = 'core/binding/core/internal/store/sqlstore/store.go/openPrepared/buildCoreMigrationPlan/1'
 CORE = 'core/binding/core/internal/store/sqlstore/store.go/openPrepared/buildCoreMigrations/1'
-# The digests the gate computed for these two bindings on the 0.3 tree and on the 0.4 tree.
+# The digests the gate computed for these two bindings on origin/main 7a241bb74 and on the the regression tree
+# (the temp_store pragma constant and _pragma DSN helper moved to core/dr/opgate; DSNs byte-identical).
 PAIRS = {
-    PLAN: ('8243800ce7033c9938779e9cfd765a8c0b0debfb48fd828ca4c861cdc1b7cb30',
-           'f348a0c80cd65335f5f8c422a46b7ef1a615dc38ea8500aed9e646382de6d14c'),
-    CORE: ('6d2daa839373bd36eaddc5827f156be844e394b7d7af72c019de051dfa78aca0',
-           'f7264bf98632902afa007091ba78aa1dbca1aa57edea3964a5fec73aa882273f'),
+    PLAN: ('07c7ca1548c23d82288a3184efe7e02a1b142a316f77fcc072ffb6ce907b19b4',
+           'c0061ac4e3965ca0a230023cfeb956c5a843787c00eb461c80a120db234887cb'),
+    CORE: ('d6916f0bf171360672387c95e4b5a48291871c238aafa8f5037ea67b6b67df34',
+           'a998fa92501003913f626839fece82b898ff35082f3a5a9c206a8a93029cfbf5'),
 }
 OTHER = 'a' * 64
 
@@ -665,6 +704,63 @@ class ReviewedBindings(unittest.TestCase):
                 self.assertIn('migration immutable: ' + key, errors)
         for key in getattr(gate, 'REVIEWED_BINDINGS', {}):
             self.assertTrue(key.startswith('core/binding/') and not key.endswith('.sql'), key)
+    def test_second_reviewed_binding_pair_passes(self):
+        baseline = {
+            PLAN: 'f348a0c80cd65335f5f8c422a46b7ef1a615dc38ea8500aed9e646382de6d14c',
+            CORE: 'f7264bf98632902afa007091ba78aa1dbca1aa57edea3964a5fec73aa882273f',
+        }
+        head = {
+            PLAN: 'aff9a3a853e4cb6618dbd9c0174755fc26e9f3f8ca6a5066955020668e432eeb',
+            CORE: '440cec34f56451a5198a639f7b224d0b4784972cc5b8cc306f17f4bc2557954e',
+        }
+        code, errors, _ = self.decide(baseline, head)
+        self.assertEqual((code, errors), (0, ''))
+
+    def test_reviewed_migration_pair_and_refusals(self):
+        old = 'd4b8fd1ffb453430088cfc14a51cfc2392d2d37e767152aaf46a8fc75ebce931'
+        new = 'cc82a1e36d6e4f1c73710096e03bf508b615a6b89a6c23b9c0c6b8f91b1ae176'
+        code, errors, _ = self.decide({'core/6': old}, {'core/6': new})
+        self.assertEqual((code, errors), (0, ''))
+        for baseline, head in ((old, OTHER), (new, old)):
+            with self.subTest(baseline=baseline[:8], head=head[:8]):
+                code, errors, _ = self.decide({'core/6': baseline}, {'core/6': head})
+                self.assertEqual(code, 1)
+                self.assertIn('migration immutable: core/6', errors)
+        code, errors, _ = self.decide({'core/6': old}, {})
+        self.assertEqual(code, 1)
+        self.assertIn('migration immutable: core/6', errors)
+
+    def test_second_reviewed_migration_pair_and_refusals(self):
+        old = '4d904b8f6c265665f75cb32b6df2b3e792e75b022a41e7e3a254052066454e90'
+        new = 'dc94c32fa7e69279c6fb5b826f2ca4da429c8d4c27ad4feb892317d1f20f2f1b'
+        code, errors, _ = self.decide({'core/6': old}, {'core/6': new})
+        self.assertEqual((code, errors), (0, ''))
+        for baseline, head in ((old, OTHER), (OTHER, new), (new, old)):
+            with self.subTest(baseline=baseline[:8], head=head[:8]):
+                code, errors, _ = self.decide({'core/6': baseline}, {'core/6': head})
+                self.assertEqual(code, 1)
+                self.assertIn('migration immutable: core/6', errors)
+        code, errors, _ = self.decide({'core/6': old}, {})
+        self.assertEqual(code, 1)
+        self.assertIn('migration immutable: core/6', errors)
+
+    def test_reviewed_base_descriptor_pair_and_near_miss(self):
+        key = 'core/descriptor/authSessionDescriptor'
+        old = 'dfaa6d28e78cac5c0a82b72f2d0276392bef665ef66287bf2ce08debc7be61c5'
+        new = '9a9c6647856ca2b7f19020eb21f3534dd25a2d0fa809027e561b9e8e4f5fb162'
+        code, errors, _ = self.decide({key: old}, {key: new})
+        self.assertEqual((code, errors), (0, ''))
+        code, errors, _ = self.decide({key: old}, {key: OTHER})
+        self.assertEqual(code, 1)
+        self.assertIn('migration immutable: ' + key, errors)
+
+    def test_reviewed_migrations_reject_non_numeric_key(self):
+        old, new = PAIRS[PLAN]
+        _, _, gate = self.decide({'core/plan/example': old}, {'core/plan/example': new})
+        gate.REVIEWED_MIGRATIONS = {'core/plan/example': (old, new)}
+        with self.assertRaisesRegex(ValueError, 'REVIEWED_MIGRATIONS may hold numeric core or runner migration keys only'):
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                gate.main()
 
 
 if __name__ == '__main__':

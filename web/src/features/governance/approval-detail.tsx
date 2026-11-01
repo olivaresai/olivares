@@ -34,7 +34,7 @@ import {
   ApprovalPreview,
   approvalCommandUnknown,
 } from './approval-preview'
-import { DenyDialog, useDecision } from './decision-dialog'
+import { DenyDialog, useDecision, useMayDecide } from './decision-dialog'
 import './i18n'
 import { canDecideOnRequest } from './types'
 import type { ApprovalDTO, DecisionDTO } from './types'
@@ -92,7 +92,6 @@ export function ApprovalDetailPanel({
 }) {
   const { t } = useTranslation(['governance', 'common'])
   const { activeTenant, can, principal } = useAuth()
-  const canDecide = can('governance:approval:admin')
   const canWrite = can('governance:approval:write')
 
   const [denyOpen, setDenyOpen] = useState(false)
@@ -111,6 +110,7 @@ export function ApprovalDetailPanel({
     queryFn: () => governanceApi.listDecisions(approvalId),
     refetchInterval: 12_000,
   })
+  const { mayDecide, decidedByMe } = useMayDecide(detail)
 
   const approve = useDecision(approvalId, 'approve')
 
@@ -125,30 +125,22 @@ export function ApprovalDetailPanel({
   })
 
   const isPending = detail?.status === 'pending'
-  // A request that needs more than one approver stays pending after this person's
-  // approval; the engine refuses a second decision from them (409), so it is not offered.
-  const decidedByMe =
-    !!principal?.actor &&
-    !!decisions.data?.items.some((d) => d.decider === principal.actor)
-  // Separation of duties: hide Approve/Deny the engine would 403 (requester
-  // cannot decide their own; a token has no stable user id).
-  const mayDecide =
-    isPending &&
-    !decidedByMe &&
-    canDecide &&
-    canDecideOnRequest(detail?.requested_by, principal?.actor, principal?.kind)
   const { mutate: decide, isPending: deciding } = approve
+  const approvingSession = deciding && approve.variables?.scope === 'session'
   // One decision per action: a second click or key that lands before the first one's
   // render is dropped here, not sent and refused.
   const inFlight = useRef(false)
   useEffect(() => {
     if (!deciding) inFlight.current = false
   }, [deciding])
-  const approveOnce = useCallback(() => {
-    if (inFlight.current) return
-    inFlight.current = true
-    decide({ decision: 'approve' })
-  }, [decide])
+  const approveRequest = useCallback(
+    (scope?: 'session') => {
+      if (inFlight.current) return
+      inFlight.current = true
+      decide({ decision: 'approve', ...(scope ? { scope } : {}) })
+    },
+    [decide],
+  )
 
   useEffect(() => {
     if (!mayDecide) return
@@ -157,7 +149,7 @@ export function ApprovalDetailPanel({
       const command = resolveBinding(KEYBINDINGS, e, { approvalQueue: true })
       if (command === 'approvals.approve') {
         e.preventDefault()
-        approveOnce()
+        approveRequest()
       } else if (command === 'approvals.deny') {
         e.preventDefault()
         setDenyOpen(true)
@@ -165,7 +157,7 @@ export function ApprovalDetailPanel({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [mayDecide, approveOnce])
+  }, [mayDecide, approveRequest])
 
   const requesterIsPerson =
     !!detail?.requested_by?.startsWith('user:') && !detail.launched_by
@@ -228,7 +220,7 @@ export function ApprovalDetailPanel({
             </p>
           ) : null}
 
-          {/* HU 047: the requester of an estate re-enable cannot decide it, and the panel
+          {/* acceptance: the requester of an estate re-enable cannot decide it, and the panel
               offered nothing else. It says what is needed and where to do it. */}
           {isPending &&
           detail.action === REENABLE_ACTION &&
@@ -261,17 +253,34 @@ export function ApprovalDetailPanel({
                   size="sm"
                   disabled={deciding}
                   aria-keyshortcuts="A"
-                  onClick={approveOnce}
+                  onClick={() => approveRequest()}
                 >
-                  {/* Disabled only while its decision is sent, and it says so (dev#3268). */}
-                  {deciding ? (
+                  {/* Disabled only while its decision is sent, and it says so. */}
+                  {deciding && !approvingSession ? (
                     <Loader2 aria-hidden className="animate-spin" />
                   ) : (
                     <Check />
                   )}
-                  {deciding
+                  {deciding && !approvingSession
                     ? t('approvals.approving')
                     : t('approvals.approveOnce')}
+                </Button>
+              )}
+              {mayDecide && detail?.session_scope_allowed && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={deciding}
+                  onClick={() => approveRequest('session')}
+                >
+                  {approvingSession ? (
+                    <Loader2 aria-hidden className="animate-spin" />
+                  ) : (
+                    <Check aria-hidden />
+                  )}
+                  {approvingSession
+                    ? t('approvals.approving')
+                    : t('approvals.approveForSession')}
                 </Button>
               )}
               {mayDecide && (
@@ -303,9 +312,9 @@ export function ApprovalDetailPanel({
           <Separator />
 
           <section className="flex flex-col gap-2">
-            <h3 className="text-body font-medium text-foreground">
+            <h2 className="text-body font-medium text-foreground">
               {t('detail.trail')}
-            </h3>
+            </h2>
             <p className="text-caption text-muted-foreground">
               {t('detail.trailCaption')}
             </p>
@@ -478,7 +487,9 @@ function DecisionTrail({
             <div className="flex items-center justify-between gap-2">
               <Badge variant={approved ? 'success' : 'danger'}>
                 {approved
-                  ? t('detail.decisionApprove')
+                  ? d.scope === 'session'
+                    ? t('detail.decisionApproveForSession')
+                    : t('detail.decisionApprove')
                   : t('detail.decisionReject')}
               </Badge>
               {d.decided_at && (

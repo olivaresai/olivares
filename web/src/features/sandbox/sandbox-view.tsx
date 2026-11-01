@@ -381,8 +381,16 @@ export function SandboxView() {
             description={t('scenarios.description')}
             actions={
               // Not offered at all without the right, rather than offered and then
-              // 403'd. The server door stays the real one either way.
-              canCreate ? (
+              // 403'd. The server door stays the real one either way. On an empty
+              // read that SUCCEEDED the verb moves to the empty state — one filled
+              // primary per first screen — while an unread or failed read keeps it
+              // here, where it is the only way to act (same rule as catalog-view,
+              // vault-view).
+              canCreate &&
+              !(
+                scenariosQ.isSuccess &&
+                (scenariosQ.data?.items?.length ?? 0) === 0
+              ) ? (
                 <PagePrimaryAction>
                   <Button
                     type="button"
@@ -429,7 +437,7 @@ export function SandboxView() {
                       canCreate ? (
                         <Button
                           type="button"
-                          variant="secondary"
+                          variant="primary"
                           size="sm"
                           onClick={() => setCreateOpen(true)}
                         >

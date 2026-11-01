@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -38,6 +39,9 @@ func storedSetupApproval(rec model.Record) *workspaceSetupApproval {
 
 // handleSetWorkspaceSetup stores the exact setup command text of one folder, or clears it when the text is empty. The text is stored and never run by this operation, and an approval is bound to the SHA-256 of the exact text, so changing the text leaves the earlier approval unable to authorize it.
 func (m *Module) handleSetWorkspaceSetup(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if !m.workspaceAllowed(w, r, mc, permWsAdmin, auth.TrusteeModify) {
+		return
+	}
 	var body struct {
 		Command json.RawMessage `json:"command"`
 	}
@@ -59,6 +63,9 @@ func (m *Module) handleSetWorkspaceSetup(w http.ResponseWriter, r *http.Request,
 
 // handleApproveWorkspaceSetup records a person's approval of the setup command text whose SHA-256 is posted, and refuses with 409 when the stored text no longer has that hash. An agent identity cannot approve, and the approval commits together with its audit entry.
 func (m *Module) handleApproveWorkspaceSetup(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if !m.workspaceAllowed(w, r, mc, permWsAdmin, auth.TrusteeModify) {
+		return
+	}
 	var body struct {
 		SHA256 string `json:"sha256"`
 	}

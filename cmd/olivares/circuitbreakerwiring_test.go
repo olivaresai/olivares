@@ -40,7 +40,10 @@ func TestTheInferenceDeciderIsWiredWithEveryGateItReads(t *testing.T) {
 	// THE GATES, WRITTEN DOWN. A list derived from the struct definition would shrink with it —
 	// the "expectation derived from the thing under test" defect this repository has paid for
 	// more than once. Adding a gate is a deliberate edit here as well as there.
-	gates := []string{"KillSwitch", "CircuitBreaker", "Egress", "Inspector", "ComputerUse", "Residency"}
+	// The three edition gates are bound through their Live fields: an administrator's
+	// settings change them while the engine runs (edition_live.go), and the decider reads
+	// the Live field first (inferencepep/inferenceproxy.go egress, inspector, computerUse).
+	gates := []string{"KillSwitch", "CircuitBreaker", "EgressLive", "InspectorLive", "ComputerUseLive", "Residency"}
 
 	assigned := map[string]bool{}
 	found := false

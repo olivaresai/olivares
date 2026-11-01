@@ -164,7 +164,7 @@ if (state.get("schema") != "production-state/v1" or set(configs) != {"business"}
         or not all(isinstance(v, str) and v for v in pins.values())):
     cannot(f"{state_path} does not name the production pins, the one sold Business configuration with what it bundles, the retired bundles and the not-sold Cloud ids")
 # The record names the production pins: sale on, and ENTERPRISE_VERSION "latest", the release the
-# stable channel manifest publishes (olivares-work#374), so a release bump edits neither file.
+# stable channel manifest publishes, so a release bump edits neither file.
 for key, value, why in (("FULFILLMENT_ENABLED", "true", "sale on"),
                         ("ENTERPRISE_VERSION", "latest", "the stable channel manifest names the release")):
     if pins[key] != value:

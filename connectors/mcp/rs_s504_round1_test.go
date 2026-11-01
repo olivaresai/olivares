@@ -13,12 +13,12 @@ import (
 )
 
 // rs_s504_round1_test.go — Stage-5 review round 1 (Codex,
-// an internal design note (not shipped)): the six blocking
+// an internal audit): the six blocking
 // findings S5-01…S5-06, each pinned by the reviewer's OWN concrete failing input.
 //
 // RED-FIRST: every test here was written and RUN against commit fb310421 BEFORE
 // the fixes existed; the literal failing output lives in
-// an internal design note (not shipped)
+// an internal audit
 //
 // PRIMARY SOURCE for every protocol shape asserted here is the vendored MCP
 // 2026-07-28 RC schema (an internal design note (not shipped), upstream 76346843):

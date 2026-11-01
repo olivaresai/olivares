@@ -14,16 +14,7 @@ description: >-
 選抜でも、誰かが覚えていて文書化したものだけでもなく、principal が開くために必要な
 権限と詳細情報の参照先とともに列挙します。
 
-コンソールのナビゲーション構造は**ひとつ、セクション付きの 9 エリア**です。各画面は
-1 つのエリアとその 1 つのセクションに属し、画面の場所を示すものはすべて同じ場所を
-示します。「すべての領域」（アカウントメニューとコマンドパレット、スマートフォンでは
-「その他」）、エリアのディレクトリページ、コマンドパレット、そして画面の上にあるリンクの
-列です。この列は同じセクションのほかの画面を並べます。上部バーが
-5 つの場所を、最初の作業を先頭に示し（ホーム、セッション、ツール、ルール、台帳。Business は
-組織を加えます）、場所は同じセクションのほかの画面でも選択中として表示されます。「すべての領域」は各エリアとその画面を 2 階層で並べ、バーにすでにある場所は繰り返しません。ナビゲーションのフィルタは、グループ化されたツリーを、権限のある一致結果の
-順位付き一覧に置き換えます。コマンドパレットも同じ索引、同じ順位、同じ権限の投影を
-使います。エリアのディレクトリはリンクのページであり、権限が許すエントリを列挙します。
-能力、可用性、準備状態のライブな読み取りではありません。
+コンソールのナビゲーションは**左サイドバーひとつ**です。場所を 4 つのグループ（**作業**（ホーム、セッション、ファイルとワークスペース、作業とコミュニケーション）、**ツール**（AI ツール、モデル、MCPとスキル、ソース）、**コントロール**（ルールと承認、使用量とコスト、アクティビティと監査、アクセスマップ）、**管理**（ユーザーとグループ、セキュリティ、運用、ライセンス））に分けて並べ、設定を一番下に置きます。各画面は 1 つの場所に属し、画面の上のリンク行はその場所のほかの画面を並べます。場所は、権限で少なくとも 1 つの画面を開けるときだけ表示され、Business の画面は Business エディションでだけ表示されます。サイドバーはアイコンだけに折りたたんで、また開けます。狭い画面では、同じサイドバーがメニューボタンからドロワーとして開きます。上部バーには、ページのタイトル、検索（⌘K または Ctrl+K）、通知、アカウントメニューがあります。コマンドパレットは同じ画面を同じ権限で検索します。以前のエリアディレクトリのアドレス（`/areas/…`）は、その画面を今持つ場所を、クエリとフラグメントを保ったまま開きます。
 
 新規インストールでは、最初の作業だけが一覧に表示されます（ホーム、セッション、AI ツール、
 承認、セットアップウィザード、設定）。それ以外の画面はプレビューです。
@@ -37,8 +28,8 @@ description: >-
 append-only な一覧であり、画面が追加、移動、消失すれば、このページも必ず変わります。
 各画面の名前と 1 行説明は、コンソールと同じ翻訳カタログから取得した**コンソール自身の
 文字列**です。ここで読む内容は製品で目にする内容と同じです。以下の表は、それらの行をエリアごとにまとめ、ホーム（概要）を先頭に、サインイン、
-セットアップ、アカウントを最後に置きます。9 つのエリアディレクトリページは、機能
-レジストリの外にマウントされたルートと同じ表にあります。
+セットアップ、アカウントを最後に置きます。以前の 9 つのエリアディレクトリのアドレスは、機能
+レジストリの外にマウントされたルートと同じ表にあり、それぞれ対応する場所へリダイレクトします。
 
 :::note[権限を強制するのはこの表ではなくエンジン]
 `必要な権限` 列は、エンジンが返す実効権限に基づき、コンソールがルートを提示する前に
@@ -50,7 +41,7 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 
 ## このページの読み方
 
-- **画面** — 「すべての領域」、エリアディレクトリ、コマンドパレットで使われる名前。
+- **画面** — 画面の上のリンク行とコマンドパレットで使われる名前。
 - **パス** — デプロイしたコンソールの origin 配下の URL。これは公開 contract です。
   ブックマーク、runbook のディープリンク、ドキュメントの相互参照はいずれもこの文字列を
   使います。
@@ -59,13 +50,13 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
   提供されることを意味します。
 - **リファレンス** — その画面でコンソール自身のヘルプリンクが開くページ。
 
-以下の見出しはエリアで、「すべての領域」と同じ順です。インフラ、AI、データと
+以下の見出しは、ルート一覧が画面をまとめるレジストリのエリアです。インフラ、AI、データと
 コンテキスト、作業とコミュニケーション、自動化、セキュリティとアイデンティティ、
 デリバリー、監督、システムと設定。
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-コンソールは **74 ルート**を公開します。以下の表に、必要な権限と、製品内
+コンソールは **66 ルート**を公開します。以下の表に、必要な権限と、製品内
 ヘルプリンクが開くリファレンスページとともに、すべて掲載されています。
 
 ### ホーム
@@ -88,9 +79,8 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 |---|---|---|---|---|
 | エージェントツール | `/agent-tools` | セッションが使うアカウントと API キーを確認します。ツールのインストールとサインインはデプロイ管理者のみです | `sessions:account:read` | [how-to/add-a-provider](/ja/how-to/add-a-provider/) |
 | セッションを運用 | `/agentops` | セッションを開始し、Olivares が見つけたものも含めて、それぞれの動きを追います | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/ja/how-to/run-claude-code-with-olivares/) |
-| MCP サーバー | `/mcp-servers` | リモートの MCP サーバーをこの組織に接続してテストし、セッションが使えるツールを選びます | `tenant:admin` | [how-to/connectors/mcp-governance](/ja/how-to/connectors/mcp-governance/) |
 | モデル運用 | `/model-operations` | 所有モデル、admission、デプロイメント | `models:registry:read` | [reference/modules/xxiii-model-operations](/ja/reference/modules/xxiii-model-operations/) |
-| モデル | `/models` | モデル、ルーティング、プロバイダー鍵 | `models:catalog:read` | [reference/modules/x-models](/ja/reference/modules/x-models/) |
+| モデル | `/models` | モデル、ルーティング、ガバナンス | `models:catalog:read` | [reference/modules/x-models](/ja/reference/modules/x-models/) |
 | プラットフォーム | `/platforms` | デプロイ面、コンプライアンスマトリクス、プラットフォーム別モデルライフサイクル | `models:platforms:read` | [reference/modules/x-models](/ja/reference/modules/x-models/) |
 | プロバイダーアカウント | `/provider-accounts` | 名前付きのプロバイダーアカウントを一覧し、既存のプロバイダープロファイルをアカウントとして採用する | `sessions:account:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
 | ソースバインディング | `/provider-bindings` | 構成済みソースをプロバイダープロファイルにリンクする | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
@@ -111,7 +101,6 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | MCP とスキル | `/capabilities` | MCP サーバー、スキル、ツールを統制 | `capabilities:catalog:read` | [reference/modules/v-capabilities](/ja/reference/modules/v-capabilities/) |
 | カタログ | `/catalog` | キュレーションされ承認されたエージェントと capability | `catalog:entry:read` | [reference/modules/xiv-catalog](/ja/reference/modules/xiv-catalog/) |
 | ナレッジ | `/knowledge` | ナレッジベース、RAG、データリネージ | `knowledge:kb:read` | [reference/modules/viii-knowledge](/ja/reference/modules/viii-knowledge/) |
-| スキルカタログ | `/skills` | スキルパックを閲覧し、部門、エージェントグループ、エージェントに割り当てる | `skills:catalog:read` | [reference/console](/ja/reference/console/) |
 
 ### 作業とコミュニケーション
 
@@ -166,6 +155,7 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | オブザーバビリティ | `/observability` | 標準別の取り込み健全性とトレースのドリルダウン | `health:status:read` | [reference/modules/observability](/ja/reference/modules/observability/) |
 | 保持期間 | `/retention` | 記録クラスごとの保持期間、それを適用するスイープ、封印された証明書 | `compliance:retention:read` | [reference/modules/xiii-compliance](/ja/reference/modules/xiii-compliance/) |
 | 予算 | `/stored-budgets` | 保存済みの各上限に対する消費を表示します。予約済みキャパシティは上限にカウントされます。 | `finops:budget:read` | [reference/modules/xi-finops](/ja/reference/modules/xi-finops/) |
+| 使用量 | `/usage` | 各アカウントの公式の 5 時間と週の上限（上限に近い順）と、今日のトークンとコスト。 | `sessions:run:read` | [reference/console](/ja/reference/console/) |
 
 ### システムと設定
 
@@ -177,6 +167,7 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | ソースの差分 | `/console/sources/diff` | 接続された Git リポジトリのベースリビジョンとヘッドリビジョンをファイルごとに比較します | `system:admin` | [reference/console](/ja/reference/console/) |
 | ログ | `/logs` | レベルやモジュールで絞り込み、検索、一時停止ができるエンジンのライブログストリーム。 | `system:admin` | [how-to/troubleshooting](/ja/how-to/troubleshooting/) |
 | セットアップウィザード | `/onboarding` | 段階的なデプロイメント設定 | `system:admin` | [start/quickstart](/ja/start/quickstart/) |
+| アップデート | `/updates` | このエンジンが実行しているバージョン、チャンネルの最新の署名付きリリース、そしてインストールする操作です | `system:admin` | [how-to/upgrade-and-rollback](/ja/how-to/upgrade-and-rollback/) |
 
 ### ログイン、セットアップ、アカウント
 
@@ -186,16 +177,8 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | 画面 | パス | 内容 | 必要な権限 | リファレンス |
 |---|---|---|---|---|
 | 招待を受け入れる | `/accept-invite` | メールで届いた招待リンクの遷移先。事前のセッションなしでパスワードを設定し、ワークスペースへ参加する。 | **no sign-in** | — |
-| AI | `/areas/ai` | AI 領域のディレクトリです。セッションの監視と運用、プロバイダーのプロファイルと環境、モデル、専用実行、プロバイダーリファレンスを扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
-| 自動化 | `/areas/automation` | 自動化 領域のディレクトリです。フローとオーケストレーション、イベントと通知を扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
-| データとコンテキスト | `/areas/data-context` | データとコンテキスト 領域のディレクトリです。能力、ナレッジ、成果物を扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
-| デリバリー | `/areas/deployment` | デリバリー 領域のディレクトリです。デプロイの準備と制御を扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
-| インフラ | `/areas/infrastructure` | インフラ 領域のディレクトリです。環境のインベントリとワークスペースを扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
-| 監督 | `/areas/observation` | 監督 領域のディレクトリです。状態とアクティビティ、コストと導入、監査、評価とエビデンスを扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
-| セキュリティとアイデンティティ | `/areas/security-identity` | セキュリティとアイデンティティ 領域のディレクトリです。アイデンティティとアクセス、ポリシーとガバナンスの境界、保護と対応を扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
-| システムと設定 | `/areas/system` | システムと設定 領域のディレクトリです。管理、インストールと保守、開発者ツール、個人設定を扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
-| 作業とコミュニケーション | `/areas/work-communications` | 作業とコミュニケーション 領域のディレクトリです。セッション間で永続的に記録される作業とガバナンス下の通信を扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
 | ログイン | `/login` | プロビジョニング済みアカウントのクレデンシャルまたはトークンによるログインページ。 | **no sign-in** | — |
+| デバイスをペアリング | `/pair` | 1 回限りのデバイスペアリングリンクの遷移先です。新しいデバイスは既存のセッションなしでログインします。 | **no sign-in** | — |
 | 設定 | `/settings` | ワークスペースとアカウントの設定 | any signed-in user | — |
 | 初回セットアップ | `/setup` | 新規デプロイメントを利用可能にする 1 回限りのページ。セットアップトークンを消費して最初の owner アカウントを作成する。 | **no sign-in** | — |
 | 公開ステータス | `/status-page` | ログインしていない人向けのコンポーネント健全性。ページを開いている間は自動更新される。 | **no sign-in** | — |

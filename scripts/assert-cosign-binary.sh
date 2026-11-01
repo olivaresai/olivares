@@ -385,7 +385,7 @@ echo "cosign-binary: verified binary is $abs"
 # checked. That is a runtime fact, not an inference over shell text.
 #
 # ADJUDICATED, NOT INVENTED: this design and every postcondition below were approved by the
-# adversarial reviewer in an internal design note (not shipped), after
+# adversarial reviewer in an internal audit, after
 # the author's own judgement was ruled out of scope. Two qualifications came with it and are
 # recorded here because they bound what this may be claimed to achieve:
 #   1. it is NOT a sandbox against hostile same-UID code, which can still fetch its own

@@ -435,7 +435,7 @@ export const VISTAS_DE_SESION = new Set([
 // A glob (`src/**/x`) and a masked value (`****`) are not markdown.
 const MARKDOWN_CRUDO =
   /(?:^|\n)\s*[-*] \*\*|(?<![*/\w])\*\*(?=[^\s*/])[^*\n]*[^\s*/]\*\*(?![*/\w])|```/
-// The rows #1784 and dev#3119 showed. The console paints no rate-limit report as a row: only a refusal that
+// The rows #1784 and the regression showed. The console paints no rate-limit report as a row: only a refusal that
 // stopped the turn, as a sentence ("Claude Code reached its weekly limit…", conversation-frames.ts
 // `rateLimitStop`). So any raw report, "allowed · <window> [· 42%]", "allowed warning · seven day · 93%",
 // "rejected · five hour" or "allowed · overage", is a defect.

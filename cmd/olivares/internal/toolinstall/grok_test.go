@@ -71,6 +71,8 @@ func grokEngine(t *testing.T, s *tlsMapServer) (*Engine, *Grok, string) {
 	eng := NewEngineWithCapabilities(cat, EngineOptions{InstallerVersion: "test", Now: func() time.Time {
 		return time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
 	}})
+	recordChildren(eng)
+	stubLandlock(t)
 	return eng, g, root
 }
 

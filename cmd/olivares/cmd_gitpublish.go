@@ -21,7 +21,7 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 )
 
-// The git publication family: scriptable verbs over the thirteen
+// The git publication family: scriptable verbs over the fourteen
 // /v1/m/gitpublish routes (modules/gitpublish/routes.go). `olivares gitpublish`
 // and /v1/m/gitpublish are the same word, as with every module namespace.
 //

@@ -273,7 +273,7 @@ func (m *Module) stopIdleRun(ctx context.Context, lr *liveRun, window time.Durat
 	// Once the stop is recorded it runs to its end, on its own budget.
 	effectCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), idlePolicyStopBudget)
 	defer cancel()
-	outcome, stopErr, revokeErr := m.stopLiveEffect(effectCtx, lr, idlePolicyReason, legacyRevocationPhase(effectCtx))
+	outcome, stopErr, revokeErr := m.stopLiveEffect(effectCtx, lr, idlePolicyReason, "", legacyRevocationPhase(effectCtx))
 	if outcome != stopEffectFinalized {
 		return errors.Join(errIdleStopNotFinalized, stopErr, revokeErr)
 	}
@@ -355,7 +355,7 @@ func (lr *liveRun) workInFlightLocked(now time.Time, window time.Duration) bool 
 		return false
 	}
 	if lr.session != nil {
-		return lr.session.ActiveTurn() != "" || !lr.driverTurnEnded && !lr.lastIOAt.IsZero() && now.Before(lr.lastIOAt.Add(window))
+		return lr.session.ActiveTurn() != "" || lr.driverInputStarted && !lr.driverTurnEnded && !lr.lastIOAt.IsZero() && now.Before(lr.lastIOAt.Add(window))
 	}
 	return lr.claudePendingTurns > 0 || lr.claudeOutputOpen
 }

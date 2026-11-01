@@ -56,8 +56,13 @@ vi.mock('./license-tab', () => ({
 
 import ConsoleView from './console-view'
 
+/** A tenant administrator by default; a test that needs a delegated (workspace) admin flips it. */
+let tenantAdmin = true
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ can: () => true, confinedWorkspace: null }),
+  useAuth: () => ({
+    can: (permission: string) => permission !== 'tenant:admin' || tenantAdmin,
+    confinedWorkspace: null,
+  }),
 }))
 vi.mock('@/features/extensions', async (original) => {
   const actual = await original<typeof import('@/features/extensions')>()
@@ -67,19 +72,14 @@ vi.mock('@/features/extensions', async (original) => {
   }
 })
 
+/** What Administration still holds for a tenant administrator, in tab order. */
 const ALL_TABS = [
-  ['people', 'PeopleTab mounted'],
   ['agents', 'AgentsTab mounted'],
-  ['sso', 'SSOTab mounted'],
   ['scopes', 'ScopesTab mounted'],
-  ['roles', 'RolesTab mounted'],
   ['bindings', 'BindingsTab mounted'],
   ['secrets', 'SecretsTab mounted'],
-  ['mcpGateway', 'MCPGatewayTab mounted'],
   ['connectors', 'ConnectorsTab mounted'],
   ['wsConnectors', 'WorkspaceConnectorsTab mounted'],
-  ['apiKeys', 'ApiKeysTab mounted'],
-  ['license', 'LicenseTab mounted'],
 ] as const
 
 function locationOf(router: AnyRouter) {
@@ -125,8 +125,17 @@ function makeRouter(initialEntries: string[]) {
     path: '/',
     component: () => <h1>home</h1>,
   })
+  // The places that now own the tabs Administration used to repeat.
+  // MCP & skills' alias for the old MCP gateway tab is the app routes' (TAB_ALIASES).
+  const owners = ['/identity', '/settings'].map((path) =>
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path,
+      component: () => <h1>{path}</h1>,
+    }),
+  )
   return createRouter({
-    routeTree: rootRoute.addChildren([consoleRoute, homeRoute]),
+    routeTree: rootRoute.addChildren([consoleRoute, homeRoute, ...owners]),
     history: createMemoryHistory({ initialEntries }),
     scrollRestoration: true,
   })
@@ -141,83 +150,84 @@ async function mount(initialEntries: string[]) {
 }
 
 afterEach(() => {
+  tenantAdmin = true
   window.history.replaceState(null, '', '/')
 })
 
 describe('ConsoleView — mounted URL continuity (real router)', () => {
-  it('follows PUSH ?tab=people then ?tab=license while still mounted; Back/Forward match', async () => {
-    const router = await mount(['/console?tab=roles'])
-    expect(screen.getByText('RolesTab mounted')).toBeInTheDocument()
-    expect(screen.getAllByRole('tab')).toHaveLength(12)
+  it('follows PUSH ?tab=scopes then ?tab=secrets while still mounted; Back/Forward match', async () => {
+    const router = await mount(['/console?tab=agents'])
+    expect(screen.getByText('AgentsTab mounted')).toBeInTheDocument()
+    expect(screen.getAllByRole('tab')).toHaveLength(ALL_TABS.length)
 
-    let done = rendered(router, '/console', 'tab=people')
+    let done = rendered(router, '/console', 'tab=scopes')
     await act(async () => {
       await router.navigate({
         to: '/console',
-        search: { tab: 'people' },
+        search: { tab: 'scopes' },
       } as never)
       await done
     })
-    expect(screen.getByText('PeopleTab mounted')).toBeInTheDocument()
-    expect(screen.queryByText('RolesTab mounted')).toBeNull()
-    expect(locationOf(router).search).toContain('tab=people')
+    expect(screen.getByText('ScopesTab mounted')).toBeInTheDocument()
+    expect(screen.queryByText('AgentsTab mounted')).toBeNull()
+    expect(locationOf(router).search).toContain('tab=scopes')
 
-    done = rendered(router, '/console', 'tab=license')
+    done = rendered(router, '/console', 'tab=secrets')
     await act(async () => {
       await router.navigate({
         to: '/console',
-        search: { tab: 'license' },
+        search: { tab: 'secrets' },
       } as never)
       await done
     })
-    expect(screen.getByText('LicenseTab mounted')).toBeInTheDocument()
-    expect(screen.queryByText('PeopleTab mounted')).toBeNull()
+    expect(screen.getByText('SecretsTab mounted')).toBeInTheDocument()
+    expect(screen.queryByText('ScopesTab mounted')).toBeNull()
 
-    done = rendered(router, '/console', 'tab=people')
+    done = rendered(router, '/console', 'tab=scopes')
     await act(async () => {
       router.history.back()
       await done
     })
-    expect(screen.getByText('PeopleTab mounted')).toBeInTheDocument()
-    expect(locationOf(router).search).toContain('tab=people')
+    expect(screen.getByText('ScopesTab mounted')).toBeInTheDocument()
+    expect(locationOf(router).search).toContain('tab=scopes')
 
-    done = rendered(router, '/console', 'tab=roles')
+    done = rendered(router, '/console', 'tab=agents')
     await act(async () => {
       router.history.back()
       await done
     })
-    expect(screen.getByText('RolesTab mounted')).toBeInTheDocument()
-    expect(locationOf(router).search).toContain('tab=roles')
+    expect(screen.getByText('AgentsTab mounted')).toBeInTheDocument()
+    expect(locationOf(router).search).toContain('tab=agents')
 
-    done = rendered(router, '/console', 'tab=people')
+    done = rendered(router, '/console', 'tab=scopes')
     await act(async () => {
       router.history.forward()
       await done
     })
-    expect(screen.getByText('PeopleTab mounted')).toBeInTheDocument()
+    expect(screen.getByText('ScopesTab mounted')).toBeInTheDocument()
 
-    done = rendered(router, '/console', 'tab=license')
+    done = rendered(router, '/console', 'tab=secrets')
     await act(async () => {
       router.history.forward()
       await done
     })
-    expect(screen.getByText('LicenseTab mounted')).toBeInTheDocument()
+    expect(screen.getByText('SecretsTab mounted')).toBeInTheDocument()
   })
 
   it('user tab clicks REPLACE, so Back leaves the view instead of walking tabs', async () => {
     const user = userEvent.setup()
-    const router = await mount(['/', '/console?tab=roles'])
-    expect(screen.getByText('RolesTab mounted')).toBeInTheDocument()
+    const router = await mount(['/', '/console?tab=agents'])
+    expect(screen.getByText('AgentsTab mounted')).toBeInTheDocument()
 
-    let done = rendered(router, '/console', 'tab=people')
-    await user.click(screen.getByRole('tab', { name: /users & groups/i }))
+    let done = rendered(router, '/console', 'tab=scopes')
+    await user.click(screen.getByRole('tab', { name: /workspaces/i }))
     await act(() => done)
-    expect(screen.getByText('PeopleTab mounted')).toBeInTheDocument()
+    expect(screen.getByText('ScopesTab mounted')).toBeInTheDocument()
 
-    done = rendered(router, '/console', 'tab=license')
-    await user.click(screen.getByRole('tab', { name: /edition & license/i }))
+    done = rendered(router, '/console', 'tab=bindings')
+    await user.click(screen.getByRole('tab', { name: /source bindings/i }))
     await act(() => done)
-    expect(screen.getByText('LicenseTab mounted')).toBeInTheDocument()
+    expect(screen.getByText('BindingsTab mounted')).toBeInTheDocument()
 
     done = rendered(router, '/')
     await act(async () => {
@@ -231,8 +241,8 @@ describe('ConsoleView — mounted URL continuity (real router)', () => {
 
   it('preserves unrelated search and hash across a user tab click', async () => {
     const user = userEvent.setup()
-    const router = await mount(['/console?tab=roles&focus=svc_pool#panel-x'])
-    expect(screen.getByText('RolesTab mounted')).toBeInTheDocument()
+    const router = await mount(['/console?tab=agents&focus=svc_pool#panel-x'])
+    expect(screen.getByText('AgentsTab mounted')).toBeInTheDocument()
     expect(
       locationOf(router).hash === '#panel-x' ||
         locationOf(router).hash === 'panel-x',
@@ -248,26 +258,26 @@ describe('ConsoleView — mounted URL continuity (real router)', () => {
     expect(loc.hash === '#panel-x' || loc.hash === 'panel-x').toBe(true)
   })
 
-  it('invalid ?tab= falls back to People, clears only tab, keeps unrelated search/hash, does not loop', async () => {
+  it('invalid ?tab= falls back to Agents, clears only tab, keeps unrelated search/hash, does not loop', async () => {
     const router = await mount([
       '/console?tab=not-a-tab&focus=svc_pool#panel-x',
     ])
     await act(async () => {})
-    expect(screen.getByText('PeopleTab mounted')).toBeInTheDocument()
+    expect(screen.getByText('AgentsTab mounted')).toBeInTheDocument()
     const loc = locationOf(router)
     expect(loc.search).not.toContain('tab=not-a-tab')
     expect(loc.search).toContain('focus=svc_pool')
     expect(loc.hash === '#panel-x' || loc.hash === 'panel-x').toBe(true)
     // Cleanup is a replace: staying on /console, not bouncing through another entry.
     expect(loc.pathname).toBe('/console')
-    expect(screen.getAllByRole('tab')).toHaveLength(12)
+    expect(screen.getAllByRole('tab')).toHaveLength(ALL_TABS.length)
   })
 
   it.each(ALL_TABS)(
     'router PUSH to ?tab=%s selects that panel while Console stays mounted',
     async (id, mounted) => {
       const router = await mount(['/console'])
-      expect(screen.getByText('PeopleTab mounted')).toBeInTheDocument()
+      expect(screen.getByText('AgentsTab mounted')).toBeInTheDocument()
       const done = rendered(router, '/console', `tab=${id}`)
       await act(async () => {
         await router.navigate({
@@ -277,7 +287,75 @@ describe('ConsoleView — mounted URL continuity (real router)', () => {
         await done
       })
       expect(screen.getByText(mounted)).toBeInTheDocument()
-      expect(screen.getAllByRole('tab')).toHaveLength(12)
+      expect(screen.getAllByRole('tab')).toHaveLength(ALL_TABS.length)
     },
   )
+})
+
+describe('ConsoleView — tabs another place owns (0.5 Admin fold)', () => {
+  it('offers a tenant administrator no tab that People & groups, License or MCP & skills holds', async () => {
+    await mount(['/console'])
+    const names = screen.getAllByRole('tab').map((tab) => tab.textContent)
+    for (const gone of [
+      'Users & groups',
+      'SSO / IdP',
+      'Roles & delegation',
+      'API keys',
+      'Edition & license',
+      'MCP gateway',
+    ])
+      expect(names).not.toContain(gone)
+  })
+
+  it.each([
+    ['people', '/identity', 'tab=people'],
+    ['sso', '/identity', 'tab=sso'],
+    ['roles', '/identity', 'tab=roles'],
+    ['apiKeys', '/identity', 'tab=apiKeys'],
+    ['license', '/settings', 'section=edition'],
+  ])(
+    'sends an old ?tab=%s link to %s with its other query and hash, replacing the entry',
+    async (tab, pathname, owned) => {
+      const router = await mount([
+        '/',
+        `/console?tab=${tab}&focus=svc_pool#panel-x`,
+      ])
+      await act(async () => {})
+      const loc = locationOf(router)
+      expect(loc.pathname).toBe(pathname)
+      expect(loc.search).toContain(owned)
+      expect(loc.search).toContain('focus=svc_pool')
+      if (pathname !== '/identity') expect(loc.search).not.toContain('tab=')
+      expect(loc.hash === '#panel-x' || loc.hash === 'panel-x').toBe(true)
+      // A replace: Back returns where the link was followed from, not to the old address.
+      const done = rendered(router, '/')
+      await act(async () => {
+        router.history.back()
+        await done
+      })
+      expect(locationOf(router).pathname).toBe('/')
+    },
+  )
+
+  it('keeps an old ?tab=people address for a principal not (yet) answered as a tenant administrator', async () => {
+    // The Business authority answers after the first render: clearing the tab as refused
+    // would lose the link before the redirect could follow it.
+    tenantAdmin = false
+    const router = await mount(['/console?tab=people&focus=svc_pool'])
+    await act(async () => {})
+    expect(screen.getByText('AgentsTab mounted')).toBeInTheDocument()
+    expect(locationOf(router).pathname).toBe('/console')
+    expect(locationOf(router).search).toContain('tab=people')
+  })
+
+  it('keeps Roles & delegation in Administration for a workspace (delegated) administrator', async () => {
+    tenantAdmin = false
+    const router = await mount(['/console?tab=roles'])
+    await act(async () => {})
+    expect(screen.getByText('RolesTab mounted')).toBeInTheDocument()
+    expect(locationOf(router).pathname).toBe('/console')
+    expect(
+      screen.getByRole('tab', { name: /roles & delegation/i }),
+    ).toBeInTheDocument()
+  })
 })

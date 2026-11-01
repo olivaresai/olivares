@@ -6,16 +6,29 @@
 
 package sessions
 
-import "os/exec"
+import (
+	"errors"
+	"os"
+	"os/exec"
+)
 
 // The session guard is Linux's: it needs a subreaper, which other systems do not
 // have. There the session is the process the engine starts, as before.
 
 type engineWatch struct{}
 
-func watchEngine(*exec.Cmd) (*engineWatch, error) { return nil, nil }
+func watchEngine(_ *exec.Cmd, killTreeOnExit bool) (*engineWatch, error) {
+	if killTreeOnExit {
+		return nil, errors.New("sessions: worktree setup is unavailable on this host: descendant cleanup requires the Linux session guard")
+	}
+	return nil, nil
+}
 
 func (*engineWatch) started() {}
+
+func (*engineWatch) guardOutcome() *os.File { return nil }
+
+func (*engineWatch) endLifetime() {}
 
 func (*engineWatch) close() {}
 

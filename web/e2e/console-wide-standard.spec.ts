@@ -14,10 +14,9 @@
 //    `scripts/web-e2e-demo.sh` is where this spec actually runs.
 //
 // ⛔ WHAT IT ASSERTS THAT A UNIT TEST CANNOT, and each was a measured hole:
-//    · that the rail CUTS NO LABEL — `scrollWidth > clientWidth` is the browser's own
-//      answer, and jsdom has no layout at all. Measured before the fix: 65 cut labels
-//      across the console languages;
-//    · that the rail is ONE tab stop in a REAL tab order. Measured before: 85;
+//    · that the left navigation CUTS NO LABEL — `scrollWidth > clientWidth` is the
+//      browser's own answer, and jsdom has no layout at all. Measured on the old rail
+//      before the fix: 65 cut labels across the console languages;
 //    · that the type ladder SURVIVES to the painted element. `cn` used to delete it,
 //      and no source-level census could see that;
 //    · the keyboard of each screen family — list, form, dialog — including focus RETURN,
@@ -119,36 +118,14 @@ async function prefer(page: Page, theme: 'dark' | 'light', lang: string) {
   )
 }
 
-/** The area directory: All areas, opened from the account menu (there is no sidebar). */
-const AREAS = '[role="dialog"]'
+/** The one left navigation (sidebar.tsx). */
+const NAV = '[data-slot="sidebar"]'
 
-/** The two names `openAllAreas` clicks, in `lang`, read from the catalogs the console is
- * built from (as `tokensCss` is above), so a language's own words are stated once. */
-function areasNames(lang: string) {
-  const catalog = (ns: string) =>
-    JSON.parse(readFileSync(`src/lib/i18n/locales/${lang}/${ns}.json`, 'utf8'))
-  return {
-    account: catalog('auth').account.title as string,
-    allAreas: catalog('nav').shell.allAreas as string,
-  }
-}
-
-async function openAllAreas(page: Page, lang = 'en') {
-  const { account, allAreas } = areasNames(lang)
-  // The account button's name ends with its title, after the initials it shows.
-  const accountEnd = new RegExp(
-    `, ${account.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
-  )
-  await page.getByRole('button', { name: accountEnd }).click()
-  await page.getByRole('menuitem', { name: allAreas, exact: true }).click()
-  await expect(page.locator(AREAS)).toBeVisible()
-}
-
-/** Every element in All areas whose text the browser is CUTTING. */
+/** Every element in the left navigation whose text the browser is CUTTING. */
 async function cutLabels(page: Page) {
-  return page.evaluate((areas) => {
-    const directory = document.querySelector(areas)
-    if (!directory) return ['no area directory']
+  return page.evaluate((nav) => {
+    const directory = document.querySelector(nav)
+    if (!directory) return ['no navigation']
     const out: string[] = []
     for (const el of directory.querySelectorAll('*')) {
       if (el.children.length > 0) continue
@@ -162,7 +139,7 @@ async function cutLabels(page: Page) {
         out.push(`${text.slice(0, 40)} (+${el.scrollWidth - el.clientWidth}px)`)
     }
     return out
-  }, AREAS)
+  }, NAV)
 }
 
 test.describe('the console-wide standard', () => {
@@ -173,7 +150,9 @@ test.describe('the console-wide standard', () => {
   test.use({ viewport: { width: 1600, height: 1000 } })
 
   for (const lang of LANGUAGES) {
-    test(`the rail cuts no label in ${lang}`, async ({ browser }) => {
+    test(`the left navigation cuts no label in ${lang}`, async ({
+      browser,
+    }) => {
       // THE MEASURE THIS SPEC EXISTS FOR, and it is a BROWSER measure: the rail used to
       // cut 65 labels — en 5, es 12, ja 9, de 8, ru 16, fr 15, zh 0 — worst 102px of French
       // past the edge. A source census cannot see this: every string is whole in the locale
@@ -198,87 +177,15 @@ test.describe('the console-wide standard', () => {
       const p = await context.newPage()
       await signIn(p)
       await p.goto('/')
-      await openAllAreas(p, lang)
-      // Open every area, so the leaves and the section labels are measured too.
-      for (let pass = 0; pass < 3; pass++) {
-        const closed = p.locator(`${AREAS} button[aria-expanded="false"]`)
-        if ((await closed.count()) === 0) break
-        await closed
-          .first()
-          .click({ timeout: 3000 })
-          .catch(() => {})
-      }
+      await p.locator(NAV).waitFor()
       await p.waitForTimeout(400)
-      expect(await cutLabels(p), `${lang}: the rail must cut no label`).toEqual(
-        [],
-      )
+      expect(
+        await cutLabels(p),
+        `${lang}: the navigation must cut no label`,
+      ).toEqual([])
       await context.close()
     })
   }
-
-  test('the rail is ONE tab stop, and arrows walk it', async ({ page }) => {
-    await signIn(page)
-    await page.goto('/inventory')
-    await page.waitForLoadState('networkidle').catch(() => {})
-    await openAllAreas(page)
-
-    // Measured before the fix: 85 focusable elements in the sidebar. The tree is now a
-    // composite, so exactly one of its ROWS is tabbable.
-    const tabbableRows = await page.evaluate(
-      () =>
-        document.querySelectorAll(
-          '[role="dialog"] [data-nav-row][tabindex="0"]',
-        ).length,
-    )
-    expect(tabbableRows, 'exactly one rail row is in the tab order').toBe(1)
-
-    // And it is the row that names the page, so "where am I" needs no keystroke.
-    const current = await page.evaluate(() =>
-      document
-        .querySelector('[role="dialog"] [data-nav-row][tabindex="0"]')
-        ?.getAttribute('aria-current'),
-    )
-    expect(current, 'the tab stop starts on the current page').toBe('page')
-
-    await page.evaluate(() =>
-      document
-        .querySelector<HTMLElement>(
-          '[role="dialog"] [data-nav-row][tabindex="0"]',
-        )
-        ?.focus(),
-    )
-    const before = await page.evaluate(
-      () => document.activeElement?.textContent?.trim() ?? '',
-    )
-    await page.keyboard.press('ArrowDown')
-    const after = await page.evaluate(
-      () => document.activeElement?.textContent?.trim() ?? '',
-    )
-    expect(after, 'ArrowDown moves the rail focus').not.toBe(before)
-    expect(
-      await page.evaluate(
-        () =>
-          document.querySelectorAll(
-            '[role="dialog"] [data-nav-row][tabindex="0"]',
-          ).length,
-      ),
-      'the tab stop moves with the focus — it never becomes two',
-    ).toBe(1)
-  })
-
-  test('the rail names the pin and the key that does it', async ({ page }) => {
-    await signIn(page)
-    await page.goto('/')
-    await openAllAreas(page)
-    const pin = page.locator(`${AREAS} [data-rail-pin]`).first()
-    // Named BEFORE it happens, and the name carries the key, so
-    // the control and the keystroke are one offer rather than a key nobody can discover.
-    await expect(pin).toHaveAttribute('aria-label', /\(p\)/)
-    expect(
-      await pin.evaluate((el) => (el as HTMLElement).tabIndex),
-      'the pin is not a tab stop — the rail owns the one',
-    ).toBe(-1)
-  })
 
   test('the type ladder survives to the painted element', async ({ page }) => {
     // THE DEFECT `cn` HAD: tailwind-merge classified a ladder step as a text COLOUR and

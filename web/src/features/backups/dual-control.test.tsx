@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -36,6 +36,7 @@ vi.mock('@/lib/hooks/use-privileged-mutation', () => ({
   }),
 }))
 
+import { drKeys } from './api'
 import { BackupSchedule } from './backup-schedule'
 import { PendingRestores } from './pending-restores'
 
@@ -74,6 +75,150 @@ describe('PendingRestores (dual-control queue)', () => {
 })
 
 describe('BackupSchedule dual-control toggle', () => {
+  it.each([false, true])(
+    'refreshing backup age preserves drafts unless restore policy changed (%s)',
+    async (policyChanged) => {
+      const saved = {
+        enabled: true,
+        cron: '0 2 * * *',
+        retain_days: 30,
+        verify_cron: '0 3 * * 0',
+        last_backup: '2026-10-28T01:00:00Z',
+        backup_age_seconds: 0,
+      }
+      api.getSchedule.mockResolvedValue(saved)
+      const qc = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      })
+      render(
+        <QueryClientProvider client={qc}>
+          <BackupSchedule />
+        </QueryClientProvider>,
+      )
+      const weekly = await screen.findByLabelText(/verification schedule/i)
+      await userEvent.clear(weekly)
+      await userEvent.type(weekly, '0 4 * * 0')
+      const bucket = screen.getByLabelText(/offsite bucket/i)
+      await userEvent.type(bucket, 'recovery')
+      api.getSchedule.mockResolvedValue({
+        ...saved,
+        backup_age_seconds: 7200,
+        require_dual_control_restore: policyChanged ? true : undefined,
+      })
+      await act(async () => {
+        await qc.refetchQueries({ queryKey: drKeys.schedule() })
+      })
+      await screen.findByText(/2 hours old/)
+      expect(weekly).toHaveValue(policyChanged ? '0 3 * * 0' : '0 4 * * 0')
+      expect(bucket).toHaveValue(policyChanged ? '' : 'recovery')
+      const save = screen.getByRole('button', { name: /save schedule/i })
+      if (policyChanged) {
+        expect(save).toBeDisabled()
+        expect(
+          screen.getByLabelText(/require dual-control for restore/i),
+        ).toBeChecked()
+      } else {
+        expect(save).toBeEnabled()
+      }
+    },
+  )
+  it('shows failed verification independently and saves weekly cadence and offsite references', async () => {
+    api.getSchedule.mockResolvedValue({
+      enabled: true,
+      cron: '0 2 * * *',
+      retain_days: 30,
+      verify_cron: '0 3 * * 0',
+      last_run_status: 'completed',
+      last_verify_status: 'failed',
+      last_verify_error: 'bundle authentication failed',
+      rpo_hours: 24,
+    })
+    api.updateSchedule.mockResolvedValue({})
+    wrap(<BackupSchedule />)
+    expect(
+      await screen.findByText('bundle authentication failed'),
+    ).toBeVisible()
+    const weekly = screen.getByLabelText(/verification schedule/i)
+    await userEvent.clear(weekly)
+    await userEvent.type(weekly, '0 4 * * 0')
+    await userEvent.type(screen.getByLabelText(/offsite bucket/i), 'recovery')
+    await userEvent.type(
+      screen.getByLabelText(/credential reference/i),
+      'store:dr/offsite',
+    )
+    await userEvent.click(
+      screen.getByRole('button', { name: /save schedule/i }),
+    )
+    await waitFor(() =>
+      expect(api.updateSchedule).toHaveBeenCalledWith(
+        expect.objectContaining({
+          verify_cron: '0 4 * * 0',
+          offsite: expect.objectContaining({
+            bucket: 'recovery',
+            credential_ref: 'store:dr/offsite',
+          }),
+        }),
+      ),
+    )
+  })
+  it.each([
+    ['none', /does not lock new copies/i],
+    ['governance', /does not lock new copies/i],
+    ['no_default', /does not lock new copies/i],
+    ['unknown', /could not read the object lock/i],
+  ])(
+    'warns when the offsite bucket lock is %s',
+    async (offsite_lock, warning) => {
+      api.getSchedule.mockResolvedValue({
+        enabled: true,
+        cron: '0 2 * * *',
+        retain_days: 30,
+        offsite: {
+          bucket: 'recovery',
+          credential_ref: 'store:dr/offsite',
+          gfs: { daily: 7, weekly: 4, monthly: 12, yearly: 0, keep_last: 1 },
+        },
+        offsite_lock,
+      })
+      wrap(<BackupSchedule />)
+      expect(await screen.findByText(warning)).toBeVisible()
+    },
+  )
+  it('names the COMPLIANCE mode as code, without raw backticks', async () => {
+    api.getSchedule.mockResolvedValue({
+      enabled: true,
+      cron: '0 2 * * *',
+      retain_days: 30,
+      offsite: {
+        bucket: 'recovery',
+        credential_ref: 'store:dr/offsite',
+        gfs: { daily: 7, weekly: 4, monthly: 12, yearly: 0, keep_last: 1 },
+      },
+      offsite_lock: 'none',
+    })
+    wrap(<BackupSchedule />)
+    const warning = await screen.findByText(/does not lock new copies/i)
+    expect(warning.textContent).not.toContain('`')
+    const modes = within(warning).getAllByText('COMPLIANCE')
+    expect(modes.map((m) => m.tagName)).toEqual(['CODE', 'CODE'])
+  })
+  it('does not warn about a bucket with a default COMPLIANCE lock', async () => {
+    api.getSchedule.mockResolvedValue({
+      enabled: true,
+      cron: '0 2 * * *',
+      retain_days: 30,
+      offsite: {
+        bucket: 'recovery',
+        credential_ref: 'store:dr/offsite',
+        gfs: { daily: 7, weekly: 4, monthly: 12, yearly: 0, keep_last: 1 },
+      },
+      offsite_lock: 'compliance',
+    })
+    wrap(<BackupSchedule />)
+    expect(await screen.findByText(/last backup/i)).toBeVisible()
+    expect(screen.queryByText(/does not lock new copies/i)).toBeNull()
+    expect(screen.queryByText(/could not read the object lock/i)).toBeNull()
+  })
   it('renders the restore command in its explanation without raw backticks', async () => {
     api.getSchedule.mockResolvedValue({
       enabled: false,

@@ -19,12 +19,13 @@ import { agentOpsApi } from './api'
 import { launchRunAsAgent } from './launch-agent-api'
 import { stoppedAtStartReason } from './launch-readiness'
 import { sessionTurnBody } from './session-turn'
-import { TOOL_NAMES, type SessionTool } from './tool-names'
+import { toolName, type SessionTool } from './engine-tools'
 import {
   DEFAULT_DLP_MODE,
   type CreateRunRequest,
   type RunDTO,
   type SecretEnvRef,
+  type SourceItemDTO,
   type WorkspaceDTO,
 } from './types'
 
@@ -41,18 +42,50 @@ export interface LaunchAuthority {
  * applies each preset to every driver, and refuses with one sentence a launch a tool cannot
  * honour). "Edit files and run commands" (the default) is the engine's built-in template:
  * an allowlist under dontAsk, so the named tools run without asking and every other tool
- * is refused. The others are plain permission modes. */
+ * is refused. The others are plain permission modes. Supervised is `ask`, Auto-accept edits
+ * is `editsOnly`: the names are a view over the engine's modes (modules/sessions
+ * permission_modes.go lists them and what each tool receives). */
 export type PermissionChoice =
-  'editsAndCommands' | 'editsOnly' | 'readOnly' | 'ask'
+  'readOnly' | 'ask' | 'editsOnly' | 'editsAndCommands' | 'auto' | 'full'
+/** The choices from the least to the most the agent may do, as the engine lists them. */
+export const PERMISSION_CHOICES: readonly PermissionChoice[] = [
+  'readOnly',
+  'ask',
+  'editsOnly',
+  'editsAndCommands',
+  'auto',
+  'full',
+]
+/** The engine's name for each choice: what `olivares session start --permission` takes
+ * and what the Settings table lists (settings/permission-modes.gen.json). */
+export const PERMISSION_NAME: Record<PermissionChoice, string> = {
+  readOnly: 'read-only',
+  ask: 'supervised',
+  editsOnly: 'auto-accept-edits',
+  editsAndCommands: 'edits-and-commands',
+  auto: 'auto',
+  full: 'full',
+}
+/** Whether someone may choose a permission: Full and Auto let the tool act without a
+ * person approving each call, so the engine refuses them to anyone who does not run
+ * sessions as an administrator (modules/sessions needsRunAdministration). */
+export const mayChoosePermission = (
+  choice: PermissionChoice,
+  mayRunAdmin: boolean,
+): boolean => mayRunAdmin || (choice !== 'full' && choice !== 'auto')
+/** Never `full`: Full is chosen on purpose, and the engine refuses it to anyone who is
+ * not a run administrator. */
 export const DEFAULT_PERMISSION: PermissionChoice = 'editsAndCommands'
 /** The engine keys its built-in templates by name (modules/sessions/templates.go
  * seedBuiltins), as the CLI does (cmd/olivares/cmd_session.go). */
 export const EDITS_AND_COMMANDS_TEMPLATE = 'Edits and commands'
-const PERMISSION_MODE: Record<PermissionChoice, string> = {
+export const PERMISSION_MODE: Record<PermissionChoice, string> = {
   editsAndCommands: '',
   editsOnly: 'acceptEdits',
   readOnly: 'plan',
   ask: 'default',
+  auto: 'auto',
+  full: 'bypassPermissions',
 }
 
 /** What the quick form chose: the engine resolves the profile for the tool (its own
@@ -66,6 +99,8 @@ export interface QuickLaunch {
    * When present, folder is only used to name the session. */
   workspace_ref?: string
   permission: PermissionChoice
+  /** The enrolled remote node chosen by Run on. Absent runs on this engine. */
+  runOn?: string
   /** A model the user chose. Absent means the engine resolves it: the key's saved
    * default, else the tool's own. */
   model?: string
@@ -75,6 +110,9 @@ export interface QuickLaunch {
   serviceTier?: string
   /** Vault secrets the session receives as environment variables, by name. */
   secretEnv?: SecretEnvRef[]
+  /** Managed credentials the session may use, by name (the launch's
+   * credentials field; the engine's broker carries each use). */
+  credentials?: string[]
   /** The profile the person chose when the tool has several: it is the session's, and the
    * engine's rule for the default login is not asked. Absent means that rule. */
   profileRef?: string
@@ -98,6 +136,19 @@ export async function launchSession(
   authority.dispatchGuard()
   const { model, ...run } =
     'quick' in launch ? await quickRun(launch.quick, authority) : launch.run
+  // A start from an issue or pull request page reads the item first, so a page the
+  // engine cannot read leaves no session behind; its title and body lead the message.
+  let message = launch.message
+  let named = launch.message
+  if (run.source_url) {
+    const item = await agentOpsApi.sourceItem(
+      run.workspace_ref,
+      run.source_url,
+      authority,
+    )
+    message = sourceItemMessage(item, launch.message)
+    named = item.title
+  }
   const chosenModel = model?.trim()
   const body: CreateRunRequest = {
     ...run,
@@ -105,9 +156,9 @@ export async function launchSession(
     // quick form) by its tool and folder.
     name:
       run.name.trim() ||
-      promptName(launch.message) ||
+      promptName(named) ||
       ('quick' in launch ? toolFolderName(launch.quick) : ''),
-    // HU2-37: no model chosen, so none is sent and the engine resolves it.
+    // acceptance: no model chosen, so none is sent and the engine resolves it.
     ...(chosenModel ? { model: chosenModel } : {}),
   }
   const actor = 'actor' in launch ? (launch.actor ?? '') : ''
@@ -118,8 +169,17 @@ export async function launchSession(
   // The first message is retried while the child starts, and kept with the session
   // when the engine refuses it.
   if (created?.run_ref && !authority.signal.aborted)
-    await sendFirstMessage(created, launch.message, partition, authority)
+    await sendFirstMessage(created, message, partition, authority)
   return created
+}
+
+/** The first message of a session started from an item: its title, its body, its page,
+ * then whatever the person typed. */
+function sourceItemMessage(item: SourceItemDTO, typed: string): string {
+  return [item.title, item.body, item.url, typed]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join('\n\n')
 }
 
 /** A launch the gate holds for a second person's approval: the engine's 409
@@ -173,17 +233,19 @@ async function quickRun(
     ...(quick.serviceTier ? { service_tier: quick.serviceTier } : {}),
     ...(quick.model ? { model: quick.model } : {}),
     workspace_ref: workspaceRef,
+    ...(quick.runOn ? { run_on: quick.runOn } : {}),
     isolation: 'native',
     env_allow: [],
     provider_profile_ref: profileRef,
     ...(template_id ? { template_id } : {}),
     ...(quick.secretEnv?.length ? { secret_env: quick.secretEnv } : {}),
+    ...(quick.credentials?.length ? { credentials: quick.credentials } : {}),
   }
 }
 
 /** A quick session with no first message is named by its tool and folder. */
 function toolFolderName(quick: QuickLaunch): string {
-  const tool = TOOL_NAMES[quick.driver]
+  const tool = toolName(quick.driver)
   // At most 100 characters of the folder, so the name stays within the engine's 200.
   const folder = Array.from(
     plainName(quick.folder.trim().split('/').filter(Boolean).pop() ?? ''),
@@ -263,9 +325,10 @@ async function sendFirstMessage(
   const prompt = message.trim()
   if (!prompt) return
   const { note } = useSentTurns.getState()
-  // POST /runs answered 202 waiting_approval: no child takes input until the approval
-  // (#500). The message waits with the launch instead of being refused by it.
-  if (run.state === 'waiting_approval') {
+  // POST /runs answered waiting_approval (#500) or pending (the worktree's setup is
+  // still running): no child takes input yet. The message waits with the launch
+  // instead of being refused by it.
+  if (run.state === 'waiting_approval' || run.state === 'pending') {
     options?.signal?.throwIfAborted()
     options?.dispatchGuard?.()
     note(partition, run.run_ref, { text: prompt, waiting: true })
@@ -283,7 +346,7 @@ async function sendFirstMessage(
     options?.dispatchGuard?.()
     // A tool that stopped as it started did not start: the form says why.
     if (stoppedAtStartReason(err) !== null) throw err
-    // The session runs and its first message did not reach it (HU2-27: a refused key,
+    // The session runs and its first message did not reach it (acceptance: a refused key,
     // "auth_required"). The session opens with the message and the engine's reason,
     // instead of a form saying it did not start while it runs on.
     note(partition, run.run_ref, {

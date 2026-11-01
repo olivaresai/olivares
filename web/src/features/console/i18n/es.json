@@ -1,6 +1,6 @@
 {
   "title": "Administración",
-  "subtitle": "Configura quién entra y qué puede administrar: alta de usuarios, conexión de SSO y gestión de espacios de trabajo y grupos de agentes.",
+  "subtitle": "Los agentes, espacios de trabajo, bindings de fuentes, secretos y conectores de esta organización. Las personas, el inicio de sesión y los roles están en Personas y grupos.",
   "tabs": {
     "people": "Usuarios y grupos",
     "agents": "Agentes",
@@ -12,8 +12,7 @@
     "apiKeys": "Claves API",
     "license": "Edición y licencia",
     "bindings": "Bindings de fuentes",
-    "wsConnectors": "Conectores de espacio de trabajo",
-    "mcpGateway": "Gateway MCP"
+    "wsConnectors": "Conectores de espacio de trabajo"
   },
   "stepUpAction": "configurar",
   "apiKeys": {
@@ -167,9 +166,13 @@
       "owner": "Owner"
     },
     "totpReset": "Restablecer TOTP",
-    "totpResetLabel": "Restablecer el factor TOTP de {{email}}",
+    "totpResetLabel": "Restablecer TOTP de {{email}}",
     "totpResetTitle": "¿Restablecer el factor TOTP de esta persona?",
     "totpResetBody": "Se eliminan el factor y todos los códigos de recuperación de {{email}}. La cuenta registra un factor nuevo en su próximo inicio de sesión: la política de exigencia a administradores la lleva allí, nunca a un bloqueo.",
+    "endSessions": "Cerrar sesiones",
+    "endSessionsFor": "¿Cerrar las sesiones de {{email}}?",
+    "endSessionsBody": "Todas las sesiones activas de {{email}} dejarán de funcionar en esta organización. Sus sesiones en otras organizaciones, sus tokens de API y su cuenta no cambiarán.",
+    "sessionsEnded": "Se ha finalizado el acceso a esta organización",
     "totpResetDone": "Factor TOTP restablecido."
   },
   "superadmins": {
@@ -313,6 +316,7 @@
       "sessions": "El secreto se elimina del almacén. Una sesión que lo recibe sigue en ejecución, pero no podrá reanudarse, y una plantilla que lo nombre no podrá lanzarse, hasta que lo vuelvas a crear."
     },
     "sessionCaption": "Secretos que una sesión puede recibir como variables de entorno. Los nombres empiezan por env/. Un valor nunca se vuelve a mostrar.",
+    "credentialCaption": "Credenciales administradas que una sesión puede usar mediante los ayudantes del motor (Business). Los nombres empiezan por credential/. Un valor nunca se vuelve a mostrar.",
     "colValue": "Valor",
     "colChanged": "Último cambio",
     "colReference": "Referencia",
@@ -644,6 +648,7 @@
       "scopeRefPlaceholder": "Selecciona…",
       "scopeClass": "Tipo de recurso",
       "scopeClassAny": "Cualquier recurso",
+      "expiresAt": "Caduca (opcional)",
       "scopeClassHint": "Opcional. Acota el grant a un único tipo de recurso (p. ej. solo modelos).",
       "note": "Nota",
       "noteHint": "Contexto opcional que se registra con el grant.",
@@ -906,7 +911,16 @@
           "unknown": "Desconocido",
           "not_applicable": "No aplica"
         },
-        "unknownHint": "Desconocido significa que el motor no pudo decidir ese derecho; la causa está en el log del motor. No es una denegación."
+        "unknownHint": "Desconocido significa que el motor no pudo decidir ese derecho; la causa está en el log del motor. No es una denegación.",
+        "reason": "Motivo",
+        "membershipAsOf": "Pertenencia al directorio a fecha de {{at}}",
+        "grantAt": "Concesión {{id}} en {{node}} mediante {{chain}}",
+        "removedByAt": "Eliminado por {{kind}} {{id}} en {{node}}",
+        "removedBy": "Eliminado por {{kind}} {{id}}",
+        "removalKinds": {
+          "irf": "IRF",
+          "forbid": "prohibición"
+        }
       }
     }
   },
@@ -986,6 +1000,7 @@
     },
     "defaultWorkspace": "espacio de trabajo por defecto",
     "enabledYes": "Activado",
+    "expiresAt": "Caduca (opcional)",
     "enabledNo": "Desactivado",
     "noCredential": "Ninguna",
     "edit": "Editar",

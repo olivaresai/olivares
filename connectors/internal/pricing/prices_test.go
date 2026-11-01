@@ -5,6 +5,8 @@ package pricing
 
 import (
 	"errors"
+	"os"
+	"strings"
 	"sync"
 	"testing"
 
@@ -12,6 +14,27 @@ import (
 
 	"github.com/olivaresai/olivares/connectors/modelprovider"
 )
+
+// TestDatasetAsOfMatchesLinkedModule ties the snapshot date to the dataset the module
+// requires: a bump of the requirement in connectors/go.mod that leaves datasetVersion
+// (and so datasetAsOf) behind would stamp every price with an older release's date.
+func TestDatasetAsOfMatchesLinkedModule(t *testing.T) {
+	const module = "github.com/pydantic/genai-prices/packages/go"
+	data, err := os.ReadFile("../../go.mod")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if f := strings.Fields(line); len(f) >= 2 && f[0] == module {
+			if f[1] != datasetVersion {
+				t.Fatalf("connectors/go.mod requires %s %s, but datasetVersion is %s: set datasetVersion and datasetAsOf to that release and its date",
+					module, f[1], datasetVersion)
+			}
+			return
+		}
+	}
+	t.Fatalf("connectors/go.mod does not require %s", module)
+}
 
 // TestClaudePricingForEmbeddedDataset is the red test of the embedded-price switch:
 // the shared Claude lookup answers from the genai-prices dataset embedded at release

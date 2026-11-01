@@ -605,9 +605,11 @@ func denyUnavailable(reason string) sessions.LaunchDecision {
 // the tools that list names and refuses every other one. It keeps hook
 // enforcement, policies, the kill switch, audit and recording, and is not a
 // privileged launch. dontAsk under a custom template or with no allowlist stays
-// critical. bypassPermissions ("full") alone is an administrator's own decision,
-// checked at start and resume (sessions.refuseUnrestrictedFor), with no separate
-// approval. A read-write mount of a classified workspace is critical in any mode.
+// critical. bypassPermissions ("full") and "auto" (the tool's own reviewed automatic
+// mode) are an administrator's own decision, checked at start and resume
+// (sessions.refuseUnrestrictedFor), with no separate approval: a critical launch always
+// waits for a human, and these do not (hook policy, kill switch and audit still apply).
+// A read-write mount of a classified workspace is critical in any mode.
 func isCriticalLaunch(intent sessions.LaunchIntent) (bool, string) {
 	switch strings.TrimSpace(intent.PermissionMode) {
 	case "dontAsk":
@@ -648,6 +650,9 @@ func sessionLaunchPlanHash(intent sessions.LaunchIntent) string {
 		fields = append(fields, "secret-env")
 		fields = append(fields, secretEnvNames(intent.SecretEnv)...)
 	}
+	if intent.RunOn != "" {
+		fields = append(fields, "run-on", intent.RunOn)
+	}
 	// The repository read credential (session_git_read.go), the same way.
 	if intent.GitRead != "" {
 		fields = append(fields, "git-read", intent.GitRead)
@@ -657,6 +662,12 @@ func sessionLaunchPlanHash(intent sessions.LaunchIntent) string {
 	if len(intent.Credentials) > 0 {
 		fields = append(fields, "credentials")
 		fields = append(fields, intent.Credentials...)
+	}
+	if intent.CostCapMicroUSD > 0 {
+		fields = append(fields, "cost-cap", strconv.FormatInt(intent.CostCapMicroUSD, 10))
+	}
+	if intent.RunDeadlineAt != "" {
+		fields = append(fields, "run-deadline", intent.RunDeadlineAt)
 	}
 	for _, s := range fields {
 		_, _ = h.Write([]byte(s))
@@ -681,12 +692,16 @@ func describeLaunch(intent sessions.LaunchIntent) string {
 		"default": "it asks before edits and commands", "acceptEdits": "it edits files and asks before commands",
 		"plan": "it only reads", "dontAsk": "it runs its allowed tools without asking",
 		"bypassPermissions": "it runs every tool without asking",
+		"auto":              "the tool's automatic mode decides each call",
 	}
 	mode, ok := words[intent.PermissionMode]
 	if !ok {
 		mode = "permission mode " + intent.PermissionMode
 	}
 	parts := []string{mode}
+	if intent.RunOn != "" {
+		parts = append(parts, "run on "+intent.RunOn)
+	}
 	if intent.Model != "" {
 		parts = append(parts, "model "+intent.Model)
 	}
@@ -994,6 +1009,9 @@ func wireSessionGovernance(set moduleSet, st store.Store, stopDeny *stopDenyReco
 	if set.sessionDependencies == nil {
 		set.sessionDependencies = set.sessions.Dependencies
 	}
+	if set.gov != nil {
+		set.sessionDependencies.CancelSessionApprovals = set.gov.CancelSessionApprovals
+	}
 	// Kill-switch pre-flight (fail-closed) + the active-termination sweep.
 	set.sessionDependencies.StopGate = sessionStopGate{guard: set.gov, rec: stopDeny}
 	sessions.WithKillSwitchSweep(loadKillSwitchSweepInterval(getenv, log))(set.sessions)
@@ -1094,6 +1112,9 @@ func wireSessionGovernance(set moduleSet, st store.Store, stopDeny *stopDenyReco
 //   - it keeps the rule expressed at the gate seam, where a second gate composition
 //     (a different deployment, a different inner gate) inherits it for free.
 func buildSessionLaunchGate(set moduleSet, inner sessions.LaunchGate) sessions.LaunchGate {
+	if thisEdition.sessionLaunchGate != nil {
+		inner = thisEdition.sessionLaunchGate(set.all, inner)
+	}
 	return sessions.NewClaimAdmission(inner, set.sessions, sessions.ProviderOperated, sessions.IntentHolder)
 }
 

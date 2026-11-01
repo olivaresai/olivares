@@ -89,6 +89,8 @@ def build(root: Path, dist: Path, version: str, epoch: int, recipe: Path, snapsh
                         content['src'] = str(notices[arch])
                     if content.get('src') == 'packaging/systemd/olivares.service':
                         content['src'] = str(unit)
+                    if content.get('src') == 'bin/olivares':
+                        content['src'] = str(binaries[arch])
                 config['contents'].append({'src': str(binaries[arch]), 'dst': f'{bindir}/olivares',
                                            'file_info': {'mode': 0o755, 'mtime': stamp}})
                 config_file = stage / f'config-{arch}.json'

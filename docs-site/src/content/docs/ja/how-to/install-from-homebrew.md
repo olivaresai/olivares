@@ -6,7 +6,7 @@ description: >-
 draft: false
 ---
 
-次のリリースは <!-- release -->`0.4`<!-- /release --> で、GitHub ではまだ公開されていません。以下のコマンドは予定されている成果物を示します。公開まではソースからビルドし、公開後も使用前に各成果物を検証してください。観測した公開状況は <!-- release -->`docs/releases/0.4-install-surfaces.json`<!-- /release --> に記録されています。
+次のリリースは <!-- release -->`0.5`<!-- /release --> で、GitHub ではまだ公開されていません。以下のコマンドは予定されている成果物を示します。公開まではソースからビルドし、公開後も使用前に各成果物を検証してください。観測した公開状況は <!-- release -->`docs/releases/0.5-install-surfaces.json`<!-- /release --> に記録されています。
 
 これは `INSTALL.md` が推奨として名付ける macOS 経路です。Homebrew cask 経由で
 署名済み `olivares` バイナリをインストールし、Gatekeeper 隔離を解除します。

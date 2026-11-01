@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { preferenceStorage } from '@/lib/preference-storage'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from 'i18next'
 import { LANGUAGE_CODES } from '@/lib/i18n'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
-import { RAIL_KEYS } from '@/features/navigation/rail-keys'
 import { SETTINGS_SECTIONS } from '@/features/settings/sections'
 import { expectNoRawI18nKeys } from '@/test/i18n-keys'
 import {
@@ -31,12 +31,6 @@ vi.mock('@/features/settings/modules-settings', () => ({
   ModulesSettings: () => <section aria-label="Modules list" />,
 }))
 
-// The Updates panel has its own tests (features/settings/updates-settings.test.tsx); here it
-// only has to be where a system administrator finds it.
-vi.mock('@/features/settings/updates-settings', () => ({
-  UpdatesSettings: () => <section aria-label="Updates panel" />,
-}))
-
 // The Session idle form has its own tests (features/settings/session-idle-settings.test.tsx);
 // here it only has to be where a system administrator finds it.
 vi.mock('@/features/settings/session-idle-settings', () => ({
@@ -54,14 +48,7 @@ vi.mock('@tanstack/react-router', () => ({
   useRouterState: () => location.search,
 }))
 
-// AI tools, Workspaces and Setup are rooms with their own tests; here they only have to
-// open INSIDE Settings (#2905).
-vi.mock('@/features/agent-tools/agent-tools-view', () => ({
-  AgentToolsView: () => <section aria-label="AI tools room" />,
-}))
-vi.mock('@/features/workspace-dashboard/workspace-dashboard-view', () => ({
-  WorkspaceDashboardView: () => <section aria-label="Workspaces room" />,
-}))
+// Setup is a room with its own tests; here it only has to open INSIDE Settings (#2905).
 vi.mock('@/features/onboarding/index', () => ({
   OnboardingView: () => <section aria-label="Setup wizard" />,
 }))
@@ -141,37 +128,65 @@ beforeEach(async () => {
     clock: '24',
     startPage: 'home',
     confirmStop: true,
+    editor: 'vscode',
+    editorSsh: '',
   })
   await i18n.changeLanguage('en')
   localStorage.removeItem('olivares.lang')
 })
 
 describe('Settings', () => {
-  it.each(['deep link', 'navigation'])(
-    'opens the shared license status and actions through %s',
-    async (entry) => {
-      const user = userEvent.setup()
-      location.search = entry === 'deep link' ? '?section=edition' : ''
-      render(<SettingsPage />)
-      if (entry === 'navigation') {
-        await user.click(
-          screen.getByRole('button', { name: 'Edition & modules' }),
-        )
-      }
-      expect(
-        await screen.findByText('Settings License Owner'),
-      ).toBeInTheDocument()
-      expect(
-        screen.getByRole('button', { name: 'Install / update' }),
-      ).toBeInTheDocument()
-      expect(
-        screen.getByRole('button', { name: 'Remove license' }),
-      ).toBeInTheDocument()
-      expect(
-        screen.getByRole('region', { name: 'Modules list' }),
-      ).toBeInTheDocument()
-    },
-  )
+  it('opens the shared license status and actions as the License page, with no Settings list beside it', async () => {
+    location.search = '?section=edition'
+    render(<SettingsPage />)
+    expect(
+      await screen.findByText('Settings License Owner'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Install / update' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Remove license' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('region', { name: 'Modules list' }),
+    ).toBeInTheDocument()
+    // License is its own place of the sidebar (IA.md), not a section of Settings.
+    expect(
+      screen.queryByRole('navigation', { name: 'Settings sections' }),
+    ).toBeNull()
+  })
+
+  it('leaves / to the rest of the console on the License page, which has no search to focus', async () => {
+    location.search = '?section=edition'
+    const user = userEvent.setup()
+    render(<SettingsPage />)
+    await screen.findByText('Settings License Owner')
+    const seen: KeyboardEvent[] = []
+    const listen = (event: KeyboardEvent) => seen.push(event)
+    window.addEventListener('keydown', listen)
+    try {
+      await user.keyboard('/')
+    } finally {
+      window.removeEventListener('keydown', listen)
+    }
+    expect(seen.map((e) => [e.key, e.defaultPrevented])).toEqual([['/', false]])
+  })
+
+  it('lists only personal sections: no room another place of the sidebar holds (0.5 fold)', () => {
+    render(<SettingsPage />)
+    const list = screen.getByRole('navigation', { name: 'Settings sections' })
+    for (const name of [
+      'AI tools',
+      'Workspaces',
+      'Deploy and updates',
+      'Updates',
+      'Edition & modules',
+    ])
+      expect(within(list).queryByRole('button', { name })).toBeNull()
+    // No row of the list leaves /settings.
+    expect(within(list).queryAllByRole('link')).toHaveLength(0)
+  })
 
   it('keeps the license superadmin gate in Settings', async () => {
     auth.isSuperadmin = false
@@ -228,15 +243,18 @@ describe('Settings', () => {
     ).toBeInTheDocument()
   })
 
-  it('offers no section that does nothing, opens the wizard from Setup, and names every key (HU-14)', async () => {
+  it('opens the notification choices, Setup wizard and named keyboard shortcuts', async () => {
     const user = userEvent.setup()
     render(<SettingsPage />)
-    expect(
-      screen.queryByRole('button', { name: 'Notifications' }),
-    ).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Notifications' })).toBeVisible()
     expect(
       screen.queryByRole('button', { name: 'Session defaults' }),
     ).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'New sessions' })).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Notifications' }))
+    expect(screen.getByRole('heading', { name: 'Notifications' })).toBeVisible()
+    for (const name of ['Needs you', 'Finished', 'Failed'])
+      expect(screen.getByRole('switch', { name })).toBeVisible()
     // Setup is a section of Settings, never a link out of it (#2905).
     expect(screen.queryByRole('link', { name: 'Setup' })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Setup' }))
@@ -251,7 +269,7 @@ describe('Settings', () => {
   it.each(LANGUAGE_CODES)(
     'names every shortcut in %s without fallback',
     (lng) => {
-      for (const { command } of [...KEYBINDINGS, ...RAIL_KEYS]) {
+      for (const { command } of KEYBINDINGS) {
         const key = `keys.command.${command}`
         const label = i18n.t(key, { lng, ns: 'common', fallbackLng: false })
         expect(label, `${lng}: ${key}`).not.toBe(key)
@@ -356,7 +374,7 @@ describe('Settings', () => {
       ).toBe('es'),
     )
     expect(document.documentElement.lang).toBe('es')
-    expect(localStorage.getItem('olivares.lang')).toBe('es')
+    expect(preferenceStorage.getItem('olivares.lang')).toBe('es')
 
     await user.click(trigger)
     await user.click(
@@ -366,7 +384,7 @@ describe('Settings', () => {
     )
     await waitFor(() => expect(i18n.resolvedLanguage).toBe('de'))
     expect(document.documentElement.lang).toBe('de')
-    expect(localStorage.getItem('olivares.lang')).toBe('de')
+    expect(preferenceStorage.getItem('olivares.lang')).toBe('de')
 
     await user.click(trigger)
     await user.click(
@@ -376,7 +394,7 @@ describe('Settings', () => {
     )
     await waitFor(() => expect(i18n.resolvedLanguage).toBe('it'))
     expect(document.documentElement.lang).toBe('it')
-    expect(localStorage.getItem('olivares.lang')).toBe('it')
+    expect(preferenceStorage.getItem('olivares.lang')).toBe('it')
 
     await user.click(trigger)
     await user.click(
@@ -386,7 +404,7 @@ describe('Settings', () => {
     )
     await waitFor(() => expect(i18n.resolvedLanguage).toBe('ko'))
     expect(document.documentElement.lang).toBe('ko')
-    expect(localStorage.getItem('olivares.lang')).toBe('ko')
+    expect(preferenceStorage.getItem('olivares.lang')).toBe('ko')
   })
 
   it('focuses search on / and filters to Reduce motion', async () => {
@@ -403,7 +421,7 @@ describe('Settings', () => {
     ).not.toBeInTheDocument()
   })
 
-  // dev#2560: the search input drops its own outline, so its field draws the 3 px focus ring.
+  // the regression: the search input drops its own outline, so its field draws the 3 px focus ring.
   it('rings the search field in the focus color while the search has keyboard focus', async () => {
     const user = userEvent.setup()
     render(<SettingsPage />)
@@ -467,6 +485,7 @@ describe('Settings', () => {
     await user.click(screen.getByRole('radio', { name: 'Compact' }))
     await user.click(screen.getByRole('radio', { name: '12-hour' }))
     await user.click(screen.getByRole('switch', { name: 'Reduce motion' }))
+    useClientSettings.setState({ editor: 'zed', editorSsh: 'me@devbox' })
     await user.click(
       screen.getByRole('button', { name: 'Restore all defaults' }),
     )
@@ -476,10 +495,38 @@ describe('Settings', () => {
     expect(useClientSettings.getState().clock).toBe('24')
     expect(useClientSettings.getState().startPage).toBe('home')
     expect(useClientSettings.getState().confirmStop).toBe(true)
+    expect(useClientSettings.getState().editor).toBe('vscode')
+    expect(useClientSettings.getState().editorSsh).toBe('')
     await waitFor(() => expect(i18n.resolvedLanguage).toBe('en'))
     expect(
       screen.queryByRole('button', { name: /Changed · reset/ }),
     ).not.toBeInTheDocument()
+  })
+
+  it('chooses the editor that file links open, and resets to VS Code', async () => {
+    const user = userEvent.setup()
+    render(<SettingsPage />)
+    const choice = screen.getByRole('combobox', {
+      name: 'Editor for file links',
+    })
+    expect(choice).toHaveTextContent('VS Code')
+    await user.click(choice)
+    await user.click(await screen.findByRole('option', { name: 'GoLand' }))
+    expect(useClientSettings.getState().editor).toBe('goland')
+    await user.click(screen.getByRole('button', { name: /Changed · reset/ }))
+    expect(useClientSettings.getState().editor).toBe('vscode')
+  })
+
+  it('keeps the SSH host the editor connects with, and resets it to empty', async () => {
+    const user = userEvent.setup()
+    render(<SettingsPage />)
+    await user.type(
+      screen.getByRole('textbox', { name: 'SSH host for the editor' }),
+      'me@devbox',
+    )
+    expect(useClientSettings.getState().editorSsh).toBe('me@devbox')
+    await user.click(screen.getByRole('button', { name: /Changed · reset/ }))
+    expect(useClientSettings.getState().editorSsh).toBe('')
   })
 
   it('keeps Restore all in the General header, never portaled into a top bar', () => {
@@ -500,10 +547,10 @@ describe('Settings', () => {
   })
 
   it('names the edition once, and on Community lists what a Business build adds', async () => {
-    const user = userEvent.setup()
+    // The License place of the sidebar opens this address.
+    location.search = '?section=edition'
     server.edition = 'community'
     const { unmount } = render(<SettingsPage />)
-    await user.click(screen.getByRole('button', { name: 'Edition & modules' }))
     expect(
       screen.getByRole('heading', { name: 'Edition & modules' }),
     ).toBeInTheDocument()
@@ -521,7 +568,6 @@ describe('Settings', () => {
     // lists nothing it lacks.
     server.edition = 'enterprise'
     render(<SettingsPage />)
-    await user.click(screen.getByRole('button', { name: 'Edition & modules' }))
     expect(await screen.findByText('Business')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Business adds' })).toBeNull()
     server.edition = 'community'
@@ -566,176 +612,43 @@ describe('Settings', () => {
     },
   )
 
-  it('opens AI tools and Workspaces as sections of Settings, never as a link out of it (#2905)', async () => {
-    const user = userEvent.setup()
+  it('opens ?section=setup on load, with its row marked current (#2905)', async () => {
+    location.search = '?section=setup'
     render(<SettingsPage />)
-    const list = screen.getByRole('navigation', { name: 'Settings sections' })
-    // No row of the list leaves /settings.
-    expect(within(list).queryAllByRole('link')).toHaveLength(0)
-
-    await user.click(within(list).getByRole('button', { name: 'AI tools' }))
     expect(
-      await screen.findByRole('region', { name: 'AI tools room' }),
-    ).toBeInTheDocument()
-    expect(
-      within(list).getByRole('button', { name: 'AI tools' }),
-    ).toHaveAttribute('aria-current', 'page')
-    // The section is a place: Back returns to the one before it, inside Settings.
-    const toAiTools = router.navigate.mock.calls.at(-1)![0]
-    expect(toAiTools.replace).toBe(false)
-    expect(toAiTools.search({})).toEqual({ section: 'aiTools' })
-
-    await user.click(within(list).getByRole('button', { name: 'Workspaces' }))
-    expect(
-      await screen.findByRole('region', { name: 'Workspaces room' }),
-    ).toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: 'AI tools room' })).toBeNull()
-    expect(
-      within(list).getByRole('button', { name: 'Workspaces' }),
-    ).toHaveAttribute('aria-current', 'page')
-    expect(
-      within(list).getByRole('button', { name: 'General' }),
-    ).not.toHaveAttribute('aria-current')
-    expect(router.navigate.mock.calls.at(-1)![0].search({})).toEqual({
-      section: 'workspaces',
-    })
+      await screen.findByRole('region', { name: 'Setup wizard' }),
+    ).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Setup' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
   })
 
-  it('leaves the AI tools wizard address behind when the section changes (#2905)', async () => {
-    // `?add=<kind>&returnTo=` opens the add-a-key form each time the AI tools room mounts:
-    // kept in the address across a section change, it reopens on every return to AI tools.
-    location.search = '?section=aiTools&add=anthropic&returnTo=%2Fonboarding'
-    const user = userEvent.setup()
-    render(<SettingsPage />)
-    await user.click(screen.getByRole('button', { name: 'Workspaces' }))
-    expect(
-      router.navigate.mock.calls.at(-1)![0].search({
-        section: 'aiTools',
-        add: 'anthropic',
-        returnTo: '/onboarding',
-      }),
-    ).toEqual({ section: 'workspaces' })
-  })
-
-  it('leaves the AI tools wizard address behind when a search starts, which unmounts the room (#2905)', async () => {
-    location.search = '?section=aiTools&add=anthropic&returnTo=%2Fonboarding'
-    const user = userEvent.setup()
-    render(<SettingsPage />)
-    await user.type(screen.getByRole('searchbox'), 't')
-    expect(
-      router.navigate.mock.calls.at(-1)![0].search({
-        section: 'aiTools',
-        add: 'anthropic',
-        returnTo: '/onboarding',
-      }),
-    ).toEqual({ section: 'aiTools', q: 't' })
-  })
-
-  it.each([
-    ['aiTools', 'AI tools room', 'AI tools'],
-    ['workspaces', 'Workspaces room', 'Workspaces'],
-    ['setup', 'Setup wizard', 'Setup'],
-  ])(
-    'opens ?section=%s on load, with its row marked current (#2905)',
-    async (section, room, row) => {
-      location.search = `?section=${section}`
-      render(<SettingsPage />)
-      expect(await screen.findByRole('region', { name: room })).toBeVisible()
-      expect(screen.getByRole('button', { name: row })).toHaveAttribute(
-        'aria-current',
-        'page',
-      )
-    },
-  )
-
-  it('offers a section only where its page opens, and an address to one that is not falls back to General (#474, #2905)', async () => {
-    const row = (name: string) => screen.queryByRole('button', { name })
-    const { unmount } = render(<SettingsPage />)
-    // Deployment is a Business page: Community has no page to host.
-    expect(row('Deploy and updates') !== null).toBe(businessDeploy)
-    expect(row('AI tools')).not.toBeNull()
-    expect(row('Workspaces')).not.toBeNull()
-    expect(row('Setup')).not.toBeNull()
-    expect(screen.getByText('Work')).toBeInTheDocument()
-    unmount()
-
-    if (businessDeploy) {
-      // A fresh install leaves deploy off (modulespec standard=false).
-      useModulesStore.getState().setOff(['deploy'])
-      const off = render(<SettingsPage />)
-      expect(row('Deploy and updates')).toBeNull()
-      expect(row('AI tools')).not.toBeNull()
-      off.unmount()
-
-      // Module on, permission not held.
-      useModulesStore.getState().setOff([])
-      auth.denied.add('deploy:deployment:read')
-      const denied = render(<SettingsPage />)
-      expect(row('Deploy and updates')).toBeNull()
-      denied.unmount()
-    }
-
-    // One section left keeps its group; none left drops the heading too.
-    auth.denied.add('tenant:read')
-    const one = render(<SettingsPage />)
-    expect(row('Workspaces')).toBeNull()
-    expect(row('AI tools')).not.toBeNull()
-    expect(screen.getByText('Work')).toBeInTheDocument()
-    one.unmount()
-
-    // An address to a section the person may not open shows General, not an empty pane.
-    location.search = '?section=workspaces'
-    const address = render(<SettingsPage />)
-    expect(screen.queryByRole('region', { name: 'Workspaces room' })).toBeNull()
-    expect(screen.getByRole('radiogroup', { name: 'Theme' })).toBeVisible()
-    address.unmount()
-
-    location.search = undefined
-    auth.denied.add('sessions:provider:read')
+  it('offers Setup only where its page opens, and an address to it otherwise falls back to General (#474, #2905)', () => {
     auth.denied.add('system:admin')
+    location.search = '?section=setup'
     render(<SettingsPage />)
-    expect(row('AI tools')).toBeNull()
-    expect(row('Workspaces')).toBeNull()
-    expect(row('Setup')).toBeNull()
-    expect(screen.queryByText('Work')).toBeNull()
-  })
-
-  it('follows the address between hosted sections, as Back and Forward move it (#2905)', async () => {
-    location.search = '?section=aiTools'
-    const view = render(<SettingsPage />)
-    expect(
-      await screen.findByRole('region', { name: 'AI tools room' }),
-    ).toBeVisible()
-    location.search = '?section=workspaces'
-    view.rerender(<SettingsPage />)
-    expect(
-      await screen.findByRole('region', { name: 'Workspaces room' }),
-    ).toBeVisible()
-    expect(screen.queryByRole('region', { name: 'AI tools room' })).toBeNull()
-    location.search = '?section=aiTools'
-    view.rerender(<SettingsPage />)
-    expect(
-      await screen.findByRole('region', { name: 'AI tools room' }),
-    ).toBeVisible()
-    // The address before any section is General.
-    location.search = ''
-    view.rerender(<SettingsPage />)
+    expect(screen.queryByRole('button', { name: 'Setup' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Setup wizard' })).toBeNull()
     expect(screen.getByRole('radiogroup', { name: 'Theme' })).toBeVisible()
-    expect(screen.queryByRole('region', { name: 'AI tools room' })).toBeNull()
+    // the regression: Permissions is open to everyone, so the group keeps its heading for it.
+    expect(
+      screen.getByRole('button', { name: 'Permissions' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Work')).toBeInTheDocument()
   })
 
   it('shows search results, not the hosted section, while the search holds a query (#2905)', async () => {
-    location.search = '?section=aiTools&q=theme'
+    location.search = '?section=setup&q=theme'
     const view = render(<SettingsPage />)
     expect(
       await screen.findByRole('radiogroup', { name: 'Theme' }),
     ).toBeVisible()
-    expect(screen.queryByRole('region', { name: 'AI tools room' })).toBeNull()
-    // The room is there once the query is cleared: the absence above is not a missing section.
-    location.search = '?section=aiTools'
+    expect(screen.queryByRole('region', { name: 'Setup wizard' })).toBeNull()
+    location.search = '?section=setup'
     view.rerender(<SettingsPage />)
     expect(
-      await screen.findByRole('region', { name: 'AI tools room' }),
+      await screen.findByRole('region', { name: 'Setup wizard' }),
     ).toBeVisible()
   })
 
@@ -788,40 +701,13 @@ it('shows the active commercial badge and one visibility setting in Edition', as
   ).toBeChecked()
 })
 
-describe('Settings > Updates', () => {
-  it('offers the Updates section to a system administrator, by menu and by link', async () => {
-    const user = userEvent.setup()
-    location.search = ''
-    render(<SettingsPage />)
-    await user.click(screen.getByRole('button', { name: 'Updates' }))
-    expect(
-      await screen.findByRole('region', { name: 'Updates panel' }),
-    ).toBeInTheDocument()
-  })
-
-  it('opens the Updates section from its address', () => {
-    location.search = '?section=updates'
-    render(<SettingsPage />)
-    expect(
-      screen.getByRole('region', { name: 'Updates panel' }),
-    ).toBeInTheDocument()
-  })
-
-  it('does not offer Updates to anyone else', () => {
-    auth.isSuperadmin = false
-    location.search = '?section=updates'
-    render(<SettingsPage />)
-    expect(screen.queryByRole('button', { name: 'Updates' })).toBeNull()
-    expect(screen.queryByRole('region', { name: 'Updates panel' })).toBeNull()
-    // An address to a section the person is not offered shows General, not an empty pane.
-    expect(screen.getByRole('radiogroup', { name: 'Theme' })).toBeVisible()
-  })
-})
-
 describe('Settings > section list', () => {
   const label = (id: string) => i18n.t(`nav.${id}`, { ns: 'settings' })
-  // A hosted page is listed only where that page opens: those rows are tested above.
-  const own = SETTINGS_SECTIONS.filter((s) => !('view' in s))
+  // A hosted page is listed only where that page opens: those rows are tested above. Edition
+  // is the License page of the sidebar, not a row of this list.
+  const own = SETTINGS_SECTIONS.filter(
+    (s) => !('view' in s) && s.id !== 'edition',
+  )
 
   it.each(own.map((s) => s.id))('lists %s for an administrator', (id) => {
     render(<SettingsPage />)
@@ -879,11 +765,10 @@ describe('Settings > section list', () => {
       expect(
         screen.queryByRole('region', { name: 'Session idle panel' }),
       ).toBeNull()
-      expect(screen.queryByRole('region', { name: 'Updates panel' })).toBeNull()
     },
   )
 
-  it.each(['notifications', 'sessionDefaults', 'nothing-here'])(
+  it.each(['sessionDefaults', 'nothing-here'])(
     'opens General for the unknown address ?section=%s',
     (id) => {
       location.search = `?section=${id}`

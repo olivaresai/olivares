@@ -37,7 +37,7 @@ describe('session StateDot shares the chip system and preserves the engine state
   })
 })
 
-// dev#3120: the rail reads no ledger, so a run whose row cannot say whether it finished
+// the regression: the rail reads no ledger, so a run whose row cannot say whether it finished
 // or was stopped is Ended, true of both; a stop that recorded why is Stopped.
 describe('StateDot words a run that ended', () => {
   const base: RunDTO = {

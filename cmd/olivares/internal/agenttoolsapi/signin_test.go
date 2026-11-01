@@ -121,12 +121,12 @@ exit 2
 `
 
 // signedInDecoy makes the ENGINE user's own home look signed in to every tool, with
-// the tools' variables pointing at it (FH 036). Nothing the product does may read it:
+// the tools' variables pointing at it (first-hour check). Nothing the product does may read it:
 // a product login lives in the tenant's own login home.
 func signedInDecoy(t *testing.T) string {
 	t.Helper()
 	engineHome := t.TempDir()
-	for _, f := range []string{".claude/.credentials.json", ".codex/auth.json", ".grok/auth.json", ".local/share/opencode/auth.json"} {
+	for _, f := range []string{".claude/.credentials.json", ".codex/auth.json", ".grok/auth.json", ".local/share/opencode/auth.json", ".config/cursor/auth.json"} {
 		p := filepath.Join(engineHome, f)
 		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 			t.Fatal(err)
@@ -139,6 +139,8 @@ func signedInDecoy(t *testing.T) string {
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(engineHome, ".claude"))
 	t.Setenv("CODEX_HOME", filepath.Join(engineHome, ".codex"))
 	t.Setenv("GROK_HOME", filepath.Join(engineHome, ".grok"))
+	t.Setenv("CURSOR_CONFIG_DIR", filepath.Join(engineHome, ".cursor"))
+	t.Setenv("CURSOR_API_KEY", "engine-key-must-not-reach-a-login")
 	t.Setenv("XDG_DATA_HOME", filepath.Join(engineHome, ".local", "share"))
 	t.Setenv("OPENCODE_CONFIG_DIR", filepath.Join(engineHome, ".config", "opencode"))
 	return engineHome
@@ -147,7 +149,7 @@ func signedInDecoy(t *testing.T) string {
 // testLoginHome is the composition's layout for the tests: <root>/<tenant>/<driver>.
 func testLoginHome(root string) LoginHomeFunc {
 	return func(_ context.Context, tenant model.TenantID, driver, accountRef string) (string, string, error) {
-		rel, ok := map[string]string{"claude": ".claude", "codex": ".codex", "grok": ".grok", "opencode": ".config/opencode", "gemini-cli": ".gemini"}[driver]
+		rel, ok := map[string]string{"claude": ".claude", "codex": ".codex", "grok": ".grok", "opencode": ".config/opencode", "gemini-cli": ".gemini", "cursor": ".cursor"}[driver]
 		if !ok || tenant.IsZero() {
 			return "", "", errors.New("no login home")
 		}
@@ -431,7 +433,7 @@ func TestLoginStatusIsWhatTheToolSays(t *testing.T) {
 	check("claude", true, true)
 }
 
-// Root on FH 036 (EU, refresh 08): a fresh install showed Claude Code signed in,
+// Root on first-hour check (EU, refresh 08): a fresh install showed Claude Code signed in,
 // because the status read the engine user's own ~/.claude. The engine here has a
 // signed-in HOME, CLAUDE_CONFIG_DIR and CODEX_HOME; the product's answer is "not
 // signed in" for every tool, and nothing is written into the engine user's home.
@@ -452,7 +454,7 @@ func TestAFreshInstallIsNotSignedInWhateverTheEngineUserHas(t *testing.T) {
 	}
 }
 
-// Root on FH 036: the own login is per tenant. One organization's sign-in lives in
+// Root on first-hour check: the own login is per tenant. One organization's sign-in lives in
 // its own home and does not sign the tool in for another organization.
 func TestEachOrganizationHasItsOwnLogin(t *testing.T) {
 	call, home, st := newSignInServerWithStore(t)

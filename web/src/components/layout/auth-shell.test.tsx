@@ -86,3 +86,19 @@ describe('AuthShell statement column', () => {
     )
   })
 })
+
+it('contains the statement, card and deployment identity in one primary landmark', () => {
+  renderIntel(
+    <AuthShell>
+      <h1>Pair this device</h1>
+    </AuthShell>,
+  )
+  const main = screen.getByRole('main')
+  expect(main).toContainElement(
+    screen.getByText('One place to govern every AI agent you run.'),
+  )
+  expect(main).toContainElement(screen.getByTestId('deployment-identity'))
+  expect(main).toContainElement(
+    screen.getByRole('heading', { name: 'Pair this device' }),
+  )
+})

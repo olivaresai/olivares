@@ -289,10 +289,14 @@ func (a *Authenticator) principalFromToken(ctx context.Context, as store.AuthSco
 	}
 	grants := map[model.TenantID]string{}
 	if !t.IsSuperadmin {
-		if t.BoundTenantID.IsZero() || !IsRole(t.Role) {
+		role, ok, err := currentTokenRole(ctx, as, t)
+		if err != nil {
+			return Principal{}, false, err
+		}
+		if !ok {
 			return Principal{}, false, nil
 		}
-		grants[t.BoundTenantID] = t.Role
+		grants[t.BoundTenantID] = role
 	}
 	p, err := withTokenStanding(ctx, as, newPrincipal(KindToken, t.UserID, t.ID, t.IsSuperadmin, t.Name, grants, nil), t)
 	if err != nil {

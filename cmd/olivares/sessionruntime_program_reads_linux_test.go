@@ -77,7 +77,7 @@ func installedClaude(t *testing.T, padding int) (*agentToolFixture, string) {
 	return f, want
 }
 
-// dev#2584: the AI tools status, the profile resolve rule and a launch each ask which
+// the regression: the AI tools status, the profile resolve rule and a launch each ask which
 // program Claude Code runs. The host observer cannot answer for a Claude release (its
 // verifier is unavailable on purpose), so its verdict is never kept; asking it first made
 // every one of those requests hash the whole executable (251 MB in the release
@@ -97,7 +97,7 @@ func TestAProgramLookupForAnInstalledClaudeDoesNotReadItsExecutableAgain(t *test
 		}
 	}
 	if n := processBytesRead(t) - before; n >= padding {
-		t.Fatalf("three lookups of an installed, kept Claude read %d bytes; a hash of its %d-byte executable per lookup is the stall of dev#2584", n, padding)
+		t.Fatalf("three lookups of an installed, kept Claude read %d bytes; a hash of its %d-byte executable per lookup is the stall of the regression", n, padding)
 	}
 }
 
@@ -105,7 +105,7 @@ func TestAProgramLookupForAnInstalledClaudeDoesNotReadItsExecutableAgain(t *test
 // host observer cannot answer for Claude either: its verifier is unavailable on purpose, so
 // the lookup falls back to the PATH. Neither engine keeps the damaged verdict, but the
 // verified cache keeps the executable's digest under the release identity for every posture
-// (dev#2609), so the first lookup hashes the executable once and the next lookups of the
+// , so the first lookup hashes the executable once and the next lookups of the
 // unchanged file read none of it, whichever engine asks. The bound is under two hashes: one
 // hash plus less than one of incidental reads.
 func TestAProgramLookupForADamagedClaudeHashesItsExecutableOnce(t *testing.T) {
@@ -135,7 +135,7 @@ func TestAProgramLookupForADamagedClaudeHashesItsExecutableOnce(t *testing.T) {
 		t.Fatalf("%d lookups of a damaged Claude read only %d bytes; the verified check no longer hashes its %d-byte executable, so this test measures nothing", lookups, n, padding)
 	}
 	if n >= 2*padding {
-		t.Fatalf("%d lookups of a damaged Claude read %d bytes; more than one hash of its unchanged %d-byte executable is the stall of dev#2584 and dev#2609", lookups, n, padding)
+		t.Fatalf("%d lookups of a damaged Claude read %d bytes; more than one hash of its unchanged %d-byte executable is the stall of repeated full-file hashing", lookups, n, padding)
 	}
 }
 

@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -413,60 +412,6 @@ func (s *Server) auditFilteredListLegacy(
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
-}
-
-// handleAuditVerify verifies the chain structurally AND verifies every signed
-// checkpoint's Ed25519 signature against the engine key. It does NOT self-audit
-// (verification is an observer; auditing it would grow the chain it inspects).
-func (s *Server) handleAuditVerify(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
-	tenant := mc.Tenant
-	from := queryInt64(r, "from", 1)
-	var structural store.VerifyReport
-	var checks audit.CheckpointReport
-	err := s.st.View(r.Context(), tenant, func(sc store.Scope) error {
-		rep, err := sc.Audit().Verify(r.Context(), from)
-		if err != nil {
-			return err
-		}
-		structural = rep
-		cr, err := audit.VerifyCheckpoints(r.Context(), sc.Audit(), s.signer.PublicKey())
-		if err != nil {
-			return err
-		}
-		checks = cr
-		return nil
-	})
-	if err != nil {
-		s.writeError(w, r, err)
-		return
-	}
-	// A young chain has no checkpoints yet: "pending" is not a verification FAILURE
-	// (structural verification already proves chain integrity), only a corrupt
-	// checkpoint (bad sig/link) is. But an EMPTY chain must not report success —
-	// Checked==0 verifies nothing, and calling that "ok" is the vacuous-truth
-	// shape.
-	//
-	// `checkpoints.ok` stays the strict boolean it has always been (false until
-	// something has actually been attested — flipping it to true for a virgin chain
-	// would be the same lie in the other direction, and would hide a ledger whose
-	// checkpoints really are gone). `checkpoints.status` carries the THIRD answer
-	// the boolean cannot: a renderer keys off it so "not yet" is never painted as
-	// "broken". Anything the audit layer cannot name lands on "failed".
-	cpStatus := checks.Status()
-	checkpointsTrustworthy := cpStatus != audit.CheckpointStatusFailed
-	verified := structural.OK && structural.Checked > 0 && checkpointsTrustworthy
-	writeJSON(w, http.StatusOK, map[string]any{
-		"ok": verified,
-		"chain": map[string]any{
-			"ok": structural.OK, "checked": structural.Checked,
-			"break_at": structural.BreakAt, "reason": structural.Reason,
-		},
-		"checkpoints": map[string]any{
-			"ok": checks.OK, "status": string(cpStatus), "count": checks.Checkpoints,
-			"latest_attested_seq": checks.LatestAttestedSeq,
-			"first_bad_seq":       checks.FirstBadSeq, "reason": checks.Reason,
-		},
-	})
 }
 
 // handleAuditPubkey returns the engine's audit checkpoint verification key, so an

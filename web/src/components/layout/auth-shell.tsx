@@ -64,44 +64,44 @@ export function AuthShell({ children }: { children: ReactNode }) {
       <div className="absolute top-4 right-4 z-10">
         <ThemeToggle />
       </div>
-      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center gap-10 px-6 py-14 lg:grid lg:grid-cols-[minmax(0,1fr)_26rem] lg:items-center lg:gap-16">
-        {/* The statement column. Hidden below lg, where the card IS the page and a
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="flex flex-1 flex-col outline-none"
+      >
+        <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center gap-10 px-6 py-14 lg:grid lg:grid-cols-[minmax(0,1fr)_26rem] lg:items-center lg:gap-16">
+          {/* The statement column. Hidden below lg, where the card IS the page and a
             scrolling preamble above a password box helps nobody. */}
-        <div className="hidden flex-col gap-6 lg:flex">
-          <Wordmark />
-          <p className="max-w-lg font-display text-display-lg text-foreground">
-            {t('auth:shell.headline')}
-          </p>
-          <ul className="flex max-w-lg flex-col gap-3">
-            {promises.map((line) => (
-              <li
-                key={line}
-                className="flex items-start gap-3 text-body text-muted-foreground"
-              >
-                <span
-                  aria-hidden
-                  className="mt-[0.45rem] size-1.5 shrink-0 rounded-full bg-accent"
-                />
-                {line}
-              </li>
-            ))}
-          </ul>
+          <div className="hidden flex-col gap-6 lg:flex">
+            <Wordmark />
+            <p className="max-w-lg font-display text-display-lg text-foreground">
+              {t('auth:shell.headline')}
+            </p>
+            <ul className="flex max-w-lg flex-col gap-3">
+              {promises.map((line) => (
+                <li
+                  key={line}
+                  className="flex items-start gap-3 text-body text-muted-foreground"
+                >
+                  <span
+                    aria-hidden
+                    className="mt-[0.45rem] size-1.5 shrink-0 rounded-full bg-accent"
+                  />
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="flex w-full flex-col items-center gap-6 lg:items-stretch">
+            <Wordmark className="lg:hidden" />
+            <div className="w-full max-w-md">{children}</div>
+          </div>
         </div>
-        <div className="flex w-full flex-col items-center gap-6 lg:items-stretch">
-          <Wordmark className="lg:hidden" />
-          <main
-            id="main-content"
-            tabIndex={-1}
-            className="w-full max-w-md outline-none"
-          >
-            {children}
-          </main>
-        </div>
-      </div>
-      {/* WHICH DEPLOYMENT AM I SIGNING INTO. The console keeps the scope of the next
+        {/* WHICH DEPLOYMENT AM I SIGNING INTO. The console keeps the scope of the next
           action on screen at all times, and on the signed-out screens that scope is the
           deployment itself. */}
-      <DeploymentIdentity className="pb-6 text-center" />
+        <DeploymentIdentity className="pb-6 text-center" />
+      </main>
     </div>
   )
 }

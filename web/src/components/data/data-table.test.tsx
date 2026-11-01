@@ -532,16 +532,16 @@ describe('DataTable — density preference', () => {
   it('estimates virtualized rows with the density height and re-estimates on change', () => {
     // jsdom reports every box as 0 × 0, which collapses the virtual window to
     // nothing (see the 100k test above). Simulate the two facts a browser supplies:
-    // the scroll region is 640 px tall (the virtualizer reads offsetWidth/Height)
+    // the scroll region is 640 px tall (the virtualizer reads clientWidth/Height)
     // and each row measures exactly its density height (getBoundingClientRect).
     const originalRect = Element.prototype.getBoundingClientRect
-    const originalOffsetHeight = Object.getOwnPropertyDescriptor(
-      HTMLElement.prototype,
-      'offsetHeight',
+    const originalClientHeight = Object.getOwnPropertyDescriptor(
+      Element.prototype,
+      'clientHeight',
     )
-    const originalOffsetWidth = Object.getOwnPropertyDescriptor(
-      HTMLElement.prototype,
-      'offsetWidth',
+    const originalClientWidth = Object.getOwnPropertyDescriptor(
+      Element.prototype,
+      'clientWidth',
     )
     const isScroller = (el: Element) =>
       el instanceof HTMLElement && el.classList.contains('overflow-auto')
@@ -567,15 +567,15 @@ describe('DataTable — density preference', () => {
       }
       return originalRect.call(this)
     }
-    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+    Object.defineProperty(Element.prototype, 'clientHeight', {
       configurable: true,
-      get(this: HTMLElement) {
+      get(this: Element) {
         return isScroller(this) ? 640 : 0
       },
     })
-    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+    Object.defineProperty(Element.prototype, 'clientWidth', {
       configurable: true,
-      get(this: HTMLElement) {
+      get(this: Element) {
         return isScroller(this) ? 800 : 0
       },
     })
@@ -583,17 +583,17 @@ describe('DataTable — density preference', () => {
       exerciseVirtualDensity()
     } finally {
       Element.prototype.getBoundingClientRect = originalRect
-      if (originalOffsetHeight)
+      if (originalClientHeight)
         Object.defineProperty(
-          HTMLElement.prototype,
-          'offsetHeight',
-          originalOffsetHeight,
+          Element.prototype,
+          'clientHeight',
+          originalClientHeight,
         )
-      if (originalOffsetWidth)
+      if (originalClientWidth)
         Object.defineProperty(
-          HTMLElement.prototype,
-          'offsetWidth',
-          originalOffsetWidth,
+          Element.prototype,
+          'clientWidth',
+          originalClientWidth,
         )
     }
   })
@@ -648,13 +648,13 @@ describe('DataTable — density preference', () => {
     // the sticky header. Only `scrollTop` of the region may change; the document must
     // not be scrolled (no scrollIntoView).
     const originalRect = Element.prototype.getBoundingClientRect
-    const originalOffsetHeight = Object.getOwnPropertyDescriptor(
-      HTMLElement.prototype,
-      'offsetHeight',
+    const originalClientHeight = Object.getOwnPropertyDescriptor(
+      Element.prototype,
+      'clientHeight',
     )
-    const originalOffsetWidth = Object.getOwnPropertyDescriptor(
-      HTMLElement.prototype,
-      'offsetWidth',
+    const originalClientWidth = Object.getOwnPropertyDescriptor(
+      Element.prototype,
+      'clientWidth',
     )
     const isScroller = (el: Element) =>
       el instanceof HTMLElement && el.classList.contains('overflow-auto')
@@ -685,15 +685,15 @@ describe('DataTable — density preference', () => {
       }
       return originalRect.call(this)
     }
-    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+    Object.defineProperty(Element.prototype, 'clientHeight', {
       configurable: true,
-      get(this: HTMLElement) {
+      get(this: Element) {
         return isScroller(this) ? 640 : 0
       },
     })
-    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+    Object.defineProperty(Element.prototype, 'clientWidth', {
       configurable: true,
-      get(this: HTMLElement) {
+      get(this: Element) {
         return isScroller(this) ? 800 : 0
       },
     })
@@ -744,17 +744,17 @@ describe('DataTable — density preference', () => {
       expect(scrollIntoView.mock.calls.length).toBe(scrollIntoViewCalls)
     } finally {
       Element.prototype.getBoundingClientRect = originalRect
-      if (originalOffsetHeight)
+      if (originalClientHeight)
         Object.defineProperty(
-          HTMLElement.prototype,
-          'offsetHeight',
-          originalOffsetHeight,
+          Element.prototype,
+          'clientHeight',
+          originalClientHeight,
         )
-      if (originalOffsetWidth)
+      if (originalClientWidth)
         Object.defineProperty(
-          HTMLElement.prototype,
-          'offsetWidth',
-          originalOffsetWidth,
+          Element.prototype,
+          'clientWidth',
+          originalClientWidth,
         )
     }
   })

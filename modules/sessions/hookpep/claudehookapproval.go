@@ -139,6 +139,18 @@ func buildClaudeApprovalFacts(in claude.HookDecisionInput, disp hookDisposition,
 			return claudeApprovalFacts{}, err
 		}
 	}
+	// A tool's purpose is separate from its executable facts. Keep the command
+	// review intact and project only the optional description through the masker.
+	purpose, _ := input["description"].(string)
+	if strings.TrimSpace(purpose) != "" {
+		masked, generated, err := mask(purpose)
+		if err != nil {
+			return claudeApprovalFacts{}, err
+		}
+		reason.Reset()
+		reason.WriteString(masked)
+		spans = generated
+	}
 	return claudeApprovalFacts{
 		reason: reason.String(), reasonMasks: spans,
 		review: &governance.ApprovalReview{Tool: toolDisplay, Text: reviewText}, reviewMasks: reviewMasks,
@@ -269,8 +281,17 @@ func (d *Decider) gateViaSessionApproval(ctx context.Context, tenant model.Tenan
 	case effectgate.Replay, effectgate.Unspendable:
 		return deny("human approval is no longer valid for this tool-call", actor, tier, version)
 	default: // not approved, or an answer about another effect
-		if a.Status == governance.GateStatusRejected {
+		if a.Outcome == effectgate.Refused && a.Status == governance.GateStatusRejected {
 			declinedByPerson(ctx)
+			decisions, err := d.Approvals.Decisions(ctx, tenant, a.Ref)
+			if err != nil {
+				return deny("human review declined this tool-call; feedback could not be read", actor, tier, version)
+			}
+			for _, decision := range decisions {
+				if decision.Decision == "reject" && decision.Note != "" {
+					return deny("human review declined this tool-call: "+decision.Note, actor, tier, version)
+				}
+			}
 		}
 		return deny("human review did not approve this tool-call ("+a.Status+")", actor, tier, version)
 	}

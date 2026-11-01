@@ -128,18 +128,21 @@ func (c *cappedBuffer) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// plainRune turns the controls, and the format characters that reorder text, into spaces.
+func plainRune(r rune) rune {
+	if !unicode.IsPrint(r) {
+		return ' '
+	}
+	return r
+}
+
 // gitMessage is git's own first line of explanation, cut and stripped of control
 // characters, safe to hand to a caller and to the ledger.
 func gitMessage(texts ...string) string {
 	for _, text := range texts {
 		for _, line := range strings.Split(text, "\n") {
 			if line = strings.TrimSpace(line); line != "" {
-				line = strings.Map(func(r rune) rune {
-					if !unicode.IsPrint(r) { // controls, and the format characters that reorder text
-						return ' '
-					}
-					return r
-				}, line)
+				line = strings.Map(plainRune, line)
 				if len(line) > worktreeGitMessageLimit {
 					line = strings.ToValidUTF8(line[:worktreeGitMessageLimit], "") + "…"
 				}
@@ -155,6 +158,13 @@ func gitMessage(texts ...string) string {
 // not running, being stopped (a timeout, a cancelled request, a signal) or not
 // finishing, none of which is an answer to the question asked.
 func gitRun(ctx context.Context, dir string, args ...string) (stdout string, code int, stderr string, err error) {
+	return gitRunWithHome(ctx, dir, "", args...)
+}
+
+// gitRunWithHome keeps the same command hardening. The repository source fetch
+// supplies its freshly created directory as HOME so libcurl cannot fall back to
+// the engine user's .netrc. Existing local-only callers retain their environment.
+func gitRunWithHome(ctx context.Context, dir, home string, args ...string) (stdout string, code int, stderr string, err error) {
 	git, err := exec.LookPath("git")
 	if err != nil {
 		return "", -1, "", &runErr{http.StatusServiceUnavailable,
@@ -180,6 +190,9 @@ func gitRun(ctx context.Context, dir string, args ...string) (stdout string, cod
 		"PATH=" + os.Getenv("PATH"), "LANG=C", "LC_ALL=C",
 		"GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_TERMINAL_PROMPT=0",
 		"GIT_NO_REPLACE_OBJECTS=1", "GIT_NO_LAZY_FETCH=1",
+	}
+	if home != "" {
+		cmd.Env = append(cmd.Env, "HOME="+home, "XDG_CONFIG_HOME="+home)
 	}
 	cmd.WaitDelay = worktreeGitWaitDelay
 	out, errb := &cappedBuffer{limit: worktreeGitOutputLimit}, &cappedBuffer{limit: worktreeGitOutputLimit}
@@ -322,8 +335,9 @@ func resolveWorktreeStart(ctx context.Context, repo, from string) (string, error
 //
 // from is where the worktree starts: "" is the workspace's HEAD, as it has always been;
 // otherwise a commit id or a local branch of the workspace's repository, which is how a
-// person opens the work a handoff names (resolveWorktreeStart).
-func (m *Module) prepareRunWorktree(ctx context.Context, runRef string, ws *resolvedWorkspace, isolation Isolation, from string) (dir, branch string, err error) {
+// person opens the work a handoff names (resolveWorktreeStart). stem names the item a
+// session starts from in its branch (issue-17-); it is empty for every other start.
+func (m *Module) prepareRunWorktree(ctx context.Context, runRef string, ws *resolvedWorkspace, isolation Isolation, from, stem string) (dir, branch string, err error) {
 	root, err := m.worktreeRootOrErr()
 	if err != nil {
 		return "", "", err
@@ -358,7 +372,7 @@ func (m *Module) prepareRunWorktree(ctx context.Context, runRef string, ws *reso
 			return "", "", err
 		}
 	}
-	branch = m.rt.worktreeBranchPrefix + runRef[len(runRef)-worktreeBranchSuffixLen:]
+	branch = m.rt.worktreeBranchPrefix + stem + runRef[len(runRef)-worktreeBranchSuffixLen:]
 	if _, code, _, err := gitRun(ctx, ws.rootReal, "check-ref-format", "refs/heads/"+branch); err != nil {
 		return "", "", err
 	} else if code != 0 {

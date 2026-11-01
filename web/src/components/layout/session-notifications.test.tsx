@@ -209,6 +209,14 @@ it('notifies once when a turn ends in a hidden tab', async () => {
   expect(document.title).toBe('Olivares')
 })
 
+it('keeps finished notifications off when the user disabled that event', async () => {
+  useClientSettings.setState({
+    notificationEvents: { needsYou: true, finished: false, failed: true },
+  })
+  await turnEndsWith(new Date(Date.now() - 20_000).toISOString(), 'finished')
+  expect(notify).not.toHaveBeenCalled()
+})
+
 it('stays quiet for a run that went idle from silence', async () => {
   await turnEndsWith(new Date(Date.now() - 6 * 60_000).toISOString(), 'quiet')
   expect(notify).not.toHaveBeenCalled()

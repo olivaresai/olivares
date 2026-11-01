@@ -27,7 +27,7 @@ func TestSuperadminLifecycleEndpoints(t *testing.T) {
 		t.Fatalf("create response carried no id: %s", r.raw)
 	}
 
-	// HU-28: once the deployment asks for a passkey step-up, adding a person from
+	// acceptance: once the deployment asks for a passkey step-up, adding a person from
 	// the API asks for it too, exactly like the console's onboarding.
 	h.requirePasskeyStepUp()
 	r = h.do("POST", "/v1/users", admin, map[string]any{

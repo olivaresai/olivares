@@ -33,6 +33,28 @@ vi.mock('@/lib/auth/context', () => ({
   }),
 }))
 
+// The view is in the address (?view=table): the router answers with the real URL, and a
+// navigation writes it there, so a test reads back what a pasted link would carry.
+const navigate = vi.hoisted(() =>
+  vi.fn((opts: { search: (cur: Record<string, unknown>) => object }) => {
+    const cur = Object.fromEntries(new URLSearchParams(window.location.search))
+    const next = new URLSearchParams()
+    for (const [k, v] of Object.entries(opts.search(cur)))
+      if (v !== undefined) next.set(k, String(v))
+    const q = next.toString()
+    window.history.replaceState(null, '', q ? `/reach?${q}` : '/reach')
+    return Promise.resolve()
+  }),
+)
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => navigate,
+  useRouterState: ({
+    select,
+  }: {
+    select: (s: { location: { searchStr: string } }) => unknown
+  }) => select({ location: { searchStr: window.location.search } }),
+}))
+
 const api = vi.hoisted(() => ({
   graph: vi.fn(),
   agents: vi.fn(),
@@ -183,6 +205,8 @@ const SESSION_REQUEST = {
 }
 
 beforeEach(() => {
+  window.history.replaceState(null, '', '/reach')
+  navigate.mockClear()
   perm.approvals = true
   perm.sessions = true
   api.graph.mockReset().mockResolvedValue(GRAPH)
@@ -510,6 +534,32 @@ describe('ReachView table alternative', () => {
     ])
     const results = await axe.run(document.body)
     expect(results.violations).toEqual([])
+    // The choice is in the address, so a pasted link opens the table.
+    expect(window.location.search).toBe('?view=table')
+    await user.click(screen.getByRole('button', { name: 'Graph' }))
+    expect(window.location.search).toBe('')
+  })
+
+  it('opens on the table a link names, and says when the link names no view', async () => {
+    window.history.replaceState(null, '', '/reach?view=table')
+    const first = renderIntel(<ReachView />)
+    expect(await screen.findByRole('table')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Table', pressed: true }),
+    ).toBeInTheDocument()
+    first.unmount()
+
+    window.history.replaceState(null, '', '/reach?view=pie')
+    renderIntel(<ReachView />)
+    expect(
+      await screen.findByRole('img', { name: /Reach graph/ }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('table')).toBeNull()
+    expect(
+      await screen.findByText(
+        /1 value in this link could not be used \(view\)/,
+      ),
+    ).toBeInTheDocument()
   })
 })
 

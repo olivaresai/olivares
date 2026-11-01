@@ -1,4 +1,13 @@
 {
+  "compact": {
+    "context": "컨텍스트",
+    "now": "지금 압축",
+    "beforeSend": "전송 전에 압축",
+    "working": "압축 중…",
+    "hint": "이전 대화를 요약하여 컨텍스트를 확보합니다. 압축이 확인될 때까지 초안이 유지됩니다.",
+    "unavailable": "세션이 유휴 상태이고 도구가 기본 압축을 지원할 때 사용할 수 있습니다.",
+    "failed": "압축이 확인되지 않았습니다. 메시지가 전송되지 않았습니다."
+  },
   "git": {
     "title": "Git",
     "branch": "브랜치",
@@ -304,16 +313,17 @@
     "currentSession": "현재 세션",
     "besideSession": "옆 세션",
     "switchSession": "세션 전환",
-    "closeContext": "컨텍스트 닫기",
+    "details": "세션 세부 정보",
+    "closeContext": "세부 정보 닫기",
     "backTo": "{{pane}}(으)로 돌아가기",
     "pane": {
       "rail": "세션",
       "narrative": "작업",
-      "context": "컨텍스트"
+      "context": "세부 정보"
     },
     "resize": {
       "rail": "세션 목록 너비 조절",
-      "context": "컨텍스트 패널 너비 조절",
+      "context": "세부 정보 패널 너비 조절",
       "beside": "옆 세션 너비 조절"
     }
   },
@@ -348,7 +358,9 @@
     "planNotRead": "요금제 윈도 읽지 않음",
     "resets": "{{when}}에 재설정({{at}})",
     "stale": "마지막으로 알려짐",
-    "readAt": "{{at}}에 읽음"
+    "readAt": "{{at}}에 읽음",
+    "permission": "{{name}}: {{what}}",
+    "full": "전체 권한: 묻지 않고 실행되며 <policy>Olivares 정책</policy>으로 제한됩니다"
   },
   "evidence": {
     "checks": {
@@ -425,7 +437,7 @@
       "worker": "워커",
       "orchestrator": "오케스트레이터"
     },
-    "details": "세부 정보",
+    "details": "참조",
     "echoes": "다음으로도 보고됨",
     "folder": "폴더",
     "temporaryFolder": "이 세션의 임시 폴더",
@@ -437,12 +449,29 @@
     "noChanges": "Olivares가 이 세션을 시작하지 않아 표시할 변경이 없습니다.",
     "filesUnavailable": "이 폴더는 탐색할 수 없습니다.",
     "filesNoAccess": "귀하의 역할로는 이 폴더를 탐색할 수 없습니다.",
-    "filesFailed": "폴더를 읽을 수 없습니다."
+    "filesFailed": "폴더를 읽을 수 없습니다.",
+    "facts": {
+      "title": "세션",
+      "state": "상태",
+      "workspace": "작업 공간",
+      "tool": "도구",
+      "account": "계정",
+      "model": "모델",
+      "access": "접근",
+      "cost": "비용"
+    },
+    "usage": {
+      "title": "계정 사용량",
+      "fiveHour": "5시간 중 {{percent}}%",
+      "week": "이번 주 {{percent}}%"
+    }
   },
   "conversation": {
     "log": "대화",
     "waiting": "세션을 기다리는 중…",
     "empty": "아직 메시지가 없습니다.",
+    "earlier": "이전 출력 보기",
+    "earlierFailed": "이전 출력을 불러오지 못했습니다.",
     "ended": "세션이 종료되었습니다.",
     "lag_other": "프레임 {{count}}개가 유실됨 — 아래 출력은 공백 이후부터 이어집니다.",
     "tool": "도구",
@@ -468,8 +497,8 @@
     "started": "세션 시작됨",
     "startedTools_other": "도구 {{count}}개",
     "notSent": "전송되지 않음: {{reason}}",
-    "waitingApproval": "시작이 승인되고 세션이 시작되면 전송됩니다.",
-    "workingFolder": "작업 폴더: {{cwd}}",
+    "waitingApproval": "세션이 준비되면 전송됩니다.",
+    "workingFolder": "작업 폴더: <path />",
     "temporaryFolder": "작업 폴더: 이 세션의 임시 폴더",
     "workedFor": "{{duration}} 동안 작업함",
     "modelChanged": "모델이 바뀌었습니다: {{from}} → {{to}}",
@@ -497,8 +526,11 @@
     "running": {
       "command_other": "셸 명령 {{count}}개 실행 중",
       "edit": "{{target}} 편집 중",
+      "editPath": "<path/> 편집 중",
       "read": "{{target}} 읽는 중",
+      "readPath": "<path/> 읽는 중",
       "search": "{{target}} 검색 중",
+      "searchPath": "<lead/><path/> 검색 중",
       "agent": "{{name}} 작업 중",
       "tool": "{{tool}} 실행 중"
     },
@@ -515,6 +547,14 @@
         "extra": "추가 사용량 한도",
         "usage": "사용량 한도"
       }
+    },
+    "card": {
+      "question": "질문",
+      "plan": "제안된 계획",
+      "todos": "할 일 목록 ({{total}}개 중 {{done}}개 완료)",
+      "send": "답변 보내기",
+      "answered": "답변을 보냈습니다: {{answer}}",
+      "sendFailed": "답변을 보내지 못했습니다."
     }
   },
   "changes": {
@@ -563,6 +603,22 @@
       "added": "추가됨",
       "modified": "수정됨",
       "deleted": "삭제됨"
+    },
+    "comment": {
+      "title": "줄에 댓글 달기",
+      "line": "줄",
+      "version": "버전",
+      "text": "댓글",
+      "send": "세션으로 보내기",
+      "sent": "댓글을 세션으로 보냈습니다.",
+      "failed": "댓글을 보낼 수 없습니다. 잠시 후 다시 시도하십시오.",
+      "notLive": "댓글을 보내려면 세션을 재개하십시오.",
+      "noPermission": "댓글을 보내려면 세션에 쓸 수 있는 권한이 필요합니다.",
+      "needLine": "줄을 선택하십시오. 줄 번호를 클릭하거나 입력하십시오.",
+      "noSuchLine": "파일에 {{version}} {{line}}번째 줄이 없습니다.",
+      "empty": "댓글을 작성하십시오.",
+      "atBase": "베이스에서",
+      "atTip": "브랜치 팁에서"
     }
   },
   "peers": {
@@ -682,6 +738,13 @@
     "unreadable": "대화 기록의 기록 {{n}}개를 읽을 수 없습니다."
   },
   "limit": {
+    "settingsSaved": "자동 재개 설정을 저장했습니다.",
+    "resumeAtReset": "초기화 시 재개",
+    "snoozeUntilReset": "초기화까지 숨기기",
+    "automatic": "한도가 초기화되면 자동으로 재개",
+    "resumes": "{{time}}에 재개",
+    "cancel": "취소",
+    "cancelled": "예약된 재개가 취소되었습니다.",
     "usageUntil": "{{time}}까지 할당량 소진",
     "usage": "할당량 소진",
     "rate": "프로바이더가 속도를 제한했습니다. 잠시 후 다시 시도하십시오."
@@ -692,6 +755,10 @@
   },
   "rowActions": {
     "rename": "이름 바꾸기…",
+    "regenerateTitle": "제목 다시 만들기",
+    "titleShort": "짧게",
+    "titleSentence": "보통",
+    "titleLong": "길게",
     "renameTitle": "세션 이름 바꾸기",
     "renameDescription": "이름은 서버에 저장되며 이 세션이 표시되는 모든 곳에 나타납니다. 비워 두면 Olivares가 붙이는 이름으로 돌아갑니다.",
     "renameLabel": "이름",
@@ -713,6 +780,52 @@
     "copiedPartial": "복사했습니다. 대화 기록 중 {{n}}개 항목은 읽을 수 없어 포함되지 않았습니다.",
     "clipped": "64 KiB를 넘는 메시지는 복사본에서 잘렸으며 각각 [...]로 끝납니다.",
     "noWholeText": "엔진이 각 메시지의 첫 줄만 보내서 대화 기록을 복사하지 않았습니다.",
-    "transcriptChanged": "복사하는 동안 대화 기록이 바뀌었습니다. 다시 시도하세요."
+    "transcriptChanged": "복사하는 동안 대화 기록이 바뀌었습니다. 다시 시도하세요.",
+    "undo": "실행 취소"
+  },
+  "approval": {
+    "declineSend": "거절하고 보내기",
+    "feedbackUnsupported": "이 도구는 피드백을 받을 수 없습니다. 답변은 거절과 함께 저장됩니다.",
+    "title": "승인이 필요합니다",
+    "why": "이유",
+    "rule": "규칙",
+    "reach": "접근 범위",
+    "requestedBy": "요청자",
+    "reachUnknown": "보고되지 않음",
+    "notYours": "승인 권한이 있는 다른 사람이 이 요청을 결정합니다.",
+    "approved": "승인됨",
+    "denied": "거부됨",
+    "ended": "더 이상 대기하지 않음",
+    "unreadable": "요청을 읽을 수 없습니다."
+  },
+  "terminal": {
+    "title": "터미널",
+    "hint": "이 세션의 폴더 안에서 실행되는 셸입니다. 세션과 같은 제한이 적용되며 내 계정으로 실행됩니다. 입력한 모든 명령줄이 기록됩니다.",
+    "open": "터미널 열기",
+    "close": "닫기",
+    "copy": "복사",
+    "paste": "붙여넣기",
+    "again": "새 터미널 열기",
+    "reconnecting": "다시 연결하는 중…",
+    "ended": "터미널이 종료되었습니다.",
+    "endedWith": "터미널이 종료되었습니다(종료 코드 {{code}}).",
+    "input": "터미널 입력",
+    "label": "터미널",
+    "noFolder": "이 세션에는 폴더가 없어 터미널을 열 수 있는 곳이 없습니다.",
+    "unavailable": "세션의 폴더를 여기서 사용할 수 없어 터미널을 열 수 없습니다.",
+    "problem": {
+      "step_up": "먼저 본인 확인을 한 뒤 터미널을 다시 여세요.",
+      "refused": "이 폴더에서 터미널을 열 권한이 없습니다.",
+      "busy": "열려 있는 터미널이 너무 많습니다. 먼저 하나를 닫으세요.",
+      "failed": "터미널을 열 수 없었습니다. 잠시 후 다시 시도하세요."
+    },
+    "keys": {
+      "esc": "Esc",
+      "tab": "Tab",
+      "ctrlC": "Ctrl+C",
+      "up": "위",
+      "down": "아래"
+    },
+    "closeLabel": "터미널 닫기"
   }
 }

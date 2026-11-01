@@ -257,7 +257,7 @@ func TestToolsScreensLeaveTheAuditEventsOfTheCommandsOnARealEngine(t *testing.T)
 		j.press(keyEnterBytes) // Get started
 		j.see("Next: olivares tool install claude")
 		j.press(keyEnterBytes) // install it
-		j.see("Next: olivares tool login claude")
+		j.seeWithin("Next: olivares tool login claude", installWait)
 		j.press(keyEnterBytes) // sign it in
 		j.see("Paste the code the page shows")
 		j.typeText(uiTestCode)

@@ -275,7 +275,7 @@ describe('Approvals: what will run, before Approve', () => {
     expect(row.querySelector('[data-slot="approval-review"]')).toBeNull()
   })
 
-  // SR4C on 912c4d15: only the structured provider scope decides, never the text of a
+  // review on 912c4d15: only the structured provider scope decides, never the text of a
   // reviewed command.
   it('decides from the provider scope only, never from a reviewed command', () => {
     const provider = (scope: string, review?: ApprovalDTO['review']) =>
@@ -341,6 +341,26 @@ describe('Approvals: what will run, before Approve', () => {
     expect(await within(queue()).findByText('/srv/app')).toBeInTheDocument()
   })
 
+  it('names a session that has no name by the title the engine cut from its first message', async () => {
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [
+        {
+          run_ref: 'run-3',
+          title: 'Plan the migration',
+          workspace_ref: 'ws-1',
+          state: 'running',
+          pending_approval_ref: 'apr-1',
+        } as never,
+      ],
+      has_more: false,
+    })
+    serve([hookRequest])
+    wrap(<GovernanceView />)
+    expect(
+      await screen.findByText('Bash · Plan the migration'),
+    ).toBeInTheDocument()
+  })
+
   // #502: a launch held for its approval names it in approval_ref, not pending_approval_ref.
   it('the session and folder come from the launch held for this request', async () => {
     vi.mocked(sessionsApi.live).mockResolvedValue({
@@ -376,9 +396,12 @@ describe('the queue row keeps its lines to one', () => {
     serve([hookRequest])
     wrap(<GovernanceView />)
     await screen.findByText('Bash · Fix the build')
-    const folder = await within(queue()).findByText('/srv/app')
-    expect(folder).toHaveAttribute('title', '/srv/app')
-    expect(folder.className).toMatch(/truncate/)
+    // PathText: the whole path is the title, the start gives way, and the row (a button)
+    // carries no copy action of its own inside it.
+    const folder = await within(queue()).findByTitle('/srv/app')
+    expect(folder).toHaveTextContent('/srv/app')
+    expect(folder.firstElementChild?.className).toMatch(/truncate/)
+    expect(within(queue()).queryByRole('button', { name: /^Copy / })).toBeNull()
     const cell = folder.closest('[data-slot="approval-request"]') as HTMLElement
     expect(cell.className).toMatch(/max-w-full/)
     expect(

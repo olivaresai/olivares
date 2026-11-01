@@ -90,23 +90,10 @@ func newAgentManagedSettingsCmd() *cobra.Command {
 					Matcher:     matcher, // "" = every tool (deny-closed coverage)
 					TimeoutSecs: hookTimeout,
 					Redact:      redact,
+					PinEvents:   pinHookEvents || (defaultClient && cmd.Flags().Changed("timeout")),
 				})
 				if err != nil {
 					return err
-				}
-				if pinHookEvents || (defaultClient && cmd.Flags().Changed("timeout")) {
-					for event, matchers := range hooks {
-						for i := range matchers {
-							// PEPHook shares its command slice between events.
-							// Each invocation needs its own immutable event pin.
-							commands := append([]managedsettings.HookCommand(nil), matchers[i].Hooks...)
-							for j := range commands {
-								commands[j].Command += " --hook-event " + event
-							}
-							matchers[i].Hooks = commands
-						}
-						hooks[event] = matchers
-					}
 				}
 				pol.Hooks = hooks
 			}

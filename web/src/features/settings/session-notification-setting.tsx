@@ -5,6 +5,14 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { useClientSettings } from './preferences'
+import {
+  currentPush,
+  disablePush,
+  enablePush,
+  needsInstallForPush,
+  pushSupported,
+  pushTextsFrom,
+} from './web-push'
 
 export function SessionNotificationSetting({
   owner,
@@ -22,6 +30,9 @@ export function SessionNotificationSetting({
       : Notification.permission,
   )
   const [pendingFor, setPendingFor] = useState<string | null>(null)
+  // Whether this browser is also registered for push, so a closed tab is told too. 'off' until
+  // the switch is on; 'failed' keeps the in-page notices and says what is missing.
+  const [push, setPush] = useState<'off' | 'on' | 'failed'>('off')
   const pending = owner !== null && pendingFor === owner
   const requestOwner = useRef(owner)
   useEffect(() => {
@@ -31,9 +42,25 @@ export function SessionNotificationSetting({
     }
   }, [owner])
 
+  // A page that opens with the switch already on shows what this browser really holds. Only
+  // that opening state: a switch turned on here knows its own outcome from enablePush below.
+  const [openedOn] = useState(enabled)
+  useEffect(() => {
+    if (!openedOn || !pushSupported()) return
+    let current = true
+    void currentPush()
+      .catch(() => false)
+      .then((on) => current && setPush(on ? 'on' : 'failed'))
+    return () => {
+      current = false
+    }
+  }, [openedOn])
+
   const toggle = async () => {
-    if (enabled) {
+    if (enabled && permission !== 'default') {
       setSelected(null)
+      setPush('off')
+      void disablePush().catch(() => undefined)
       return
     }
     if (!owner || typeof Notification === 'undefined') return
@@ -46,7 +73,17 @@ export function SessionNotificationSetting({
           : Notification.permission
       if (requestOwner.current !== owner) return
       setPermission(answer)
-      if (answer === 'granted') setSelected(owner)
+      if (answer === 'granted') {
+        setSelected(owner)
+        if (pushSupported()) {
+          try {
+            await enablePush(pushTextsFrom(t))
+            if (requestOwner.current === owner) setPush('on')
+          } catch {
+            if (requestOwner.current === owner) setPush('failed')
+          }
+        }
+      }
     } catch {
       if (requestOwner.current === owner) setPermission('unsupported')
     } finally {
@@ -58,8 +95,14 @@ export function SessionNotificationSetting({
     permission === 'denied'
       ? t('sessionNotifications.denied')
       : permission === 'unsupported'
-        ? t('sessionNotifications.unavailable')
-        : ''
+        ? needsInstallForPush()
+          ? t('sessionNotifications.installHint')
+          : t('sessionNotifications.unavailable')
+        : enabled && push === 'on'
+          ? t('sessionNotifications.pushOn')
+          : enabled && push === 'failed'
+            ? t('sessionNotifications.pushUnavailable')
+            : ''
   return (
     <div className="grid grid-cols-1 items-center gap-3 border-t border-line py-3.5 sm:grid-cols-[minmax(0,1fr)_auto]">
       <div className="min-w-0">

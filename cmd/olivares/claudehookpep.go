@@ -80,10 +80,10 @@ func buildClaudeHookPEPServer(eng *engine, log *slog.Logger) (*http.Server, erro
 		Approvals:     eng.engineApprovals,
 		// Hook content firewall: the real inspector under -tags enterprise WITH a config,
 		// else nil (no deep inspection, unchanged). Findings/metering ride the engine bus.
-		Inspector: chainInspectors(thisEdition.hookContentInspector.get(osGetenv, log), eng.sessionDecoys),
-		Bus:       eng.bus,
-		Clock:     time.Now,
-		Log:       log,
+		InspectorLive: hookInspectorSource(liveInspectorChain(eng.gates().hookFirewall.bootFrom(func() contentInspector { return thisEdition.hookContentInspector.get(osGetenv, log) }), eng.sessionDecoys)),
+		Bus:           eng.bus,
+		Clock:         time.Now,
+		Log:           log,
 	})
 	if eng.sessionsMod != nil {
 		dec.ApprovalWait = eng.sessionsMod.BeginApprovalWait

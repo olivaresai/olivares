@@ -51,11 +51,9 @@ export const savedViewsKeys = {
 }
 
 /** The user's favorites on the engine, for personal navigation. A favorites call never
- * renews, replays or ends the sign-in: on failure the browser copy stands. */
+ * renews, replays or ends the sign-in: on failure the current visit keeps its in-memory list. */
 export const engineFavorites = (tenant: string | null): FavoritesRemote => ({
-  // Favorites live in the consoleviews module. While it is off nothing is sent (the read
-  // would answer 404 module_not_enabled): the load fails as before, so the browser copy
-  // stands, and a save stays in the browser without a "could not save" notice.
+  // A disabled module cannot read or acknowledge a saved list.
   load: ({ signal, guard }) =>
     moduleOn('consoleviews')
       ? savedViewsApi.favorites({
@@ -75,5 +73,7 @@ export const engineFavorites = (tenant: string | null): FavoritesRemote => ({
           dispatchGuard: guard,
           sessionEffects: 'none',
         })
-      : Promise.resolve(undefined),
+      : Promise.reject(
+          new ApiError(404, 'module_not_enabled', 'consoleviews is off'),
+        ),
 })

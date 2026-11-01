@@ -36,6 +36,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { ForbiddenState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { PathText } from '@/components/ui/path-text'
 import {
   Select,
   SelectContent,
@@ -424,9 +425,7 @@ function BindingsTable({
                     {binding.scope_ref || t('bindings.defaultWorkspace')}
                   </code>
                   {binding.folder_path ? (
-                    <span className="break-all text-caption text-muted-foreground">
-                      {binding.folder_path}
-                    </span>
+                    <PathText value={binding.folder_path} tone="muted" wrap />
                   ) : null}
                 </div>
               </td>
@@ -489,6 +488,15 @@ function BindingsTable({
   )
 }
 
+function expiryInputValue(expiresAt?: string) {
+  if (!expiresAt) return ''
+  const at = new Date(expiresAt)
+  // datetime-local reads and writes the viewer's local time, not UTC.
+  return new Date(at.getTime() - at.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 16)
+}
+
 function BindingForm({
   sourceType,
   sourceRef,
@@ -522,6 +530,9 @@ function BindingForm({
   const [credRef, setCredRef] = useState(existing?.cred_ref ?? '')
   const [credHint, setCredHint] = useState(existing?.cred_hint ?? '')
   const [note, setNote] = useState(existing?.note ?? '')
+  const [expiresAt, setExpiresAt] = useState(
+    expiryInputValue(existing?.expires_at),
+  )
 
   // ⛔ ESTAS TRES NO PINTAN UNA TABLA: LLENAN UN SELECTOR, y ahí el recorte silencioso no oculta
   //    filas — impide ELEGIR. El operador que no encuentra su workspace, su grupo o su agente no
@@ -603,6 +614,14 @@ function BindingForm({
         scope_ref: scopeRef.trim() || undefined,
         effect,
         enabled,
+        expires_at:
+          isEdit &&
+          existing?.expires_at &&
+          expiresAt === expiryInputValue(existing.expires_at)
+            ? existing.expires_at
+            : expiresAt
+              ? new Date(expiresAt).toISOString()
+              : undefined,
         note: note.trim() || undefined,
         cred_name: credentialTouched ? credName.trim() : undefined,
         cred_ref_kind: credentialTouched
@@ -863,6 +882,18 @@ function BindingForm({
             id="binding-cred-hint"
             value={credHint}
             onChange={(event) => setCredHint(event.target.value)}
+          />
+        </Field>
+
+        <Field
+          label={t('console:bindings.expiresAt')}
+          htmlFor="binding-expires-at"
+        >
+          <Input
+            id="binding-expires-at"
+            type="datetime-local"
+            value={expiresAt}
+            onChange={(event) => setExpiresAt(event.target.value)}
           />
         </Field>
 
@@ -1671,13 +1702,15 @@ function PostureQueue({
     return m
   }, [postures.data])
   const decideMutation = usePrivilegedMutation<
-    { id: string; decision: 'approve' | 'reject' },
+    { id: string; op: string; decision: 'approve' | 'reject' },
     PostureRequestDTO
   >({
-    mutationFn: ({ id, decision }) =>
-      decision === 'approve'
-        ? consoleApi.approvePostureRequest(id)
-        : consoleApi.rejectPostureRequest(id),
+    mutationFn: ({ id, op, decision }) =>
+      decision === 'approve' && op === 'access_request'
+        ? consoleApi.approveAccessRequest(id)
+        : decision === 'approve'
+          ? consoleApi.approvePostureRequest(id)
+          : consoleApi.rejectPostureRequest(id),
     invalidateKeys: () => [
       consoleKeys.postureRequests(activeTenant),
       consoleKeys.bindings(activeTenant),
@@ -1852,6 +1885,7 @@ function PostureQueue({
                             onClick={() =>
                               decideMutation.mutate({
                                 id: request.id!,
+                                op: request.op,
                                 decision: 'reject',
                               })
                             }
@@ -1865,6 +1899,7 @@ function PostureQueue({
                             onClick={() =>
                               decideMutation.mutate({
                                 id: request.id!,
+                                op: request.op,
                                 decision: 'approve',
                               })
                             }

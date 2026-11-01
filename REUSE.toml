@@ -107,7 +107,6 @@ path = [
   "**/PLACEHOLDER",
   "ci/oracles/commit-outcome/*.patch",
   "cmd/olivares/testdata/*.ndjson",
-  "cmd/olivares/testdata/public-v26.8.0/*.gz",
   "core/internal/store/sqlstore/testdata/**/*.gz",
   "modules/security/testdata/fuzz/**",
   "modules/sessions/testdata/*.jsonl",
@@ -299,3 +298,13 @@ path = ["appliance/images/kiwi/RPM-GPG-KEY-docker"]
 precedence = "override"
 SPDX-FileCopyrightText = "Docker, Inc. (Docker Release (CE rpm) public signing key, unmodified)"
 SPDX-License-Identifier = "LicenseRef-Third-Party-Public-Key"
+
+# Exact neutral image declarations: their only content is the profile name.
+[[annotations]]
+path = [
+  "appliance/images/kiwi/almalinux10-server-amd64/etc/olivares-appliance/image",
+  "appliance/images/kiwi/almalinux10-desktop-amd64/etc/olivares-appliance/image",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Olivares.AI"
+SPDX-License-Identifier = "AGPL-3.0-only"

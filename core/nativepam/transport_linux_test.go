@@ -111,9 +111,11 @@ func TestNativeAccountRefusalDisposesRequestSecret(t *testing.T) {
 }
 
 func TestNativeWorkerExitAndCancellationGateCompletion(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	child := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestNativeWorkerLifetimeHelper$")
+	// The product waits WorkerLifetime+time.Second for a worker to exit
+	// (check). Starting and ending a race-built child on a loaded host can
+	// take longer than a second, so the test waits as long as the product.
+	// Cleanup kills the child; only closing its stdin may end it here.
+	child := exec.Command(os.Args[0], "-test.run=^TestNativeWorkerLifetimeHelper$")
 	child.Env = append(os.Environ(), "IDC_NATIVE_CHILD=1")
 	input, err := child.StdinPipe()
 	if err != nil {
@@ -133,7 +135,7 @@ func TestNativeWorkerExitAndCancellationGateCompletion(t *testing.T) {
 		t.Fatal("a live native worker supplied completion")
 	}
 	_ = input.Close()
-	if !held.finished(context.Background(), time.Now().Add(time.Second)) {
+	if !held.finished(context.Background(), time.Now().Add(WorkerLifetime+time.Second)) {
 		t.Fatal("the exited native worker control did not complete")
 	}
 	canceled, stop := context.WithCancel(context.Background())

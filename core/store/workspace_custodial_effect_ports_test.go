@@ -92,7 +92,7 @@ func (s custodyMatrixScope) Tenant() model.TenantID { return custodyMatrixTenant
 func (s custodyMatrixScope) Org(context.Context) (model.Org, error) {
 	return model.Org{}, nil
 }
-func (s custodyMatrixScope) SetOrgSettings(context.Context, map[string]any) (model.Org, error) {
+func (s custodyMatrixScope) SetOrgSettings(context.Context, map[string]any, ...int64) (model.Org, error) {
 	return model.Org{}, nil
 }
 func (s custodyMatrixScope) Agents() Repository[model.Agent]       { return nil }

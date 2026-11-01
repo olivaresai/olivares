@@ -220,7 +220,7 @@ describe('launch-readiness helpers', () => {
   })
 })
 
-describe('a launch that stopped as it started (HU-06)', () => {
+describe('a launch that stopped as it started', () => {
   const stopped = (body: unknown) =>
     new ApiError(409, 'conflict', 'Conflict', undefined, {}, body)
 

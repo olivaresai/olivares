@@ -166,7 +166,7 @@ func isAllZero(s string) bool {
 }
 
 // Correlator is the deny-closed hand-off seam to the trace-correlation path
-//. The default (NopCorrelator) is a no-op: trace context is extracted
+// . The default (NopCorrelator) is a no-op: trace context is extracted
 // and carried, but not yet joined to a span tree. An implementation MUST be
 // non-blocking and best-effort — correlation is observability, never a gate on
 // observation (docs/SECURITY-HARDENING.md: a collector failure must not break the data path).

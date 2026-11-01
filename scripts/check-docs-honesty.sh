@@ -103,6 +103,29 @@ if has -nE "(curl|wget)[^|]*/(main|master)/[^|]*$PIPE_SH" "$ROOT/INSTALL.md" "$R
   fail "INSTALL.md or a README pipes a branch head into a shell (above); show download, verify, then run"
 fi
 
+# ---- A README installs only what it verified -------------------------------
+# The READMEs say each method verifies what it downloads before it installs it. Within one code
+# block, a release package install must follow both `cosign verify-blob` (the signed checksums)
+# and `sha256sum -c` (the package against them), and `docker run` must follow `cosign verify
+# "$img"` and run that verified digest, never a tag. Line-based, like the pipe rule above.
+UNVERIFIED="$(awk '
+  FNR == 1 || /^```/ { blob = sum = img = run = 0 }
+  /^```/ { next }
+  /cosign verify-blob / { blob = 1 }
+  /sha256sum -c/ { sum = 1 }
+  /cosign verify "\$img"/ { img = 1 }
+  /(dpkg -i|rpm -i|apk add)[^|]* olivares_/ && !(blob && sum) { print FILENAME ":" FNR ": " $0 }
+  /docker run / { run = 1; if (!img) print FILENAME ":" FNR ": " $0 }
+  run && /olivaresai\/olivares:/ { print FILENAME ":" FNR ": " $0 }
+' "$ROOT"/README*.md)" || {
+  echo "docs-honesty: awk could not read the READMEs; their install blocks are UNVERIFIED" >&2
+  exit 2
+}
+if [ -n "$UNVERIFIED" ]; then
+  printf '%s\n' "$UNVERIFIED" >&2
+  fail "a README installs a download it did not verify (above); verify the signed checksums and the file, or the image digest, first"
+fi
+
 # ---- supply-chain wording honesty ------------------------------------
 LIVE_FILES="$(mktemp)"
 SLSA_HITS="$(mktemp)"

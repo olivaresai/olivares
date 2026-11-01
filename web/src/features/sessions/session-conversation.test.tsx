@@ -23,6 +23,11 @@ import { SessionConversation } from './session-conversation'
 import { sentPlace, sentTurnsPartition, useSentTurns } from './sent-turns'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
+import {
+  readSessionDraft,
+  sessionDraftKey,
+  writeSessionDraft,
+} from '@/lib/session-drafts'
 import nativeHistory from './fixtures/codex-native-history.json'
 import claudeStream from './fixtures/claude-2.1.309-subagents.jsonl?raw'
 import './i18n'
@@ -38,6 +43,7 @@ const onFrameRef = vi.hoisted(() => ({
 const onHistoryRef = vi.hoisted(() => ({
   current: null as ((line: string) => void) | null,
 }))
+const messageRights = vi.hoisted(() => ({ writable: true }))
 
 vi.mock('@/features/agentops/attach', () => ({
   useRunAttach: (opts: {
@@ -56,7 +62,12 @@ vi.mock('@/features/agentops/attach', () => ({
 }))
 
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ can: () => true, activeTenant: 'demo' }),
+  useAuth: () => ({
+    can: (permission: string) =>
+      permission !== 'sessions:run:write' || messageRights.writable,
+    activeTenant: 'demo',
+    principal: { kind: 'user', actor: 'alice', user_id: 'alice' },
+  }),
 }))
 
 const run: RunDTO = {
@@ -82,7 +93,10 @@ function wrap(overrides: Partial<RunDTO> = {}) {
   }))
   return render(
     <QueryClientProvider client={qc}>
-      <SessionConversation run={{ ...run, ...overrides }} />
+      <SessionConversation
+        run={{ ...run, ...overrides }}
+        composerId="work-composer-input"
+      />
     </QueryClientProvider>,
   )
 }
@@ -92,12 +106,199 @@ function push(line: string, seq = 1, at?: string) {
 }
 
 beforeEach(() => {
+  messageRights.writable = true
   attachStatus.value = 'open'
   onFrameRef.current = null
   useSentTurns.setState({ byRun: {}, seen: {}, said: {} })
 })
 
 describe('SessionConversation', () => {
+  it('clears task placeholders across a sign-in owner change', async () => {
+    const activity = vi
+      .spyOn(agentOpsApi, 'activity')
+      .mockResolvedValueOnce({
+        transcript: 'read',
+        todos: [{ content: 'Previous owner task', status: 'pending' }],
+      } as Awaited<ReturnType<typeof agentOpsApi.activity>>)
+      .mockImplementation(() => new Promise(() => {}))
+    try {
+      wrap({ provider_driver: 'claude' })
+      await screen.findByText('Previous owner task')
+      act(() => {
+        lastClient!.clear()
+        useSessionStore.setState((s) => ({
+          credentialGeneration: s.credentialGeneration + 1,
+        }))
+      })
+      expect(screen.queryByText('Previous owner task')).toBeNull()
+    } finally {
+      activity.mockRestore()
+    }
+  })
+
+  it.each(['refused', 'pending', 'missing'])(
+    'keeps inline todos when activity is %s',
+    async (status) => {
+      const activity = vi.spyOn(agentOpsApi, 'activity')
+      if (status === 'refused')
+        activity.mockRejectedValue(
+          new ApiError(409, 'conflict', 'Transcript unavailable'),
+        )
+      else
+        activity.mockResolvedValue({
+          transcript: status,
+          todos: [],
+        } as unknown as Awaited<ReturnType<typeof agentOpsApi.activity>>)
+      try {
+        wrap({ provider_driver: 'claude' })
+        act(() =>
+          push(
+            JSON.stringify({
+              type: 'assistant',
+              message: {
+                content: [
+                  {
+                    type: 'tool_use',
+                    id: 'todo-1',
+                    name: 'TodoWrite',
+                    input: {
+                      todos: [
+                        {
+                          content: 'Keep inline task',
+                          status: 'pending',
+                          activeForm: '',
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            }),
+          ),
+        )
+        await waitFor(() => expect(qcIdle()).toBe(true))
+        expect(screen.queryByRole('alert')).toBeNull()
+        expect(screen.getByTestId('conversation-card-todos')).toHaveTextContent(
+          'Keep inline task',
+        )
+      } finally {
+        activity.mockRestore()
+      }
+    },
+  )
+
+  it.each(['claude', 'codex'])(
+    'renders the %s current task list in the conversation and refreshes it',
+    async (provider_driver) => {
+      const activity = vi.spyOn(agentOpsApi, 'activity').mockResolvedValue({
+        transcript: 'read',
+        todos: [{ content: 'Read the code', status: 'pending' }],
+      } as Awaited<ReturnType<typeof agentOpsApi.activity>>)
+      try {
+        wrap({ provider_driver })
+        expect(
+          await screen.findByTestId('conversation-card-todos'),
+        ).toHaveTextContent('Read the code')
+        activity.mockResolvedValue({
+          transcript: 'read',
+          todos: [{ content: 'Read the code', status: 'completed' }],
+        } as Awaited<ReturnType<typeof agentOpsApi.activity>>)
+        await act(async () => {
+          await lastClient!.invalidateQueries({
+            queryKey: agentOpsKeys.runActivity(
+              useTenantStore.getState().activeTenant,
+              run.run_ref,
+            ),
+          })
+        })
+        await waitFor(() =>
+          expect(
+            screen.getByTestId('conversation-card-todos'),
+          ).toHaveTextContent('1 of 1'),
+        )
+        expect(screen.getAllByTestId('conversation-card-todos')).toHaveLength(1)
+      } finally {
+        activity.mockRestore()
+      }
+    },
+  )
+
+  it.each([
+    'live',
+    'pending turn',
+    'later operator',
+    'no write permission',
+    'stopped',
+    'pending',
+    'approval',
+  ])('checks whether a question is answerable with %s', async (reason) => {
+    messageRights.writable = reason !== 'no write permission'
+    wrap({
+      state:
+        reason === 'stopped'
+          ? 'stopped'
+          : reason === 'pending'
+            ? 'pending'
+            : 'running',
+      ...(reason === 'approval' ? { pending_approval_ref: 'approval-1' } : {}),
+    })
+    act(() =>
+      push(
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'tool_use',
+                id: 'q1',
+                name: 'AskUserQuestion',
+                input: {
+                  questions: [
+                    {
+                      question: 'Which store?',
+                      header: 'Store',
+                      multiSelect: false,
+                      options: [{ label: 'SQLite', description: 'Local' }],
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        }),
+        1,
+      ),
+    )
+    if (reason === 'pending turn')
+      act(() =>
+        useSentTurns
+          .getState()
+          .note(sentTurnsPartition(), run.run_ref, { text: 'Already sent' }),
+      )
+    if (reason === 'later operator')
+      act(() =>
+        push(
+          JSON.stringify({
+            type: 'user',
+            message: { role: 'user', content: 'Moved on' },
+          }),
+          2,
+        ),
+      )
+    expect(
+      await screen.findByTestId('conversation-card-question'),
+    ).toBeInTheDocument()
+    if (reason === 'live') {
+      expect(
+        screen.getByRole('button', { name: 'Send answer' }),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('radio', { name: /SQLite/ })).toBeEnabled()
+    } else {
+      expect(screen.queryByRole('button', { name: 'Send answer' })).toBeNull()
+      expect(screen.getByRole('radio', { name: /SQLite/ })).toBeDisabled()
+    }
+  })
+
   it('keeps the empty conversation prompt for a retryable failure', () => {
     attachStatus.value = 'closed'
     wrap({ state: 'failed', reason: 'provider temporarily unavailable' })
@@ -179,10 +380,162 @@ describe('SessionConversation', () => {
     )
     expect(screen.getByText('Read')).toBeInTheDocument()
     expect(screen.queryByText(/tool_use/)).toBeNull()
-    // The call reads as what it acts on, never as its JSON (dev#3119).
+    // The call reads as what it acts on, never as its JSON.
     expect(screen.queryByText(/file_path/)).toBeNull()
     expect(screen.getAllByText('README.md').length).toBeGreaterThan(0)
   })
+
+  // #3135: a file tool's path is shown whole through the shared PathText, in the row and in
+  // its arguments, never cut into a string first (the full path was nowhere on the page).
+  it('shows a file tool path whole through PathText, in the row and in its arguments', async () => {
+    const long =
+      '/home/ada/.claude/projects/-home-ada-work-shop/memory/MEMORY.md'
+    wrap()
+    await screen.findByTestId('session-conversation')
+    act(() => {
+      push(
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [
+              {
+                type: 'tool_use',
+                id: 'toolu_long',
+                name: 'Read',
+                input: { file_path: long },
+              },
+            ],
+          },
+        }),
+        1,
+      )
+    })
+    await screen.findByText('Read')
+    const row = screen
+      .getAllByTestId('conversation-item')
+      .find((el) => el.getAttribute('data-kind') === 'tool')!
+    const shown = Array.from(row.querySelectorAll('[data-slot="path-text"]'))
+    // The row and the arguments, each the whole path as its hover.
+    expect(shown).toHaveLength(2)
+    for (const el of shown)
+      expect(el.querySelector('code')).toHaveAttribute('title', long)
+    expect(row.textContent).not.toContain('/…/')
+    // The row is a <summary>: no button inside it.
+    expect(row.querySelector('summary button')).toBeNull()
+  })
+
+  // #3135: while the call runs, the live line names its path through PathText too, so the
+  // file name is not lost at the end of a long sentence.
+  it('names a running file tool path whole through PathText in the live line', async () => {
+    const long =
+      '/home/ada/.claude/projects/-home-ada-work-shop/memory/MEMORY.md'
+    wrap()
+    await screen.findByTestId('session-conversation')
+    act(() => {
+      push(
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [
+              {
+                type: 'tool_use',
+                id: 'toolu_live',
+                name: 'Read',
+                input: { file_path: long },
+              },
+            ],
+          },
+        }),
+        1,
+      )
+    })
+    const live = await screen.findByTestId('conversation-live')
+    const shown = live.querySelector('[data-slot="path-text"]')
+    expect(shown).not.toBeNull()
+    expect(shown!.querySelector('code')).toHaveAttribute('title', long)
+    expect(live).toHaveTextContent(/^Reading /)
+    expect(live.querySelector('button')).toBeNull()
+  })
+
+  // #3135 round 5: a running search names its folder through PathText too, so a long
+  // folder keeps its end in the live line (Grep, Glob and LS share the search words).
+  it.each([
+    ['Grep', { pattern: 'TODO', path: '' }, /^Searching TODO · /],
+    ['Glob', { pattern: '**/*.md', path: '' }, /^Searching \*\*\/\*\.md · /],
+    ['LS', { path: '' }, /^Searching /],
+  ])(
+    'names a running %s folder whole through PathText in the live line',
+    async (name, input, words) => {
+      const long =
+        '/home/ada/.claude/projects/-home-ada-work-shop/memory/deep/folder'
+      wrap()
+      await screen.findByTestId('session-conversation')
+      act(() => {
+        push(
+          JSON.stringify({
+            type: 'assistant',
+            message: {
+              role: 'assistant',
+              content: [
+                {
+                  type: 'tool_use',
+                  id: `toolu_${name}`,
+                  name,
+                  input: { ...input, path: long },
+                },
+              ],
+            },
+          }),
+          1,
+        )
+      })
+      const live = await screen.findByTestId('conversation-live')
+      const shown = live.querySelector('[data-slot="path-text"]')
+      expect(shown).not.toBeNull()
+      expect(shown!.querySelector('code')).toHaveAttribute('title', long)
+      expect(live).toHaveTextContent(words)
+      expect(live.querySelector('button')).toBeNull()
+    },
+  )
+
+  // #3135 round 6: a search pattern is the agent's text, never markup. It shows exactly as
+  // typed beside the path; only the path fills the PathText slot.
+  it.each(['TODO', '<strong>x</strong>', '<path/>', '{{lead}}'])(
+    'shows the search pattern %s as plain text in the live line',
+    async (pattern) => {
+      const long =
+        '/home/ada/.claude/projects/-home-ada-work-shop/memory/deep/folder'
+      wrap()
+      await screen.findByTestId('session-conversation')
+      act(() => {
+        push(
+          JSON.stringify({
+            type: 'assistant',
+            message: {
+              role: 'assistant',
+              content: [
+                {
+                  type: 'tool_use',
+                  id: 'toolu_hostile',
+                  name: 'Grep',
+                  input: { pattern, path: long },
+                },
+              ],
+            },
+          }),
+          1,
+        )
+      })
+      const live = await screen.findByTestId('conversation-live')
+      expect(live.textContent?.startsWith(`Searching ${pattern} · `)).toBe(true)
+      expect(live.querySelectorAll('strong')).toHaveLength(0)
+      const shown = live.querySelectorAll('[data-slot="path-text"]')
+      expect(shown).toHaveLength(1)
+      expect(shown[0]!.querySelector('code')).toHaveAttribute('title', long)
+    },
+  )
 
   it('a Bash row shows its command in one line, the whole command and its description when opened', async () => {
     const user = userEvent.setup()
@@ -220,7 +573,7 @@ describe('SessionConversation', () => {
     ).toBeInTheDocument()
   })
 
-  // HU 025 (real Claude Code 2.1.287): a long Bash turn printed "Unrecognised frame"
+  // acceptance (real Claude Code 2.1.287): a long Bash turn printed "Unrecognised frame"
   // for its progress and for the reply to the interrupt the console sent.
   it("shows a running tool's elapsed time on its row and no unrecognised frame", async () => {
     wrap()
@@ -362,7 +715,7 @@ describe('SessionConversation', () => {
     expect(onInspect.mock.calls[0][0].raw[0]).toContain('"type":"assistant"')
   })
 
-  // SR2C on 0df0c254: a cancelled ACP turn showed only "Result".
+  // review on 0df0c254: a cancelled ACP turn showed only "Result".
   it('says in the footer how an ACP turn stopped when it did not just finish', async () => {
     wrap()
     await screen.findByTestId('session-conversation')
@@ -383,7 +736,7 @@ describe('SessionConversation', () => {
     expect(footer).toHaveTextContent('Cancelled')
   })
 
-  // HU2-12: a failed Codex turn read as "Result · Turn completed".
+  // acceptance: a failed Codex turn read as "Result · Turn completed".
   it('paints a failed turn as a failure, with its reason', async () => {
     wrap()
     await screen.findByTestId('session-conversation')
@@ -410,7 +763,7 @@ describe('SessionConversation', () => {
     expect(screen.queryByText('Result')).toBeNull()
   })
 
-  // HU2-13: a refused API key read as "api retry", ten times.
+  // acceptance: a refused API key read as "api retry", ten times.
   it('says the provider refused the key, once, instead of a line per retry', async () => {
     wrap()
     await screen.findByTestId('session-conversation')
@@ -455,7 +808,7 @@ describe('SessionConversation', () => {
     ).toBeInTheDocument()
   })
 
-  // HU2-23: 18 "Unrecognised frame" rows for one stderr dump; the failure read as quiet.
+  // acceptance: 18 "Unrecognised frame" rows for one stderr dump; the failure read as quiet.
   it("shows a tool's output as one line and its failed reply as a failure", async () => {
     wrap()
     await screen.findByTestId('session-conversation')
@@ -485,7 +838,7 @@ describe('SessionConversation', () => {
     )
   })
 
-  // HU2-27: one raw row with "\u001b[2m…\u001b[31mERROR\u001b[0m" in it.
+  // acceptance: one raw row with "\u001b[2m…\u001b[31mERROR\u001b[0m" in it.
   it("shows a tool's coloured line as words", async () => {
     wrap()
     await screen.findByTestId('session-conversation')
@@ -506,7 +859,7 @@ describe('SessionConversation', () => {
     )
   })
 
-  // HU2-27: Codex never started the turn and the person's "Say hi." was nowhere.
+  // acceptance: Codex never started the turn and the person's "Say hi." was nowhere.
   it('shows a first message the engine refused, with its reason', async () => {
     useSentTurns.getState().note(sentTurnsPartition(), 'run_1', {
       text: 'Say hi.',
@@ -529,25 +882,19 @@ describe('SessionConversation', () => {
     })
     wrap()
     expect(await screen.findByText('Say hi.')).toBeInTheDocument()
-    expect(
-      screen.getByText(
-        'Sent when the launch is approved and the session starts.',
-      ),
-    ).toHaveClass('text-muted-foreground')
+    expect(screen.getByText('Sent when the session is ready.')).toHaveClass(
+      'text-muted-foreground',
+    )
     act(() => {
       useSentTurns
         .getState()
         .note(sentTurnsPartition(), 'run_1', { text: 'Say hi.' })
     })
     expect(screen.getAllByTestId('conversation-sent')).toHaveLength(1)
-    expect(
-      screen.queryByText(
-        'Sent when the launch is approved and the session starts.',
-      ),
-    ).toBeNull()
+    expect(screen.queryByText('Sent when the session is ready.')).toBeNull()
   })
 
-  // SR4C on 3cf9f18a: a sign-out leaves no person's words behind.
+  // review on 3cf9f18a: a sign-out leaves no person's words behind.
   it('forgets the first message when the sign-in changes', async () => {
     useSentTurns
       .getState()
@@ -828,7 +1175,7 @@ describe('SessionConversation — the thread reads as a thread', () => {
     expect(summary.querySelector('svg.lucide-check')).not.toBeNull()
   })
 
-  it('folds the calls between two replies into one closed row that keeps them one click away (dev#3119)', async () => {
+  it('folds the calls between two replies into one closed row that keeps them one click away', async () => {
     const userEv = userEvent.setup()
     wrap()
     await screen.findByTestId('session-conversation')
@@ -846,7 +1193,7 @@ describe('SessionConversation — the thread reads as a thread', () => {
     expect(fold.hasAttribute('open')).toBe(true)
   })
 
-  it('folds a single call too: the reply is not cut by a lone tool row (dev#3119)', async () => {
+  it('folds a single call too: the reply is not cut by a lone tool row', async () => {
     wrap()
     await screen.findByTestId('session-conversation')
     act(() => {
@@ -1024,7 +1371,7 @@ describe('SessionConversation — the tool’s bookkeeping stays out of the thre
     expect(screen.queryByText(/five hour/i)).toBeNull()
   })
 
-  it('tells the person, in words, that a limit stopped the turn and when it resets (dev#3119)', async () => {
+  it('tells the person, in words, that a limit stopped the turn and when it resets', async () => {
     wrap()
     await screen.findByTestId('session-conversation')
     act(() => push(rateLimit('rejected'), 1))
@@ -1036,7 +1383,7 @@ describe('SessionConversation — the tool’s bookkeeping stays out of the thre
     expect(screen.queryByText(/rejected|five hour/i)).toBeNull()
   })
 
-  it('says how much of the window was used when the tool said so (dev#3119)', async () => {
+  it('says how much of the window was used when the tool said so', async () => {
     wrap()
     await screen.findByTestId('session-conversation')
     act(() =>
@@ -1444,7 +1791,7 @@ describe('SessionConversation — the message navigator', () => {
       })
       wrap({ provider_driver })
       await waitFor(() => expect(asked).toHaveBeenCalledTimes(1))
-      // The rail marks messages the conversation shows (dev#3120).
+      // The rail marks messages the conversation shows.
       act(() =>
         push(
           JSON.stringify({
@@ -1482,7 +1829,7 @@ describe('SessionConversation — the message navigator', () => {
   })
 })
 
-// dev#2786: a session that started on claude-opus-5-5 went on on claude-opus-4-8 silently.
+// the regression: a session that started on claude-opus-5-5 went on on claude-opus-4-8 silently.
 describe('SessionConversation — the model in use', () => {
   const reply = (model: string, text: string) =>
     JSON.stringify({
@@ -1523,7 +1870,7 @@ describe('SessionConversation — the model in use', () => {
   })
 })
 
-// dev#2787: a message the person sends shows at once, and once, even when its words
+// the regression: a message the person sends shows at once, and once, even when its words
 // repeat an earlier message the tool already showed.
 describe('SessionConversation — a sent message', () => {
   const echo = (text: string) =>
@@ -1711,7 +2058,7 @@ describe('SessionConversation — a sent message', () => {
   })
 })
 
-// dev#2788: no message could be copied, neither the person's nor the tool's.
+// the regression: no message could be copied, neither the person's nor the tool's.
 describe('SessionConversation — copying a message', () => {
   const asked = JSON.stringify({
     type: 'user',
@@ -1730,6 +2077,79 @@ describe('SessionConversation — copying a message', () => {
     },
   })
 
+  it('quotes only selected reply words into this session draft without replacing a comment', async () => {
+    const key = sessionDraftKey(
+      'demo',
+      { kind: 'user', actor: 'alice', user_id: 'alice' },
+      'run_1',
+    )!
+    writeSessionDraft(key, 'Please explain this part.')
+    wrap()
+    act(() => push(answered))
+    const word = await screen.findByText('One')
+    const range = document.createRange()
+    range.selectNodeContents(word)
+    window.getSelection()!.removeAllRanges()
+    window.getSelection()!.addRange(range)
+    fireEvent.click(screen.getByRole('button', { name: 'Quote reply' }))
+    expect(readSessionDraft(key)).toBe('Please explain this part.\n\n> One\n\n')
+    window.getSelection()!.removeAllRanges()
+    writeSessionDraft(key, '')
+  })
+
+  it('does not quote a selection from outside the reply', async () => {
+    const key = sessionDraftKey(
+      'demo',
+      { kind: 'user', actor: 'alice', user_id: 'alice' },
+      'run_1',
+    )!
+    writeSessionDraft(key, '')
+    wrap()
+    act(() => {
+      push(asked, 1)
+      push(answered, 2)
+    })
+    const range = document.createRange()
+    range.selectNodeContents(await screen.findByText('Look up the readme'))
+    window.getSelection()!.removeAllRanges()
+    window.getSelection()!.addRange(range)
+    fireEvent.click(screen.getByRole('button', { name: 'Quote reply' }))
+    expect(readSessionDraft(key)).toBe(
+      '> Two things:\n> \n> - One thing\n> \n> make test\n\n',
+    )
+    window.getSelection()!.removeAllRanges()
+    writeSessionDraft(key, '')
+  })
+
+  it('copies one Markdown block with its original markers independently', async () => {
+    const user = userEvent.setup()
+    const writeText = vi
+      .spyOn(navigator.clipboard, 'writeText')
+      .mockResolvedValue(undefined)
+    wrap()
+    act(() => push(answered))
+    const buttons = await screen.findAllByRole('button', {
+      name: 'Copy Markdown block',
+    })
+    await user.click(buttons[1]!)
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith('- **One** thing'),
+    )
+    writeText.mockRestore()
+  })
+
+  it('keeps copying available to a reader without offering a writable quote', async () => {
+    messageRights.writable = false
+    wrap()
+    act(() => push(answered))
+    expect(
+      await screen.findByRole('button', { name: 'Copy message' }),
+    ).toBeEnabled()
+    expect(
+      screen.queryByRole('button', { name: 'Quote reply' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('leaves every message selectable: none of its words sit in a button', async () => {
     wrap()
     act(() => {
@@ -1740,7 +2160,7 @@ describe('SessionConversation — copying a message', () => {
       expect((await screen.findByText(words)).closest('button')).toBeNull()
   })
 
-  it('offers no Copy for a message without words, and paints no reply without words (dev#3119)', async () => {
+  it('offers no Copy for a message without words, and paints no reply without words', async () => {
     wrap()
     act(() => {
       push(
@@ -1886,12 +2306,12 @@ describe('SessionConversation — copying, second review', () => {
   })
 })
 
-// THE CONVERSATION READS LIKE A CHAT, NOT AN EVENT LOG (dev#3119). Built from a real
+// THE CONVERSATION READS LIKE A CHAT, NOT AN EVENT LOG. Built from a real
 // Claude Code 2.1.309 stream (fixtures/claude-2.1.309-subagents.jsonl, how it was recorded
 // is in conversation-frames.test.ts): subagent, background command, task frames, heartbeats,
 // thinking-only frames, an edit and a failing command. Each frame is pushed with the time
 // the tool stamped on the frames around it, as the engine stamps when it reads a frame.
-describe('SessionConversation — the work folds, one live line, nested subagents (dev#3119)', () => {
+describe('SessionConversation — the work folds, one live line, nested subagents', () => {
   const REAL = claudeStream.trim().split('\n')
   const stamps = (() => {
     let last = '2026-10-23T11:32:07.000Z'
@@ -2032,10 +2452,10 @@ describe('SessionConversation — the work folds, one live line, nested subagent
   })
 })
 
-// A CODEX STREAM DOES NOT READ WORSE (dev#3119): the recorded follow stream of the CLI tests
+// A CODEX STREAM DOES NOT READ WORSE: the recorded follow stream of the CLI tests
 // (protocol replies, two answers, two completed turns) and the real Codex 0.162.1 history
 // keep their rows.
-describe('SessionConversation — Codex keeps its rows (dev#3119)', () => {
+describe('SessionConversation — Codex keeps its rows', () => {
   // The CLI tests' recorded stream, read where it lives (one copy for both).
   const codexFollow = readFileSync(
     join(
@@ -2089,8 +2509,8 @@ describe('SessionConversation — Codex keeps its rows (dev#3119)', () => {
   })
 })
 
-// dev#3119, the branches the real stream does not reach.
-describe('SessionConversation — the work row in its other states (dev#3119)', () => {
+// the regression, the branches the real stream does not reach.
+describe('SessionConversation — the work row in its other states', () => {
   const REAL = claudeStream.trim().split('\n')
   const use = (id: string, name: string, input: object) =>
     JSON.stringify({
@@ -2257,7 +2677,7 @@ describe('SessionConversation — the work row in its other states (dev#3119)', 
   })
 })
 
-describe('SessionConversation — a stream that repeats a call id (dev#3119 review)', () => {
+describe('SessionConversation — a stream that repeats a call id (the regression review)', () => {
   it('paints a call that names itself as its own parent once, and stops', async () => {
     wrap()
     await screen.findByTestId('session-conversation')
@@ -2291,7 +2711,7 @@ describe('SessionConversation — a stream that repeats a call id (dev#3119 revi
   })
 })
 
-describe('SessionConversation — a work row always says something (dev#3119 review)', () => {
+describe('SessionConversation — a work row always says something (the regression review)', () => {
   it('tells calls that only run in the background in words', async () => {
     wrap()
     await screen.findByTestId('session-conversation')
@@ -2304,5 +2724,60 @@ describe('SessionConversation — a work row always says something (dev#3119 rev
         screen.getAllByTestId('conversation-work')[0]?.querySelector('summary'),
       ).toHaveTextContent(/1 in the background/),
     )
+  })
+})
+
+describe('SessionConversation — it follows what grows at its end', () => {
+  // The request card loads after the transcript; a following conversation must keep its
+  // end in view, or Alt+A finds the request cut by the composer (measured at 1440 px).
+  let resized: (() => void) | null = null
+  beforeEach(() => {
+    resized = null
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        cb: () => void
+        constructor(cb: () => void) {
+          this.cb = cb
+          resized = cb
+        }
+        observe() {}
+        unobserve() {}
+        // A disconnected observer reports nothing more, as a browser's does.
+        disconnect() {
+          if (resized === this.cb) resized = null
+        }
+      },
+    )
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  const grow = (log: HTMLElement, height: number) =>
+    Object.defineProperty(log, 'scrollHeight', {
+      value: height,
+      configurable: true,
+    })
+
+  it('scrolls to the end when the content grows while it follows', () => {
+    wrap()
+    const log = screen.getByRole('log')
+    grow(log, 1200)
+    act(() => resized?.())
+    expect(log.scrollTop).toBe(1200)
+  })
+
+  it('stays where the person scrolled when the content grows', () => {
+    wrap()
+    const log = screen.getByRole('log')
+    grow(log, 1000)
+    Object.defineProperty(log, 'clientHeight', {
+      value: 300,
+      configurable: true,
+    })
+    log.scrollTop = 100
+    fireEvent.scroll(log)
+    grow(log, 1400)
+    act(() => resized?.())
+    expect(log.scrollTop).toBe(100)
   })
 })

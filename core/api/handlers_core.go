@@ -42,10 +42,11 @@ func (s *Server) handleServerInfo(w http.ResponseWriter, r *http.Request, mc Mod
 		license["support_profile"] = lic.SupportProfile
 	}
 	info := map[string]any{
-		"version":        s.version,
-		"engine":         string(s.st.Engine()),
-		"setup_required": !s.setupCompleteNow(r),
-		"license":        license,
+		"backup_key_required": s.applianceDR,
+		"version":             s.version,
+		"engine":              string(s.st.Engine()),
+		"setup_required":      !s.setupCompleteNow(r),
+		"license":             license,
 		"protocol_currency": map[string]any{
 			"mcp_revision":                 "2026-07-28",
 			"mcp_revision_status":          "current",
@@ -54,6 +55,10 @@ func (s *Server) handleServerInfo(w http.ResponseWriter, r *http.Request, mc Mod
 			"agents_md_enforce_available":  true,
 			"aaif_standards":               []string{"MCP", "A2A", "AGENTS.md"},
 		},
+	}
+	// Setup names the effective recovery file without exposing its contents.
+	if s.applianceDR && s.drSvc != nil {
+		info["backup_key_path"] = s.drSvc.cfg.PassphraseFile
 	}
 	// The background jobs this node does not run, and why, so the console says so
 	// where an administrator expects them (retention without the PostgreSQL
@@ -219,6 +224,22 @@ func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request, mc Mo
 	p := mc.Principal
 	tenant := mc.Tenant
 	err := s.st.Mutate(r.Context(), tenant, func(sc store.Scope) error {
+		// The membership table has no foreign key to agents, so the agent's group rows
+		// would outlive it. Drop them in this same transaction, as handleDeleteAgentGroup
+		// drops a group's roster, so no group reader meets a member with no agent behind it.
+		// Each drop is audited like handleRemoveAgentGroupMember does: the rows are hard-deleted.
+		memberships, err := drainMemberRows(r, sc, model.Filter{Column: "agent_id", Op: model.OpEq, Value: id.String()})
+		if err != nil {
+			return err
+		}
+		for _, m := range memberships {
+			if err := sc.AgentGroupMembers().Delete(r.Context(), m.ID); err != nil {
+				return err
+			}
+			if err := appendAudit(r.Context(), sc, p, "agent_group.member.remove", "core.agent_group", m.GroupID); err != nil {
+				return err
+			}
+		}
 		if err := sc.Agents().Delete(r.Context(), id); err != nil {
 			return err
 		}
@@ -299,7 +320,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request, mc Mod
 	p := mc.Principal
 	// One rule for adding a person, here and in the console's onboarding: the
 	// deployment's administrative step-up (none by default). A superadmin made
-	// from the CLI no longer skips what an invitation asks for (HU-28).
+	// from the CLI no longer skips what an invitation asks for.
 	if !s.requireStepUp(w, r, p) {
 		return
 	}

@@ -32,24 +32,41 @@ import (
 //
 // Deciding is every edition, and the bindings already stored keep applying in Community.
 // Writing them is Business: a Community engine answers 501 business_required to a create, an
-// update or the approval of one queued earlier, and keeps read, revoke and disable-scoping.
+// update or the approval of one queued earlier, and a Business engine whose licence does not
+// cover assigning answers 403 addon_requires_license. Both keep read, revoke and disable-scoping.
+// The instructions and the default template of a department (standards.go) are assigned the
+// same way and gated by the same option.
 
 // errProfileAssignmentBusiness is the sentinel the update closure returns so its handler
 // can answer the Community refusal outside the transaction.
-var errProfileAssignmentBusiness = errors.New("sourcescope: assigning profiles and tools requires Business")
+var errProfileAssignmentBusiness = errors.New("sourcescope: assigning profiles, tools, instructions and templates requires Business")
 
 func isProfileSource(sourceType string) bool {
 	return sourceType == sourceProfile || sourceType == sourceTool
 }
 
-// mayWriteSource reports whether this build may create or change a binding of sourceType.
-func (m *Module) mayWriteSource(sourceType string) bool {
-	return !isProfileSource(sourceType) || m.profileAssignment
+// isAssignedSource reports the source types that are assigned rather than confined: a
+// provider profile, an AI tool, and the instructions and default template of a department.
+func isAssignedSource(sourceType string) bool {
+	return isProfileSource(sourceType) || isStandardsSource(sourceType)
+}
+
+// mayWriteSource answers nil when this build may create or change a binding of sourceType
+// now: errProfileAssignmentBusiness in Community, the licence gate's refusal in a Business
+// engine whose licence does not cover assigning.
+func (m *Module) mayWriteSource(sourceType string) error {
+	if !isAssignedSource(sourceType) {
+		return nil
+	}
+	if m.profileAssignment == nil {
+		return errProfileAssignmentBusiness
+	}
+	return m.profileAssignment()
 }
 
 func writeProfileAssignmentBusiness(w http.ResponseWriter) {
 	writeJSON(w, http.StatusNotImplemented, api.ErrorBody("business_required",
-		"Assigning provider profiles and AI tools to departments and groups requires Olivares Business."))
+		"Assigning provider profiles, AI tools, instructions and session templates to departments and groups requires Olivares Business."))
 }
 
 // profileAdminPermission is the tenant-wide term for a profile or tool: the role that

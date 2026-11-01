@@ -79,8 +79,8 @@ func communityS3ArchiveDataExportBoot(t *testing.T) {
 	if err := runAudit("archive", "export", "--data-dir", data, "--tenant", tenant.String(), "--out", archive); exitcode.From(err) != exitcode.Edition {
 		t.Fatalf("Community directory export must refuse with exit 9: %v", err)
 	}
-	if err := runAudit("verify", "--data-dir", data, "--tenant", tenant.String(), "--strict"); err != nil {
-		t.Fatalf("Community retained ledger did not verify: %v", err)
+	if err := runAudit("verify", "--data-dir", data, "--tenant", tenant.String(), "--strict"); exitcode.From(err) != exitcode.Edition {
+		t.Fatalf("Community verification must refuse: %v", err)
 	}
 	eng, err := drBoot(ctx, drFlags{dataDir: data, engineKind: "sqlite"})
 	if err != nil {
@@ -157,8 +157,8 @@ func TestCommunityS3ArchivePreservesOtherEditionLedger(t *testing.T) {
 		t.Fatalf("Community directory export must refuse: %v\n%s", err, out)
 	}
 	out, err = runCLI(t, "audit", "verify", "--data-dir", data, "--tenant", tenant.String(), "--strict")
-	if err != nil || !strings.Contains(out, `"OK": true`) {
-		t.Fatalf("historical ledger must still verify: %v\n%s", err, out)
+	if exitcode.From(err) != exitcode.Edition {
+		t.Fatalf("Community verification must refuse without touching the historical ledger: %v\n%s", err, out)
 	}
 	after, err := os.ReadFile(db)
 	if err != nil {

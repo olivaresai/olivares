@@ -23,7 +23,7 @@ the message navigator reaches the row of a message the tool has taken).
 It reports the model it was launched with (`--model`, else fixture-claude) on its init
 and replies; like Claude Code, its result footer names none. When the session folder holds a file named .fixture-model, the turns
 after it run on the model that file names, with no other word of it: the change of model
-in mid-session the console must tell (dev#2786).
+in mid-session the console must tell.
 """
 from __future__ import annotations
 
@@ -132,6 +132,36 @@ while True:
                     },
                 }
             )
+        continue
+    # Card journey: the reply below is built from the bytes received on stdin.
+    if os.path.exists(os.path.join(CWD, ".fixture-cards")):
+        text = (request.get("message") or {}).get("content", "")
+        emit({"type": "user", "message": {"role": "user", "content": text}})
+        if text == "Ask me about the database":
+            todo_call = {"type": "tool_use", "id": "todos-db", "name": "TodoWrite", "input": {"todos": [{"content": "Choose the database", "status": "in_progress", "activeForm": "Choosing the database"}]}}
+            emit({"type": "assistant", "message": {"role": "assistant", "content": [
+                {"type": "text", "text": "Choose a database for this project."},
+                {"type": "tool_use", "id": "question-db", "name": "AskUserQuestion", "input": {"questions": [{
+                    "question": "Which database?", "header": "Database", "multiSelect": False,
+                    "options": [{"label": "PostgreSQL", "description": "Shared store"}, {"label": "SQLite", "description": "Local store"}],
+                }]}},
+                {"type": "tool_use", "id": "plan-db", "name": "ExitPlanMode", "input": {"plan": "## Database plan\n\n- Choose a store\n- Implement and test"}},
+                todo_call,
+            ]}})
+            # Activity reads the native transcript, including a settled TodoWrite.
+            project = os.path.join(os.environ["CLAUDE_CONFIG_DIR"], "projects", "cards-journey")
+            os.makedirs(project, exist_ok=True)
+            with open(os.path.join(project, SID + ".jsonl"), "a", encoding="utf-8") as transcript:
+                for record in [
+                    {"type": "assistant", "message": {"content": [todo_call]}},
+                    {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "todos-db", "content": "Todos updated"}]}},
+                ]:
+                    transcript.write(json.dumps(record) + "\n")
+            # Claude can settle a denied question before the next operator turn.
+            emit({"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "question-db", "is_error": True, "content": "Question tool unavailable; answer in the next turn."}]}})
+        else:
+            emit({"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "Received on stdin: " + str(text)}]}})
+        emit({"type": "result", "subtype": "success", "is_error": False, "result": "Ready for next turn", "session_id": SID})
         continue
     if os.path.exists(ECHO_USER_FILE):
         emit(

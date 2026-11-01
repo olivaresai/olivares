@@ -238,6 +238,89 @@ func TestCreateRefusesAContainerRunThatAMountCannotCarryAndStartsNothing(t *test
 // A server that governs tool calls with hooks (the stock engine does) must not lose them
 // in a container: the hook program and the run's settings are mounted read-only, and the
 // endpoint and credential travel in the environment as they do natively.
+func TestCreateUsesTheContainerHookEntrypointOnAnEnforcingHost(t *testing.T) {
+	dataDir := t.TempDir()
+	enforce := filepath.Join(dataDir, "enforce")
+	if err := os.WriteFile(enforce, []byte("1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	restore := selinuxEnforcePath
+	selinuxEnforcePath = enforce
+	t.Cleanup(func() { selinuxEnforcePath = restore })
+	engine := filepath.Join(t.TempDir(), "olivares")
+	if err := os.WriteFile(engine, []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	entrypoint := filepath.Join(t.TempDir(), "olivares-container-hook")
+	if err := os.WriteFile(entrypoint, []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	restoreBinary := containerHookBinary
+	containerHookBinary = entrypoint
+	t.Cleanup(func() { containerHookBinary = restoreBinary })
+	gate := &spyGate{inner: LaunchDecision{Allowed: true, InjectEnv: []EnvVar{
+		{Name: envHookPEPURL, Value: "http://127.0.0.1:7"},
+		{Name: envHookPEPToken, Value: "pep-token"},
+	}}}
+	runner := &fakeRunner{initSID: "s"}
+	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()), WithLaunchGate(gate),
+		WithClaudeHookPEP(dataDir, engine), WithConfinement([]string{dataDir}, false))
+	dto, err := createProfiledTestRun(t, m, t.Context(), tenant, CreateRunParams{
+		Transport: TransportStreamJSON, Isolation: IsolationContainer, Actor: actorU, ActorKind: actorKindU,
+	})
+	if err != nil {
+		t.Fatalf("a hook-governed container run was refused: %v", err)
+	}
+	spec := runner.lastSpec()
+	if !hasBind(spec.Binds, entrypoint, entrypoint, true) {
+		t.Errorf("the container hook entrypoint is not mounted read-only: %+v", spec.Binds)
+	}
+	i := slices.Index(spec.Args, claudeSettingsFlag)
+	if i < 0 || !strings.Contains(spec.Args[i+1], entrypoint) {
+		t.Errorf("the inline settings do not use the container hook entrypoint: %q", spec.Args)
+	}
+	_ = dto
+}
+
+func TestCreateFallsBackWhenTheContainerHookEntrypointIsMissing(t *testing.T) {
+	dataDir := t.TempDir()
+	enforce := filepath.Join(dataDir, "enforce")
+	if err := os.WriteFile(enforce, []byte("1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	restore := selinuxEnforcePath
+	selinuxEnforcePath = enforce
+	t.Cleanup(func() { selinuxEnforcePath = restore })
+	engine := filepath.Join(t.TempDir(), "olivares")
+	if err := os.WriteFile(engine, []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	restoreBinary := containerHookBinary
+	containerHookBinary = filepath.Join(t.TempDir(), "missing-container-hook")
+	t.Cleanup(func() { containerHookBinary = restoreBinary })
+	gate := &spyGate{inner: LaunchDecision{Allowed: true, InjectEnv: []EnvVar{
+		{Name: envHookPEPURL, Value: "http://127.0.0.1:7"},
+		{Name: envHookPEPToken, Value: "pep-token"},
+	}}}
+	runner := &fakeRunner{initSID: "s"}
+	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()), WithLaunchGate(gate),
+		WithClaudeHookPEP(dataDir, engine), WithConfinement([]string{dataDir}, false))
+	_, err := createProfiledTestRun(t, m, t.Context(), tenant, CreateRunParams{
+		Transport: TransportStreamJSON, Isolation: IsolationContainer, Actor: actorU, ActorKind: actorKindU,
+	})
+	if err != nil {
+		t.Fatalf("the previous hook path must work when the distinct entrypoint is absent: %v", err)
+	}
+	spec := runner.lastSpec()
+	if !hasBind(spec.Binds, engine, engine, true) {
+		t.Errorf("the previous hook path is not mounted: %+v", spec.Binds)
+	}
+	i := slices.Index(spec.Args, claudeSettingsFlag)
+	if i < 0 || !strings.Contains(spec.Args[i+1], engine) || strings.Contains(spec.Args[i+1], containerHookBinary) {
+		t.Errorf("the inline settings do not keep the previous hook path: %q", spec.Args)
+	}
+}
+
 func TestCreateCarriesTheToolCallHooksIntoAContainer(t *testing.T) {
 	dataDir := t.TempDir()
 	useClaudeManagedSettingsDir(t, t.TempDir())
@@ -260,21 +343,25 @@ func TestCreateCarriesTheToolCallHooksIntoAContainer(t *testing.T) {
 	}
 	spec := runner.lastSpec()
 	runDir := filepath.Join(dataDir, "run", dto.RunRef)
-	if !hasBind(spec.Binds, runDir, runDir, true) {
-		t.Errorf("the run's hook settings are not mounted read-only: %+v", spec.Binds)
+	i := slices.Index(spec.Args, claudeSettingsFlag)
+	if i < 0 || !strings.Contains(spec.Args[i+1], `"disableAllHooks":false`) || strings.Contains(spec.Args[i+1], runDir) {
+		t.Errorf("the container does not carry inline Claude hook settings: %q", spec.Args)
+	}
+	if _, err := os.Stat(filepath.Join(runDir, "pep-settings.json")); !os.IsNotExist(err) {
+		t.Errorf("the container still depends on a settings file: %v", err)
+	}
+	if hasBind(spec.Binds, runDir, runDir, true) {
+		t.Errorf("the container still mounts the settings directory it does not create: %+v", spec.Binds)
 	}
 	if !hasBind(spec.Binds, engine, engine, true) {
 		t.Errorf("the hook program is not mounted: %+v", spec.Binds)
-	}
-	if i := slices.Index(spec.Args, claudeSettingsFlag); i < 0 || spec.Args[i+1] != filepath.Join(runDir, "pep-settings.json") {
-		t.Errorf("the launch does not carry the hook settings: %q", spec.Args)
 	}
 	if !slices.ContainsFunc(spec.Env, func(e EnvVar) bool { return e.Name == envHookPEPURL }) {
 		t.Errorf("the hook endpoint did not reach the environment")
 	}
 	// A hook that cannot run (another architecture, no shell) must block the tool call, not
 	// let it through: Claude Code proceeds on every hook failure except exit 2.
-	settings := mustRead(t, filepath.Join(runDir, "pep-settings.json"))
+	settings := spec.Args[i+1]
 	if !strings.Contains(settings, "|| exit 2") {
 		t.Errorf("the container's hook command does not fail closed: %s", settings)
 	}
@@ -282,7 +369,8 @@ func TestCreateCarriesTheToolCallHooksIntoAContainer(t *testing.T) {
 		t.Errorf("the engine's program must be mounted without relabelling: %+v", spec.Binds)
 	}
 
-	// The same launch natively is unchanged: no appended exit status, no container mounts.
+	// The same launch natively fails closed the same way: a native hook that cannot run (refused by the
+	// host's policy, a missing program) must block the tool call too.
 	native, _, nativeTenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()), WithLaunchGate(gate),
 		WithClaudeHookPEP(dataDir, engine), WithConfinement([]string{dataDir}, false))
 	ndto, err := createProfiledTestRun(t, native, t.Context(), nativeTenant, CreateRunParams{
@@ -291,8 +379,8 @@ func TestCreateCarriesTheToolCallHooksIntoAContainer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("native run: %v", err)
 	}
-	if body := mustRead(t, filepath.Join(dataDir, "run", ndto.RunRef, "pep-settings.json")); strings.Contains(body, "exit 2") {
-		t.Errorf("a native hook command was changed: %s", body)
+	if body := mustRead(t, filepath.Join(dataDir, "run", ndto.RunRef, "pep-settings.json")); !strings.Contains(body, "|| exit 2") {
+		t.Errorf("a native hook command does not fail closed: %s", body)
 	}
 }
 

@@ -80,7 +80,7 @@ describe('anonymous extension registry', () => {
         beforeLoad:
           path === '/finops'
             ? () => {
-                throw redirect({ to: '/areas/observation' })
+                throw redirect({ to: '/settings' })
               }
             : undefined,
       })

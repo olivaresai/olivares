@@ -358,6 +358,32 @@ describe('session rail read authority', () => {
     expect(result.current.attention).toEqual([])
   })
 
+  it('counts as open only what the list shows, and every alive session for Stop all', async () => {
+    auth.permissions.add('sessions:run:read')
+    replies.set(RUNS, () =>
+      Response.json({
+        items: [
+          RUN,
+          {
+            ...RUN,
+            run_ref: 'rail-archived',
+            archived_at: '2026-10-03T09:00:00Z',
+          },
+          {
+            ...RUN,
+            run_ref: 'rail-snoozed',
+            snoozed_until: '2030-01-02T09:00:00Z',
+          },
+          { ...RUN, run_ref: 'rail-ended', state: 'completed' },
+        ],
+        has_more: false,
+      }),
+    )
+    const { result } = mount()
+    await waitFor(() => expect(result.current.sessionCounts.running).toBe(3))
+    expect(result.current.sessionCounts).toMatchObject({ running: 3, open: 1 })
+  })
+
   it('offers live-only users their observed session without asking for operated runs', async () => {
     auth.permissions.add('sessions:live:read')
     const { result } = mount()
@@ -427,32 +453,29 @@ describe('session rail read authority', () => {
   )
 })
 
-// Keep the real top bar + query hook + HTTP client together for the count oracle.
+// Keep the real left navigation + query hook + HTTP client together for the count oracle.
 vi.mock('./scope-switcher', () => ({ ScopeSwitcher: () => null }))
-vi.mock('./notification-bell', () => ({ NotificationBell: () => null }))
-vi.mock('./user-menu', () => ({ UserMenu: () => null }))
 vi.mock('@/lib/hooks/use-server-info', () => ({
   useServerInfo: () => ({ data: undefined }),
 }))
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { Topbar } from './topbar'
-/** The Sessions place in the top bar: these cases are about its count and attention. */
+import { Sidebar } from './sidebar'
+/** The Sessions place in the left navigation: these cases are about its count and attention. */
 function sessionsPin() {
-  return within(screen.getByRole('navigation', { name: 'Journeys' })).getByRole(
-    'link',
-    { name: /Sessions/ },
-  )
+  return within(
+    screen.getByRole('navigation', { name: 'Main navigation' }),
+  ).getByRole('link', { name: /Sessions/ })
 }
 function counts() {
   return render(
     <QueryClientProvider client={client}>
       <TooltipProvider>
-        <Topbar />
+        <Sidebar />
       </TooltipProvider>
     </QueryClientProvider>,
   )
 }
-it.each(['the top bar'] as const)(
+it.each(['the left navigation'] as const)(
   'counts sessions separately from offered handoffs in %s',
   async () => {
     auth.permissions = new Set([
@@ -470,8 +493,8 @@ it.each(['the top bar'] as const)(
   },
 )
 it.each([
-  ['the top bar', RUNS],
-  ['the top bar', OBSERVED],
+  ['the left navigation', RUNS],
+  ['the left navigation', OBSERVED],
 ] as const)(
   'reads later pages in %s from %s, including attention beyond the first thirty',
   async (_bar, path) => {

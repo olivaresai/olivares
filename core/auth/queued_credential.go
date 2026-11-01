@@ -94,7 +94,7 @@ func (a *Authenticator) BindQueuedCredential(ctx context.Context, q QueuedCreden
 			if err != nil {
 				return err
 			}
-			if row.Version != q.Version || row.Revoked || row.DeletedAt != nil || !a.clock.Now().Before(row.ExpiresAt) {
+			if !row.PairingSourceID.IsZero() || row.Version != q.Version || row.Revoked || row.DeletedAt != nil || !a.clock.Now().Before(row.ExpiresAt) {
 				return ErrUnauthenticated
 			}
 			q.Seal = queuedCredentialSeal(row.SecretHash)

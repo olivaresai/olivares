@@ -9,7 +9,7 @@ import {
 } from '@/features/first-hour/api'
 import { agentToolsKeys } from '@/features/agent-tools/api'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
-import { TOOL_NAMES } from '@/features/agentops/tool-names'
+import { toolName } from '@/features/agentops/engine-tools'
 import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
@@ -84,9 +84,19 @@ import './i18n'
  * The list is remounted on the authority boundary: nothing read or half-done under
  * one operator survives into the next.
  */
-export function ApiKeys() {
+/** The API keys list. `adding` opens its add form from outside the list, as AI tools'
+ * header action does; closing the form reports back through `onAddingChange`. */
+export function ApiKeys({
+  adding = false,
+  onAddingChange,
+}: {
+  adding?: boolean
+  onAddingChange?: (open: boolean) => void
+} = {}) {
   const boundary = useProviderBoundary()
-  return <Inner key={boundary.key} />
+  return (
+    <Inner key={boundary.key} adding={adding} onAddingChange={onAddingChange} />
+  )
 }
 
 function probeHintKey(record: ProviderRecordDTO) {
@@ -99,7 +109,7 @@ function probeHintKey(record: ProviderRecordDTO) {
 }
 
 /** The provider `?add=<kind>` asks for: the setup wizard's "Add an API key" or "Add a
- * local model" opens the form on that provider (HU2-18). Read once, like the other views'
+ * local model" opens the form on that provider. Read once, like the other views'
  * `?tab=`; anything else opens nothing. */
 function addFromURL(): ProviderKind | undefined {
   const want = new URLSearchParams(window.location.search).get('add')
@@ -128,7 +138,13 @@ const SESSION_TOOL: Partial<Record<ProviderKind, SignInTool>> = {
   ollama: 'opencode',
 }
 
-function Inner() {
+function Inner({
+  adding,
+  onAddingChange,
+}: {
+  adding: boolean
+  onAddingChange?: (open: boolean) => void
+}) {
   const { t, i18n } = useTranslation(['providers', 'errors'])
   const navigate = useNavigate()
   const { activeTenant, can } = useAuth()
@@ -144,7 +160,12 @@ function Inner() {
   const [returnTo] = useState(returnFromURL)
   // The provider this page just created, whose first test decides the return.
   const created = useRef<string | null>(null)
-  const [createOpen, setCreateOpen] = useState(!!addKind)
+  const [ownOpen, setOwnOpen] = useState(!!addKind)
+  const createOpen = ownOpen || adding
+  const setCreateOpen = (open: boolean) => {
+    setOwnOpen(open)
+    onAddingChange?.(open)
+  }
   const [binding, setBinding] = useState<ProviderRecordDTO | null>(null)
   const [rotating, setRotating] = useState<ProviderRecordDTO | null>(null)
   const [revoking, setRevoking] = useState<ProviderRecordDTO | null>(null)
@@ -300,10 +321,10 @@ function Inner() {
     : prepare.isPending && preparing
       ? download
         ? t('prepare.installing', {
-            tool: TOOL_NAMES[preparing],
+            tool: toolName(preparing),
             progress: download,
           })
-        : t('prepare.pending', { tool: TOOL_NAMES[preparing] })
+        : t('prepare.pending', { tool: toolName(preparing) })
       : test.isPending
         ? t('actions.testing')
         : undefined
@@ -378,7 +399,8 @@ function Inner() {
     },
     {
       id: 'actions',
-      header: '',
+      // Named for a screen reader, not shown: an empty header is a column with no name.
+      header: () => <span className="sr-only">{t('columns.actions')}</span>,
       cell: ({ row }) => actionsFor(row.original, true),
     },
   ]

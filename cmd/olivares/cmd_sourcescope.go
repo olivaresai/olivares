@@ -25,6 +25,7 @@ type sourcescopeBindingBody struct {
 	ScopeTree   string `json:"scope_tree"`
 	ScopeRef    string `json:"scope_ref,omitempty"`
 	Effect      string `json:"effect,omitempty"`
+	ExpiresAt   string `json:"expires_at,omitempty"`
 	FolderPath  string `json:"folder_path,omitempty"`
 	CredName    string `json:"cred_name,omitempty"`
 	CredRefKind string `json:"cred_ref_kind,omitempty"`
@@ -111,6 +112,7 @@ type sourcescopeBindingFlags struct {
 	scopeTree   string
 	scopeRef    string
 	effect      string
+	expiresAt   string
 	folderPath  string
 	credName    string
 	credRefKind string
@@ -121,11 +123,12 @@ type sourcescopeBindingFlags struct {
 }
 
 func (f *sourcescopeBindingFlags) add(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&f.sourceType, "source-type", "", "mcp, model, provider, knowledge, data, profile or tool")
+	cmd.Flags().StringVar(&f.sourceType, "source-type", "", "mcp, model, provider, knowledge, data, profile, tool, instructions or template")
 	cmd.Flags().StringVar(&f.sourceRef, "source-ref", "", "reference of the source being confined")
 	cmd.Flags().StringVar(&f.scopeTree, "scope-tree", "", "scope tree the binding attaches to (e.g. workspace, agent_group)")
 	cmd.Flags().StringVar(&f.scopeRef, "scope-ref", "", "reference within the scope tree")
 	cmd.Flags().StringVar(&f.effect, "effect", "", "allow or forbid")
+	cmd.Flags().StringVar(&f.expiresAt, "expires-at", "", "optional RFC3339 time when the binding stops granting access")
 	cmd.Flags().StringVar(&f.folderPath, "folder-path", "", "folder or subtree the binding is anchored to")
 	cmd.Flags().StringVar(&f.credName, "cred-name", "", "name of the scoped credential the binding carries")
 	cmd.Flags().StringVar(&f.credRefKind, "cred-ref-kind", "", "kind of the credential reference")
@@ -138,7 +141,7 @@ func (f *sourcescopeBindingFlags) add(cmd *cobra.Command) {
 func (f *sourcescopeBindingFlags) body() sourcescopeBindingBody {
 	return sourcescopeBindingBody{
 		SourceType: f.sourceType, SourceRef: f.sourceRef, ScopeTree: f.scopeTree,
-		ScopeRef: f.scopeRef, Effect: f.effect, FolderPath: f.folderPath,
+		ScopeRef: f.scopeRef, Effect: f.effect, ExpiresAt: f.expiresAt, FolderPath: f.folderPath,
 		CredName: f.credName, CredRefKind: f.credRefKind, CredRef: f.credRef,
 		CredHint: f.credHint, Enabled: f.enabled, Note: f.note,
 	}
@@ -451,7 +454,7 @@ func newSourceScopeSourcesCmd(client datalaneClient) *cobra.Command {
 			return datalaneResult(cmd, raw, code, "")
 		},
 	}
-	disable.Flags().StringVar(&sourceType, "source-type", "", "mcp, model, provider, knowledge, data, profile or tool")
+	disable.Flags().StringVar(&sourceType, "source-type", "", "mcp, model, provider, knowledge, data, profile, tool, instructions or template")
 	disable.Flags().StringVar(&sourceRef, "source-ref", "", "reference of the source to unconfine")
 	addYesFlag(disable, &yes)
 	cmd.AddCommand(disable)
@@ -726,7 +729,7 @@ func newSourceScopeResolveCmd(client datalaneClient) *cobra.Command {
 			return datalaneResult(cmd, raw, code, "")
 		},
 	}
-	cmd.Flags().StringVar(&sourceType, "source-type", "", "mcp, model, provider, knowledge, data, profile or tool")
+	cmd.Flags().StringVar(&sourceType, "source-type", "", "mcp, model, provider, knowledge, data, profile, tool, instructions or template")
 	cmd.Flags().StringVar(&sourceRef, "source-ref", "", "reference of the source to resolve")
 	cmd.Flags().StringVar(&actorKind, "actor-kind", "", "session or agent")
 	cmd.Flags().StringVar(&actorRef, "actor-ref", "", "reference of the actor to resolve for")

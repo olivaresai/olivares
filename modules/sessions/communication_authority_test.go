@@ -305,6 +305,37 @@ func TestModuleUseCommunicationRequestAuthorityBindsConcretePair(t *testing.T) {
 			scoped.typedCalls, scoped.legacyCalls)
 	}
 
+	operator, err := auth.NewSystemOperator("test:system-workflow", "test sealed system authority")
+	if err != nil {
+		t.Fatal(err)
+	}
+	system, err := fixture.authenticator.ResolveSystemScope(
+		ctx, operator, fixture.tenant, auth.CommunicationSessionMessageSendWrite,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	systemPrincipal := CommunicationPrincipal{
+		System: true, SystemActorRef: "workflow-system", SystemGrantAgentID: model.NewID(),
+	}
+	systemQuestion, err := newCommunicationAuthorityQuestion(
+		DirectoryScopeRef{TenantID: fixture.tenant, WorkspaceID: fixture.workspace},
+		channelKind, model.NewID(), CommunicationMessageSend,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, err := fixture.module.bindSystemCommunicationRequestAuthority(
+		ctx, system, systemPrincipal, systemQuestion,
+	)
+	if err != nil {
+		t.Fatalf("bind sealed system authority: %v", err)
+	}
+	inspection, err := bound.contextFor(systemQuestion)
+	if err != nil || inspection.principal != systemPrincipal {
+		t.Fatalf("system authority inspection = %+v, %v", inspection, err)
+	}
+
 	var nilResolver *auth.Authenticator
 	fixture.module.CommunicationAuthority = NewCommunicationRequestAuthority(nilResolver, typedAuthorizer)
 	if fixture.module.CommunicationAuthority != nil {

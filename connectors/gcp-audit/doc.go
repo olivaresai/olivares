@@ -45,7 +45,7 @@
 // Identity convergence. The principalEmail is emitted verbatim as OriginKind
 // "identity": for a service account it is the same name@project.iam.gserviceaccount.com
 // ref google-agent emits, so the governance roster fuses them by external_id
-//. The connector never resolves an identity to an agent — that bridge
+// . The connector never resolves an identity to an agent — that bridge
 // is module VI's job.
 //
 // Least privilege. The connector needs only read-only management metadata plus

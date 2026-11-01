@@ -431,3 +431,55 @@ func TestAncestorsThroughAConfinedScopeReportARoot(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestWorkspaceLineageIDsListsTheDepartmentsAboveRootFirst pins what a grant on workspace ids
+// reads: the department itself and every department above it, root first, from verified rows.
+// A department with no row matches nothing, and a tree the store would never write is refused
+// the way Ancestors refuses it.
+func TestWorkspaceLineageIDsListsTheDepartmentsAboveRootFirst(t *testing.T) {
+	st, tenant, d := seedDepartments(t)
+	lineage := func(sc store.Scope, id model.ID) ([]model.ID, error) {
+		return store.WorkspaceLineageIDs(context.Background(), sc, id)
+	}
+	ids := func(list []model.ID) string {
+		out := make([]string, len(list))
+		for i, id := range list {
+			out[i] = id.String()
+		}
+		return strings.Join(out, ",")
+	}
+	if err := st.View(context.Background(), tenant, func(sc store.Scope) error {
+		for name, tc := range map[string]struct {
+			id   model.ID
+			want []model.ID
+		}{
+			"a department under two others": {d.sre.ID, []model.ID{d.eng.ID, d.platform.ID, d.sre.ID}},
+			"the middle department":         {d.platform.ID, []model.ID{d.eng.ID, d.platform.ID}},
+			"a root department":             {d.eng.ID, []model.ID{d.eng.ID}},
+		} {
+			if got, err := lineage(sc, tc.id); err != nil || ids(got) != ids(tc.want) {
+				t.Errorf("%s: lineage = %s, %v; want %s", name, ids(got), err, ids(tc.want))
+			}
+		}
+		if got, err := lineage(sc, model.NewID()); !errors.Is(err, store.ErrNotFound) || len(got) != 0 {
+			t.Errorf("a department nobody holds: lineage = %s, %v; want ErrNotFound and none", ids(got), err)
+		}
+		for _, zero := range []model.ID{"", "00000000-0000-0000-0000-000000000000"} {
+			if got, err := lineage(sc, zero); !errors.Is(err, store.ErrNotFound) || len(got) != 0 {
+				t.Errorf("the zero id %q: lineage = %s, %v; want ErrNotFound and none", zero, ids(got), err)
+			}
+		}
+		broken := patchedScope{sc, func(ws model.Workspace) (model.Workspace, error) {
+			if ws.ID == d.platform.ID {
+				ws.Path = "/" + d.sre.ID.String() + "/" + ws.ID.String()
+			}
+			return ws, nil
+		}}
+		if got, err := lineage(broken, d.sre.ID); !errors.Is(err, store.ErrLineageUnavailable) || len(got) != 0 {
+			t.Errorf("a tree whose path disagrees with its parent: lineage = %s, %v; want ErrLineageUnavailable and none", ids(got), err)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}

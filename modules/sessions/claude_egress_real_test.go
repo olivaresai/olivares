@@ -187,7 +187,7 @@ func TestRealClaudeKeySessionReachesNoOtherHost(t *testing.T) {
 // The governed hook launch (one settings file, no other setting sources), real Claude Code:
 // a key-bound session, endpoint up then down, start then resume, reaches only its endpoint.
 // It does not exercise managed settings: Claude Code reads those only from the system
-// directory, which a test cannot write (SR2C 071).
+// directory, which a test cannot write (review 071).
 func TestRealClaudeHookLaunchReachesOnlyItsEndpoint(t *testing.T) {
 	bin := os.Getenv("OLIVARES_TEST_CLAUDE_BIN")
 	if bin == "" {

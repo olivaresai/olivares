@@ -15,7 +15,7 @@ WORK="${ROOT}/.examples-tmp/bring-your-own-protocol"
 # The engine `task build:bin` already produced. The skeleton step used `go run ./cmd/olivares`,
 # which recompiles the whole engine with other flags (measured on the builder: 84 s for the
 # build, 232 s for the `go run` after it, 1 s for the binary) and sat silent until the CI job
-# timeout (dev#2363). Same convention as govern-claude-code/smoke.sh and otel-genai-ingest.
+# timeout. Same convention as govern-claude-code/smoke.sh and otel-genai-ingest.
 ENGINE="${OLIVARES_BIN:-${ROOT}/bin/olivares}"
 
 export GOMAXPROCS="${GOMAXPROCS:-2}"

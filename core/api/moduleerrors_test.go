@@ -192,6 +192,7 @@ func TestStoreErrorBodyCarriesTheCodeCoreAnswers(t *testing.T) {
 		{"bare add-on sentinel", license.ErrAddonRequiresLicense, http.StatusForbidden, "addon_requires_license"},
 		{"not found", store.ErrNotFound, http.StatusNotFound, "not_found"},
 		{"tenant suspended", store.ErrTenantSuspended, http.StatusLocked, "tenant_suspended"},
+		{"store unavailable", store.ErrStoreUnavailable, http.StatusServiceUnavailable, "store_unavailable"},
 		{"workspace confinement", store.ErrWorkspaceConfinement, http.StatusForbidden, "workspace_confined"},
 		// The module family answers both query sentinels 400, so the code is the 400's.
 		{"cursor with sort", store.ErrCursorWithSort, http.StatusBadRequest, "bad_request"},

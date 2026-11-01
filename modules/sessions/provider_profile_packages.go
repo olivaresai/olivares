@@ -45,12 +45,13 @@ import (
 // npm's own settings beside them: two sources of npm configuration would be
 // resolved by npm's order, not by the profile.
 //
-// Egress hosts: the HTTPS hosts an administrator declares (session_egress_hosts)
-// are appended to the same confined network, so an API-key session can reach what
-// its work needs (a Git host, a module mirror) and nothing else. None is added by
-// default. Each is admitted only at public addresses, whatever its name resolves
-// to (egress.Policy.PublicProviders): a declared name cannot reach the engine
-// host's loopback or private services.
+// Egress hosts: the hosts an administrator declares (session_egress_hosts) are
+// appended to the same confined network, so an API-key session can reach what its
+// work needs (a Git host, a build host, a module mirror) and nothing else. Each is
+// reached over HTTPS on port 443 and over SSH on port 22, the latter as a raw
+// tunnel to that name only. None is added by default. Each is admitted only at
+// public addresses, whatever its name resolves to (egress.Policy.PublicProviders):
+// a declared name cannot reach the engine host's loopback or private services.
 //
 // Declaring any of the three needs tenant administration. The token is delegated to every
 // session launched under the profile, as the profile's provider key is: the
@@ -75,11 +76,12 @@ const (
 
 const (
 	// maxSessionPrograms and maxSessionRegistries bound one profile. The egress
-	// policy holds at most 16 endpoints, the provider and hook relays included.
+	// policy holds at most 20 endpoints, the provider and hook relays included.
 	maxSessionPrograms   = 16
 	maxSessionRegistries = 8
-	// maxSessionEgressHosts fits the policy's 16 with the provider, up to three
-	// hook and session relays and a full set of registries (1+3+8+4).
+	// maxSessionEgressHosts fits the policy's 20 with the provider, up to three
+	// hook and session relays, a full set of registries and each host on https and
+	// ssh (1+3+8+4*2).
 	maxSessionEgressHosts = 4
 	// registryKindNPM is the one registry kind sessions get.
 	registryKindNPM = "npm"
@@ -146,8 +148,8 @@ func normalizeSessionPrograms(in []string) (string, error) {
 // canonicalEgressHost returns the one spelling of a declared host the egress
 // policy compares (coreegress.CanonicalHost), and whether raw is a host at all: a
 // DNS name with a dot, such as github.com. An address literal, a port, a path, a
-// scheme and a wildcard are refused. The session reaches https on port 443 of
-// exactly that name.
+// scheme and a wildcard are refused. The session reaches https on port 443 and
+// ssh on port 22 of exactly that name.
 func canonicalEgressHost(raw string) (string, bool) {
 	host, err := coreegress.CanonicalHost(raw)
 	return host, err == nil && net.ParseIP(host) == nil && strings.Contains(host, ".")
@@ -359,14 +361,15 @@ func (m *Module) configureProfilePackages(ctx, runCtx context.Context, tenant mo
 }
 
 // applyProfileEgressHosts grants the declared hosts to a confined session's
-// network, as the registry hosts are. An unconfined session (account login,
-// unmeasured tool) has no boundary to widen and keeps the host network.
+// network, as the registry hosts are: https on 443 and ssh on 22 for each. An
+// unconfined session (account login, unmeasured tool) has no boundary to widen
+// and keeps the host network.
 func applyProfileEgressHosts(p *CreateRunParams, spec *LaunchSpec) {
 	if len(p.profileEgressHosts) == 0 || spec.NetworkPolicy == nil {
 		return
 	}
 	for _, host := range p.profileEgressHosts {
-		spec.NetworkPolicy.PublicProviders = append(spec.NetworkPolicy.PublicProviders, "https://"+host+"/")
+		spec.NetworkPolicy.PublicProviders = append(spec.NetworkPolicy.PublicProviders, "https://"+host+"/", "ssh://"+host+"/")
 	}
 	p.egressDetail = "egress hosts " + strings.Join(p.profileEgressHosts, ",")
 }

@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel, screen } from '@/test/intel'
 import { agentOpsApi } from '@/features/agentops/api'
 import { useTenantStore } from '@/stores/tenant'
-import { SESSION_TOOLS, type SessionTool } from './api'
+import { sessionTools, type SessionTool } from './api'
 import { useReadyTools } from './first-hour'
 
 vi.mock('@/lib/auth/context', () => ({
@@ -39,7 +39,7 @@ type State =
 /** The engine's answer for every tool: what a session would run on, or why not. */
 function given(states: Record<SessionTool, State>) {
   vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue({
-    tools: SESSION_TOOLS.map((driver) => {
+    tools: sessionTools().map((driver) => {
       const s = states[driver]
       if ('refused' in s)
         return {
@@ -75,7 +75,7 @@ function Probe() {
   return (
     <ul>
       <li>{`ready=[${ready.join(',')}]`}</li>
-      {SESSION_TOOLS.map((d) => {
+      {sessionTools().map((d) => {
         const key = boundKey(d)
         return (
           <li key={d}>
@@ -101,6 +101,13 @@ describe('which tools can start a session, and why not', () => {
           status: 409,
           code: 'nothing_to_run_on',
           message: 'Gemini CLI has nothing to run on yet.',
+        },
+      },
+      cursor: {
+        refused: {
+          status: 409,
+          code: 'nothing_to_run_on',
+          message: 'Cursor CLI has nothing to run on yet.',
         },
       },
       claude: { own_login: true },
@@ -158,6 +165,13 @@ describe('which tools can start a session, and why not', () => {
           status: 409,
           code: 'nothing_to_run_on',
           message: 'Gemini CLI has nothing to run on yet.',
+        },
+      },
+      cursor: {
+        refused: {
+          status: 409,
+          code: 'nothing_to_run_on',
+          message: 'Cursor CLI has nothing to run on yet.',
         },
       },
       claude: {

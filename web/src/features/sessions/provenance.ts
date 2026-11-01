@@ -19,7 +19,7 @@
 // recording credential through that same identity, and runtime_bridge.go:80 captures
 // it off the stream-json init frame).
 
-import { toolName } from '@/features/agentops/tool-names'
+import { toolName } from '@/features/agentops/engine-tools'
 import type { RunDTO, RunState, Transport } from '@/features/agentops/types'
 import {
   sessionNameLadder,
@@ -107,7 +107,11 @@ export interface UnifiedSession {
 
 /** The run states in which the plane holds a live process. `idle` is DERIVED from
  * activity recency by the engine — the process is not killed — so it is live. */
-const LIVE_RUN_STATES: RunState[] = ['pending', 'running', 'idle']
+export const LIVE_RUN_STATES: readonly RunState[] = [
+  'pending',
+  'running',
+  'idle',
+]
 /** The states from which a run can be brought back. */
 const RESUMABLE_RUN_STATES: RunState[] = ['stopped', 'failed']
 
@@ -613,7 +617,12 @@ export function mergeSessions(
  * the distinguishing tail together. This is the wrapper, not a second ladder.
  */
 export function sessionLabel(s: UnifiedSession): string | null {
-  const { text, from } = sessionNameLadder(operatorName(s), s.live, '')
+  const { text, from } = sessionNameLadder(
+    operatorName(s),
+    s.live,
+    '',
+    runTitle(s),
+  )
   return from === 'untitled' ? null : text
 }
 
@@ -665,6 +674,16 @@ export function operatorName(s: UnifiedSession): string | null {
   return (
     primaryRun(s.runs)?.name?.trim() ||
     s.runs.find((r) => r.name?.trim())?.name?.trim() ||
+    null
+  )
+}
+
+/** The phrase the engine cut from the first message, or `null`: what a session with no
+ * name is called, and never the name (`operatorName`) itself. */
+export function runTitle(s: UnifiedSession): string | null {
+  return (
+    primaryRun(s.runs)?.title?.trim() ||
+    s.runs.find((r) => r.title?.trim())?.title?.trim() ||
     null
   )
 }
@@ -721,7 +740,12 @@ export function sessionListName(
   s: UnifiedSession,
   untitled: string,
 ): { text: string; from: SessionNameSource | 'place' } {
-  const named = sessionNameLadder(operatorName(s), s.live, untitled)
+  const named = sessionNameLadder(
+    operatorName(s),
+    s.live,
+    untitled,
+    runTitle(s),
+  )
   if (named.from !== 'action' && named.from !== 'untitled') return named
   const place = sessionPlace(s)
   return place
@@ -745,7 +769,7 @@ export function sessionNaming(
   return {
     name: text,
     // The tail tells apart an untitled row, and any row whose name another row of the
-    // same list also carries (HU 029: two long first messages cut to the same words;
+    // same list also carries (acceptance: two long first messages cut to the same words;
     // #2266: fifty observed sessions of one tool).
     shortId:
       from === 'untitled' || shared?.has(text) ? sessionShortId(s) : null,

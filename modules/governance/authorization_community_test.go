@@ -14,7 +14,6 @@ import (
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
-	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/modules/governance/testsupport"
 )
@@ -98,40 +97,6 @@ func TestCommunityStoredCedarUpgrade(t *testing.T) {
 				t.Fatalf("disabled policy enforcement = %d %s; want %d", r.code, r.raw, want)
 			}
 		})
-	}
-}
-
-// Seed an existing installation through the real store, rather than calling a paid
-// management route in the Community fixture. The legacy active flag is supported.
-func seedStoredCedar(t *testing.T, h *harness, tenant model.TenantID, surface, source string) {
-	t.Helper()
-	if err := h.st.Mutate(context.Background(), tenant, func(sc store.Scope) error {
-		epochs := sc.(store.AuthorizationEpochStore)
-		current, err := epochs.ReadAuthorizationEpoch(context.Background())
-		if err != nil {
-			return err
-		}
-		if _, err := epochs.BumpAuthorizationEpoch(context.Background(), current); err != nil {
-			return err
-		}
-		repo, err := sc.Ext(model.Kind("governance.policy_revision"))
-		if err != nil {
-			return err
-		}
-		rows, _, err := repo.List(context.Background(), model.Query{Limit: 100})
-		if err != nil {
-			return err
-		}
-		var next int64 = 1
-		for _, row := range rows {
-			if row.String("surface") == surface && row.Int("revision") >= next {
-				next = row.Int("revision") + 1
-			}
-		}
-		_, err = repo.Create(context.Background(), model.Record{"surface": surface, "revision": next, "content": source, "author": "upgrade-fixture", "validated": true, "active": true, "note": "stored before upgrade"})
-		return err
-	}); err != nil {
-		t.Fatal(err)
 	}
 }
 

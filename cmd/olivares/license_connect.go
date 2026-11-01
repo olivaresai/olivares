@@ -254,7 +254,7 @@ func (r *connectRun) install(v license.Verified, a connectCredentialAnswer, phas
 	now := r.now().UTC()
 	r.st.Last = &connectLastResult{Phase: phase, CredentialSerial: v.Credential.Serial, CredentialSHA256: hex.EncodeToString(sum[:]),
 		Version: a.version, OTAExp: a.otaExp, EffectiveUntil: connectRefreshBoundary(v, now).UTC().Format(time.RFC3339), At: now.Format(time.RFC3339)}
-	return nil
+	return notifyLicenseChanged(r.dataDir)
 }
 
 // connectRefreshBoundary is the local refresh PLANNING boundary of a verified credential: the

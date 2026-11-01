@@ -39,6 +39,7 @@ export function NewSessionHost() {
               advanced.effort,
               String(advanced.fastMode),
               advanced.serviceTier,
+              advanced.runOn,
             ]
               .map((part) => part ?? '')
               .join('\n')}
@@ -52,6 +53,7 @@ export function NewSessionHost() {
             initialEffort={advanced.effort}
             initialFastMode={advanced.fastMode}
             initialServiceTier={advanced.serviceTier}
+            initialRunOn={advanced.runOn}
             onCloseAutoFocus={(event) => {
               const { opener } = useNewSessionDialog.getState()
               if (!opener?.isConnected) return

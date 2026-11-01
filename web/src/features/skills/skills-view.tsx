@@ -21,7 +21,9 @@ import { PackSheet, PackState } from './pack-sheet'
 import type { SkillPack } from './types'
 import './i18n'
 
-export function SkillsView() {
+/** The skill-pack catalog. `titled` is its own page header; on MCP & skills' Skills tab
+ * (#3388) the page's title already names it. */
+export function SkillsView({ titled = true }: { titled?: boolean } = {}) {
   const { t } = useTranslation('skills')
   const { activeTenant } = useAuth()
   // `?pack=<id>` opens that pack (AI tools > Installed here links each skill here).
@@ -65,11 +67,13 @@ export function SkillsView() {
 
   return (
     <div className="flex h-full flex-col gap-4">
-      <PageHeader
-        icon={GraduationCap}
-        title={t('title')}
-        description={t('subtitle')}
-      />
+      {titled ? (
+        <PageHeader
+          icon={GraduationCap}
+          title={t('title')}
+          description={t('subtitle')}
+        />
+      ) : null}
       <InstallPack key={activeTenant} packs={items} />
       <ListTruncationBadge
         query={packs}

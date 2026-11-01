@@ -272,6 +272,43 @@
       "lastCredential": "Impossible de supprimer votre seule passkey. Enregistrez-en une autre d'abord."
     }
   },
+  "sessions": {
+    "title": "Vos connexions",
+    "description": "Navigateurs et clients sur lesquels vous êtes connecté. Terminez les sessions que vous n’utilisez ou ne reconnaissez plus.",
+    "endAll": "Terminer toutes les autres",
+    "none": "Aucune connexion active",
+    "noneHint": "Vos connexions actuelles et récentes apparaîtront ici.",
+    "client": "Client",
+    "lastUsed": "Dernière utilisation",
+    "created": "Créée",
+    "expires": "Expire",
+    "actionsColumn": "Actions",
+    "current": "Cette session",
+    "end": "Terminer",
+    "endLabel": "Mettre fin à la connexion {{kind}} du {{created}}",
+    "endTitle": "Terminer la connexion ?",
+    "endBody": "Cette connexion cessera de fonctionner sur ce navigateur ou client. Vous pourrez vous y reconnecter plus tard.",
+    "endAllTitle": "Terminer toutes les autres connexions ?",
+    "endAllBody": "Les autres sessions de cette liste seront fermées. Cette session reste active.",
+    "endAllFailed_one": "{{count}} connexion n’a pas pu être terminée. Vérifiez la liste et réessayez.",
+    "endAllFailed_many": "{{count}} connexions n’ont pas pu être terminées. Vérifiez la liste et réessayez.",
+    "endAllFailed_other": "{{count}} connexions n’ont pas pu être terminées. Vérifiez la liste et réessayez.",
+    "ended": "Connexion terminée.",
+    "kinds": {
+      "browser": "Navigateur",
+      "token": "Jeton",
+      "unknown": "Inconnu",
+      "pairing": "Association en attente"
+    },
+    "deviceName": "Nom de l’appareil",
+    "pair": "Associer un appareil",
+    "pairLink": "Lien à usage unique",
+    "pairHint": "Copiez ce lien privé sur l’appareil. Il expire dans 10 minutes et ne fonctionne qu’une fois.",
+    "pairTitle": "Associer cet appareil",
+    "acceptHint": "Continuez uniquement si vous avez demandé ce lien depuis votre propre compte. Cet appareil aura accès à ce compte.",
+    "pairInvalid": "Ce lien est absent, expiré ou déjà utilisé. Créez-en un autre dans les paramètres de connexion.",
+    "accept": "Associer cet appareil"
+  },
   "totp": {
     "title": "Second facteur TOTP",
     "description": "Un mot de passe à usage unique temporisé (RFC 6238) comme facteur additionnel de votre compte local. Il s'ajoute à vos passkeys — il ne les remplace jamais.",
