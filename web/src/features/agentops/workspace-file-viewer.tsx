@@ -2,7 +2,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, Lock, Pencil, Save, Trash2 } from 'lucide-react'
+import {
+  Code,
+  Download,
+  Eye,
+  FolderInput,
+  Lock,
+  MoreHorizontal,
+  Pencil,
+  Save,
+  Trash2,
+} from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -17,6 +27,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PathText } from '@/components/ui/path-text'
@@ -34,6 +50,12 @@ import { firstChangedLine } from '@/lib/editor-links'
 import { cn } from '@/lib/utils'
 import { agentOpsApi, agentOpsKeys } from './api'
 import type { FileReadResponse, SensitivityHit, WorkspaceDTO } from './types'
+
+/** An action's name in the file toolbar: shown where the viewer has room for it (44rem),
+ * else read only by a screen reader, beside the icon. */
+const TOOL_LABEL = '@max-[44rem]/viewer:sr-only'
+/** The actions that move under More where the viewer is narrower than that. */
+const WIDE_ONLY = '@max-[44rem]/viewer:hidden'
 
 const IMAGE_TYPES: Record<string, string> = {
   '.png': 'image/png',
@@ -153,35 +175,64 @@ export function FileViewer({
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <PathText value={path} />
-        <div className="flex flex-wrap items-center gap-1">
+      {/* ONE TOOLBAR ROW: the file's path, then its actions. Where the viewer is narrow
+          (the session's side pane) Open and Edit are their icons, their names kept for a
+          screen reader and shown on hover, and Download, Move and Delete wait under More,
+          so the file's name keeps its room. */}
+      <div className="flex min-w-0 items-center gap-2">
+        <PathText value={path} className="min-w-0 flex-1" />
+        <div className="flex shrink-0 items-center gap-1">
           <OpenInEditor
             root={workspace.root_path}
             file={path}
             line={firstChange}
+            labelClassName={TOOL_LABEL}
           />
           {hasRenderedView && !editing && (
             <Button
               variant="ghost"
               size="sm"
+              title={showSource ? t('browser.rendered') : t('browser.source')}
               onClick={() => setShowSource((current) => !current)}
             >
-              {showSource ? t('browser.rendered') : t('browser.source')}
+              {showSource ? (
+                <Eye className="size-3.5" aria-hidden="true" />
+              ) : (
+                <Code className="size-3.5" aria-hidden="true" />
+              )}
+              <span className={TOOL_LABEL}>
+                {showSource ? t('browser.rendered') : t('browser.source')}
+              </span>
             </Button>
           )}
-          <Button variant="ghost" size="sm" onClick={() => downloadFile(file)}>
-            <Download className="size-3.5" />
+          <Button
+            variant="ghost"
+            size="sm"
+            className={WIDE_ONLY}
+            onClick={() => downloadFile(file)}
+          >
+            <Download className="size-3.5" aria-hidden="true" />
             {t('browser.download')}
           </Button>
           {writable && !isBinary && !editing && (
-            <Button variant="ghost" size="sm" onClick={onEdit}>
-              <Pencil className="size-3.5" />
-              {t('browser.edit')}
+            <Button
+              variant="ghost"
+              size="sm"
+              title={t('browser.edit')}
+              onClick={onEdit}
+            >
+              <Pencil className="size-3.5" aria-hidden="true" />
+              <span className={TOOL_LABEL}>{t('browser.edit')}</span>
             </Button>
           )}
           {writable && (
-            <Button variant="ghost" size="sm" onClick={() => setMoveOpen(true)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={WIDE_ONLY}
+              onClick={() => setMoveOpen(true)}
+            >
+              <FolderInput className="size-3.5" aria-hidden="true" />
               {t('browser.move')}
             </Button>
           )}
@@ -189,12 +240,47 @@ export function FileViewer({
             <Button
               variant="destructive"
               size="sm"
+              className={WIDE_ONLY}
               onClick={() => setConfirmDel(true)}
             >
-              <Trash2 className="size-3.5" />
+              <Trash2 className="size-3.5" aria-hidden="true" />
               {t('browser.delete')}
             </Button>
           )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="@min-[44rem]/viewer:hidden"
+                aria-label={t('browser.moreActions')}
+                title={t('browser.moreActions')}
+              >
+                <MoreHorizontal className="size-3.5" aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => downloadFile(file)}>
+                <Download aria-hidden="true" />
+                {t('browser.download')}
+              </DropdownMenuItem>
+              {writable && (
+                <DropdownMenuItem onSelect={() => setMoveOpen(true)}>
+                  <FolderInput aria-hidden="true" />
+                  {t('browser.move')}
+                </DropdownMenuItem>
+              )}
+              {writable && (
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={() => setConfirmDel(true)}
+                >
+                  <Trash2 aria-hidden="true" />
+                  {t('browser.delete')}
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

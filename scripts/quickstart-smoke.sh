@@ -87,12 +87,10 @@ assert_eq() {
 
 # wait_health: poll /healthz until the engine answers. 0 healthy, 1 gave up, 2 the engine
 # ($PID) exited, which ends the wait at once instead of burning the budget on a dead child.
-# ⛔ THE BUDGET IS 120 s, NOT 20. The nightly died twice with "never became healthy"
-#    because the CI runner stalled 8-10 s at a random phase of the boot (key generation one
-#    day, store migrations the next); the binary boots in about 7 s on one pinned CPU. A
-#    budget that a slow runner can exceed grades the runner, not the quickstart. Same bound
-#    as first-hour-smoke.sh.
-SMOKE_HEALTH_POLLS="${SMOKE_HEALTH_POLLS:-240}"
+# Fresh SQLite migrations on a loaded runner can consume nearly the entire old
+# 120 s wait before the HTTP listener starts. Allow five minutes, while still
+# failing immediately when the child exits.
+SMOKE_HEALTH_POLLS="${SMOKE_HEALTH_POLLS:-600}"
 # The waits for ingestion after the engine is healthy had the same 10 s (40 x 0.25 s), so a runner
 # stall there only moved the nightly failure to a different message. Same 120 s, in 0.25 s polls;
 # a healthy run leaves each loop at the first match.

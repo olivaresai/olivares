@@ -368,17 +368,17 @@ func TestToolWithoutImageInputRefusesAndNamesTheTool(t *testing.T) {
 	}
 }
 
-// Over-long lines stay terminal, except the echo of a message with a picture, and even
-// that one only up to a ceiling.
+// The image recognizer claims the echo of a message with a picture; any other
+// over-long line is left to the pump's generic compact frame.
 func TestOversizedImageEchoIsReplacedAndAnyOtherLongLineIsNot(t *testing.T) {
-	big := strings.Repeat("A", 2*maxOutputLine)
+	const limit = 4 << 10
+	big := strings.Repeat("A", 2*limit)
 	claude := `{"type":"user","message":{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"` + big + `"}}]},"isReplay":true}`
 	codexDone := `{"method":"item/completed","params":{"item":{"type":"userMessage","content":[{"type":"image","url":"data:image/png;base64,` + big + `"}]}}}`
 	codexStart := `{"method":"item/started","params":{"item":{"type":"userMessage","content":[{"type":"image","url":"data:image/png;base64,` + big + `"}]}}}`
 	other := `{"type":"assistant","message":"` + big + `"}`
 	// A screenshot a tool read is a user line too, and it is not the person's message.
 	toolResult := `{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":[{"type":"image","source":{"data":"` + big + `"}}]}]}}`
-	runaway := claude[:len(claude)-3] + strings.Repeat("A", maxOverflowDrain)
 	for name, tc := range map[string]struct {
 		line string
 		want []byte
@@ -386,9 +386,8 @@ func TestOversizedImageEchoIsReplacedAndAnyOtherLongLineIsNot(t *testing.T) {
 		"claude echo": {claude, imageEchoOversize}, "codex started": {codexStart, codexStartedOversize},
 		"codex completed":     {codexDone, codexCompletedOversize},
 		"any other long line": {other, nil}, "an oversized tool result": {toolResult, nil},
-		"an echo that never ends": {runaway, nil},
 	} {
-		line, err := readBoundedLineWithOverflow(bufio.NewReader(strings.NewReader(tc.line+"\n"+`{"type":"result"}`+"\n")), maxOutputLine, oversizedImageEcho)
+		line, err := readBoundedLineWithOverflow(bufio.NewReader(strings.NewReader(tc.line+"\n"+`{"type":"result"}`+"\n")), limit, func(prefix []byte, _ int, _ []byte) []byte { return oversizedImageEcho(prefix) })
 		if (err != nil) != (tc.want == nil) {
 			t.Fatalf("%s: err = %v, want an error exactly when no replacement applies", name, err)
 		}
@@ -467,8 +466,9 @@ func TestUploadLimitsAreSaidAndKept(t *testing.T) {
 	}
 }
 
-// A real screenshot's echo is far over the one-line limit. Through the real pump the
-// session survives it, and the next frame is the tool's own.
+// An echo over the one-line limit (1 MiB here stands for maxOutputLine, too big to
+// write past in a test). Through the real pump the session survives it, and the next
+// frame is the tool's own.
 func TestOversizedImageEchoDoesNotEndTheSessionThroughThePump(t *testing.T) {
 	t.Parallel()
 	script := filepath.Join(t.TempDir(), "echo.sh")
@@ -483,7 +483,7 @@ func TestOversizedImageEchoDoesNotEndTheSessionThroughThePump(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	proc, err := NewProcRunner().Launch(ctx, LaunchSpec{Program: script, Dir: t.TempDir(), WaitDelay: 2 * time.Second})
+	proc, err := (&procRunner{lineCap: 1 << 20}).Launch(ctx, LaunchSpec{Program: script, Dir: t.TempDir(), WaitDelay: 2 * time.Second})
 	if err != nil {
 		t.Fatalf("launch: %v", err)
 	}

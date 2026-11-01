@@ -49,8 +49,9 @@ export interface UseRunAttachOptions {
   /** Restarts the attempt when session state/transport (or equivalent) changes. */
   sessionKey?: string
   onFrame: (frame: AttachFrame) => void
-  /** Opts into a stored conversation snapshot on attach at cursor zero. */
-  onHistory?: (line: string) => void
+  /** Opts into the stored conversation on attach at cursor zero: one line a record, given
+   * whole once its last line arrived. A later snapshot replaces the earlier one. */
+  onHistory?: (lines: string[]) => void
   onLag?: (lag: AttachLag) => void
   onNotice?: (notice: AttachNotice) => void
   onEnd?: () => void
@@ -127,19 +128,25 @@ export function useRunAttach({
     let attempt = 0
     let endReceived = false
     let unavailable: AttachIOUnavailable | null = null
+    // The stored conversation comes as one history event per record, before every other
+    // event of the attempt: the view folds it once, not once per record.
+    let history: string[] | null = null
+    const flushHistory = () => {
+      const lines = history
+      history = null
+      if (lines && !cancelled) cbRef.current.onHistory?.(lines)
+    }
 
     const handle = (msg: { event: string; data: string }) => {
       if (cancelled) return
       const cb = cbRef.current
+      if (msg.event !== 'history') flushHistory()
       switch (msg.event) {
         case 'history': {
+          history ??= []
           try {
-            const history = JSON.parse(msg.data) as { line?: unknown }
-            if (
-              typeof history.line === 'string' &&
-              history.line.length <= 1 << 20
-            )
-              cb.onHistory?.(history.line)
+            const record = JSON.parse(msg.data) as { line?: unknown }
+            if (typeof record.line === 'string') history.push(record.line)
           } catch {
             /* ignore malformed history without advancing the output cursor */
           }
@@ -207,6 +214,8 @@ export function useRunAttach({
       setIoUnavailable(null)
       while (!cancelled && !endReceived && unavailable === null) {
         setStatus('connecting')
+        // A history cut short by a dropped stream is read again whole on the reconnect.
+        history = null
         try {
           await subscribeStream({
             path: runAttachPath(runRef),
@@ -224,6 +233,7 @@ export function useRunAttach({
             },
             onMessage: handle,
           })
+          flushHistory()
           // Server closed the stream. If it ended cleanly or I/O is absent, stop;
           // otherwise reconnect with the cursor.
           if (cancelled || endReceived || unavailable !== null) break

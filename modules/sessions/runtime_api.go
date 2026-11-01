@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"sort"
@@ -957,14 +956,48 @@ func (m *Module) handleAttachRun(w http.ResponseWriter, r *http.Request, mc api.
 
 	cursor := parseSeqParam(r, "from")
 	before := parseSeqParam(r, "before")
-	if cursor == 0 && r.URL.Query().Get("history") == "1" {
-		line, historyErr := m.conversationHistory(r.Context(), mc.Tenant, rec)
-		if historyErr != nil {
-			lineBytes, _ := json.Marshal(map[string]string{"type": "olivares_notice", "message": historyErr.Error()})
-			line = string(lineBytes)
+	// A tail open says first whether earlier frames are buffered; a page says it last.
+	tail := parseSeqParam(r, "tail")
+	if cursor != 0 || before > 0 {
+		tail = 0
+	}
+	start := func(lr *liveRun) int64 {
+		if tail > 0 {
+			return lr.ring.tailCursor(tail)
 		}
-		if line != "" && writeSSE(rc, w, "history", map[string]string{"line": line}) != nil {
-			return
+		return cursor
+	}
+	// The ring's window is the frames this attach replays. A Claude Code history ends
+	// where the window begins, so the window is fixed before the transcript is read and
+	// kept while the same ring is served.
+	var windowRing *outputRing
+	var windowStart int64
+	historyRead := false
+	if cursor == 0 && r.URL.Query().Get("history") == "1" {
+		if rec.String(colRunProfileDriver) == providerDriverClaude {
+			var window map[string]bool
+			if lr != nil {
+				windowRing, windowStart = lr.ring, start(lr)
+				window = claudeWindow(lr.ring.readFrom(windowStart).frames)
+			}
+			read, historyErr := m.claudeHistory(r.Context(), mc.Tenant, ref, window, func(line []byte) error {
+				return writeSSE(rc, w, "history", map[string]string{"line": string(line)})
+			})
+			if errors.Is(historyErr, errHistoryWrite) {
+				return
+			}
+			if historyErr != nil && writeSSE(rc, w, "history", map[string]string{"line": noticeLine(historyErr.Error())}) != nil {
+				return
+			}
+			historyRead = read
+		} else {
+			line, historyErr := m.conversationHistory(r.Context(), mc.Tenant, rec)
+			if historyErr != nil {
+				line = noticeLine(historyErr.Error())
+			}
+			if line != "" && writeSSE(rc, w, "history", map[string]string{"line": line}) != nil {
+				return
+			}
 		}
 	}
 	lr, releaseView = m.repinLive(mc.Tenant, ref, lr, releaseView)
@@ -987,13 +1020,10 @@ func (m *Module) handleAttachRun(w http.ResponseWriter, r *http.Request, mc api.
 		return
 	}
 
-	// A tail open says first whether earlier frames are buffered; a page says it last.
-	tail := parseSeqParam(r, "tail")
-	if cursor != 0 || before > 0 {
-		tail = 0
-	}
-	if tail > 0 {
-		cursor = lr.ring.tailCursor(tail)
+	if lr.ring == windowRing {
+		cursor = windowStart
+	} else {
+		cursor = start(lr)
 	}
 	ticker := time.NewTicker(heartbeatInterval)
 	defer ticker.Stop()
@@ -1013,7 +1043,9 @@ func (m *Module) handleAttachRun(w http.ResponseWriter, r *http.Request, mc api.
 			}
 		}
 		if tail > 0 {
-			if writeSSE(rc, w, "page", attachPage{Type: "page", Earlier: rd.earlier}) != nil {
+			// After a read transcript the ring's older frames hold no turn the history
+			// did not already show.
+			if writeSSE(rc, w, "page", attachPage{Type: "page", Earlier: rd.earlier && !historyRead}) != nil {
 				return
 			}
 			tail = 0
@@ -1083,12 +1115,22 @@ type attachNotice struct {
 
 // writeSSE marshals v and writes it as a named SSE event.
 func writeSSE(rc *http.ResponseController, w http.ResponseWriter, event string, v any) error {
-	payload, err := json.Marshal(v)
-	if err != nil {
+	// One buffer for the whole event: an output frame may be up to maxOutputLine.
+	var sb strings.Builder
+	sb.WriteString("event: " + event + "\ndata: ")
+	enc := json.NewEncoder(&sb)
+	enc.SetEscapeHTML(false) // an event stream is not HTML: a frame of markup keeps its size
+	if enc.Encode(v) != nil {
 		return nil // skip an unencodable frame rather than break the stream
 	}
-	return writeFrame(rc, w, fmt.Sprintf("event: %s\ndata: %s\n\n", event, payload))
+	sb.WriteString("\n") // Encode ended the data line; the blank line ends the event
+	return writeFrame(rc, w, sb.String())
 }
+
+// MaxAttachEvent is the longest data line the attach stream writes: one output frame
+// of maxOutputLine bytes, each byte at most six once JSON-escaped (\u00XX), and the
+// event fields around it. A client of the stream reads lines up to it.
+const MaxAttachEvent = 6*maxOutputLine + 64<<10
 
 // auditAttach records that a principal attached to a live session (a privileged
 // read of operated I/O). Best-effort: a failed audit logs but never denies the

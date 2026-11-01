@@ -18,10 +18,13 @@ export function OpenInEditor({
   root,
   file,
   line,
+  labelClassName,
 }: {
   root: string
   file: string
   line?: number
+  /** Where the toolbar shows its actions as icons: the label's own classes. */
+  labelClassName?: string
 }) {
   const { t } = useTranslation('shared')
   const editor = useClientSettings((s) => s.editor)
@@ -32,11 +35,12 @@ export function OpenInEditor({
     sshTarget(editorSsh, window.location.hostname),
   )
   if (!href) return null
+  const label = t('openInEditor', { editor: EDITORS[editor].label })
   return (
     <Button asChild variant="ghost" size="sm" className="shrink-0">
-      <a href={href}>
+      <a href={href} title={label}>
         <ExternalLink className="size-3.5" aria-hidden />
-        {t('openInEditor', { editor: EDITORS[editor].label })}
+        <span className={labelClassName}>{label}</span>
       </a>
     </Button>
   )

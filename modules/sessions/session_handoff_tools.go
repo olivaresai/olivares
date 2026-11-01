@@ -473,7 +473,8 @@ func (m *Module) readOpenCodeHandoff(ctx context.Context, tenant model.TenantID,
 
 // collectStdout reads the process's standard output to its end, at most limit bytes,
 // and answers with the process's own verdict: a non-zero exit is a refusal, not a
-// conversation. A line past the pump's bound ends the child and is a record too large.
+// conversation. A line past the pump's bound is a record too large: the pump left it
+// out (oversize_frame.go), so what was read is not the whole conversation.
 func collectStdout(ctx context.Context, proc Process, limit int) ([]byte, error) {
 	var out bytes.Buffer
 	for out.Len() <= limit {
@@ -483,6 +484,9 @@ func collectStdout(ctx context.Context, proc Process, limit int) ([]byte, error)
 		case frame, ok := <-proc.Output():
 			if !ok {
 				return out.Bytes(), waitExit(ctx, proc)
+			}
+			if frame.Stream == streamStdout && bytes.Contains(frame.Data, []byte(oversizeMarker)) {
+				return nil, errHandoffRecordTooLarge
 			}
 			if frame.Stream == streamStdout {
 				out.Write(frame.Data)
@@ -505,10 +509,7 @@ func waitExit(ctx context.Context, proc Process) error {
 		return ctx.Err() // the stop that follows ends the wait
 	case <-done:
 	}
-	switch {
-	case errors.Is(err, ErrOutputLineTooLong):
-		return errHandoffRecordTooLarge
-	case err != nil || code != 0:
+	if err != nil || code != 0 {
 		return errOpenCodeExport
 	}
 	return nil

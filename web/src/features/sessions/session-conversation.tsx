@@ -75,7 +75,10 @@ import {
 import { useConversationTasks } from './use-conversation-tasks'
 import './i18n'
 
+/** Past this many frames read here, the oldest SETTLE_FRAMES join the folded base the stored conversation
+ * starts: a frame then folds again only the frames after them, and no turn ever leaves the view. */
 const MAX_FRAMES = 5000
+const SETTLE_FRAMES = 2500
 /** A session opens on its last this many frames and reads earlier ones this many at a time: the engine
  * buffers up to 4096 frames or 8 MiB, and replaying all of them at every open is what a page avoids. */
 const PAGE_FRAMES = 500
@@ -138,8 +141,14 @@ function ConversationBody({
 }) {
   const { t } = useTranslation('sessions')
   const { t: tShared } = useTranslation('shared')
-  const [frames, setFrames] = useState<AttachFrame[]>([])
-  const [history, setHistory] = useState<string | null>(null)
+  // The frames read here: the settled ones, folded once into the base, and the newest, folded on every frame.
+  const [read, setRead] = useState<{
+    settled: AttachFrame[]
+    frames: AttachFrame[]
+  }>({ settled: [], frames: [] })
+  const { settled, frames } = read
+  // The stored conversation before the frames read here: every earlier turn, from the tool's own record.
+  const [history, setHistory] = useState<string[]>([])
   const [dropped, setDropped] = useState(0)
   // Whether the engine buffers frames before the first one here, and a page being read or failed.
   const [earlier, setEarlier] = useState(false)
@@ -204,13 +213,14 @@ function ConversationBody({
   )
   const onFrame = useCallback(
     (f: AttachFrame) => {
-      setFrames((prev) => {
-        const next =
-          prev.length >= MAX_FRAMES
-            ? prev.slice(prev.length - MAX_FRAMES + 1)
-            : prev
-        return [...next, f]
-      })
+      setRead(({ settled, frames }) =>
+        frames.length >= MAX_FRAMES
+          ? {
+              settled: [...settled, ...frames.slice(0, SETTLE_FRAMES)],
+              frames: [...frames.slice(SETTLE_FRAMES), f],
+            }
+          : { settled, frames: [...frames, f] },
+      )
       if (activityTimer.current) return
       activityTimer.current = setTimeout(() => {
         activityTimer.current = null
@@ -240,14 +250,29 @@ function ConversationBody({
   // Protocol bookkeeping (handshakes, replies, lifecycle notifications) is no row: it read
   // "Protocol frames: N" between every turn and told nothing. Every frame stays one command
   // away under "In a terminal" (`session follow -o json`); a protocol error is still shown.
+  // A long session's history is thousands of records: it is folded once, and each frame on top of it.
+  // ponytail: a fold copies the item list per line (quadratic); fine to some ten thousand records, fold in
+  // place when sessions longer than that open slowly.
+  const stored = useMemo(() => mapConversationFrames(history), [history])
+  const restored = useMemo(
+    () =>
+      mapConversationFrames(
+        settled.map((f) => f.line),
+        settled.map((f) => f.at),
+        settled.map((f) => f.seq),
+        stored,
+      ),
+    [settled, stored],
+  )
   const items = useMemo(
     () =>
       mapConversationFrames(
-        [...(history ? [history] : []), ...frames.map((f) => f.line)],
-        [...(history ? [undefined] : []), ...frames.map((f) => f.at)],
-        [...(history ? [undefined] : []), ...frames.map((f) => f.seq)],
+        frames.map((f) => f.line),
+        frames.map((f) => f.at),
+        frames.map((f) => f.seq),
+        restored,
       ).filter((item) => item.systemKind !== 'protocol' && !isQuiet(item)),
-    [frames, history],
+    [frames, restored],
   )
   // The first message the console sent, until the tool shows it itself.
   const sent = useRunSentTurns(run.run_ref)
@@ -295,11 +320,10 @@ function ConversationBody({
     if (anchorRef.current === null || !el) return
     el.scrollTop = el.scrollHeight - anchorRef.current
     anchorRef.current = null
-  }, [frames])
-  const firstSeq = frames[0]?.seq
-  const room = MAX_FRAMES - frames.length
+  }, [read])
+  const firstSeq = (settled[0] ?? frames[0])?.seq
   const showEarlier = async () => {
-    if (firstSeq === undefined || room <= 0) return
+    if (firstSeq === undefined) return
     pageRef.current?.abort()
     const controller = new AbortController()
     pageRef.current = controller
@@ -310,17 +334,23 @@ function ConversationBody({
         runRef,
         token: useSessionStore.getState().csrfToken,
         tenant: useTenantStore.getState().activeTenant,
-        from: Math.max(1, firstSeq - Math.min(PAGE_FRAMES, room)),
+        from: Math.max(1, firstSeq - PAGE_FRAMES),
         before: firstSeq,
         signal: controller.signal,
       })
       if (controller.signal.aborted) return
       const el = scrollRef.current
       anchorRef.current = el ? el.scrollHeight - el.scrollTop : null
-      setFrames((prev) => [
-        ...page.frames.filter((f) => f.seq < (prev[0]?.seq ?? Infinity)),
-        ...prev,
-      ])
+      // Above every frame read here: a page is settled at once.
+      setRead(({ settled, frames }) => ({
+        settled: [
+          ...page.frames.filter(
+            (f) => f.seq < ((settled[0] ?? frames[0])?.seq ?? Infinity),
+          ),
+          ...settled,
+        ],
+        frames,
+      }))
       setEarlier(page.earlier)
       setPaging(null)
     } catch {
@@ -533,7 +563,7 @@ function ConversationBody({
             {/* A LINK THAT DROPPED OR IS COMING UP SAYS SO, ONCE, QUIETLY, while the turns
               already read stay on the page. Without it a stale transcript reads as a
               finished one. */}
-            {earlier && room > 0 ? (
+            {earlier ? (
               <div className="mb-2 flex flex-col items-center gap-1">
                 <Button
                   variant="ghost"

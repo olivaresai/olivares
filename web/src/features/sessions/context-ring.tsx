@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// How full a session's context is, as a ring beside send. The figures
+// How full a session's context is, as a filled wedge beside send. The figures
 // are the side pane's Activity: the same query, so an open pane asks once. A tool that
 // reports no window draws nothing.
 import { useQuery } from '@tanstack/react-query'
@@ -15,7 +15,10 @@ import { formatInt, formatPercent } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import './i18n'
 
-const RADIUS = 7
+// A WEDGE, NEVER AN ARC: a short round-capped arc on a faint track is the shape of a
+// loading spinner, so an ended session at 10% read as still loading. A stroke as wide as
+// the circle's diameter, centred on half the radius, fills the sector from the centre.
+const RADIUS = 4
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS
 /** From here the ring warns: the tool compacts or stops soon. */
 const NEARLY_FULL = 80
@@ -61,20 +64,18 @@ export function ContextRing({ run }: { run: RunDTO }) {
         <circle
           cx="9"
           cy="9"
-          r={RADIUS}
-          fill="none"
-          stroke="currentColor"
-          strokeOpacity={0.25}
-          strokeWidth={2}
+          r={2 * RADIUS}
+          fill="currentColor"
+          fillOpacity={0.25}
         />
         <circle
+          data-part="value"
           cx="9"
           cy="9"
           r={RADIUS}
           fill="none"
           stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
+          strokeWidth={2 * RADIUS}
           strokeDasharray={CIRCUMFERENCE}
           strokeDashoffset={CIRCUMFERENCE * (1 - percent / 100)}
         />

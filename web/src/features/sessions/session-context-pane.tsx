@@ -27,7 +27,6 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { PathText } from '@/components/ui/path-text'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Segmented } from '@/components/ui/segmented'
 import { Compass } from 'lucide-react'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { sourceItemLabel } from './source-item'
@@ -53,6 +52,7 @@ import type { ConversationItem } from './conversation-frames'
 import { primaryRun, type UnifiedSession } from './provenance'
 import type { EvidenceBlock } from './session-address'
 import { hasThread } from './has-thread'
+import { PaneTabs } from './pane-tabs'
 import { SessionFacts } from './session-facts'
 import { SessionOverview } from './session-overview'
 import { RefChip } from './ref-chip'
@@ -572,18 +572,16 @@ export function SessionContextPane({
           files and task list), Changes (what the session changed, and publishing it) and Files
           (the folder it works in), Preview (the app it serves on a local port), then whatever
           a build registers (a terminal). A build with none shows exactly these. */}
-      <div className="-mx-1 overflow-x-auto px-1 pb-0.5">
-        <Segmented
-          size="sm"
-          aria-label={t('context.panels')}
-          options={options}
-          value={tab}
-          onValueChange={(value) => {
-            setLocalTab(value)
-            onPanel?.(value)
-          }}
-        />
-      </div>
+      <PaneTabs
+        label={t('context.panels')}
+        moreLabel={t('context.morePanels')}
+        options={options}
+        value={tab}
+        onValueChange={(value) => {
+          setLocalTab(value)
+          onPanel?.(value)
+        }}
+      />
       {extension ? (
         <extension.Component key={extension.id} session={panelSession} />
       ) : null}

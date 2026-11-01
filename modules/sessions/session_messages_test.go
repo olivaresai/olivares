@@ -375,13 +375,14 @@ func TestMessages_AreRedactedLikeTheStream(t *testing.T) {
 	}
 }
 
-// A record the tool is still writing waits for the next read, and one past the bound
-// is skipped without losing the messages after it.
-func TestMessages_PartialAndOversizedRecords(t *testing.T) {
-	huge := `{"type":"user","message":{"content":"` + strings.Repeat("x", activityLineMax+10) + `"}}` + "\n"
-	f := messagesFixture(t, huge+messagesTranscript+`{"type":"user","timestamp":"2026-10-15T10:00:00Z","message":{"content":"being wri`)
+// A record the tool is still writing waits for the next read, and a record as long
+// as a message the tool may send is read whole with the messages after it.
+func TestMessages_PartialAndLargeRecords(t *testing.T) {
+	// 9 MiB: over the old 8 MiB record bound, under a provider's request size.
+	large := `{"type":"user","message":{"content":"` + strings.Repeat("x", 9<<20) + `"}}` + "\n"
+	f := messagesFixture(t, large+messagesTranscript+`{"type":"user","timestamp":"2026-10-15T10:00:00Z","message":{"content":"being wri`)
 	got, r := f.messages(t, "")
-	if r.code != http.StatusOK || got.Total != 3 || got.Unreadable != 1 {
+	if r.code != http.StatusOK || got.Total != 4 || got.Unreadable != 0 {
 		t.Fatalf("messages = %s", r.raw)
 	}
 }

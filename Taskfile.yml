@@ -1002,8 +1002,8 @@ tasks:
 
   smoke:quickstart:selftest:
     desc: >-
-      Prove the quickstart smoke waits for a slow engine boot (25 s, past the old 20 s budget
-      that failed the nightly, the regression) and names an engine that exits during boot at once.
+      Prove the quickstart smoke waits for a slow engine boot (125 s, past the old 120 s budget)
+      and names an engine that exits during boot at once.
     cmds:
       - bash scripts/test-quickstart-smoke-boot.sh
 

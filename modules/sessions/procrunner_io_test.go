@@ -10,6 +10,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -1083,35 +1085,63 @@ func TestProcProcessTheReapingVerdictSeparatesLostOutputFromAnUnstoppedChild(t *
 	}
 }
 
+// An over-long line is never delivered as itself, nor as a cut prefix that could read
+// as another record: it becomes one compact frame and the tool goes on.
 func TestProcRunnerOversizedOutputCannotBecomeAProtocolFrame(t *testing.T) {
-	for _, stream := range []string{"stdout"} {
-		t.Run(stream, func(t *testing.T) {
-			script := "#!/bin/sh\nprintf '%s\\n' '" + `{"type":"assistant"}` + strings.Repeat(" ", 1024) + "'"
-			if stream == "stderr" {
-				script += " >&2"
+	record := `{"type":"assistant"}` + strings.Repeat(" ", 1024)
+	script := "#!/bin/sh\nprintf '%s\\n' '" + record + "'\nprintf '%s\\n' '{\"type\":\"result\"}'\nexec sleep 300\n"
+	proc, err := (&procRunner{lineCap: 32}).Launch(context.Background(), LaunchSpec{
+		Program: writeOwnedChild(t, script), WaitDelay: 50 * time.Millisecond, Env: raceGuardEnv,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := proc.(*procProcess)
+	t.Cleanup(func() { _ = p.Stop(context.Background()) })
+	sink := drainOutput(p)
+	waitFor(t, "the line after the long one", func() bool { _, ok := sink.find(`{"type":"result"}`); return ok })
+	sum := sha256.Sum256([]byte(record))
+	want := `{"type":"assistant","olivares_oversize":{"bytes":1044,"sha256":"` + hex.EncodeToString(sum[:]) + `"}}`
+	if frames := sink.all(); len(frames) != 2 || frames[0] != want {
+		t.Fatalf("frames = %q, want the compact frame %s then the next line", frames, want)
+	}
+	if p.finishedWithin(100 * time.Millisecond) {
+		t.Fatal("the long line ended the tool")
+	}
+}
+
+// The frames a stalled consumer has not taken are bounded in bytes, not only in
+// count: the pump stops and the tool waits on its pipe. Nothing is lost on the way.
+func TestProcRunnerQueuedOutputStaysWithinItsByteBudget(t *testing.T) {
+	const line, budget, lines = 1 << 20, 8 << 20, 300
+	counter := filepath.Join(t.TempDir(), "written")
+	script := "#!/bin/sh\ni=0\nwhile [ $i -lt " + strconv.Itoa(lines) + " ]; do head -c " + strconv.Itoa(line) +
+		" /dev/zero | tr '\\0' x; echo; i=$((i+1)); echo $i > " + counter + "; done\nexec sleep 300\n"
+	proc, err := (&procRunner{lineCap: 2 * line, queueBytes: budget}).Launch(context.Background(), LaunchSpec{
+		Program: writeOwnedChild(t, script), WaitDelay: 50 * time.Millisecond, Env: raceGuardEnv,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := proc.(*procProcess)
+	t.Cleanup(func() { _ = p.Stop(context.Background()) })
+	written := func() int { b, _ := os.ReadFile(counter); n, _ := strconv.Atoi(strings.TrimSpace(string(b))); return n }
+	last := -1
+	for i := 0; i < 100 && written() != last; i++ { // until the tool stops: it waits on its pipe
+		last = written()
+		time.Sleep(200 * time.Millisecond)
+	}
+	if queued := len(p.out); queued > budget/line || last > budget/line+2 {
+		t.Fatalf("a stalled consumer let %d frames queue and the tool write %d lines; the budget holds %d", queued, last, budget/line)
+	}
+	for got := 0; got < lines; got++ {
+		select {
+		case f := <-p.Output():
+			if len(f.Data) != line {
+				t.Fatalf("frame %d has %d bytes, want %d", got, len(f.Data), line)
 			}
-			proc, err := (&procRunner{lineCap: 32}).Launch(context.Background(), LaunchSpec{
-				Program: writeOwnedChild(t, script+"\nexec sleep 300\n"), WaitDelay: 50 * time.Millisecond, Env: raceGuardEnv,
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			p := proc.(*procProcess)
-			t.Cleanup(func() { _ = p.Stop(context.Background()) })
-			sink := drainOutput(p)
-			if !p.finishedWithin(2 * time.Second) {
-				t.Fatal("oversized output did not retire")
-			}
-			<-sink.closed
-			if frames := sink.all(); len(frames) != 0 {
-				t.Fatalf("oversized record became %d output frame(s)", len(frames))
-			}
-			if _, err := p.Wait(); !errors.Is(err, ErrOutputLineTooLong) || !errors.Is(err, ErrOutputAbandoned) {
-				t.Fatalf("oversized output classification = %v", err)
-			}
-			if err := p.Stop(context.Background()); !errors.Is(err, ErrOutputLineTooLong) || strings.Contains(err.Error(), "outside its group") {
-				t.Fatalf("Stop lost the framing cause or invented a descriptor holder: %v", err)
-			}
-		})
+		case <-time.After(10 * time.Second):
+			t.Fatalf("only %d of %d lines arrived", got, lines)
+		}
 	}
 }

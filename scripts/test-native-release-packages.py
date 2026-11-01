@@ -185,9 +185,15 @@ class NativeReleaseVersions(unittest.TestCase):
                 self.assertEqual(installed.stat().st_mode & 0o777, 0o644)
                 self.assertEqual((extracted / 'usr/share/doc/olivares/NOTICE').read_bytes(),
                                  b'Generated dependency attribution\n')
-                hook = extracted / 'usr/libexec/olivares-container-hook'
-                self.assertEqual(hook.read_bytes(), Path('/bin/true').read_bytes())
-                self.assertEqual(hook.stat().st_mode & 0o777, 0o755)
+                # The container hook is a second copy of the engine kept for the SELinux
+                # policy's own label. Only the rpm ships it: a copy in every package doubled
+                # the deb, the apk and the Arch package.
+                hook = '/usr/libexec/olivares-container-hook'
+                self.assertFalse((extracted / hook.lstrip('/')).exists())
+                self.assertEqual(payload_mode_owner(dist / f'olivares_26.1100_linux_{arch}.rpm', hook), (0o755, 'root'))
+                if arch == 'amd64':  # the Arch package is built for amd64 only
+                    with arch_tar(dist / 'olivares_26.1100_linux_amd64.pkg.tar.zst') as bundle:
+                        self.assertNotIn(hook.lstrip('/'), bundle.getnames())
             self.assertIn(b'RestartSec=5s', (project / 'packaging/systemd/olivares.service').read_bytes())
             before = {path.name: packages.digest_file(path) for path in dist.iterdir()}
             template.write_text(template.read_text() + '@UNRENDERED@\n')

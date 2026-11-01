@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
+	"github.com/olivaresai/olivares/modules/sessions"
 )
 
 // sessionview.go renders a session's output frames for a person, by the rules of the
@@ -639,7 +640,7 @@ func truncateSummary(s string) string {
 // data until fn returns false or the body ends.
 func scanSSE(body io.Reader, fn func(event, data string) bool) error {
 	sc := bufio.NewScanner(body)
-	sc.Buffer(make([]byte, 0, 64*1024), 4<<20)
+	sc.Buffer(make([]byte, 0, 64*1024), sessions.MaxAttachEvent)
 	event := ""
 	for sc.Scan() {
 		line := sc.Text()

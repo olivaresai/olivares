@@ -436,45 +436,6 @@ func TestSessionGuardEndsWhatACancelledLaunchLeftRunning(t *testing.T) {
 	}
 }
 
-// A tool that writes a line past the output ceiling is ended, and what it left
-// running with it: the pump's forced end goes through the guard like a stop's.
-func TestSessionGuardEndsWhatAnOversizedLineLeftRunning(t *testing.T) {
-	if _, err := exec.LookPath("setsid"); err != nil {
-		t.Skip("setsid(1) is not installed here")
-	}
-	for name, runner := range map[string]Runner{"pipes": &procRunner{lineCap: 64}, "pty": &procRunner{lineCap: 64, usePTY: true}} {
-		t.Run(name, func(t *testing.T) {
-			dir := t.TempDir()
-			// The long line waits for the file the test writes once it has seen the
-			// background command run, so only the forced end can have stopped it.
-			proc, err := runner.Launch(context.Background(), LaunchSpec{Dir: dir, Program: "/bin/sh", WaitDelay: 200 * time.Millisecond,
-				Args: []string{"-c", `setsid sleep 600 </dev/null >/dev/null 2>&1 & echo $! > left; while [ ! -e go ]; do sleep 0.05; done; head -c 4096 /dev/zero | tr '\0' x; echo; exec sleep 600`}})
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() { _ = proc.Stop(context.Background()) })
-			go func() {
-				for range proc.Output() {
-				}
-			}()
-			left := waitForPID(t, filepath.Join(dir, "left"))
-			defer func() { _ = syscall.Kill(left, syscall.SIGKILL) }() // never leave the sleep behind
-			if !processRunning(left) {
-				t.Fatalf("the background command %d never ran", left)
-			}
-			if err := os.WriteFile(filepath.Join(dir, "go"), nil, 0o600); err != nil { // the tool may go on now
-				t.Fatal(err)
-			}
-			if !endsWithin(left, 5*time.Second) {
-				t.Errorf("process %d the session left running in the background survived the oversized line", left)
-			}
-			if _, err := proc.Wait(); !errors.Is(err, ErrOutputLineTooLong) {
-				t.Errorf("wait error = %v, want the oversized-line report", err)
-			}
-		})
-	}
-}
-
 // A tool that ends by itself while the engine lives keeps its own exit code, and
 // what it left running in the background still ends with it: the guard kills the
 // tree without turning the status into its own.

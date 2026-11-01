@@ -14,8 +14,8 @@ import (
 // Code re-emits the user message with its base64 (--replay-user-messages, measured on
 // 2.1.299 with a stub API) and Codex reports it as a userMessage item with a data URL.
 // Carried through the output stream, that echo would
-//   - end the session when it is over the one-line limit (maxOutputLine, 1 MiB: the
-//     pump treats a longer line as a runaway and kills the process group), and
+//   - lose its text when it is over the one-line limit (maxOutputLine: the pump
+//     leaves any longer line out, oversize_frame.go), and
 //   - push the image into the ring, the recorder and every attach client, which keep
 //     frames and not files.
 //
@@ -70,7 +70,8 @@ func isCodexImageItem(head []byte) bool {
 }
 
 // oversizedImageEcho recognizes, from the first bytes of a line over the limit, the
-// echo of a message that carried an image. Any other over-long line stays terminal.
+// echo of a message that carried an image. Any other over-long line gets the
+// generic compact frame (oversize_frame.go).
 func oversizedImageEcho(prefix []byte) []byte {
 	head := prefix[:min(len(prefix), 4<<10)]
 	switch {

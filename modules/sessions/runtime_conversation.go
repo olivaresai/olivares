@@ -5,9 +5,13 @@
 package sessions
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"time"
 
 	"github.com/olivaresai/olivares/core/api"
@@ -43,7 +47,7 @@ func (m *Module) conversationHistory(ctx context.Context, tenant model.TenantID,
 	args := append([]string{"-c", "features.api_key_model_discovery=false"}, NewCodexDriver().LaunchArgs(DriverLaunch{})...)
 	err = m.withStoredReader(ctx, tenant, rec, home, args, 15*time.Second,
 		func(ctx context.Context, proc Process) (err error) {
-			line, err = readCodexConversation(ctx, proc, threadID)
+			line, err = readCodexConversation(ctx, proc, threadID, maxOutputLine)
 			return err
 		})
 	switch {
@@ -60,6 +64,189 @@ func (m *Module) conversationHistory(ctx context.Context, tenant model.TenantID,
 		return "", errors.New("stored conversation provider home authorization changed during the read")
 	}
 	return line, nil
+}
+
+var (
+	// errHistoryWrite is a history the client stopped reading: the attach ends.
+	errHistoryWrite = errors.New("the history could not be written to the client")
+	// The transcript on disk is the tool's own, unredacted; the activity's rules decide
+	// whether it may be read (session_activity.go), and these say so in the view.
+	errHistorySecretBearing = errors.New("this session was given vault secrets, a repository credential or a managed credential; " +
+		"its saved conversation cannot be proven free of them, so only its live output is shown")
+	errHistoryRegistryToken = errors.New("this session used a package registry token; " +
+		"its saved conversation cannot be proven free of one an earlier launch printed, so only its live output is shown")
+	errHistoryMissing    = errors.New("the saved conversation was not found in the session's account home; only its live output is shown")
+	errHistoryUnreadable = errors.New("the saved conversation could not be read; live output is still available while the session is running")
+)
+
+// noticeLine is the engine's own notice as one line of the conversation.
+func noticeLine(message string) string {
+	b, _ := json.Marshal(map[string]string{"type": "olivares_notice", "message": message})
+	return string(b)
+}
+
+// claudeWindow is the uuids of the messages among frames. Claude Code prints a message
+// with the uuid its transcript stores it under (measured on 2.1.316).
+func claudeWindow(frames []seqFrame) map[string]bool {
+	ids := map[string]bool{}
+	for _, f := range frames {
+		var frame struct {
+			UUID string `json:"uuid"`
+		}
+		if bytes.Contains(f.Data, []byte(`"uuid"`)) && json.Unmarshal(f.Data, &frame) == nil && frame.UUID != "" {
+			ids[frame.UUID] = true
+		}
+	}
+	return ids
+}
+
+// claudeHistory sends through emit, one line each, the messages of a Claude Code
+// session's transcript (the tool's store of record) that precede window, the messages
+// the live ring will send itself. A turn the ring evicted (defaultRingFrames,
+// defaultRingBytes), or that a restarted engine never held, is read from there. The
+// transcript is read under the activity's rules (a proven home, no secret it cannot
+// withhold) and through the same redactor. read says the transcript was read to the
+// window, so the ring's older frames are not offered again. The error is a reason the
+// view shows, or errHistoryWrite.
+func (m *Module) claudeHistory(ctx context.Context, tenant model.TenantID, ref string, window map[string]bool,
+	emit func(line []byte) error) (read bool, err error) {
+	rec, tr, redact, live, err := m.activitySource(ctx, tenant, ref, false)
+	switch {
+	case errors.Is(err, errNoClaudeSessionID):
+		return false, nil
+	case errors.Is(err, errClaudeTranscriptMissing):
+		// A running tool may not have written it yet; a stopped one should have.
+		if live && activityRunState(rec.String(colState)) {
+			return false, nil
+		}
+		return false, errHistoryMissing
+	case errors.Is(err, errActivitySecretBearing):
+		return false, errHistorySecretBearing
+	case errors.Is(err, errActivityRegistryToken):
+		return false, errHistoryRegistryToken
+	case err != nil:
+		return false, errHistoryUnreadable
+	}
+	defer tr.Close()
+	withheld := 0
+	done := func() (bool, error) {
+		if withheld > 0 && emit([]byte(noticeLine(fmt.Sprintf(
+			"%d records of the saved conversation are not shown: they could not be proven free of the session's secrets", withheld)))) != nil {
+			return false, errHistoryWrite
+		}
+		return true, nil
+	}
+	br := bufio.NewReaderSize(io.LimitReader(tr.f, tr.info.Size()), 64<<10)
+	for {
+		if ctx.Err() != nil {
+			return false, errHistoryWrite
+		}
+		line, tooLong, rerr := readRecord(br, activityLineMax)
+		end := errors.Is(rerr, io.EOF)
+		if rerr != nil && !end {
+			return false, errHistoryUnreadable
+		}
+		// A last record without its newline is still being written: the ring has it.
+		if tooLong || len(line) > 0 && (!end || json.Valid(line)) {
+			var out []byte
+			var stop bool
+			if redacted := redact.apply(line); len(redacted) == 0 && !tooLong {
+				withheld++
+			} else {
+				out, stop = claudeHistoryLine(redacted, tooLong, window)
+			}
+			if stop {
+				return done()
+			}
+			if out != nil && emit(out) != nil {
+				return false, errHistoryWrite
+			}
+		}
+		if end {
+			return done()
+		}
+	}
+}
+
+// claudeHistoryLine is one transcript record as the view reads a frame: a message of
+// the main conversation with its uuid, its time and the tool's result beside it,
+// without the folder, branch, version and account the record also carries, and without
+// the bytes of an inline image (the attachment route serves those). Other records give
+// nil. A record that cannot be shown whole, within the console's one-line bound
+// (maxOutputLine), is a notice in its place. stop is the first message of window.
+func claudeHistoryLine(line []byte, tooLong bool, window map[string]bool) (out []byte, stop bool) {
+	if tooLong {
+		return []byte(noticeLine(fmt.Sprintf("a record of the saved conversation is not shown: it is over the %d bytes the view reads", activityLineMax))), false
+	}
+	var in struct {
+		Type             string          `json:"type"`
+		UUID             string          `json:"uuid"`
+		Timestamp        string          `json:"timestamp"`
+		IsSidechain      bool            `json:"isSidechain"`
+		IsMeta           bool            `json:"isMeta"`
+		IsCompactSummary bool            `json:"isCompactSummary"`
+		Message          json.RawMessage `json:"message"`
+		ToolUseResult    json.RawMessage `json:"toolUseResult"`
+	}
+	if json.Unmarshal(line, &in) != nil {
+		return []byte(noticeLine("a record of the saved conversation could not be read")), false
+	}
+	if in.UUID != "" && window[in.UUID] {
+		return nil, true
+	}
+	if (in.Type != messageRoleUser && in.Type != messageRoleAssistant) || in.IsSidechain || in.IsMeta || in.IsCompactSummary || len(in.Message) == 0 {
+		return nil, false
+	}
+	message, err := dropInlineImages(in.Message)
+	if err == nil {
+		in.ToolUseResult, err = dropInlineImages(in.ToolUseResult)
+	}
+	if err != nil {
+		return []byte(noticeLine("a record of the saved conversation could not be read")), false
+	}
+	out, err = json.Marshal(struct {
+		Type          string          `json:"type"`
+		UUID          string          `json:"uuid,omitempty"`
+		Timestamp     string          `json:"timestamp,omitempty"`
+		Message       json.RawMessage `json:"message"`
+		ToolUseResult json.RawMessage `json:"toolUseResult,omitempty"`
+	}{in.Type, in.UUID, in.Timestamp, message, in.ToolUseResult})
+	if err != nil || len(out) > maxOutputLine {
+		return []byte(noticeLine(fmt.Sprintf("a message of the saved conversation is not shown: it is %d bytes, over the %d the view shows", len(out), maxOutputLine))), false
+	}
+	return out, false
+}
+
+// dropInlineImages removes the payload of every base64 source in raw (Claude's image
+// and document blocks), keeping its media type: the view says an image was there.
+func dropInlineImages(raw json.RawMessage) (json.RawMessage, error) {
+	if !bytes.Contains(raw, []byte(`"base64"`)) {
+		return raw, nil
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return nil, err
+	}
+	var walk func(any)
+	walk = func(v any) {
+		switch t := v.(type) {
+		case map[string]any:
+			if t["type"] == "base64" {
+				delete(t, "data")
+			}
+			for _, c := range t {
+				walk(c)
+			}
+		case []any:
+			for _, c := range t {
+				walk(c)
+			}
+		}
+	}
+	walk(v)
+	return json.Marshal(v)
 }
 
 var (
@@ -142,7 +329,9 @@ func (m *Module) withStoredReader(ctx context.Context, tenant model.TenantID, re
 	return read(ctx, proc)
 }
 
-func readCodexConversation(ctx context.Context, proc Process, threadID string) (string, error) {
+// readCodexConversation reads the stored conversation threadID, at most limit bytes
+// as Codex sends it and as the console gets it.
+func readCodexConversation(ctx context.Context, proc Process, threadID string, limit int) (string, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	conn := newRPCConn(proc.Send, false)
 	done := make(chan struct{})
@@ -184,7 +373,7 @@ func readCodexConversation(ctx context.Context, proc Process, threadID string) (
 			Turns []json.RawMessage `json:"turns"`
 		} `json:"thread"`
 	}
-	if len(raw) > maxOutputLine || json.Unmarshal(raw, &response) != nil || response.Thread.ID != threadID || response.Thread.ParentThreadID != nil || response.Thread.AgentRole != nil || response.Thread.Turns == nil {
+	if len(raw) > limit || json.Unmarshal(raw, &response) != nil || response.Thread.ID != threadID || response.Thread.ParentThreadID != nil || response.Thread.AgentRole != nil || response.Thread.Turns == nil {
 		return "", errors.New("invalid stored root conversation")
 	}
 	for _, rawTurn := range response.Thread.Turns {
@@ -204,7 +393,7 @@ func readCodexConversation(ctx context.Context, proc Process, threadID string) (
 		ThreadID string            `json:"thread_id"`
 		Turns    []json.RawMessage `json:"turns"`
 	}{"olivares_conversation", threadID, response.Thread.Turns})
-	if len(data) > maxOutputLine {
+	if len(data) > limit {
 		return "", errors.New("stored conversation exceeded its display response bound")
 	}
 	return string(data), err

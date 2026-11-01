@@ -314,7 +314,7 @@ function LineCommentForm({
                 side: e.target.value as CommentPlace['side'],
               })
             }
-            className="h-9 rounded-md border border-border-strong bg-surface px-2 text-caption text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-9 rounded-md border border-ctl-border bg-surface px-2 text-caption text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="modified">{t('branchChanges.modified')}</option>
             <option value="original">{t('branchChanges.original')}</option>

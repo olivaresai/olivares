@@ -52,7 +52,7 @@ version you know is there and the guards stay armed:
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.5
+olivares upgrade --check --current-version 0.6
 ```
 <!-- /release -->
 

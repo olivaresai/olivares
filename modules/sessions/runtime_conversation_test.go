@@ -158,6 +158,10 @@ func (p *conversationPeer) Send(_ context.Context, line []byte) error {
 	return nil
 }
 
+// conversationTestLimit stands for the reader's limit (maxOutputLine in the product),
+// which is too big to write past here.
+const conversationTestLimit = 1 << 20
+
 func TestCodexConversationReaderRefusesUnprovenOrPartialHistory(t *testing.T) {
 	for _, test := range []struct {
 		name    string
@@ -170,12 +174,12 @@ func TestCodexConversationReaderRefusesUnprovenOrPartialHistory(t *testing.T) {
 		{"agent role", map[string]any{"id": "root", "agentRole": "worker", "turns": []any{}}, true},
 		{"no turns", map[string]any{"id": "root"}, true},
 		{"summary only", map[string]any{"id": "root", "turns": []any{map[string]any{"id": "turn", "items": []any{}, "itemsView": "summary"}}}, true},
-		{"oversize", map[string]any{"id": "root", "turns": []any{}, "extra": strings.Repeat("x", maxOutputLine)}, true},
-		{"HTML expansion", map[string]any{"id": "root", "turns": []any{map[string]any{"id": "turn", "items": []any{map[string]any{"type": "agentMessage", "text": strings.Repeat("<", maxOutputLine/5)}}}}}, true},
+		{"oversize", map[string]any{"id": "root", "turns": []any{}, "extra": strings.Repeat("x", conversationTestLimit)}, true},
+		{"HTML expansion", map[string]any{"id": "root", "turns": []any{map[string]any{"id": "turn", "items": []any{map[string]any{"type": "agentMessage", "text": strings.Repeat("<", conversationTestLimit/5)}}}}}, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			peer := &conversationPeer{fakeProc: &fakeProc{out: make(chan OutputFrame, 4), stopped: make(chan struct{})}, t: t, thread: test.thread}
-			line, err := readCodexConversation(t.Context(), peer, "root")
+			line, err := readCodexConversation(t.Context(), peer, "root", conversationTestLimit)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("reader err=%v; want error=%v", err, test.wantErr)
 			}
