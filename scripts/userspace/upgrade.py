@@ -79,7 +79,7 @@ def snapshot_rows(tables):
         entries = {}
         for row in rows:
             # These timestamps/counters are engine-maintained, not user settings.
-            ignored = {'updated_at', 'version'} - set(keys)
+            ignored = {'updated_at', 'version', 'last_used_at'} - set(keys)
             if table == 'leader_epoch':
                 ignored |= {'epoch', 'holder', 'acquired_at'}
             # Auth/read requests append audit events; the ledger rows remain checked.
