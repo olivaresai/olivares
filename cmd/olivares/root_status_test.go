@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -67,6 +68,85 @@ func TestBareOlivaresSignedInNamesTheNextStep(t *testing.T) {
 			t.Fatalf("missing %q in\n%s", want, out)
 		}
 	}
+}
+
+// A probe that fails says why, and names the command that fixes that case: an engine
+// the CLI cannot trust (the CA lives in a container's data volume, not on this host)
+// is not an engine that is down (#3861).
+func TestRootStatusNamesWhyTheEngineDoesNotAnswer(t *testing.T) {
+	stop := make(chan struct{})
+	hang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-stop:
+		case <-r.Context().Done():
+		}
+	}))
+	defer hang.Close()
+	defer close(stop)
+	tls := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	defer tls.Close()
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	defer up.Close()
+	down := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	downURL := down.URL
+	down.Close()
+
+	for _, tc := range []struct {
+		name, server, reason, next string
+		reachable                  bool
+	}{
+		{"certificate not trusted", tls.URL, "certificate not trusted", "docker exec -it olivares olivares ui", false},
+		{"engine stopped", downURL, "connection refused", "olivares doctor", false},
+		{"no answer in time", hang.URL, "no answer in 2 s", "olivares doctor", false},
+		{"running", up.URL, "", "olivares login", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			config := filepath.Join(t.TempDir(), "config.yaml")
+			t.Setenv(cliConfigOverrideEnv, config)
+			t.Setenv("OLIVARES_DATA_DIR", t.TempDir())
+			t.Setenv("OLIVARES_SERVER_URL", "")
+			if err := writeCLIConfig(config, cliConfig{CurrentContext: "lab", Contexts: []cliContext{{
+				Name: "lab", Server: tc.server,
+			}}}); err != nil {
+				t.Fatal(err)
+			}
+			report := rootStatus(context.Background())
+			if report.Reachable != tc.reachable || report.Reason != tc.reason || report.Next != tc.next {
+				t.Fatalf("rootStatus = reachable %v, reason %q, next %q; want %v, %q, %q",
+					report.Reachable, report.Reason, report.Next, tc.reachable, tc.reason, tc.next)
+			}
+			if footer := mainMenuFrame(report).Footer; tc.reason != "" && !strings.Contains(footer, "("+tc.reason+")") {
+				t.Fatalf("menu footer = %q, want the reason", footer)
+			}
+			out, _, err := execRoot(t, []string{}...)
+			if err != nil {
+				t.Fatalf("olivares: %v", err)
+			}
+			want := tc.server + " (running)"
+			if tc.reason != "" {
+				want = tc.server + " (" + tc.reason + ")"
+			}
+			if !strings.Contains(out, want) || strings.Contains(out, "not answering") {
+				t.Fatalf("olivares =\n%s\nwant %q and no \"not answering\"", out, want)
+			}
+		})
+	}
+
+	// `olivares status` and every other command say the same fix for the same cause.
+	t.Setenv("OLIVARES_DATA_DIR", t.TempDir())
+	_, err := cliDo(&http.Client{}, mustGet(t, tls.URL+"/status"))
+	if err == nil || !strings.Contains(err.Error(), dockerEngineNext) {
+		t.Fatalf("a command that cannot trust a loopback engine says %v, want %q", err, dockerEngineNext)
+	}
+}
+
+func mustGet(t *testing.T, target string) *http.Request {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, target, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return req
 }
 
 func TestAuditLsShowsRecentEventsNewestFirstWithoutReads(t *testing.T) {

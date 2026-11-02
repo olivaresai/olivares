@@ -149,7 +149,7 @@ class ReleaseFirstHourTest(unittest.TestCase):
         for name in ['.goreleaser.yaml', 'Dockerfile.release', 'LICENSE', 'NOTICE',
                      'LICENSING.md', 'DISCLAIMER.md']:
             shutil.copy(ROOT / name, root / name)
-        for name in ['LICENSES', 'packaging/container']:
+        for name in ['LICENSES', 'packaging/container', 'deploy/seccomp', 'deploy/apparmor']:
             shutil.copytree(ROOT / name, root / name)
         package = root / 'web/node_modules/@playwright/test/package.json'
         package.parent.mkdir(parents=True)

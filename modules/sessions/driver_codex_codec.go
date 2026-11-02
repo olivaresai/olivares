@@ -445,6 +445,10 @@ type codexServerRequest struct {
 	method string
 	codec  codexApprovalCodec
 	once   sync.Once
+	// wait is the authority's wait for this request; its answer or the session's
+	// Close stops it, as for acpServerRequest.wait.
+	wait context.Context
+	stop context.CancelFunc
 }
 
 func (s *codexSession) onServerRequest(id json.RawMessage, method string, params json.RawMessage) {
@@ -457,7 +461,8 @@ func (s *codexSession) onServerRequest(id json.RawMessage, method string, params
 		}()
 		return
 	}
-	req := &codexServerRequest{id: id, method: method, codec: codec}
+	wait, stop := context.WithCancel(context.Background())
+	req := &codexServerRequest{id: id, method: method, codec: codec, wait: wait, stop: stop}
 	key := string(id)
 	s.mu.Lock()
 	if s.closed {
@@ -532,7 +537,7 @@ func (s *codexSession) resolveServerRequest(req *codexServerRequest, key string,
 	if deadline <= 0 {
 		deadline = defaultDriverApprovalDeadline
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), deadline)
+	ctx, cancel := context.WithTimeout(req.wait, deadline)
 	defer cancel()
 	var tokens []string
 	if req.codec.tokens != nil {
@@ -552,6 +557,11 @@ func (s *codexSession) resolveServerRequest(req *codexServerRequest, key string,
 			CommandLine:         facts.CommandLine, FilePaths: facts.FilePaths, FactsComplete: facts.Complete,
 			EffectiveCommandLine: facts.EffectiveCommandLine, EffectiveFilePaths: facts.EffectiveFilePaths,
 		})
+		if req.wait.Err() != nil {
+			// An interrupt or stop answered the request, or its session closed: that
+			// ended the wait, and the request has nothing left to answer.
+			return
+		}
 		if err != nil {
 			// An authority that could not decide never means "allow".
 			s.warn("sessions: the provider approval authority failed; refusing deny-closed",
@@ -601,6 +611,7 @@ func (s *codexSession) resolveServerRequest(req *codexServerRequest, key string,
 // answer writes the reply exactly once.
 func (s *codexSession) answer(req *codexServerRequest, reply any) {
 	req.once.Do(func() {
+		req.stop()
 		if err := s.conn.respond(context.Background(), req.id, reply); err != nil &&
 			!errors.Is(err, errRPCClosed) {
 			s.warn("sessions: could not answer a provider approval request",

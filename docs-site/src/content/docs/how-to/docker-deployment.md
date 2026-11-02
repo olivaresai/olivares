@@ -23,8 +23,8 @@ a one-time setup token and TLS on by default. The host port is published on ever
 interface, because this is a server — restrict it deliberately, as shown below.
 
 <!-- release -->
-:::note[Olivares 0.6]
-The next release is `0.6`; its GitHub release is not published yet. The commands below describe the planned artifacts. Build from source until publication, then verify each artifact before use. See `docs/releases/0.6-install-surfaces.json` for the observed publication state.
+:::note[Olivares 0.7]
+The next release is `0.7`; its GitHub release is not published yet. The commands below describe the planned artifacts. Build from source until publication, then verify each artifact before use. See `docs/releases/0.7-install-surfaces.json` for the observed publication state.
 :::
 <!-- /release -->
 
@@ -39,7 +39,7 @@ The official container pull is **Docker Hub**:
 
 <!-- release -->
 ```bash
-docker pull docker.io/olivaresai/olivares:0.6
+docker pull docker.io/olivaresai/olivares:0.7
 ```
 <!-- /release -->
 
@@ -48,7 +48,7 @@ and used as the build registry and the fallback. Docker Hub rate-limits **anonym
 pulls; ghcr.io does not rate-limit anonymous pulls of public images, so `docker login`
 or the ghcr.io coordinate is the way out if a CI node or a large fleet hits the ceiling.
 Tags carry **no leading `v`**: <!-- release -->
-`:0.6`<!-- /release --> pins a release, `:latest` floats, and <!-- release -->`:0.6-fips`<!-- /release --> / <!-- release -->`:0.6-stig`<!-- /release --> are
+`:0.7`<!-- /release --> pins a release, `:latest` floats, and <!-- release -->`:0.7-fips`<!-- /release --> / <!-- release -->`:0.7-stig`<!-- /release --> are
 the hardened variants. The base and `:latest` tags are multi-arch
 (`linux/amd64`, `linux/arm64`); `fips`/`stig` are `amd64`-only.
 
@@ -60,7 +60,7 @@ Docker Hub by `cosign copy`, so the digest is the same:
 <!-- release -->
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:0.6")"
+DIGEST="$(crane digest "$IMAGE:0.7")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
@@ -88,6 +88,15 @@ host itself. Run it non-root, read-only, with all capabilities dropped:
 <!-- release -->
 ```bash
 docker volume create olivares-data
+docker run --rm --entrypoint cat docker.io/olivaresai/olivares:0.7 \
+  /usr/share/olivares/olivares-sessions.json >olivares-sessions.json
+apparmor=
+if grep -qsw userns_create /sys/kernel/security/apparmor/features/namespaces/mask; then
+  docker run --rm --entrypoint cat docker.io/olivaresai/olivares:0.7 /usr/share/olivares/olivares-sessions.conf |
+    sudo tee /etc/apparmor.d/olivares-sessions >/dev/null
+  sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions
+  apparmor=--security-opt=apparmor=olivares-sessions
+fi
 
 docker run -d --name olivares \
   --user 65532:65532 \
@@ -95,10 +104,11 @@ docker run -d --name olivares \
   --tmpfs /tmp \
   --cap-drop ALL \
   --security-opt no-new-privileges \
+  --security-opt seccomp=olivares-sessions.json $apparmor \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:0.6 \
+  docker.io/olivaresai/olivares:0.7 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -114,6 +124,7 @@ docker run -d --name olivares \
 | `--tmpfs /tmp` | a writable scratch tmpfs, required because the rootfs is read-only |
 | `--cap-drop ALL` | the engine needs no Linux capabilities |
 | `--security-opt no-new-privileges` | block privilege escalation via setuid binaries |
+| `--security-opt seccomp=olivares-sessions.json $apparmor` | the session seccomp profile, read from the image by the first command: Docker's default plus the user, network and mount namespaces a session confines its tool in (where AppArmor controls user namespaces, as on Debian 13 and Ubuntu 24.04 and later, `$apparmor` also selects the session AppArmor profile the block loads) |
 | `-v olivares-data:/var/lib/olivares` | persist the data directory (see [§5](#5-operating-notes)) |
 | `-p 8443:8443` | publish HTTPS (REST + web UI) on **every host interface** |
 | `-p 8444:8444` | publish gRPC (ingest / ControlPlane API) on every host interface |
@@ -327,7 +338,7 @@ image before recreating.
 
 ## 8. Pin by digest for production
 
-Mutable tags (<!-- release -->`:0.6`<!-- /release -->, `:latest`) are for evaluation. In production, pin the
+Mutable tags (<!-- release -->`:0.7`<!-- /release -->, `:latest`) are for evaluation. In production, pin the
 **digest** you verified — a digest is immutable and is exactly what you signed off on:
 
 ```bash

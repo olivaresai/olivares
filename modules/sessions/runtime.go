@@ -127,6 +127,7 @@ type runtimeState struct {
 	credentialHeartbeatInterval time.Duration
 	stopSweepInterval           time.Duration
 	idleAutoStopPolicy          func(context.Context) (time.Duration, error)
+	idleSettingMissed           string        // cause of the previous sweep's failed read; cleared when a read succeeds
 	idleSettingWarned           string        // cause of the last unreadable-setting warning; cleared when the read succeeds
 	idleSweepInterval           time.Duration // zero: idlePolicySweepInterval
 	sweepCancel                 func()

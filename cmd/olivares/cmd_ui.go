@@ -133,7 +133,7 @@ func mainMenuFrame(report rootStatusReport) tui.Frame {
 	case report.Engine != "" && report.Reachable:
 		footer, role = oneRow(report.Engine)+" (running)", termrender.RoleOK
 	case report.Engine != "":
-		footer, role = oneRow(report.Engine)+" (not answering)", termrender.RoleWarn
+		footer, role = oneRow(report.Engine)+" ("+oneRow(report.engineState())+")", termrender.RoleWarn
 	}
 	next := oneRow(report.Next)
 	items := []tui.MenuItem{

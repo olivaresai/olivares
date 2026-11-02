@@ -86,7 +86,9 @@ type grokFixture struct {
 	//   ""         answer end_turn immediately;
 	//   "hold"     answer only after the release file appears, or after a cancel;
 	//   "never"    never answer at all (the delayed-result row);
-	//   "auth"     answer with the -32000 authentication error.
+	//   "auth"     answer with the -32000 authentication error;
+	//   "auth-once" answer the FIRST prompt with that error (an expired token) and
+	//              every later one with end_turn (the person signed in again).
 	PromptMode string `json:"prompt_mode"`
 	// PromptReleasePath releases a held prompt.
 	PromptReleasePath string `json:"prompt_release_path"`
@@ -385,6 +387,12 @@ func (p *grokFixturePeer) onPrompt(id json.RawMessage) {
 		return
 	case "auth":
 		p.replyError(id, acpErrAuthRequired, "Authentication required")
+	case "auth-once":
+		if len(p.rec.PromptTexts) == 1 {
+			p.replyError(id, acpErrAuthRequired, "Authentication required")
+			return
+		}
+		p.reply(id, map[string]any{"stopReason": "end_turn"})
 	case "hold":
 		p.mu.Lock()
 		p.heldPrompt = append(json.RawMessage(nil), id...)

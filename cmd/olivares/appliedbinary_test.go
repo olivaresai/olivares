@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -666,6 +667,35 @@ func TestHandOver(t *testing.T) {
 		code, out, _ := run(t, "26.700", "version", errors.New("exec format error"))
 		if code != 0 || !strings.Contains(out, "could not be started") {
 			t.Fatalf("code = %d stderr = %q, want the command to run on with the failure reported", code, out)
+		}
+	})
+	t.Run("a volume this user cannot read stops every command and names the way in", func(t *testing.T) {
+		if os.Geteuid() == 0 {
+			t.Skip("root reads any file, so no mode can deny it")
+		}
+		// Root in the engine's container, capabilities dropped: the engine's private console.json is
+		// another user's file. On a fresh volume nothing is applied; on the other a release is.
+		for _, vol := range []struct{ name, dir string }{{"fresh volume", t.TempDir()}, {"applied release", dataDir}} {
+			state := filepath.Join(vol.dir, consoleStateFile)
+			if err := os.WriteFile(state, []byte("{}"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(state, 0); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Remove(state) })
+			want := "olivares: " + vol.dir + " cannot be read by uid " + strconv.Itoa(os.Getuid()) + ": it belongs to another user. " +
+				"Run the command as that user: docker exec -it olivares olivares <command> (without -u root)\n"
+			for _, cmd := range []string{"version", "serve"} {
+				var out bytes.Buffer
+				code := handOver([]string{"olivares", cmd, "--data-dir", vol.dir}, image, rel.pub, &out, func(p string) error {
+					t.Errorf("%s %s: handed over to %q", vol.name, cmd, p)
+					return nil
+				})
+				if code != 1 || out.String() != want {
+					t.Errorf("%s %s: code = %d stderr = %q, want exit 1 and %q", vol.name, cmd, code, out.String(), want)
+				}
+			}
 		}
 	})
 	t.Run("a newer image says so to the engine only", func(t *testing.T) {

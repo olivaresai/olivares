@@ -495,20 +495,21 @@ func TestIdlePolicyPreviewHoldEndsWithTheURL(t *testing.T) {
 	}
 }
 
-// An unreadable setting is a persistent condition of the instance: it is logged
-// once per cause, not on every 30 s sweep, and again after a successful read.
-func TestIdlePolicyUnreadableSettingWarnsOncePerCause(t *testing.T) {
-	f, _, _ := idlePolicyFixture(t)
+// idleSettingFixture makes the setting unreadable on demand and counts the
+// warnings that say so.
+func idleSettingFixture(t *testing.T) (f *moveFixture, failing *bool, warns func() int) {
+	t.Helper()
+	f, _, _ = idlePolicyFixture(t)
 	logs := &runtimeObserverLogs{}
 	f.m.log = slog.New(logs)
-	failing := true
+	failing = new(bool)
 	f.m.SetIdleAutoStopPolicy(func(context.Context) (time.Duration, error) {
-		if failing {
+		if *failing {
 			return 0, errors.New("settings store unavailable")
 		}
 		return 0, nil
 	})
-	warns := func() int {
+	return f, failing, func() int {
 		logs.mu.Lock()
 		defer logs.mu.Unlock()
 		n := 0
@@ -519,6 +520,14 @@ func TestIdlePolicyUnreadableSettingWarnsOncePerCause(t *testing.T) {
 		}
 		return n
 	}
+}
+
+// A setting that stays unreadable is a persistent condition of the instance: it
+// is logged once per cause, not on every 30 s sweep, and again when it stays
+// unreadable after a successful read.
+func TestIdlePolicyUnreadableSettingWarnsOncePerCause(t *testing.T) {
+	f, failing, warns := idleSettingFixture(t)
+	*failing = true
 	for range 3 {
 		f.m.sweepIdleAutoStop(t.Context())
 	}
@@ -528,12 +537,33 @@ func TestIdlePolicyUnreadableSettingWarnsOncePerCause(t *testing.T) {
 	if r, _ := f.m.getRun(t.Context(), f.tenant, f.runRef); r.State == stateStopped {
 		t.Fatal("a session was stopped while the setting could not be read")
 	}
-	failing = false
+	*failing = false
 	f.m.sweepIdleAutoStop(t.Context())
-	failing = true
-	f.m.sweepIdleAutoStop(t.Context())
+	*failing = true
+	for range 2 {
+		f.m.sweepIdleAutoStop(t.Context())
+	}
 	if n := warns(); n != 2 {
-		t.Fatalf("warnings after a successful read and a new failure=%d, want 2", n)
+		t.Fatalf("warnings after a successful read and 2 new failures=%d, want 2", n)
+	}
+}
+
+// One missed read (a busy store, a slow disk) heals at the next sweep and costs
+// the sessions nothing but a 30 s wait, so a fresh install must not log it. The
+// run is never stopped on it either.
+func TestIdlePolicySingleUnreadableSweepIsNotLogged(t *testing.T) {
+	f, failing, warns := idleSettingFixture(t)
+	for range 3 {
+		*failing = true
+		f.m.sweepIdleAutoStop(t.Context())
+		*failing = false
+		f.m.sweepIdleAutoStop(t.Context())
+	}
+	if n := warns(); n != 0 {
+		t.Fatalf("warnings after 3 isolated failing sweeps=%d, want 0", n)
+	}
+	if r, _ := f.m.getRun(t.Context(), f.tenant, f.runRef); r.State == stateStopped {
+		t.Fatal("a session was stopped while the setting could not be read")
 	}
 }
 

@@ -333,6 +333,16 @@ for doc in [root / "INSTALL.md"]:
                   "sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions",
                   "export OLIVARES_APPARMOR_PROFILE=olivares-sessions"):
         assert token in block[:up], f"{doc.name} must prepare AppArmor before Compose up: {token}"
+# The README quick install runs Compose too: Docker's default AppArmor profile refuses the session
+# namespaces wherever AppArmor controls them (Debian 13 measured), so it prepares the same profile.
+for readme in ("README.md", "README.de.md", "README.es.md", "README.fr.md", "README.ja.md",
+               "README.ru.md", "README.zh.md"):
+    block = read(readme).split("git clone --depth 1 https://github.com/olivaresai/olivares.git", 1)[1]
+    block = block[:block.index(" up --wait")]
+    for token in ("userns_create", "deploy/apparmor/olivares-sessions.conf",
+                  "sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions",
+                  "export OLIVARES_APPARMOR_PROFILE=olivares-sessions"):
+        assert token in block, f"{readme} must prepare AppArmor before Compose up: {token}"
 assert standby.count("condition: service_healthy") == 2
 assert health in standby
 for token in ("--engine=postgres", "olivares-standby-data", "read_only: true"):

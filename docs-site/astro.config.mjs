@@ -8,7 +8,7 @@ import starlightOpenAPI, { createOpenAPISidebarGroup } from 'starlight-openapi'
 import starlightVersions from 'starlight-versions'
 import sitemap from '@astrojs/sitemap'
 import { localizeSidebar } from './src/sidebar-i18n.mjs'
-import { ARCHIVED_SLUGS, LOCALES, VERSIONS } from './src/site-locales.mjs'
+import { ARCHIVED_SLUGS, LOCALES, OPENAPI_BASES, VERSIONS } from './src/site-locales.mjs'
 import { satteri } from '@astrojs/markdown-satteri'
 import { corePathsPlugin } from './src/core-paths-plugin.mjs'
 
@@ -527,7 +527,7 @@ export default defineConfig({
         }),
         starlightOpenAPI([
           {
-            base: 'reference/api',
+            base: OPENAPI_BASES[0],
             schema: OPENAPI_SCHEMA,
             sidebar: {
               group: apiSidebarGroup,
@@ -538,7 +538,7 @@ export default defineConfig({
           {
             // The beta module-route reference. Its overview page carries the
             // "beta, may change" banner from the document's own info.description.
-            base: 'reference/api-beta',
+            base: OPENAPI_BASES[1],
             schema: OPENAPI_BETA_SCHEMA,
             sidebar: {
               group: apiBetaSidebarGroup,

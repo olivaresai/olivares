@@ -59,11 +59,19 @@ func assertOpenCodeConfined(t *testing.T, env map[string]string, provider string
 	if cfg["share"] != "disabled" {
 		t.Errorf("share = %v, want disabled", cfg["share"])
 	}
-	for name, want := range map[string]string{envOpenCodeDisableModelsFetch: "1", envOpenCodeDisableLSPDownload: "1", envNPMConfigOffline: "true",
+	for name, want := range map[string]string{envOpenCodeDisableModelsFetch: "1", envOpenCodeDisableLSPDownload: "1",
 		envOpenCodeDisableShare: "1"} {
 		if env[name] != want {
 			t.Errorf("%s = %q, want %q (a request to a host other than the bound provider)", name, env[name], want)
 		}
+	}
+	// #3122: OpenCode's shell runs the agent's commands with this environment, so the
+	// variable would make the agent's npm install fail and keep a profile's declared
+	// registries unreachable. OpenCode's background install of @opencode-ai/plugin is
+	// refused by the session's egress policy instead (it names only the bound provider
+	// and the declared registries).
+	if v, ok := env[envNPMConfigOffline]; ok {
+		t.Errorf("%s = %q: a record-bound launch turns npm offline for the agent's own commands", envNPMConfigOffline, v)
 	}
 }
 

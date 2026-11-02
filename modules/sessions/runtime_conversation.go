@@ -33,37 +33,79 @@ func (m *Module) conversationHistory(ctx context.Context, tenant model.TenantID,
 	if attempted, known := rec[colRunCodexInputAttempted].(bool); known && !attempted {
 		return "", nil
 	}
+	args := append([]string{"-c", "features.api_key_model_discovery=false"}, NewCodexDriver().LaunchArgs(DriverLaunch{})...)
+	err = m.readStoredConversation(ctx, tenant, rec, args, 15*time.Second,
+		func(ctx context.Context, proc Process) (err error) {
+			line, err = readCodexConversation(ctx, proc, threadID, maxOutputLine)
+			return err
+		})
+	if err != nil {
+		return "", err
+	}
+	return line, nil
+}
+
+// openCodeHistory is an OpenCode session's conversation as the lines of the
+// session/update frames OpenCode's own session/load replay sends for it (OpenCode
+// 1.19.4), which the console already shows for a live OpenCode session: the person's
+// and the tool's text under its message's id, and each tool call with its outcome.
+// It is read from OpenCode's own export, as a handoff reads it. Text OpenCode adds as
+// context (synthetic or ignored), reasoning and attachments are left out, as a handoff
+// leaves them out.
+func (m *Module) openCodeHistory(ctx context.Context, tenant model.TenantID, rec model.Record) (lines []string, err error) {
+	sid := rec.String(colClaudeSessionID)
+	if sid == "" {
+		return nil, nil
+	}
+	if !claudeSessionIDPattern.MatchString(sid) {
+		return nil, errHistoryUnreadable
+	}
+	err = m.readStoredConversation(ctx, tenant, rec, []string{"--pure", "export", sid}, openCodeExportTimeout,
+		func(ctx context.Context, proc Process) error {
+			export, err := collectStdout(ctx, proc, openCodeExportMax)
+			if err != nil {
+				return err
+			}
+			lines, err = openCodeFrames(sid, export)
+			return err
+		})
+	if err != nil {
+		return nil, err
+	}
+	return lines, nil
+}
+
+// readStoredConversation runs read on the tool of the run's profile, run once and
+// offline to read the conversation it stored (withStoredReader), behind the checks
+// every stored conversation passes, and answers in the words the view shows.
+func (m *Module) readStoredConversation(ctx context.Context, tenant model.TenantID, rec model.Record,
+	args []string, timeout time.Duration, read func(context.Context, Process) error) error {
 	if m.earlierLaunchValuesMayBeUnheld(ctx, tenant, rec) {
 		// Current vault values cannot redact secrets from earlier generations
 		// after rotation, nor expired Git read tokens from earlier launches, nor
 		// a package registry token (the stored thread is the tool's own, so none
 		// is withheld from it). The already-redacted live ring remains available.
-		return "", errors.New("stored conversation is unavailable because historical secret redaction cannot be proven")
+		return errors.New("stored conversation is unavailable because historical secret redaction cannot be proven")
 	}
 	home, _, err := m.revalidateStoredProfile(ctx, tenant, rec)
 	if err != nil {
-		return "", errors.New("stored conversation is unavailable because its provider home is no longer authorized")
+		return errors.New("stored conversation is unavailable because its provider home is no longer authorized")
 	}
-	args := append([]string{"-c", "features.api_key_model_discovery=false"}, NewCodexDriver().LaunchArgs(DriverLaunch{})...)
-	err = m.withStoredReader(ctx, tenant, rec, home, args, 15*time.Second,
-		func(ctx context.Context, proc Process) (err error) {
-			line, err = readCodexConversation(ctx, proc, threadID, maxOutputLine)
-			return err
-		})
+	err = m.withStoredReader(ctx, tenant, rec, home, args, timeout, read)
 	switch {
 	case errors.Is(err, errStoredReaderVersion):
-		return "", errors.New("stored conversation tool version is unavailable; install it or clear its version selection")
+		return errors.New("stored conversation tool version is unavailable; install it or clear its version selection")
 	case errors.Is(err, errStoredReaderStart):
-		return "", errors.New("stored conversation reader could not be started")
+		return errors.New("stored conversation reader could not be started")
 	case errors.Is(err, errStoredReaderStop):
-		return "", errors.New("stored conversation reader could not be stopped without error")
+		return errors.New("stored conversation reader could not be stopped without error")
 	case err != nil:
-		return "", errors.New("the saved conversation could not be read; live output is still available while the session is running")
+		return errHistoryUnreadable
 	}
 	if _, _, err = m.revalidateStoredProfile(ctx, tenant, rec); err != nil {
-		return "", errors.New("stored conversation provider home authorization changed during the read")
+		return errors.New("stored conversation provider home authorization changed during the read")
 	}
-	return line, nil
+	return nil
 }
 
 var (
@@ -397,4 +439,90 @@ func readCodexConversation(ctx context.Context, proc Process, threadID string, l
 		return "", errors.New("stored conversation exceeded its display response bound")
 	}
 	return string(data), err
+}
+
+// openCodeFrames is the export as the session/update frames of openCodeHistory.
+func openCodeFrames(sid string, export []byte) ([]string, error) {
+	var conv openCodeExport
+	// A session with no messages exports an empty list; an answer without one is not
+	// an export of this tool, and an empty conversation must not stand for it.
+	if json.Unmarshal(export, &conv) != nil || conv.Messages == nil {
+		return nil, errOpenCodeExport
+	}
+	var frames []string
+	for _, msg := range conv.Messages {
+		if msg.Info.Role != "user" && msg.Info.Role != "assistant" {
+			continue
+		}
+		for _, p := range msg.Parts {
+			var update any
+			switch {
+			case p.Type == "text" && p.Text != "" && !p.Synthetic && !p.Ignored:
+				kind := "agent_message_chunk"
+				if msg.Info.Role == "user" {
+					kind = "user_message_chunk"
+				}
+				update = acpChunkUpdate{kind, msg.Info.ID, acpContentBlock{"text", p.Text}}
+			case p.Type == "tool" && p.CallID != "":
+				update = openCodeToolUpdate(p)
+			default:
+				continue
+			}
+			raw, err := json.Marshal(update)
+			if err != nil {
+				return nil, err
+			}
+			frame, err := json.Marshal(notificationOut{JSONRPC: "2.0", Method: acpNotifySessionUpdate, Params: acpSessionNotification{sid, raw}})
+			if err != nil {
+				return nil, err
+			}
+			frames = append(frames, string(frame))
+		}
+	}
+	return frames, nil
+}
+
+type acpChunkUpdate struct {
+	SessionUpdate string          `json:"sessionUpdate"`
+	MessageID     string          `json:"messageId"`
+	Content       acpContentBlock `json:"content"`
+}
+
+type acpToolContent struct {
+	Type    string          `json:"type"`
+	Content acpContentBlock `json:"content"`
+}
+
+type acpToolUpdate struct {
+	SessionUpdate string           `json:"sessionUpdate"`
+	ToolCallID    string           `json:"toolCallId"`
+	Title         string           `json:"title"`
+	Status        string           `json:"status"`
+	RawInput      json.RawMessage  `json:"rawInput,omitempty"`
+	Content       []acpToolContent `json:"content,omitempty"`
+}
+
+// openCodeToolUpdate is a stored tool call as one tool_call_update: the state the live
+// view reaches for it, with its output, or its error when it failed.
+func openCodeToolUpdate(p openCodePart) acpToolUpdate {
+	u := acpToolUpdate{SessionUpdate: "tool_call_update", ToolCallID: p.CallID, Title: p.State.Title, Status: p.State.Status}
+	if u.Title == "" {
+		u.Title = p.Tool
+	}
+	if acpCapabilityPresent(p.State.Input) {
+		u.RawInput = p.State.Input
+	}
+	text := ""
+	switch p.State.Status {
+	case "running":
+		u.Status = "in_progress"
+	case "completed":
+		text = p.State.Output
+	case "error":
+		u.Status, text = "failed", p.State.Error
+	}
+	if text != "" {
+		u.Content = []acpToolContent{{"content", acpContentBlock{"text", text}}}
+	}
+	return u
 }

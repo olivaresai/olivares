@@ -10,6 +10,7 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -751,10 +752,12 @@ func TestOpenCodeAuthRequiredOnResumeLoadAndConfigPublishesRequired(t *testing.T
 }
 
 func TestOpenCodePromptAuthRequiredPublishesRequired(t *testing.T) {
+	var mu sync.Mutex
 	var states []string
 	peer := newOpenCodePeer(t, func(cfg *DriverSessionConfig) {
-		cfg.OnAuthState = func(state string) { states = append(states, state) }
+		cfg.OnAuthState = func(state string) { mu.Lock(); states = append(states, state); mu.Unlock() }
 	})
+	published := func() []string { mu.Lock(); defer mu.Unlock(); return slices.Clone(states) }
 	if _, err := peer.answerHandshake("ses_prompt_auth"); err != nil {
 		t.Fatalf("handshake: %v", err)
 	}
@@ -768,11 +771,22 @@ func TestOpenCodePromptAuthRequiredPublishesRequired(t *testing.T) {
 	}
 	peer.replyError(id, acpErrAuthRequired, "provider authentication required")
 	waitFor(t, "auth-required ended the turn and published required", func() bool {
-		return peer.session.ActiveTurn() == "" && peer.session.AuthState() == AuthStateRequired
+		return peer.session.ActiveTurn() == "" && slices.Equal(published(), []string{AuthStateUnknown, AuthStateRequired})
 	})
-	if len(states) != 2 || states[0] != AuthStateUnknown || states[1] != AuthStateRequired {
-		t.Fatalf("OnAuthState = %v", states)
+	// The refused turn is reported, and the gate stays the launch's: the next
+	// message is sent and judged by its own result.
+	if peer.session.AuthState() != AuthStateUnknown {
+		t.Fatalf("a refused turn closed the input gate: auth = %q", peer.session.AuthState())
 	}
+	go func() { _, _ = peer.session.Input(context.Background(), "after sign-in") }()
+	id, method, _ = peer.nextRequest()
+	if method != acpMethodSessionPrompt {
+		t.Fatalf("method = %q", method)
+	}
+	peer.reply(id, map[string]any{"stopReason": "end_turn"})
+	waitFor(t, "the answered turn put the launch readiness back", func() bool {
+		return slices.Equal(published(), []string{AuthStateUnknown, AuthStateRequired, AuthStateUnknown})
+	})
 }
 
 func TestOpenCodeAuthRequiredMovesUnknownToRequired(t *testing.T) {

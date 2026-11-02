@@ -147,10 +147,10 @@ func (openCodeDriver) LaunchEnv(l DriverLaunch) []EnvVar {
 		cfg["share"] = "disabled"
 	}
 	if bound {
-		// npm_config_offline reaches every command OpenCode's shell runs, the agent's
-		// npm install included; the own login keeps npm online (review of #3053).
-		env = append(env, EnvVar{Name: envOpenCodeDisableModelsFetch, Value: "1"},
-			EnvVar{Name: envNPMConfigOffline, Value: "true"})
+		// npm stays online: npm_config_offline would reach every command OpenCode's
+		// shell runs, the agent's npm install included (#3122). OpenCode's own plugin
+		// install is refused by the session's egress policy.
+		env = append(env, EnvVar{Name: envOpenCodeDisableModelsFetch, Value: "1"})
 	}
 	env = append(env,
 		EnvVar{Name: envOpenCodeDisableLSPDownload, Value: "1"},
@@ -219,13 +219,18 @@ var (
 // Anthropic, OpenAI and xAI keys reached only their own API host, a local model only
 // loopback.
 //
-// Three more requests went to other hosts, each closed by OpenCode's own switch:
+// Two more requests went to other hosts, each closed by OpenCode's own switch:
 //   - OPENCODE_DISABLE_MODELS_FETCH: the model catalogue from models.opencode.ai at start;
-//   - npm_config_offline: the background install of @opencode-ai/plugin from
-//     registry.npmjs.org into every configuration directory (it fails and is logged).
-//     OpenCode's shell runs the agent's commands with the same environment, so their
-//     npm is offline too; the own login, which has no record, does not set it;
 //   - OPENCODE_DISABLE_LSP_DOWNLOAD: language servers downloaded when a file is edited.
+//
+// A third, the background install of @opencode-ai/plugin from registry.npmjs.org into
+// every configuration directory, has no OpenCode switch of its own (1.19.3: neither
+// OPENCODE_PURE nor OPENCODE_DISABLE_DEFAULT_PLUGINS stops it; only npm_config_offline
+// did). That variable also reaches the agent's own npm commands, because OpenCode's
+// shell runs them with the same environment, and no registry a profile declares would
+// then be contacted. So npm stays online and the install is refused where every other
+// host is: the session's egress policy (sessionNetworkPolicy) names the bound provider
+// and the profile's declared registries alone. OpenCode logs the failed install and goes on.
 //
 // And two held against what a profile or a project may already hold:
 //   - the bound provider's address is pinned in the same configuration, so a baseURL saved

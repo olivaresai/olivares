@@ -64,6 +64,9 @@ RUN printf '%s\n' \
       >> /etc/ssh/ssh_config
 COPY packaging/container/bashrc.sh /etc/olivares-bashrc
 RUN sed -i '1i . /etc/olivares-bashrc' /etc/bash.bashrc
+# The profiles a container needs to start sessions, which `docker run` reads from the
+# verified image (INSTALL.md, Docker); Compose reads the same files from deploy/.
+COPY deploy/seccomp/olivares-sessions.json deploy/apparmor/olivares-sessions.conf /usr/share/olivares/
 # A writable home is required for npm/npx and uvx on Compose's read-only rootfs.
 # Per-account homes are set by the product when launching subscription tools.
 ENV HOME=/var/lib/olivares/home

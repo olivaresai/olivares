@@ -75,6 +75,7 @@ type Module struct {
 	cancel          context.CancelFunc
 	wg              sync.WaitGroup
 	mu              sync.Mutex
+	installing      sync.Mutex // admits one install request at a time (install)
 	plans           map[string]*Plan
 	jobs            map[model.ID]*savedJob
 	files           *os.Root
@@ -525,14 +526,30 @@ func (m *Module) install(w http.ResponseWriter, r *http.Request, mc api.ModuleCo
 		fail(w, 400, "bad_request", "A canonical nonzero request ID is required.")
 		return
 	}
+	// One request is admitted at a time. m.mu guards only the maps: the sign-in
+	// output and every status read take it, so no audit, catalog read or journal
+	// fsync runs under it.
+	m.installing.Lock()
+	defer m.installing.Unlock()
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	if old := m.jobs[id]; old != nil {
+	old := m.jobs[id]
+	var replay Job
+	if old != nil {
+		replay = old.Job
+	}
+	p := m.plans[mc.Tenant.String()+":"+in.Digest]
+	if p == nil {
+		if tenant, ok := tenantOf(r.Header.Get("X-Olivares-Tenant")); ok {
+			p = m.plans[mc.Tenant.String()+":"+in.Digest+":"+tenant.String()]
+		}
+	}
+	m.mu.Unlock()
+	if old != nil {
 		if old.Tenant != mc.Tenant {
 			fail(w, 404, "not_found", "Job not found.")
 			return
 		}
-		if old.Digest != in.Digest {
+		if replay.Digest != in.Digest {
 			fail(w, 409, "conflict", "This request ID already identifies a different plan.")
 			return
 		}
@@ -540,14 +557,8 @@ func (m *Module) install(w http.ResponseWriter, r *http.Request, mc api.ModuleCo
 			unavailable(w)
 			return
 		}
-		write(w, 202, old.Job)
+		write(w, 202, replay)
 		return
-	}
-	p := m.plans[mc.Tenant.String()+":"+in.Digest]
-	if p == nil {
-		if tenant, ok := tenantOf(r.Header.Get("X-Olivares-Tenant")); ok {
-			p = m.plans[mc.Tenant.String()+":"+in.Digest+":"+tenant.String()]
-		}
 	}
 	if p == nil || time.Now().After(p.expires) {
 		fail(w, 409, "plan_expired", "Preview the installation again before installing.")
@@ -564,11 +575,14 @@ func (m *Module) install(w http.ResponseWriter, r *http.Request, mc api.ModuleCo
 			return
 		}
 	}
-	if m.active {
+	m.mu.Lock()
+	busy, full := m.active, len(m.jobs) >= maxRetained
+	m.mu.Unlock()
+	if busy {
 		fail(w, 409, "install_busy", "Another host tool installation is running.")
 		return
 	}
-	if len(m.jobs) >= maxRetained {
+	if full {
 		fail(w, 409, "journal_full", "The tool job journal is full. Archive it before another installation.")
 		return
 	}
@@ -581,18 +595,25 @@ func (m *Module) install(w http.ResponseWriter, r *http.Request, mc api.ModuleCo
 		unavailable(w)
 		return
 	}
+	accepted := j.Job
+	m.mu.Lock()
 	m.jobs[id] = j
 	m.active = true
 	m.wg.Add(1)
+	m.mu.Unlock()
 	go m.run(j, p, mc)
 	w.Header().Set("Location", "/v1/m/agenttools/jobs/"+id.String())
-	write(w, 202, j.Job)
+	write(w, 202, accepted)
 }
 func (m *Module) job(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	id := model.ID(chi.URLParam(r, "id"))
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	j := m.jobs[id]
+	var snapshot Job
+	if j != nil {
+		snapshot = j.Job
+	}
+	m.mu.Unlock()
 	if j == nil || j.Tenant != mc.Tenant {
 		fail(w, 404, "not_found", "Job not found.")
 		return
@@ -601,7 +622,7 @@ func (m *Module) job(w http.ResponseWriter, r *http.Request, mc api.ModuleContex
 		unavailable(w)
 		return
 	}
-	write(w, 200, j.Job)
+	write(w, 200, snapshot)
 }
 func write(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")

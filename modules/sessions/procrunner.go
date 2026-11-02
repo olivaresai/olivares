@@ -156,7 +156,8 @@ func (pr *procRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, err
 	if err != nil {
 		release()
 		if waitReady != nil {
-			return nil, networkBoundaryErr(fmt.Errorf("the host or container must allow unprivileged user and network namespaces and Landlock: %w", err))
+			// Docker's default seccomp and AppArmor profiles refuse these namespaces; the image ships the ones that allow them.
+			return nil, networkBoundaryErr(fmt.Errorf("the host or container must allow unprivileged user and network namespaces and Landlock (in Docker, run the container with --security-opt seccomp=olivares-sessions.json and, where AppArmor controls user namespaces, --security-opt apparmor=olivares-sessions, the profiles the image ships in /usr/share/olivares/): %w", err))
 		}
 		return nil, err
 	}

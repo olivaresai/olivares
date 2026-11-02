@@ -153,27 +153,56 @@ var hideTerminalEcho = func(in io.Reader) (func(), error) {
 // that is not running. The original error stays on the next line (callers redact
 // it like any other). Anything else is returned unchanged.
 func transportHint(req *url.URL, err error) error {
-	var unknown x509.UnknownAuthorityError
-	var verify *tls.CertificateVerificationError
-	var hostErr x509.HostnameError
-	switch {
-	case errors.As(err, &hostErr) || (errors.As(err, &verify) && errors.As(verify.Err, &hostErr)):
+	cause, hostErr := classifyTransport(err)
+	switch cause {
+	case transportHostname:
 		// The certificate is trusted but does not name this address (the engine's
 		// self-signed one covers loopback only): no trust or pin can fix that.
 		return exitcode.New(exitcode.Server, fmt.Errorf(
 			"The engine's certificate covers %s, not %s. Use an address it covers, or start the engine with a "+
 				"certificate for %s: olivares serve --tls-cert <file> --tls-key <file>\n  %w",
 			certificateNames(hostErr.Certificate), hostErr.Host, hostErr.Host, err))
-	case errors.As(err, &unknown) || (errors.As(err, &verify) && errors.As(verify.Err, &unknown)):
+	case transportUntrusted:
+		fix := "On the engine's host, sign in with: olivares login. " +
+			"From another computer, pass the engine's certificate (<data-dir>/tls.crt): --ca-cert <file>"
+		if loopbackWithoutLocalEngine(originOf(req)) {
+			fix = "If the engine runs in Docker, use the CLI inside it: " + dockerEngineNext + ". " + fix
+		}
 		return exitcode.New(exitcode.Server, fmt.Errorf(
-			"This computer does not trust the certificate of %s. On the engine's host, sign in with: olivares login. "+
-				"From another computer, pass the engine's certificate (<data-dir>/tls.crt): --ca-cert <file>\n  %w",
-			originOf(req), err))
-	case errors.Is(err, syscall.ECONNREFUSED):
+			"This computer does not trust the certificate of %s. %s\n  %w", originOf(req), fix, err))
+	case transportRefused:
 		return exitcode.New(exitcode.Server, fmt.Errorf(
 			"No engine answers at %s. Start it on that host: olivares quickstart\n  %w", originOf(req), err))
 	}
 	return err
+}
+
+// transportCause is which of the failures a new user meets first a transport error is.
+type transportCause int
+
+const (
+	transportOther transportCause = iota
+	transportHostname
+	transportUntrusted
+	transportRefused
+)
+
+// classifyTransport is the one reading of a transport error that transportHint (the
+// sentence of a command) and rootStatus (the reason of the menu footer) share. The
+// HostnameError is the certificate's, set for transportHostname.
+func classifyTransport(err error) (transportCause, x509.HostnameError) {
+	var unknown x509.UnknownAuthorityError
+	var verify *tls.CertificateVerificationError
+	var hostErr x509.HostnameError
+	switch {
+	case errors.As(err, &hostErr) || (errors.As(err, &verify) && errors.As(verify.Err, &hostErr)):
+		return transportHostname, hostErr
+	case errors.As(err, &unknown) || (errors.As(err, &verify) && errors.As(verify.Err, &unknown)):
+		return transportUntrusted, hostErr
+	case errors.Is(err, syscall.ECONNREFUSED):
+		return transportRefused, hostErr
+	}
+	return transportOther, hostErr
 }
 
 // certificateNames lists the names and addresses a certificate covers.

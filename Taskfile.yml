@@ -1003,9 +1003,11 @@ tasks:
   smoke:quickstart:selftest:
     desc: >-
       Prove the quickstart smoke waits for a slow engine boot (125 s, past the old 120 s budget)
-      and names an engine that exits during boot at once.
+      and names an engine that exits during boot at once, and that its module selection waits
+      for a slow or briefly unavailable engine (local HTTP stand-in).
     cmds:
       - bash scripts/test-quickstart-smoke-boot.sh
+      - python3 -I scripts/test-smoke-module-prerequisites.py
 
   smoke:quickstart-argv:
     desc: >-

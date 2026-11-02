@@ -53,7 +53,7 @@ service); `--check` still shows the plan, and `--target` still replaces a path y
 
 ## 1. Versioning and the image coordinate
 
-Release and container tags use bare `MAJOR.MINOR`: release <!-- release -->`0.6`<!-- /release -->, image tags <!-- release -->`:0.6`<!-- /release --> and `:latest`;
+Release and container tags use bare `MAJOR.MINOR`: release <!-- release -->`0.7`<!-- /release -->, image tags <!-- release -->`:0.7`<!-- /release --> and `:latest`;
 FIPS/STIG variants are Business artifacts. See [versioning](../INSTALL.md#versioning).
 
 The official registry is **Docker Hub**:
@@ -71,11 +71,11 @@ digest** — a tag is mutable, a digest is exactly what you verified:
 
 <!-- release -->
 ```sh
-cosign verify docker.io/olivaresai/olivares:0.6 \
+cosign verify docker.io/olivaresai/olivares:0.7 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 # then resolve and use the digest you verified (same value on either registry):
-crane digest docker.io/olivaresai/olivares:0.6   # -> sha256:<…>
+crane digest docker.io/olivaresai/olivares:0.7   # -> sha256:<…>
 ```
 <!-- /release -->
 
@@ -271,7 +271,17 @@ Pull and **verify** the new image/package first (§1), then:
 **Docker (`docker run`)**
 ```sh
 docker stop olivares && docker rm olivares      # the named data volume is NOT removed
+docker run --rm --entrypoint cat docker.io/olivaresai/olivares@sha256:<new-digest> \
+  /usr/share/olivares/olivares-sessions.json >olivares-sessions.json   # the new release's session profiles
+apparmor=
+if grep -qsw userns_create /sys/kernel/security/apparmor/features/namespaces/mask; then
+  docker run --rm --entrypoint cat docker.io/olivaresai/olivares@sha256:<new-digest> /usr/share/olivares/olivares-sessions.conf |
+    sudo tee /etc/apparmor.d/olivares-sessions >/dev/null
+  sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions
+  apparmor=--security-opt=apparmor=olivares-sessions
+fi
 docker run -d --name olivares -p 127.0.0.1:8443:8443 -p 127.0.0.1:8444:8444 \
+  --security-opt no-new-privileges --security-opt seccomp=olivares-sessions.json $apparmor \
   -v olivares-data:/var/lib/olivares \
   docker.io/olivaresai/olivares@sha256:<new-digest> \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
@@ -632,7 +642,7 @@ olivares upgrade --enterprise --connect --data-dir /var/lib/olivares  # connecte
 
   <!-- release -->
   ```bash
-  olivares upgrade --target /opt/olivares/olivares --current-version 0.6
+  olivares upgrade --target /opt/olivares/olivares --current-version 0.7
   ```
   <!-- /release -->
 

@@ -54,6 +54,13 @@ export const VERSIONS = [{ slug: '2026-06', label: '2026-06 (pre-1.0 preview)' }
 export const ARCHIVED_SLUGS = VERSIONS.map((v) => v.slug)
 
 /**
+ * Where starlight-openapi renders the REST references. Those pages exist only in English and only
+ * in the latest version, yet each one offers the language and version pickers a locale or snapshot
+ * copy; scripts/gen-redirects.mjs sends those URLs to the English page.
+ */
+export const OPENAPI_BASES = ['reference/api', 'reference/api-beta']
+
+/**
  * Las clases de Diátaxis que TIENEN tarjeta social propia en `public/og/<clase>.png`.
  *
  * ⛔ VIVE AQUÍ, y no en el componente, por la misma razón que `LOCALES`: la puerta

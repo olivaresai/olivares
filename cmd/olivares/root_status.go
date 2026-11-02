@@ -7,10 +7,14 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -30,12 +34,27 @@ const rootProbeTimeout = 2 * time.Second
 type rootStatusReport struct {
 	Engine    string `json:"engine,omitempty"`
 	Reachable bool   `json:"reachable"`
-	Context   string `json:"context,omitempty"`
-	SignedIn  string `json:"signed_in_as,omitempty"`
-	Next      string `json:"next"`
+	// Reason is why the engine did not answer the probe, in a few words: an engine
+	// that is down is not one this computer cannot trust, and Next names the command for each.
+	Reason   string `json:"reason,omitempty"`
+	Context  string `json:"context,omitempty"`
+	SignedIn string `json:"signed_in_as,omitempty"`
+	Next     string `json:"next"`
 	// Refusal is the readiness sentence of a key its provider refused, when no tool is
 	// ready: the cause the next step alone does not name.
 	Refusal string `json:"refusal,omitempty"`
+}
+
+// engineState is how the engine is described next to its address: running, the
+// reason the probe failed, or "not answering" when it gave none.
+func (r rootStatusReport) engineState() string {
+	switch {
+	case r.Reachable:
+		return "running"
+	case r.Reason != "":
+		return r.Reason
+	}
+	return "not answering"
 }
 
 func runRootStatus(cmd *cobra.Command) error {
@@ -44,11 +63,8 @@ func runRootStatus(cmd *cobra.Command) error {
 		r := renderTo(w)
 		fmt.Fprintf(w, "Olivares AI %s\n\n", version)
 		engine := "none found on this machine"
-		switch {
-		case report.Engine != "" && report.Reachable:
-			engine = report.Engine + " (running)"
-		case report.Engine != "":
-			engine = report.Engine + " (not answering)"
+		if report.Engine != "" {
+			engine = report.Engine + " (" + report.engineState() + ")"
 		}
 		signed := "no"
 		if report.SignedIn != "" {
@@ -107,43 +123,45 @@ func rootStatus(ctx context.Context) rootStatusReport {
 		report.Next = "olivares quickstart"
 		return report
 	}
-	get := func(path string, withToken bool, into any) int {
+	get := func(path string, withToken bool, into any) (int, error) {
 		r := resolved
 		if !withToken {
 			r.Token, r.Tenant = "", ""
 		}
 		client, headers, err := cliTransport(cliTransportOptions{Resolved: r, Timeout: rootProbeTimeout, Stderr: io.Discard})
 		if err != nil {
-			return 0
+			return 0, err
 		}
 		cctx, cancel := context.WithTimeout(ctx, rootProbeTimeout)
 		defer cancel()
 		req, err := http.NewRequestWithContext(cctx, http.MethodGet, r.Server+path, nil)
 		if err != nil {
-			return 0
+			return 0, err
 		}
 		req.Header = headers
 		resp, err := client.Do(req)
 		if err != nil {
-			return 0
+			return 0, err
 		}
 		defer func() { _ = resp.Body.Close() }()
 		if into != nil && resp.StatusCode == http.StatusOK {
 			_ = json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(into)
 		}
-		return resp.StatusCode
+		return resp.StatusCode, nil
 	}
-	report.Reachable = get("/livez", false, nil) == http.StatusOK
+	status, probeErr := get("/livez", false, nil)
+	report.Reachable = probeErr == nil && status == http.StatusOK
 	switch {
 	case !report.Reachable:
-		report.Next = "olivares doctor"
+		report.Reason, report.Next = probeProblem(resolved.Server, status, probeErr)
 		return report
 	case resolved.Token == "":
 		report.Next = "olivares login"
 		return report
 	}
 	var who authWhoamiResponse
-	if get("/v1/auth/whoami", true, &who) != http.StatusOK {
+	// Whatever the reason, a saved sign-in the engine does not take is mended by signing in.
+	if status, _ := get("/v1/auth/whoami", true, &who); status != http.StatusOK {
 		report.Next = "olivares login"
 		return report
 	}
@@ -163,6 +181,63 @@ func rootStatus(ctx context.Context) rootStatusReport {
 		report.Next = rootNextFromTools(rows)
 	}
 	return report
+}
+
+// dockerEngineNext is the documented way to the engine a container runs: the CLI
+// inside it has the CA in its own data volume (INSTALL.md, `docker exec olivares ...`).
+// ponytail: assumes the documented container name, and any loopback engine this host
+// did not record gets it; upgrade when the engine records its container for the host.
+const dockerEngineNext = "docker exec -it olivares olivares ui"
+
+// probeProblem says why the engine's liveness probe failed and which command fixes
+// that case. status is the HTTP status when the engine answered with one, err the
+// transport error when it did not.
+func probeProblem(server string, status int, err error) (reason, next string) {
+	next = "olivares doctor"
+	if err == nil {
+		return fmt.Sprintf("answers HTTP %d", status), next
+	}
+	cause, _ := classifyTransport(err)
+	var netErr net.Error
+	switch {
+	case cause == transportHostname:
+		return "certificate does not cover this address", next
+	case cause == transportUntrusted && loopbackWithoutLocalEngine(server):
+		// The CA of an engine on this host's loopback that this host did not record is
+		// in a container's data volume.
+		return "certificate not trusted", dockerEngineNext
+	case cause == transportUntrusted:
+		return "certificate not trusted", "olivares login"
+	case cause == transportRefused:
+		return "connection refused", next
+	case errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &netErr) && netErr.Timeout()):
+		return fmt.Sprintf("no answer in %d s", int(rootProbeTimeout/time.Second)), next
+	}
+	return "cannot connect: " + shortLine(err.Error()), next
+}
+
+// loopbackWithoutLocalEngine is whether server is an address on this computer that no
+// engine of this host's data directory recorded.
+func loopbackWithoutLocalEngine(server string) bool {
+	u, err := url.Parse(server)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	if host != "localhost" && !net.ParseIP(host).IsLoopback() {
+		return false
+	}
+	origin, _ := localEngine()
+	return origin == "" || !sameLocalOrigin(server, origin)
+}
+
+// shortLine is s as one row of at most 60 characters.
+func shortLine(s string) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if r := []rune(s); len(r) > 60 {
+		return string(r[:60]) + "…"
+	}
+	return s
 }
 
 // rootNextFromTools picks the next step from the engine's tool rows, in the order

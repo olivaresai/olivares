@@ -1,14 +1,14 @@
 # Changelog
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Releases use `MAJOR.MINOR`, with no patch number or `v` prefix. The next release is <!-- release -->`0.6`<!-- /release -->.
+Releases use `MAJOR.MINOR`, with no patch number or `v` prefix. The next release is <!-- release -->`0.7`<!-- /release -->.
 See [versioning](INSTALL.md#versioning) for the release policy.
 
-> **Draft: Community <!-- release -->`0.6`<!-- /release --> is unreleased.** Dated sections remain unchanged;
+> **Draft: Community <!-- release -->`0.7`<!-- /release --> is unreleased.** Dated sections remain unchanged;
 > the release-preparation section awaits publication. Other dated sections record published releases. [GitHub releases](https://github.com/olivaresai/olivares/releases)
 > lists their notes and artifacts. Published CLI commands and flags, API routes and
 > fields, configuration keys, defaults, paths and stored data follow the compatibility policy.
-> The <!-- release -->0.6<!-- /release --> edition changes are described in [Editions](docs/editions.md).
+> The <!-- release -->0.7<!-- /release --> edition changes are described in [Editions](docs/editions.md).
 > Announce deprecations in an earlier release and provide an automatic migration
 > before removal. A release never permits a regression. Any breaking change must
 > be explicit under **Changed** or **Removed**.
@@ -27,6 +27,24 @@ See [versioning](INSTALL.md#versioning) for the release policy.
   fix and keep private reports undisclosed.
 
 ## [Unreleased]
+
+## [0.7] - 2026-11-02
+
+### Added
+
+- Docker run and Compose start sessions with the image's seccomp and AppArmor profiles, and name the Docker options when that boundary cannot start. OpenCode sessions whose provider is bound by record keep npm online.
+- The documentation site permanently redirects the old picker URLs and locale roots, and the portal sends `X-Robots-Tag: noindex` on every response.
+
+### Changed
+
+- Console tool installation sends only one install at a time. An idle-policy read warns only while it stays unreadable, and the CLI names an unreadable data volume instead of running the image binary. `olivares` and `olivares ui` say why the engine does not answer.
+- Sign-in links and codes arrive without tool-job audit and journal fsync work held inside the module lock, and slow first module-selection reads wait for the engine.
+
+### Fixed
+
+- After one turn's `auth_required`, the next message can start instead of being refused. Interrupting or closing a provider approval ends its wait instead of leaving an approval card that cannot be answered.
+- An OpenCode session shows its stored conversation after a restart, including long or ended conversations whose earlier turns were missing.
+- The public tree can be synchronized from development between releases while preserving its export base and reviewed removals.
 
 ## [0.6] - 2026-11-01
 

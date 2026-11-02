@@ -990,6 +990,22 @@ func (m *Module) handleAttachRun(w http.ResponseWriter, r *http.Request, mc api.
 				return
 			}
 			historyRead = read
+		} else if rec.String(colRunProfileDriver) == providerDriverOpenCode {
+			// A run this engine holds is shown from its ring, which also holds the replay
+			// OpenCode sends when a session is resumed: a stored copy beside it would show
+			// every message twice. A run it no longer holds (after an engine restart or
+			// upgrade) has only OpenCode's own record.
+			if lr == nil {
+				lines, historyErr := m.openCodeHistory(r.Context(), mc.Tenant, rec)
+				if historyErr != nil {
+					lines = []string{noticeLine(historyErr.Error())}
+				}
+				for _, line := range lines {
+					if writeSSE(rc, w, "history", map[string]string{"line": line}) != nil {
+						return
+					}
+				}
+			}
 		} else {
 			line, historyErr := m.conversationHistory(r.Context(), mc.Tenant, rec)
 			if historyErr != nil {
