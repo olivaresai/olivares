@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { readFileSync } from 'node:fs'
-import { expect, type Page, test } from '@playwright/test'
+import { expect, type ConsoleMessage, type Page, test } from '@playwright/test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { Skeleton } from '../src/components/ui/skeleton'
@@ -10,6 +10,7 @@ import { StatusChip } from '../src/components/ui/status-chip'
 import auth from '../src/lib/i18n/locales/en/auth.json' with { type: 'json' }
 import {
   expectReleaseVersion,
+  isExpectedNoRepositoryConsoleError,
   openToolInstall,
   RELEASE_VERSION,
   recordSlowLoads,
@@ -65,6 +66,49 @@ test('first-hour guard accepts a personal-folder switch but rejects a path text 
   )
   await page.evaluate(watchSurface, surfaceOptions('0.1'))
   expect(findings).toEqual(['blank: filesystem path field: Folder'])
+})
+
+test('first-hour console guard admits only the no-repository Git status 404', async ({
+  page,
+}) => {
+  const git = 'https://example.test/v1/m/sessions/runs/run-one/git'
+  const other = 'https://example.test/v1/m/sessions/runs/run-one/other'
+  const errors: ConsoleMessage[] = []
+  await page.route('https://example.test/**/*', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (
+      path === '/v1/m/sessions/runs/run-one/git' ||
+      path === '/v1/m/sessions/runs/run-one/other'
+    ) {
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: '{"error":"not found"}',
+      })
+    } else {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<p>ok</p>',
+      })
+    }
+  })
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message)
+  })
+  await page.goto('https://example.test/')
+  await page.evaluate(
+    async ([gitUrl, otherUrl]) => {
+      await Promise.all([fetch(gitUrl), fetch(otherUrl)])
+    },
+    [git, other],
+  )
+  await expect.poll(() => errors.length).toBe(2)
+  expect(
+    errors
+      .filter(isExpectedNoRepositoryConsoleError)
+      .map((message) => message.location().url),
+  ).toEqual([git])
 })
 
 test('first-hour guard still rejects a skeleton alongside live working sessions', async ({

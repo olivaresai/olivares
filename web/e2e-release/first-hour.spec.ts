@@ -11,6 +11,7 @@ import {
 } from '../src/features/navigation/journeys'
 import {
   expectReleaseVersion,
+  isExpectedNoRepositoryConsoleError,
   openToolInstall,
   READY_MS,
   RELEASE_VERSION,
@@ -99,7 +100,10 @@ test('release container: a fresh administrator reaches a first answer and the co
   const slowLoads = await recordSlowLoads(page, redact)
   await page.addInitScript(watchSurface, surfaceOptions(version!))
   page.on('console', (message) => {
-    if (message.type() === 'error')
+    if (
+      message.type() === 'error' &&
+      !isExpectedNoRepositoryConsoleError(message)
+    )
       record(
         `${new URL(page.url()).pathname}: console error: ${message.text()}`,
       )

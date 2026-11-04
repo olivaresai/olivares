@@ -239,7 +239,22 @@ jobs:
           GOFLAGS: -trimpath
         run: task build:go
       - name: the core session journey works on this build
-        run: bash scripts/session-journey-smoke.sh --binary bin/olivares --label pr-build
+        run: |
+          set -euo pipefail
+          nobody_dir=$(mktemp -d /tmp/olivares-pr-build-nobody.XXXXXX)
+          trap 'rm -rf "$nobody_dir"' EXIT
+          chmod 0777 "$nobody_dir"
+          cp bin/olivares "$nobody_dir/olivares"
+          chmod 0755 "$nobody_dir/olivares"
+          mkdir "$nobody_dir/scripts"
+          cp scripts/session-journey-smoke.sh scripts/install-service.sh "$nobody_dir/scripts/"
+          chmod 0755 "$nobody_dir/scripts/session-journey-smoke.sh"
+          chmod 0644 "$nobody_dir/scripts/install-service.sh"
+          if command -v sudo >/dev/null 2>&1 && id nobody >/dev/null 2>&1; then
+            sudo -u nobody env -u XDG_RUNTIME_DIR TMPDIR="$nobody_dir" bash "$nobody_dir/scripts/session-journey-smoke.sh" --binary "$nobody_dir/olivares" --label pr-build
+          else
+            TMPDIR="$RUNNER_TEMP" bash scripts/session-journey-smoke.sh --binary bin/olivares --label pr-build
+          fi
       - name: verify and package the development CLI
         env:
           PR_HEAD: ${{ github.event.pull_request.head.sha }}

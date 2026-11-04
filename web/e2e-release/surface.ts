@@ -3,7 +3,12 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { globSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { expect, type Page, type Request } from '@playwright/test'
+import {
+  expect,
+  type ConsoleMessage,
+  type Page,
+  type Request,
+} from '@playwright/test'
 import auth from '../src/lib/i18n/locales/en/auth.json' with { type: 'json' }
 
 /** The release grammar: bare MAJOR.MINOR, the one scripts/release-first-hour.sh admits. */
@@ -82,6 +87,20 @@ declare global {
     __firstHourLoading?: () => boolean
     __firstHourVersions?: () => string[]
   }
+}
+
+export function isExpectedNoRepositoryConsoleError(
+  message: ConsoleMessage,
+): boolean {
+  // GET run/git deliberately answers 404 when the folder has no repository; the
+  // console offers Initialize Git in that state. Any other resource failure is red.
+  return (
+    message.type() === 'error' &&
+    message.text().includes('status of 404') &&
+    /^https?:\/\/[^/]+\/v1\/m\/sessions\/runs\/[^/]+\/git$/.test(
+      message.location().url,
+    )
+  )
 }
 
 /** Runs in the page, across SPA transitions; report text, never input values. */
