@@ -182,7 +182,9 @@ export function watchSurface({
     }
     for (const field of document.querySelectorAll<
       HTMLInputElement | HTMLTextAreaElement
-    >('input:not([type=hidden]), textarea')) {
+    >(
+      'input:not([type=hidden]):not([type=checkbox]):not([type=radio]), textarea',
+    )) {
       if (!visible(field)) continue
       const label = [...(field.labels ?? [])]
         .map((node) => node.textContent)

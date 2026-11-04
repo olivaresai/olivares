@@ -294,8 +294,9 @@ test('release container: a fresh administrator reaches a first answer and the co
           exact: true,
         })
         await dialog
-          .getByRole('radio', { name: tool.name, exact: true })
+          .getByRole('combobox', { name: 'Tool', exact: true })
           .click()
+        await page.getByRole('option', { name: tool.name, exact: true }).click()
         await dialog
           .getByRole('textbox', {
             name: 'First message (optional)',

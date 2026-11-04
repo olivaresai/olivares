@@ -49,6 +49,24 @@ test('first-hour guard accepts live working sessions without a pending load', as
   expect(findings).toEqual([])
 })
 
+test('first-hour guard accepts a personal-folder switch but rejects a path text field', async ({
+  page,
+}) => {
+  const findings: string[] = []
+  await page.exposeFunction('__firstHourFinding', (message: string) =>
+    findings.push(message),
+  )
+  await page.setContent(`<label for="personal">Give each person a personal folder (My files)</label>
+    <input id="personal" type="checkbox">`)
+  await page.evaluate(watchSurface, surfaceOptions('0.1'))
+  expect(findings).toEqual([])
+  await page.setContent(
+    `<label for="path">Folder</label><input id="path" type="text">`,
+  )
+  await page.evaluate(watchSurface, surfaceOptions('0.1'))
+  expect(findings).toEqual(['blank: filesystem path field: Folder'])
+})
+
 test('first-hour guard still rejects a skeleton alongside live working sessions', async ({
   page,
 }) => {

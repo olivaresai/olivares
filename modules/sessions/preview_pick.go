@@ -23,11 +23,11 @@ const previewPick = `<script>(function () {
   var on = false, hot = null, was = '';
   function selector(start) {
     var out = [];
-    for (var el = start; el && el.nodeType === 1 && el !== document.documentElement && out.length < 4; el = el.parentElement) {
-      var part = el.localName;
-      if (el.id) { out.unshift(part + '#' + CSS.escape(el.id)); break; }
-      var same = el.parentElement ? [].filter.call(el.parentElement.children, function (c) { return c.localName === part; }) : [];
-      if (same.length > 1) part += ':nth-of-type(' + (same.indexOf(el) + 1) + ')';
+    for (var element = start; element && element.nodeType === 1 && element !== document.documentElement && out.length < 4; element = element.parentElement) {
+      var part = element.localName;
+      if (element.id) { out.unshift(part + '#' + CSS.escape(element.id)); break; }
+      var same = element.parentElement ? [].filter.call(element.parentElement.children, function (c) { return c.localName === part; }) : [];
+      if (same.length > 1) part += ':nth-of-type(' + (same.indexOf(element) + 1) + ')';
       out.unshift(part);
     }
     return out.join(' > ') || start.localName;
@@ -49,11 +49,11 @@ const previewPick = `<script>(function () {
     if (!on) return;
     e.preventDefault();
     e.stopPropagation();
-    var el = e.target;
+    var element = e.target;
     unmark();
     on = false;
-    var text = (el.innerText || el.value || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80);
-    parent.postMessage({ type: 'olivares-element', selector: selector(el), text: text, path: location.pathname }, '*');
+    var text = (element.innerText || element.value || element.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    parent.postMessage({ type: 'olivares-element', selector: selector(element), text: text, path: location.pathname }, '*');
   }, true);
 })();</script>`
 
