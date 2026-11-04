@@ -237,7 +237,7 @@ class ReleaseFirstHourTest(unittest.TestCase):
             if chat:
                 *args, binary = calls[chat[0]][1:]
                 self.assertEqual([args[0], *args[2:]], ['--binary', '--label', 'release-candidate', '--large-output'])
-                self.assertRegex(args[1], r'/first-hour\.[^/]+/olivares$')
+                self.assertRegex(args[1], r'/olivares-first-hour-nobody\.[^/]+/olivares$')
                 self.assertEqual(binary, 'canonical release binary')
                 self.assertTrue(any(call[:6] == ['sudo', '-u', 'nobody', 'env', '-u', 'XDG_RUNTIME_DIR'] for call in calls))
                 self.assertLess(next(i for i, call in enumerate(calls) if call[:2] == ['docker', 'cp']), chat[0])

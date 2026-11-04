@@ -12,8 +12,9 @@ import { de, en, es, fr, it as itLocale, ja, ko, ru, zh } from './index'
 /** The engine words, per locale. A locale-specific word that also has an ordinary
  * meaning (Spanish and French "principal", Chinese and Korean "subject", French "debit")
  * is matched only in its engine sense. */
-const SPANISH_PRINCIPAL =
-  '\\b(?:este|el|al|del|ese|actual) principal\\b|\\bbits?\\b|cursor|continuación' // language-data: locale vocabulary
+const ES_PREFIX = '\\b(?:este|el|al|del|ese|actual) ' // language-data: locale vocabulary
+const ES_SUFFIX = 'principal\\b|\\bbits?\\b|cursor|continuación' // language-data: locale vocabulary
+const SPANISH_PRINCIPAL = ES_PREFIX + ES_SUFFIX
 
 const ENGINE_WORDS: Record<string, { locale: object; words: RegExp }> = {
   en: { locale: en, words: /\bprincipals?\b|\bbits?\b|continuation|cursor/i },

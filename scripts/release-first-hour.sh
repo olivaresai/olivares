@@ -46,12 +46,14 @@ latest=docker.io/olivaresai/olivares:latest
 owned_tags=()
 browser=$project-browser
 browser_created=false
+nobody_dir=''
 declare -A previous=()
 compose=(docker compose -p "$project" -f deploy/compose/docker-compose.yml
   -f deploy/compose/docker-compose.first-hour.ci.yml)
 cleanup() {
   local rc=$?
   trap - EXIT
+  [[ -z ${nobody_dir:-} ]] || rm -rf "$nobody_dir"
   if [[ $browser_created == true ]]; then
     docker rm --force "$browser" >/dev/null || rc=1
   fi
@@ -173,14 +175,19 @@ fi
 # every release check and ended its first real chat on exactly that). The tool is a
 # labelled stand-in; the engine, its runner and its API are the candidate's own.
 # Run the engine as a user with no user manager of its own. The hosted runner has one,
-# and required confinement correctly refuses to expose a child to it. This disposable
-# directory holds only synthetic test data; no user manager exists for `nobody`.
-chmod 0777 "$work"
+# and required confinement correctly refuses to expose a child to it. Keep the binary
+# outside the runner's private parent so `nobody` can execute it.
+nobody_dir=$(mktemp -d /tmp/olivares-first-hour-nobody.XXXXXX)
+chmod 0755 "$nobody_dir"
+cp "$work/olivares" "$nobody_dir/olivares"
+chmod 0755 "$nobody_dir/olivares"
 if command -v sudo >/dev/null 2>&1 && id nobody >/dev/null 2>&1; then
-  sudo -u nobody env -u XDG_RUNTIME_DIR TMPDIR="$work" bash scripts/session-journey-smoke.sh --binary "$work/olivares" --label release-candidate --large-output
+  sudo -u nobody env -u XDG_RUNTIME_DIR TMPDIR="$nobody_dir" bash scripts/session-journey-smoke.sh --binary "$nobody_dir/olivares" --label release-candidate --large-output
 else
   TMPDIR="$work" bash scripts/session-journey-smoke.sh --binary "$work/olivares" --label release-candidate --large-output
 fi
+rm -rf "$nobody_dir"
+nobody_dir=''
 "${compose[@]}" logs --no-color olivares | sed -n '/FIRST-BOOT SETUP/,/========================/p' | python3 -c '
 import re, sys
 from pathlib import Path
