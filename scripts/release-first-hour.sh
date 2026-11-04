@@ -178,7 +178,7 @@ fi
 # and required confinement correctly refuses to expose a child to it. Keep the binary
 # outside the runner's private parent so `nobody` can execute it.
 nobody_dir=$(mktemp -d /tmp/olivares-first-hour-nobody.XXXXXX)
-chmod 0755 "$nobody_dir"
+chmod 0777 "$nobody_dir"
 cp "$work/olivares" "$nobody_dir/olivares"
 chmod 0755 "$nobody_dir/olivares"
 if command -v sudo >/dev/null 2>&1 && id nobody >/dev/null 2>&1; then

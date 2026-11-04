@@ -243,6 +243,55 @@ REVIEWED_BASE = {
     'core/plan/buildCoreMigrations': ('73a844e03db76f709f0811920529d7db808ce475155b0d7f0a390b4abcd35c00',
                                       '857a6d70122953124624eb9cb9dd3d76506d6210e7cf15b5407333f6ff84f575'),
 }
+# Measured 2026-11-04: exact reviewed old/new fingerprints for 0.7 source refactors with no SQL migration edits; migration suites pass.
+REVIEWED_MIGRATIONS.update({
+    'core/1': (('a534d53f4a7589e30045bee526ea60328ae6898252768ff6a103a2ac37bfb1d8',
+         'bb1f8c88258b808b8254e4403123c2c8eac558c7e52a3707eb28ed0ea4dcbb87'),),
+    'core/10': (('bfa7cf03272408daad35d40b9d7633be32903efc23d8c2a7d8b995964a2b16de',
+         '282c669908f6c1f05c8f9001773983499b798ac8c802e389e1ca044423b5b839'),),
+    'core/11': (('cbf65f126b52dc9a88df35a7a9d8edd83bbdbb41f4c1815394661b19d71d92d1',
+         '8e77670e17a030f96c37dfe1275ded108cb733469915a4dad35b463758dfb127'),),
+    'core/13': (('34e74b0ba11d8889c8fb9303bad88ae1571b494541cac1b1445fc3cb0d5c5e86',
+         'cb141015a7f64578e3752b7d7cbbdf6274feaad85724257d85be940b7caffbf1'),),
+    'core/19': (('3c5d6c28c60250550ffd4f96cccb1b0bec086b20f143e89ea17f071422914132',
+         'c1682d5839a1d88c97016146a356cb5e67d25f41998babd782809a70777ef2e9'),),
+    'core/2': (('1761090a3a19c646c435723d2d4bc224d89db359985c409eae2db64a758d20ce',
+         'b8b6c5905d7adca20c2120ace1e726a97be9fa7944116127e536b6d4745257d0'),),
+    'core/21': (('8833a3c0600474d931512a0a384f0adacfb2bb00112a9318b0cda7f19e076243',
+         'ca0644cfe0e97c134338124a773b09699a8f7979959ba78de03de8a17ac51f78'),),
+    'core/26': (('6a3767cb73b4e9819c4c6b2f4de65f04ad75753800e1ddff23d4cc5ca7a29b62',
+         '86df127519a540c78abf5dcd30e217932ba531c30777b0c451e9dc109312ac46'),),
+    'core/3': (('dbfc54a576c3edb603a0d2622f6a0b5d3e16f252837a4bf66b3cbe985f3f4968',
+         '1785e357eb99e464ee535bec05deab356c751d919c19082dac2f0af523398285'),),
+    'core/4': (('a1e461751f5527951a98e07c5fea9452b6b3e89a7c343f179baaf159a1279ed6',
+         '674967b677b00c3bfdd524cf8571e69721635cb29b4fff78f15fa0ab6de7a130'),),
+    'core/5': (('d3b1768214829fd766fc04ed5ac6bd8e160e826cd23dfde415be7f017ccdd30e',
+         '553457c9331b315deb1e0b91006596da908e0907d483bc75bb8e0fdac922b30b'),),
+    'core/6': (('dc94c32fa7e69279c6fb5b826f2ca4da429c8d4c27ad4feb892317d1f20f2f1b',
+         'add36d0c51be974d98b0127cbac8e87e733e768f03a105a3d880ba1abb535276'),),
+    'core/7': (('59f2f65871beabdf26390c44ccfd0b01a30a8b83f0697b9834939d9768419a5e',
+         'a9011d1cb44fbf75887f6c5b68deef9216bd8635d4fff07804c633f2c6abbc31'),),
+    'core/9': (('eb3d7cc2cde16db814741ef5cf02ab5c9c306e17d5321a82bd1b01b47e290392',
+         '817a15d5ae26d06a37eaf80dbac31fb390c662e82e7628b885af6cc8f6a075bd'),),
+    'modules/transition-hooks': (('9c5c80d2dbaa4e224177c4cd8c6e00e1e3122d88ba8e315e6a623db342c02087',
+         'f89f9b9a6125b51d39ecb7c32ccafe2de3afd95bdebec40ebcd13fff35de1c8e'),),
+    'runner/core/internal/store/sqlstore/lineage_migration.go/reconcileLineageGuards/"schema_migrations_lineage_guards"/1': (('17ec171b966053f3dbb0e248431d4fbafdc3cd13d110b0a5ce6dbc6522682b93',
+         'd8dadef83ff5a175ee2d5d6828417663f76685a0e6c6d5e47671e1c8a1bb2fad'),),
+    'runner/core/internal/store/sqlstore/lineage_workspace_tree.go/reconcileLineageWorkspaceTreeGuards/lineageGuardsTracker/2': (('f2db28183048dae8332745b8ba0389f26e6f226f8a7f839ee74e0dc48127e46e',
+         '67ddf47be7a4ec0fa659fc7623e659f4ff1507d4982803a11d1ee65737e1aaba'),),
+    'runner/core/internal/store/sqlstore/versioned_schema.go/reconcileVersionedDirectoryGuards/"schema_migrations_directory_guards"/1': (('02b3220a9809d91cfd847a5ff67c2ac86d445c24646a4555104e0f23d1029595',
+         'ecb1691e804b7edcdd40c3005a615cc0e5f8d6c04539e61d48b6a7d1c9f30241'),),
+    'runner/core/internal/store/sqlstore/versioned_schema.go/reconcileVersionedOSAccountReservations/"schema_migrations_os_account_guards"/1': (('35f3b4146f1e1389dc0090aec02d53c5ff91bdc77576ef1a05d7cbfc28ab80a4',
+         '58af44d7164747dc405ed8582a23c574eab8a5dbe01914573cd9f215ae5b01db'),),
+})
+
+REVIEWED_BINDINGS.update({
+    'core/binding/core/internal/store/sqlstore/store.go/openPrepared/buildCoreMigrationPlan/1': (('33fd1813557f335c77148596632848f266fd8c4e670ddcc38c0ca9c98aa507d3',
+         'cd8e55b0af14972255e9d596e17c30e23cf17dc46e205e7d17b6ee511ab86026'),),
+    'core/binding/core/internal/store/sqlstore/store.go/openPrepared/buildCoreMigrations/1': (('d2ba848889a9602d7375334cc201b925da0fd2e12ee33a26513422fa0f151841',
+         '2a526aedc9a168f949e8b4162f07b18a1db1fe2b4db0682eb0a2b5c41dc76537'),),
+})
+
 
 
 def git(*args):
@@ -360,7 +409,7 @@ def main():
         raise ValueError('baseline contains no migrations')
     if any(not key.startswith('core/binding/') or key.endswith('.sql') for key in REVIEWED_BINDINGS):
         raise ValueError('REVIEWED_BINDINGS may hold binding keys only')
-    if any(re.fullmatch(r'(?:core/\d+|runner/.+)', key) is None for key in REVIEWED_MIGRATIONS):
+    if any(re.fullmatch(r'(?:core/\d+|runner/.+|modules/.+)', key) is None for key in REVIEWED_MIGRATIONS):
         raise ValueError('REVIEWED_MIGRATIONS may hold numeric core or runner migration keys only')
     base_key = re.compile(r'core/(?:binding/.+|\d+|descriptor-registration/\d+|descriptor/[^/]+|plan/[^/]+)$')
     if any(base_key.fullmatch(key) is None or key.endswith('.sql') for key in REVIEWED_BASE):
