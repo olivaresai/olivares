@@ -307,8 +307,11 @@ test('release container: a fresh administrator reaches a first answer and the co
           .getByRole('button', { name: 'More options', exact: true })
           .click()
         await dialog
-          .getByRole('radio', { name: 'Supervised', exact: true })
-          .check()
+          .getByRole('combobox', { name: 'What the agent may do', exact: true })
+          .click()
+        await page
+          .getByRole('option', { name: 'Supervised', exact: true })
+          .click()
         await capture(`new-session-${tool.key}-filled`)
         await dialog.getByRole('button', { name: 'Start', exact: true }).click()
         // The launch retries the first message for up to 15 s while the tool starts.
