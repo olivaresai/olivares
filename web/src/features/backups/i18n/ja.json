@@ -30,6 +30,7 @@
       "date": "日時",
       "filename": "ファイル名",
       "size": "サイズ",
+      "duration": "所要時間",
       "engine": "エンジン",
       "tenants": "テナント",
       "notes": "メモ"
@@ -88,6 +89,9 @@
     "freeSpace": "保存先の空き容量",
     "notAvailable": "利用不可",
     "overdue": "目標復旧時点を超過",
+    "rtoMinutes": "目標復旧時間（分）",
+    "rtoExceeded": "直近の復元テストは目標復旧時間の {{minutes}} 分を超えました",
+    "restoreTook": "復元テストに {{seconds}} 秒かかりました",
     "age": "{{hours}}時間前",
     "offsiteLockMissing": "バケット {{bucket}} は新しいコピーを `COMPLIANCE` モードでロックしないため、このサーバーの認証情報で削除される可能性があります。既定の `COMPLIANCE` 保持期間付きで S3 Object Lock を有効にし、別の認証情報で整理してください。",
     "offsiteLockUnknown": "バケット {{bucket}} の Object Lock を読み取れなかったため、これらのコピーは削除から保護されていない可能性があります。"
@@ -164,6 +168,8 @@
     "tenants": "テナント",
     "keys": "封印済みキー",
     "empty": "なし",
+    "notIncluded": "このバックアップに含まれないもの",
+    "notIncludedHint": "これらのパスはコピーされません。ご自身でバックアップしてください。",
     "loadFailed": "バックアップの詳細を読み込めませんでした。"
   },
   "empty": {

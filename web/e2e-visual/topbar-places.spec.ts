@@ -144,6 +144,8 @@ for (const lang of ['en', 'es'] as const) {
         const nav = page.locator('[data-slot="sidebar"]')
         await nav.waitFor()
         await settled(page)
+        // Every place is measured, in any language: More is the one closed disclosure.
+        await nav.locator('button[aria-expanded="false"]').click()
         const places = nav.locator('a[data-place]')
         expect(await places.count()).toBeGreaterThan(10)
         expect(

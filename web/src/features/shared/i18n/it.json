@@ -37,8 +37,7 @@
     "savedViewRejected_one": "{{count}} valore salvato in “{{name}}” non è utilizzabile ({{keys}}); la vista è tornata ai valori predefiniti.",
     "savedViewRejected_many": "{{count}} valori salvati in “{{name}}” non sono utilizzabili ({{keys}}); la vista è tornata ai valori predefiniti.",
     "savedViewRejected_other": "{{count}} valori salvati in “{{name}}” non sono utilizzabili ({{keys}}); la vista è tornata ai valori predefiniti.",
-    "thisSavedView": "questa vista salvata",
-    "dismiss": "Chiudi"
+    "thisSavedView": "questa vista salvata"
   },
   "workspaceRequired": {
     "use": "Usa {{name}}",

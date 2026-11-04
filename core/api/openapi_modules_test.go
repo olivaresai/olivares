@@ -152,6 +152,7 @@ var stableContractPaths = []string{
 	"/v1/console/updates/apply",
 	"/v1/console/logs/stream",
 	"/v1/console/logs/buffer",
+	"/v1/console/errors",
 	"/v1/members",
 	"/v1/members/{id}",
 	"/v1/groups",
@@ -167,6 +168,8 @@ var stableContractPaths = []string{
 	"/v1/search",
 	"/v1/server-info",
 	"/v1/setup",
+	// The host metrics read: an additive stable core system operation (superadmin).
+	"/v1/system/host",
 	"/v1/system/orgs",
 	"/v1/system/orgs/{tenant_id}",
 	"/v1/system/orgs/{tenant_id}/region",

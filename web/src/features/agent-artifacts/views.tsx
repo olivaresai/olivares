@@ -23,6 +23,7 @@ export const VIEWS = [
     helpHref: '/reference/modules/xxiii-model-operations',
     icon: PackageSearch,
     permission: 'models:registry:read',
+    changes: [{ permission: 'models:registry:write' }],
     element: lazyView(AgentArtifactsView),
   },
 ] satisfies ViewEntry[]

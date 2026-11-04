@@ -126,6 +126,12 @@ var (
 	// vocabulary. Only the store's internal seal path may write audit.gap, and
 	// audit.recover is admitted only with its detached off-box signature.
 	ErrReservedAuditAction = errors.New("audit action is reserved")
+	// ErrAuditFilterUnavailable is returned when an audit list filter needs a fact
+	// this store cannot resolve: ?tool and ?folder are facts of the sessions.run row
+	// an entry targets, so a store that does not register that entity cannot answer
+	// them. The API maps it to HTTP 501; an empty page would say "no entries" and
+	// ignoring the filter would say "all of them", and neither is true.
+	ErrAuditFilterUnavailable = errors.New("audit filter unavailable")
 	// ErrStoreUnavailable wraps a backend-availability failure at the SQL
 	// boundary: a lost/refused connection or a Postgres SQLSTATE class-08
 	// "Connection Exception". A store transaction that cannot start on a pooled

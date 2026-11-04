@@ -83,8 +83,8 @@ Ctrl+K), уведомления и меню учётной записи. Пал�
 
 | Экран | Путь | Назначение | Требуется | Справка |
 |---|---|---|---|---|
-| Парк | `/estate` | Просматривайте настроенные ресурсы и их связи, включая зависимости рабочих элементов. | `sessions:run:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
-| Инвентаризация | `/inventory` | Обнаружение и каталогизация агентов, MCP-серверов и моделей, которые наблюдали коннекторы. | `inventory:catalog:read` | [reference/modules/i-inventory](/ru/reference/modules/i-inventory/) |
+| Настроенные ресурсы | `/estate` | Что вы настроили и как части зависят друг от друга, включая рабочие элементы. | `sessions:run:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
+| Обнаруженные ресурсы | `/inventory` | Агенты, MCP-серверы и модели, замеченные коннекторами, и когда каждый из них был виден в последний раз. | `inventory:catalog:read` | [reference/modules/i-inventory](/ru/reference/modules/i-inventory/) |
 | Рабочая область | `/workspace` | Агенты, сессии, ресурсы и активность в пределах одной рабочей области | `tenant:read` | [reference/modules/xx-multi-tenancy](/ru/reference/modules/xx-multi-tenancy/) |
 
 ### ИИ

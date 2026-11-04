@@ -123,7 +123,7 @@
     "add": "Add {{token}} to the query",
     "commands": "Search and commands",
     "problem": {
-      "key": "{{token}} is not a ledger filter. Use person:, action:, kind:, target:, since:, until: or plain words.",
+      "key": "{{token}} is not a ledger filter. Use person:, action:, kind:, target:, tool:, folder:, since:, until: or plain words.",
       "time": "{{token}} is not a time. Use 90m, 24h, 7d, 2w or a date such as 2026-10-20.",
       "person": "No one matches {{token}}. Use a name, an email or user:<id>.",
       "several": "{{token}} fits several people. Use the full name, an email or user:<id>.",

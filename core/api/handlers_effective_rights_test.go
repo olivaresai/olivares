@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
@@ -425,5 +426,57 @@ func TestEffectiveRightsReportASuperadminSubjectHoldingEverything(t *testing.T) 
 		if state[name] != "held" {
 			t.Errorf("superadmin: %s = %q, want held", name, state[name])
 		}
+	}
+}
+
+// directoryAgeModule is a route-less module that holds a person's directory data and says when
+// the directory last answered for them, the way a directory module does.
+type directoryAgeModule struct {
+	at  time.Time
+	ok  bool
+	err error
+}
+
+func (*directoryAgeModule) APINamespace() string           { return "dirage" }
+func (*directoryAgeModule) APIRoutes(api.RouteRegistrar)   {}
+func (*directoryAgeModule) Permissions() []auth.Permission { return nil }
+func (m *directoryAgeModule) DirectoryDataAsOf(context.Context, model.TenantID, model.ID) (time.Time, bool, error) {
+	return m.at, m.ok, m.err
+}
+
+// A module that holds the subject's directory data says how old it is, and the read shows
+// that age as membership_as_of, with or without directory groups. A module with nothing for
+// the subject leaves the field out, as a build without a directory does, and a module that
+// cannot say fails the read rather than show a different age.
+func TestEffectiveRightsShowTheAgeAModuleHoldsForTheSubject(t *testing.T) {
+	readAt := time.Date(2026, 11, 2, 9, 30, 15, 123000000, time.UTC)
+	for _, tc := range []struct {
+		name   string
+		module *directoryAgeModule
+		code   int
+		asOf   string
+	}{
+		{"answers", &directoryAgeModule{at: readAt, ok: true}, http.StatusOK, "2026-11-02T09:30:15.123Z"},
+		{"has nothing for the subject", &directoryAgeModule{}, http.StatusOK, ""},
+		{"cannot say", &directoryAgeModule{err: errors.New("directory cache unreadable")}, http.StatusInternalServerError, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t, tc.module)
+			admin := h.adminLogin()
+			tenant := h.createOrg(admin, "acme")
+			agent := h.mkAgent(admin, tenant, "worker")
+			uid, _ := h.authzMember(admin, "viewer@acme.io", "memberpass1", auth.RoleViewer, tenant)
+			r := h.do("GET", effectiveRightsURL(uid, "agent", agent), admin, nil, tenantHdr(tenant))
+			if r.code != tc.code {
+				t.Fatalf("effective-rights = %d %s, want %d", r.code, r.raw, tc.code)
+			}
+			if tc.code != http.StatusOK {
+				return
+			}
+			got, present := r.body["membership_as_of"].(string)
+			if present != (tc.asOf != "") || got != tc.asOf {
+				t.Errorf("membership_as_of = %q (present %v), want %q", got, present, tc.asOf)
+			}
+		})
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/license"
+	"github.com/olivaresai/olivares/core/runtime/hostmetrics"
 	"github.com/olivaresai/olivares/core/secure"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -94,6 +95,8 @@ func statusFor(err error) (int, string) {
 		return http.StatusServiceUnavailable, "session_idle_settings_unavailable"
 	case errors.Is(err, ErrTracingUnavailable):
 		return http.StatusServiceUnavailable, "tracing_unavailable"
+	case errors.Is(err, hostmetrics.ErrUnavailable):
+		return http.StatusNotImplemented, "host_metrics_unavailable"
 	case errors.Is(err, auth.ErrSSOProviderUnavailable):
 		// Checked before the causes it wraps (a store or sealer error). 500: writeError
 		// logs the cause and answers "internal error", never the cause's text.
@@ -162,6 +165,11 @@ func statusFor(err error) (int, string) {
 		// No store registry was handed to the server (an embedder or test store
 		// that exposes none). 501 honest seam, never a list without module kinds.
 		return http.StatusNotImplemented, "workspace_contents_unavailable"
+	case errors.Is(err, store.ErrAuditFilterUnavailable):
+		// #2750: ?tool and ?folder are facts of the sessions.run an entry targets; a
+		// store without that entity cannot resolve them. 501 honest seam, never an
+		// empty page and never the unfiltered ledger.
+		return http.StatusNotImplemented, "audit_filter_unavailable"
 	case errors.Is(err, errDRUnavailable):
 		// the DR console surface is not wired on this deployment. 501.
 		return http.StatusNotImplemented, "dr_unavailable"
@@ -394,6 +402,11 @@ func statusFor(err error) (int, string) {
 		// oraculo de existencia: bastaria con provocarlo para distinguir "no existe" de "no
 		// puedes verla". Por eso este caso va ANTES de cualquier lectura de fila.
 		return http.StatusServiceUnavailable, "route_decision_unavailable"
+	case errors.Is(err, auth.ErrRightsDataStale):
+		// The freshness port refused a new sign-in or the administrative step-up: no
+		// ceremony can help until the source refreshes the data, so it is not
+		// step_up_required.
+		return http.StatusForbidden, "rights_data_stale"
 	case errors.Is(err, auth.ErrStepUpRequired):
 		// the action demands a higher session assurance (AAL3). Distinct
 		// code so the console can route the operator to the step-up ceremony
@@ -605,6 +618,7 @@ func statusFor(err error) (int, string) {
 // tomorrow must not silently reintroduce it.
 var honestSeamMessage = map[string]string{
 	"audit_export_unavailable":         "Audit export and external archive verification require Business. The signed ledger and dr backup remain available.",
+	"audit_filter_unavailable":         "The tool and folder filters cannot be answered on this deployment: they need the sessions module and a store that can read its sessions.",
 	"activation_not_recorded":          "The change reached this server but could not be saved for the deployment, so the engine did not restart. Apply it again; if it fails again, check the engine log.",
 	"activation_restart_unavailable":   "The change is saved, but this engine cannot restart itself. Restart the engine with its service manager to apply it.",
 	"updates_unavailable":              "Updates from the console are not available on this engine. Run `olivares upgrade` on the server.",

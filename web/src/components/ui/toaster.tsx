@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { Toaster as Sonner, toast } from 'sonner'
+import { Toaster as Sonner } from 'sonner'
 import type { ComponentProps } from 'react'
 import { cn } from '@/lib/utils'
 import { useThemeStore } from '@/stores/theme'
+import { TOAST_MS, toast } from './toast'
 
 /**
  * Toaster — the app-wide notification surface, wrapping `sonner` and re-skinned
@@ -14,6 +15,10 @@ import { useThemeStore } from '@/stores/theme'
  * and a thin semantic left rule per intent (success/error/warning/info). Theme
  * follows the app's resolved light/dark so toasts never flash the wrong scheme.
  * Re-exports `toast` so callers do `toast.success(...)` from one import.
+ *
+ * The container is a polite live region, so every toast is announced, and its action
+ * and close buttons are ordinary buttons. Lifetime (6 seconds, an error until it is
+ * dismissed) is the rule in `./toast`.
  */
 export type ToasterProps = ComponentProps<typeof Sonner>
 
@@ -25,6 +30,7 @@ export function Toaster({ toastOptions, ...props }: ToasterProps) {
       theme={theme}
       position="top-right"
       richColors={false}
+      duration={TOAST_MS}
       closeButton
       toastOptions={{
         ...toastOptions,
@@ -66,4 +72,6 @@ export function Toaster({ toastOptions, ...props }: ToasterProps) {
   )
 }
 
+// A re-export, not a component: callers import `toast` and `Toaster` from this one module.
+// eslint-disable-next-line react-refresh/only-export-components
 export { toast }

@@ -7,6 +7,7 @@
 // carries the orange edge: the first request still waiting that THIS person may decide.
 // Selecting a row is a tone step and nothing else, so the edge never follows the
 // selection (C2-IMPROVE L4): the flag says what needs you, the tone says what you read.
+import type { KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatDateTime, formatShortDateTime } from '@/lib/format'
 import { Badge } from '@/components/ui/badge'
@@ -53,7 +54,11 @@ export function ApprovalQueue({
   return (
     <ul
       aria-label={t('approvals.title')}
-      className="flex flex-col overflow-hidden rounded-xl border border-line bg-surface"
+      data-list-keys
+      data-trust-chrome=""
+      tabIndex={-1}
+      onKeyDown={moveRowFocus}
+      className="flex flex-col overflow-hidden rounded-xl border border-line bg-surface text-foreground outline-none"
     >
       {ordered.map((a) => (
         <li key={a.id} className="border-b border-line last:border-b-0">
@@ -67,6 +72,36 @@ export function ApprovalQueue({
       ))}
     </ul>
   )
+}
+
+const ROW_STEP: Readonly<Record<string, number>> = {
+  ArrowDown: 1,
+  j: 1,
+  J: 1,
+  ArrowUp: -1,
+  k: -1,
+  K: -1,
+}
+
+/** `j`/`k` and the arrows walk the rows; Enter on one opens it, as its click does. From
+ * the list itself (the shell focuses it for a `j` from the page) the open row takes focus. */
+function moveRowFocus(e: KeyboardEvent<HTMLUListElement>) {
+  const step = ROW_STEP[e.key]
+  if (!step || e.metaKey || e.ctrlKey || e.altKey) return
+  const rows = Array.from(
+    e.currentTarget.querySelectorAll<HTMLElement>('[data-approval-row]'),
+  )
+  if (rows.length === 0) return
+  e.preventDefault()
+  const at = rows.indexOf(document.activeElement as HTMLElement)
+  const next =
+    at < 0
+      ? Math.max(
+          rows.findIndex((r) => r.getAttribute('aria-current') === 'true'),
+          0,
+        )
+      : Math.min(Math.max(at + step, 0), rows.length - 1)
+  rows[next].focus()
 }
 
 function QueueRow({

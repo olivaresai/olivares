@@ -1364,6 +1364,15 @@ export class Client extends ClientCore {
   }
 
   /**
+   * POST /v1/console/errors — Report a console render error from a person's browser session; the engine logs it, shortened to its limits, only when telemetry is enabled.
+   *
+   * Stability: stable.
+   */
+  postV1ConsoleErrors(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/console/errors", "/v1/console/errors", body, opts);
+  }
+
+  /**
    * GET /v1/console/health-summary — Operational health summary for the console dashboard.
    *
    * Stability: stable.
@@ -1580,7 +1589,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/console/secrets/reveal — Reveal one item of the caller's own personal vault (step-up, audited, rate limited)
+   * POST /v1/console/secrets/reveal — Reveal one vault item the caller owns or may read in a shared vault (step-up, audited, rate limited)
    *
    * Stability: stable.
    */
@@ -1589,7 +1598,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/console/secrets/totp — Current authenticator code of one of the caller's own vault items (step-up, audited, rate limited; never the seed)
+   * POST /v1/console/secrets/totp — Current authenticator code of a vault item the caller owns or may read in a shared vault (step-up, audited, rate limited; never the seed)
    *
    * Stability: stable.
    */
@@ -1973,6 +1982,15 @@ export class Client extends ClientCore {
    */
   postV1Setup(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
     return this.do("POST", "/v1/setup", "/v1/setup", body, opts);
+  }
+
+  /**
+   * GET /v1/system/host — Read the host's CPU, memory, load, filesystems and session-folder disk use (superadmin)
+   *
+   * Stability: stable.
+   */
+  getV1SystemHost(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/system/host", "/v1/system/host", undefined, opts);
   }
 
   /**
@@ -2417,6 +2435,15 @@ export class Client extends ClientCore {
   }
 
   /**
+   * DELETE /v1/m/agenttools/ollama/models — Deletes one installed model from the running Ollama.
+   *
+   * Stability: beta.
+   */
+  deleteV1MAgenttoolsOllamaModels(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("DELETE", "/v1/m/agenttools/ollama/models", "/v1/m/agenttools/ollama/models", body, opts);
+  }
+
+  /**
    * POST /v1/m/agenttools/ollama/pulls — Downloads a model into the running Ollama and returns the download to follow; Ollama's own progress is read from it.
    *
    * Stability: beta.
@@ -2432,6 +2459,15 @@ export class Client extends ClientCore {
    */
   getV1MAgenttoolsOllamaPullsById(id: string, opts?: RequestOptions): Promise<Json> {
     return this.do("GET", "/v1/m/agenttools/ollama/pulls/{id}", `/v1/m/agenttools/ollama/pulls/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * DELETE /v1/m/agenttools/ollama/pulls/{id} — Ends a running download: the request to Ollama is closed, which stops its pull (what it fetched stays for the next try).
+   *
+   * Stability: beta.
+   */
+  deleteV1MAgenttoolsOllamaPullsById(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/m/agenttools/ollama/pulls/{id}", `/v1/m/agenttools/ollama/pulls/${encodeURIComponent(id)}`, undefined, opts);
   }
 
   /**
@@ -5792,6 +5828,51 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/m/governance/vaults — governance module route (requires governance:vault:read)
+   *
+   * Stability: beta.
+   */
+  getV1MGovernanceVaults(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/governance/vaults", "/v1/m/governance/vaults", undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/governance/vaults — governance module route (requires governance:vault:write)
+   *
+   * Stability: beta.
+   */
+  postV1MGovernanceVaults(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/governance/vaults", "/v1/m/governance/vaults", body, opts);
+  }
+
+  /**
+   * GET /v1/m/governance/vaults/{id}/shares — governance module route (requires governance:vault:read)
+   *
+   * Stability: beta.
+   */
+  getV1MGovernanceVaultsByIdShares(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/governance/vaults/{id}/shares", `/v1/m/governance/vaults/${encodeURIComponent(id)}/shares`, undefined, opts);
+  }
+
+  /**
+   * PUT /v1/m/governance/vaults/{id}/shares — governance module route (requires governance:vault:write)
+   *
+   * Stability: beta.
+   */
+  putV1MGovernanceVaultsByIdShares(id: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("PUT", "/v1/m/governance/vaults/{id}/shares", `/v1/m/governance/vaults/${encodeURIComponent(id)}/shares`, body, opts);
+  }
+
+  /**
+   * DELETE /v1/m/governance/vaults/{id}/shares — governance module route (requires governance:vault:write)
+   *
+   * Stability: beta.
+   */
+  deleteV1MGovernanceVaultsByIdShares(id: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("DELETE", "/v1/m/governance/vaults/{id}/shares", `/v1/m/governance/vaults/${encodeURIComponent(id)}/shares`, body, opts);
+  }
+
+  /**
    * GET /v1/m/health/checks — Lists declared checks, optionally filtered by ?subject_kind and ?desired_status.
    *
    * Stability: beta.
@@ -8564,6 +8645,24 @@ export class Client extends ClientCore {
   }
 
   /**
+   * POST /v1/m/sessions/live/by-id/{live_ref}/pin — Pins an observed session for the caller, idempotently.
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsLiveByIdByLiveRefPin(live_ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/m/sessions/live/by-id/{live_ref}/pin", `/v1/m/sessions/live/by-id/${encodeURIComponent(live_ref)}/pin`, undefined, opts);
+  }
+
+  /**
+   * DELETE /v1/m/sessions/live/by-id/{live_ref}/pin — Removes the caller's pin on an observed session, idempotently.
+   *
+   * Stability: beta.
+   */
+  deleteV1MSessionsLiveByIdByLiveRefPin(live_ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/m/sessions/live/by-id/{live_ref}/pin", `/v1/m/sessions/live/by-id/${encodeURIComponent(live_ref)}/pin`, undefined, opts);
+  }
+
+  /**
    * GET /v1/m/sessions/live/by-id/{live_ref}/timeline — Returns the timeline of exactly one session row by its live_ref: a scoped row by the events written with that reference, a legacy row by its legacy events.
    *
    * Stability: beta.
@@ -8610,6 +8709,24 @@ export class Client extends ClientCore {
   getV1MSessionsMessagesById(id: string, opts?: RequestOptions): Promise<SessionsCommunicationReadResult> {
     const callOpts = opts;
     return this.do("GET", "/v1/m/sessions/messages/{id}", `/v1/m/sessions/messages/${encodeURIComponent(id)}`, undefined, callOpts) as unknown as Promise<SessionsCommunicationReadResult>;
+  }
+
+  /**
+   * GET /v1/m/sessions/personal-folders-settings — Reads or changes whether this organization gives each person a personal folder, My files; changing it takes folder administration and is audited.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsPersonalFoldersSettings(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/personal-folders-settings", "/v1/m/sessions/personal-folders-settings", undefined, opts);
+  }
+
+  /**
+   * PUT /v1/m/sessions/personal-folders-settings — Reads or changes whether this organization gives each person a personal folder, My files; changing it takes folder administration and is audited.
+   *
+   * Stability: beta.
+   */
+  putV1MSessionsPersonalFoldersSettings(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("PUT", "/v1/m/sessions/personal-folders-settings", "/v1/m/sessions/personal-folders-settings", body, opts);
   }
 
   /**
@@ -8829,7 +8946,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/sessions/provider-profiles/{ref}/models — Lists the models and effort levels that the installed tool or bound provider of one provider profile reports now, cached for two minutes; it sends no prompt, starts no conversation and returns no credential.
+   * GET /v1/m/sessions/provider-profiles/{ref}/models — Lists the models and effort levels that the installed tool or bound provider of one provider profile reports now, cached for two minutes, then answered from the last read while it is read again; it sends no prompt, starts no conversation and returns no credential.
    *
    * Stability: beta.
    */
@@ -9081,6 +9198,24 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/m/sessions/runs/{ref}/checkpoints — Lists the session's turns, oldest first: the prompt of each and the files it changed, read from snapshots the engine took (nothing is executed in the folder).
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsRunsByRefCheckpoints(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/runs/{ref}/checkpoints", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/checkpoints`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/runs/{ref}/checkpoints/{seq}/rewind — Puts the session's folder back as it was before a turn (to start), or as it was when the turn ended (to end, which undoes a rewind).
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsRunsByRefCheckpointsBySeqRewind(ref: string, seq: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/sessions/runs/{ref}/checkpoints/{seq}/rewind", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/checkpoints/${encodeURIComponent(seq)}/rewind`, body, opts);
+  }
+
+  /**
    * POST /v1/m/sessions/runs/{ref}/cleanup without a request body.
    * Stability: beta.
    */
@@ -9176,6 +9311,24 @@ export class Client extends ClientCore {
    */
   postV1MSessionsRunsByRefGitCommit(ref: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
     return this.doJsonRequired("POST", "/v1/m/sessions/runs/{ref}/git/commit", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/git/commit`, body, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/runs/{ref}/git/init — sessions module route (requires sessions:run:write)
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsRunsByRefGitInit(ref: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/sessions/runs/{ref}/git/init", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/git/init`, body, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/runs/{ref}/git/merge — Fast-forwards the workspace's current branch to the stopped session's owned branch.
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsRunsByRefGitMerge(ref: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/sessions/runs/{ref}/git/merge", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/git/merge`, body, opts);
   }
 
   /**
@@ -9403,12 +9556,39 @@ export class Client extends ClientCore {
   }
 
   /**
+   * POST /v1/m/sessions/runs/{ref}/tasks/{task}/stop — Stops one background task of a live session and answers with the session, which stays running (stopRunTask).
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsRunsByRefTasksByTaskStop(ref: string, task: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/m/sessions/runs/{ref}/tasks/{task}/stop", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/tasks/${encodeURIComponent(task)}/stop`, undefined, opts);
+  }
+
+  /**
    * POST /v1/m/sessions/runs/{ref}/title — Cuts the run's title from its first message.
    *
    * Stability: beta.
    */
   postV1MSessionsRunsByRefTitle(ref: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
     return this.do("POST", "/v1/m/sessions/runs/{ref}/title", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/title`, body, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/runs/{ref}/unread — Marks the run unread for the caller, idempotently: the moment they last saw it goes back before anything it ever did.
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsRunsByRefUnread(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/m/sessions/runs/{ref}/unread", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/unread`, undefined, opts);
+  }
+
+  /**
+   * DELETE /v1/m/sessions/runs/{ref}/unread — Marks the run read for the caller, idempotently: they have seen all it did up to now.
+   *
+   * Stability: beta.
+   */
+  deleteV1MSessionsRunsByRefUnread(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/m/sessions/runs/{ref}/unread", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/unread`, undefined, opts);
   }
 
   /**
@@ -9535,6 +9715,15 @@ export class Client extends ClientCore {
    */
   getV1MSessionsTools(opts?: RequestOptions): Promise<Json> {
     return this.do("GET", "/v1/m/sessions/tools", "/v1/m/sessions/tools", undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/usage — Totals the runs the caller may read, one row per model, account, provider or tool, over an optional time range.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsUsage(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/usage", "/v1/m/sessions/usage", undefined, opts);
   }
 
   /**
@@ -9736,6 +9925,15 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/m/sessions/workspace-candidates — Lists the folders the tools of the engine's own account already worked in, read from the tools' own records of project paths and dates (never a credential or conversation text), each with the tool, the last use, the number of conversations, whether it is preselected (used in the last 30 days in at least 3 conversations) and the reason it cannot be registered.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsWorkspaceCandidates(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/workspace-candidates", "/v1/m/sessions/workspace-candidates", undefined, opts);
+  }
+
+  /**
    * GET /v1/m/sessions/workspaces — sessions module route (requires sessions:workspace:read)
    *
    * Stability: beta.
@@ -9796,6 +9994,15 @@ export class Client extends ClientCore {
    */
   deleteV1MSessionsWorkspacesByRefFiles(ref: string, opts?: RequestOptions): Promise<Json> {
     return this.do("DELETE", "/v1/m/sessions/workspaces/{ref}/files", `/v1/m/sessions/workspaces/${encodeURIComponent(ref)}/files`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/workspaces/{ref}/files/archive — sessions module route (requires sessions:workspace:read)
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsWorkspacesByRefFilesArchive(ref: string, opts?: RequestOptions): Promise<string> {
+    return this.doRaw("GET", "/v1/m/sessions/workspaces/{ref}/files/archive", `/v1/m/sessions/workspaces/${encodeURIComponent(ref)}/files/archive`, opts);
   }
 
   /**
@@ -9877,6 +10084,24 @@ export class Client extends ClientCore {
    */
   postV1MSessionsWorkspacesByRefSetupCommandApprove(ref: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
     return this.doJsonRequired("POST", "/v1/m/sessions/workspaces/{ref}/setup-command/approve", `/v1/m/sessions/workspaces/${encodeURIComponent(ref)}/setup-command/approve`, body, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/workspaces/{ref}/sftp — Tells whether this server serves SFTP and SCP for the folder, and where: the user name, the port and the fingerprint of the host key a client should compare.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsWorkspacesByRefSftp(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/workspaces/{ref}/sftp", `/v1/m/sessions/workspaces/${encodeURIComponent(ref)}/sftp`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/workspaces/{ref}/sftp — Issues a short-lived credential to copy files in and out of the folder with sftp or scp, and answers with the private key, shown once and never kept.
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsWorkspacesByRefSftp(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/m/sessions/workspaces/{ref}/sftp", `/v1/m/sessions/workspaces/${encodeURIComponent(ref)}/sftp`, undefined, opts);
   }
 
   /**

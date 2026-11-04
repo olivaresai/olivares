@@ -87,8 +87,9 @@ test.describe('the Estate sheet and the session page show the real conversation'
     await signIn(page)
     await page.goto('/')
     const card = page
-      .getByTestId('now-live-card')
+      .getByTestId('swimlane-lane')
       .filter({ hasText: runName })
+      .getByRole('link')
       .first()
     await card.click()
     await expect(sheet(page)).toBeVisible()
@@ -100,7 +101,7 @@ test.describe('the Estate sheet and the session page show the real conversation'
       /^(live|run):/,
     )
     await expect(page.getByRole('dialog', { name: runName })).toBeVisible()
-    await expect(page.getByTestId('now-live')).toBeAttached()
+    await expect(page.getByTestId('estate-swimlane')).toBeAttached()
 
     const log = sheet(page).getByRole('log')
     await sendTurn(page, 'Look up the readme')

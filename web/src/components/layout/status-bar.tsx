@@ -36,6 +36,7 @@ import {
 } from '@/features/agent-tools/use-background-providers'
 import { engineToolsQuery } from '@/features/agentops/api'
 import { toolName } from '@/features/agentops/engine-tools'
+import { PanelSlot } from '@/components/ui/trust-chrome'
 import type * as EngageCard from '@/features/killswitch/engage-card'
 import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { useOfferedPanels } from '@/features/panels'
@@ -79,21 +80,28 @@ function OpenKillSwitch() {
   return null
 }
 
-/** Each tool's 5-hour and weekly use, as its default login reported it. A tool that
- * reported nothing shows nothing: unknown is never 0%. */
+/** Each tool's 5-hour and weekly use, as its default login reported it, else as the
+ * first of its logins that reported any (the account quota the session header no longer
+ * repeats). A tool that reported nothing shows nothing: unknown is never 0%. */
 function ProviderUsage() {
   const { t } = useTranslation('nav')
   const providers = useBackgroundProviders()
-  const tools = (providers.data?.providers ?? [])
-    .filter((p) => p.default && p.state === 'ready')
+  const reported = (providers.data?.providers ?? [])
+    .filter((p) => p.state === 'ready')
     .map((p) => ({
       driver: p.driver,
+      isDefault: p.default,
       windows: p.limits.flatMap((limit) => {
         const key = USAGE_WINDOWS[limit.label as keyof typeof USAGE_WINDOWS]
         return key ? [{ key, percent: Math.round(limit.percent) }] : []
       }),
     }))
-    .filter((tool) => tool.windows.length > 0)
+    .filter((login) => login.windows.length > 0)
+  const tools = [...new Set(reported.map((login) => login.driver))].map(
+    (driver) =>
+      reported.find((l) => l.driver === driver && l.isDefault) ??
+      reported.find((l) => l.driver === driver)!,
+  )
   if (tools.length === 0) return null
   return (
     <>
@@ -232,7 +240,9 @@ export function StatusBar() {
         <ProviderUsage />
         <KillSwitchStatus />
         {additions.map(({ id, Component }) => (
-          <Component key={id} />
+          <PanelSlot key={id} className="flex items-center">
+            <Component />
+          </PanelSlot>
         ))}
       </span>
       <span className="flex shrink-0 items-center gap-3">
@@ -243,6 +253,8 @@ export function StatusBar() {
             className="flex shrink-0 tabular-nums text-text-3"
           >
             <span className="sr-only">{t('shell.status.version')} </span>
+            {/* The product's name before its number: a bare "0.6" says nothing. */}
+            <span>Olivares&nbsp;</span>
             <span>{version}</span>
           </p>
         ) : null}

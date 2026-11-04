@@ -13,9 +13,11 @@ construit autour de cette exigence — chaque bundle enregistre les pointes de
 chaîne par tenant, la restauration **échoue avec un code non nul si le ledger
 restauré n'est pas sûr pour la continuité**, et `dr drill` vérifie la
 continuité du ledger, de la sauvegarde à la restauration, sur un ledger
-synthétique dans un répertoire de travail, puis affiche la RTO mesurée. Il ne
-vérifie pas les droits, la garde des clés ni les effets postérieurs au point
-de restauration, et il ne touche pas un répertoire de données de production.
+synthétique dans un répertoire de travail, puis affiche la RTO mesurée ; avec
+`--scratch-dsn`, il exécute le même aller-retour sur PostgreSQL, dans des bases
+jetables, et affiche cette RTO à côté de celle de SQLite. Il ne vérifie pas les
+droits, la garde des clés ni les effets postérieurs au point de restauration, et
+il ne touche pas un répertoire de données de production.
 
 Le bundle est chiffré sous une **KEK que vous fournissez** — une phrase secrète
 dérivée par Argon2id (`--passphrase-file`) ou une clé brute de 32 octets issue de
@@ -68,11 +70,11 @@ le chart Helm un
 [CronJob](/fr/tutorials/getting-started/kubernetes/#4-sauvegardes-chiffrées-planifiées) ;
 sur bare metal, planifiez la commande ci-dessus avec cron. Les chiffres du
 tableau sont des cibles. Pour les paliers cron, la cible de RPO est
-l'intervalle cron. `dr drill` mesure la RTO SQLite sur un ledger synthétique
-(restauration, démarrage et vérification). Il ne mesure pas le RPO et ne
-mesure pas une restauration Postgres. Les RTO SQLite mesurées, avec le nombre
-d'événements et l'hôte, sont dans `docs/DR-RUNBOOK.md` ; ce ne sont pas les
-cibles de ce tableau.
+l'intervalle cron. `dr drill` mesure la RTO sur un ledger synthétique (restauration, démarrage et
+vérification) : SQLite toujours, PostgreSQL lorsque vous lui donnez
+`--scratch-dsn`. Il ne mesure pas le RPO. Les valeurs de RTO mesurées, avec le
+nombre d'événements et l'hôte sur lequel elles ont été prises, sont dans
+`docs/DR-RUNBOOK.md` ; ce ne sont pas les cibles de ce tableau.
 
 | Palier | Mécanisme | RPO cible | RTO cible |
 |---|---|---|---|
@@ -89,15 +91,25 @@ sens qui compte.
 
 `dr verify` vérifie un bundle **sans toucher à votre data dir**. Sous SQLite,
 il restaure dans un répertoire de travail et vérifie la continuité du ledger,
-puis sort avec un code non nul si cette vérification échoue. Sous Postgres, il
-vérifie le digest du bundle et le déchiffrement des clés. La vérification
-complète de la chaîne d'un bundle Postgres exige une restauration sur un
-Postgres de travail. Lancez la vérification avec :
+puis sort avec un code non nul si cette vérification échoue. Sous Postgres,
+donnez-lui un serveur de travail avec `--scratch-dsn` : il y crée une base
+jetable avec ses propres rôles, y restaure le bundle, vérifie le ledger, puis
+supprime les deux. Lancez la vérification avec :
 
 ```bash
 olivares dr verify --in /backups/olivares-dr-<ts>.drbundle \
   --passphrase-file <your-dr-passphrase-file>
+
+# Postgres: a maintenance DSN of a server where databases and roles may be created
+olivares dr verify --in /backups/olivares-pg-<ts>.drbundle \
+  --passphrase-file <your-dr-passphrase-file> \
+  --scratch-dsn file:/run/secrets/scratch.dsn
 ```
+
+Le DSN est une référence `file:` ou `env:`, jamais un identifiant en clair. Sans
+`--scratch-dsn`, un bundle Postgres n'est vérifié que pour son digest et le
+déchiffrement de ses clés, et la sortie indique que le ledger n'a pas été
+restauré.
 
 `dr inspect --in <bundle>` affiche le manifeste (sans KEK requise, sans secrets
 montrés) — quel moteur, quels tenants, quelles pointes de chaîne. Exécutez
@@ -120,6 +132,15 @@ sûre. Après toute restauration, re-vérifiez face à votre épingle de checkpo
 **hors machine** — un instantané plus ancien restauré peut passer un parcours
 naïf tout en échouant à la comparaison hors machine
 ([dépannage § ledger](/fr/how-to/troubleshooting/#le-ledger-échoue-à-la-vérification)).
+
+Sous Postgres, restaurer dans une base qui contient déjà un estate est refusé
+sauf si vous le déclarez : `--operator` et `--reason` (enregistrés dans le ledger
+restauré) et `--force`. Les objets du bundle remplacent alors ceux de la base
+dans une seule transaction : l'ancien estate est remplacé en entier ou pas du
+tout. Avant de toucher à quoi que ce soit, elle sauvegarde un `pg_dump` de la
+base (via `--admin-dsn`, obligatoire ici) à côté des clés de signature
+précédentes, qui restent sous le nom `*.pre-restore-*` ; supprimez-les lorsque
+vous en êtes satisfait.
 
 ## Les deux clés qui décident de tout
 

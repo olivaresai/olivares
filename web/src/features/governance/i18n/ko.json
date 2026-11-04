@@ -472,7 +472,7 @@
     "subtitle": "Claude Code Routines의 주기 하한, 동시성 상한, 승인 요구, cron 허용 목록 및 차단 환경입니다. 겹치는 정책은 가장 제한적인 것이 이깁니다.",
     "search": "루틴 정책 검색…",
     "newPolicy": "새 정책",
-    "enforcementCaption": "이 제어는 루틴이 선언될 때와 매 실행 시 다시 강제됩니다. 비활성화된 정책은 보관되지만 아무것도 구성하지 않습니다.",
+    "enforcementCaption": "이 제어는 루틴이 선언될 때와 매 실행 시 다시 강제됩니다. 비활성화된 정책은 보관되지만 아무것에도 적용되지 않습니다.",
     "enabledYes": "활성화됨",
     "enabledNo": "비활성화됨",
     "approvalYes": "필요",
@@ -491,7 +491,7 @@
       "envs": "차단 환경"
     },
     "scope": {
-      "tenant": "테넌트",
+      "tenant": "조직",
       "workspace": "Workspace",
       "user": "사용자"
     },
@@ -509,12 +509,12 @@
       "unreadableCaveat": "엔진이 이 저장 열을 파싱할 수 없었습니다. 강제는 그러한 정책을 즉시 거부하므로 아무것도 허용하지 않고 거부 폐쇄합니다."
     },
     "posture": {
-      "title": "유효 태세",
+      "title": "적용 중인 규칙",
       "counts": "정책 {{total}}개 중 {{enabled}}개 활성화됨",
       "workspaceRef": "Workspace",
       "userRef": "사용자",
-      "defaultWorkspace": "테넌트 기본값",
-      "noUser": "소유 사용자 없음",
+      "defaultWorkspace": "조직 기본값",
+      "noUser": "소유자 없음",
       "resolve": "해석",
       "indeterminate": "이 해석은 {{axis}} 축에서 확정할 수 없습니다. 강제는 여기서 거부 폐쇄합니다 — 제어가 없는 것이 아니라 거부입니다.",
       "floor": "주기 하한",
@@ -524,17 +524,17 @@
       "cap": "{{scope}} · 최대 {{max}}",
       "origin": "구성 출처:",
       "none": "이 범위를 거버넌스하는 활성 정책이 없습니다.",
-      "failed": "태세를 읽을 수 없습니다",
+      "failed": "적용 중인 규칙을 읽을 수 없습니다",
       "resolvedFor": "Workspace {{workspace}} · 사용자 {{user}}에 대해 해석됨",
       "stale": "위 범위가 변경되었습니다; 다시 해석하십시오",
-      "unknownUser": "답할 수 없는 사용자 축",
-      "unknownUserAxis": "사용자 축에 답할 수 없음",
+      "unknownUser": "소유자 알 수 없음",
+      "unknownUserAxis": "소유자 알 수 없음",
       "supersededByIndeterminate": "아래 값은 지금까지 구성된 것입니다. 결과가 아닙니다: 확정할 수 없는 해석은 그 값이 무엇이든 통째로 거부됩니다.",
-      "noneIndeterminate": "이 범위에 구성된 정책이 없고 해석이 답할 수 없는 축에서 거부되었습니다 — 여기에 제어가 적용되지 않는 것과 같지 않습니다."
+      "noneIndeterminate": "이 범위에 어떤 정책이 적용되는지 Olivares가 판단할 수 없어 조회가 거부되었습니다 — 여기에 제어가 적용되지 않는 것과 같지 않습니다."
     },
     "remove": {
       "title": "루틴 정책 삭제",
-      "body": "“{{name}}”이 유효 태세 구성에서 빠집니다. 제약하던 루틴은 남은 정책만 적용받습니다.",
+      "body": "“{{name}}”이 더 이상 적용되지 않습니다. 제약하던 루틴은 남은 정책만 적용받습니다.",
       "confirm": "정책 삭제",
       "done": "루틴 정책이 삭제되었습니다"
     },
@@ -550,7 +550,7 @@
       "scopeImmutable": "생성 후 불변입니다.",
       "scopeRef": "범위 참조",
       "scopeRefRequired": "Workspace 또는 사용자 범위 정책에는 참조가 필요합니다.",
-      "tenantScopeRef": "테넌트 범위 정책에는 참조가 없어야 합니다.",
+      "tenantScopeRef": "조직 범위 정책에는 참조가 없어야 합니다.",
       "enabled": "정책 활성화됨",
       "floorToggle": "주기 하한 강제",
       "floor": "최소 간격(초)",

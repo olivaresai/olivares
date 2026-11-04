@@ -132,6 +132,9 @@ type keyEvent struct {
 // readKeys decodes keys until the terminal ends or the frame closes.
 func readKeys(r *bufio.Reader, fd int, out chan<- keyEvent, done <-chan struct{}) {
 	for {
+		if r.Buffered() == 0 && !waitInput(fd, done) {
+			return
+		}
 		k, err := readKey(r, fd)
 		select {
 		case out <- keyEvent{key: k, err: err}:
@@ -512,16 +515,38 @@ func (m *model) render() []string {
 	}
 	lines[0] = m.heading(m.frame.Heading)
 	lines[1] = m.separator()
-	start, rows := m.list.Window(m.height - 6)
+	footer := m.footerRows()
+	start, rows := m.list.Window(m.height - 5 - len(footer))
 	labelWidth := m.labelWidth()
 	for i, item := range rows {
 		lines[2+i] = m.item(item, start+i == m.list.Cursor(), labelWidth)
 	}
-	lines[m.height-4] = m.commandRow()
-	lines[m.height-3] = m.renderer.Paint(clip("  "+m.frame.Footer, m.width), m.frame.FooterRole)
+	top := m.height - 2 - len(footer)
+	lines[top-1] = m.commandRow()
+	for i, row := range footer {
+		lines[top+i] = m.renderer.Paint(row, m.frame.FooterRole)
+	}
 	lines[m.height-2] = m.separator()
 	lines[m.height-1] = m.statusLine()
 	return lines
+}
+
+// maxFooterRows is the most rows the footer takes from the list.
+const maxFooterRows = 3
+
+// footerRows is the footer wrapped to the screen: a sentence the engine or a screen
+// says is read whole, not cut at the width. One row stays for the list's own window
+// on a short screen, and a footer past the rows it may take ends in the cut.
+func (m *model) footerRows() []string {
+	rows := wrapWords("  "+m.frame.Footer, m.width)
+	limit := max(1, min(maxFooterRows, m.height-6))
+	if len(rows) > limit {
+		rows = append(rows[:limit-1], strings.Join(rows[limit-1:], " "))
+	}
+	for i := range rows {
+		rows[i] = clip(rows[i], m.width)
+	}
+	return rows
 }
 
 func (m *model) heading(left string) string {

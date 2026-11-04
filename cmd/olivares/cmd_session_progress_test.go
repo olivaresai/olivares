@@ -42,3 +42,25 @@ func TestSessionViewKeepsALongToolCallReadable(t *testing.T) {
 		t.Fatalf("view =\n%s\nwant\n%s", got, want)
 	}
 }
+
+// TestSessionViewDropsTheThinkingCounter: Claude Code reports a `thinking_tokens` system
+// frame per thinking chunk, and send printed "· thinking tokens" for each, 19 lines in a
+// row before one answer. It is the tool's bookkeeping, as the console treats it (#1784):
+// no line. Another status the view cannot name is said once, not once per frame.
+func TestSessionViewDropsTheThinkingCounter(t *testing.T) {
+	var b strings.Builder
+	v := newSessionView(&b)
+	v.driver = "claude"
+	for _, f := range []string{
+		`{"type":"system","subtype":"thinking_tokens","session_id":"s1"}`,
+		`{"type":"system","subtype":"thinking_tokens","session_id":"s1"}`,
+		`{"type":"system","subtype":"compacting","session_id":"s1"}`,
+		`{"type":"system","subtype":"compacting","session_id":"s1"}`,
+		`{"type":"assistant","session_id":"s1","message":{"role":"assistant","content":[{"type":"text","text":"hola"}]}}`,
+	} {
+		v.render(f)
+	}
+	if got, want := b.String(), "· compacting\nhola\n"; got != want {
+		t.Fatalf("view =\n%s\nwant\n%s", got, want)
+	}
+}

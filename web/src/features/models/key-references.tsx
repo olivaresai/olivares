@@ -75,6 +75,7 @@ export function ProviderKeyReferences() {
         </IntelNotice>
         <ListTruncationBadge
           query={keysQ}
+          filas={keysQ.data?.items?.length ?? 0}
           label={t('keys.truncated', {
             n: keysQ.data?.items?.length ?? 0,
           })}

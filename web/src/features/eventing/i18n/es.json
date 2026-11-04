@@ -106,7 +106,7 @@
   },
   "events": {
     "title": "Eventos capturados",
-    "description": "Registro de eventos con cursor de secuencia. Filtra por tipo de evento para acotar resultados.",
+    "description": "Registro de eventos. Filtra por tipo de evento para acotar resultados.",
     "empty": "Sin eventos capturados",
     "emptyHint": "Aquí se lista cada evento capturado por el bus, del más reciente al más antiguo. No se ha publicado nada en este intervalo.",
     "typeFilter": "Filtrar por tipo",

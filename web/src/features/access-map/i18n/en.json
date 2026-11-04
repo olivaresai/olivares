@@ -15,8 +15,10 @@
   },
   "webgl": {
     "badge": "High-density view",
-    "hint": "Showing {{n}} nodes — switched to the accelerated WebGL renderer for scale.",
-    "clustered": "Resources are grouped by host at this scale; a group reads as “host (N)”. No finding is hidden — any group with unexpected access is flagged."
+    "hint": "Showing {{n}} nodes — switched to the accelerated WebGL renderer for scale."
+  },
+  "lod": {
+    "grouped": "Groups: click one to open it."
   },
   "filters": {
     "search": "Search origin, resource, tool…",
@@ -167,8 +169,13 @@
     "description": "Your role does not include permission to view the access graph."
   },
   "mobile": {
-    "title": "The map needs a wider screen",
-    "hint": "Open this view on a larger display for the interactive R/RW graph."
+    "title": "The map opens full screen",
+    "hint": "Pan with one finger, pinch to zoom. The list below works too.",
+    "open": "Open the full-screen map"
+  },
+  "fullscreen": {
+    "enter": "Full screen",
+    "exit": "Exit full screen"
   },
   "attackPaths": {
     "chooseAgent": "Choose an agent in the graph to see its attack paths.",
@@ -203,5 +210,17 @@
   },
   "graph": {
     "keyboardHint": "Focus a node, then use the arrow keys to move to a connected node and Enter to open it. The list below the graph does the same without the canvas."
+  },
+  "groupKinds": {
+    "session": "Sessions",
+    "agent": "Agents",
+    "identity": "Identities"
+  },
+  "group": {
+    "items_one": "{{count}} item",
+    "items_other": "{{count}} items",
+    "more": "+{{count}} more",
+    "close": "Close {{name}}",
+    "members": "Members"
   }
 }

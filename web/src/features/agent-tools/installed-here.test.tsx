@@ -17,6 +17,9 @@ const { auth, skills, mcp, consoleApiMock, agentOps } = vi.hoisted(() => ({
   mcp: { get: vi.fn() },
   consoleApiMock: { listWorkspaces: vi.fn() },
 }))
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => auth }))
 vi.mock('@/features/skills/api', async (orig) => ({
   ...(await orig<typeof import('@/features/skills/api')>()),
@@ -157,7 +160,7 @@ it('lists what a new session in the active workspace receives, each linked to it
   const skillRow = within(await row('Skills'))
   expect(
     await skillRow.findByRole('link', { name: 'research' }),
-  ).toHaveAttribute('href', '/capabilities?tab=skills&pack=p1')
+  ).toHaveAttribute('href', '/capabilities?tab=skills&pack=p1&skill=research')
   expect(skills.selection).toHaveBeenCalledWith(
     'workspace',
     'ws-eng',
@@ -483,7 +486,10 @@ it('resolves workspace and profile skills together for each launchable tool', as
   const skillRow = within(await row('Skills'))
   expect(
     await skillRow.findByRole('link', { name: 'claude-review' }),
-  ).toHaveAttribute('href', '/capabilities?tab=skills&pack=pack-profile')
+  ).toHaveAttribute(
+    'href',
+    '/capabilities?tab=skills&pack=pack-profile&skill=claude-review',
+  )
   expect(
     await skillRow.findByRole('link', { name: 'grok-review' }),
   ).toBeInTheDocument()

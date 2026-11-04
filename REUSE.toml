@@ -76,6 +76,13 @@ precedence = "override"
 SPDX-FileCopyrightText = "2022 OpenAI"
 SPDX-License-Identifier = "MIT"
 
+# Simple Icons path data the console draws as vendor marks, and its license text.
+[[annotations]]
+path = ["web/public/licenses/simple-icons/LICENSE.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "Simple Icons contributors"
+SPDX-License-Identifier = "CC0-1.0"
+
 # Fonts shipped with the console, vendored verbatim. NOTICE credits them and their
 # license texts ship under web/public/licenses/fonts/.
 [[annotations]]

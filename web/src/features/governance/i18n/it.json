@@ -478,7 +478,7 @@
     "subtitle": "Soglie minime di cadenza, limiti di concorrenza, requisiti di approvazione, allowlist cron e ambienti bloccati per le Routines di Claude Code. Le policy sovrapposte si compongono con la più restrittiva che prevale.",
     "search": "Cerca policy delle Routines…",
     "newPolicy": "Nuova policy",
-    "enforcementCaption": "Questi controlli sono applicati quando una routine viene dichiarata e di nuovo a ogni avvio. Una policy disabilitata è conservata ma non si compone in nulla.",
+    "enforcementCaption": "Questi controlli sono applicati quando una routine viene dichiarata e di nuovo a ogni avvio. Una policy disabilitata è conservata ma non si applica a nulla.",
     "enabledYes": "Abilitata",
     "enabledNo": "Disabilitata",
     "approvalYes": "Richiesta",
@@ -497,7 +497,7 @@
       "envs": "Ambienti bloccati"
     },
     "scope": {
-      "tenant": "Tenant",
+      "tenant": "Organizzazione",
       "workspace": "Workspace",
       "user": "Utente"
     },
@@ -515,12 +515,12 @@
       "unreadableCaveat": "L'engine non ha potuto analizzare questa colonna salvata. L'enforcement rifiuta del tutto una policy simile, quindi nega in modalità fail-closed invece di consentire qualsiasi cosa."
     },
     "posture": {
-      "title": "Postura effettiva",
+      "title": "Regole in vigore",
       "counts": "{{enabled}} abilitate su {{total}} policy",
       "workspaceRef": "Workspace",
       "userRef": "Utente",
-      "defaultWorkspace": "Predefinito del tenant",
-      "noUser": "Nessun utente proprietario",
+      "defaultWorkspace": "Predefinito dell'organizzazione",
+      "noUser": "Nessun proprietario",
       "resolve": "Risolvi",
       "indeterminate": "Questa risoluzione è indeterminata sull'asse {{axis}}. L'enforcement qui nega in modalità fail-closed — è un rifiuto, non un'assenza di controlli.",
       "floor": "Soglia di cadenza",
@@ -530,17 +530,17 @@
       "cap": "{{scope}} · max {{max}}",
       "origin": "Composta da:",
       "none": "Nessuna policy abilitata governa questo ambito.",
-      "failed": "Non è stato possibile leggere la postura",
+      "failed": "Impossibile leggere le regole in vigore",
       "resolvedFor": "Risolto per il workspace {{workspace}} · utente {{user}}",
       "stale": "l'ambito qui sopra è cambiato; risolvi di nuovo",
-      "unknownUser": "asse utente senza risposta",
-      "unknownUserAxis": "Asse utente senza risposta",
+      "unknownUser": "proprietario sconosciuto",
+      "unknownUserAxis": "Proprietario sconosciuto",
       "supersededByIndeterminate": "I valori qui sotto sono ciò che si è composto finora. NON sono l'esito: una risoluzione indeterminata viene rifiutata del tutto, qualunque cosa dicano.",
-      "noneIndeterminate": "Nessuna policy è stata composta per questo ambito e la risoluzione è stata RIFIUTATA su un asse senza risposta — non equivale a dire che qui non si applicano controlli."
+      "noneIndeterminate": "Olivares non ha potuto stabilire quali policy si applicano a questo ambito, quindi la ricerca è stata RIFIUTATA — non equivale a dire che qui non si applicano controlli."
     },
     "remove": {
       "title": "Elimina policy delle Routines",
-      "body": "“{{name}}” smetterà di comporsi nella postura effettiva. Le routine che limitava saranno soggette solo alle policy rimanenti.",
+      "body": "“{{name}}” smetterà di applicarsi. Le routine che limitava saranno soggette solo alle policy rimanenti.",
       "confirm": "Elimina policy",
       "done": "Policy delle Routines eliminata"
     },
@@ -556,7 +556,7 @@
       "scopeImmutable": "Immutabile dopo la creazione.",
       "scopeRef": "Riferimento dell'ambito",
       "scopeRefRequired": "Una policy con ambito workspace o utente richiede il suo riferimento.",
-      "tenantScopeRef": "Una policy con ambito tenant non deve avere un riferimento.",
+      "tenantScopeRef": "Una policy con ambito organizzazione non deve avere un riferimento.",
       "enabled": "Policy abilitata",
       "floorToggle": "Applica una soglia di cadenza",
       "floor": "Intervallo minimo (secondi)",

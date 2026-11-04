@@ -10,3 +10,9 @@ const (
 	ioctlGetTermios = unix.TIOCGETA
 	ioctlSetTermios = unix.TIOCSETA
 )
+
+// fread is FREAD of <sys/fcntl.h>: TIOCFLUSH flushes the input queue for it.
+const fread = 0x1
+
+// flushInput throws away what was typed on the terminal fd and not yet read.
+func flushInput(fd int) error { return unix.IoctlSetPointerInt(fd, unix.TIOCFLUSH, fread) }

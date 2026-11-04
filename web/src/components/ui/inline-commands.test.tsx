@@ -44,6 +44,27 @@ describe('withInlineCommands', () => {
     expect(container.textContent).not.toContain('`')
   })
 
+  it('shows a command with a placeholder as code with no Copy, which would paste the placeholder', () => {
+    const { container } = render(
+      <p>
+        {withInlineCommands(
+          'Run `olivares db init --data-dir <data directory>` or `olivares setup`.',
+        )}
+      </p>,
+    )
+    const codes = [...container.querySelectorAll('code')]
+    expect(codes.map((c) => c.textContent)).toEqual([
+      'olivares db init --data-dir <data directory>',
+      'olivares setup',
+    ])
+    // Only the command that runs as written gets its Copy.
+    expect(container.querySelectorAll('[data-slot="code-line"]')).toHaveLength(
+      1,
+    )
+    expect(container.querySelectorAll('button')).toHaveLength(1)
+    expect(codes[0]!.className).not.toMatch(/break-all/)
+  })
+
   // CodeLine throws on a blank command, and there is no error boundary above a page: one odd
   // engine string must stay text.
   it('keeps a blank backtick pair as text instead of throwing', () => {

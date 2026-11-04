@@ -22,6 +22,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/driverfacts"
 )
 
@@ -129,10 +130,11 @@ func (openCodeDriver) LaunchEnv(l DriverLaunch) []EnvVar {
 	env := []EnvVar{{Name: envOpenCodeDisableAutoUpdate, Value: "1"}, {Name: envOpenCodeDisableExternalSkills, Value: "1"}}
 	cfg := map[string]any{}
 	bound := true
+	_, presetVendor := modelprovider.LookupPresetByEndpoint(l.BoundProvider.Kind, l.BoundProvider.Endpoint)
 	switch {
 	case l.LocalModelEndpoint != "":
 		_ = json.Unmarshal([]byte(openCodeLocalProviderConfig(openCodeOllama, l.LocalModelEndpoint, l.LocalModels, l.Model)), &cfg)
-	case l.BoundProvider.Kind == ProviderKindOpenAICompatible:
+	case l.BoundProvider.Kind == ProviderKindOpenAICompatible && !presetVendor:
 		_ = json.Unmarshal([]byte(openCodeLocalProviderConfig(openCodeLocalServer, l.BoundProvider.Endpoint, l.LocalModels, l.Model)), &cfg)
 	case l.BoundProvider.Kind != "":
 		openCodeConfineToKey(cfg, l.BoundProvider, l.Model)
@@ -349,17 +351,41 @@ var openCodeKeyProviders = map[string]openCodeKeyProvider{
 // first (recordServesDriver), and this keeps the driver closed if a caller did not.
 const openCodeUnconfinedProviderID = "olivares_no_provider"
 
+// openCodeNativeProviderID is the OpenCode provider id a preset catalog ref names
+// (opencode.ai/docs/providers): Moonshot's OpenCode id is "moonshotai", not the
+// catalog's own ref "moonshot"; every other preset ref is OpenCode's id unchanged.
+func openCodeNativeProviderID(ref string) string {
+	if ref == "moonshot" {
+		return "moonshotai"
+	}
+	return ref
+}
+
 // openCodeConfineToKey allows only the bound key's provider, at the carrier's endpoint. A
 // carrier naming a kind OpenCode has no provider for, or any address but the vendor's own,
-// enables no provider at all.
+// enables no provider at all. openai_compatible has no single vendor address: OpenRouter,
+// DeepSeek, Mistral, Moonshot and Z.ai each confine to OpenCode's own native provider for
+// that vendor (modelprovider.LookupPresetByEndpoint), at the preset catalog's documented endpoint; the key
+// reaches it by reference to the engine's one credential variable for this kind
+// (providerRecordKeyEnv), which is not the variable name OpenCode's own provider expects.
 func openCodeConfineToKey(cfg map[string]any, b BoundProvider, model string) {
-	p, ok := openCodeKeyProviders[b.Kind]
-	if !ok || b.Endpoint != providerVendorEndpoints[b.Kind] {
+	if p, ok := openCodeKeyProviders[b.Kind]; ok {
+		if b.Endpoint != providerVendorEndpoints[b.Kind] {
+			openCodeConfineTo(cfg, openCodeUnconfinedProviderID)
+			return
+		}
+		cfg["provider"] = map[string]any{p.id: map[string]any{"options": map[string]any{"baseURL": p.baseURL}}}
+		openCodeConfineTo(cfg, p.id)
+	} else if row, ok := modelprovider.LookupPresetByEndpoint(b.Kind, b.Endpoint); ok {
+		id := openCodeNativeProviderID(row.Ref)
+		cfg["provider"] = map[string]any{id: map[string]any{"options": map[string]any{
+			"baseURL": row.BaseURL, "apiKey": "{env:" + providerRecordKeyEnv(b.Kind) + "}",
+		}}}
+		openCodeConfineTo(cfg, id)
+	} else {
 		openCodeConfineTo(cfg, openCodeUnconfinedProviderID)
 		return
 	}
-	cfg["provider"] = map[string]any{p.id: map[string]any{"options": map[string]any{"baseURL": p.baseURL}}}
-	openCodeConfineTo(cfg, p.id)
 	if model != "" {
 		cfg["model"] = openCodeModelValue(b, model, false)
 		cfg["small_model"] = cfg["model"]
@@ -376,6 +402,9 @@ func openCodeModelValue(b BoundProvider, model string, endpointID bool) string {
 		id = openCodeOllama.id
 	case ProviderKindOpenAICompatible:
 		id = openCodeLocalServer.id
+		if row, ok := modelprovider.LookupPresetByEndpoint(b.Kind, b.Endpoint); ok {
+			id = openCodeNativeProviderID(row.Ref)
+		}
 	}
 	return qualifyOpenCodeModel(id, model, endpointID)
 }

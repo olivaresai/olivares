@@ -271,15 +271,16 @@
     "submit": "交付",
     "message": "提交说明",
     "messageHint": "仅在会话文件夹有更改时使用。默认为标题。",
-    "shipped": "已交付：{{branch}} 已推送。",
+    "shipped": "已交付：<branch /> 已推送。",
+    "shippedToast": "已交付。",
     "pullRequest": "拉取请求 #{{number}}",
     "pullRequestOpen": "打开拉取请求",
     "awaitingTitle": "等待另一位成员批准",
     "awaitingBody": "您的更改已提交。推送发出前需要另一位成员批准（审批 {{id}}）。批准后请再次交付。",
     "again": "再次交付",
     "incompleteTitle": "交付未完成",
-    "incompletePush": "{{branch}} 的推送未生效（{{state}}）。请查看此目标的意图，然后再次交付。",
-    "incompletePullRequest": "{{branch}} 已推送，但未能创建拉取请求（{{code}}）。请再次交付以重试。",
+    "incompletePush": "<branch /> 的推送未生效（{{state}}）。请查看此目标的意图，然后再次交付。",
+    "incompletePullRequest": "<branch /> 已推送，但未能创建拉取请求（{{code}}）。请再次交付以重试。",
     "pullRequests": "拉取请求"
   }
 }

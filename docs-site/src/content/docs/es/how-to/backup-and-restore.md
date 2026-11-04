@@ -13,9 +13,10 @@ está construido en torno a ese requisito — cada bundle registra las puntas de
 por tenant, la restauración **falla con código distinto de cero si el ledger restaurado
 no es seguro para la continuidad**, y `dr drill` comprueba la continuidad del
 ledger del backup a la restauración sobre un ledger sintético en un directorio
-temporal e imprime el RTO medido. No comprueba concesiones, la custodia de
-claves ni los efectos posteriores al punto de restauración, y no toca un
-directorio de datos de producción.
+temporal e imprime el RTO medido; con `--scratch-dsn` ejecuta la misma ida y vuelta
+sobre PostgreSQL, en bases de datos desechables, e imprime ese RTO junto al de SQLite.
+No comprueba concesiones, la custodia de claves ni los efectos posteriores al punto de
+restauración, y no toca un directorio de datos de producción.
 
 El bundle se cifra bajo una **KEK que tú proporcionas** — una passphrase derivada con
 Argon2id (`--passphrase-file`) o una clave en bruto de 32 bytes de tu KMS
@@ -63,10 +64,11 @@ el chart de Helm un
 [CronJob](/es/tutorials/getting-started/kubernetes/#4-copias-de-seguridad-cifradas-programadas);
 en bare metal, programa con cron el comando de arriba. Las cifras de la tabla
 son objetivos. En los niveles con cron, el RPO objetivo es el intervalo de
-cron. `dr drill` mide el RTO de SQLite sobre un ledger sintético (restauración,
-arranque y verificación). No mide el RPO y no mide una restauración de
-Postgres. Los RTO de SQLite medidos, con su número de eventos y el host, están
-en `docs/DR-RUNBOOK.md`; no son los objetivos de esta tabla.
+cron. `dr drill` mide el RTO sobre un ledger sintético (restauración,
+arranque y verificación): SQLite siempre, PostgreSQL cuando le das
+`--scratch-dsn`. No mide el RPO. Los valores de RTO medidos, con su número de
+eventos y el host en que se tomaron, están en `docs/DR-RUNBOOK.md`; no son los
+objetivos de esta tabla.
 
 | Nivel | Mecanismo | RPO objetivo | RTO objetivo |
 |---|---|---|---|
@@ -82,15 +84,24 @@ viaja con su passphrase no está cifrado en ningún sentido que importe.
 
 `dr verify` comprueba un bundle **sin tocar tu directorio de datos**. En SQLite
 lo restaura en un directorio temporal y verifica la continuidad del ledger, y
-sale con código distinto de cero si esa comprobación falla. En Postgres
-comprueba el digest del bundle y que las claves se descifran. La verificación
-completa de la cadena de un bundle Postgres necesita una restauración sobre un
-Postgres temporal. Ejecuta la comprobación con:
+sale con código distinto de cero si esa comprobación falla. En Postgres, dale un
+servidor temporal con `--scratch-dsn`: crea allí una base de datos desechable con
+sus propios roles, restaura el bundle en ella, verifica el ledger y elimina ambas
+cosas. Ejecuta la comprobación con:
 
 ```bash
 olivares dr verify --in /backups/olivares-dr-<ts>.drbundle \
   --passphrase-file <your-dr-passphrase-file>
+
+# Postgres: a maintenance DSN of a server where databases and roles may be created
+olivares dr verify --in /backups/olivares-pg-<ts>.drbundle \
+  --passphrase-file <your-dr-passphrase-file> \
+  --scratch-dsn file:/run/secrets/scratch.dsn
 ```
+
+El DSN es una referencia `file:` o `env:`, nunca una credencial en línea. Sin
+`--scratch-dsn`, un bundle de Postgres solo se comprueba por su digest y porque sus
+claves se descifran, y la salida indica que el ledger no se restauró.
 
 `dr inspect --in <bundle>` imprime el manifiesto (sin necesidad de KEK, sin mostrar
 secretos) — qué motor, qué tenants, qué puntas de cadena. Ejecuta el simulacro con la
@@ -113,6 +124,8 @@ vuelve a verificar contra tu pin de checkpoint **fuera de banda** — un snapsho
 antiguo restaurado puede pasar un recorrido ingenuo y aun así fallar la comparación
 fuera de banda
 ([troubleshooting § ledger](/es/how-to/troubleshooting/#el-ledger-falla-la-verificación)).
+
+En Postgres, restaurar en una base de datos que ya contiene un estate se rechaza salvo que lo declares: `--operator` y `--reason` (que se registran en el ledger restaurado) y `--force`. Entonces los objetos del backup reemplazan a los de la base de datos en una sola transacción, así que el estate anterior se reemplaza entero o no se reemplaza nada. Antes de tocar nada guarda un `pg_dump` de la base de datos (a través de `--admin-dsn`, que aquí es obligatorio) junto a las claves de firma anteriores, que permanecen como `*.pre-restore-*`; elimínalas cuando estés conforme.
 
 ## Las dos claves que lo deciden todo
 

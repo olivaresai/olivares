@@ -35,6 +35,17 @@ PROFILE_NAMING = ('account_name', 'home_mode', 'isolation_level')
 # took more than 120 s on a loaded runner (73 s and 23 s store steps, then a restart before serving); a published binary
 # cannot be made faster.
 READY_SECONDS = 300
+# How long the browser ceremony against the published binary may take (15-18 s when it passes on a healthy runner).
+PASSKEY_SECONDS = 90
+
+
+def passkey_stage(path):
+    """' at <stage>' for the stage passkey.cjs last entered; nothing unless the file holds one of its fixed-name shapes."""
+    try:
+        name = path.read_text()
+    except OSError:
+        return ''
+    return ' at ' + name if re.fullmatch(r'(?=[a-z-]{1,24}$)[a-z]+(-[a-z]+)*', name) else ''
 
 
 def digest(value):
@@ -70,6 +81,9 @@ def module_profile_snapshot(value):
     return result
 
 
+OBSERVED_USE = {'auth_sessions': {'last_used_at', 'client_kind'}, 'api_tokens': {'last_used_at'}}
+
+
 def snapshot_rows(tables):
     result = {}
     for table, keys, rows in tables:
@@ -79,12 +93,14 @@ def snapshot_rows(tables):
         entries = {}
         for row in rows:
             # These timestamps/counters are engine-maintained, not user settings.
-            ignored = {'updated_at', 'version', 'last_used_at'} - set(keys)
+            ignored = {'updated_at', 'version'} - set(keys)
             if table == 'leader_epoch':
                 ignored |= {'epoch', 'holder', 'acquired_at'}
             # Auth/read requests append audit events; the ledger rows remain checked.
             if table == 'audit_heads':
                 ignored |= {'seq', 'hash'}
+            # Authenticated reads stamp observed use on a timing-dependent, best-effort write.
+            ignored |= OBSERVED_USE.get(table, set())
             values = {k: digest(v) for k, v in row.items() if k not in ignored}
             identity = digest([row[k] for k in keys]) if keys else digest(values)
             entry = entries.setdefault(identity, {'count': 0, 'values': values})
@@ -156,9 +172,9 @@ class Upgrade:
                 text = text.replace(secret, '<redacted>')
         return re.sub(r'olst_[A-Za-z0-9]+', '<redacted>', text)
 
-    def call(self, method, path, body=None, expected=None):
+    def call(self, method, path, body=None, expected=None, credential=True):
         headers = {'Content-Type': 'application/json'}
-        if self.token:
+        if self.token and credential:
             headers['Authorization'] = 'Bearer ' + self.token
         if self.tenant:
             headers['X-Olivares-Tenant'] = self.tenant
@@ -208,7 +224,9 @@ class Upgrade:
             if self.process.poll() is not None:
                 raise RuntimeError(label + ': engine exited ' + str(self.process.returncode))
             try:
-                if self.call('GET', '/v1/server-info')[0] == 200:
+                # Readiness uses no session: a bearer authenticates on every route and records its
+                # use, which would change the previous stage's stored last_used_at.
+                if self.call('GET', '/v1/server-info', credential=False)[0] == 200:
                     actual = hashlib.sha256(Path('/proc/' + str(self.process.pid) + '/exe').read_bytes()).hexdigest()
                     if actual != hashlib.sha256(binary.read_bytes()).hexdigest():
                         raise RuntimeError('running executable digest differs')
@@ -317,18 +335,20 @@ class Upgrade:
                 self.provision()
             self.start(self.args.published, 'published', seed=True)
             who = self.login()
+            # Never retain browser stderr, even after token scrubbing: the stage file names where it stopped.
+            stage_file = self.home / 'passkey.stage'
             ceremony = subprocess.Popen(['node', str(Path(__file__).with_name('passkey.cjs'))],
                                         env=self.env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                        stderr=subprocess.PIPE, text=True, start_new_session=True)
+                                        stderr=subprocess.DEVNULL, text=True, start_new_session=True)
             try:
-                output, error = ceremony.communicate(json.dumps({'origin': self.origin, 'token': self.token,
-                                                            'tenant': self.tenant}), timeout=90)
+                try:
+                    output, _ = ceremony.communicate(json.dumps({'origin': self.origin, 'token': self.token,
+                                                                 'tenant': self.tenant, 'stageFile': str(stage_file)}),
+                                                     timeout=PASSKEY_SECONDS)
+                except subprocess.TimeoutExpired:
+                    raise RuntimeError('published passkey ceremony timed out' + passkey_stage(stage_file)) from None
                 if ceremony.returncode or json.loads(output)['aal'] != 3:
-                    # Never retain arbitrary browser stderr, even after token scrubbing.
-                    stage = re.fullmatch(r'WebAuthn upgrade fixture failed at '
-                                         r'(browser-launch|browser-setup|webauthn)\n', error)
-                    raise RuntimeError('published passkey ceremony failed' +
-                                       (' at ' + stage[1] if stage else ''))
+                    raise RuntimeError('published passkey ceremony failed' + passkey_stage(stage_file))
             finally:
                 try:
                     os.killpg(ceremony.pid, signal.SIGTERM)

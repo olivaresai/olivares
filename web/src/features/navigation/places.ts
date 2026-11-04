@@ -112,7 +112,14 @@ export const PLACE_GROUPS: readonly {
       {
         id: 'files',
         icon: Folder,
-        views: ['workspaceDashboard', 'workspace-templates', 'inventory'],
+        // What do I have? The workspace, what is configured in it, what connectors
+        // discovered; routes /estate and /inventory keep their paths.
+        views: [
+          'workspaceDashboard',
+          'estate',
+          'inventory',
+          'workspace-templates',
+        ],
       },
       {
         id: 'work',
@@ -222,7 +229,6 @@ export const PLACE_GROUPS: readonly {
         id: 'operations',
         icon: Server,
         views: [
-          'estate',
           'health',
           'deploy',
           'backups',
@@ -240,6 +246,15 @@ export const PLACE_GROUPS: readonly {
     ],
   },
 ]
+
+/** What the navigation shows a new person: the work and what it runs on. Every other place
+ * is one click away under More and in the palette; none is removed or turned off by this. */
+export const FIRST_PLACES: ReadonlySet<PlaceId> = new Set<PlaceId>([
+  'now',
+  'sessions',
+  'files',
+  'ai-tools',
+])
 
 /** Settings, pinned at the foot: the Settings utility, then the pages it holds. */
 export const SETTINGS_PLACE: Place = {
@@ -334,6 +349,57 @@ export interface SidebarPlace {
   search?: Readonly<Record<string, string>>
 }
 
+const MAY_OPEN_EVERYTHING: ViewGate = () => true
+
+/** The page a place's link opens: its first page the gate lists. */
+function leadOf(place: Place, gate: ViewGate): FeatureView | undefined {
+  return placeViews(place).find(
+    (v) =>
+      !v.hideInNav &&
+      (v.navigation.kind === 'root' ||
+        (v.navigation.kind === 'feature' && isListed(v, gate))),
+  )
+}
+
+/** The place a view is the lead page of, for a person the gate describes, or null. */
+export function placeLedBy(
+  view: FeatureView,
+  gate: ViewGate = MAY_OPEN_EVERYTHING,
+): PlaceId | null {
+  return (
+    PLACE_GROUPS.flatMap((g) => g.places).find(
+      (p) => leadOf(p, gate)?.id === view.id,
+    )?.id ?? null
+  )
+}
+
+/**
+ * The place whose sidebar link opens this address for a person the gate describes, or null.
+ * That place is the page's name in the top bar, the tab title and its heading: the place you
+ * click is the place you land on. Settings is a page of its own whose General section (the
+ * default) is the Settings place and whose Edition section is the License place.
+ */
+export function placeOpenedAt(
+  pathname: string,
+  search: Readonly<Record<string, unknown>>,
+  gate: ViewGate = MAY_OPEN_EVERYTHING,
+): PlaceId | null {
+  const location = resolveLocation(pathname)
+  switch (location.kind) {
+    case 'home':
+      return 'now'
+    case 'settings':
+      if (search.section === 'edition') return 'license'
+      return search.section === undefined || search.section === 'general'
+        ? 'settings'
+        : null
+    case 'view':
+      return placeLedBy(location.view, gate)
+    default:
+      return null
+  }
+}
+
 /** Where a place's link opens for this principal, or null when it may open none of it. */
 function placeLink(place: Place, gate: ViewGate): SidebarPlace | null {
   const at = (path: string, search?: Readonly<Record<string, string>>) => ({
@@ -345,12 +411,7 @@ function placeLink(place: Place, gate: ViewGate): SidebarPlace | null {
   if (place.id === 'settings') return at(SETTINGS_UTILITY.path)
   if (place.settingsSection)
     return at(SETTINGS_UTILITY.path, { section: place.settingsSection })
-  const lead = placeViews(place).find(
-    (v) =>
-      !v.hideInNav &&
-      (v.navigation.kind === 'root' ||
-        (v.navigation.kind === 'feature' && isListed(v, gate))),
-  )
+  const lead = leadOf(place, gate)
   if (!lead) return null
   const section = place.section
   return section && section.view === lead.id && gate(lead, section)
@@ -395,13 +456,29 @@ export function currentPlace(
   }
 }
 
+/**
+ * A group's name for this principal. The admin group is "Admin" to whoever may open
+ * Administration; to anyone else it holds organization pages they read, and some they may
+ * change, so it is named for what it holds. Words only: which places it offers is the gate's.
+ */
+export function groupLabel(
+  t: TFunction,
+  id: PlaceGroupId,
+  gate: ViewGate,
+): string {
+  const administration = viewById('console')
+  return id === 'admin' && !(administration && gate(administration))
+    ? t('nav:groups.organization')
+    : t(`nav:groups.${id}`)
+}
+
 // --- the palette's index ------------------------------------------------------------
 
 /** `Group › Place`: where the left navigation holds a page. Settings has no group. */
-function placeContext(t: TFunction, place: PlaceId): string {
+function placeContext(t: TFunction, place: PlaceId, gate: ViewGate): string {
   const group = PLACE_GROUPS.find((g) => g.places.some((p) => p.id === place))
   const label = t(`nav:places.${place}`)
-  return group ? `${t(`nav:groups.${group.id}`)} › ${label}` : label
+  return group ? `${groupLabel(t, group.id, gate)} › ${label}` : label
 }
 
 function aliasesFor(t: TFunction, id: string): string[] {
@@ -425,18 +502,25 @@ function aliasesFor(t: TFunction, id: string): string[] {
  * holds it and the thirteen nouns. Each result says `Group › Place`, the words of the
  * sidebar; the retired area directories are no destination here, and their names stay
  * search words only, so "Oversight" still finds what it held. Authorization is NOT applied
- * here (`authorizedEntries` does), so one index serves every principal and the ranking
- * never depends on who is asking.
+ * here (`authorizedEntries` does); the gate only names the group in each result, as the
+ * sidebar names it for this principal.
  */
-export function buildNavSearchIndex(t: TFunction): NavSearchEntry[] {
+export function buildNavSearchIndex(
+  t: TFunction,
+  gate: ViewGate = () => true,
+): NavSearchEntry[] {
   const entries: NavSearchEntry[] = []
   let order = 0
   for (const v of FEATURE_VIEWS) {
     if (v.hideInNav || v.navigation.kind === 'detail') continue
-    const label = viewLabel(t, v.id)
+    const pageName = viewLabel(t, v.id)
+    // The page a place opens is listed by the place, as in the sidebar, the top bar and its
+    // heading; its own name stays a search word.
+    const led = placeLedBy(v)
+    const label = led ? t(`nav:places.${led}`) : pageName
     const description = viewDescription(t, v.id)
     const place = placeOfView(v)
-    const context = placeContext(t, place)
+    const context = placeContext(t, place, gate)
     const area = areaOfView(v)
     const former = area
       ? [
@@ -457,7 +541,7 @@ export function buildNavSearchIndex(t: TFunction): NavSearchEntry[] {
       order: order++,
       haystack: {
         label: fold(label),
-        aliases: aliasesFor(t, v.id).map(fold),
+        aliases: [...aliasesFor(t, v.id), ...(led ? [pageName] : [])].map(fold),
         path: fold(v.path),
         context: [
           fold(context),

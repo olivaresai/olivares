@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE SESSION'S MODE AND WHAT IT HAS SPENT, on the session header (#427).
+// THE SESSION'S MODE AND WHAT IT HAS SPENT, in Details (#427). The header names the session
+// and its state; each tool's plan windows are the status bar's.
 //
 // ⛔ EVERY FIGURE IS ONE THE ENGINE SENT, AS THE TOOL SAID IT.
 //    - The mode is `tool_mode`, the tool's own word (Claude Code's permission mode,
@@ -12,13 +13,10 @@
 //    - The usage is the run's own counters (an observed session's, its live row's).
 //      Absent tokens are unknown, and a cost the tool did not report is said to be
 //      unknown, never printed as $0.
-//    - The plan window is the AI tools instance's own usage windows (GET
-//      /agenttools/providers), only for a run on the organization's own login of
-//      its tool, and only for a viewer who may read that page.
 import { useQuery } from '@tanstack/react-query'
+import { AppLink } from '@/components/ui/app-link'
 import { Trans, useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
-import { agentToolsApi, agentToolsKeys } from '@/features/agent-tools/api'
 import {
   EDITS_AND_COMMANDS_TEMPLATE,
   PERMISSION_CHOICES,
@@ -27,17 +25,10 @@ import {
 import type { PermissionChoice } from '@/features/agentops/session-launch'
 import type { RunDTO } from '@/features/agentops/types'
 import { toolName } from '@/features/agentops/engine-tools'
-import { useAuth } from '@/lib/auth/context'
 import { COST_VIEW } from '@/features/registry'
 import { useViewAccess } from '@/features/navigation/authorization'
 import { viewById } from '@/features/navigation/model'
-import {
-  formatDateTime,
-  formatMicroUsd,
-  formatPercent,
-  formatRelativeTime,
-  formatTokens,
-} from '@/lib/format'
+import { formatMicroUsd, formatTokens } from '@/lib/format'
 import { templatesApi, templatesKeys } from '@/features/workspace-templates/api'
 import { useTenantStore } from '@/stores/tenant'
 import '@/features/first-hour/i18n'
@@ -126,13 +117,18 @@ export function useAccessWords(run: RunDTO): string {
   const { t } = useTranslation(['sessions', 'firstHour'])
   const { choice, templateId, template, builtin } = useLaunchTemplate(run)
   const toolMode = run.tool_mode ?? ''
+  // Nothing until the template answers, as SessionMode: the first frames never show the
+  // tool's private name for the mode ("dontAsk").
+  if (templateId && template.isPending) return ''
   if (choice && (choice !== 'editsAndCommands' || builtin))
     return t(`firstHour:permission.${choice}`)
   if (templateId && template.data?.name) return template.data.name
   const plain = toolWord(toolMode)
   if (plain === 'unasked') return t('sessions:meter.unaskedShort')
   if (plain) return t(`sessions:meter.toolWord.${plain}`)
-  return toolMode || run.permission_mode || t('sessions:meter.accessUnknown')
+  // The tool's own word when it has reported one; before that the access is not known,
+  // and the launch's internal name ("default", "dontAsk") is not a word to show.
+  return toolMode || t('sessions:meter.accessUnknown')
 }
 
 /**
@@ -163,7 +159,7 @@ export function SessionMode({ run }: { run: RunDTO | null | undefined }) {
     run.provider_driver === 'claude' ? viewById('claudePolicy') : undefined
   const policy =
     policyView && access.navigable(policyView) ? (
-      <a
+      <AppLink
         href={policyView.path}
         className="rounded-sm underline decoration-text-3 underline-offset-2 hover:decoration-current focus-visible:outline-2 focus-visible:outline-ring"
       />
@@ -202,20 +198,9 @@ export function SessionMode({ run }: { run: RunDTO | null | undefined }) {
   )
 }
 
-/** What the session has spent and the plan window of its login, for the thread's header. */
-export function SessionMeter({
-  run,
-  usage,
-  where = 'header',
-}: {
-  run: RunDTO | null | undefined
-  usage: SessionUsage | null
-  /**
-   * The thread's header paints usage and the plan window beside the name; the Context pane
-   * paints the usage alone, so it is still there where the header has no room.
-   */
-  where?: 'header' | 'context'
-}) {
+/** What the session has spent, in Details: the header names the session and its state,
+ * and the status bar says each tool's plan windows. */
+export function SessionMeter({ usage }: { usage: SessionUsage | null }) {
   const { t, i18n } = useTranslation('sessions')
   const access = useViewAccess()
   const lang = i18n.language
@@ -240,7 +225,7 @@ export function SessionMeter({
         <span
           className="shrink-0 text-overline font-normal tabular-nums text-text-3"
           aria-label={t('meter.usageLabel')}
-          data-testid={where === 'header' ? 'narrative-usage' : 'context-usage'}
+          data-testid="context-usage"
         >
           {usage.input != null && usage.output != null ? (
             <>
@@ -252,89 +237,18 @@ export function SessionMeter({
             </>
           ) : null}
           {access.navigable(COST_VIEW) ? (
-            <a
+            <AppLink
               href={COST_VIEW.path}
               aria-label={`${t('meter.viewCosts')}: ${costText}`}
               className="rounded-sm underline decoration-text-3 underline-offset-2 hover:decoration-current focus-visible:outline-2 focus-visible:outline-ring"
             >
               {cost}
-            </a>
+            </AppLink>
           ) : (
             cost
           )}
         </span>
       ) : null}
-      {where === 'header' && run?.provider_instance ? (
-        <PlanWindow instance={run.provider_instance} />
-      ) : null}
     </>
-  )
-}
-
-/** The plan's usage windows of the tool login this session spends. */
-function PlanWindow({ instance }: { instance: string }) {
-  const { t } = useTranslation('sessions')
-  const { isSuperadmin } = useAuth()
-  const tenant = useTenantStore((s) => s.activeTenant)
-  const providers = useQuery({
-    queryKey: [...agentToolsKeys.all, 'providers', tenant],
-    queryFn: ({ signal }) => agentToolsApi.providers(tenant, signal),
-    // The providers page reads the same snapshot; the engine probes at most once a minute.
-    enabled: !!isSuperadmin,
-    staleTime: 60_000,
-  })
-  if (!isSuperadmin || providers.isPending) return null
-  const snap = providers.isError
-    ? undefined
-    : providers.data.providers.find((p) => p.instance === instance)
-  // A read that failed, an instance the snapshot does not list, and a login the
-  // tool reports as not ready all leave the window unknown: said, not left blank.
-  if (!snap || snap.state !== 'ready')
-    return (
-      <span
-        className="text-caption text-muted-foreground"
-        title={
-          providers.error instanceof Error
-            ? providers.error.message
-            : (snap?.error ?? snap?.state)
-        }
-        data-testid="narrative-plan-error"
-      >
-        {t('meter.planNotRead')}
-      </span>
-    )
-  if (snap.limits.length === 0) return null
-  return (
-    <span
-      className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground"
-      aria-label={t('meter.planLabel')}
-      data-testid="narrative-plan"
-    >
-      {snap.limits.map((limit, i) => (
-        <span
-          key={`${limit.label}-${i}`}
-          title={
-            limit.resets_at
-              ? t('meter.resets', {
-                  when: formatRelativeTime(limit.resets_at),
-                  at: formatDateTime(limit.resets_at),
-                })
-              : undefined
-          }
-        >
-          {limit.label}{' '}
-          <span className="font-mono tabular-nums text-foreground">
-            {formatPercent(limit.percent)}
-          </span>
-        </span>
-      ))}
-      {snap.stale ? (
-        <span
-          title={t('meter.readAt', { at: formatDateTime(snap.checked_at) })}
-        >
-          {t('meter.stale')}
-        </span>
-      ) : null}
-    </span>
   )
 }

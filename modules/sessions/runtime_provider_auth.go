@@ -468,7 +468,7 @@ func (m *Module) mintFromProviderRecord(
 			presetAuth = row.Auth
 		}
 	}
-	if !recordServesDriver(rec.Kind, rec.BaseURL, driver) {
+	if !recordServesDriver(rec.Kind, rec.BaseURL, rec.Service, driver) {
 		// Re-checked HERE and not only when the binding was written: a driver's
 		// operability and a record's kind are read at different times, and a check
 		// that only runs at write time is a check that expires.
@@ -476,7 +476,7 @@ func (m *Module) mintFromProviderRecord(
 		if name == "" {
 			name = rec.Kind
 		}
-		return Credential{}, nil, &runErr{http.StatusUnprocessableEntity, recordDriverRefusal(driver, name, rec.Kind)}
+		return Credential{}, nil, &runErr{http.StatusUnprocessableEntity, recordDriverRefusal(driver, name, rec.Kind, rec.Service)}
 	}
 	if rec.ProbeState == ProbeRefused {
 		// Codex launched on an OpenAI key the provider test had refused never
@@ -552,9 +552,12 @@ func (m *Module) mintFromProviderRecord(
 	}
 
 	// OpenCode on a local OpenAI-compatible server is pointed at that server only, like a
-	// local Ollama: the models its last test listed are the only ones it is offered.
+	// local Ollama: the models its last test listed are the only ones it is offered. A
+	// preset catalog vendor (OpenRouter, DeepSeek, Mistral, Moonshot, Z.ai) is not a
+	// local server: OpenCode's own native provider for it carries its own model
+	// catalog, the same as a plain Anthropic, OpenAI or xAI key.
 	var localModels []string
-	if driver == providerDriverOpenCode && rec.Kind == ProviderKindOpenAICompatible {
+	if _, preset := modelprovider.LookupPresetByEndpoint(rec.Kind, endpoint); driver == providerDriverOpenCode && rec.Kind == ProviderKindOpenAICompatible && !preset {
 		if localModels = localModelNames(rec.Models); len(localModels) == 0 {
 			return Credential{}, nil, &runErr{http.StatusConflict, "the local model server " + strconv.Quote(rec.DisplayName) +
 				" lists no model; start it with a model, then test the provider in Providers so its models are read"}

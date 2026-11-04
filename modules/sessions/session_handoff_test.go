@@ -342,6 +342,28 @@ func TestHandoff_ARunningSessionIsNotStoppedByARefusal(t *testing.T) {
 		t.Fatalf("handoff name with an invisible character = %d %s", r.code, r.raw)
 	}
 	still("a handoff name the rename refuses")
+
+	// A handoff name another session holds is refused with it, still before the
+	// source is stopped: the successor would be the name's second holder (#2978).
+	if err := f.m.Data.Mutate(context.Background(), f.tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(runKind)
+		if err != nil {
+			return err
+		}
+		_, err = repo.Create(context.Background(), model.Record{colRunRef: "run-held-name", colRunName: "api",
+			colState: stateRunning, colTransport: string(TransportStreamJSON), colPermissionMode: "default",
+			colIsolation: string(IsolationNative), colLastEventSeq: int64(0)})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// The seeded holder is itself a session; rebaseline what still() compares
+	// against so only the refusal's own effects count.
+	runs = f.runCount(t)
+	if r := f.post(t, "handoff", map[string]any{"provider_profile_ref": f.b, "name": "api"}); r.code != http.StatusConflict || !strings.Contains(refusalMessage(r), `already named "api"`) {
+		t.Fatalf("handoff onto a held name = %d %s, want 409 naming it", r.code, r.raw)
+	}
+	still("a handoff name another session holds")
 }
 
 // The conversation is read once the tool has exited, not before: what it writes on its
@@ -521,6 +543,23 @@ func TestHandoff_EachHandoffKeepsItsOwnAttachment(t *testing.T) {
 		if len(p) > 0 && !strings.Contains(string(p[0]), "Transcript of the earlier session") {
 			t.Fatalf("first turn = %s", p[0])
 		}
+	}
+}
+
+// A handoff that names nothing gets the name the engine derives. Handing one session to a
+// second tool must not fail for it: the second is numbered, as `session start` numbers a
+// derived name, while a name the caller chose is refused (#2978).
+func TestHandoff_ASecondUnnamedHandoffIsNumberedNotRefused(t *testing.T) {
+	f := newMoveFixture(t)
+	f.stop(t)
+	first := f.post(t, "handoff", map[string]any{"provider_profile_ref": f.b})
+	second := f.post(t, "handoff", map[string]any{"provider_profile_ref": f.b})
+	if first.code != http.StatusCreated || second.code != http.StatusCreated {
+		t.Fatalf("handoffs = %d %d (%s)", first.code, second.code, second.raw)
+	}
+	base, _ := first.body["name"].(string)
+	if !strings.HasPrefix(base, "Handoff from ") || second.body["name"] != base+"-2" {
+		t.Fatalf("names = %q, %q; want the second to be %q", base, second.body["name"], base+"-2")
 	}
 }
 

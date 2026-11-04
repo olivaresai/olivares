@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { Fragment, useEffect, type ReactNode } from 'react'
+import { SystemAdminOnly } from '@/components/layout/system-admin-only'
+import { AppLink } from '@/components/ui/app-link'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,7 +39,9 @@ import { LicenseTab } from '@/features/console/license-tab'
 // way the console view does for its own tab.
 import '@/features/console/i18n'
 import {
+  SETTINGS_SECTIONS,
   settingsSections,
+  type SettingsSection,
   type SettingsSectionId,
 } from '@/features/settings/sections'
 import { useUrlState } from '@/lib/hooks/use-url-state'
@@ -193,10 +197,21 @@ export function SettingsPage() {
   const [url, patchUrl] = useUrlState(['section', 'q', 'add', 'returnTo'])
   // A page this installation does not run, or this principal may not open, is neither a
   // section nor offered as a start page: the same gate the sidebar uses (#474).
-  const { navigable } = useViewAccess()
+  const { navigable, state } = useViewAccess()
   const offered = settingsSections(isSuperadmin, navigable)
   // An address to a section this person is not offered, or that does not exist, shows General.
   const section = offered.find((s) => s.id === url.section)?.id ?? 'general'
+  // A section only a system administrator is offered, asked for by address: it says so, and
+  // never opens General in its place. Its own mark or the permission of the page it hosts.
+  const refused = (s: SettingsSection) => {
+    const hosted = s.view ? viewById(s.view) : undefined
+    return (
+      (s.adminOnly && !isSuperadmin) || (!!hosted && state(hosted) === 'denied')
+    )
+  }
+  const withheld = SETTINGS_SECTIONS.find(
+    (s) => s.id === url.section && refused(s),
+  )?.id
   const hostedView = offered.find((s) => s.id === section)?.view
   const query = url.q ?? ''
   // The wizard's address stays behind when the hosted room goes away (another section, or a
@@ -212,7 +227,7 @@ export function SettingsPage() {
     const Icon = entry.icon
     return (
       <NavButton
-        current={section === id && query.trim().length === 0}
+        current={section === id && !withheld && query.trim().length === 0}
         onClick={() => setSection(id)}
         icon={<Icon aria-hidden className="size-3.5" />}
       >
@@ -566,7 +581,7 @@ export function SettingsPage() {
     ) : null,
   ].filter(Boolean)
 
-  const showGeneral = q.length > 0 || section === 'general'
+  const showGeneral = q.length > 0 || (section === 'general' && !withheld)
   const licenseLabel = t('console:license.title')
   const showLicenseResult =
     q.length > 0 &&
@@ -621,6 +636,12 @@ export function SettingsPage() {
         )}
         <div className="min-w-0 overflow-auto">
           <div className="mx-auto flex w-full max-w-[880px] flex-col gap-2 px-7 py-6">
+            {q.length === 0 && withheld ? (
+              <>
+                <PageHeader title={t(`nav.${withheld}`)} />
+                <SystemAdminOnly />
+              </>
+            ) : null}
             {showGeneral ? (
               <>
                 <PageHeader
@@ -634,16 +655,12 @@ export function SettingsPage() {
                   <p className="text-body text-text-2">{t('noMatches')}</p>
                 )}
                 {showLicenseResult ? (
-                  <a
+                  <AppLink
                     href="/settings?section=edition"
-                    onClick={(e) => {
-                      e.preventDefault()
-                      setSection('edition')
-                    }}
                     className="text-body font-medium text-accent-text hover:underline"
                   >
                     {licenseLabel}
-                  </a>
+                  </AppLink>
                 ) : null}
               </>
             ) : null}

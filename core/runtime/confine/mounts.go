@@ -21,6 +21,11 @@ type Mounts struct {
 	// Pin are directories or files bound onto themselves, still writable, so the
 	// child cannot rename or remove the path to put another one in its place.
 	Pin []string
+	// Hide are directories the child must not reach at all: each is covered, in the
+	// child's mount namespace, by an empty read-only filesystem. Landlock does not
+	// govern connect() to a socket at a path, so a directory that holds one (a
+	// per-user runtime directory) can only be taken away, not denied.
+	Hide []string
 	// Create are nodes to make, when missing, once the host is known to apply
 	// the mounts: a name the child could otherwise create itself, for a program
 	// that reads it. Each is also listed in ReadOnly. They are not sent to the

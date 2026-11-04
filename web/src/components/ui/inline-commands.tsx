@@ -12,6 +12,8 @@ import { CodeLine } from './code-line'
  * back as its own text; a blank pair, or a pair that spans lines, is text, not a chip (CodeLine
  * refuses an empty command, and one odd string must not blank a screen); a missing sentence is nothing.
  */
+const PLACEHOLDER = /<[^<>]+>/
+
 export function withInlineCommands(
   text: string | null | undefined,
   kind: 'command' | 'code' = 'command',
@@ -19,8 +21,9 @@ export function withInlineCommands(
   if (typeof text !== 'string') return []
   return text.split(/`([^`\r\n]+)`/).map((part, i) =>
     i % 2 === 1 && part.trim() !== '' ? (
-      kind === 'code' ? (
-        <code key={i} className="font-mono text-mono-s break-all">
+      // A command with a <placeholder> does not run as written: it is shown, not copied.
+      kind === 'code' || PLACEHOLDER.test(part) ? (
+        <code key={i} className="font-mono text-mono-s break-words">
           {part}
         </code>
       ) : (

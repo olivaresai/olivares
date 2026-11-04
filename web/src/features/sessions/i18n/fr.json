@@ -1,4 +1,23 @@
 {
+  "pathChip": {
+    "open": "Ouvrir dans {{editor}}",
+    "copyRelative": "Copier le chemin relatif",
+    "copyFull": "Copier le chemin complet"
+  },
+  "race": {
+    "cleanupFailed": "La branche choisie est déjà fusionnée. Certains autres arbres de travail restent présents ; réessayez pour les supprimer.",
+    "title": "Comparer les sessions",
+    "hint": "Examinez chaque branche et son coût. Créez un commit pour les modifications à conserver avant de choisir.",
+    "keep": "Garder celle-ci",
+    "confirm": "Arrêter toutes les sessions, fusionner {{name}} dans le dépôt et supprimer définitivement les autres arbres de travail et leurs modifications non fusionnées ?",
+    "confirmKeep": "Fusionner et supprimer les autres",
+    "kept": "La branche choisie est fusionnée. Les autres arbres de travail ont été supprimés.",
+    "invalid": "Choisissez des sessions distinctes avec des arbres de travail du même dépôt.",
+    "loadError": "Impossible de lire toutes les sessions. Vérifiez les accès et réessayez.",
+    "notStopped": "Une session ne s’est pas arrêtée. Aucune branche fusionnée ou supprimée.",
+    "failed": "Impossible de conserver cette session.",
+    "uncommitted": "Modifications non committées et Git"
+  },
   "compact": {
     "context": "Contexte",
     "now": "Compacter maintenant",
@@ -9,6 +28,8 @@
     "failed": "Le compactage n’a pas été confirmé. Votre message n’a pas été envoyé."
   },
   "git": {
+    "init": "Initialiser Git",
+    "noRepository": "Ce dossier n’est pas un dépôt Git.",
     "title": "Git",
     "branch": "Branche",
     "newBranch": "Nouvelle branche",
@@ -95,7 +116,7 @@
     "lastSeen": "Dernier événement",
     "minimalData": "Seules les métadonnées sont affichées. Par conception, le moteur ne transporte jamais ici de SQL, de charges utiles ni de secrets (données minimales).",
     "viewAccess": "Carte des accès",
-    "viewInventory": "Inventaire"
+    "viewInventory": "Ressources découvertes"
   },
   "timeline": {
     "title": "Chronologie",
@@ -311,7 +332,18 @@
     "unsnooze": "Ne plus reporter",
     "markDone": "Marquer comme terminée",
     "markNotDone": "Marquer comme non terminée",
+    "markUnread": "Marquer comme non lue",
+    "markRead": "Marquer comme lue",
+    "unreadMark": "Non lue",
     "markFailed": "La marque n’a pas pu être modifiée."
+  },
+  "undo": {
+    "archived": "« {{name}} » archivée",
+    "snoozed": "« {{name}} » reportée",
+    "done": "« {{name}} » marquée comme terminée",
+    "unpinned": "« {{name}} » détachée",
+    "changed": "Cette session a changé ; rien n’a été annulé.",
+    "failed": "Le changement n’a pas pu être annulé."
   },
   "surface": {
     "openBeside": "Ouvrir à côté",
@@ -360,11 +392,6 @@
     "costUnknown": "coût non communiqué",
     "costPartial": "{{cost}} (partiel)",
     "viewCosts": "Voir les coûts",
-    "planLabel": "Fenêtres d'utilisation du forfait de la connexion de cette session",
-    "planNotRead": "fenêtre du forfait non lue",
-    "resets": "Réinitialisation {{when}} ({{at}})",
-    "stale": "dernière valeur connue",
-    "readAt": "Lu {{at}}",
     "permission": "{{name}} : {{what}}",
     "full": "Accès complet : s’exécute sans demander, encadré par la <policy>politique d’Olivares</policy>"
   },
@@ -424,7 +451,6 @@
     "identifiersHint": "Références à copier. Ce ne sont pas les noms de la ligne d’étendue.",
     "wireTitle": "Ligne sélectionnée",
     "wireHint": "La ligne sélectionnée telle que l’outil l’a envoyée. La conversation est la vue par défaut.",
-    "wireEmpty": "Sélectionnez une ligne de la conversation pour la voir telle que l’outil l’a envoyée.",
     "thisNode": "Ce nœud",
     "workTitle": "Autorité de travail de la session",
     "workHint": "Enregistrée pour le dernier lancement. Chaque action vérifie l’autorisation actuelle.",
@@ -477,6 +503,11 @@
       "week": "{{percent}} % de la semaine"
     }
   },
+  "backgroundTasks": {
+    "label": "Tâches en arrière-plan",
+    "stop": "Arrêter {{name}}",
+    "stopFailed": "La tâche n’a pas pu être arrêtée."
+  },
   "conversation": {
     "log": "Conversation",
     "waiting": "En attente de la session…",
@@ -521,6 +552,7 @@
     "sentPending": "Envoyé. En attente de sa prise en charge par l’outil.",
     "sentNotTaken": "La session s’est terminée avant que l’outil ne le prenne.",
     "finishedIn": "Terminé en {{duration}}",
+    "interrupted": "Interrompu par vous",
     "escToInterrupt": "Échap pour interrompre",
     "background": "En arrière-plan",
     "agentWorking": "En cours",
@@ -605,6 +637,29 @@
     "fileTruncated": "Affichage des 256 premiers Ko.",
     "truncated": "Affichage des {{count}} fichiers les plus récents."
   },
+  "checkpoints": {
+    "title": "Tours",
+    "hint": "Ce que chaque message de cette session a modifié dans son dossier. Revenir en arrière remet les fichiers comme ils étaient avant un tour.",
+    "turn": "Tour {{n}}",
+    "filesChanged": "Fichiers modifiés : {{n}}",
+    "showFiles": "Fichiers",
+    "status": {
+      "added": "ajouté",
+      "modified": "modifié",
+      "deleted": "supprimé"
+    },
+    "rewind": "Revenir en arrière",
+    "undo": "Annuler le retour en arrière",
+    "noWords": "(sans texte)",
+    "rewound": "Dossier remis en arrière ({{n}} fichiers restaurés ou supprimés). Votre message est dans la zone de message.",
+    "undone": "Retour en arrière annulé ({{n}} fichiers restaurés ou supprimés).",
+    "confirm": {
+      "title": "Revenir à avant le tour {{n}} ?",
+      "description": "Fichiers concernés : {{n}}. Ils reviennent comme ils étaient avant ce tour ; les fichiers créés depuis par l’agent sont supprimés.",
+      "action": "Revenir en arrière",
+      "conversation": "Seuls les fichiers changent. L’outil garde sa conversation. Le message de ce tour est placé dans la zone de message pour que vous puissiez le modifier et le renvoyer."
+    }
+  },
   "preview": {
     "title": "Aperçu",
     "hint": "L'application que cette session sert sur un port local. Elle s'exécute dans votre navigateur, isolée de la console et hors des limites réseau de la session.",
@@ -619,7 +674,9 @@
     "reload": "Recharger",
     "newTab": "Ouvrir dans un nouvel onglet",
     "openError": "L'aperçu n'a pas pu être ouvert. Le port s'est peut-être fermé.",
-    "frameTitle": "Aperçu du port {{port}}"
+    "frameTitle": "Aperçu du port {{port}}",
+    "annotate": "Annoter",
+    "annotating": "Cliquer sur un élément de la page pour y laisser une note."
   },
   "branchChanges": {
     "title": "Modifications de la branche",
@@ -679,11 +736,14 @@
       "snoozed": "Reportées",
       "archived": "Archivées"
     },
+    "agentCount_one": "{{count}} agent",
+    "agentCount_many": "{{count}} agents",
+    "agentCount_other": "{{count}} agents",
     "more": "Plus",
     "back": "Retour aux sessions",
     "showTable": "Afficher en tableau",
     "filter": "Filtrer les sessions…",
-    "recent": "Affichage des {{n}} plus récentes",
+    "recent": "Les {{n}} plus récentes",
     "loadMore": "Charger plus",
     "noMatch": "Aucune session ne correspond."
   },
@@ -809,7 +869,6 @@
     "cancel": "Annuler",
     "archive": "Archiver",
     "unarchive": "Désarchiver",
-    "archived": "Archivée. Elle se trouve sous Archivées, en fin de liste.",
     "unarchived": "De retour dans la liste.",
     "copyLink": "Copier le lien",
     "copyId": "Copier l’identifiant de session",

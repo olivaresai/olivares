@@ -22,7 +22,7 @@
 //    asking to be logged in are both work FOR A PERSON; a session that went quiet
 //    within tolerance is not. Collapsing the two would make the group the operator is
 //    supposed to trust the one they learn to ignore.
-import { primaryRun, type UnifiedSession } from './provenance'
+import { primaryRun, type UnifiedSession, sessionWorkspace } from './provenance'
 import { sessionDisplayState } from './session-display-state'
 
 /**
@@ -72,6 +72,12 @@ export function isSnoozed(s: Pick<UnifiedSession, 'runs'>): boolean {
  */
 export function isArchived(s: Pick<UnifiedSession, 'runs'>): boolean {
   return s.runs.some((run) => !!run.archived_at)
+}
+
+/** Whether the session did something after the person last saw it (#2866). The engine
+ * works it out per person, so it is a flag to read, not a time to compare here. */
+export function isUnread(s: Pick<UnifiedSession, 'runs'>): boolean {
+  return s.runs.some((run) => run.unread === true)
 }
 
 /** Whether the person marked this session done (#2480): it is filed under Settled. */
@@ -167,21 +173,43 @@ export function groupSessions(
   byGroup.get('active')?.sort((a, b) => startedMs(b) - startedMs(a))
   return [
     // A STABLE sort: two rows of one rank keep the incoming order.
-    { id: 'pinned', sessions: pinnedRows.sort((a, b) => rank(a) - rank(b)) },
-    { id: 'attention', sessions: byGroup.get('attention') ?? [] },
-    { id: 'active', sessions: byGroup.get('active') ?? [] },
-    { id: 'today', sessions: doneToday },
-    { id: 'settled', sessions: byGroup.get('settled') ?? [] },
-    { id: 'snoozed', sessions: snoozedRows },
-    { id: 'archived', sessions: archivedRows },
+    {
+      id: 'pinned',
+      sessions: gatherWorkspaces(pinnedRows.sort((a, b) => rank(a) - rank(b))),
+    },
+    {
+      id: 'attention',
+      sessions: gatherWorkspaces(byGroup.get('attention') ?? []),
+    },
+    { id: 'active', sessions: gatherWorkspaces(byGroup.get('active') ?? []) },
+    { id: 'today', sessions: gatherWorkspaces(doneToday) },
+    { id: 'settled', sessions: gatherWorkspaces(byGroup.get('settled') ?? []) },
+    { id: 'snoozed', sessions: gatherWorkspaces(snoozedRows) },
+    { id: 'archived', sessions: gatherWorkspaces(archivedRows) },
   ]
+}
+
+/** THE SESSIONS OF ONE WORKSPACE SIT TOGETHER, where the first of them is (a stable
+ * reorder): the rail draws them under one row, and the arrow keys walk what it draws. */
+export function gatherWorkspaces(
+  rows: readonly UnifiedSession[],
+): UnifiedSession[] {
+  const first = new Map<string, number>()
+  rows.forEach((s, i) => {
+    const ref = sessionWorkspace(s)
+    if (ref && !first.has(ref)) first.set(ref, i)
+  })
+  return rows
+    .map((s, i) => ({ s, i, at: first.get(sessionWorkspace(s) ?? '') ?? i }))
+    .sort((a, b) => a.at - b.at || a.i - b.i)
+    .map(({ s }) => s)
 }
 
 /** Every row in rail order, which is what an arrow key walks. The snoozed and archived
  * rows are not in it unless the rail is showing them: a session out of the list is not
  * where the screen opens either. The Working rows are in it unless the caller says its
- * fold is shut (`withWorking` false): the rail keeps them shut until asked, so
- * a running session never moves a row under the pointer, and a session leaves the fold
+ * fold is shut (`withWorking` false): the rail shows them unless the person folded them,
+ * and a session leaves the fold
  * when it finishes, fails or asks for an answer (its group changes) or is pinned. The
  * surface still opens on a working session, so its default asks with them in. */
 export function railOrder(

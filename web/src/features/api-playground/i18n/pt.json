@@ -1,0 +1,68 @@
+{
+  "title": "API Playground",
+  "description": "Explore e teste a API da Olivares AI.",
+  "filterPlaceholder": "Filtrar endpoints…",
+  "selectEndpoint": "Selecione um endpoint no painel da esquerda",
+  "send": "Enviar",
+  "sending": "A enviar…",
+  "streaming": "A transmitir…",
+  "cancel": "Cancelar",
+  "requiredPermission": "Permissão necessária",
+  "copyAsCurl": "Copiar como curl",
+  "response": "Resposta",
+  "history": "Histórico",
+  "clearHistory": "Limpar",
+  "noRequests": "Ainda sem pedidos",
+  "noMatch": "Nenhum endpoint corresponde ao filtro.",
+  "pathParams": "Parâmetros de caminho",
+  "queryParams": "Consulta",
+  "headers": "Cabeçalhos",
+  "body": "Corpo",
+  "networkError": "Erro de rede",
+  "beta": "beta",
+  "summary": "{{endpoints}} endpoints em {{groups}} grupos",
+  "summaryWithBeta": "{{endpoints}} endpoints em {{groups}} grupos · {{beta}} rotas de módulos beta",
+  "endpointTree": {
+    "ariaLabel": "Endpoints da API"
+  },
+  "errors": {
+    "loadSpec": "Falha ao carregar a especificação OpenAPI"
+  },
+  "request": {
+    "networkError": "Erro de rede",
+    "failedNetworkHint": "O pedido falhou — verifique a ligação de rede.",
+    "blockedDestination": "Destino bloqueado",
+    "blockedDestinationHint": "O API Playground só pode enviar pedidos para este servidor Olivares AI.",
+    "enterPathParam": "Introduza {{name}}",
+    "headerNamePlaceholder": "Nome do cabeçalho",
+    "headerValuePlaceholder": "Valor",
+    "curlCommand": "curl",
+    "removeHeaderAria": "Remover o cabeçalho {{header}}",
+    "addHeaderAria": "Adicionar cabeçalho personalizado",
+    "bodyAria": "Corpo do pedido"
+  },
+  "responsePanel": {
+    "empty": "Selecione um endpoint e envie um pedido",
+    "statusError": "ERR",
+    "duration": "{{duration}} ms",
+    "size": {
+      "bytes": "{{value}} B",
+      "kilobytes": "{{value}} KB",
+      "megabytes": "{{value}} MB"
+    },
+    "headersCount": "Cabeçalhos ({{count}})",
+    "bodyAria": "Corpo da resposta"
+  },
+  "historyPanel": {
+    "recentCount": "Recentes ({{count}})",
+    "clearAria": "Limpar o histórico de pedidos",
+    "statusError": "ERR",
+    "duration": "{{duration}} ms",
+    "relative": {
+      "justNow": "agora mesmo",
+      "minutes": "há {{count}} min",
+      "hours": "há {{count}} h",
+      "days": "há {{count}} d"
+    }
+  }
+}

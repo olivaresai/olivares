@@ -60,7 +60,20 @@
     "waiting": "等待审批",
     "needsYou": "等你处理",
     "idle": "空闲",
-    "approvalsUnread": "无法读取审批，因此不显示等待审批的时段。"
+    "approvalsUnread": "审批尚未读取或无法读取，因此不显示等待审批的时段。",
+    "approvalsPartial": "只读取了部分审批，因此部分等待审批的时段可能不会显示。",
+    "step": {
+      "Bash": "正在运行 {{what}}",
+      "Read": "正在读取 {{what}}",
+      "Edit": "正在编辑 {{what}}",
+      "Write": "正在写入 {{what}}",
+      "Grep": "正在搜索 {{what}}",
+      "Glob": "正在查找文件 {{what}}",
+      "WebFetch": "正在读取 {{what}}",
+      "WebSearch": "正在网上搜索 {{what}}",
+      "Task": "正在与智能体协作",
+      "Agent": "正在与智能体协作"
+    }
   },
   "summary": {
     "heading": "摘要",
@@ -82,10 +95,5 @@
   "state": {
     "pendingIdle": "查询未开始——打开以加载",
     "pendingPaused": "查询已暂停——等待恢复"
-  },
-  "proof": {
-    "verified": "链已于 {{time}} 验证",
-    "entries_other": "{{n}} 条记录",
-    "broken": "链已断裂：打开账本"
   }
 }

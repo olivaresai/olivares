@@ -32,7 +32,7 @@ const demoTenant = process.env.DEMO_TENANT ?? ''
 const EMAIL = 'demo@olivares.local'
 const PASSWORD = 'olivares-demo-estate'
 
-/** The nine the console ships; `lint:i18n` proves the resources exist for each. */
+/** The eleven the console ships; `lint:i18n` proves the resources exist for each. */
 const LANGUAGES = [
   'en',
   'es',
@@ -43,6 +43,8 @@ const LANGUAGES = [
   'ko',
   'ru',
   'zh',
+  'uk',
+  'pt',
 ] as const
 
 async function signIn(page: Page) {
@@ -197,9 +199,10 @@ test.describe('the work surface', () => {
     await prefer(page, 'dark', 'en')
     await signIn(page)
     await page.goto('/')
-    // A live session is a card on Now and an ended one a row (#2245): either opens it.
+    // A live session is a lane on Now and an ended one a row (#2245): either opens it.
     const row = page
-      .getByTestId('now-live-card')
+      .getByTestId('swimlane-lane')
+      .getByRole('link')
       .or(page.getByTestId('home-recent-row'))
       .first()
     await expect(row).toBeVisible()

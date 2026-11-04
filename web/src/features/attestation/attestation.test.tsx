@@ -23,6 +23,10 @@ import {
 } from './fixtures'
 import './i18n'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 // RBAC: the view gates the whole privileged read on `compliance:read`. A hoisted,
 // mutable auth lets the view tests flip `can` while the pure-component tests (which
 // never touch useAuth) are unaffected. vi.mock is hoisted above the imports by Vitest.

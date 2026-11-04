@@ -36,7 +36,7 @@
     "density": "Densidad",
     "densityHint": "Compacto muestra más filas; cómodo se lee mejor.",
     "language": "Idioma",
-    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어.",
+    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어, Українська, Português.",
     "time": "Hora",
     "timeHint": "Las horas se muestran en tu zona ({{zone}}). Los registros y las exportaciones siguen en UTC.",
     "clock24": "24 horas",

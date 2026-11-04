@@ -52,8 +52,10 @@ describe('Command line: how to get and use the olivares CLI, for every signed-in
     expect(commands()).toEqual([
       'curl -fsSL https://olivares.ai/olivares/install.sh | sh',
       `olivares login --server ${origin} --ca-cert tls.crt`,
-      'olivares session start . "<first task>"',
+      'olivares session start .',
     ])
+    // A copied command runs as pasted: no "<placeholder>" to replace first.
+    for (const command of commands()) expect(command).not.toMatch(/[<>]/)
     expect(
       within(dialog).getByText(
         'Already installed on this server. On another Linux computer, run:',
@@ -83,11 +85,7 @@ describe('Command line: how to get and use the olivares CLI, for every signed-in
 
   it('never shows --email alone (it fails today) or a credential', () => {
     for (const pin of [undefined, 'pin']) {
-      for (const step of commandLineSteps(
-        'https://olv.example:8443',
-        'first task',
-        pin,
-      )) {
+      for (const step of commandLineSteps('https://olv.example:8443', pin)) {
         expect(step.command).not.toMatch(/--email|--password|--token/)
       }
     }
@@ -97,7 +95,7 @@ describe('Command line: how to get and use the olivares CLI, for every signed-in
   })
 
   it('fills the sign-in line with the address it is given', () => {
-    const [, signIn] = commandLineSteps('https://olv.example:8443', 'x')
+    const [, signIn] = commandLineSteps('https://olv.example:8443')
     expect(signIn.command).toBe(
       'olivares login --server https://olv.example:8443 --ca-cert tls.crt',
     )

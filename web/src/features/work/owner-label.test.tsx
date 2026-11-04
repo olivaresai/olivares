@@ -19,10 +19,12 @@ import { renderIntel, screen } from '@/test/intel'
 import '@/features/_intel'
 import './i18n'
 
+const denied = vi.hoisted(() => ({ withoutUserRead: false }))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     activeTenant: 't1',
-    can: () => true,
+    can: (permission: string) =>
+      !(denied.withoutUserRead && permission === 'user:read'),
     confinedWorkspace: null,
   }),
 }))
@@ -59,6 +61,7 @@ const fila = (id: string, kind: string, ref: string) => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
+  denied.withoutUserRead = false
   consola.listMembers.mockResolvedValue({
     items: [
       {
@@ -110,5 +113,16 @@ describe('el propietario de un work item se lee', () => {
     })
     renderIntel(<WorkView />)
     expect(await screen.findByText(/agent-claude-review-3/)).toBeVisible()
+  })
+
+  it('without user:read the roster is not requested (the engine would refuse it with 403) and the ref is shown', async () => {
+    denied.withoutUserRead = true
+    api.listWorkItems.mockResolvedValue({
+      items: [fila('d', 'user', CON_NOMBRE)],
+      has_more: false,
+    })
+    renderIntel(<WorkView />)
+    expect(await screen.findByText(new RegExp(CON_NOMBRE))).toBeVisible()
+    expect(consola.listMembers).not.toHaveBeenCalled()
   })
 })

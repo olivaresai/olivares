@@ -55,8 +55,13 @@ REPLY = "journey-reply"
 SESSIONS = 3
 PROVIDER_PORT = 18080  # the compose backend's provider double, in the engine's network namespace
 
-# The agent CLI double: an init frame, then one reply per prompt line.
+# The agent CLI double: signed in, then an init frame and one reply per prompt line.
 CLAUDE_STUB = f"""#!/bin/sh
+# The engine reads a named account's sign-in with `claude auth status --json` before it resumes a session.
+if [ "$1" = auth ] && [ "$2" = status ]; then
+	printf '{{"loggedIn":true,"authMethod":"claude.ai","email":"journey@upgrade.invalid"}}\\n'
+	exit 0
+fi
 sid="journey-$$"
 printf '{{"type":"system","subtype":"init","session_id":"%s","cwd":"%s"}}\\n' "$sid" "$PWD"
 while IFS= read -r line; do
@@ -299,6 +304,13 @@ class ComposeBackend:
         (stub / "claude").write_text(CLAUDE_STUB)
         os.chmod(stub / "claude", 0o755)
         (self.work / "provider.py").write_text(PROVIDER_SERVER)
+        # The one project folder: the documented host-folder route (deploy/compose/README.md,
+        # "Work on a host project folder"). The empty olivares-project volume is root-owned, and
+        # an engine refuses a registered folder it cannot write; neither the 0.3 nor the 0.4 image
+        # has a /project of its own to give the volume its owner. The container user is 65532.
+        self.project_dir = self.work / "project"
+        self.project_dir.mkdir(exist_ok=True)
+        os.chmod(self.project_dir, 0o777)
         # The base file pins container_name and publishes fixed host ports; this run takes
         # neither (the layer the first-hour gate uses), puts the agent CLI double first on the
         # engine's PATH, and keeps the data in the named volume the upgrade reuses. The provider
@@ -328,7 +340,7 @@ class ComposeBackend:
         self.current = ""
 
     def compose(self, *args, image, check=True):
-        env = dict(os.environ, OLIVARES_IMAGE=image, OLIVARES_BIND="127.0.0.1")
+        env = dict(os.environ, OLIVARES_IMAGE=image, OLIVARES_BIND="127.0.0.1", OLIVARES_PROJECT_DIR=str(self.project_dir))
         for var in ("COMPOSE_FILE", "COMPOSE_PROFILES"):
             env.pop(var, None)
         cmd = ["docker", "compose", "-p", self.project, "-f", "deploy/compose/docker-compose.yml", "-f", str(self.override), *args]
@@ -343,7 +355,11 @@ class ComposeBackend:
         # The documented upgrade pulls; an image that is already here (a local candidate) is not pulled.
         if subprocess.run(["docker", "image", "inspect", image], capture_output=True).returncode != 0:
             self.compose("pull", "--quiet", image=image)
-        self.compose("up", "--wait", "--wait-timeout", str(first_boot_deadline()), "-d", image=image)
+        try:
+            self.compose("up", "--wait", "--wait-timeout", str(first_boot_deadline()), "-d", image=image)
+        except Fail as e:
+            log = self.compose("logs", "--no-color", "--tail", "15", "olivares", image=image, check=False).stdout
+            raise Fail(f"{e} | engine log: {' | '.join(log.strip().splitlines())[-800:]}")
         port = self.compose("port", "olivares", "8443", image=image).stdout.strip().rsplit(":", 1)[-1]
         api = Api(f"https://127.0.0.1:{port}")
         api.wait_healthy(self)
@@ -353,8 +369,10 @@ class ComposeBackend:
         pass  # `up --wait` already returned healthy; wait_healthy confirms the published port answers
 
     def stop(self):
+        # `down` keeps the named volume. `stop` returned while the engine container still read as running,
+        # so the next `up` skipped it and the provider double could not join its network namespace.
         if self.current:
-            self.compose("stop", image=self.images[self.current])
+            self.compose("down", "--remove-orphans", image=self.images[self.current])
 
     def setup_token(self):
         logs = self.compose("logs", "--no-color", "olivares", image=self.images["old"]).stdout

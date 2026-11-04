@@ -103,7 +103,7 @@ export function useModuleEnabled(): (
   return (permission, viewId) => moduleEnabled(off, permission, viewId)
 }
 
-/** Mounted once by the shell: keeps the store in step with server-info. Its
+/** Mounted once by the app providers: keeps the store in step with server-info. Its
  * `communication_ready` says whether the K3 communication plane is effective; until it
  * is, the communication screens are hidden. No route is probed for it, so a plane that
  * is staged by design never shows up as failed requests. */

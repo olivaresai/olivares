@@ -47,6 +47,7 @@ export function SessionOverview({
   onExpandEvidence,
   peerSessions,
   frameCwd,
+  showMode = true,
 }: {
   resolution: SessionResolution
   evidence?: EvidenceBlock
@@ -55,6 +56,8 @@ export function SessionOverview({
   peerSessions?: readonly UnifiedSession[]
   /** The folder the tool's own first frame names, when the run recorded none. */
   frameCwd?: string | null
+  /** False beside a conversation, whose composer already says the access in its chip. */
+  showMode?: boolean
 }) {
   const { t, i18n } = useTranslation('sessions')
   const lang = i18n.language
@@ -90,7 +93,7 @@ export function SessionOverview({
         {live && isScopedRow(live) && live.attribution !== 'managed' ? (
           <AttributionChip attribution={live.attribution} />
         ) : null}
-        <SessionMode run={run} />
+        {showMode ? <SessionMode run={run} /> : null}
         {live && (!run || run.state === 'running' || run.state === 'idle') ? (
           <LiveDot status={resolution.streamStatus} />
         ) : null}
@@ -99,11 +102,10 @@ export function SessionOverview({
         ) : null}
       </div>
 
-      {/* WHAT IT HAS SPENT. The header paints it only where it has room (from 1100 px);
-          here it is always one look away. */}
+      {/* WHAT IT HAS SPENT: its tokens and cost, said here and not in the header. */}
       {usage ? (
         <p className="text-caption text-muted-foreground">
-          <SessionMeter run={run} usage={usage} where="context" />
+          <SessionMeter usage={usage} />
         </p>
       ) : null}
 

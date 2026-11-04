@@ -10,7 +10,17 @@ import (
 	"bufio"
 	"errors"
 	"os"
+	"time"
 )
+
+// discardTypedAhead cannot drop unread keys on this platform, so a question that
+// needs it is not asked at the terminal.
+func discardTypedAhead(*os.File) error {
+	return errors.New("this platform cannot clear typed input")
+}
+
+// waitReadable cannot poll on this platform: the read that follows waits.
+func waitReadable(*os.File, time.Duration) (bool, error) { return true, nil }
 
 // readHiddenLine cannot turn echo off on this platform, so it refuses rather than
 // show the password on screen.

@@ -30,6 +30,10 @@ export const VIEWS = [
     helpHref: '/reference/modules/eventing',
     icon: Bell,
     permission: 'eventing:subscription:read',
+    changes: [
+      { permission: 'eventing:subscription:write' },
+      { permission: 'eventing:subscription:admin' },
+    ],
     commandActions: [
       {
         id: 'createSubscription',

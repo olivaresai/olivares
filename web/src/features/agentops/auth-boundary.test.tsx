@@ -28,6 +28,7 @@ vi.mock('@/lib/auth/context', () => ({
   }),
 }))
 
+import { sessionsKeys } from '@/features/sessions/api'
 import { agentOpsKeys } from './api'
 import { useAuthBoundary } from './auth-boundary'
 
@@ -159,5 +160,20 @@ describe('useAuthBoundary — the credential generation moves the boundary', () 
     expect(other.aborted()).toBe(false)
     expect(qc.getQueryCache().find({ queryKey: other.queryKey })).toBeDefined()
     expect(qc.getQueryData(['elsewhere', 't1'])).toEqual({ untouched: true })
+  })
+
+  it('removes the sessions plane’s pages of the previous boundary too, from this one custody', async () => {
+    const { qc, hook } = mount()
+    const first = hook.result.current
+    const page = sessionsKeys.liveScoped('t1', first.epoch, { limit: 50 })
+    const otherTenant = sessionsKeys.liveScoped('t-other', 999, { limit: 50 })
+    qc.setQueryData(page, { items: [{ id: 'previous-persons-row' }] })
+    qc.setQueryData(otherTenant, { items: [] })
+    act(() => {
+      setSession('olvs_ROTATED_3')
+    })
+    hook.rerender()
+    await waitFor(() => expect(qc.getQueryData(page)).toBeUndefined())
+    expect(qc.getQueryData(otherTenant)).toEqual({ items: [] })
   })
 })

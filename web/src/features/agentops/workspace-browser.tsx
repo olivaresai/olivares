@@ -9,16 +9,17 @@ import {
 } from '@tanstack/react-query'
 import {
   ChevronRight,
-  File as FileIcon,
   FilePlus,
   Folder,
   FolderPlus,
   Home,
   RefreshCw,
 } from 'lucide-react'
+import { FileTypeIcon } from '@/components/ui/file-type-icon'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -41,6 +42,12 @@ import { cn } from '@/lib/utils'
 import { agentOpsApi, agentOpsKeys } from './api'
 import type { FileEntry, WorkspaceDTO } from './types'
 import { FileViewer } from './workspace-file-viewer'
+import { ArchiveButton, UploadButton } from './workspace-transfer'
+import {
+  MAX_UPLOAD_BYTES,
+  uploadRefusal,
+  useWorkspaceUpload,
+} from './workspace-upload'
 import './i18n'
 
 const PAGE = 200
@@ -116,11 +123,29 @@ function Browser({
   )
   const editing = draft?.path === selected
   const editValue = editing ? draft.value : ''
-
   const invalidateDir = () =>
     qc.invalidateQueries({
       queryKey: agentOpsKeys.files(activeTenant, wref, dir),
     })
+
+  const refusal = uploadRefusal(
+    workspace.mount_mode,
+    can('sessions:workspace:write'),
+    (key) => t(key),
+  )
+  // The engine refuses a write past 64 MiB whatever limit the folder registered.
+  const uploadLimit = Math.min(
+    workspace.max_read_bytes || MAX_UPLOAD_BYTES,
+    MAX_UPLOAD_BYTES,
+  )
+  const { upload, pending: uploading } = useWorkspaceUpload({
+    wref,
+    dir,
+    maxBytes: uploadLimit,
+    refusal,
+    onDone: invalidateDir,
+  })
+  const [dropping, setDropping] = useState(false)
 
   const filesQuery = useInfiniteQuery({
     queryKey: agentOpsKeys.files(activeTenant, wref, dir),
@@ -137,6 +162,22 @@ function Browser({
     () => filesQuery.data?.pages.flatMap((p) => p.entries) ?? [],
     [filesQuery.data],
   )
+
+  // The ticked entries belong to the folder they were ticked in: leaving it drops them (also
+  // when the same folder is opened again), and only an entry the list still has counts.
+  const [ticked, setTicked] = useState<{ dir: string; paths: string[] }>({
+    dir,
+    paths: [],
+  })
+  if (ticked.dir !== dir) setTicked({ dir, paths: [] })
+  const checked = ticked.paths.filter((p) => entries.some((e) => e.path === p))
+  const toggle = (path: string) =>
+    setTicked({
+      dir,
+      paths: checked.includes(path)
+        ? checked.filter((p) => p !== path)
+        : [...checked, path],
+    })
 
   const fileQuery = useQuery({
     queryKey: agentOpsKeys.file(activeTenant, wref, selected ?? ''),
@@ -172,10 +213,20 @@ function Browser({
   // page they stand side by side. The file's column never grows past the space it has, so
   // a long line wraps or scrolls inside the editor instead of pushing the pane sideways.
   return (
-    <div className="@container/files">
-      <div className="grid grid-cols-1 gap-3 @min-[40rem]/files:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]">
+    // STACKED (the side pane), the two fill the pane's height: the list on top, the file
+    // under it, and the list's bottom edge is the browser's own splitter (resize-y).
+    <div className="@container/files flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 @min-[40rem]/files:grid @min-[40rem]/files:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]">
         {/* Left: breadcrumb + toolbar + list */}
-        <div className="flex min-w-0 flex-col gap-2 rounded-md border border-border">
+        <div
+          data-testid="files-list-pane"
+          className={cn(
+            'flex min-w-0 flex-col gap-2 overflow-hidden rounded-md border border-border',
+            selected
+              ? '@max-[40rem]/files:h-[45%] @max-[40rem]/files:max-h-[85%] @max-[40rem]/files:min-h-32 @max-[40rem]/files:shrink-0 @max-[40rem]/files:resize-y'
+              : '@max-[40rem]/files:min-h-0 @max-[40rem]/files:flex-1',
+          )}
+        >
           <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-1.5 text-caption">
             <button
               type="button"
@@ -225,23 +276,66 @@ function Browser({
                 onDone={invalidateDir}
               />
             )}
+            {(checked.length > 0 || dir !== '') && (
+              <ArchiveButton
+                wref={wref}
+                paths={checked.length > 0 ? checked : [dir]}
+                label={
+                  checked.length > 0
+                    ? t('browser.downloadSelected', { n: checked.length })
+                    : t('browser.downloadFolder')
+                }
+              />
+            )}
+            <UploadButton
+              refusal={refusal}
+              maxBytes={uploadLimit}
+              pending={uploading}
+              onFiles={upload}
+            />
           </div>
 
-          <FileList
-            entries={entries}
-            loading={filesQuery.isLoading}
-            error={filesQuery.error}
-            onRetry={() => void filesQuery.refetch()}
-            selected={selected}
-            onOpen={openEntry}
-            hasMore={!!filesQuery.hasNextPage}
-            onLoadMore={() => void filesQuery.fetchNextPage()}
-            loadingMore={filesQuery.isFetchingNextPage}
-          />
+          {/* Drop files anywhere on the list to upload them into the folder shown. */}
+          <div
+            onDragOver={(e) => {
+              e.preventDefault()
+              setDropping(true)
+            }}
+            onDragLeave={() => setDropping(false)}
+            onDrop={(e) => {
+              e.preventDefault()
+              setDropping(false)
+              upload(Array.from(e.dataTransfer.files))
+            }}
+            className={cn(
+              'flex min-h-0 flex-1 flex-col rounded-b-md',
+              dropping && 'outline-2 -outline-offset-2 outline-accent-text',
+            )}
+          >
+            <FileList
+              entries={entries}
+              loading={filesQuery.isLoading}
+              error={filesQuery.error}
+              onRetry={() => void filesQuery.refetch()}
+              selected={selected}
+              onOpen={openEntry}
+              checked={checked}
+              onToggle={toggle}
+              hasMore={!!filesQuery.hasNextPage}
+              onLoadMore={() => void filesQuery.fetchNextPage()}
+              loadingMore={filesQuery.isFetchingNextPage}
+            />
+          </div>
         </div>
 
         {/* Right: viewer / editor. Its toolbar keeps one row by its width (workspace-file-viewer). */}
-        <div className="@container/viewer flex min-w-0 flex-col gap-2 rounded-md border border-border p-3">
+        <div
+          className={cn(
+            '@container/viewer flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-auto rounded-md border border-border p-3',
+            // Stacked, an empty viewer gives its height to the list.
+            !selected && '@max-[40rem]/files:hidden',
+          )}
+        >
           {!selected ? (
             <p className="p-6 text-center text-body text-muted-foreground">
               {t('browser.pickFile')}
@@ -311,6 +405,8 @@ function FileList({
   onRetry,
   selected,
   onOpen,
+  checked,
+  onToggle,
   hasMore,
   onLoadMore,
   loadingMore,
@@ -321,6 +417,8 @@ function FileList({
   onRetry: () => void
   selected: string | null
   onOpen: (e: FileEntry) => void
+  checked: string[]
+  onToggle: (path: string) => void
   hasMore: boolean
   onLoadMore: () => void
   loadingMore: boolean
@@ -355,21 +453,32 @@ function FileList({
       </p>
     )
   return (
-    <ul className="max-h-[28rem] overflow-auto pb-2">
+    <ul className="min-h-0 flex-1 overflow-auto pb-2 @min-[40rem]/files:max-h-[28rem]">
       {entries.map((e) => (
-        <li key={e.path}>
+        <li
+          key={e.path}
+          className={cn(
+            'flex items-center gap-2 pl-2 hover:bg-muted',
+            selected === e.path && 'bg-muted',
+          )}
+        >
+          <Checkbox
+            checked={checked.includes(e.path)}
+            onCheckedChange={() => onToggle(e.path)}
+            aria-label={t('browser.select', { name: e.name })}
+          />
           <button
             type="button"
             onClick={() => onOpen(e)}
-            className={cn(
-              'flex w-full items-center gap-2 px-2 py-1.5 text-left text-body hover:bg-muted',
-              selected === e.path && 'bg-muted',
-            )}
+            className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pr-2 text-left text-body"
           >
             {e.type === 'dir' ? (
               <Folder className="size-4 shrink-0 text-accent-text" />
             ) : (
-              <FileIcon className="size-4 shrink-0 text-muted-foreground" />
+              <FileTypeIcon
+                path={e.name}
+                className="size-4 shrink-0 text-muted-foreground"
+              />
             )}
             <span className="truncate font-mono text-caption text-foreground">
               {e.name}

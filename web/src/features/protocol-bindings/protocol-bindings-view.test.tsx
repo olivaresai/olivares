@@ -8,6 +8,10 @@ import * as api from './api'
 import { ProtocolBindingsView } from './protocol-bindings-view'
 import type { ProtocolBinding, ProtocolBindingSpec } from './types'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     activeTenant: 'tenant-1',

@@ -19,6 +19,32 @@ const NAMED = [
   { window: 'seven_day', key: 'week' },
 ] as const
 
+/** The engine's own labels for its two plan windows, for a reading that carries only the
+ * label (the provider snapshot), and its label for a per-model weekly cap
+ * ("Weekly (<model>)", agenttoolsapi/providers_probe.go). */
+export const ENGINE_LABELS: Record<string, string> = {
+  '5-hour': 'five_hour',
+  Weekly: 'seven_day',
+}
+const MODEL_WEEK = /^Weekly \((.+)\)$/
+
+/** A usage window in the console's language: "Semanal", or "Solo Fable" for a weekly cap
+ * of one model. A window the console has no word for keeps the tool's own label. */
+export function useWindowName(): (u: {
+  window?: string
+  label?: string
+}) => string {
+  const { t } = useTranslation('agentops')
+  return ({ window, label = '' }) => {
+    const id = window ?? ENGINE_LABELS[label]
+    const key = NAMED.find((n) => n.window === id)?.key
+    if (key) return t(`usage.${key}`)
+    const model = MODEL_WEEK.exec(label)?.[1]
+    if (model) return t('usage.weekModel', { model })
+    return label || window || ''
+  }
+}
+
 /** A percent that says 100 only when the window is at its limit. */
 const shownPercent = (utilization: number) =>
   utilization >= 100 ? 100 : Math.min(99, Math.max(0, Math.round(utilization)))
@@ -49,6 +75,7 @@ export function AccountUsage({
   className?: string
 }) {
   const { t } = useTranslation('agentops')
+  const windowName = useWindowName()
   const current = inForce(usage)
   const ordered = [
     ...NAMED.flatMap(
@@ -58,8 +85,7 @@ export function AccountUsage({
       []),
   ]
   const windows = ordered.flatMap((u) => {
-    const key = NAMED.find((n) => n.window === u.window)?.key
-    const label = key ? t(`usage.${key}`) : u.label || u.window
+    const label = windowName(u)
     if (u.credit) {
       const balance = u.credit.unlimited ? '∞' : u.credit.balance
       return balance === undefined
@@ -102,15 +128,47 @@ export function AccountUsage({
   )
 }
 
-/** The mark before a launch: the window at its limit and when it resets. */
+/** One short bar per account: its most used window still in force, 0-100. */
+export function UsageMeter({
+  usage,
+}: {
+  usage: readonly ProviderAccountUsage[] | undefined
+}) {
+  const percents = (inForce(usage) ?? []).flatMap((u) =>
+    u.utilization !== undefined && Number.isFinite(u.utilization)
+      ? [shownPercent(u.utilization)]
+      : [],
+  )
+  if (percents.length === 0) return null
+  const peak = Math.max(...percents)
+  // The figures beside it say the same in words; the bar is for the eye.
+  return (
+    <meter
+      aria-hidden
+      min={0}
+      max={100}
+      low={80}
+      high={99}
+      optimum={0}
+      value={peak}
+      className="ms-2 me-1.5 h-1.5 w-10 align-middle"
+    />
+  )
+}
+
+/** The mark before a launch: the window at its limit and when it resets. `quiet` drops
+ * the live status, for a row in a list that says it among others. */
 export function AtLimit({
   usage,
+  quiet = false,
   className,
 }: {
   usage: readonly ProviderAccountUsage[] | undefined
+  quiet?: boolean
   className?: string
 }) {
   const { t, i18n } = useTranslation('agentops')
+  const windowName = useWindowName()
   const hit = limitReached(usage)
   if (!hit) return null
   const key =
@@ -121,11 +179,11 @@ export function AtLimit({
       : ''
   return (
     <span
-      role="status"
+      role={quiet ? undefined : 'status'}
       className={cn('text-caption font-medium text-warning', className)}
     >
       {t(`usage.limit.${key}${time ? 'Resets' : ''}`, {
-        label: hit.label || hit.window,
+        label: windowName(hit),
         time,
       })}
     </span>

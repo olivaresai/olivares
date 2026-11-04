@@ -89,11 +89,11 @@
   },
   "catalog": {
     "title": "Canales visibles",
-    "description": "Solo los canales activos que este principal puede leer ahora, con sus propios bits locales actuales. Una página no es una búsqueda sobre todo el catálogo: carga más para continuar desde la continuación del servidor.",
+    "description": "Solo los canales activos que puedes leer ahora, con tu propio acceso. Una página no es una búsqueda sobre todo el catálogo: carga más para ver más canales.",
     "emptyTitle": "Sin canales visibles",
-    "emptyBody": "Este principal no tiene ningún canal que pueda leer en este espacio de trabajo, o todavía no existe ninguno. Una concesión de lectura y el permiso channel:read hacen que aparezca aquí.",
+    "emptyBody": "No puedes leer ningún canal en este espacio de trabajo, o todavía no existe ninguno. El acceso de lectura a un canal y el permiso channel:read hacen que aparezca aquí.",
     "truncated": "Hay más canales más allá de esta página",
-    "truncatedHint": "El servidor informó de más canales visibles. Carga más para continuar desde su continuación.",
+    "truncatedHint": "Hay más canales visibles. Carga más para verlos.",
     "columns": {
       "name": "Nombre",
       "slug": "Slug",
@@ -111,9 +111,9 @@
     "read": "lectura",
     "write": "escritura",
     "admin": "admin",
-    "none": "sin bits locales",
+    "none": "sin acceso",
     "unknown": "no informado por esta lectura",
-    "hint": "Los bits locales son las concesiones del propio canal para este principal. Hace falta además un permiso core, y el motor decide cada acto en el momento en que se le pide."
+    "hint": "Tu acceso es lo que el propio canal te concede. Hace falta además el permiso, y el motor decide cada acto en el momento en que se le pide."
   },
   "kind": {
     "coordination": "Coordinación",
@@ -171,15 +171,15 @@
       "tenant": "Inquilino"
     },
     "sendHint": {
-      "canWrite": "Tu bit local de escritura es actual en esta página del catálogo y tienes el permiso de envío. El motor vuelve a decidir en el envío.",
-      "noWrite": "Esta página del catálogo no informa de un bit local de escritura para ti. El motor rechazaría un envío; no se ofrece componer.",
-      "unknown": "Esta lectura no informa de tus bits locales. Tienes el permiso de envío; el motor decide la autoridad local en el envío.",
+      "canWrite": "Puedes escribir en este canal y tienes el permiso de envío. El motor vuelve a decidir en el envío.",
+      "noWrite": "Esta página del catálogo indica que no puedes escribir en este canal. El motor rechazaría un envío; no se ofrece componer.",
+      "unknown": "Esta lectura no indica tu acceso al canal. Tienes el permiso de envío; el motor decide en el envío.",
       "noPermission": "No tienes el permiso de envío de mensajes, así que no se ofrece componer."
     }
   },
   "create": {
     "title": "Crear un canal",
-    "description": "Están disponibles todos los campos del contrato. Las concesiones iniciales son explícitas: añade cada sujeto y marca cada bit que pretendas. No se añade nada en tu nombre.",
+    "description": "Están disponibles todos los campos del contrato. Las concesiones iniciales son explícitas: añade cada sujeto y marca cada acceso que pretendas. No se añade nada en tu nombre.",
     "fields": {
       "slug": "Slug",
       "slugHint": "Minúsculas, dígitos y guiones; único en el espacio de trabajo.",
@@ -196,7 +196,7 @@
       "maxFanout": "Fanout máximo",
       "maxAutomationDepth": "Profundidad máxima de automatización",
       "grants": "Concesiones iniciales",
-      "grantsHint": "Al menos una concesión con al menos un bit. Una concesión es un sujeto y sus tres bits, cada uno independiente. Tu propia cuenta es un sujeto como cualquier otro."
+      "grantsHint": "Al menos una concesión con al menos un acceso. Una concesión es un sujeto y sus tres accesos, cada uno independiente. Tu propia cuenta es un sujeto como cualquier otro."
     },
     "grant": {
       "subject": "Sujeto",
@@ -211,7 +211,7 @@
       "name": "El nombre es obligatorio.",
       "grants": "Hace falta al menos una concesión inicial.",
       "grantRef": "Toda concesión necesita una referencia de sujeto.",
-      "grantBits": "Toda concesión necesita al menos un bit.",
+      "grantBits": "Toda concesión necesita al menos un acceso.",
       "number": "Debe ser un número entero de cero o más.",
       "fanout": "Debe ser un número entero de uno o más."
     },
@@ -325,11 +325,12 @@
   },
   "inbox": {
     "title": "Bandeja personal",
-    "description": "Entregas dirigidas a este principal en este espacio de trabajo, tal como el motor las autoriza ahora. Leer una página no acusa nada ni avanza ningún cursor.",
-    "emptyTitle": "Sin entregas",
-    "emptyBody": "Ahora mismo no hay nada visible dirigido a este principal en este espacio de trabajo.",
+    "description": "Entregas dirigidas a ti en este espacio de trabajo, tal como el motor las autoriza ahora. Leer una página no acusa nada ni mueve ninguna marca de visto.",
+    "emptyTitle": "Tu bandeja está vacía",
+    "emptyBody": "Aquí aparece lo que otras personas o sesiones te envían a través de un canal. Para enviar algo, abre Canales, elige un canal y pulsa Enviar aviso.",
+    "showChannels": "Ir a Canales",
     "truncated": "Hay más entregas más allá de esta página",
-    "truncatedHint": "El servidor informó de más entregas visibles. Carga más para continuar desde su continuación.",
+    "truncatedHint": "Hay más entregas visibles. Carga más para verlas.",
     "columns": {
       "subject": "Asunto",
       "sender": "Remitente",
@@ -343,7 +344,7 @@
   },
   "delivery": {
     "title": "Entrega",
-    "description": "Leída en fresco para este principal. Acusar recepción es un acto explícito con la versión que acabas de leer.",
+    "description": "Leída en fresco para ti. Acusar recepción es un acto explícito con la versión que acabas de leer.",
     "fields": {
       "id": "ID de la entrega",
       "messageId": "ID del mensaje",
@@ -439,9 +440,9 @@
     "late": "Tardío"
   },
   "failure": {
-    "forbidden": "El motor lo rechazó para el principal actual.",
+    "forbidden": "El motor lo rechazó para ti.",
     "step_up": "Tu rol lo permite, pero antes hay que elevar la sesión.",
-    "not_found": "No encontrado, o no visible para este principal.",
+    "not_found": "No encontrado, o no visible para ti.",
     "unavailable": "El motor no pudo mirar: la evidencia de autoridad, custodia o almacén actual no está disponible. No es un resultado vacío ni un rechazo.",
     "version_mismatch": "La versión que leíste ya no es la actual.",
     "version_required": "El motor exigió una precondición de versión que la consola no envió.",
@@ -462,7 +463,7 @@
   "authority": {
     "lost": "Ya no se tiene el permiso para este acto; no se envió nada.",
     "confirmationClosed": "Se cerró una confirmación pendiente porque se perdió el permiso que la sostenía.",
-    "notAddressable": "Este principal no tiene referencia de directorio para este tipo y no puede ser direccionado."
+    "notAddressable": "Este sujeto no tiene referencia de directorio para este tipo y no puede ser direccionado."
   },
   "states": {
     "loading": "Cargando…",
@@ -470,7 +471,7 @@
   },
   "administration": {
     "title": "Canales administrables",
-    "description": "Canales que este principal puede administrar ahora: channel:admin core y un bit local de admin vigente, decididos por el motor en cada lectura. Los canales archivados siguen listados e inspeccionables. No es el catálogo de lectura: un bit local de lectura no se exige ni se supone.",
+    "description": "Canales que puedes administrar ahora: el permiso channel:admin y acceso de admin en el canal, decididos por el motor en cada lectura. Los canales archivados siguen listados e inspeccionables. No es el catálogo de lectura: el acceso de lectura a un canal no se exige ni se supone.",
     "stateFilter": "Estado persistido",
     "states": {
       "all": "Todos los estados",
@@ -490,9 +491,9 @@
     "openById": "Administrar un canal por ID",
     "openByIdHint": "La hoja se lee por el historial de concesiones bajo channel:admin; nunca usa la lectura de canal del nivel de lectura.",
     "emptyTitle": "Sin canales administrables",
-    "emptyBody": "Ningún canal de este espacio de trabajo concede a este principal un bit de admin vigente, o ninguno coincide con el estado persistido seleccionado. Una concesión local de admin y el permiso channel:admin hacen aparecer uno aquí.",
+    "emptyBody": "Ningún canal de este espacio de trabajo te da acceso de admin, o ninguno coincide con el estado seleccionado. El acceso de admin a un canal y el permiso channel:admin hacen que aparezca aquí.",
     "truncated": "Hay más canales administrables más allá de esta página",
-    "truncatedHint": "El servidor informó de más canales administrables. Cargue más para continuar desde su continuación."
+    "truncatedHint": "Hay más canales administrables. Carga más para verlos."
   },
   "channelState": {
     "active": "Activo",
@@ -580,7 +581,7 @@
     },
     "columns": {
       "subject": "Sujeto",
-      "bits": "Bits",
+      "bits": "Acceso",
       "generation": "Generación",
       "stored": "Estado almacenado",
       "temporal": "En la observación",
@@ -589,7 +590,7 @@
       "created": "Creada"
     },
     "truncated": "Hay más generaciones más allá de esta página",
-    "truncatedHint": "El servidor informó de más generaciones. Cargue más para continuar desde su continuación; un cambio del canal entre páginas reinicia el listado.",
+    "truncatedHint": "Hay más generaciones. Carga más para verlas; un cambio del canal entre páginas reinicia el listado.",
     "emptyTitle": "Sin generaciones",
     "emptyBody": "Ninguna generación almacenada coincide con el estado y el sujeto seleccionados. Una nueva concesión añade una.",
     "temporalHint": "«Estado almacenado» es lo que el motor persistió; «en la observación» es si la fila estaba vigente en el instante observado. Una caducidad pasada se informa, no se materializa: no revoca la fila, y una sucesora para ese sujeto sigue exigiendo antes una revocación explícita.",
@@ -605,7 +606,7 @@
     },
     "form": {
       "title": "Nueva generación de concesión",
-      "hint": "Un sujeto, tres bits independientes, una caducidad opcional. Una fila del directorio es un candidato, no un sujeto elegible: el motor decide en el acto, y una generación registrada no promete acceso efectivo."
+      "hint": "Un sujeto, tres accesos independientes, una caducidad opcional. Una fila del directorio es un candidato, no un sujeto elegible: el motor decide en el acto, y una generación registrada no promete acceso efectivo."
     },
     "validation": {
       "expiry": "La caducidad no se pudo leer como fecha.",
@@ -647,17 +648,17 @@
   },
   "cursor": {
     "title": "Marcar visto hasta aquí",
-    "description": "Avanza su cursor personal de visto hasta la última entrega de una página de la bandeja. No acusa nada ni cambia ninguna entrega.",
+    "description": "Mueve tu marca personal de visto hasta la última entrega de una página de la bandeja. No acusa nada ni cambia ninguna entrega.",
     "section": {
-      "title": "Cursor de visto",
+      "title": "Marca de visto",
       "hint": "Cada página cargada puede marcarse como vista hasta su última entrega. El objetivo es el de la propia página, acuñado por el motor para esa entrega exacta; el filtro local de la tabla debe estar vacío para que el alcance sea inequívoco.",
       "page": "Página {{page}} · {{count}} entregas",
       "upTo": "hasta"
     },
     "reasons": {
       "noPermission": "Requiere el permiso delivery:write.",
-      "noRecipient": "Esta sesión no es una identidad de usuario; el cursor personal pertenece a un buzón de usuario.",
-      "filtered": "Vacíe primero el filtro de la tabla: el objetivo del cursor es la página del servidor, no las filas filtradas.",
+      "noRecipient": "Esta sesión no es una identidad de usuario; la marca de visto personal pertenece a un buzón de usuario.",
+      "filtered": "Vacía primero el filtro de la tabla: la marca apunta a la página del servidor, no a las filas filtradas.",
       "emptyPage": "Esta página no tiene entregas que marcar.",
       "otherRecipient": "La última entrega de esta página no va dirigida a su identidad de usuario."
     },
@@ -669,36 +670,36 @@
       "lastSubject": "Último asunto",
       "lastDelivery": "Última entrega",
       "lastSeq": "Secuencia de entrega",
-      "cursorVersion": "Versión del cursor",
-      "cursorId": "ID del cursor",
+      "cursorVersion": "Versión de la marca",
+      "cursorId": "ID de la marca",
       "replayed": "Reproducido",
       "lastSeenSeq": "Última secuencia vista",
       "barrierDelivery": "Entrega de barrera",
       "barrierReason": "Motivo de la barrera",
       "barrierSince": "Barrera desde"
     },
-    "preparing": "Preparando: pidiendo al motor el objetivo de cursor de esta página…",
-    "prepareFailedTitle": "No se pudo preparar el objetivo del cursor",
+    "preparing": "Preparando: pidiendo al motor el objetivo de esta página…",
+    "prepareFailedTitle": "No se pudo preparar el objetivo",
     "prepareFailedBody": "No se avanzó nada. Refresque la bandeja y prepare de nuevo desde una página actual.",
     "confirm": {
       "title": "Confirmar el avance",
-      "body": "Esto envía el objetivo preparado y la entrega de arriba con la versión de cursor leída, y una clave propia. Solo confirmar avanza algo. Un reintento tras un resultado ambiguo reenvía exactamente esto."
+      "body": "Esto envía el objetivo preparado y la entrega de arriba con la versión de la marca leída, y una clave propia. Solo confirmar mueve algo. Un reintento tras un resultado ambiguo reenvía exactamente esto."
     },
-    "conflictTitle": "El cursor cambió desde que se preparó",
-    "conflictBody": "El motor rechazó el avance: la versión del cursor o el objetivo ya no son actuales. No se reenvió nada. Refresque la bandeja y prepare de nuevo desde una página actual.",
+    "conflictTitle": "La marca cambió desde que se preparó",
+    "conflictBody": "El motor rechazó el movimiento: la versión de la marca o el objetivo ya no son actuales. No se reenvió nada. Refresca la bandeja y prepara de nuevo desde una página actual.",
     "ambiguousTitle": "Resultado desconocido",
     "ambiguousBody": "La conexión falló antes de que llegara respuesta. Reintentar reenvía el mismo objetivo, la misma versión y la misma clave; el motor lo aplica una vez, lo reproduce o lo rechaza con su versión actual. Dejarlo indeterminado mantiene desconocido el resultado anterior.",
     "refusedTitle": "Avance rechazado",
-    "refusedBody": "El motor no avanzó el cursor. Refresque la bandeja antes de preparar de nuevo.",
+    "refusedBody": "El motor no movió la marca. Refresca la bandeja antes de preparar de nuevo.",
     "result": {
-      "appliedTitle": "Cursor avanzado",
-      "appliedBody": "El motor confirmó el avance y devolvió la posición de abajo. La bandeja se relee desde el cursor durable.",
+      "appliedTitle": "Marca movida",
+      "appliedBody": "El motor confirmó el movimiento y devolvió la posición de abajo. La bandeja se relee desde la marca guardada.",
       "replayedTitle": "Ya avanzado",
       "replayedBody": "El motor reprodujo el resultado de un comando idéntico anterior. Nada se aplicó dos veces.",
       "barrierTitle": "Avance limitado por una barrera",
-      "barrierBody": "El motor se detuvo en la entrega de abajo por el motivo que nombra; el cursor no alcanzó el objetivo. No es un avance completo.",
+      "barrierBody": "El motor se detuvo en la entrega de abajo por el motivo que nombra; la marca no alcanzó el objetivo. No es un movimiento completo.",
       "barrierHint": "Abra la entrega de barrera con una lectura fresca. Resolverla no avanza nada por sí sola: refresque la bandeja, prepare un nuevo objetivo y confirme de nuevo.",
-      "notAck": "Un cursor de visto no es un acuse y no cambia el estado ni la marca de primera vista de ninguna entrega."
+      "notAck": "Una marca de visto no es un acuse y no cambia el estado ni la marca de primera vista de ninguna entrega."
     }
   },
   "capability": {
@@ -833,7 +834,7 @@
     },
     "inbox": {
       "title": "Traspasos dirigidos a ti",
-      "description": "Una página cada vez, sobre la continuación del servidor. Esta colección no lleva contenido: el resumen, la siguiente acción y el riesgo de una oferta solo se leen abriéndola.",
+      "description": "Una página cada vez; carga más para ver más traspasos. Esta colección no lleva contenido: el resumen, la siguiente acción y el riesgo de una oferta solo se leen abriéndola.",
       "filter": "Estado",
       "truncated": "Hay más ofertas más allá de esta página",
       "truncatedHint": "El motor informa de que autorizó una oferta más en la misma transacción. No es un total, y no es un recuento de filas ocultas.",

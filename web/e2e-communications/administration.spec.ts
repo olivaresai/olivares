@@ -1083,7 +1083,7 @@ test('B marks a real page seen: GET prepares the target of the chosen page, only
   await expect(
     b.getByText('More deliveries exist beyond this page'),
   ).toBeHidden()
-  const section = b.getByRole('region', { name: 'Seen cursor' })
+  const section = b.getByRole('region', { name: 'Seen mark' })
   const pages = section.getByRole('listitem')
   await expect(pages).toHaveCount(2)
   await shot(b, 'i2-17-b-inbox-two-pages-cursor-section')
@@ -1166,7 +1166,7 @@ test('B marks a real page seen: GET prepares the target of the chosen page, only
   await shot(b, 'i2-18-b-cursor-receipt')
   const advancedFully = put1.projection.barrier_delivery_id === undefined
   if (advancedFully) {
-    await expect(dialog.getByText('Cursor advanced')).toBeVisible()
+    await expect(dialog.getByText('Seen mark moved')).toBeVisible()
     await expect(
       receipt.locator('[data-slot="cursor-last-seen-seq"]'),
     ).toHaveText(String(put1.projection.last_seen_seq))
@@ -1179,7 +1179,7 @@ test('B marks a real page seen: GET prepares the target of the chosen page, only
   await dialog.getByRole('button', { name: 'Dismiss' }).click()
   // The chain was dropped: the cursor section now lists ONE loaded page again.
   await expect(
-    b.getByRole('region', { name: 'Seen cursor' }).getByRole('listitem'),
+    b.getByRole('region', { name: 'Seen mark' }).getByRole('listitem'),
   ).toHaveCount(1)
   // The engine, asked again for the same page target, now reports the durable version.
   const inboxNow = await apiRead(
@@ -1242,7 +1242,7 @@ test('B marks a real page seen: GET prepares the target of the chosen page, only
   ).toHaveCount(0)
   await expect(b.getByRole('button', { name: 'Load more' })).toHaveCount(0)
   const pages2 = b
-    .getByRole('region', { name: 'Seen cursor' })
+    .getByRole('region', { name: 'Seen mark' })
     .getByRole('listitem')
   await expect(pages2).toHaveCount(1)
   await shot(b, 'i2-19-b-inbox-resumed-from-durable-cursor')

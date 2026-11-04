@@ -64,7 +64,20 @@
     "waiting": "In attesa di approvazione",
     "needsYou": "Ti aspetta",
     "idle": "Inattiva",
-    "approvalsUnread": "Non è stato possibile leggere le approvazioni, quindi le attese di approvazione non sono disegnate."
+    "approvalsUnread": "Le approvazioni non sono ancora state lette o non è stato possibile leggerle, quindi le attese di approvazione non sono disegnate.",
+    "approvalsPartial": "Solo una parte delle approvazioni è stata letta, quindi alcune attese di approvazione potrebbero non essere disegnate.",
+    "step": {
+      "Bash": "Esegue {{what}}",
+      "Read": "Legge {{what}}",
+      "Edit": "Modifica {{what}}",
+      "Write": "Scrive {{what}}",
+      "Grep": "Cerca {{what}}",
+      "Glob": "Cerca file {{what}}",
+      "WebFetch": "Legge {{what}}",
+      "WebSearch": "Cerca sul web {{what}}",
+      "Task": "Lavora con un agente",
+      "Agent": "Lavora con un agente"
+    }
   },
   "summary": {
     "heading": "Riepilogo",
@@ -96,12 +109,5 @@
   "state": {
     "pendingIdle": "Query non avviata: apri per caricare",
     "pendingPaused": "Query in pausa: in attesa di riprendere"
-  },
-  "proof": {
-    "verified": "Catena verificata alle {{time}}",
-    "entries_one": "{{n}} voce",
-    "entries_many": "{{n}} voci",
-    "entries_other": "{{n}} voci",
-    "broken": "Catena interrotta: apri il Registro"
   }
 }

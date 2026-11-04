@@ -10,6 +10,7 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Download, FileJson2, PackageSearch, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useTabParam } from '@/lib/hooks/use-tab-param'
 import { Badge, type BadgeVariant } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -121,8 +122,11 @@ function ProvenanceState({ verified }: { verified: boolean }) {
   )
 }
 
+const ARTIFACT_TABS = ['registry', 'aibom'] as const
+
 export function AgentArtifactsView() {
   const { t } = useTranslation('agent-artifacts')
+  const [tab, setTab] = useTabParam(ARTIFACT_TABS)
   const { can } = useAuth()
 
   if (!can('models:registry:read')) return <ForbiddenState />
@@ -134,7 +138,7 @@ export function AgentArtifactsView() {
       description={t('subtitle')}
       notices={<CaveatNotice tone="info">{t('intro')}</CaveatNotice>}
     >
-      <Tabs defaultValue="registry">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="registry">{t('tabs.registry')}</TabsTrigger>
           <TabsTrigger value="aibom">{t('tabs.aibom')}</TabsTrigger>

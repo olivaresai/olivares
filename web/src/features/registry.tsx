@@ -19,7 +19,6 @@ import {
   Telescope,
 } from 'lucide-react'
 import type { RouteAlias, TabAlias } from './route-census'
-import { BUSINESS_BUILD } from './business-build'
 import { FEATURE_EXTENSIONS } from './extensions'
 
 /**
@@ -205,7 +204,6 @@ const DECLARED_PRODUCT_NOUNS: readonly ProductNoun[] = [
   {
     id: 'infrastructure',
     views: [
-      'deploy',
       'platforms',
       'backups',
       'residency',
@@ -381,6 +379,11 @@ export type FeatureNavigation =
       readonly parentViewId: string
     }
 
+/** A permission that lets a person change something on a view. */
+export interface ViewChange {
+  permission: string
+}
+
 export interface FeatureView {
   /** Stable id — also the i18n key under nav.items/nav.descriptions and the route id. */
   id: string
@@ -403,6 +406,14 @@ export interface FeatureView {
   icon: LucideIcon
   /** RBAC permission required to see/enter this view; undefined = any signed-in user. */
   permission?: string
+  /**
+   * What changes this page: any one of these and the person can do something here. Holding
+   * none, the shell says the page is read-only for them (RequirePermission). Absent: the page
+   * has nothing to change, or says for itself who may. Declared, like `commandActions`,
+   * because a verb tier cannot be derived from `permission`. It only words a sentence; the
+   * engine still decides each request.
+   */
+  readonly changes?: readonly ViewChange[]
   /** The route content — a `lazy()` view from the module's own features/ folder. */
   element: () => ReactNode
   /**
@@ -556,51 +567,38 @@ export interface ViewEntry extends FeatureView {
 }
 
 /**
- * Pages docs/editions.md places in Business whose source is shared with the Business build:
- * their `features/<dir>/business-views.tsx` exports `VIEWS` like a views.tsx, and Community
- * never registers them. Its navigation, router and palette omit them, and the census
- * (route-census.json `business_paths`) answers their bookmarks with the Business notice.
- * A Business build is the one that carries edition views; it serves them unless its own
- * extension already registers the id.
- * ponytail: a build is Business when it has any extension view; drop this bridge once
- * the Business extension registers these pages itself.
+ * Ids of the pages docs/editions.md places in Business whose source is shared with the
+ * Business build: their `features/<dir>/business-views.tsx` exports `VIEWS` like a
+ * views.tsx. Community never registers them: its navigation, router and palette omit
+ * them, and the census (route-census.json `business_paths`) answers their bookmarks with
+ * the Business notice. A Business build serves them only through its own extension
+ * (./extensions), so a page the extension forgets is missing, not served from here.
+ * Listed whether served or not: their labels ship with their source (locales nav.json).
  */
-const SHARED_BUSINESS_VIEWS = Object.values(
+export const BUSINESS_ONLY_VIEW_IDS: readonly string[] = Object.values(
   import.meta.glob<readonly ViewEntry[]>('./*/business-views.tsx', {
     eager: true,
     import: 'VIEWS',
   }),
-).flat()
-
-/** Ids of those pages, served or not: their labels ship with their source (locales nav.json). */
-export const BUSINESS_ONLY_VIEW_IDS: readonly string[] =
-  SHARED_BUSINESS_VIEWS.map((view) => view.id)
-
-const BUSINESS_ONLY_VIEWS = !BUSINESS_BUILD
-  ? []
-  : SHARED_BUSINESS_VIEWS.filter(
-      (view) =>
-        !FEATURE_EXTENSIONS.some(
-          (extension) =>
-            extension.id === view.id || extension.path === view.path,
-        ),
-    )
+)
+  .flat()
+  .map((view) => view.id)
 
 /** Every `features/<dir>/views.tsx`, so a new view is registered by its own directory
  * (and its module row, core/modulespec/modules.json `console_entries`), never here. */
-const BUILTIN_VIEWS = [
-  ...Object.values(
-    import.meta.glob<readonly ViewEntry[]>('./*/views.tsx', {
-      eager: true,
-      import: 'VIEWS',
-    }),
-  ).flat(),
-  ...BUSINESS_ONLY_VIEWS,
-].sort((a, b) => a.order - b.order)
+const BUILTIN_VIEWS = Object.values(
+  import.meta.glob<readonly ViewEntry[]>('./*/views.tsx', {
+    eager: true,
+    import: 'VIEWS',
+  }),
+)
+  .flat()
+  .sort((a, b) => a.order - b.order)
 
 // Consumers share these permission-bearing records. Seal both the registry and
 // each record before export so an alias cannot replace an authority declaration.
-// Edition views (./extensions) follow the built-in ones.
+// Edition views (./extensions) follow every built-in view, in the order the extension
+// lists them: an extension view carries no `order`, so none sorts among the built-ins.
 export const FEATURE_VIEWS: readonly FeatureView[] = Object.freeze(
   [...BUILTIN_VIEWS, ...FEATURE_EXTENSIONS].map((view) => Object.freeze(view)),
 )

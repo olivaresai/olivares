@@ -86,7 +86,6 @@
     "folderHint": "Un dossier sur ce serveur. Laissez-le vide pour démarrer dans un nouveau dossier.",
     "folderNew": "Un nouveau dossier pour cette session",
     "folderTyped": "Un autre dossier…",
-    "folderChange": "Changer de dossier",
     "readingFolder": "Lecture du dossier de la dernière session…",
     "prompt": "Premier message (facultatif)",
     "promptPlaceholder": "Que doit-il faire en premier ?",
@@ -126,8 +125,6 @@
     "autoAsks": "{{tool}} n’a pas de mode automatique : il demandera avant chaque action."
   },
   "lists": {
-    "runsTruncated": "Sessions récentes : {{count}} chargées ; il y en a d’autres.",
-    "runsHint": "Les sessions plus anciennes ne figurent pas dans cette liste.",
     "foldersTruncated": "Dossiers enregistrés : {{count}} chargés ; il y en a d’autres.",
     "foldersHint": "Certains dossiers enregistrés ne figurent pas dans cette liste."
   },
@@ -147,9 +144,7 @@
     "mcp": "Ajouter des serveurs MCP",
     "budgets": "Définir des budgets",
     "cli": "Utiliser la ligne de commande olivares",
-    "cliHint": "Sur ce serveur, la commande olivares est déjà installée. Depuis un autre ordinateur, installez-la avec :",
-    "copy": "Copier",
-    "copied": "Copié"
+    "cliHint": "Sur ce serveur, la commande olivares est déjà installée. Depuis un autre ordinateur, installez-la avec :"
   },
   "permissionSummary": {
     "readOnly": "Lit et planifie. Toute modification est refusée.",
@@ -158,5 +153,29 @@
     "editsAndCommands": "Lit, modifie les fichiers et exécute des commandes sans demander. Les autres outils sont refusés.",
     "auto": "Le mode automatique vérifié de l’outil décide. Un outil qui n’en a pas demande, comme dans Supervisé. Nécessite l’administration des exécutions.",
     "full": "Rien ne demande. Olivares continue d’encadrer la session et enregistre chaque action. Nécessite l’administration des exécutions."
+  },
+  "bring": {
+    "title": "Importer vos dossiers",
+    "body": "Les dossiers où vos outils ont déjà travaillé, lus dans les propres enregistrements des outils (chemins de projet et dates). Rien n'est enregistré avant votre confirmation.",
+    "error": "Impossible de rechercher les dossiers de vos outils.",
+    "unreadable": "Les enregistrements de {{tool}} n'ont pas pu être lus. Ajoutez plutôt les dossiers à la main.",
+    "cols": {
+      "folder": "Dossier",
+      "tool": "Outil",
+      "lastUsed": "Dernière utilisation",
+      "conversations": "Conversations"
+    },
+    "pick": "Enregistrer {{folder}}",
+    "confirm": "Enregistrer la sélection ({{n}})",
+    "skipStep": "Pas maintenant",
+    "skip": {
+      "missing": "Le dossier n'existe plus",
+      "unreadable": "Le dossier est illisible",
+      "outside_allowed_roots": "Hors des dossiers autorisés : il chevauche un dossier protégé",
+      "already_registered": "Déjà enregistré"
+    },
+    "failed": "Il n'a pas pu être enregistré.",
+    "toast": "Enregistrés : {{n}}",
+    "result": "Enregistrés : {{imported}}. Ignorés : {{skipped}}."
   }
 }

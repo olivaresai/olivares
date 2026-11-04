@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -136,8 +137,12 @@ type policyDTO struct {
 	Spec    map[string]any `json:"spec"`
 }
 
+// builtinPolicyKinds is the one list of kinds this module validates itself. The
+// published schema enum, the unknown-kind refusal and governancePolicyKind read it.
+var builtinPolicyKinds = []string{policyKindABAC, policyKindApproval, policyKindGrantExpiry}
+
 func governancePolicyKind(kind string) bool {
-	return kind == policyKindABAC || kind == policyKindApproval || kind == policyKindGrantExpiry
+	return slices.Contains(builtinPolicyKinds, kind)
 }
 
 func toPolicyDTO(p model.Policy) policyDTO {
@@ -166,7 +171,7 @@ func (in *policyRequest) validateAndCanonicalize() (map[string]any, string) {
 	case policyKindGrantExpiry:
 		return canonicalizeGrantExpiry(in.Spec)
 	default:
-		return nil, "kind must be one of abac, approval, grant_expiry"
+		return nil, "kind must be one of " + strings.Join(builtinPolicyKinds, ", ")
 	}
 }
 
@@ -386,7 +391,7 @@ func (m *Module) handleListPolicies(w http.ResponseWriter, r *http.Request, mc a
 			return err
 		}
 		for _, p := range list {
-			if governancePolicyKind(p.Kind) {
+			if m.ownsPolicyKind(p.Kind) {
 				out.Items = append(out.Items, toPolicyDTO(p))
 			}
 		}
@@ -416,7 +421,7 @@ func (m *Module) handleGetPolicy(w http.ResponseWriter, r *http.Request, mc api.
 		if err != nil {
 			return err
 		}
-		if !governancePolicyKind(p.Kind) {
+		if !m.ownsPolicyKind(p.Kind) {
 			return nil // not a governance policy — treat as not found below
 		}
 		found, out = true, toPolicyDTO(p)
@@ -459,7 +464,7 @@ func (m *Module) handleCreatePolicy(w http.ResponseWriter, r *http.Request, mc a
 	if !decodeJSON(w, r, &in) {
 		return
 	}
-	canon, msg := in.validateAndCanonicalize()
+	canon, msg := m.canonicalizePolicy(r.Context(), mc.Tenant, &in)
 	if msg != "" {
 		writeJSON(w, http.StatusBadRequest, errorBody(msg))
 		return
@@ -493,7 +498,7 @@ func (m *Module) handleCreatePolicy(w http.ResponseWriter, r *http.Request, mc a
 			return err
 		}
 		out = toPolicyDTO(p)
-		return auditEvent(r.Context(), sc, mc, "governance.policy.create", model.Kind("core.policy"), p.ID, map[string]any{"kind": in.Kind, "enabled": in.Enabled})
+		return auditEvent(r.Context(), sc, mc, "governance.policy.create", model.Kind("core.policy"), p.ID, m.policyAuditMeta(p, map[string]any{"kind": in.Kind, "enabled": in.Enabled}))
 	})
 	if err != nil {
 		writeStoreError(w, err)
@@ -517,7 +522,7 @@ func (m *Module) handleUpdatePolicy(w http.ResponseWriter, r *http.Request, mc a
 	if !decodeJSON(w, r, &in) {
 		return
 	}
-	canon, msg := in.validateAndCanonicalize()
+	canon, msg := m.canonicalizePolicy(r.Context(), mc.Tenant, &in)
 	if msg != "" {
 		writeJSON(w, http.StatusBadRequest, errorBody(msg))
 		return
@@ -535,7 +540,7 @@ func (m *Module) handleUpdatePolicy(w http.ResponseWriter, r *http.Request, mc a
 		if err != nil {
 			return err
 		}
-		if !governancePolicyKind(p.Kind) {
+		if !m.ownsPolicyKind(p.Kind) {
 			return store.ErrNotFound // not a governance policy
 		}
 		if p.Kind != in.Kind {
@@ -571,7 +576,7 @@ func (m *Module) handleUpdatePolicy(w http.ResponseWriter, r *http.Request, mc a
 		}
 		changed = true
 		out = toPolicyDTO(p)
-		return auditEvent(r.Context(), sc, mc, "governance.policy.update", model.Kind("core.policy"), p.ID, map[string]any{"kind": in.Kind, "enabled": in.Enabled})
+		return auditEvent(r.Context(), sc, mc, "governance.policy.update", model.Kind("core.policy"), p.ID, m.policyAuditMeta(p, map[string]any{"kind": in.Kind, "enabled": in.Enabled}))
 	})
 	if msg, ok := asValidation(err); ok {
 		writeJSON(w, http.StatusBadRequest, errorBody(msg))
@@ -608,7 +613,7 @@ func (m *Module) handleDeletePolicy(w http.ResponseWriter, r *http.Request, mc a
 		if err != nil {
 			return err
 		}
-		if !governancePolicyKind(p.Kind) {
+		if !m.ownsPolicyKind(p.Kind) {
 			return store.ErrNotFound
 		}
 		deletedKind = p.Kind
@@ -626,7 +631,7 @@ func (m *Module) handleDeletePolicy(w http.ResponseWriter, r *http.Request, mc a
 		if err := sc.Policies().Delete(r.Context(), id); err != nil {
 			return err
 		}
-		return auditEvent(r.Context(), sc, mc, "governance.policy.delete", model.Kind("core.policy"), id, map[string]any{"kind": p.Kind})
+		return auditEvent(r.Context(), sc, mc, "governance.policy.delete", model.Kind("core.policy"), id, m.policyAuditMeta(p, map[string]any{"kind": p.Kind}))
 	})
 	if err != nil {
 		writeStoreError(w, err)

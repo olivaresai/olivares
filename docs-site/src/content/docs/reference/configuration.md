@@ -171,7 +171,7 @@ Process environment values take precedence over activation defaults. Unknown
 
 ### Complete variable reference
 
-The table below is generated from the product's own sources: 304 variables and 19 runtime-constructed families, covering the engine, the CLI and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
+The table below is generated from the product's own sources: 308 variables and 19 runtime-constructed families, covering the engine, the CLI and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
 
 **Required** means the feature that reads the variable does not start without it; most variables are optional and the engine runs with none of them set.
 
@@ -428,11 +428,14 @@ The table below is generated from the product's own sources: 304 variables and 1
 | `OLIVARES_SESSIONS_AGENT_BOOTSTRAP_LISTEN` | No | — | Listen address of the agent enrollment endpoint, as `host:port`: the server-only TLS endpoint where a node agent enrolls with a one-use token before it holds a certificate. Read at startup; empty, the default, means no listener. Read only by the Business edition; a Community binary refuses to serve while it is set. |
 | `OLIVARES_SESSIONS_AGENT_LINK_LISTEN` | No | — | Listen address of the agent link, as `host:port`: the mutual-TLS endpoint an edition built on this tree serves for its node agents. Read at startup; empty, the default, means no listener. Read only by the Business edition; a Community binary refuses to serve while it is set. |
 | `OLIVARES_SESSIONS_MANAGED_STOP_ADMISSION_TIMEOUT` | No | `10s` | Maximum time to admit a managed Stop request, as a positive Go duration with units. Read at startup; invalid or nonpositive values prevent startup. This does not bound process teardown. |
+| `OLIVARES_SESSIONS_SFTP_LISTEN` | No | — | Address (`host:port`) on which the engine accepts SFTP and SCP to a folder. Unset, nothing listens and the console shows no Connect card. It needs the operating system's `sftp-server` (the `openssh-sftp-server` package) and Landlock; without them it stays off and says why in the log. |
 | `OLIVARES_SESSION_BUDGET_AVAILABILITY` | No | — | Whether session budget enforcement is required, and what happens when the budget service cannot answer. |
 | `OLIVARES_SESSION_CONTAINER_IMAGE` | No | `localhost/olivares-session:latest` | Image that container sessions (`isolation=container`) run in. It must hold what the tool shells out to, such as git and a shell, and run the host's tool program, which is mounted into it read-only. |
 | `OLIVARES_SESSION_CONTAINER_RUNTIME` | No | `auto` | Container runtime for `isolation=container` and for `olivares tool start ollama --container`: `auto` uses podman, then docker, whichever is installed; `podman` or `docker` pins one; `off` turns both off. Read at engine start. |
 | `OLIVARES_SESSION_CONTEXT_AVAILABILITY` | No | — | Whether session context governance is required, and what happens when the context service cannot answer. |
 | `OLIVARES_SESSION_KILLSWITCH_SWEEP` | No | `15s` | How often an active session is re-checked against the kill switch, as a Go duration. `0` leaves only the check at launch. |
+| `OLIVARES_SESSION_MAX_PER_USER` | No | `0` | Most sessions one person may have running at once; the next launch is refused with a 429 and one sentence. `0` sets no cap. Resuming a session counts as a launch. |
+| `OLIVARES_SESSION_MEMORY_MAX` | No | `50%` | Memory ceiling of each session, as systemd's `MemoryMax=` takes it: `8G`, `50%` of the host's memory, or `infinity`. A session that passes it, swap included, is killed alone while the engine and the other sessions keep running. It needs a user manager for the engine's user (the deb and rpm packages enable one for `olivares`; elsewhere `loginctl enable-linger <user>`) and a session confined by Landlock with a mount namespace of its own; a host that cannot give either starts the session without the ceiling and says why on the session. |
 | `OLIVARES_SESSION_PEP_TOKEN_FILE` | No | — | Path to the file holding the token the session enforcement point requires. |
 | `OLIVARES_SESSION_PEP_URL` | No | — | Base URL of the policy enforcement point a governed agent session calls before acting. |
 | `OLIVARES_SESSION_RUNTIME_BASE_URL` | No | — | Base URL the launched session runtime calls back to. |
@@ -446,6 +449,7 @@ The table below is generated from the product's own sources: 304 variables and 1
 | `OLIVARES_SESSION_RUNTIME_TOKEN_TTL` | No | `15m` | Lifetime of a minted session runtime credential, as a Go duration. |
 | `OLIVARES_SESSION_RUNTIME_WIF` | No | — | Whether the session runtime takes its credential from workload identity federation instead of a token file. |
 | `OLIVARES_SESSION_RUNTIME_WIF_RULE` | No | — | Which federation rule the session runtime exchanges its workload identity under. |
+| `OLIVARES_SESSION_TASKS_MAX` | No | `16384` | Most processes and threads one session may have, as systemd's `TasksMax=` takes it. Past it the session cannot fork. Applied through the same scope as `OLIVARES_SESSION_MEMORY_MAX`, on the same conditions; too small a value shows as "Failed to fork". |
 | `OLIVARES_SESSION_WORKTREE_BRANCH_PREFIX` | No | `olivares/` | Prefix of the branch a session gets when it is started with a new git worktree; git checks the resulting branch name. |
 | `OLIVARES_SESSION_WORKTREE_DIR` | No | — | Directory that holds the git worktrees of sessions started with a new worktree; the default is session-worktrees in the data directory. |
 | `OLIVARES_SIEM_FORWARD_INTERVAL` | No | — | How often signed ledger records are forwarded to the configured SIEM, as a Go duration. Read only by the Business edition; a Community binary refuses to serve while it is set. |

@@ -62,11 +62,12 @@ export interface RunPinDTO {
   pinned_at?: string
 }
 
-/** The answer of the snooze and done routes: the signed-in person's two marks. */
+/** The answer of the snooze, done and unread routes: the signed-in person's marks. */
 export interface RunMarkDTO {
   run_ref: string
   snoozed_until?: string
   done: boolean
+  unread: boolean
 }
 
 /** One message waiting in a session's queue for the tool's turn to end. */
@@ -114,6 +115,8 @@ export interface RunDTO {
    */
   snoozed_until?: string
   done?: boolean
+  /** THE CALLER'S OWN read state: the session did something after they last saw it. */
+  unread?: boolean
   /** On the answer of a release only: the messages still waiting in the session's queue,
    * which the release threw away, so the person can copy them. */
   discarded_queue?: QueuedMessageDTO[]
@@ -508,6 +511,9 @@ export interface ProfileModelDTO {
   is_legacy?: boolean
   supports_fast_mode?: boolean
   service_tiers?: string[]
+  /** The exact id a Claude Code selector launches on, which a session records; the
+   * engine's one alias table names it. Absent for any other model. */
+  launch_model?: string
 }
 
 /** GET /provider-profiles/{ref}/models: the models and effort levels the installed tool
@@ -931,6 +937,35 @@ export interface WorkspaceDTO {
   updated_at?: string
 }
 
+/** Why a folder the person's tool used cannot be registered now (GET
+ * /v1/m/sessions/workspace-candidates). */
+export type FolderCandidateSkip =
+  'missing' | 'unreadable' | 'outside_allowed_roots' | 'already_registered'
+
+/** One folder a tool already worked in, from that tool's own records: the folder, the
+ * tool, the last use and how many conversations it kept there. `preselected`: used in
+ * the last 30 days, in at least 3 conversations. `skip` is set when it cannot be registered. */
+export interface FolderCandidateDTO {
+  path: string
+  tool: string
+  last_used: string
+  conversations: number
+  preselected: boolean
+  skip?: FolderCandidateSkip
+}
+
+/** A tool whose records were looked at; `readable: false` when they could not be read. */
+export interface FolderCandidateToolDTO {
+  tool: string
+  name: string
+  readable: boolean
+}
+
+export interface FolderCandidatesDTO {
+  tools: FolderCandidateToolDTO[]
+  folders: FolderCandidateDTO[]
+}
+
 /** POST /workspaces body. */
 export interface CreateWorkspaceRequest {
   name: string
@@ -990,6 +1025,8 @@ export interface WriteResponse {
   size: number
   sha256: string
   created: boolean
+  /** The DLP labels a read of the same bytes shows (classes, never the matched values). */
+  sensitivity?: SensitivityHit[]
 }
 
 // --- Attach stream frames (GET /runs/{ref}/attach, SSE) --------------------------
@@ -1066,6 +1103,34 @@ export interface RunChangesDTO {
   truncated: boolean
 }
 
+/** One turn of a session and what it changed in the session's folder. */
+export interface RunCheckpointDTO {
+  seq: number
+  /** The message that started the turn; `clipped` when it is only the start of it. */
+  prompt: string
+  clipped: boolean
+  at: string
+  /** The newest turn until the next starts: its files are the changes so far. */
+  open: boolean
+  files: { path: string; status: WorktreeDiffStatus }[]
+  truncated: boolean
+}
+
+/** GET /v1/m/sessions/runs/{ref}/checkpoints: the session's turns, oldest first.
+ * `available` is false, with a `reason`, when its folder cannot be checkpointed. */
+export interface RunCheckpointsDTO {
+  available: boolean
+  reason?: string
+  turns: RunCheckpointDTO[]
+}
+
+/** POST /v1/m/sessions/runs/{ref}/checkpoints/{seq}/rewind: what was put back. */
+export interface RunRewindDTO {
+  seq: number
+  to: 'start' | 'end'
+  files: { path: string; action: 'restored' | 'removed' }[]
+}
+
 /** GET /v1/m/sessions/runs/{ref}/changes/file?path=: one file's current text. */
 export interface RunChangedFileDTO {
   path: string
@@ -1106,7 +1171,7 @@ export interface RunGitStatusDTO {
   writable: boolean
 }
 
-export type RunGitAction = 'stage' | 'unstage' | 'commit' | 'branch'
+export type RunGitAction = 'stage' | 'unstage' | 'commit' | 'branch' | 'init'
 export interface RunGitRequest {
   paths?: string[]
   message?: string

@@ -123,7 +123,7 @@
     "add": "Añadir {{token}} a la consulta",
     "commands": "Buscar y comandos",
     "problem": {
-      "key": "{{token}} no es un filtro del registro. Usa person:, action:, kind:, target:, since:, until: o palabras.",
+      "key": "{{token}} no es un filtro del registro. Usa person:, action:, kind:, target:, tool:, folder:, since:, until: o palabras.",
       "time": "{{token}} no es un tiempo. Usa 90m, 24h, 7d, 2w o una fecha como 2026-10-20.",
       "person": "Nadie coincide con {{token}}. Usa un nombre, un correo o user:<id>.",
       "several": "{{token}} coincide con varias personas. Usa el nombre completo, un correo o user:<id>.",

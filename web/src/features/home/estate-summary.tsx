@@ -35,6 +35,8 @@ export interface EstateSummaryProps {
   needs: { count: number; more: boolean } | null
   /** The tenant's monthly budget, when one is read and its amount is proven. */
   month: MonthBudget | null
+  /** A finished clause an edition adds after the Community ones (PANEL_EXTENSIONS). */
+  budgetClause?: string | null
 }
 
 /** Where the month meter turns to a warning: most of the budget is spent. */
@@ -51,6 +53,7 @@ export function EstateSummary({
   yesterday,
   needs,
   month,
+  budgetClause = null,
 }: EstateSummaryProps) {
   const { t } = useTranslation(['home', 'nav'])
   const usd = (micro: number) => formatMicroUsd(micro)
@@ -82,6 +85,7 @@ export function EstateSummary({
         ? t('summary.needsMore', { n: needs.count })
         : t('summary.needs', { count: needs.count }),
     )
+  if (budgetClause) clauses.push(budgetClause)
 
   const spend: string[] = []
   if (yesterday?.costMicroUsd != null)

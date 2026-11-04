@@ -36,7 +36,7 @@
     "density": "Densité",
     "densityHint": "Compact affiche plus de lignes ; confortable se lit plus facilement.",
     "language": "Langue",
-    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어.",
+    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어, Українська, Português.",
     "time": "Heure",
     "timeHint": "Les heures s’affichent dans votre fuseau ({{zone}}). Les enregistrements et les exports restent en UTC.",
     "clock24": "24 heures",

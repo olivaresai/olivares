@@ -271,15 +271,16 @@
     "submit": "Livrer",
     "message": "Message du commit",
     "messageHint": "Utilisé seulement si le dossier de la session a des changements. Par défaut, le titre.",
-    "shipped": "Livré : {{branch}} est poussée.",
+    "shipped": "Livré : <branch /> est poussée.",
+    "shippedToast": "Livré.",
     "pullRequest": "Pull request n° {{number}}",
     "pullRequestOpen": "Ouvrir la pull request",
     "awaitingTitle": "En attente de l’approbation d’une autre personne",
     "awaitingBody": "Vos changements sont validés. Une autre personne doit approuver le push (approbation {{id}}) avant qu’il parte. Une fois fait, livrez à nouveau.",
     "again": "Livrer à nouveau",
     "incompleteTitle": "La livraison n’a pas abouti",
-    "incompletePush": "Le push de {{branch}} n’a pas été appliqué ({{state}}). Vérifiez les intentions de cette cible, puis livrez à nouveau.",
-    "incompletePullRequest": "{{branch}} est poussée, mais la pull request n’a pas été ouverte ({{code}}). Livrez à nouveau pour réessayer.",
+    "incompletePush": "Le push de <branch /> n’a pas été appliqué ({{state}}). Vérifiez les intentions de cette cible, puis livrez à nouveau.",
+    "incompletePullRequest": "<branch /> est poussée, mais la pull request n’a pas été ouverte ({{code}}). Livrez à nouveau pour réessayer.",
     "pullRequests": "Pull requests"
   }
 }

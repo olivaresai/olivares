@@ -667,5 +667,20 @@
     "config_defaults": {},
     "console_entries": [],
     "edition_slot": true
+  },
+  {
+    "namespace": "agentroles",
+    "name": "olivares.agentroles",
+    "package": "agentroles",
+    "constructor": "agentroles.New()",
+    "edition": "community",
+    "kind": "kernel",
+    "standard": false,
+    "requires": [],
+    "selectable": false,
+    "published_26100": false,
+    "config_defaults": {},
+    "console_entries": [],
+    "edition_slot": true
   }
 ]

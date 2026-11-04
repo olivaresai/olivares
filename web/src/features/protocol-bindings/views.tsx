@@ -25,6 +25,10 @@ export const VIEWS = [
     helpHref: '/reference/modules/ii-sessions',
     icon: Cable,
     permission: 'sessions:protocol-binding:read',
+    changes: [
+      { permission: 'sessions:protocol-binding:write' },
+      { permission: 'sessions:protocol-binding:admin' },
+    ],
     element: lazyView(ProtocolBindingsView),
   },
 ] satisfies ViewEntry[]

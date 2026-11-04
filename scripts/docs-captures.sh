@@ -555,15 +555,19 @@ else
   redact_log "$SETUP_DATA/engine.log" <"$SETUP_DATA/engine.log" >&2 || true
 fi
 
-# Resolve the recording-session ID from the API and omit its viewer when none exists.
-DEMO_SESSION_ID="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl --noproxy '*' -sf "http://127.0.0.1:$PORT/v1/m/recording/sessions" \
-  -H @- -H "X-Olivares-Tenant: $TENANT" \
-  | python3 -I -c 'import sys,json;d=json.load(sys.stdin);i=(d.get("items") or []);print(i[0]["id"] if i else "")' 2>/dev/null || echo "")"
-if [ -n "$DEMO_SESSION_ID" ]; then
-  echo "==> Demo recording session: $DEMO_SESSION_ID"
-  export DEMO_SESSION_ID
-else
-  echo "==> ⚠ the seeded estate exposes no recording sessions — skipping /session-viewer capture" >&2
+# Recording is a Business capability: only a Business build has a recording session to open in
+# the viewer, so a Community build asks for none and the spec skips /session-viewer.
+if [ "$BUILD_EDITION" != community ]; then
+  # Resolve the recording-session ID from the API and omit its viewer when none exists.
+  DEMO_SESSION_ID="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl --noproxy '*' -sf "http://127.0.0.1:$PORT/v1/m/recording/sessions" \
+    -H @- -H "X-Olivares-Tenant: $TENANT" \
+    | python3 -I -c 'import sys,json;d=json.load(sys.stdin);i=(d.get("items") or []);print(i[0]["id"] if i else "")' 2>/dev/null || echo "")"
+  if [ -n "$DEMO_SESSION_ID" ]; then
+    echo "==> Demo recording session: $DEMO_SESSION_ID"
+    export DEMO_SESSION_ID
+  else
+    echo "==> ⚠ the seeded estate exposes no recording sessions — skipping /session-viewer capture" >&2
+  fi
 fi
 
 # Clear the output directory so filtered runs cannot publish captures left by an earlier

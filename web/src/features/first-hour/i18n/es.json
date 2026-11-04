@@ -86,7 +86,6 @@
     "folderHint": "Una carpeta de este servidor. Déjala vacía para empezar en una carpeta nueva.",
     "folderNew": "Una carpeta nueva para esta sesión",
     "folderTyped": "Otra carpeta…",
-    "folderChange": "Cambiar carpeta",
     "readingFolder": "Leyendo la carpeta de la última sesión…",
     "prompt": "Primer mensaje (opcional)",
     "promptPlaceholder": "¿Qué debe hacer primero?",
@@ -126,8 +125,6 @@
     "autoAsks": "{{tool}} no tiene modo automático: preguntará antes de cada acción."
   },
   "lists": {
-    "runsTruncated": "Sesiones recientes: {{count}} cargadas; hay más.",
-    "runsHint": "Las sesiones anteriores no aparecen en esta lista.",
     "foldersTruncated": "Carpetas registradas: {{count}} cargadas; hay más.",
     "foldersHint": "Algunas carpetas registradas no aparecen en esta lista."
   },
@@ -147,9 +144,7 @@
     "mcp": "Añadir servidores MCP",
     "budgets": "Definir presupuestos",
     "cli": "Usar la línea de comandos de olivares",
-    "cliHint": "En este servidor, el comando olivares ya está instalado. Desde otro equipo, instálalo con:",
-    "copy": "Copiar",
-    "copied": "Copiado"
+    "cliHint": "En este servidor, el comando olivares ya está instalado. Desde otro equipo, instálalo con:"
   },
   "permissionSummary": {
     "readOnly": "Lee y planifica. Se rechaza cualquier cambio.",
@@ -158,5 +153,29 @@
     "editsAndCommands": "Lee, edita archivos y ejecuta comandos sin preguntar. Se rechazan las demás herramientas.",
     "auto": "Decide el modo automático revisado de la propia herramienta. Una herramienta sin él pregunta, como en Supervisado. Requiere administración de ejecuciones.",
     "full": "Nada pregunta. Olivares sigue confinando la sesión y registra cada acción. Requiere administración de ejecuciones."
+  },
+  "bring": {
+    "title": "Traer tus carpetas",
+    "body": "Carpetas en las que tus herramientas ya trabajaron, leídas de los registros propios de cada herramienta sobre rutas de proyecto y fechas. No se registra nada hasta que confirmes.",
+    "error": "No se pudieron buscar las carpetas de tus herramientas.",
+    "unreadable": "No se pudieron leer los registros de {{tool}}. Añade las carpetas a mano.",
+    "cols": {
+      "folder": "Carpeta",
+      "tool": "Herramienta",
+      "lastUsed": "Último uso",
+      "conversations": "Conversaciones"
+    },
+    "pick": "Registrar {{folder}}",
+    "confirm": "Registrar las seleccionadas ({{n}})",
+    "skipStep": "Ahora no",
+    "skip": {
+      "missing": "La carpeta ya no existe",
+      "unreadable": "No se puede leer la carpeta",
+      "outside_allowed_roots": "Fuera de las carpetas permitidas: se solapa con una carpeta protegida",
+      "already_registered": "Ya está registrada"
+    },
+    "failed": "No se pudo registrar.",
+    "toast": "Registradas: {{n}}",
+    "result": "Registradas: {{imported}}. Omitidas: {{skipped}}."
   }
 }

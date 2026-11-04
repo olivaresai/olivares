@@ -90,7 +90,7 @@ func (h *moduleHost) Publish(ctx context.Context, e event.Event) error {
 		valid := false
 		switch e.Payload.(type) {
 		case model.EdgeObservation:
-			valid = e.Type == event.TypeEdgeObserved
+			valid = e.Type == event.TypeEdgeObserved || e.Type == event.TypeSessionReachExpired
 		case model.CostSample:
 			valid = e.Type == event.TypeCostSampled
 		case model.FindingReport:

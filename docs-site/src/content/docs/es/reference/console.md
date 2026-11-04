@@ -88,8 +88,8 @@ requieren y la página de referencia que abre su enlace de ayuda dentro del prod
 
 | Pantalla | Ruta | Qué es | Requiere | Referencia |
 |---|---|---|---|---|
-| Entorno | `/estate` | Inspecciona los recursos configurados y sus relaciones, incluidas las dependencias de los elementos de trabajo. | `sessions:run:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
-| Inventario | `/inventory` | Descubre y cataloga los agentes, servidores MCP y modelos que los conectores observaron. | `inventory:catalog:read` | [reference/modules/i-inventory](/es/reference/modules/i-inventory/) |
+| Recursos configurados | `/estate` | Lo que has configurado y cómo dependen entre sí sus partes, incluidos los elementos de trabajo. | `sessions:run:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
+| Recursos descubiertos | `/inventory` | Agentes, servidores MCP y modelos que han observado los conectores, y cuándo se vio cada uno por última vez. | `inventory:catalog:read` | [reference/modules/i-inventory](/es/reference/modules/i-inventory/) |
 | Espacio de trabajo | `/workspace` | Agentes, sesiones, recursos y actividad con scope de un espacio de trabajo | `tenant:read` | [reference/modules/xx-multi-tenancy](/es/reference/modules/xx-multi-tenancy/) |
 
 ### IA

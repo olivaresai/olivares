@@ -1,10 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { PanelSlot } from '@/components/ui/trust-chrome'
 import { useQuery } from '@tanstack/react-query'
 import { ListChecks, Plus, RefreshCw, ShieldCheck } from 'lucide-react'
-import { useRouter } from '@tanstack/react-router'
 import { useRef, useState } from 'react'
+import { useTabParam } from '@/lib/hooks/use-tab-param'
+import { useUrlState } from '@/lib/hooks/use-url-state'
 import { useTranslation } from 'react-i18next'
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Button } from '@/components/ui/button'
@@ -25,13 +27,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/lib/auth/context'
 import { useMinWidth } from '@/lib/hooks/use-min-width'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
-import { RecordingNotice } from '@/features/recordings/recording-notice'
+import { RecordingNoticeSlot } from '@/features/recording-notice-slot'
 import { governanceApi, governanceKeys } from './api'
 import { AgentRiskView } from './agent-risk-view'
 import { APPROVAL_QUEUE_REGION, ApprovalDetailPanel } from './approval-detail'
 import { ApprovalQueue, flaggedApprovalId } from './approval-queue'
 import { PANEL_EXTENSIONS } from '@/features/extensions'
-import { useOfferedPanels, type TabExtension } from '@/features/panels'
+import { useOfferedPanels } from '@/features/panels'
 import { IdentitiesView } from './identities-view'
 import { NewRequestDialog } from './new-request-dialog'
 import { PoliciesView } from './policies-view'
@@ -51,21 +53,6 @@ const TAB_KEYS: readonly TabKey[] = [
   'identities',
   'agent-risk',
 ]
-
-/** The section a `?tab=` link names (the sidebar's Approvals entry and Now link to
- *  `?tab=approvals`), or the queue when the link names nothing this principal may open. */
-function initialTab(
-  canReadApprovals: boolean,
-  panels: readonly TabExtension[],
-): TabKey {
-  const fallback: TabKey = canReadApprovals ? 'approvals' : 'policies'
-  if (typeof window === 'undefined') return fallback
-  const want = new URLSearchParams(window.location.search).get('tab')
-  if (!want || (!TAB_KEYS.includes(want) && !panels.some((p) => p.id === want)))
-    return fallback
-  if (want === 'approvals' && !canReadApprovals) return fallback
-  return want as TabKey
-}
 
 // The HITL approval queue polls on a 12s interval — there is NO SSE; all freshness is
 // poll-based, and status is computed at read (so an expired item surfaces before a
@@ -91,23 +78,14 @@ export default function GovernanceView() {
   // view an operator holding only that delegated permission could not reach it —
   // the same reasoning that gave routine policies their own route.
 
-  // Outside a RouterProvider (component tests) the hook answers undefined and the section
-  // is simply not written to the URL — the installed hook's own no-provider contract.
-  const router = useRouter({ warn: false }) as
-    { navigate: (opts: unknown) => Promise<void> } | undefined
-  const [tab, setTabState] = useState<TabKey>(() =>
-    initialTab(canReadApprovals, panels),
-  )
-  function setTab(value: TabKey) {
-    setTabState(value)
-    // `replace` and out of scroll restoration, like the other tabbed screens: a section is
-    // a facet of this page, not a place Back returns to.
-    void router?.navigate({
-      search: (prev: Record<string, unknown>) => ({ ...prev, tab: value }),
-      replace: true,
-      resetScroll: false,
-    })
-  }
+  // `?tab=` names the section (the sidebar's Approvals entry and Now link to
+  // `?tab=approvals`). Approvals is first only where this principal may read it, so
+  // anything else falls back to the first section on offer.
+  const [tab, setTab] = useTabParam([
+    ...(canReadApprovals ? ['approvals'] : []),
+    ...TAB_KEYS.filter((k) => k !== 'approvals'),
+    ...panels.map((p) => p.id),
+  ])
 
   return (
     <div className="flex flex-col gap-5 pb-10">
@@ -117,9 +95,9 @@ export default function GovernanceView() {
         icon={ShieldCheck}
       />
 
-      <RecordingNotice namespace="governance" />
+      <RecordingNoticeSlot namespace="governance" />
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           {canReadApprovals && (
             <TabsTrigger value="approvals">{t('tabs.approvals')}</TabsTrigger>
@@ -154,18 +132,14 @@ export default function GovernanceView() {
 
         {panels.map((p) => (
           <TabsContent key={p.id} value={p.id}>
-            <p.Component />
+            <PanelSlot>
+              <p.Component />
+            </PanelSlot>
           </TabsContent>
         ))}
       </Tabs>
     </div>
   )
-}
-
-/** The approval named by ?approval= in the address, if any. */
-function linkedApproval(): string | null {
-  const v = new URLSearchParams(window.location.search).get('approval')
-  return v || null
 }
 
 /** The text a search matches in a request: what runs, why, and who asks. */
@@ -199,7 +173,17 @@ function ApprovalsTab({ active }: { active: boolean }) {
   const [search, setSearch] = useState('')
   // ?approval=<id> opens that request: the notification bell and Estate's Needs you link
   // a waiting request here, one click from there to the decision.
-  const [picked, setPicked] = useState<string | null>(linkedApproval)
+  // `?approval=` is the request on screen, so a link, a reload and Back all show it. The
+  // default (first row) is not written: a pristine queue keeps a clean address.
+  const [{ approval: linked }, patchUrl] = useUrlState(['approval'])
+  const [pinned, setPinned] = useState<string | null>(null)
+  // The address leads: when it names another request (or none, after Back), the pin follows.
+  const [seenLinked, setSeenLinked] = useState(linked)
+  if (linked !== seenLinked) {
+    setSeenLinked(linked)
+    setPinned(linked ?? null)
+  }
+  const picked = linked ?? pinned
   const [confirmSweep, setConfirmSweep] = useState(false)
   const [newOpen, setNewOpen] = useState(false)
 
@@ -245,11 +229,13 @@ function ApprovalsTab({ active }: { active: boolean }) {
   // a click or `A` would decide what they have not read. A request the list no longer
   // holds (decided, expired, or linked from elsewhere) is read by its id.
   const defaultId = flaggedId ?? items[0]?.id
-  if (picked === null && defaultId) setPicked(defaultId)
+  if (picked === null && defaultId) setPinned(defaultId)
   const shownId = picked ?? defaultId
 
   function select(id: string) {
-    setPicked(id)
+    setPinned(id)
+    // A place, not a filter: Back returns to the request read before this one.
+    patchUrl({ approval: id }, { history: 'push' })
     if (!wide) panelRef.current?.scrollIntoView?.({ block: 'start' })
   }
 

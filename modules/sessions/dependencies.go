@@ -40,6 +40,8 @@ type Dependencies struct {
 	ProviderSources                  ProviderSourceResolver
 	ToolLogin                        ToolLoginStatus
 	ProfileLogin                     ProfileLoginStatus
+	ServerToolLogin                  ServerToolLoginHome
+	ServerLoginOpen                  ServerLoginPolicy
 	CommunicationSealer              CommunicationContentSealer
 	CommunicationAuthority           *CommunicationRequestAuthority
 	CommunicationDirectoryResolver   DirectorySnapshotResolver
@@ -213,6 +215,8 @@ func (m *Module) dependencyChecks() []dependencyCheck {
 		{"ProviderSources", d.ProviderSources, "provider source bindings", true},
 		{"ToolLogin", d.ToolLogin, "tool login resolution", true},
 		{"ProfileLogin", d.ProfileLogin, "profile login checks", true},
+		{"ServerToolLogin", d.ServerToolLogin, "sessions on the engine user's own tool login", false},
+		{"ServerLoginOpen", d.ServerLoginOpen, "sessions on the engine user's own tool login", false},
 		{"CommunicationSealer", d.CommunicationSealer, "communication payload sealing", false},
 		{"CommunicationAuthority", authority, "authenticated communication authority", true},
 		{"CommunicationDirectoryResolver", d.CommunicationDirectoryResolver, "communication audience resolution", false},

@@ -98,6 +98,58 @@ olivares session resume <session>
 Resume 会为现有运行启动一个新的自有子进程。实时 attach 输出是内存中的有界环；保留的运行元数据和
 生命周期事件不承诺持久化的对话记录。录制策略与工具自身的 resume 支持仍是独立的要求。
 
+## NFS 或 SMB 共享上的会话文件夹
+
+会话文件夹是引擎主机上的一条路径，因此网络共享一旦被主机挂载，就成为一个文件夹。`olivares netfolder add` 使用 systemd 自身的挂载单元完成挂载，并将挂载点登记为一个文件夹；挂载仍由 systemd 负责，而这些单元是可以阅读和编辑的普通文件。请在引擎主机上以 root 身份运行：
+
+```sh
+printf '%s\n' "$SMB_PASSWORD" | sudo olivares netfolder add files //fileserver/projects --user svc --password-stdin
+sudo olivares netfolder add data fileserver:/export --mode write_no_delete
+olivares netfolder ls
+```
+
+来源对于 SMB 是 `//server/share`，对于 NFS 是 `server:/export`，与 `mount(8)` 的写法一致。名称由小写字母和数字组成，并将挂载点命名为 `/srv/olivares/mnt/<name>`。`--mode` 是该文件夹的访问模式（默认为 `rw`）。这些单元将 SMB 文件夹所显示的每个文件的所有者账户设为 `olivares`，因此引擎必须以该账户运行。`ls` 会将每个文件夹显示为 `mounted`、`unmounted`（首次使用时挂载，`ls` 不会触发挂载）或 `not responding`。已存在的文件夹永远不会被覆盖。
+
+对于上面的 SMB 示例，该命令会写入以下单元。这些数据是在 Debian 13（Linux 6.12）上，针对 NFSv4.2 导出和 Samba 4.22 共享（SMB 3.1.1）测得的。文件名是 `systemd-escape -p /srv/olivares/mnt/files` 的输出加上 `.mount` 和 `.automount`：
+
+```ini
+# /etc/systemd/system/srv-olivares-mnt-files.mount
+[Unit]
+Description=Olivares network folder files
+After=network-online.target
+Wants=network-online.target
+
+[Mount]
+What=//fileserver/projects
+Where=/srv/olivares/mnt/files
+Type=cifs
+Options=credentials=/etc/olivares/netfolders/files.cred,uid=olivares,gid=olivares,vers=3.1.1,nodev,nosuid,soft,echo_interval=5
+TimeoutSec=30
+```
+
+```ini
+# /etc/systemd/system/srv-olivares-mnt-files.automount
+[Unit]
+Description=Olivares network folder files (mounted on first use)
+
+[Automount]
+Where=/srv/olivares/mnt/files
+TimeoutIdleSec=0
+
+[Install]
+WantedBy=remote-fs.target
+```
+
+对于 NFS，它会写入 `Type=nfs4`、`What=fileserver:/export` 以及 `Options=nodev,nosuid,vers=4.2,soft,timeo=50,retrans=2`，并且不写入凭据文件。在强制 SELinux 且使用该 appliance 策略的主机上，它会在选项中添加 `context=system_u:object_r:olivares_workspace_t:s0`，这是引擎及其会话工具为文件夹已使用的标签。要删除一个文件夹，请对其两个单元运行 `systemctl disable --now`，删除它们及其凭据文件，并注销该文件夹。
+
+- **Everyone who has the folder acts as one account.** 文件由挂载所呈现的账户读写：SMB 为 `uid=` 和 `gid=`，NFS 为导出的用户映射。共享本身无法区分不同的人。由 Olivares 决定谁能获得该文件夹。
+- **The credential stays in a file.** 命令将 `username=` 和 `password=` 写入 `credentials=` 文件，该文件归 root 所有，权限为 0600，密码来自标准输入。密码不出现在任何单元、挂载选项、进程参数或日志行中：`mount.cifs` 只接收路径。使用 `sec=sys` 的 NFS 不需要凭据。
+- **The automount unit keeps boot independent of the file server.** 启动时不会等待共享。首次使用时挂载；若那一刻文件服务器宕机，则是该次使用失败，而不是启动失败。
+- **Use `soft`.** 默认的 `hard` NFS 挂载会使访问已失效服务器的进程卡住，无法停止。使用上述选项后，对已挂载共享的读写会在 20 到 30 秒后以 input/output error 或 "Host is down" 失败，服务器重新响应后共享即恢复工作。
+- **A folder that does not respond is reported.** 登记、打开、列出文件夹以及在其中启动会话，都会等待共享 10 秒，然后以 "The folder ... is not responding. If it is on a network share, check that its file server is up and reachable." 拒绝并返回 424 状态。会话不会启动。
+- **`write_no_delete` holds.** Landlock 在内核的文件系统层执行该限制，位于网络文件系统之上。在两种共享上的实际会话启动中，会话创建并修改了文件，且被拒绝重命名、删除（unlink）和删除目录（rmdir），与本地磁盘上完全一致，而 `rw` 则允许这些操作。无法实施限制的主机仍会拒绝启动。
+- **The folder is the boundary.** 在同样的启动中，两种模式下，对文件夹父目录（位于同一共享上）的写入都被拒绝，且不留下任何文件。会话只会写入其文件夹内部。
+
 ## 它消费什么（以及它派生什么）
 
 模块 II 消费与清点相同的最小数据观测流——[`edge.observed`](/zh/reference/events/)、

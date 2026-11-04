@@ -316,7 +316,7 @@ func (m *Module) handleIngest(w http.ResponseWriter, r *http.Request, mc api.Mod
 // on a client error.
 func (m *Module) gatherDocuments(ctx context.Context, mc api.ModuleContext, kbRef string, req *ingestRequest) ([]ingestDocument, func(context.Context, store.Scope, SourceValidation) error, string, int) {
 	if name := strings.TrimSpace(req.Source); name != "" {
-		src, ok := m.sources[name]
+		src, ok := m.source(name)
 		owned := false
 		var validate func(context.Context, store.Scope, SourceValidation) error
 		if !ok && m.sourceOpener != nil {

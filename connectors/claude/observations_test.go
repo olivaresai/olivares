@@ -210,7 +210,7 @@ func TestFindingFromPermissionMode(t *testing.T) {
 		name: evtPermissionMode, sessionID: "s", fromMode: "default", toMode: "bypassPermissions",
 		modeTrigger: "shift_tab", at: testTime,
 	})
-	if !ok || f.Kind != findingKindPolicyChange || f.Severity != model.SeverityHigh || f.SubjectRef != "s" {
+	if !ok || f.Kind != findingKindPolicyChange || f.Severity != model.SeverityHigh || f.SubjectRef != "s" || f.ObservedPermissionMode != "bypassPermissions" {
 		t.Errorf("bypass escalation finding = %+v ok=%v", f, ok)
 	}
 	if f.DetailHash == "" {
@@ -272,3 +272,10 @@ func TestFindingFromAPIError(t *testing.T) {
 
 // containsSubstr is a tiny helper so the redaction assertion reads clearly.
 func containsSubstr(s, sub string) bool { return strings.Contains(s, sub) }
+
+func TestPermissionModeObservationBoundsUnknownValue(t *testing.T) {
+	finding, ok := findingFromPermissionMode(claudeEvent{name: evtPermissionMode, sessionID: "s", toMode: "an-unrecognized-mode", at: testTime})
+	if !ok || finding.ObservedPermissionMode != "unknown" {
+		t.Fatalf("unknown mode observation = %+v, %v", finding, ok)
+	}
+}

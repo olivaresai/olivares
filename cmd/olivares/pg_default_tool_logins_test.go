@@ -114,6 +114,23 @@ func TestToolLoginHomeAndLocalOllamaServeTheCallersTenant(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			// The engine user's own tool login serves the node's only person, and nobody once a
+			// second account exists, with a membership or without one.
+			only := func(t2 model.TenantID) bool {
+				t.Helper()
+				got, err := isOnlyPersonsTenant(context.Background(), eng.store, t2)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return got
+			}
+			if !only(model.TenantID(tenant)) || only(model.NewTenantID()) {
+				t.Fatalf("only person: own tenant %v, another tenant %v, want true and false", only(model.TenantID(tenant)), only(model.NewTenantID()))
+			}
+			do("POST", "/v1/users", map[string]any{"email": "second@olivares.ai", "password": "fixture-password-2026!"}, http.StatusCreated)
+			if only(model.TenantID(tenant)) {
+				t.Fatal("a second account left the server's own login open")
+			}
 			register := registerLocalOllama(eng.sessionsMod, eng.store)
 			if err := register(context.Background(), p, model.TenantID(tenant), "http://127.0.0.1:11434"); err != nil {
 				t.Fatalf("register Ollama in the caller's tenant: %v", err)

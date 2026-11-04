@@ -8,7 +8,8 @@
     "managedMcp": "MCP e plugin",
     "sandbox": "Sandbox ed egress",
     "policyAsCode": "Policy-as-code",
-    "hitl": "HITL degli agenti gestiti"
+    "hitl": "HITL degli agenti gestiti",
+    "departmentInstructions": "Istruzioni di reparto"
   },
   "seam": {
     "badge": "Backend in attesa",
@@ -296,5 +297,20 @@
     "openFindings_one": "{{count}} rilevamento aperto",
     "openFindings_many": "{{count}} rilevamenti aperti",
     "openFindings_other": "{{count}} rilevamenti aperti"
+  },
+  "department": {
+    "title": "File di istruzioni del reparto",
+    "hint": "Il file di istruzioni di un reparto, generato da ciò che il reparto porta: lo stesso testo che ricevono le sue sessioni. Visualizzalo in anteprima, poi pubblicalo per le postazioni del reparto. Un reparto senza istruzioni ritira il file pubblicato.",
+    "select": "Reparto",
+    "selectPlaceholder": "Scegli un reparto",
+    "preview": "Anteprima",
+    "publish": "Pubblica",
+    "published": "File di istruzioni pubblicato.",
+    "previewFailed": "Impossibile visualizzare l'anteprima del file del reparto",
+    "fileLabel": "File di istruzioni del reparto",
+    "digest": "SHA-256 {{sha}}",
+    "revisions_one": "{{count}} revisione pubblicata",
+    "revisions_many": "{{count}} revisioni pubblicate",
+    "revisions_other": "{{count}} revisioni pubblicate"
   }
 }

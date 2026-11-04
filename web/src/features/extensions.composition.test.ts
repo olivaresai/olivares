@@ -12,12 +12,28 @@ vi.mock('./extensions', async () => {
     i18n.addResource(lng, 'nav', 'items.finops', 'FinOps')
     i18n.addResource(lng, 'nav', 'items.redteam', 'Red team')
     i18n.addResource(lng, 'nav', 'items.team-costs', 'Team costs')
+    i18n.addResource(lng, 'nav', 'items.recordings', 'Recordings')
+    i18n.addResource(lng, 'nav', 'items.session-viewer', 'Session viewer')
   }
   const historicalExtensions = [
     { id: 'finops', path: '/finops', heading: 'FinOps' },
     { id: 'redteam', path: '/red-team', heading: 'Red team' },
     { id: 'team-costs', path: '/team-costs', heading: 'Team costs' },
+    { id: 'recordings', path: '/recordings', heading: 'Recordings' },
+    {
+      id: 'session-viewer',
+      path: '/session-viewer/$id',
+      heading: 'Session viewer',
+    },
   ]
+  // The Business extension registers the pages of shared source itself, from the same
+  // business-views.tsx files: the registry serves none of them for it.
+  const sharedBusinessViews = Object.values(
+    import.meta.glob<readonly object[]>('./*/business-views.tsx', {
+      eager: true,
+      import: 'VIEWS',
+    }),
+  ).flat()
   return {
     LAUNCH_IDENTITY_EXTENSION: undefined,
     PANEL_EXTENSIONS: {
@@ -31,6 +47,7 @@ vi.mock('./extensions', async () => {
       scopesCards: [],
     },
     FEATURE_EXTENSIONS: [
+      ...sharedBusinessViews,
       ...historicalExtensions.map(({ id, path }) => ({
         id,
         path,
@@ -58,13 +75,6 @@ vi.mock('./extensions', async () => {
       ...historicalExtensions,
       // A Business build serves the pages whose source is shared (business-views.tsx).
       { id: 'compliance', path: '/compliance', heading: 'Compliance' },
-      { id: 'deploy', path: '/deploy', heading: 'Deployment' },
-      { id: 'recordings', path: '/recordings', heading: 'Recordings' },
-      {
-        id: 'session-viewer',
-        path: '/session-viewer/$id',
-        heading: 'Session viewer',
-      },
       {
         id: 'extension-fixture',
         path: '/extension-fixture',
@@ -91,12 +101,14 @@ vi.mock('./extensions', async () => {
 
 import { routeTree } from '@/app/routes'
 import { BUSINESS_BUILD } from './business-build'
+import { FEATURE_EXTENSIONS } from './extensions'
 import {
   BUSINESS_ONLY_VIEW_IDS,
   FEATURE_VIEWS,
   PRODUCT_NOUNS,
   ROUTE_ALIASES,
   nounsForView,
+  type ViewEntry,
 } from './registry'
 import { ANONYMOUS_VIEWS } from './anonymous-registry'
 import { AUTH_ROUTES, PUBLIC_ROUTES, ROUTES } from '../../e2e-visual/routes'
@@ -109,9 +121,17 @@ import './registry.nav-labels.test'
 import './anonymous-registry.test'
 
 describe('composed console extensions', () => {
-  it('registers the Business pages of shared source exactly once, in registry order', () => {
+  it('registers the Business pages of shared source exactly once, after every built-in view, in the extension order', () => {
     expect(BUSINESS_BUILD).toBe(true)
-    for (const id of ['deploy', 'recordings', 'compliance', 'session-viewer']) {
+    const builtIns = FEATURE_VIEWS.slice(
+      0,
+      FEATURE_VIEWS.length - FEATURE_EXTENSIONS.length,
+    ).map((view) => (view as ViewEntry).order)
+    expect(builtIns).toEqual([...builtIns].sort((a, b) => a - b))
+    expect(FEATURE_VIEWS.slice(builtIns.length).map((view) => view.id)).toEqual(
+      FEATURE_EXTENSIONS.map((view) => view.id),
+    )
+    for (const id of ['compliance']) {
       expect(
         FEATURE_VIEWS.filter((view) => view.id === id),
         id,
@@ -120,9 +140,7 @@ describe('composed console extensions', () => {
     const orders = FEATURE_VIEWS.filter((view) =>
       BUSINESS_ONLY_VIEW_IDS.includes(view.id),
     ).map((view) => view.path)
-    expect(orders.sort()).toEqual(
-      ['/compliance', '/deploy', '/recordings', '/session-viewer/$id'].sort(),
-    )
+    expect(orders.sort()).toEqual(['/compliance'])
   })
   it('mounts historical extension destinations once instead of their Community aliases', () => {
     const router = createRouter({ routeTree })

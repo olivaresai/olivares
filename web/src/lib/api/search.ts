@@ -48,6 +48,9 @@ export async function searchConsole(q: string): Promise<ConsoleSearchResponse> {
   return searchResponseSchema.parse(raw)
 }
 
+/** The kind of a session hit; its id is the session's address in the console. */
+export const SEARCH_KIND_SESSION = 'sessions.run'
+
 /** Maps a server result kind to the console route that lists that entity. */
 export const SEARCH_KIND_ROUTES: Record<string, string> = {
   workspace: '/workspace',
@@ -57,6 +60,19 @@ export const SEARCH_KIND_ROUTES: Record<string, string> = {
   'eventing.subscription': '/eventing',
   'notify.route': '/alerting',
   'orchestration.schedule': '/orchestration',
+  [SEARCH_KIND_SESSION]: '/sessions',
+}
+
+/** Where a hit opens: a session opens itself, by its address; any other kind opens the
+ * list of its entities. Undefined for a kind the console has no route for. */
+export function searchHitRoute(hit: {
+  kind: string
+  id: string
+}): string | undefined {
+  const route = SEARCH_KIND_ROUTES[hit.kind]
+  return route && hit.kind === SEARCH_KIND_SESSION
+    ? `${route}?session=${encodeURIComponent(hit.id)}`
+    : route
 }
 
 /** Maps a server result kind to the feature id whose nav label names it. */
@@ -68,4 +84,5 @@ export const SEARCH_KIND_FEATURE: Record<string, string> = {
   'eventing.subscription': 'eventing',
   'notify.route': 'alerting',
   'orchestration.schedule': 'orchestration',
+  [SEARCH_KIND_SESSION]: 'sessions',
 }

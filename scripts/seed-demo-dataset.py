@@ -568,6 +568,14 @@ def make_repo(root, name, files):
     return os.path.realpath(final)
 
 
+def is_personal_folder(folder):
+    # The engine's own "My files" folder of a signed-in person, <data>/files/<user-id>
+    # (modules/sessions/personal_folder.go). The engine lists it to whoever asks, so it is never one of the five.
+    # ponytail: the workspace list carries no owner, so any folder named "My files" under a files/ path is skipped
+    # too; upgrade to an owner check when the list exposes one.
+    return folder.get("name") == "My files" and os.path.basename(os.path.dirname(folder.get("root_path") or "")) == "files"
+
+
 def step_workspaces(api, ctx):
     existing = {w["root_path"]: w for w in api.items("workspaces", "/v1/m/sessions/workspaces")}
     refs, roots = {}, {}
@@ -589,7 +597,7 @@ def step_workspaces(api, ctx):
             "name": name, "root_path": root, "mount_mode": mode, "container_target": "/workspace",
             "dlp_mode": dlp})
         refs[name] = created["workspace_ref"]
-    final = api.items("workspaces", "/v1/m/sessions/workspaces")
+    final = [w for w in api.items("workspaces", "/v1/m/sessions/workspaces") if not is_personal_folder(w)]
     by_root = {w["root_path"]: w for w in final}
     missing = sorted(set(roots.values()) - set(by_root))
     extra = sorted(set(by_root) - set(roots.values()))

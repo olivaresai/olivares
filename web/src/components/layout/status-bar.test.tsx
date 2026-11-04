@@ -17,6 +17,8 @@ const state = vi.hoisted(() => ({
   version: '1.0' as string | undefined,
   engineError: false,
   usagePercent: 58,
+  /** Whether the Claude login that reports its use is the tool's default. */
+  claudeDefault: true,
   refreshing: false,
   live: 0,
   /** What the list shows; null: the same sessions as `live`. */
@@ -28,6 +30,24 @@ const state = vi.hoisted(() => ({
 }))
 const engage = vi.hoisted(() => vi.fn())
 const providersRead = vi.hoisted(() => vi.fn())
+/** The status-bar items an edition registers (none in the default console). */
+const registered = vi.hoisted(() => ({
+  items: [] as { id: string; Component: () => unknown }[],
+}))
+
+vi.mock('@/features/extensions', async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import('@/features/extensions')>()
+  return {
+    ...original,
+    PANEL_EXTENSIONS: {
+      ...original.PANEL_EXTENSIONS,
+      get statusBarItems() {
+        return registered.items
+      },
+    },
+  }
+})
 
 vi.mock('@/lib/hooks/use-server-info', () => ({
   useServerInfo: () => ({
@@ -105,7 +125,7 @@ vi.mock('@/features/agent-tools/api', () => ({
           {
             instance: 'claude-default',
             driver: 'claude',
-            default: true,
+            default: state.claudeDefault,
             state: 'ready',
             limits: [
               { label: '5-hour', percent: state.usagePercent },
@@ -154,6 +174,7 @@ afterEach(() => {
     version: '1.0',
     engineError: false,
     usagePercent: 58,
+    claudeDefault: true,
     refreshing: false,
     live: 0,
     open: null,
@@ -162,6 +183,7 @@ afterEach(() => {
     superadmin: false,
   })
   state.denied.clear()
+  registered.items = []
   engage.mockReset()
   providersRead.mockReset()
   useTenantStore.setState({ activeTenant: null })
@@ -183,6 +205,26 @@ describe('the status bar says how things stand', () => {
     state.version = ''
     rerender(<StatusBar />)
     expect(within(bar()).queryByTestId('deployment-identity')).toBeNull()
+  })
+
+  // #3140: the bar is on every screen, so an item an edition registers here must not be
+  // able to paint over an approval or consent dialog. It gets a container of its own.
+  it('renders a registered item in its own panel container, inside the bar', () => {
+    registered.items = [
+      {
+        id: 'hostile',
+        Component: () => (
+          <div
+            data-testid="hostile-item"
+            style={{ position: 'fixed', inset: 0, zIndex: 2147483647 }}
+          />
+        ),
+      },
+    ]
+    renderIntel(<StatusBar />)
+    const slot = screen.getByTestId('hostile-item').closest('[data-panel-slot]')
+    expect(slot).not.toBeNull()
+    expect(bar().contains(slot)).toBe(true)
   })
 
   it('names the engine state with a dot and a word', () => {
@@ -230,6 +272,18 @@ describe('the status bar says how things stand', () => {
     expect(within(bar()).getByTestId('killswitch-status')).toHaveTextContent(
       'ALL AGENTS STOPPED',
     )
+  })
+
+  it("shows a tool's use from the login that reported it when the default login did not", async () => {
+    state.superadmin = true
+    state.claudeDefault = false
+    useTenantStore.setState({ activeTenant: 't1' })
+    renderIntel(<StatusBar />)
+    const usage = await within(bar()).findByRole('group', {
+      name: 'Claude Code usage',
+    })
+    expect(usage).toHaveTextContent('58% 5h')
+    expect(usage).toHaveTextContent('41% wk')
   })
 
   it("shows each tool's 5-hour and weekly use as the tool reported it, and no guess", async () => {

@@ -49,6 +49,9 @@ const NEW_TOOL: EngineTool = {
   key: 'hermes',
   name: 'Hermes Agent',
   name_stem: 'hermes',
+  vendor: 'nous',
+  monogram: 'HA',
+  color: '#888892',
   session: true,
   bindings: [{ kind: 'openai', egress: 'configured-endpoint' }],
 }

@@ -48,7 +48,9 @@ const (
 	terminalReplayBytes = 256 << 10
 	// terminalChunkBytes is the most one read returns.
 	terminalChunkBytes = 16 << 10
-	// terminalMaxInputBytes bounds one input request (a large paste).
+	// terminalMaxInputBytes bounds one input request, not a paste: the console sends a
+	// paste of any length in requests below it (use-terminal-session.ts), and a client
+	// of the API is told the size to split at.
 	terminalMaxInputBytes = 64 << 10
 	// terminalMaxLineBytes bounds the excerpt; the payload hash seals the full line.
 	terminalMaxLineBytes = 4 << 10
@@ -255,9 +257,21 @@ func (m *Module) startTerminal(ctx context.Context, tenant model.TenantID, ref s
 // terminalSpec is the launch of the shell: the folder's confinement as a session in it
 // gets it, with the person's shell where a tool would be.
 func (m *Module) terminalSpec(ws *resolvedWorkspace) LaunchSpec {
-	// A folder mounted read-only is read-only to the shell too, as for a read-only session.
+	spec := m.folderChildSpec(ws, false)
+	spec.Program = terminalProgram()
+	spec.Env = []EnvVar{
+		{Name: "TERM", Value: "xterm-256color"},
+		{Name: "COLORTERM", Value: "truecolor"},
+	}
+	return spec
+}
+
+// folderChildSpec is the launch of a program a person runs in a folder, confined to it as a
+// session in that folder is: a terminal and an SFTP session share it. A folder mounted
+// read-only, or a child asked to be read-only, is read-only to the program too.
+func (m *Module) folderChildSpec(ws *resolvedWorkspace, readOnly bool) LaunchSpec {
 	preset := PresetNone
-	if ws.mountMode == mountRO {
+	if readOnly || ws.mountMode == mountRO {
 		preset = PresetReadOnly
 	}
 	policy := m.sessionConfinement(ws.rootReal, nil, preset)
@@ -266,13 +280,9 @@ func (m *Module) terminalSpec(ws *resolvedWorkspace) LaunchSpec {
 		noDelete = withoutDelete(policy, ws.rootReal)
 	}
 	// The Git hook and configuration mounts that keep an agent from planting what the
-	// person's next git command would run are not applied: the person is typing here.
+	// person's next git command would run are not applied: the person is acting here.
 	return LaunchSpec{
-		Program: terminalProgram(), Dir: ws.rootReal,
-		Env: []EnvVar{
-			{Name: "TERM", Value: "xterm-256color"},
-			{Name: "COLORTERM", Value: "truecolor"},
-		},
+		Dir:       ws.rootReal,
 		WaitDelay: m.rt.waitDelay, KillTreeOnExit: true,
 		Confinement: policy, ConfinementFiles: ws.readOnlyHandles, ConfinementNoDelete: noDelete,
 		// A shell that cannot be confined does not start, whatever the node's own setting.
@@ -508,7 +518,7 @@ func (t *terminal) resize(rows, cols uint16) error {
 // receiving the accept key, so unsealed text cannot run later.
 func (t *terminal) send(ctx context.Context, data string) error {
 	if len(data) > terminalMaxInputBytes {
-		return &runErr{http.StatusRequestEntityTooLarge, "that input is too large for one request"}
+		return &runErr{http.StatusRequestEntityTooLarge, "send at most 64 KiB of input in one request; split a longer paste"}
 	}
 	t.sendMu.Lock()
 	defer t.sendMu.Unlock()

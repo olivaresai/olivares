@@ -28,7 +28,7 @@ func TestConsoleCustodyReportUsesBootSealerOverrides(t *testing.T) {
 	}
 	setActivationOverlayForTest(map[string]string{dr.SecretStoreKeyEnv: base64.StdEncoding.EncodeToString([]byte(strings.Repeat("d", 32)))})
 	t.Cleanup(func() { setActivationOverlayForTest(nil) })
-	config := consoleDRConfig(bootConfig{DataDir: dir}, store.EngineSQLite, nil, nil)
+	config := consoleDRConfig(bootConfig{DataDir: dir}, store.EngineSQLite, nil, nil, nil)
 	if config.Getenv == nil {
 		t.Fatal("console restore must use boot's effective environment reader")
 	}

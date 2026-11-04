@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"slices"
 	"sort"
@@ -47,6 +48,10 @@ type Options struct {
 	Authorizer *auth.Authorizer
 	Signer     *audit.Signer
 	SetupToken *secure.SetupToken
+	// AfterSetup, when set, runs once first-boot setup has just created the first
+	// administrator and organization (the composition root leaves the data
+	// directory owner's CLI credential there). It cannot fail the setup request.
+	AfterSetup func(context.Context)
 	Logger     *slog.Logger
 	Clock      model.Clock
 	Version    string
@@ -252,6 +257,8 @@ type Options struct {
 	Updates             UpdateService
 	TracingSettings     TracingSettingsService
 	SessionIdleSettings SessionIdleSettingsService
+	// HostMetrics reads the host the engine runs on (/v1/system/host). nil = the endpoint answers 501.
+	HostMetrics HostMetricsService
 	// JobsNotRunning lists the background jobs this node does not run and why;
 	// server-info carries them so the console can say so. nil omits the fact.
 	JobsNotRunning func() []JobNotRunning
@@ -339,10 +346,14 @@ type Server struct {
 	authorizationRecorder AuthorizationDecisionRecorder
 	signer                *audit.Signer
 	setupTok              *secure.SetupToken
+	afterSetup            func(context.Context)
 	log                   *slog.Logger
 	clock                 model.Clock
 	version               string
 	edition               string
+	// stall is the longest gap between two body reads or two reply writes of an
+	// API request; zero is clientStallTimeout (stallDeadlines).
+	stall time.Duration
 	// tlsPin answers the --pin-sha256 value of the certificate this engine serves now, or
 	// "" (plain HTTP, or no certificate). Set by serve before the listener starts.
 	tlsPin func() string
@@ -484,6 +495,7 @@ type Server struct {
 	updates             UpdateService
 	tracingSettings     TracingSettingsService
 	sessionIdleSettings SessionIdleSettingsService
+	hostMetrics         HostMetricsService
 	// jobsNotRunning is Options.JobsNotRunning.
 	jobsNotRunning func() []JobNotRunning
 	// emaGrant: the EMA jwt-bearer grant handler; nil = EMA not configured
@@ -577,7 +589,7 @@ func New(opts Options) (*Server, error) {
 		st: opts.Store, authr: opts.Authenticator, authz: opts.Authorizer, signer: opts.Signer,
 		authorizationRecorder: opts.AuthorizationRecorder,
 		osAccounts:            auth.NewOSAccountBindings(opts.Authenticator, opts.Authorizer, opts.OSAccounts),
-		setupTok:              opts.SetupToken, log: opts.Logger, clock: opts.Clock, version: opts.Version, edition: opts.Edition, liveModule: moduleAnswer(opts), communicationReady: opts.CommunicationReady,
+		setupTok:              opts.SetupToken, afterSetup: opts.AfterSetup, log: opts.Logger, clock: opts.Clock, version: opts.Version, edition: opts.Edition, liveModule: moduleAnswer(opts), communicationReady: opts.CommunicationReady,
 		licensePub: opts.LicensePublicKey, licenseBlob: opts.LicenseBlob, ingest: opts.Ingest,
 		fed: opts.Federation, sso: newSSOFlowStore(), trace: opts.Tracing, residency: opts.Residency,
 		keyCustody:      KeyCustodyInfo{Keys: append([]KeyInfo(nil), opts.KeyCustody.Keys...)},
@@ -607,6 +619,7 @@ func New(opts Options) (*Server, error) {
 		updates:             opts.Updates,
 		tracingSettings:     opts.TracingSettings,
 		sessionIdleSettings: opts.SessionIdleSettings,
+		hostMetrics:         opts.HostMetrics,
 		jobsNotRunning:      opts.JobsNotRunning,
 		logBroker:           opts.LogBroker,
 		leaderRouteGate:     opts.LeaderRouteGate,
@@ -714,7 +727,9 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	// request id is already assigned) and BEFORE the rest, so the access log, auth and
 	// every handler — and the audit events they write — run inside the continued
 	// trace span. It is inserted only when a provider is wired (untraced otherwise).
-	mw := []func(http.Handler) http.Handler{s.recoverer, s.requestIDMW}
+	// stallDeadlines goes first so every write below it, the recoverer's 500
+	// included, runs under the stall deadline and not the server's whole-request one.
+	mw := []func(http.Handler) http.Handler{s.stallDeadlines, s.recoverer, s.requestIDMW}
 	if s.trace != nil {
 		mw = append(mw, s.trace.HTTPMiddleware)
 	}
@@ -1029,6 +1044,7 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	coreRoute(v1, "PUT", "/system/session-idle", s.systemRoute("system:admin"), s.handleSessionIdleSettings)
 	coreRoute(v1, "GET", "/system/tracing", s.systemRoute("system:admin"), s.handleTracingSettings)
 	coreRoute(v1, "PUT", "/system/tracing", s.systemRoute("system:admin"), s.handleTracingSettings)
+	coreRoute(v1, "GET", "/system/host", s.systemRoute("system:admin"), s.handleHostMetrics)
 	// The module selection: which optional modules the engine runs. Superadmin;
 	// the change requires the deployment's administrative step-up, like activation.
 	v1.Route("/console/modules", func(r chi.Router) {
@@ -1075,6 +1091,7 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	// Superadmin-gated. The log broker is optional: nil ⇒ 501.
 	coreRoute(v1, "GET", "/console/logs/stream", s.systemRoute("system:admin"), s.handleLogStream)
 	coreRoute(v1, "GET", "/console/logs/buffer", s.systemRoute("system:admin"), s.handleLogBuffer)
+	coreRoute(v1, "POST", "/console/errors", s.humanSessionRoute, s.handleConsoleError)
 
 	// per-connector health metrics — the connector-health dashboard
 	// surface. Gated on health:status:read (any admin/viewer, not superadmin-only)
@@ -2329,8 +2346,21 @@ func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref 
 
 // NewHTTPServer returns a hardened *http.Server bound to addr serving this API.
 // The caller attaches TLS and runs ListenAndServeTLS / Shutdown.
+//
+// ReadTimeout and WriteTimeout bound what does not go through the API router:
+// the console's static files serve wraps outside it and the side sockets that
+// reuse this server with their own handler. Every API route replaces them with
+// stall deadlines (stallDeadlines), so an upload or a reply is never cut while
+// the client keeps up.
+//
+// Every request context derives from one base context that ends when Shutdown
+// starts. An event stream (a console tab's live view) ends only with its request
+// context, so without this Shutdown waits out its whole budget for each open tab
+// and a container runtime kills the engine before it closes its sessions and store.
+// A request still in flight sees the same cancellation a client disconnect gives it.
 func (s *Server) NewHTTPServer(addr string) *http.Server {
-	return &http.Server{
+	base, stop := context.WithCancel(context.Background())
+	srv := &http.Server{
 		Addr:              addr,
 		Handler:           s.handler,
 		ReadHeaderTimeout: 10 * time.Second,
@@ -2339,7 +2369,10 @@ func (s *Server) NewHTTPServer(addr string) *http.Server {
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 		ErrorLog:          slog.NewLogLogger(s.log.Handler(), slog.LevelError),
+		BaseContext:       func(net.Listener) context.Context { return base },
 	}
+	srv.RegisterOnShutdown(stop)
+	return srv
 }
 
 // licenseStatus returns the informational license status, licensee and the attested

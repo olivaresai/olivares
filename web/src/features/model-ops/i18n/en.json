@@ -120,7 +120,7 @@
   },
   "policy": {
     "title": "Admission policy",
-    "description": "The tenant trust policy for signed-model admission. The signing method is derived from what you configure.",
+    "description": "The organization’s trust policy for signed-model admission. The signing method is derived from what you configure.",
     "edit": "Edit policy",
     "editTitle": "Edit admission policy",
     "editBody": "Author the trust anchors. Saved atomically; the engine remains the authority.",
@@ -285,14 +285,14 @@
   },
   "finetune": {
     "title": "Fine-tune jobs",
-    "description": "Records of fine-tuning jobs and the versions they produced. The plane never trains a model or holds weights.",
+    "description": "Records of fine-tuning jobs and the versions they produced. Olivares never trains a model or holds weights.",
     "new": "New job record",
     "search": "Search jobs…",
     "created": "Job recorded.",
     "updated": "Job updated.",
     "newTitle": "Record a fine-tune job",
     "editTitle": "Update fine-tune job",
-    "formBody": "Record a job's state and the version it produced. This is an inventory record — the control plane does not run training.",
+    "formBody": "Record a job's state and the version it produced. This is an inventory record — Olivares does not run training.",
     "trackBanner": "This records externally run fine-tuning work. Olivares does not start, cancel, or execute training and stores no weights or dataset contents.",
     "columns": {
       "name": "Name",
@@ -405,7 +405,7 @@
     },
     "finetune": {
       "title": "No fine-tune job records yet",
-      "description": "Record a fine-tune job run outside Olivares to track its state, lineage and produced model version; the control plane does not run training."
+      "description": "Record a fine-tune job run outside Olivares to track its state, lineage and produced model version; Olivares does not run training."
     },
     "modelEvidence": {
       "title": "No AIBOM seals recorded yet",

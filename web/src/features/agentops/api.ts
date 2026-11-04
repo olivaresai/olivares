@@ -7,6 +7,7 @@ import {
   type RequestOptions,
   type TenantRequestOptions,
 } from '@/lib/api/client'
+import { serverFilename } from '@/lib/api/download'
 import type { ListResponse } from '@/lib/api/types'
 import { keepPreviousData, queryOptions } from '@tanstack/react-query'
 import { isEngineTool, setEngineTools } from './engine-tools'
@@ -43,10 +44,12 @@ import type {
   ResolvedProfileDTO,
   RunChangedFileDTO,
   RunChangesDTO,
+  RunCheckpointsDTO,
   RunCommandsDTO,
   RunGitStatusDTO,
   RunGitAction,
   RunGitRequest,
+  RunRewindDTO,
   RunWorktreeDiffDTO,
   RunWorktreeDiffFileDTO,
   RunActivityDTO,
@@ -64,6 +67,7 @@ import type {
   HandoffRunResult,
   SourceItemDTO,
   ToolReadinessDTO,
+  FolderCandidatesDTO,
   WorkspaceDTO,
   WriteResponse,
 } from './types'
@@ -93,6 +97,7 @@ import type {
  */
 const RUNS = '/v1/m/sessions/runs'
 const WORKSPACES = '/v1/m/sessions/workspaces'
+const FOLDER_CANDIDATES = '/v1/m/sessions/workspace-candidates'
 const PROFILES = '/v1/m/sessions/provider-profiles'
 const BINDINGS = '/v1/m/sessions/provider-source-bindings'
 const ACCOUNTS = '/v1/m/sessions/provider-accounts'
@@ -334,6 +339,11 @@ export const agentOpsApi = {
     ),
   /** Cancel the active turn while retaining the owned process and conversation.
    * Work-bound runs must present the fence observed on that exact run. */
+  /** Stops one background task of the session (Claude Code's stop_task); the session keeps running. */
+  stopTask: (r: string, task: string) =>
+    http.post<RunDTO>(
+      `${RUNS}/${ref(r)}/tasks/${encodeURIComponent(task)}/stop`,
+    ),
   interrupt: (r: string, workLeaseFence?: number) =>
     http.post<RunDTO>(
       `${RUNS}/${ref(r)}/interrupt`,
@@ -417,6 +427,22 @@ export const agentOpsApi = {
     http.get<RunWorktreeDiffDTO>(`${RUNS}/${ref(r)}/diff`, {
       signal: opts?.signal,
     }),
+  /** What each turn of the session changed in its folder, oldest turn first (read-only). */
+  runCheckpoints: (r: string, opts?: { signal?: AbortSignal }) =>
+    http.get<RunCheckpointsDTO>(`${RUNS}/${ref(r)}/checkpoints`, opts),
+  /** Puts the folder back as it was before turn `seq` (`start`), or as it was when it
+   * ended (`end`, which undoes a rewind). The tool's own conversation is not changed. */
+  rewindRun: (
+    r: string,
+    seq: number,
+    to: 'start' | 'end',
+    options?: Pick<RequestOptions, 'signal' | 'dispatchGuard'>,
+  ) =>
+    http.post<RunRewindDTO>(
+      `${RUNS}/${ref(r)}/checkpoints/${seq}/rewind`,
+      { to },
+      options,
+    ),
   /** One path of that branch at the base and at the branch tip (at most 64 KiB each). */
   worktreeDiffFile: (
     r: string,
@@ -435,13 +461,16 @@ export const agentOpsApi = {
   ) => http.put<RunDTO>(`${RUNS}/${ref(r)}/peers`, body),
   /** Stop the run. A work-bound run presents its fence until its lease has ended
    * (`currentControlFence`); then the engine applies ordinary control. */
-  stop: (r: string, workLeaseFence?: number) =>
+  stop: (r: string, workLeaseFence?: number, options?: RequestOptions) =>
     http.post<RunDTO>(
       `${RUNS}/${ref(r)}/stop`,
       workLeaseFence === undefined
         ? undefined
         : { work_lease_fence: workLeaseFence },
+      options,
     ),
+  mergeWorktree: (r: string, options?: RequestOptions) =>
+    http.post<void>(`${RUNS}/${ref(r)}/git/merge`, {}, options),
   resume: (r: string) => http.post<RunDTO>(`${RUNS}/${ref(r)}/resume`),
   resumeAtReset: (r: string) =>
     http.post<RunDTO>(`${RUNS}/${ref(r)}/resume`, { at_reset: true }),
@@ -461,6 +490,20 @@ export const agentOpsApi = {
       { automatic },
       opts,
     ),
+  personalFoldersSettings: (opts?: Pick<RequestOptions, 'signal'>) =>
+    http.get<{ enabled: boolean }>(
+      '/v1/m/sessions/personal-folders-settings',
+      opts,
+    ),
+  setPersonalFoldersSettings: (
+    enabled: boolean,
+    opts?: Pick<RequestOptions, 'signal' | 'dispatchGuard'>,
+  ) =>
+    http.put<{ enabled: boolean }>(
+      '/v1/m/sessions/personal-folders-settings',
+      { enabled },
+      opts,
+    ),
   /** Pin the session for the signed-in person, or unpin it: their own mark, kept on the
    * server so it follows them to another browser. Both are idempotent. */
   pin: (r: string, opts?: Pick<RequestOptions, 'tenant'>) =>
@@ -474,6 +517,11 @@ export const agentOpsApi = {
   markDone: (r: string) =>
     http.post<RunMarkDTO>(`${RUNS}/${ref(r)}/done`, undefined),
   unmarkDone: (r: string) => http.delete<RunMarkDTO>(`${RUNS}/${ref(r)}/done`),
+  /** Mark the session unread for the signed-in person, or read (they have seen it up to
+   * now): the console sends the second when a session is opened. Both are idempotent. */
+  markUnread: (r: string) =>
+    http.post<RunMarkDTO>(`${RUNS}/${ref(r)}/unread`, undefined),
+  markRead: (r: string) => http.delete<RunMarkDTO>(`${RUNS}/${ref(r)}/unread`),
   /** The session's name, kept by the engine and shown wherever it is listed; an empty
    * one gives the session back the name the console derives. */
   rename: (r: string, name: string) =>
@@ -529,10 +577,11 @@ export const agentOpsApi = {
     http.post<HandoffRunResult>(`${RUNS}/${ref(r)}/handoff`, body),
   // discardWorktree is the person's confirmation to remove the session's worktree and
   // branch although its work is not merged; without it no body is sent.
-  cleanup: (r: string, discardWorktree = false) =>
+  cleanup: (r: string, discardWorktree = false, options?: RequestOptions) =>
     http.post<RunDTO>(
       `${RUNS}/${ref(r)}/cleanup`,
       discardWorktree ? { discard_worktree: true } : undefined,
+      options,
     ),
   deleteRun: (r: string) =>
     http.delete<{ deleted: boolean }>(`${RUNS}/${ref(r)}`),
@@ -718,6 +767,13 @@ export const agentOpsApi = {
       tenant: scope?.tenant,
       signal: scope?.signal,
     }),
+  /** The folders the person's tools already worked in, read from the tools' own records.
+   * It only reads: a folder is registered by createWorkspace once the person confirms. */
+  listFolderCandidates: (scope?: AgentOpsReadScope) =>
+    http.get<FolderCandidatesDTO>(FOLDER_CANDIDATES, {
+      tenant: scope?.tenant,
+      signal: scope?.signal,
+    }),
   getWorkspace: (r: string, scope?: AgentOpsReadScope) =>
     http.get<WorkspaceDTO>(`${WORKSPACES}/${ref(r)}`, {
       tenant: scope?.tenant,
@@ -811,6 +867,23 @@ export const agentOpsApi = {
           ? 'text/plain; charset=utf-8'
           : 'application/octet-stream',
     }),
+  /** Several entries, or whole folders, as ONE zip. Each file is read as a governed read
+   * (jail, size limit, DLP), and the engine refuses the whole archive when one is refused,
+   * so a zip is never a shortened copy of what was asked for. */
+  archiveFiles: async (r: string, paths: string[]) => {
+    const res = await apiFetchRaw(`${WORKSPACES}/${ref(r)}/files/archive`, {
+      query: { path: paths },
+      headers: { Accept: 'application/zip' },
+    })
+    return {
+      blob: await res.blob(),
+      filename: serverFilename(res.headers, 'files.zip'),
+      // The DLP classes found in the files of the zip (the labels a single read shows).
+      labels: (res.headers.get('X-Olivares-Sensitivity') ?? '')
+        .split(',')
+        .filter(Boolean),
+    }
+  },
   mkdir: (r: string, path: string) =>
     http.post<FileEntry>(`${WORKSPACES}/${ref(r)}/files/dir`, undefined, {
       query: { path },
@@ -859,6 +932,11 @@ export const agentOpsKeys = {
     ['agentops', tenant, 'run', r] as const,
   runChanges: (tenant: string | null, r: string) =>
     ['agentops', tenant, 'run', r, 'changes'] as const,
+  runCheckpoints: (tenant: string | null, r: string) =>
+    ['agentops', tenant, 'run', r, 'checkpoints'] as const,
+  /** The session's Git status, read under the authority boundary like `boundaryScope`. */
+  runGit: (tenant: string | null, epoch: number, r: string) =>
+    ['agentops', tenant, 'b', epoch, 'git', r] as const,
   runActivity: (tenant: string | null, r: string) =>
     ['agentops', tenant, 'run', r, 'activity'] as const,
   runMessages: (tenant: string | null, r: string) =>

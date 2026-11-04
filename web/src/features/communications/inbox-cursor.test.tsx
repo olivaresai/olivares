@@ -126,7 +126,7 @@ describe('InboxTable — the personal seen cursor', () => {
     await screen.findByRole('button', { name: 'Load more' })
     await user.click(screen.getByRole('button', { name: 'Load more' }))
     await waitFor(() => expect(api.listInbox).toHaveBeenCalledTimes(2))
-    const section = screen.getByRole('region', { name: 'Seen cursor' })
+    const section = screen.getByRole('region', { name: 'Seen mark' })
     const pages = within(section).getAllByRole('listitem')
     expect(pages).toHaveLength(2)
     expect(within(pages[0]).getByText(did(2))).toBeInTheDocument()
@@ -172,7 +172,7 @@ describe('InboxTable — the personal seen cursor', () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
     )
     expect(
-      await within(dialog).findByText('Cursor advanced'),
+      await within(dialog).findByText('Seen mark moved'),
     ).toBeInTheDocument()
     expect(
       within(dialog).getByText('2', {
@@ -199,7 +199,7 @@ describe('InboxTable — the personal seen cursor', () => {
     )
     const { onOpenDelivery } = mount()
     const user = userEvent.setup()
-    await screen.findByRole('region', { name: 'Seen cursor' })
+    await screen.findByRole('region', { name: 'Seen mark' })
     await user.click(
       screen.getByRole('button', { name: 'Mark seen up to here' }),
     )
@@ -212,7 +212,7 @@ describe('InboxTable — the personal seen cursor', () => {
     expect(
       await within(dialog).findByText('Advance limited by a barrier'),
     ).toBeInTheDocument()
-    expect(within(dialog).queryByText('Cursor advanced')).toBeNull()
+    expect(within(dialog).queryByText('Seen mark moved')).toBeNull()
     expect(
       within(dialog).getByText(did(1), {
         selector: '[data-slot="cursor-barrier"]',
@@ -240,7 +240,7 @@ describe('InboxTable — the personal seen cursor', () => {
     )
     mount()
     const user = userEvent.setup()
-    await screen.findByRole('region', { name: 'Seen cursor' })
+    await screen.findByRole('region', { name: 'Seen mark' })
     await user.click(
       screen.getByRole('button', { name: 'Mark seen up to here' }),
     )
@@ -252,7 +252,7 @@ describe('InboxTable — the personal seen cursor', () => {
     )
     expect(
       await within(dialog).findByText(
-        'The cursor changed since it was prepared',
+        'The seen mark changed since it was prepared',
       ),
     ).toBeInTheDocument()
     expect(within(dialog).queryByRole('button', { name: /retry/i })).toBeNull()
@@ -276,7 +276,7 @@ describe('InboxTable — the personal seen cursor', () => {
     api.advanceCursor.mockResolvedValueOnce(advanced({ replayed: true }))
     mount()
     const user = userEvent.setup()
-    await screen.findByRole('region', { name: 'Seen cursor' })
+    await screen.findByRole('region', { name: 'Seen mark' })
     await user.click(
       screen.getByRole('button', { name: 'Mark seen up to here' }),
     )
@@ -318,7 +318,7 @@ describe('InboxTable — the personal seen cursor', () => {
     })
     mount()
     const user = userEvent.setup()
-    await screen.findByRole('region', { name: 'Seen cursor' })
+    await screen.findByRole('region', { name: 'Seen mark' })
     await user.click(
       screen.getByRole('button', { name: 'Mark seen up to here' }),
     )
@@ -344,7 +344,7 @@ describe('InboxTable — the personal seen cursor', () => {
   it('a local table filter makes the scope ambiguous: the action is disabled and says why', async () => {
     mount()
     const user = userEvent.setup()
-    await screen.findByRole('region', { name: 'Seen cursor' })
+    await screen.findByRole('region', { name: 'Seen mark' })
     expect(
       screen.getByRole('button', { name: 'Mark seen up to here' }),
     ).toBeEnabled()
@@ -360,7 +360,7 @@ describe('InboxTable — the personal seen cursor', () => {
 
   it('is offered only for the AUTHENTICATED mailbox: another user identity, or no delivery:write, disables it', async () => {
     mount({ me: USER_A })
-    await screen.findByRole('region', { name: 'Seen cursor' })
+    await screen.findByRole('region', { name: 'Seen mark' })
     expect(
       screen.getByRole('button', { name: 'Mark seen up to here' }),
     ).toBeDisabled()
@@ -372,7 +372,7 @@ describe('InboxTable — the personal seen cursor', () => {
   it('without delivery:write there is no cursor section at all', async () => {
     mount({ canWrite: false })
     await screen.findAllByText('Deploy window')
-    expect(screen.queryByRole('region', { name: 'Seen cursor' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Seen mark' })).toBeNull()
     expect(
       screen.queryByRole('button', { name: 'Mark seen up to here' }),
     ).toBeNull()
@@ -391,7 +391,7 @@ describe('InboxTable — the personal seen cursor', () => {
       />
     ))
     const user = userEvent.setup()
-    await screen.findByRole('region', { name: 'Seen cursor' })
+    await screen.findByRole('region', { name: 'Seen mark' })
     await user.click(
       screen.getByRole('button', { name: 'Mark seen up to here' }),
     )

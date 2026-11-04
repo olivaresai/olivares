@@ -81,7 +81,8 @@ const recordings = FEATURE_VIEWS.some((v) => v.id === 'recordings')
 describe('the router marks no second current link', () => {
   it.each([
     ['/', ['now'], []],
-    ['/communications/inbox', ['work'], ['/communications/inbox']],
+    // The inbox is a door into the one Communications room: the room's row is the current one.
+    ['/communications/inbox', ['work'], ['/communications']],
     ['/console/sources/diff', ['work'], ['/console/sources/diff']],
     // A door folded into a room (#2240) marks the room's place; AI tools has one page, so
     // no row is drawn.

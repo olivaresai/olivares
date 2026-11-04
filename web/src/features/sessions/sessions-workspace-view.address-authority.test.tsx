@@ -124,6 +124,22 @@ vi.mock('@/features/agentops/api', async (importOriginal) => ({
 
 import { SessionsWorkspaceView } from './sessions-workspace-view'
 
+vi.mock('@/lib/notify', () => ({ notify: vi.fn(), resolveNotice: vi.fn() }))
+import { notify } from '@/lib/notify'
+
+// What the page has told: its notices are toasts now, not strips above the work.
+const toldNotice = (condition: string) =>
+  vi
+    .mocked(notify)
+    .mock.calls.map(([n]) => n)
+    .findLast((n) => n.condition === condition)
+const toldLinkIssues = () =>
+  vi
+    .mocked(notify)
+    .mock.calls.map(([n]) => n)
+    .filter((n) => n.condition === undefined)
+    .map((n) => n.message)
+
 const LIVE_A: LiveDTO = {
   session_ref: 'rev-a',
   live_ref: 'rev-lr-a',
@@ -326,7 +342,11 @@ describe('a RETIRED address that comes back through Back', () => {
       }),
       'rev/retired/other-observed-row-excluded',
     ).toBeNull()
-    expect(screen.getByTestId('sessions-address-retired')).toBeVisible()
+    await waitFor(() =>
+      expect(toldNotice('sessions.address-retired')?.message).toMatch(
+        /no longer available to you/,
+      ),
+    )
     await waitFor(() => expect(fakeRouter.url()).toBe('/sessions?tab=table'))
 
     // BACK — onto the entry that still names A, with live:read still withdrawn. A
@@ -474,7 +494,7 @@ describe('opening the session that is beside', () => {
     )
     expect(fakeRouter.url()).not.toContain('beside')
     expect(screen.queryByRole('region', { name: 'Session beside' })).toBeNull()
-    expect(screen.queryByTestId('url-state-notice')).toBeNull()
+    expect(toldLinkIssues()).toEqual([])
   })
 
   it('leaves no beside pane behind when a table row opens that session', async () => {
@@ -486,7 +506,7 @@ describe('opening the session that is beside', () => {
       expect(fakeRouter.url()).toContain('session=sess%3Arev-b'),
     )
     expect(fakeRouter.url()).not.toContain('beside')
-    expect(screen.queryByTestId('url-state-notice')).toBeNull()
+    expect(toldLinkIssues()).toEqual([])
   })
 
   it('closes the detail sheet of the beside session when that session goes', async () => {

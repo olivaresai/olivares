@@ -1,0 +1,300 @@
+{
+  "acceptance": {
+    "draftNotice": "Este item está em rascunho, por isso os seus critérios ainda podem ser corrigidos. A chave do critério é uma identidade permanente e nunca é reatribuída.",
+    "lockedNotice": "Este item saiu do rascunho, por isso os critérios já não podem ser editados — apenas avaliados. A chave do critério é uma identidade permanente.",
+    "none": "Sem critérios de aceitação.",
+    "required": "Obrigatório",
+    "state": {
+      "pending": "Pendente",
+      "passed": "Aprovado",
+      "failed": "Reprovado",
+      "waived": "Dispensado"
+    }
+  },
+  "apply": {
+    "planning": "A planear a alteração. Nada é escrito neste passo.",
+    "command": "Comando",
+    "permission": "Permissão",
+    "eventType": "Evento",
+    "rowEffects": "Linhas que isto escreveria",
+    "noRowEffects": "Este comando não escreve linhas.",
+    "externalCalls": "Chamadas externas",
+    "planHash": "Hash do plano",
+    "keyTitle": "Chave de idempotência desta alteração",
+    "keyHelp": "Gerada uma só vez para esta intenção e reutilizada em cada nova tentativa. Guarde-a: se a rede falhar a meio da aplicação, repetir com esta mesma chave é o que impede que uma alteração se torne duas.",
+    "confirm": "Aplicar",
+    "applying": "A aplicar…",
+    "cancel": "Cancelar",
+    "close": "Fechar",
+    "appliedTitle": "Aplicada",
+    "replayedTitle": "Já aplicada",
+    "replayedBody": "Esta alteração já tinha sido aplicada. Nada foi alterado duas vezes.",
+    "commandId": "ID do comando",
+    "resultId": "ID do resultado",
+    "status": "Novo estado",
+    "etag": "Nova etiqueta de versão",
+    "auditSeq": "Sequência de auditoria",
+    "reread": "Ler novamente e comparar",
+    "retrySameKey": "Tentar novamente",
+    "failure": {
+      "conflict-version": "Outra pessoa alterou este item",
+      "version-required": "Falta a pré-condição de versão",
+      "conflict-idempotency": "Esta chave já foi usada para uma alteração diferente",
+      "conflict-domain": "O motor recusou este comando",
+      "unknown": "Não foi possível verificar",
+      "other": "A alteração falhou",
+      "plan-changed": "O plano já não está atualizado"
+    },
+    "conflictVersionBody": "O item mudou entre a leitura e a aplicação desta alteração, por isso a alteração foi recusada em vez de aplicada por cima. Leia-o novamente e compare antes de decidir — reenviar sobrescreveria o que a outra alteração fez.",
+    "versionRequiredBody": "Este comando requer a versão atual do item e nenhuma foi enviada. Volte a abrir o item para que a sua etiqueta de versão seja lida novamente.",
+    "conflictIdempotencyBody": "Esta chave de idempotência já foi usada com um corpo, uma versão ou um plano diferente. O motor recusou em vez de adivinhar a qual se referia. Inicie a alteração de novo para obter uma chave nova.",
+    "conflictDomainBody": "As próprias regras do núcleo recusaram este comando — por exemplo, uma transição ilegal ou um ciclo de dependências. Ler novamente não muda a resposta; o comando tem de mudar.",
+    "otherBody": "A alteração não foi concluída.",
+    "continue": "Continuar",
+    "inputIntro": "O motor exige isto antes de a alteração poder ser planeada. Sem isto, recusa o comando de imediato.",
+    "planChangedBody": "O plano mudou entre ser mostrado e ser aplicado, por isso nada foi escrito. Volte a abrir a ação para planear de novo e leia o novo plano antes de confirmar.",
+    "field": {
+      "code": {
+        "label": "Código",
+        "hint": "Um token curto para máquinas: letras minúsculas, dígitos, ponto, hífen ou sublinhado.",
+        "placeholder": "ex.: blocked_on_review"
+      },
+      "reason": {
+        "label": "Motivo",
+        "hint": "Texto livre, registado com a alteração. É o que outra sessão irá ler.",
+        "placeholder": "Porque está a acontecer"
+      },
+      "evidence_ref": {
+        "label": "Referência da evidência",
+        "hint": "Onde se encontra a evidência deste veredicto. Obrigatória para registar aprovado ou reprovado.",
+        "placeholder": "ex.: run://ci/12345"
+      },
+      "evidence_hash": {
+        "label": "Hash da evidência",
+        "hint": "Um resumo sha256 dessa evidência. Obrigatório para registar aprovado.",
+        "placeholder": "sha256:…"
+      },
+      "waiver_decision_id": {
+        "label": "Decisão de dispensa",
+        "hint": "A decisão que autoriza a dispensa deste critério, se existir.",
+        "placeholder": "ID da decisão (opcional)"
+      },
+      "holder_sid": {
+        "label": "Sessão titular",
+        "hint": "O ID de sessão canónico que irá deter a concessão. O motor recusa tudo o que não seja um.",
+        "placeholder": "o ID da sessão titular"
+      },
+      "fence": {
+        "label": "Fence",
+        "hint": "O fence da concessão sobre o qual está a atuar. O motor recusa qualquer valor abaixo de 1, e um desatualizado perde para o titular atual.",
+        "placeholder": "1"
+      },
+      "decision_id": {
+        "label": "Decisão",
+        "hint": "A decisão em que este ato se baseia. Reajustar um relógio exige evidência: o motor não o aceita sem nome.",
+        "placeholder": "o ID da decisão"
+      }
+    },
+    "details": "Detalhes",
+    "readyTitle": "Marcar «{{title}}» como pronto",
+    "actionTitle": "{{action}}: {{title}}",
+    "waitsFor": "«{{title}}» aguarda que «{{dependency}}» esteja concluído.",
+    "dependencyWaiting": "Este item aguarda que as suas dependências estejam concluídas."
+  },
+  "checks": {
+    "evidence": "evidência {{ref}}"
+  },
+  "common": {
+    "refresh": "Atualizar",
+    "loadMore": "Carregar mais"
+  },
+  "create": {
+    "action": "Novo item",
+    "title": "Novo item de trabalho",
+    "description": "Registe um item de trabalho de que é responsável. O plano é mostrado antes de qualquer escrita; depois de existir, pode oferecê-lo como transferência.",
+    "workspace": "Espaço de trabalho",
+    "workspaceNone": "Não tem nenhum espaço de trabalho disponível aqui. Escolha um no seletor de espaços de trabalho ou peça a um administrador.",
+    "workspaceError": "Não foi possível ler a lista de espaços de trabalho. Feche isto e tente novamente.",
+    "itemTitle": "Título",
+    "brief": "Resumo",
+    "briefHint": "O que é preciso fazer e porquê.",
+    "doneWhen": "Concluído quando",
+    "doneWhenHint": "O critério de aceitação que indica que o item está terminado."
+  },
+  "decisions": {
+    "title": "Decisões",
+    "subtitle": "Cada decisão tal como foi registada e as que estão em vigor agora.",
+    "view": {
+      "effective": "Em vigor",
+      "revoked": "Revogadas",
+      "history": "Histórico completo"
+    },
+    "historyNotice": "Este é o histórico só de acrescento. O motor não atribui o estado atual a estas linhas, por isso nenhuma está marcada como em vigor ou revogada — mude para uma das outras vistas para colocar essa pergunta.",
+    "state": {
+      "effective": "Em vigor",
+      "revoked": "Revogada",
+      "notAttributed": "Estado não atribuído nesta vista"
+    },
+    "scopeOf": "Âmbito de «{{item}}»",
+    "meta": "{{subject}} · decidida por {{actor}} · {{at}}",
+    "revoke": "Revogar",
+    "revokeTitle": "Revogar decisão",
+    "revokeBody": "A revogação fica registada como uma nova entrada; a decisão original nunca é eliminada.",
+    "empty": {
+      "effective": {
+        "title": "Sem decisões em vigor",
+        "body": "Nenhuma decisão está em vigor."
+      },
+      "revoked": {
+        "title": "Sem decisões revogadas",
+        "body": "Nenhuma decisão foi revogada."
+      },
+      "history": {
+        "title": "Sem decisões registadas",
+        "body": "Ainda nada foi decidido aqui."
+      }
+    }
+  },
+  "dependencies": {
+    "none": "Sem dependências."
+  },
+  "detail": {
+    "subtitle": "{{kind}} · versão {{version}}",
+    "applyTitle": "Aplicar alteração",
+    "owner": "Responsável",
+    "provenance": "Proveniência",
+    "priority": "Prioridade",
+    "blocked": "Bloqueado",
+    "terminal": "Resultado",
+    "etag": "Etiqueta de versão",
+    "tabs": {
+      "overview": "Resumo",
+      "acceptance": "Aceitação",
+      "dependencies": "Dependências",
+      "events": "Eventos",
+      "lease": "Concessão"
+    }
+  },
+  "events": {
+    "none": "Nenhum evento registado para este item."
+  },
+  "filters": {
+    "status": "Estado",
+    "allStatus": "Qualquer estado",
+    "priority": "Prioridade",
+    "allPriority": "Qualquer prioridade",
+    "archived": {
+      "label": "Arquivado",
+      "any": "Arquivados e não arquivados",
+      "false": "Só não arquivados",
+      "true": "Só arquivados"
+    },
+    "clear": "Limpar filtros"
+  },
+  "items": {
+    "title": "Itens de trabalho",
+    "subtitle": "Os filtros pesquisam todos os itens de trabalho, não só esta página.",
+    "empty": {
+      "title": "Nenhum item de trabalho corresponde",
+      "body": "Nenhum item de trabalho corresponde a estes filtros.",
+      "allTitle": "Ainda sem itens de trabalho",
+      "allBody": "Os itens de trabalho aparecem aqui à medida que as sessões, os agentes e as pessoas os registam.",
+      "start": "Iniciar uma sessão"
+    }
+  },
+  "lease": {
+    "none": "Sem concessão neste item.",
+    "holder": "Titular",
+    "state": "Estado",
+    "fence": "Fence",
+    "expires": "Expira",
+    "renewals": "Renovações",
+    "liveness": "Atividade",
+    "live": "Ativa",
+    "notLive": "Inativa",
+    "unknown": "Não foi possível verificar",
+    "reason": "Motivo",
+    "ttl": "TTL (segundos)",
+    "noWrite": "A sua função não pode alterar esta concessão.",
+    "noAdmin": "Assumir, revogar e reajustar exigem administração de concessões.",
+    "actions": {
+      "acquire": "Adquirir",
+      "renew": "Renovar",
+      "release": "Libertar",
+      "takeover": "Assumir",
+      "revoke": "Revogar",
+      "clockRebase": "Reajustar relógio"
+    },
+    "noRead": "A sua função não pode ler esta concessão."
+  },
+  "status": {
+    "draft": "Rascunho",
+    "ready": "Pronto",
+    "active": "Ativo",
+    "blocked": "Bloqueado",
+    "review": "Em revisão",
+    "completed": "Concluído",
+    "failed": "Falhou",
+    "canceled": "Cancelado",
+    "dependencyBlocked": "Dependência em aberto",
+    "archived": "Arquivado"
+  },
+  "stream": {
+    "open": "Em direto",
+    "connecting": "A religar…",
+    "closed": "Sem transmissão",
+    "error": "Transmissão interrompida",
+    "unavailableBody": "A lista no ecrã pode estar desatualizada e mais nada o irá indicar. Atualize para ler diretamente o armazenamento."
+  },
+  "subtitle": "Trabalho que as sessões e as pessoas partilham: itens, responsáveis, dependências, critérios de aceitação e decisões. Cada alteração é mostrada antes de ser aplicada.",
+  "tabs": {
+    "items": "Itens de trabalho",
+    "decisions": "Decisões"
+  },
+  "title": "Trabalho",
+  "transition": {
+    "item.ready": "Marcar como pronto",
+    "item.block": "Bloquear",
+    "item.unblock": "Desbloquear",
+    "item.submit": "Submeter para revisão",
+    "item.complete": "Concluir",
+    "item.fail": "Marcar como falhado",
+    "item.cancel": "Cancelar",
+    "item.archive": "Arquivar",
+    "noWrite": "A sua função não pode alterar este item.",
+    "noAdmin": "A sua função não pode marcar itens como falhados nem arquivá-los."
+  },
+  "truncation": {
+    "label": "Carregadas {{n}} linhas; há mais",
+    "hint": "Esta lista é paginada por keyset e o motor limita uma página a 200. Só as linhas carregadas são mostradas; use os filtros para a restringir."
+  },
+  "unavailable": {
+    "title": "Não foi possível verificar",
+    "body": "O motor não conseguiu concluir esta observação, por isso indica que o desfecho é desconhecido, em vez de apresentar um resultado. Não trate nada neste painel como confirmado.",
+    "retryHint": "O resultado é incerto. Tente novamente aqui para verificar em segurança sem repetir a alteração.",
+    "code": "Código do motor: {{code}}"
+  },
+  "verdict": {
+    "LIMPIO": {
+      "label": "Limpo",
+      "help": "O motor verificou e não encontrou nada de errado."
+    },
+    "ROTO": {
+      "label": "Com violação",
+      "help": "O motor verificou e encontrou uma violação de regra."
+    },
+    "NO_HE_PODIDO_MIRAR": {
+      "label": "Não foi possível verificar",
+      "help": "O motor NÃO conseguiu concluir a observação. Não é uma aprovação nem um resultado vazio — a resposta é desconhecida."
+    }
+  },
+  "handoff": {
+    "offer": "Oferecer transferência",
+    "offerHint": "Ofereça a responsabilidade por este item a um destinatário através de um canal. A responsabilidade só muda quando o destinatário aceitar.",
+    "noPermission": "A sua função não pode oferecer uma transferência."
+  },
+  "url": {
+    "invalidItem": "O endereço indica um ID de item que este ecrã não pode usar, por isso foi ignorado.",
+    "invalidFilter": "O endereço indica um filtro que este ecrã não oferece, por isso são mostrados todos os itens."
+  }
+}

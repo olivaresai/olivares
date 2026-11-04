@@ -1,7 +1,8 @@
 {
-  "title": "Inventory",
+  "title": "Discovered resources",
   "unnamed": "Unnamed",
-  "subtitle": "Every agent, session, MCP, model and identity discovered across your estate.",
+  "subtitle": "Every agent, session, MCP, model and identity that connectors discovered.",
+  "mcpPointer": "Add and govern MCP servers in MCP & skills",
   "refresh": "Refresh",
   "scope": {
     "note": "Tenant-wide inventory. The workspace selector does not filter this view."

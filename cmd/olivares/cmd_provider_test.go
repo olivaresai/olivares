@@ -461,3 +461,57 @@ func TestProviderRefVerbsRefuseABlankReferenceOnTheRealTree(t *testing.T) {
 		})
 	}
 }
+
+// `provider ls` prints a provider's name next to its reference, so every verb
+// that takes a <provider-ref> must act on the name it printed.
+func TestProviderVerbsAcceptTheNameTheListPrints(t *testing.T) {
+	var calls []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.Method+" "+r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/v1/m/sessions/providers":
+			_, _ = io.WriteString(w, `{"items":[`+
+				`{"provider_ref":"prv_glm","display_name":"GLM","kind":"openai_compatible","state":"active"},`+
+				`{"provider_ref":"prv_old","display_name":"Twin","kind":"anthropic","state":"revoked"},`+
+				`{"provider_ref":"prv_new","display_name":"Twin","kind":"anthropic","state":"active"},`+
+				`{"provider_ref":"prv_a","display_name":"Dup","kind":"anthropic","state":"active"},`+
+				`{"provider_ref":"prv_b","display_name":"Dup","kind":"gemini","state":"active"}],"has_more":false}`)
+		case "/v1/m/sessions/providers/prv_glm/test":
+			_, _ = io.WriteString(w, `{"provider_ref":"prv_glm","display_name":"GLM","state":"active","probe_state":"ok"}`)
+		case "/v1/m/sessions/providers/prv_new":
+			_, _ = io.WriteString(w, `{"provider_ref":"prv_new","display_name":"Twin","state":"active"}`)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = io.WriteString(w, `{"error":"provider not found"}`)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("HOME", t.TempDir())
+	run := func(args ...string) error {
+		calls = nil
+		_, _, err := execRoot(t, append(args, "--server", srv.URL, "--token", "t", "--tenant", "tenant-a")...)
+		return err
+	}
+
+	if err := run("provider", "test", "GLM"); err != nil {
+		t.Fatalf("provider test GLM: %v (calls %v)", err, calls)
+	}
+	if last := calls[len(calls)-1]; last != "POST /v1/m/sessions/providers/prv_glm/test" {
+		t.Fatalf("provider test GLM acted on %q, want the reference of the provider named GLM", last)
+	}
+	if err := run("provider", "get", "Twin"); err != nil {
+		t.Fatalf("a revoked twin must not hide the active provider of the same name: %v", err)
+	}
+	if err := run("provider", "get", "Dup"); exitcode.From(err) != exitcode.Conflict {
+		t.Fatalf("two active providers named Dup: exit %d, want %d (conflict): %v", exitcode.From(err), exitcode.Conflict, err)
+	}
+	err := run("provider", "test", "Nope")
+	if exitcode.From(err) != exitcode.NotFound || !strings.Contains(err.Error(), `No provider is named "Nope"`) ||
+		!strings.Contains(err.Error(), "olivares provider ls") {
+		t.Fatalf("a missing name must say so and point at the list: %v", err)
+	}
+	if err := run("provider", "get", "prv_new"); err != nil || len(calls) != 1 {
+		t.Fatalf("a prv_ reference goes straight to the engine, one call: err=%v calls=%v", err, calls)
+	}
+}

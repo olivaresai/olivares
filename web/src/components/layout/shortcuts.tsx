@@ -14,9 +14,11 @@ import {
 import { Kbd } from '@/components/ui/kbd'
 import { useViewAccess } from '@/features/navigation/authorization'
 import { FEATURE_VIEWS } from '@/features/registry'
+import { moveFirstList } from '@/lib/keybindings/list-navigation'
 import {
   auditKeybindings,
   chordKeys,
+  isInsideList,
   isTypingTarget,
   modalIsOpen,
   navLeader,
@@ -152,6 +154,9 @@ export function GlobalShortcuts() {
       // `command-menu.tsx` so the console has ONE keyboard authority and one table.
       const chordCommand = resolveBinding(KEYBINDINGS, e, {
         outsideField: !typing,
+        // A list surface's own handler owns its keys, so the shell's bare `j`/`k`
+        // row movement applies only when the event is outside one.
+        outsideList: !typing && !isInsideList(e.target),
         sessionHistory:
           !!history.current.previous && !helpOpen && !modalIsOpen(),
       })
@@ -220,6 +225,7 @@ export function GlobalShortcuts() {
       // second copy of that list here would go stale against the registry.
       if (e.metaKey || e.ctrlKey || e.altKey) return
       if (e.shiftKey) return
+
       if (helpOpen || modalIsOpen()) return
 
       const now = Date.now()
@@ -240,6 +246,15 @@ export function GlobalShortcuts() {
         const view = FEATURE_VIEWS.find((v) => v.id === binding.featureId)
         if (!view) return
         void navigate({ to: view.path as never })
+        return
+      }
+      // BARE `j`/`k` MOVE THE PAGE'S LIST: the first focusable grid receives the arrow the letter stands for, so its own handler — clamping,
+      // Enter-to-open — moves the row. Placed AFTER the armed-sequence consume, so an
+      // armed `g k` navigates to Knowledge and can never move a list.
+      if (chordCommand === 'list.next' || chordCommand === 'list.previous') {
+        if (e.repeat || e.isComposing || e.defaultPrevented) return
+        const arrow = chordCommand === 'list.next' ? 'ArrowDown' : 'ArrowUp'
+        if (moveFirstList(arrow)) e.preventDefault()
         return
       }
       if (chordCommand === 'session.new') {

@@ -123,7 +123,7 @@
     "add": "{{token}} zur Abfrage hinzufügen",
     "commands": "Suche und Befehle",
     "problem": {
-      "key": "{{token}} ist kein Hauptbuch-Filter. Verwenden Sie person:, action:, kind:, target:, since:, until: oder Wörter.",
+      "key": "{{token}} ist kein Hauptbuch-Filter. Verwenden Sie person:, action:, kind:, target:, tool:, folder:, since:, until: oder Wörter.",
       "time": "{{token}} ist keine Zeitangabe. Verwenden Sie 90m, 24h, 7d, 2w oder ein Datum wie 2026-10-20.",
       "person": "Niemand passt zu {{token}}. Verwenden Sie einen Namen, eine E-Mail oder user:<id>.",
       "several": "{{token}} passt zu mehreren Personen. Verwenden Sie den vollständigen Namen, eine E-Mail oder user:<id>.",

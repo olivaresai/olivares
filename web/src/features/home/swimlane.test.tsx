@@ -233,6 +233,76 @@ describe('the last-hour swimlane', () => {
     ).toBeNull()
   })
 
+  it('leads each row with its title: what every lane shares is not repeated on each row', async () => {
+    const claude = sessions.filter(
+      (s) => s.runs[0]?.provider_driver === 'claude',
+    )
+    renderIntel(
+      <Swimlane
+        sessions={claude}
+        approvals={approvals}
+        now={NOW}
+        onOpen={vi.fn()}
+      />,
+    )
+    const rows = await lanes()
+    expect(rows.length).toBeGreaterThan(1)
+    for (const row of rows)
+      expect(within(row).getByRole('link')).not.toHaveTextContent('Claude Code')
+    // The lane's sentence still names its tool.
+    expect(said('Refactor cart totals')).toContain('Claude Code')
+  })
+
+  it("says what each live session does now in words, and how long ago, not the engine's tool word", async () => {
+    const withStep = sessions.map((s, i) =>
+      i === sessions.findIndex((x) => x.live) && s.live
+        ? {
+            ...s,
+            live: {
+              ...s.live,
+              current_action: 'Bash',
+              current_resource: 'sed',
+            },
+          }
+        : s,
+    )
+    renderIntel(
+      <Swimlane
+        sessions={withStep}
+        approvals={approvals}
+        now={NOW}
+        onOpen={vi.fn()}
+      />,
+    )
+    const rows = await lanes()
+    const row = rows.find((r) => r.textContent?.includes('Running sed'))
+    expect(row).toBeDefined()
+    expect(screen.queryByText(/Bash · sed/)).toBeNull()
+  })
+
+  it('keeps only the hour and half-hour labels when the axis is narrow', async () => {
+    show()
+    await lanes()
+    // At 1280 px the axis of the two-column Home is about 110 px wide: six labels printed
+    // as one string ("0:10:20:30:40:50"). The axis is a size container; below 22rem only
+    // the :00 and :30 marks keep their label.
+    expect(screen.getByTestId('swimlane-plot')).toHaveClass('@container/axis')
+    const mark = (from: string, to: string) =>
+      screen.getByRole('button', { name: `${clock(from)} to ${clock(to)}` })
+    for (const [from, to] of [
+      ['16:00', '16:10'],
+      ['16:30', '16:40'],
+    ])
+      expect(mark(from!, to!)).not.toHaveClass('@max-[22rem]/axis:hidden')
+    for (const [from, to] of [
+      ['15:50', '16:00'],
+      ['16:10', '16:20'],
+      ['16:20', '16:30'],
+      ['16:40', '16:50'],
+    ])
+      expect(mark(from!, to!)).toHaveClass('@max-[22rem]/axis:hidden')
+  })
+
   it('ends the range of the last mark at now', async () => {
     show()
     await lanes()
@@ -408,7 +478,24 @@ describe('the last-hour swimlane', () => {
     )
     expect(
       await screen.findByText(
-        'Approvals could not be read, so waits for approval are not drawn.',
+        'Approvals are not read yet or could not be read, so waits for approval are not drawn.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('says some waits may be missing when the approvals are read only in part', async () => {
+    renderIntel(
+      <Swimlane
+        sessions={sessions}
+        approvals={[]}
+        approvalsRead
+        approvalsMore
+        now={NOW}
+      />,
+    )
+    expect(
+      await screen.findByText(
+        'Only part of the approvals is read, so some waits for approval may not be drawn.',
       ),
     ).toBeInTheDocument()
   })

@@ -369,6 +369,23 @@ func (m moduleData) Mutate(ctx context.Context, tenant model.TenantID, fn func(s
 	return m.st.Mutate(ctx, tenant, confineIfMarked(ctx, tenant, fn))
 }
 
+// DepartmentAuthority returns ctx for a handler whose route admitted the caller at
+// one department (mc.Resource.WorkspaceID, by CollectionScopeRef): a caller confined
+// to that department by its placement keeps its principal but not the store's
+// confinement, which refuses the tenant-wide ledgers (budget policies, the folder
+// registry) the department's administrator was admitted to act on. The admission is
+// the authority, so the handler must read and write only that department's rows. A
+// route that admitted no department, or an unconfined caller, gets ctx unchanged.
+func DepartmentAuthority(ctx context.Context, mc ModuleContext) context.Context {
+	if mc.Resource.WorkspaceID.IsZero() {
+		return ctx
+	}
+	if _, confined := mc.Principal.ConfinedWorkspaceIn(mc.Tenant); !confined {
+		return ctx
+	}
+	return context.WithValue(ctx, ctxKeyModuleBoundary, nil)
+}
+
 // reservedAPISegments are top-level path/namespace segments a module may not use.
 var reservedAPISegments = map[string]bool{
 	"v1": true, "m": true, "auth": true, "system": true, "setup": true,

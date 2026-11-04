@@ -70,6 +70,7 @@ export function PendingRestores() {
                   </span>
                 </div>
                 <Button
+                  data-trust-chrome=""
                   variant="primary"
                   size="sm"
                   onClick={() => setApprove(p)}
@@ -119,7 +120,7 @@ function ApproveDialog({
   return (
     <>
       <Dialog open onOpenChange={(o) => !o && onClose()}>
-        <DialogContent className="max-w-lg">
+        <DialogContent trust className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{t('pending.dialogTitle')}</DialogTitle>
             <DialogDescription>

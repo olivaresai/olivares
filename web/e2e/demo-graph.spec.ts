@@ -619,7 +619,7 @@ test.describe('embedded web over real seeded data', () => {
     expect((await ingestion.json()).engine_scope).toBe(true)
     await page.goto('/inventory')
     await expect(
-      page.getByRole('heading', { name: 'Inventory', exact: true }),
+      page.getByRole('heading', { name: 'Discovered resources', exact: true }),
     ).toBeVisible()
   })
 

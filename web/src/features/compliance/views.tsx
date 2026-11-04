@@ -24,6 +24,7 @@ export const VIEWS = [
     helpHref: '/reference/modules/xiii-compliance',
     icon: Archive,
     permission: 'compliance:retention:read',
+    changes: [{ permission: 'compliance:retention:admin' }],
     element: lazyView(RetentionView),
   },
 ] satisfies ViewEntry[]

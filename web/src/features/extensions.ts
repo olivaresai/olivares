@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import type { ReactNode } from 'react'
+import type { ComponentType, ReactNode } from 'react'
 import type { WorkspaceDTO, ProviderProfileDTO } from './agentops/types'
 import type { LaunchIdentityExtension } from './agentops/launch-identity'
 import type { RunOnExtension } from './agentops/run-on'
@@ -14,6 +14,10 @@ export const FEATURE_EXTENSIONS: readonly FeatureView[] = Object.freeze([])
 export const LAUNCH_IDENTITY_EXTENSION: LaunchIdentityExtension | undefined =
   undefined
 export const RUN_ON_EXTENSION: RunOnExtension | undefined = undefined
+/** The monitoring notice of recorded privileged views (recording is Business, docs/editions.md). */
+export const RECORDING_NOTICE_EXTENSION:
+  ComponentType<{ namespace: string; fallback?: ReactNode }> | undefined =
+  undefined
 /** Reviewed header absences for additional features, consumed by the action census. */
 export const NO_VERB_EXTENSIONS: ReadonlyArray<{ dir: string; why: string }> =
   Object.freeze([])

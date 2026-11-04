@@ -429,6 +429,13 @@
 /ja/2026-06/reference/permission-modes/ /ja/reference/permission-modes/ 301
 /de/2026-06/reference/permission-modes/ /de/reference/permission-modes/ 301
 /fr/2026-06/reference/permission-modes/ /fr/reference/permission-modes/ 301
+/2026-06/reference/providers-and-tools/ /reference/providers-and-tools/ 301
+/es/2026-06/reference/providers-and-tools/ /es/reference/providers-and-tools/ 301
+/zh/2026-06/reference/providers-and-tools/ /zh/reference/providers-and-tools/ 301
+/ru/2026-06/reference/providers-and-tools/ /ru/reference/providers-and-tools/ 301
+/ja/2026-06/reference/providers-and-tools/ /ja/reference/providers-and-tools/ 301
+/de/2026-06/reference/providers-and-tools/ /de/reference/providers-and-tools/ 301
+/fr/2026-06/reference/providers-and-tools/ /fr/reference/providers-and-tools/ 301
 /2026-06/reference/session-runtime-api/ /reference/session-runtime-api/ 301
 /es/2026-06/reference/session-runtime-api/ /es/reference/session-runtime-api/ 301
 /zh/2026-06/reference/session-runtime-api/ /zh/reference/session-runtime-api/ 301
@@ -443,6 +450,13 @@
 /ja/2026-06/reference/siem-telemetry-egress/ /ja/reference/siem-telemetry-egress/ 301
 /de/2026-06/reference/siem-telemetry-egress/ /de/reference/siem-telemetry-egress/ 301
 /fr/2026-06/reference/siem-telemetry-egress/ /fr/reference/siem-telemetry-egress/ 301
+/2026-06/reference/supported-tools/ /reference/supported-tools/ 301
+/es/2026-06/reference/supported-tools/ /es/reference/supported-tools/ 301
+/zh/2026-06/reference/supported-tools/ /zh/reference/supported-tools/ 301
+/ru/2026-06/reference/supported-tools/ /ru/reference/supported-tools/ 301
+/ja/2026-06/reference/supported-tools/ /ja/reference/supported-tools/ 301
+/de/2026-06/reference/supported-tools/ /de/reference/supported-tools/ 301
+/fr/2026-06/reference/supported-tools/ /fr/reference/supported-tools/ 301
 /2026-06/reference/api/* /reference/api/:splat 301
 /es/reference/api/* /reference/api/:splat 301
 /es/2026-06/reference/api/* /reference/api/:splat 301

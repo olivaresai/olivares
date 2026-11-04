@@ -18,6 +18,8 @@ import i18n from 'i18next'
 import { afterEach, describe, expect, it } from 'vitest'
 import { routeTree } from '@/app/routes'
 import { BUSINESS_BUILD } from '@/features/business-build'
+import type { ViewGate } from '@/features/navigation/model'
+import { settingsPlace, sidebarGroups } from '@/features/navigation/places'
 import { ROUTE_ALIASES } from '@/features/registry'
 import census from '@/features/route-census.json'
 // The title's root-closure import registers this dictionary too; the census reads it loaded.
@@ -57,8 +59,18 @@ describe('the document title of every census route', () => {
       (a) => a.from,
     ),
   )
+  // An area directory named like the place it redirects to is that place (/areas/work-communications
+  // opens /work, "Work & communications"): the same page, not a second one to tell apart.
+  const namedLikeLanding = new Set(
+    ROUTE_ALIASES.filter((a) => title(a.from) === title(a.to)).map(
+      (a) => a.from,
+    ),
+  )
   const titled = mounted.filter(
-    (p) => !(BUSINESS_BUILD && p === '/deploy') && !redirectsOnly.has(p),
+    (p) =>
+      !(BUSINESS_BUILD && p === '/deploy') &&
+      !redirectsOnly.has(p) &&
+      !namedLikeLanding.has(p),
   )
 
   it('is unique per mounted route', () => {
@@ -96,6 +108,29 @@ describe('the document title of every census route', () => {
     expect(title('/login/')).toBe('Sign in · Olivares AI')
     expect(title('/')).toBe('Now · Olivares AI')
   })
+
+  // The place you click is the place you land on. Every sidebar link opens a page whose top
+  // bar and tab title read the sidebar's own word, for whoever opens it: a fresh install has
+  // no Security or Health module, so its Security and Operations links open other pages.
+  const gates: [string, ViewGate][] = [
+    ['may open everything', () => true],
+    ['is on a fresh install', (v) => !['security', 'health'].includes(v.id)],
+  ]
+  it.each(gates)(
+    'names the page each sidebar place opens by the place for a person who %s',
+    (_who, gate) => {
+      const places = sidebarGroups(gate).flatMap((g) => g.places)
+      expect(places.length).toBeGreaterThan(10)
+      const wrong = [...places, settingsPlace()]
+        .map((p) => ({
+          place: p.id,
+          shown: pageLabel(t, p.path, p.search ?? {}, gate),
+          sidebar: t(`nav:places.${p.id}`),
+        }))
+        .filter((p) => p.shown !== p.sidebar)
+      expect(wrong).toEqual([])
+    },
+  )
 
   it('names a door by its own entrance, not the room it opens', () => {
     expect(title('/agentops')).toBe('Operate sessions · Olivares AI')

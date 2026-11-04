@@ -8,7 +8,7 @@
   "selectTitle": "Aucun espace de travail sélectionné",
   "selectPrompt": "Sélectionnez un espace de travail dans le rail de navigation pour ouvrir cet aperçu, ou allez à l'inventaire du locataire.",
   "selectPromptWorkspaceOnly": "Sélectionnez un espace de travail dans le rail de navigation pour ouvrir cet aperçu.",
-  "viewInventory": "Ouvrir l'inventaire",
+  "viewInventory": "Ouvrir les ressources découvertes",
   "agents": "Agents",
   "sessions": "Sessions",
   "resources": "Ressources",
@@ -46,5 +46,24 @@
     "truncationHint": "Ouvrez Sessions pour voir tous les dossiers.",
     "filter": "Trouver un dossier",
     "noMatch": "Aucun dossier ne correspond à « {{query}} »."
+  },
+  "connect": {
+    "title": "Copier des fichiers avec SFTP ou SCP",
+    "intro": "Obtenez une clé valable quelques minutes, puis utilisez n'importe quel client sftp ou scp. Elle n'atteint que ce dossier.",
+    "button": "Se connecter",
+    "connecting": "Connexion…",
+    "privateKey": "Clé privée",
+    "copyKey": "Copier la clé privée",
+    "copied": "Clé privée copiée",
+    "copyFailed": "Copie impossible. Sélectionnez la clé et copiez-la à la main.",
+    "keyHint": "Affichée une seule fois. Enregistrez-la sous {{file}}, puis exécutez chmod 600 {{file}}.",
+    "sftp": "Parcourir et copier avec sftp",
+    "scp": "Copier un fichier avec scp",
+    "hostKey": "Clé d'hôte à comparer quand votre client la demande :",
+    "expires": "Connectez-vous avant {{time}}. Ensuite, la clé n'ouvre plus de nouvelle connexion.",
+    "readOnly": "Cette clé ne peut que lire les fichiers : vous n'avez pas les droits d'écriture sur ce dossier.",
+    "stepUp": "Terminez l'étape de connexion que ce serveur exige, puis réessayez.",
+    "failed": "Impossible d'obtenir une clé. Réessayez.",
+    "statusFailed": "Impossible de vérifier si ce dossier est disponible par SFTP."
   }
 }

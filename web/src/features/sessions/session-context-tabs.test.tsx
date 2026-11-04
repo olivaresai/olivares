@@ -37,6 +37,7 @@ const ops = vi.hoisted(() => ({
   listProfiles: vi.fn(),
   getProfile: vi.fn(),
   getAccount: vi.fn(),
+  listAccounts: vi.fn(),
   runChanges: vi.fn(),
   gitStatus: vi.fn(),
   previewPorts: vi.fn(),
@@ -200,6 +201,7 @@ beforeEach(() => {
   ops.listProfiles.mockResolvedValue({ items: [], has_more: false })
   ops.getProfile.mockResolvedValue(UNNAMED_PROFILE)
   ops.getAccount.mockResolvedValue({ usage: [] })
+  ops.listAccounts.mockResolvedValue({ items: [], has_more: false })
   vi.mocked(sessionsApi.timelineById).mockResolvedValue({
     items: [],
     has_more: false,
@@ -237,6 +239,26 @@ describe('the side pane tabs', () => {
   it('shows the overview when the address names no evidence block', async () => {
     renderPane({ evidence: undefined })
     expect(await screen.findByTestId('session-overview')).toBeInTheDocument()
+  })
+
+  it('says once what the header and composer already say: tool, model, access and usage wait under Session, and no explainer stands in for an unselected line', async () => {
+    renderPane({
+      panel: 'context',
+      resolution: resolution([
+        { ...RUN, tool_mode: 'plan', model_ref: 'claude-opus-5-5' },
+      ]),
+    })
+    const facts = await screen.findByTestId('session-facts')
+    // The default view: what the conversation does not show.
+    expect(within(facts).getByText('State')).toBeVisible()
+    // The rest is one click away, closed.
+    const more = screen.getByTestId('session-facts-more') as HTMLDetailsElement
+    expect(more.open).toBe(false)
+    expect(within(more).getByText('Model')).not.toBeVisible()
+    // The composer's access chip says the mode; Details does not say it again.
+    expect(screen.queryByTestId('narrative-mode')).toBeNull()
+    // Nothing selected: no paragraph about what selecting would show.
+    expect(screen.queryByText('Selected line')).toBeNull()
   })
 
   it("shows the same five tabs when a build's extension object has no sessionPanels at all", async () => {
@@ -370,6 +392,19 @@ describe('the side pane tabs', () => {
     expect(await screen.findByTestId('terminal-tab')).toHaveTextContent(
       'ws-main',
     )
+  })
+
+  it('keeps the tab bar out of the part that scrolls, and lets the tab fill the height under it', async () => {
+    renderPane({ panel: 'terminal' })
+    const terminal = await screen.findByTestId('terminal-tab')
+    const body = screen.getByTestId('session-pane-body')
+    // The tab is a flex child of a body that fills the pane and scrolls on its own...
+    expect(body).toContainElement(terminal)
+    expect(body).toHaveClass('flex-1', 'min-h-0', 'overflow-y-auto')
+    // ...and the bar is not in it, so switching tabs never moves the bar.
+    const bar = document.querySelector('[data-slot="pane-tabs"]')
+    expect(bar).not.toBeNull()
+    expect(body).not.toContainElement(bar as HTMLElement)
   })
 
   it('offers no Terminal to a person without the right to write the folder', async () => {
@@ -536,7 +571,7 @@ describe('the side pane tabs', () => {
   })
 
   it.each(['claude', 'codex'])(
-    'offers Activity, after Context, for %s and reads it only once opened',
+    'opens a %s session on Activity, with Details one click away',
     async (driver) => {
       const user = userEvent.setup()
       const onPanel = vi.fn()
@@ -563,9 +598,15 @@ describe('the side pane tabs', () => {
         'Preview',
         'Terminal',
       ])
-      expect(ops.activity).not.toHaveBeenCalled()
-      await user.click(screen.getByRole('radio', { name: 'Activity' }))
-      expect(onPanel).toHaveBeenLastCalledWith('activity')
+      // What the tool is doing is in front, read from the engine.
+      expect(screen.getByRole('radio', { name: 'Activity' })).toHaveAttribute(
+        'aria-checked',
+        'true',
+      )
+      expect(await screen.findByTestId('session-activity')).toBeInTheDocument()
+      expect(ops.activity).toHaveBeenCalledWith('run-1', expect.anything())
+      await user.click(screen.getByRole('radio', { name: 'Details' }))
+      expect(onPanel).toHaveBeenLastCalledWith('context')
       // The address holds the tab in front.
       view.rerender(
         <SessionContextPane
@@ -573,11 +614,11 @@ describe('the side pane tabs', () => {
           evidence="checks"
           onExpandEvidence={() => {}}
           onPanel={onPanel}
-          panel="activity"
+          panel="context"
         />,
       )
-      expect(await screen.findByTestId('session-activity')).toBeInTheDocument()
-      expect(ops.activity).toHaveBeenCalledWith('run-1', expect.anything())
+      expect(await screen.findByTestId('context-scope')).toBeInTheDocument()
+      expect(screen.queryByTestId('session-activity')).toBeNull()
     },
   )
 
@@ -899,8 +940,22 @@ describe('the account usage read', () => {
     )
   })
 
-  it('is still made when the profile cannot be read', async () => {
+  it('is not made for an unnamed profile when the profile cannot be read', async () => {
+    // The account list holds named profiles only: the ref is not in it.
     auth.can = (p) => p !== 'sessions:profile:read'
+    renderPane()
+    await screen.findByTestId('session-facts')
+    await settle()
+    expect(ops.getAccount).not.toHaveBeenCalled()
+    expect(ops.getProfile).not.toHaveBeenCalled()
+  })
+
+  it('is made for a named account when the profile cannot be read', async () => {
+    auth.can = (p) => p !== 'sessions:profile:read'
+    ops.listAccounts.mockResolvedValue({
+      items: [{ account_ref: 'ppf_team', name: 'team', state: 'active' }],
+      has_more: false,
+    })
     renderPane()
     await waitFor(() =>
       expect(ops.getAccount).toHaveBeenCalledWith(
@@ -911,8 +966,12 @@ describe('the account usage read', () => {
     expect(ops.getProfile).not.toHaveBeenCalled()
   })
 
-  it('is still made when the profile read fails', async () => {
+  it('is made for a named account when the profile read fails', async () => {
     ops.getProfile.mockRejectedValue(new Error('boom'))
+    ops.listAccounts.mockResolvedValue({
+      items: [{ account_ref: 'ppf_team', name: 'team', state: 'active' }],
+      has_more: false,
+    })
     renderPane()
     await waitFor(() =>
       expect(ops.getAccount).toHaveBeenCalledWith(

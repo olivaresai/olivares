@@ -26,6 +26,7 @@ import { fold, viewById } from '@/features/navigation/model'
 import { TAB_PARAM } from '@/features/sessions/session-address'
 import { useAuth } from '@/lib/auth/context'
 import { useModuleOn } from '@/stores/modules'
+import { FolderConnect } from './folder-connect'
 import './i18n'
 
 /** Enough to see what sessions use; Sessions lists them all. */
@@ -204,6 +205,7 @@ function SessionFoldersList({
                 </SheetDescription>
               </SheetHeader>
               <WorkspaceWiki workspace={wiki} />
+              <FolderConnect tenant={tenant} folderRef={wiki.workspace_ref} />
             </>
           )}
         </SheetContent>

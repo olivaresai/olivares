@@ -36,7 +36,7 @@
     "density": "Dichte",
     "densityHint": "Kompakt zeigt mehr Zeilen; bequem lässt sich leichter lesen.",
     "language": "Sprache",
-    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어.",
+    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어, Українська, Português.",
     "time": "Uhrzeit",
     "timeHint": "Zeiten erscheinen in Ihrer Zone ({{zone}}). Aufzeichnungen und Exporte bleiben in UTC.",
     "clock24": "24 Stunden",

@@ -30,6 +30,7 @@
       "date": "Date",
       "filename": "Filename",
       "size": "Size",
+      "duration": "Duration",
       "engine": "Engine",
       "tenants": "Tenants",
       "notes": "Notes"
@@ -88,6 +89,9 @@
     "freeSpace": "Free space on target",
     "notAvailable": "Not available",
     "overdue": "Recovery point target exceeded",
+    "rtoMinutes": "Restore time target (minutes)",
+    "rtoExceeded": "The last restore test took longer than the {{minutes}} minute restore time target",
+    "restoreTook": "Restore test took {{seconds}} s",
     "age": "{{hours}} hours old",
     "offsiteLockMissing": "Bucket {{bucket}} does not lock new copies in `COMPLIANCE` mode, so this server's credential could delete them. Enable S3 Object Lock with a default `COMPLIANCE` retention, and prune with a separate credential.",
     "offsiteLockUnknown": "Could not read the Object Lock of bucket {{bucket}}, so these copies may not be protected from deletion."
@@ -165,6 +169,8 @@
     "tenants": "Tenants",
     "keys": "Sealed keys",
     "empty": "None",
+    "notIncluded": "Not in this backup",
+    "notIncludedHint": "These paths are not copied. Back them up yourself.",
     "loadFailed": "Failed to load the backup detail."
   },
   "empty": {

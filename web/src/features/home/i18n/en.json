@@ -62,7 +62,20 @@
     "waiting": "Waiting for approval",
     "needsYou": "Needs you",
     "idle": "Idle",
-    "approvalsUnread": "Approvals could not be read, so waits for approval are not drawn."
+    "approvalsUnread": "Approvals are not read yet or could not be read, so waits for approval are not drawn.",
+    "approvalsPartial": "Only part of the approvals is read, so some waits for approval may not be drawn.",
+    "step": {
+      "Bash": "Running {{what}}",
+      "Read": "Reading {{what}}",
+      "Edit": "Editing {{what}}",
+      "Write": "Writing {{what}}",
+      "Grep": "Searching for {{what}}",
+      "Glob": "Finding files {{what}}",
+      "WebFetch": "Reading {{what}}",
+      "WebSearch": "Searching the web for {{what}}",
+      "Task": "Working with an agent",
+      "Agent": "Working with an agent"
+    }
   },
   "summary": {
     "heading": "Summary",
@@ -89,11 +102,5 @@
   "state": {
     "pendingIdle": "Query not started — open to load",
     "pendingPaused": "Query paused — waiting to resume"
-  },
-  "proof": {
-    "verified": "Chain verified at {{time}}",
-    "entries_one": "{{n}} entry",
-    "entries_other": "{{n}} entries",
-    "broken": "Chain broken: open the Ledger"
   }
 }

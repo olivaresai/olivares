@@ -16,10 +16,10 @@
     "infrastructure": "Infrastructure"
   },
   "items": {
-    "estate": "Estate",
+    "estate": "Configured resources",
     "home": "Now",
     "onboarding": "Setup wizard",
-    "inventory": "Inventory",
+    "inventory": "Discovered resources",
     "sessions": "Sessions",
     "accessMap": "Access map",
     "reach": "Reach",
@@ -38,7 +38,6 @@
     "vault": "Vault",
     "claudePolicy": "Managed policy",
     "routinePolicies": "Routine policies",
-    "deploy": "Deployment",
     "gitPublication": "Git publication",
     "knowledge": "Knowledge",
     "catalog": "Catalog",
@@ -51,7 +50,6 @@
     "adoption": "Adoption",
     "evals": "Evals",
     "security": "Security",
-    "recordings": "Recordings",
     "compliance": "Compliance",
     "voice": "Voice",
     "sandbox": "Sandbox",
@@ -67,7 +65,6 @@
     "settings": "Settings",
     "workspace-templates": "Workspace templates",
     "eventing": "Webhooks & events",
-    "session-viewer": "Session viewer",
     "backups": "Backups",
     "updates": "Updates",
     "logs": "Logs",
@@ -93,10 +90,10 @@
     "truncated": "The list is incomplete — more workspaces exist than are loaded"
   },
   "descriptions": {
-    "estate": "Inspect configured resources and their relationships, including work item dependencies.",
+    "estate": "What you have set up, and how its parts depend on each other, work items included.",
     "home": "Estate overview and health at a glance",
     "onboarding": "Step-by-step deployment configuration",
-    "inventory": "Discover and catalog the agents, MCP servers and models that connectors observed.",
+    "inventory": "Agents, MCP servers and models that connectors have observed, and when each was last seen.",
     "sessions": "Start sessions and follow what each one does, including the ones Olivares finds",
     "accessMap": "What each agent reads and writes (R/RW)",
     "reach": "See which destinations each tool can reach, and which are waiting for approval.",
@@ -113,7 +110,6 @@
     "identity": "SSO, SCIM and the identities your agents use",
     "vault": "Your passwords, notes and authenticator codes",
     "claudePolicy": "Managed policy, hooks, MCP, sandbox and policy-as-code",
-    "deploy": "Provision agents and connect them to infrastructure",
     "gitPublication": "Push commits, open pull requests and merge through approved Git targets",
     "knowledge": "Knowledge bases, RAG and data lineage",
     "catalog": "Curated, approved agents and capabilities",
@@ -128,7 +124,6 @@
     "adoption": "Productivity, acceptance & model mix",
     "evals": "Quality, evals and regression",
     "security": "Guardrails, forensics and anomalies",
-    "recordings": "Privileged session recording and replay",
     "compliance": "Frameworks, controls and evidence",
     "voice": "Voice and realtime sessions",
     "sandbox": "Isolated agent testing and replay",
@@ -186,13 +181,15 @@
     "agentcoreExport": "AgentCore export · AgentCore",
     "sessions": "Sessions · Observe sessions · Operate sessions · Claude Code · agentops",
     "agentops": "Operate sessions · Claude Code · agentops · Claude Code operate portal",
-    "console": "Control console · Tenant administration"
+    "console": "Control console · Tenant administration",
+    "estate": "Estate",
+    "inventory": "Inventory"
   },
   "areas": {
     "infrastructure": {
       "label": "Infrastructure",
       "sections": {
-        "estate": "Inventory and workspaces"
+        "estate": "Resources and workspaces"
       }
     },
     "ai": {
@@ -298,6 +295,13 @@
     "draftSaveFailed": "Draft could not be saved in this tab. Keep this page open or copy your message before leaving.",
     "sendBackgroundHint": "Ctrl+Enter sends and keeps the draft ready for the next sentence.",
     "slashLabel": "Commands and skills",
+    "mentionLabel": "Files and folders",
+    "skillLabel": "Skills",
+    "mention": {
+      "loading": "Reading the session's folder…",
+      "failed": "The session's folder could not be read.",
+      "nomatch": "No file or folder starts with “{{query}}”."
+    },
     "slashOption": "{{name}}, {{i}} of {{n}}",
     "slashNoMatch": "No command matches “{{query}}”.",
     "slash": {
@@ -315,7 +319,8 @@
     },
     "sessionKeeps": "This session keeps {{value}}. A different choice starts a new session.",
     "startWithChoice": "Start a new session with this choice",
-    "askPlaceholder": "Ask anything, / for commands and skills",
+    "newWithOtherAccess": "New session with different access…",
+    "askPlaceholder": "Ask anything, @ for files and folders, / for commands and skills",
     "modelPicker": "Model: {{value}}",
     "effortPicker": "Effort: {{value}}",
     "accessPicker": "Access: {{value}}",
@@ -346,6 +351,7 @@
     }
   },
   "shell": {
+    "more": "More",
     "searchCommands": "Search and commands",
     "search": "Search",
     "stopAll": "Stop all",
@@ -448,6 +454,8 @@
     "work": "Work",
     "tools": "Tools",
     "control": "Control",
-    "admin": "Admin"
-  }
+    "admin": "Admin",
+    "organization": "Organization"
+  },
+  "readOnlyNotice": "You can read this page but not change it. An organization admin can."
 }

@@ -4,6 +4,9 @@
       "key": "claude",
       "name": "Claude Code",
       "name_stem": "claude",
+      "vendor": "anthropic",
+      "monogram": "CC",
+      "color": "#CA7152",
       "session": true,
       "bindings": [{ "kind": "anthropic", "egress": "configured-endpoint" }]
     },
@@ -11,17 +14,24 @@
       "key": "codex",
       "name": "Codex",
       "name_stem": "codex",
+      "vendor": "openai",
+      "monogram": "CX",
+      "color": "#129C6E",
       "session": true,
       "bindings": [
         { "kind": "openai", "egress": "configured-endpoint" },
         { "kind": "openai_compatible", "egress": "configured-endpoint" },
         { "kind": "ollama", "egress": "configured-endpoint" }
-      ]
+      ],
+      "refused_services": ["deepseek", "zai"]
     },
     {
       "key": "grok",
       "name": "Grok Build",
       "name_stem": "grok",
+      "vendor": "xai",
+      "monogram": "GB",
+      "color": "#888892",
       "session": true,
       "bindings": [{ "kind": "xai", "egress": "configured-endpoint" }]
     },
@@ -29,6 +39,9 @@
       "key": "opencode",
       "name": "OpenCode",
       "name_stem": "opencode",
+      "vendor": "opencode",
+      "monogram": "OC",
+      "color": "#8679F1",
       "session": true,
       "bindings": [
         { "kind": "anthropic", "egress": "vendor-default-only" },
@@ -42,6 +55,9 @@
       "key": "gemini-cli",
       "name": "Gemini CLI",
       "name_stem": "gemini",
+      "vendor": "gemini",
+      "monogram": "GC",
+      "color": "#5087E8",
       "session": true,
       "bindings": [{ "kind": "gemini", "egress": "vendor-default-only" }]
     },
@@ -49,6 +65,9 @@
       "key": "cursor",
       "name": "Cursor CLI",
       "name_stem": "cursor",
+      "vendor": "cursor",
+      "monogram": "CU",
+      "color": "#A3845D",
       "session": true,
       "bindings": []
     },
@@ -56,6 +75,9 @@
       "key": "ollama",
       "name": "Ollama",
       "name_stem": "ollama",
+      "vendor": "ollama",
+      "monogram": "OL",
+      "color": "#6B8F97",
       "session": false,
       "bindings": []
     }

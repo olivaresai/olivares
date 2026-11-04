@@ -401,6 +401,8 @@ describe('NowQueue — what needs a person', () => {
       <Queue state="ready" sessions={[]} approvals={[MIGRATION, NETWORK]} />,
     )
     const flagged = screen.getByTestId('now-flagged-request')
+    // Approve once is an accent button: the card is a trust surface.
+    expect(flagged.closest('[data-trust-chrome]')).not.toBeNull()
     expect(flagged).toHaveTextContent('pnpm db:migrate --env payments-staging')
     expect(
       await within(flagged).findByText(

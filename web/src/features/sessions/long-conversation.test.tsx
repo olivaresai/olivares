@@ -123,6 +123,9 @@ describe('a long conversation', () => {
         <SessionConversation run={run} composerId="composer" />
       </QueryClientProvider>,
     )
+    // A short list keeps the browser's scroll anchoring; the virtual list keeps the view in
+    // place itself, and both doing it moved the view every frame (#4128).
+    expect(screen.getByRole('log')).not.toHaveClass('[overflow-anchor:none]')
     act(() => {
       for (let i = 0; i < 2000; i++) push(i)
     })
@@ -131,6 +134,7 @@ describe('a long conversation', () => {
     )
     expect(rows.length).toBeGreaterThan(0)
     expect(rows.length).toBeLessThanOrEqual(120)
+    expect(screen.getByRole('log')).toHaveClass('[overflow-anchor:none]')
   })
 
   it('keeps the first turn of a view that stays open past MAX_FRAMES frames', () => {

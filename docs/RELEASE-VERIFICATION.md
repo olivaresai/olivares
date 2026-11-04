@@ -33,6 +33,11 @@ with an empty store and a fresh Chromium context. It uses the README's literal
 setup-token log filter and leaves Compose image selection unchanged. Before the
 browser opens, the running image and executable must match the candidate build;
 the binary version, source commit and public-key fingerprints must also match.
+Then the same executable runs a chat session (`scripts/session-journey-smoke.sh
+--large-output`, a stand-in `claude`, no vendor credential): the tool reads a 3 MiB
+file, the long frame must come through whole, the answer after it must arrive, and
+the session must stay alive. A session ended by one long output line fails the run
+before the browser opens.
 
 It runs on `vars.CI_RUNNER` (the shared self-hosted Docker daemon) or, when that
 is unset, on a GitHub-hosted runner; no step differs between them. Each run owns

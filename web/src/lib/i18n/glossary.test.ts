@@ -42,7 +42,6 @@ const zhWorkspace = '工作区' // language-data: zh word for a workspace
 const zhGovernance = '治理' // language-data: zh word for governance
 const zhCompliance = '合规' // language-data: zh word for compliance
 const zhExecute = '执行' // language-data: zh word for execute
-const zhEstate = '资产' // language-data: zh word for the Estate module label
 const zhEstateDomain = '资产域' // language-data: zh word for the estate in running text
 
 const frEnvironment = 'environnement' // language-data: fr word for an environment, rejected for the Estate
@@ -64,9 +63,35 @@ const frWorkspaceUnresolved = 'Espace de travail absent de la liste' // language
 const frComplianceColumn = 'Conformité' // language-data: fr pinned compliance column
 const frKey = 'Clé' // language-data: fr pinned cost centre key
 
+const ukProvider = 'провайдер' // language-data: uk word for a provider, rejected
+const ukGovernance = 'нагляд' // language-data: uk word for supervision, rejected for governance
+const ukEnvironment = 'середовищ' // language-data: uk stem of environment, rejected for the Estate
+const ukTyWords = 'ти|тебе|тобі|твій|твоя|твоє|твої' // language-data: uk informal register, rejected in a ви console
+const ukTy = new RegExp(
+  `(?<![\\p{L}\\p{N}_’])(?:${ukTyWords})(?![\\p{L}\\p{N}_’])`,
+  'iu',
+)
+const ptProvider = 'provedor' // language-data: pt word for a provider, rejected
+const ptGovernance = 'governan[çc]a' // language-data: pt Brazilian word for governance, rejected
+const ptEnvironment = 'ambiente' // language-data: pt word for an environment, rejected for the Estate
+// prettier-ignore
+const ptBrazilianWords = 'usu[aá]rios?|equipes?|telas?|salvar|compartilh\\p{L}*|gerenci\\p{L}*' // language-data: pt Brazilian vocabulary, rejected in a pt-PT console
+const ptBrazilianExample = 'O usuário' // language-data: pt Brazilian word, the rule's own example
+const ptBrazilian = new RegExp(
+  `(?<![\\p{L}\\p{N}_])(?:${ptBrazilianWords})(?![\\p{L}\\p{N}_])`,
+  'iu',
+)
+const ptTuWords = 'tu|teu|tua|teus|tuas|contigo' // language-data: pt informal register, rejected in a polite console
+const ptTu = new RegExp(
+  `(?<![\\p{L}\\p{N}_])(?:${ptTuWords})(?![\\p{L}\\p{N}_])`,
+  'iu',
+)
+const CYRILLIC = /\p{Script=Cyrillic}/u
+
 const PROVIDER = /\bproviders?\b/i
 const AGENT = /\bagents?\b/i
 const ESTATE = /\bestate\b/i
+const GOVERNANCE = /\bgovernance\b/i
 /** The English words the fr rules reject inside a translated sentence. */
 const WORKSPACE = /\bworkspaces?\b/i
 const COMPLIANCE = /\bcompliance\b/i
@@ -119,10 +144,15 @@ const LATIN_AGENT = /(?<![\w-])agents?(?![\w:.-])/i
 /** Text a translator does not write: placeholders and code spans. */
 const withoutCode = (text: string) => text.replace(/\{\{[^}]*\}\}|`[^`]*`/g, '')
 
-/** "Act as" is the proxy sense of the zh word for a proxy. */
+/**
+ * "Act as" is the proxy sense of the zh word for a proxy. The key belongs to the Business
+ * session viewer; the entry stays because a Business build assembles that file back in.
+ */
 const PROXY_SENSE = new Set(['session-viewer:detail.actAs'])
 /** A product name that keeps its English words inside a Chinese sentence. */
 const AGENT_PRODUCT_NAME = new Set(['rate-limits:caveats.managedAgents'])
+/** A precedence chain of identifiers, written the same in every language. */
+const AGENT_SPEC = new Set(['console:bindings.preview.algebra'])
 /** The one place a provider sentence is about a supplier as well. */
 const SUPPLIER_SENSE = new Set(['models:gpai.description'])
 /** Korean sentences where the English talks about a supplier, not the provider. */
@@ -197,8 +227,6 @@ const LANGUAGES: Record<string, Language> = {
       ['protocol-bindings:localKind.agent', zhAgent],
       ['sessions:context.workRoles.worker', zhAgent],
       ['sessions:context.workRoles.orchestrator', zhAgent],
-      ['nav:items.estate', zhEstate],
-      ['estate:title', zhEstate],
       ['backups:schedule.dualControlDescription', zhEstateDomain],
     ],
     englishAllowed: new Set([
@@ -282,7 +310,6 @@ const LANGUAGES: Record<string, Language> = {
       },
     ],
     pinned: [
-      ['nav:items.estate', 'Bestand'],
       ['nav:items.killswitch', 'Not-Aus'],
       ['nav:workspace.unresolved', 'Arbeitsbereich'],
       ['nav:personal.saveFailed', 'Ihrem Konto'],
@@ -348,14 +375,142 @@ const LANGUAGES: Record<string, Language> = {
       ['protocol-bindings:localKind.agent', '에이전트'],
       ['protocol-bindings:workspace.scope', '워크스페이스'],
       ['nav:items.providers', '프로바이더'],
-      ['nav:items.estate', '에스테이트'],
-      ['estate:title', '에스테이트'],
       ['compliance:retention.disclosure', '프로바이더'],
     ],
     englishAllowed: new Set([
       'catalog:editor.specPlaceholder',
       'catalog:admission.bundlePlaceholder',
       'settings:general.languageHint',
+    ]),
+  },
+  uk: {
+    rules: [
+      {
+        name: 'a provider is not called by the retired word',
+        bad: (en, own) =>
+          PROVIDER.test(en) && own.toLowerCase().includes(ukProvider),
+        example: ['Add a provider', ukProvider],
+      },
+      {
+        name: 'governance is not supervision',
+        bad: (en, own) =>
+          GOVERNANCE.test(en) && own.toLowerCase().includes(ukGovernance),
+        example: ['Governance', ukGovernance],
+      },
+      {
+        name: 'the estate is not an environment',
+        bad: (en, own) =>
+          ESTATE.test(en) &&
+          !/environment/i.test(en) &&
+          own.toLowerCase().includes(ukEnvironment),
+        example: ['Estate', ukEnvironment],
+      },
+      {
+        name: 'the reader is ви, not ти',
+        bad: (_en, own) => ukTy.test(own),
+        example: ['The fence you act on', 'Рубіж, на який ти діє'],
+      },
+      {
+        name: 'an agent is not left in English inside a sentence',
+        bad: (en, own, id) =>
+          AGENT.test(en) &&
+          !AGENT_PRODUCT_NAME.has(id) &&
+          !AGENT_SPEC.has(id) &&
+          CYRILLIC.test(own) &&
+          LATIN_AGENT.test(withoutCode(own)),
+        example: ['Agent artifacts', 'Agent артефакти'],
+      },
+    ],
+    pinned: [
+      ['nav:items.providers', 'Постачальник'],
+      ['finops:statements.provider', 'Постачальник'],
+      ['models:tabs.estate', 'Парк'],
+      ['settings:modules.names.governance', 'Врядування'],
+      ['nav:items.compliance', 'Відповідність'],
+      ['nav:items.killswitch', 'Kill switch'],
+      ['console:activation.title', 'Business'],
+      ['nav:shell.rail.session', 'Сесія'],
+      ['providers:create.apiKey', 'Ключ API'],
+      ['nav:items.workspaceDashboard', 'Робочий простір'],
+    ],
+    englishAllowed: new Set([
+      'catalog:editor.specPlaceholder',
+      'catalog:admission.bundlePlaceholder',
+      'settings:general.languageHint',
+      'adoption:boundary.providers.claude-platform-aws',
+      'identity:references.labels.prm',
+      'identity:references.labels.asMetadata',
+      'identity:references.labels.oauthSecurityBcp',
+      'identity:references.labels.workloadIdentity',
+      'identity:references.labels.externalKeys',
+      // A JSON example the operator edits: the keys are data.
+      'evals:ab.outputsPlaceholder',
+    ]),
+  },
+  pt: {
+    rules: [
+      {
+        name: 'a provider is not called by the retired word',
+        bad: (en, own) =>
+          PROVIDER.test(en) && own.toLowerCase().includes(ptProvider),
+        example: ['Add a provider', ptProvider],
+      },
+      {
+        name: 'governance is governação, not governança',
+        bad: (en, own) =>
+          GOVERNANCE.test(en) && new RegExp(ptGovernance, 'i').test(own),
+        example: ['Governance', 'Governança'],
+      },
+      {
+        name: 'the estate is not an environment',
+        bad: (en, own) =>
+          ESTATE.test(en) &&
+          !/environment/i.test(en) &&
+          own.toLowerCase().includes(ptEnvironment),
+        example: ['Estate', 'Ambiente'],
+      },
+      {
+        name: 'the words are European Portuguese, not Brazilian',
+        bad: (_en, own) => ptBrazilian.test(own),
+        example: ['The user', ptBrazilianExample],
+      },
+      {
+        name: 'the reader is addressed politely, not with tu',
+        bad: (_en, own) => ptTu.test(own),
+        example: ['Your account', 'A tua conta'],
+      },
+      {
+        name: 'an agent is not left in English inside a sentence',
+        bad: (en, own, id) =>
+          AGENT.test(en) &&
+          !AGENT_PRODUCT_NAME.has(id) &&
+          !own.startsWith('/') &&
+          LATIN_AGENT.test(withoutCode(own)),
+        example: ['Agent artifacts', 'Agent artefactos'],
+      },
+    ],
+    pinned: [
+      ['nav:items.providers', 'Fornecedor'],
+      ['finops:statements.provider', 'Fornecedor'],
+      ['models:tabs.estate', 'Parque'],
+      ['settings:modules.names.governance', 'Governação'],
+      ['nav:items.compliance', 'Conformidade'],
+      ['nav:items.killswitch', 'Kill switch'],
+      ['console:activation.title', 'Business'],
+      ['nav:shell.rail.session', 'Sessão'],
+      ['providers:create.apiKey', 'Chave de API'],
+      ['nav:items.workspaceDashboard', 'Espaço de trabalho'],
+    ],
+    englishAllowed: new Set([
+      'catalog:editor.specPlaceholder',
+      'catalog:admission.bundlePlaceholder',
+      'settings:general.languageHint',
+      'adoption:boundary.providers.claude-platform-aws',
+      'identity:references.labels.prm',
+      'identity:references.labels.asMetadata',
+      'identity:references.labels.oauthSecurityBcp',
+      'identity:references.labels.workloadIdentity',
+      'identity:references.labels.externalKeys',
     ]),
   },
   fr: {
@@ -409,8 +564,6 @@ const LANGUAGES: Record<string, Language> = {
       ['settings:title', 'Paramètres'],
       ['common:commandPalette.settingsGroup', 'Paramètres'],
       ['nav:items.settings', 'Paramètres'],
-      ['nav:items.estate', 'Parc'],
-      ['estate:title', 'Parc'],
       ['models:tabs.estate', 'Parc'],
       ['nav:workspace.unresolved', frWorkspaceUnresolved],
       ['nav:items.workspace-templates', 'Modèles d’espace de travail'],

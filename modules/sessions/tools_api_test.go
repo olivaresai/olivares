@@ -6,12 +6,16 @@ package sessions
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"regexp"
+	"strconv"
 	"testing"
 
+	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/driverfacts"
 )
@@ -58,8 +62,9 @@ func TestToolsReadIsTheDriverTable(t *testing.T) {
 	}
 	for i, f := range all {
 		row, _ := tools[i].(map[string]any)
-		if row["key"] != f.Key || row["name"] != f.Name || row["name_stem"] != f.NameStem() || row["session"] != f.Session {
-			t.Fatalf("row %d = %v, want %s %q stem %q session %v", i, row, f.Key, f.Name, f.NameStem(), f.Session)
+		if row["key"] != f.Key || row["name"] != f.Name || row["name_stem"] != f.NameStem() || row["session"] != f.Session ||
+			row["vendor"] != f.Vendor || row["monogram"] != f.Monogram || row["color"] != f.Color {
+			t.Fatalf("row %d = %v, want %s %q stem %q session %v vendor %q mark %q %q", i, row, f.Key, f.Name, f.NameStem(), f.Session, f.Vendor, f.Monogram, f.Color)
 		}
 		bindings, _ := row["bindings"].([]any)
 		if len(bindings) != len(f.Bindings) {
@@ -87,5 +92,77 @@ func TestToolsConsoleFixtureIsTheEngineAnswer(t *testing.T) {
 	if got := toolsAnswer(t); !reflect.DeepEqual(got, fixture) {
 		want, _ := json.MarshalIndent(got, "", "  ")
 		t.Fatalf("%s is not the engine's answer; write this:\n%s", toolsFixture, want)
+	}
+}
+
+// themeBackgrounds reads the backgrounds a mark sits on (canvas, surface, raised,
+// muted) of every console theme from the console's own token file.
+func themeBackgrounds(t *testing.T) []string {
+	t.Helper()
+	raw, err := os.ReadFile("../../web/src/styles/tokens.css")
+	if err != nil {
+		t.Fatalf("read the console tokens: %v", err)
+	}
+	m := regexp.MustCompile(`--(?:canvas|surface|raised|muted): (#[0-9a-fA-F]{6});`).FindAllStringSubmatch(string(raw), -1)
+	if len(m) < 8 {
+		t.Fatalf("found %d theme backgrounds, want the light and dark themes' four each", len(m))
+	}
+	out := make([]string, 0, len(m))
+	for _, v := range m {
+		out = append(out, v[1])
+	}
+	return out
+}
+
+// luminance is the WCAG relative luminance of a #rrggbb color.
+func luminance(hex string) float64 {
+	var l float64
+	for i, w := range []float64{0.2126, 0.7152, 0.0722} {
+		v, _ := strconv.ParseUint(hex[1+2*i:3+2*i], 16, 8)
+		c := float64(v) / 255
+		if c <= 0.04045 {
+			c /= 12.92
+		} else {
+			c = math.Pow((c+0.055)/1.055, 2.4)
+		}
+		l += w * c
+	}
+	return l
+}
+
+func contrast(a, b string) float64 {
+	la, lb := luminance(a), luminance(b)
+	return (math.Max(la, lb) + 0.05) / (math.Min(la, lb) + 0.05)
+}
+
+// Every tool and preset has one mark: one or two capitals and a color that keeps the
+// 3:1 non-text contrast against every background of both console themes and under its
+// white letters.
+func TestCatalogIdentityContrast(t *testing.T) {
+	t.Parallel()
+	backgrounds := append(themeBackgrounds(t), "#ffffff")
+	mark := regexp.MustCompile(`^[A-Z]{1,2}$`)
+	color := regexp.MustCompile(`^#[0-9A-F]{6}$`)
+	type identity struct{ who, monogram, color string }
+	var all []identity
+	for _, f := range driverfacts.All() {
+		all = append(all, identity{f.Key, f.Monogram, f.Color})
+		if f.Vendor == "" {
+			t.Errorf("tool %s has no vendor", f.Key)
+		}
+	}
+	for _, p := range modelprovider.Presets() {
+		all = append(all, identity{p.Ref, p.Monogram, p.Color})
+	}
+	for _, id := range all {
+		if !mark.MatchString(id.monogram) || !color.MatchString(id.color) {
+			t.Errorf("%s: mark %q color %q, want one or two capitals and #RRGGBB", id.who, id.monogram, id.color)
+			continue
+		}
+		for _, bg := range backgrounds {
+			if c := contrast(id.color, bg); c < 3 {
+				t.Errorf("%s: %s on %s is %.2f:1, want 3:1", id.who, id.color, bg, c)
+			}
+		}
 	}
 }

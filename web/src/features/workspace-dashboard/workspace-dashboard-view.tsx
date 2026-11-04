@@ -25,7 +25,6 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { cuentaConSuelo } from './count-floor'
 import { workspaceDashboardApi, workspaceDashboardKeys } from './api'
 import { SessionFolders } from './session-folders'
-import { WorkspaceContents } from './workspace-contents'
 import './i18n'
 
 /** Inventory is offered only where it opens: its module runs and the principal may read it. */
@@ -130,7 +129,6 @@ function WorkspaceDashboard({
   tenant: string | null
   t: ReturnType<typeof useTranslation>['t']
 }) {
-  const auth = useAuth()
   const inventoryOffered = useInventoryOffered()
   const summaryQ = useQuery({
     queryKey: workspaceDashboardKeys.summary(tenant, workspaceId),
@@ -151,19 +149,28 @@ function WorkspaceDashboard({
   })
 
   const s = summaryQ.data
-  const title = s?.name || workspaceName || t('workspaceDashboard:title')
+  // The heading is the page's (the sidebar's place heads it); the workspace this is says
+  // which one in the subtitle.
+  const name = s?.name || workspaceName
 
   return (
     <IntelPage
       icon={Layers}
-      title={title}
+      title={t('workspaceDashboard:title')}
       description={
-        s?.slug ? (
+        name || s?.slug ? (
           <span className="flex min-w-0 items-center gap-2 text-caption text-muted-foreground">
-            <span className="truncate" title={s.slug}>
-              {s.slug}
-            </span>
-            {s.is_default && (
+            {name ? (
+              <span className="truncate font-medium text-text" title={name}>
+                {name}
+              </span>
+            ) : null}
+            {s?.slug ? (
+              <span className="truncate" title={s.slug}>
+                {s.slug}
+              </span>
+            ) : null}
+            {s?.is_default && (
               <Badge variant="neutral">
                 {t('workspaceDashboard:defaultBadge')}
               </Badge>
@@ -218,10 +225,6 @@ function WorkspaceDashboard({
           }
         />
       </StatGrid>
-
-      {tenant && auth.can('tenant:admin') && (
-        <WorkspaceContents tenant={tenant} workspaceId={workspaceId} />
-      )}
 
       <SessionFolders tenant={tenant} />
 

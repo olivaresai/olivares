@@ -15,6 +15,10 @@ import { evalsKeys } from './api'
 import { EvalsView } from './evals-view'
 import { suitesFixture } from './fixtures'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1', can: () => true }),
 }))

@@ -36,8 +36,10 @@ func TestStartRecoversWaitingLaunchesAfterRestart(t *testing.T) {
 			original.QueuedCredentialCapture = issuer.BindQueuedCredential
 			refs := make(map[model.TenantID][]string)
 			for _, tenant := range tenants {
-				for range 2 {
-					response := h.doJSON("POST", "/v1/m/sessions/runs", admin, map[string]any{"provider_profile_ref": ensureRuntimeTestProfileRef(t, h.m, tenant), "name": "restart approval"}, tenantHdr(tenant))
+				for i := range 2 {
+					// Each waiting session holds its name, so each one gets its own.
+					name := fmt.Sprintf("restart approval %d", i)
+					response := h.doJSON("POST", "/v1/m/sessions/runs", admin, map[string]any{"provider_profile_ref": ensureRuntimeTestProfileRef(t, h.m, tenant), "name": name}, tenantHdr(tenant))
 					if response.code != http.StatusAccepted || response.body["state"] != stateWaitingApproval {
 						t.Fatalf("queue launch = %d %s", response.code, response.raw)
 					}

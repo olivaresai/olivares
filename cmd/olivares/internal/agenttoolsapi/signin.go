@@ -82,18 +82,18 @@ var statusTimeout = 15 * time.Second
 var slowStatusRead = 5 * time.Second
 
 // statusOutcome names how a status read ended. A caller that left is "canceled"; a tool
-// that answered but not in a form the engine reads is "unrecognized" (the console shows it
-// as signed out), which no error reports.
+// that answered but not in a form the engine reads is "unrecognized", whose error says only
+// that the status could not be read.
 func statusOutcome(err error, unrecognized bool) string {
 	switch {
 	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, exec.ErrWaitDelay):
 		return "timeout"
 	case errors.Is(err, context.Canceled):
 		return "canceled"
-	case err != nil:
-		return "failed"
 	case unrecognized:
 		return "unrecognized"
+	case err != nil:
+		return "failed"
 	}
 	return "ok"
 }
@@ -157,13 +157,19 @@ type SignInStatus struct {
 	Plan       string  `json:"plan,omitempty"`
 	AccountRef string  `json:"account_ref,omitempty"`
 	Pending    *SignIn `json:"pending,omitempty"`
+	// Reason says why a tool the person thinks is signed in cannot run a session here,
+	// when the tool's own answers show why; absent otherwise.
+	Reason string `json:"reason,omitempty"`
 
 	// Methods are the official login methods the tool offers; absent for a tool with one.
 	Methods []driverfacts.LoginMethodInfo `json:"methods,omitempty"`
 
 	// unrecognized: the tool answered in a form this reader does not know, which is
-	// not the same as "not signed in" (the provider snapshot reports it as an error).
+	// not the same as "not signed in": the read returns errSignInStatus.
 	unrecognized bool
+	// serverHome is the configuration home of the engine user's own login, set when
+	// that login is the answer (readLoginStatus); never sent to a client.
+	serverHome string
 }
 
 var (
@@ -368,6 +374,26 @@ func (m *Module) SetLoginHome(f LoginHomeFunc) {
 	m.mu.Unlock()
 }
 
+// SetServerLoginOpen wires who may use a tool already signed in for the engine's
+// own user (the composition root).
+func (m *Module) SetServerLoginOpen(open func(context.Context, model.TenantID) bool) {
+	m.mu.Lock()
+	m.serverLoginOpen = open
+	m.statusReads = nil
+	m.mu.Unlock()
+}
+
+// ServerLoginHome is the configuration home of the engine user's own login when a new
+// session of this tool and organization runs on it, and otherwise why that login cannot
+// run one, when the tool's answers show why. Both are empty for any other case.
+func (m *Module) ServerLoginHome(ctx context.Context, tenant model.TenantID, driver string) (configHome, unusable string) {
+	st, err := m.readLoginStatus(ctx, tenant, driver, "")
+	if err != nil {
+		return "", ""
+	}
+	return st.serverHome, st.Reason
+}
+
 // OnSignedIn wires what a confirmed sign-in tells the rest of the engine (the
 // composition root): the models module refreshes that tenant's model lists.
 func (m *Module) OnSignedIn(f func(model.TenantID)) {
@@ -378,10 +404,9 @@ func (m *Module) OnSignedIn(f func(model.TenantID)) {
 
 // toolEnv is the child's whole environment: the tenant's login home the product
 // created, PATH, the tool's configuration directory inside that home and the
-// host's way out (hostNetworkEnv), and nothing else. first-hour check: it was the ENGINE
-// USER's home (~/.claude), so a fresh install read, and would have used, a vendor
-// login nobody gave the product. The engine's own HOME, CLAUDE_CONFIG_DIR,
-// CODEX_HOME or API keys never reach it.
+// host's way out (hostNetworkEnv), and nothing else. The engine's own HOME,
+// CLAUDE_CONFIG_DIR, CODEX_HOME or API keys never reach it; the engine user's own
+// login is read apart, under the node's rule (readLoginStatus).
 func (m *Module) toolEnv(ctx context.Context, tenant model.TenantID, driver, accountRef string) (env []string, configDir string, err error) {
 	m.mu.Lock()
 	loginHome := m.loginHome
@@ -492,6 +517,91 @@ func (m *Module) readStatus(ctx context.Context, tenant model.TenantID, driver, 
 	return st, err
 }
 
+// readLoginStatus is the login a session of this tool and organization runs on: the
+// organization's own (readStatus), otherwise the one the tool already has for the
+// engine's user, where the node's rule allows it. A sign-in flow reads readStatus: this
+// answer never completes one.
+func (m *Module) readLoginStatus(ctx context.Context, tenant model.TenantID, driver, accountRef string) (SignInStatus, error) {
+	st, err := m.readStatus(ctx, tenant, driver, accountRef)
+	if err != nil || st.SignedIn || !st.Installed || accountRef != "" {
+		return st, err
+	}
+	m.mu.Lock()
+	open := m.serverLoginOpen
+	m.mu.Unlock()
+	if open == nil || (driver != "claude" && driver != "codex") || !open(ctx, tenant) {
+		return st, nil
+	}
+	server, err := m.readServerLogin(ctx, tenant, st)
+	if err != nil { // The organization's answer stands; readNativeStatus logged this read.
+		return st, nil
+	}
+	return server, nil
+}
+
+// readServerLogin asks the tool about the engine user's own login, under what a session on
+// it runs with: its own home named by its own variable. Claude Code and Codex keep their
+// login there, and the session's HOME is the product's. The tool answers; the engine opens
+// no file of it and keeps nothing. A login that is not there is not signed in, and its
+// home is not created.
+func (m *Module) readServerLogin(ctx context.Context, tenant model.TenantID, st SignInStatus) (SignInStatus, error) {
+	home, configDir, err := serverLoginDir(st.Driver)
+	if err != nil {
+		return st, err
+	}
+	facts, _ := driverfacts.Lookup(st.Driver)
+	if info, err := os.Stat(configDir); err != nil || !info.IsDir() {
+		return st, nil
+	}
+	env := []string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), "LANG=C.UTF-8", "TERM=dumb", "NO_COLOR=1", facts.ConfigHomeEnv + "=" + configDir}
+	st.serverHome = configDir
+	read, err := m.readCachedStatus(ctx, tenant, st, m.program(st.Driver), configDir, append(env, hostNetworkEnv()...))
+	if err != nil {
+		return st, err
+	}
+	if !read.SignedIn {
+		read.serverHome = ""
+		if st.Driver == "claude" {
+			// Signed in only with its settings on: the tool says so, and no governed session can
+			// use it. Its answer is kept as a yes or no; the settings themselves are not read.
+			st.serverHome = ""
+			if withSettings, err := m.readCachedStatus(ctx, tenant, st, m.program(st.Driver), configDir, append(env, hostNetworkEnv()...)); err == nil && withSettings.SignedIn {
+				read.Reason = claudeSettingsOnlyLogin
+			}
+		}
+	}
+	return read, nil
+}
+
+// claudeSettingsOnlyLogin is why a Claude Code that logs in only through the user's
+// settings cannot run a session here.
+const claudeSettingsOnlyLogin = "Claude Code authentication exists only in user settings, which governed sessions disable; sign in through AI tools or add an Anthropic key in Providers."
+
+// serverLoginDir is where the tool keeps the login it has for the engine's own user.
+func serverLoginDir(driver string) (home, configDir string, err error) {
+	if home, err = os.UserHomeDir(); err != nil {
+		return "", "", err
+	}
+	facts, _ := driverfacts.Lookup(driver)
+	return home, filepath.Join(home, facts.ConfigDir), nil
+}
+
+// isServerLoginDir reports the configuration home of that login, through links. Only
+// paths are compared; no file under it is opened.
+func isServerLoginDir(driver, dir string) bool {
+	_, own, err := serverLoginDir(driver)
+	if err != nil {
+		return false
+	}
+	if real, err := filepath.EvalSymlinks(own); err == nil {
+		own = real
+	}
+	if real, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = real
+	}
+	return filepath.Clean(dir) == filepath.Clean(own)
+}
+
 func (m *Module) readStatusUnlogged(ctx context.Context, tenant model.TenantID, driver, accountRef string) (SignInStatus, error) {
 	out := SignInStatus{Driver: driver, AccountRef: accountRef}
 	program := m.program(driver)
@@ -506,6 +616,9 @@ func (m *Module) readStatusUnlogged(ctx context.Context, tenant model.TenantID, 
 		return out, nil
 	}
 	out.Installed = true
+	if accountRef != "" && isServerLoginDir(driver, configDir) {
+		out.serverHome = configDir // A profile on it reads as its session would.
+	}
 	return m.readResolvedStatus(ctx, tenant, out, program, configDir, env)
 }
 
@@ -528,10 +641,14 @@ func (m *Module) readResolvedStatus(ctx context.Context, tenant model.TenantID, 
 }
 
 // readNativeStatus runs the tool's own status command, logging it when it fails or is slow.
+// An answer it cannot recognize is an error, never "not signed in", for every reader.
 func (m *Module) readNativeStatus(ctx context.Context, out SignInStatus, program, configDir string, env []string) (SignInStatus, error) {
 	started := time.Now()
 	st, err := m.runNativeStatus(ctx, out, program, configDir, env)
 	logStatusRead("tool sign-in status process", out.Driver, started, err, st.unrecognized)
+	if err == nil && st.unrecognized {
+		err = errSignInStatus
+	}
 	return st, err
 }
 
@@ -583,6 +700,11 @@ func (m *Module) runNativeStatus(ctx context.Context, out SignInStatus, program,
 		return out, errSignInStatus
 	}
 	args := facts.StatusArgs
+	if driver == "claude" && out.serverHome != "" {
+		// A governed session reads none of the user's settings (ConfigureClaudeHookPEP), so a
+		// login only in them is one it cannot use: the tool answers for the same sources.
+		args = append([]string{"--setting-sources", ""}, args...)
+	}
 	env = readEnv(driver, env)
 	if driver == "opencode" {
 		// A status read must not refresh the native model catalog.
@@ -620,12 +742,24 @@ func (m *Module) runNativeStatus(ctx context.Context, out SignInStatus, program,
 		return out, runErr
 	}
 	if driver == "codex" {
-		text := strings.TrimSpace(ansiEscape.ReplaceAllString(string(raw), ""))
-		out.SignedIn = runErr == nil && strings.HasPrefix(strings.ToLower(text), "logged in")
-		out.unrecognized = !out.SignedIn && !strings.HasPrefix(strings.ToLower(text), "not logged in")
-		if out.SignedIn {
-			out.Method = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(text, "Logged in using"), "Logged in"))
+		// The answer is a line of its own: codex-cli 0.166, confined with a home it may not
+		// write, first warns on the same stream that it could not create its PATH aliases.
+		for _, line := range strings.Split(ansiEscape.ReplaceAllString(string(raw), ""), "\n") {
+			line = strings.TrimSpace(line)
+			switch lower := strings.ToLower(line); {
+			case strings.HasPrefix(lower, "not logged in"):
+				return out, nil
+			case strings.HasPrefix(lower, "logged in") && runErr == nil:
+				out.SignedIn = true
+				out.Method = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(line, "Logged in using"), "Logged in"))
+				return out, nil
+			case strings.HasPrefix(lower, "api key configured") && runErr == nil:
+				// This line names the key, masked: only that it is a key is kept (codex-cli 0.166).
+				out.SignedIn, out.Method = true, "API key"
+				return out, nil
+			}
 		}
+		out.unrecognized = true
 		return out, nil
 	}
 	if driver == "cursor" {
@@ -634,11 +768,7 @@ func (m *Module) runNativeStatus(ctx context.Context, out SignInStatus, program,
 		if runErr != nil {
 			return out, &probeError{cmdLine(program, args...), commandFailure(ctx, runErr)}
 		}
-		st := cursorSignInStatus(out, raw)
-		if st.unrecognized {
-			return st, errSignInStatus
-		}
-		return st, nil
+		return cursorSignInStatus(out, raw), nil
 	}
 	if driver == "opencode" {
 		if runErr != nil {
@@ -728,9 +858,6 @@ func LocalLoginStatus(ctx context.Context, engine *toolinstall.Engine, child Chi
 		return false, err
 	}
 	st, err := m.readResolvedStatus(ctx, "", SignInStatus{Driver: driver, Installed: true}, program, configDir, env)
-	if err == nil && st.unrecognized {
-		err = errSignInStatus
-	}
 	return st.SignedIn, err
 }
 
@@ -750,7 +877,7 @@ func (m *Module) LoginStatusForProfile(ctx context.Context, tenant model.TenantI
 	if !validSignInDriver(driver) {
 		return m.program(driver) != "", false, nil
 	}
-	st, err := m.readStatus(ctx, tenant, driver, profileRef)
+	st, err := m.readLoginStatus(ctx, tenant, driver, profileRef)
 	return st.Installed, st.SignedIn, err
 }
 
@@ -816,7 +943,7 @@ func (m *Module) command(ctx context.Context, driver, program, configDir string,
 	if err != nil {
 		return nil, nil, fmt.Errorf("the tool's temporary directory: %w", err)
 	}
-	release := func() { _ = os.RemoveAll(tmp) }
+	release := func() { confine.RemoveChildTemp(tmp) }
 	rw := []string{configDir, tmp}
 	home := envValue(env, "HOME")
 	if home != "" && !isEngineUserHome(home) {
@@ -878,7 +1005,7 @@ func (m *Module) handleSignInStatus(w http.ResponseWriter, r *http.Request, mc a
 			return
 		}
 		accountRef := r.URL.Query().Get("account_ref")
-		st, err := m.readStatus(r.Context(), tenant, driver, accountRef)
+		st, err := m.readLoginStatus(r.Context(), tenant, driver, accountRef)
 		if err != nil {
 			loginHomeError(w, err)
 			return
@@ -933,6 +1060,12 @@ func (m *Module) handleSignInStart(w http.ResponseWriter, r *http.Request, mc ap
 		env, configDir, err := m.toolEnv(r.Context(), tenant, in.Driver, in.AccountRef)
 		if err != nil {
 			loginHomeError(w, err)
+			return
+		}
+		if isServerLoginDir(in.Driver, configDir) {
+			// A session may run on the login the tool has for the engine's user; a sign-in
+			// never runs over it.
+			fail(w, 409, "account_login_refused", "This account is the login "+facts.Name+" already has on this server. Sign in without naming it to add one for this organization.")
 			return
 		}
 		if in.Driver == "gemini-cli" {

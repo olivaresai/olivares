@@ -14,6 +14,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/auth/authtest"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/governance/testsupport"
@@ -221,16 +222,13 @@ func TestASourceScopeBindingDoesNotSurviveALift(t *testing.T) {
 	})
 }
 
-// provisionExternal provisions an address with an external id into the tenant through the
-// account engine and returns the account id.
+// provisionExternal onboards an address with an external id into the tenant and returns the
+// account id.
 func (e *consentEstate) provisionExternal(tenant model.TenantID, email, externalID string) string {
 	e.t.Helper()
-	u, created, err := e.eng.authr.SCIMProvisionUser(context.Background(), e.directoryActor(tenant), tenant,
-		auth.SCIMUserInput{UserName: email, ExternalID: externalID, Active: true})
-	if err != nil || !created {
-		e.t.Fatalf("provision %s = %v created=%v", email, err, created)
-	}
-	return u.ID.String()
+	id := e.onboard(tenant, email, auth.RoleViewer)
+	authtest.EditUser(e.t, e.eng.store, id, func(u *model.User) { u.ExternalID = externalID })
+	return id.String()
 }
 
 // rosterHuman writes a human identity with externalID into tenant's roster.

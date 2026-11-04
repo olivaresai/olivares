@@ -491,7 +491,7 @@ func (m *Module) handleScanSource(w http.ResponseWriter, r *http.Request, mc api
 		writeJSON(w, http.StatusConflict, errorBody("no sensitivity classifier wired; discovery refused (it must never silently report \"no PII\")"))
 		return
 	}
-	src, ok := m.sources[name]
+	src, ok := m.source(name)
 	if !ok {
 		writeJSON(w, http.StatusBadRequest, errorBody("unknown source: "+name))
 		return

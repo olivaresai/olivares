@@ -130,6 +130,10 @@ OpenAI на профиле Claude — это отказ, называющий и
 
 Для `anthropic`, `openai` и `xai` OpenCode принимает только конечную точку самого поставщика: оставьте `base_url` пустой. Для шлюза `openai_compatible` используйте `codex`; для `ollama` и для локального сервера `openai_compatible`, чей `base_url` — обычный `http` по loopback- или частному адресу, например `http://127.0.0.1:8080/v1` (vLLM, llama.cpp), — `codex` или `opencode`. `base_url` включает `/v1`.
 
+Начните с ключа API. С 18 июня 2026 года Gemini CLI работает с платным ключом Gemini API или с аккаунтом Gemini Code Assist Standard или Enterprise; бесплатные личные аккаунты Google, Google AI Pro и Google AI Ultra больше не работают.
+Для аккаунта Google Code Assist создайте профиль Gemini и используйте
+`olivares tool login gemini --account <name>`.
+
 ## 4. Запустите первую сессию
 
 ```sh
@@ -169,6 +173,18 @@ olivares provider rm prv_01J8ABCDEF --yes               # необратимо
 кого-либо называть, читался бы как профиль, который никто не настраивал. Отзыв здесь не
 отзывает ключ у провайдера; это делается в его собственной консоли.
 
+## Локальная среда выполнения моделей на Olivares Server
+
+На Olivares Server (appliance, SELinux в режиме enforcing) сессия, привязанная к провайдеру на loopback-адресе, может обратиться к нему только через порт, который политика помечает для локальных сред выполнения моделей: 11434 (Ollama), 1234 (LM Studio), 8000 (vLLM) и 8080 (`llama-server` из llama.cpp). Для среды выполнения на другом порту пометьте его один раз от имени root:
+
+```bash
+semanage port -a -t olivares_model_runtime_port_t -p tcp 11435
+# If the base policy already labels that port (semanage port -l | grep -w 11435), modify it instead:
+semanage port -m -t olivares_model_runtime_port_t -p tcp 11435
+```
+
+Пока этого нет, сессия не запускается, а её ошибка называет эту команду.
+
 ## Что движок отклоняет и почему
 
 | Вы видите | Это значит |
@@ -191,6 +207,7 @@ olivares provider rm prv_01J8ABCDEF --yes               # необратимо
 
 ## Связанное
 
+- [Провайдеры и инструменты](/reference/providers-and-tools/)
 - [Управлять сеансом провайдера](/ru/how-to/operate-provider-sessions/)
 - [Ваш первый час](/ru/how-to/first-hour/)
 - [Справочник CLI](/ru/reference/cli/)

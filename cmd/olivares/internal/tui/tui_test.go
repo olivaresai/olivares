@@ -520,6 +520,27 @@ func TestWindowScrollsToTheSelection(t *testing.T) {
 	}
 }
 
+// A footer sentence longer than the screen wraps onto the next rows and is read whole; the
+// 120 columns it was cut at on the AI tools screen are not the only width that cuts one.
+func TestFooterWrapsInsteadOfBeingCut(t *testing.T) {
+	frame := testFrame()
+	frame.Footer = "Could not read the engine: this needs the permission across the whole server, which only a superadmin holds."
+	off := false
+	r := termrender.New(io.Discard, termrender.Options{Color: &off, Width: 80})
+	m := newModel(frame, 80, 24, r)
+	lines := m.render()
+	if len(lines) != 24 {
+		t.Fatalf("the frame has %d rows, want 24", len(lines))
+	}
+	text := rendered(m)
+	if !strings.Contains(text, "which only a superadmin holds.") {
+		t.Fatalf("the end of the footer was cut:\n%s", text)
+	}
+	if !strings.Contains(lines[23], "move") {
+		t.Fatalf("the key hints are not on the last row:\n%s", text)
+	}
+}
+
 type failingWriter struct{}
 
 func (failingWriter) Write([]byte) (int, error) { return 0, os.ErrClosed }

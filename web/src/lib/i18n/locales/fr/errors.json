@@ -1,8 +1,7 @@
 {
   "notFound": {
     "title": "Page introuvable",
-    "description": "Cette page n’existe pas ou a été déplacée.",
-    "back": "Retour à la vue d’ensemble"
+    "description": "Cette page n’existe pas ou a été déplacée."
   },
   "businessOnly": {
     "title": "Fait partie de Business",
@@ -17,6 +16,7 @@
     "nextStep": "Vos rôles ou une politique de groupe ne le permettent pas. Un propriétaire ou un administrateur de cette organisation peut l’accorder.",
     "deniedByPolicy": "La politique « {{policy}} » le refuse. Un propriétaire ou un administrateur de cette organisation peut la modifier."
   },
+  "systemAdminOnly": "Ce réglage concerne toute l'installation. Demandez à un administrateur système de le consulter ou de le modifier.",
   "serverError": {
     "title": "Une erreur est survenue",
     "description": "Olivares a rencontré une erreur inattendue. Veuillez réessayer.",
@@ -30,14 +30,21 @@
     "title": "Plan de contrôle injoignable",
     "description": "Nous n’avons pas pu joindre le plan de contrôle. Vérifiez votre connexion et que le moteur est en cours d’exécution."
   },
+  "engineRetrying": {
+    "title": "Le moteur est injoignable",
+    "description": "Nouvelle tentative automatique. Cette page s’ouvre dès que le moteur répond."
+  },
   "networkSecure": {
     "title": "Échec de la connexion sécurisée",
     "description": "Votre navigateur n’a pas pu ouvrir de connexion sécurisée vers {{origin}}. S’il ne fait pas confiance au certificat du moteur, ouvrez cette adresse dans un nouvel onglet et faites-lui confiance, ou installez l’AC du moteur (tls.crt.ca dans son répertoire de données). Sinon, vérifiez votre connexion et que le moteur est en cours d’exécution."
   },
   "boundary": {
     "title": "Cette vue a planté",
-    "description": "Une erreur inattendue s’est produite lors du rendu. Recharger la page résout généralement le problème.",
-    "reload": "Recharger"
+    "description": "Une erreur inattendue s’est produite lors du rendu. Une nouvelle tentative résout généralement le problème.",
+    "reload": "Recharger",
+    "errorId": "ID d'erreur",
+    "copyErrorId": "Copier l'ID d'erreur",
+    "goToNow": "Aller à Maintenant"
   },
   "generic": "Une erreur est survenue.",
   "sessionTemplateUnavailable": "Le modèle « Edits and commands » est indisponible, la session n’a donc pas démarré. Choisissez une autre permission ou demandez à un administrateur de restaurer le modèle.",

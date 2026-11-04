@@ -4,6 +4,7 @@
 import { savedViewsApi } from '@/features/saved-views/api'
 import { systemApi } from '@/lib/api/endpoints'
 import type { Whoami } from '@/lib/api/types'
+import { moduleOn } from '@/stores/modules'
 
 // The organization choice must be discoverable before an organization is selected.
 // Keep it on a stable permitted row, independently of the active request scope.
@@ -34,7 +35,8 @@ export async function restoreTenant(
     (principal.superadmin || principal.grants.some((g) => g.tenant === current))
       ? current
       : (principal.grants[0]?.tenant ?? null)
-  if (principal.kind !== 'user') return selected
+  // The saved choice lives in consoleviews; a module that is off has none to read.
+  if (principal.kind !== 'user' || !moduleOn('consoleviews')) return selected
   try {
     const home = await tenantPreferenceHome(principal, guard)
     if (!home) return selected

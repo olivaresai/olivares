@@ -36,7 +36,7 @@
     "density": "密度",
     "densityHint": "コンパクトは行を多く表示し、ゆったりは読みやすくなります。",
     "language": "言語",
-    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어.",
+    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어, Українська, Português.",
     "time": "時刻",
     "timeHint": "時刻はあなたの地域（{{zone}}）で表示します。記録とエクスポートは UTC のままです。",
     "clock24": "24 時間",

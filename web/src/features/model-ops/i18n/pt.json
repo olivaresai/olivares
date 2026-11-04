@@ -1,0 +1,423 @@
+{
+  "title": "Operações de modelos",
+  "subtitle": "Governe os modelos próprios, a sua admissão de modelos assinados e as implementações de inferência local.",
+  "tabs": {
+    "owned": "Modelos próprios",
+    "admission": "Admissão",
+    "deployments": "Implementações",
+    "datasets": "Conjuntos de dados",
+    "finetune": "Tarefas de fine-tuning",
+    "evidence": "Selos AIBOM"
+  },
+  "owned": {
+    "title": "Modelos próprios",
+    "description": "O registo governado dos modelos que possui — alojados, com fine-tuning ou importados.",
+    "new": "Novo modelo",
+    "search": "Pesquisar modelos…",
+    "created": "Modelo criado.",
+    "updated": "Modelo atualizado.",
+    "deleted": "Modelo eliminado.",
+    "newTitle": "Novo modelo próprio",
+    "editTitle": "Editar modelo próprio",
+    "formBody": "Registe um modelo que possui. Apenas metadados de governação — nunca um segredo.",
+    "deleteTitle": "Eliminar modelo próprio",
+    "deleteBody": "Eliminar «{{name}}»? As suas versões e referências de linhagem são removidas. Fica registado no registo de auditoria.",
+    "columns": {
+      "name": "Nome",
+      "kind": "Tipo",
+      "provider": "Fornecedor",
+      "visibility": "Visibilidade",
+      "status": "Estado"
+    },
+    "drawer": {
+      "subtitle": "Resumo, versões e evidências de admissão por versão."
+    },
+    "form": {
+      "name": "Nome",
+      "kind": "Tipo",
+      "status": "Estado",
+      "baseRef": "Referência base",
+      "providerRef": "Referência do fornecedor",
+      "visibility": "Visibilidade",
+      "ownerRef": "Referência do responsável",
+      "note": "Nota"
+    },
+    "truncated": "Carregados {{n}} modelos; há mais",
+    "truncatedHint": "Há mais modelos registados do que os apresentados; esta página obtém as linhas por ID — atribuído na criação — pelo que faltam as linhas para lá dela, normalmente as registadas mais recentemente. A pesquisa e a ordenação da tabela aplicam-se apenas ao que está carregado. Um modelo que não aparece aqui não prova que não esteja registado."
+  },
+  "versions": {
+    "title": "Versões",
+    "new": "Nova versão",
+    "admit": "Admitir",
+    "empty": "Ainda sem versões",
+    "emptyHint": "Crie uma versão para registar um artefacto e admitir a sua assinatura.",
+    "created": "Versão criada.",
+    "deleted": "Versão eliminada.",
+    "newTitle": "Nova versão do modelo",
+    "formBody": "Uma versão é imutável depois de criada — registe-a e depois admita o seu artefacto assinado.",
+    "deleteTitle": "Eliminar versão",
+    "deleteBody": "Eliminar a versão «{{version}}»? O seu veredicto de admissão é removido. Fica registado no registo de auditoria.",
+    "form": {
+      "version": "Versão",
+      "status": "Estado",
+      "artifactRef": "Referência do artefacto",
+      "parentRef": "Referência do progenitor",
+      "sourceRef": "Referência da origem",
+      "note": "Nota"
+    },
+    "truncated": "Carregadas {{n}} versões; há mais",
+    "truncatedHint": "Este modelo tem mais versões do que as apresentadas; a página obtém as linhas por ID, por isso as mais recentes podem faltar. Uma versão que não vê aqui é também uma versão cujas evidências de admissão não consegue alcançar a partir deste ecrã.",
+    "loadError": "Não foi possível ler a lista de versões — isto NÃO é «sem versões»"
+  },
+  "deployments": {
+    "title": "Implementações",
+    "description": "Implementações de inferência local em todos os modelos. Governadas pela barreira de admissão.",
+    "new": "Nova implementação",
+    "search": "Pesquisar implementações…",
+    "created": "Implementação criada.",
+    "updated": "Implementação atualizada.",
+    "deleted": "Implementação eliminada.",
+    "governed": "Governada",
+    "newTitle": "Nova implementação",
+    "editTitle": "Editar implementação",
+    "formBody": "Aponte um runtime para uma versão de modelo governada. A admissão é imposta ao guardar.",
+    "deleteTitle": "Eliminar implementação",
+    "deleteBody": "Eliminar «{{name}}»? Fica registado no registo de auditoria.",
+    "deniedTitle": "Bloqueada pela admissão",
+    "deniedHint": "Admita a versão referenciada com as âncoras de confiança atuais e tente novamente — o que introduziu é mantido.",
+    "columns": {
+      "name": "Nome",
+      "runtime": "Runtime",
+      "version": "Versão",
+      "governed": "Governada",
+      "status": "Estado"
+    },
+    "filters": {
+      "allRuntimes": "Todos os runtimes",
+      "allStatuses": "Todos os estados"
+    },
+    "form": {
+      "name": "Nome",
+      "runtime": "Runtime",
+      "status": "Estado",
+      "ownedRef": "Referência do modelo",
+      "versionRef": "Referência da versão",
+      "endpointRef": "Referência do endpoint",
+      "governed": "Governada",
+      "governedHint": "Um indicador de postura declarado — não é um contorno da admissão.",
+      "note": "Nota",
+      "deploymentType": "Tipo de implementação",
+      "deploymentTypeHint": "Local serve uma versão de modelo self-hosted e está sujeita à barreira de admissão; intermediada chama um fornecedor alojado e não está.",
+      "providerRef": "Endpoint do fornecedor",
+      "providerHint": "O fornecedor alojado a que esta implementação serve de intermediária (por exemplo, um endpoint de API)."
+    },
+    "types": {
+      "local": "Local (self-hosted)",
+      "brokered": "Intermediada (fornecedor alojado)"
+    },
+    "truncated": "Carregadas {{n}} implementações; há mais",
+    "truncatedHint": "Há mais implementações do que as apresentadas; esta página obtém as linhas por ID. Os filtros de runtime e de estado são aplicados pelo MOTOR, por isso repetem a consulta — o corte é feito sobre o conjunto já filtrado. Uma implementação que não aparece aqui não prova que nada esteja a executar. A pesquisa e a ordenação da tabela aplicam-se apenas ao que está carregado."
+  },
+  "policy": {
+    "title": "Política de admissão",
+    "description": "A política de confiança da organização para a admissão de modelos assinados. O método de assinatura é derivado do que configurar.",
+    "edit": "Editar política",
+    "editTitle": "Editar política de admissão",
+    "editBody": "Defina as âncoras de confiança. Guardado de forma atómica; o motor continua a ser a autoridade.",
+    "loadError": "Não foi possível carregar a política de admissão.",
+    "saved": "Política de admissão guardada.",
+    "mode": "Modo derivado",
+    "derivedMode": "Modo de assinatura derivado",
+    "requireSigned": "Exigir modelos assinados",
+    "requireSignedHint": "Impor: nega a implementação de qualquer versão sem um veredicto de admissão verificado.",
+    "requireDigests": "Exigir resumos dos artefactos",
+    "requireDigestsHint": "Exige também que um novo hash em disco dos artefactos assinados coincida.",
+    "identities": "Identidades permitidas",
+    "identitiesHint": "Uma expressão regular de identidade do assinante por linha (Sigstore keyless).",
+    "issuers": "Emissores permitidos",
+    "issuersHint": "Um URL de emissor OIDC por linha. Tem de ser definido em conjunto com as identidades, ou nenhum dos dois.",
+    "trustedRoots": "Raízes de confiança",
+    "trustedRootsHint": "Certificados de AC em PEM (Fulcio ou PKI privada). Apenas material público.",
+    "trustedKeys": "Chaves de confiança",
+    "trustedKeysHint": "Chaves públicas PEM para assinaturas só com chave. Apenas material público.",
+    "note": "Nota",
+    "on": "Ativada",
+    "off": "Desativada",
+    "attestedBy": "Atestado por",
+    "attestedAt": "Atestado em",
+    "confirmTitle": "Confirmar alteração de confiança",
+    "confirmBody": "Ativar a imposição ou remover uma âncora de confiança pode fazer falhar as futuras criações e atualizações de implementações até as versões afetadas serem novamente admitidas. Continuar?",
+    "state": {
+      "unconfigured": {
+        "title": "Modo de observação — não configurado",
+        "body": "Nenhuma política definida. Os veredictos de admissão são registados, mas nada é negado."
+      },
+      "observe": {
+        "title": "Modo de observação",
+        "body": "Há uma política configurada, mas a imposição está desativada. Os veredictos são registados; as implementações não são negadas."
+      },
+      "enforce": {
+        "title": "Modo de imposição",
+        "body": "A implementação de uma versão sem veredicto de admissão verificado e ainda ancorado é negada."
+      }
+    },
+    "err": {
+      "privateKey": "O material de confiança tem de ser público — remova qualquer bloco PRIVATE KEY.",
+      "pemResidual": "Remova o bloco PEM incompleto — só são guardados blocos BEGIN…END completos.",
+      "anchorMissing": "A imposição precisa de, pelo menos, uma raiz ou chave de confiança.",
+      "identityIssuer": "As identidades e os emissores têm de ser definidos em conjunto, ou nenhum dos dois."
+    }
+  },
+  "verdicts": {
+    "title": "Veredictos de admissão",
+    "description": "O veredicto ATUAL registado, um por versão — voltar a admitir SUBSTITUI-O, não acrescenta uma linha. Uma versão sem tentativa não aparece aqui.",
+    "search": "Pesquisar veredictos…",
+    "reAdmit": "Admitir de novo",
+    "drawerSubtitle": "O veredicto registado — cada facto apresentado de forma independente.",
+    "columns": {
+      "version": "Versão",
+      "posture": "Postura",
+      "method": "Método",
+      "roots": "Raízes do assinante",
+      "tlog": "Registo de transparência",
+      "attestedAt": "Registado"
+    },
+    "filters": {
+      "all": "Todos",
+      "verified": "Só verificados",
+      "unverified": "Só não verificados"
+    },
+    "truncated": "Carregados {{n}} veredictos; há mais",
+    "truncatedHint": "Há mais veredictos de admissão do que os apresentados; esta página obtém as linhas por ID. Há um veredicto por versão — voltar a admitir SUBSTITUI-O, não acrescenta uma linha, e o ID mantém a posição da PRIMEIRA tentativa — por isso uma versão que falte aqui não ficou necessariamente por admitir."
+  },
+  "admit": {
+    "title": "Admitir um modelo assinado",
+    "reAdmitTitle": "Admitir de novo com a confiança atual",
+    "body": "Verifique e registe uma assinatura para a versão {{version}}. Um veredicto registado é evidência, seja admitido ou não.",
+    "bundle": "Pacote de assinatura",
+    "bundleHint": "O JSON em bruto do pacote OMS / Sigstore.",
+    "bundlePlaceholder": "{ \"mediaType\": \"…\", … }",
+    "bundleInvalid": "Era esperado um objeto JSON.",
+    "digests": "Resumos resolvidos",
+    "digestsHint": "Mapa opcional de ficheiro → resumo hexadecimal, para calcular de novo o hash do artefacto em disco.",
+    "digestsInvalid": "Era esperado um objeto JSON com valores de texto.",
+    "modelRef": "Referência do modelo",
+    "aibomRef": "Referência do AIBOM",
+    "note": "Nota",
+    "submit": "Admitir",
+    "admitted": "Versão admitida.",
+    "recordedNotAdmitted": "Veredicto registado, mas a assinatura não satisfez a política."
+  },
+  "admission": {
+    "mode": {
+      "keyless": "sigstore-keyless",
+      "certificate-pki": "certificate-pki",
+      "bare-key": "bare-key",
+      "empty": "não admite nada"
+    },
+    "posture": {
+      "verified": "Verificada",
+      "signedUnbound": "Assinada, artefacto não associado",
+      "denied": "Não verificada"
+    }
+  },
+  "evidence": {
+    "reason": "Motivo",
+    "noReason": "Não foi registado nenhum motivo.",
+    "subjectName": "Assunto",
+    "subjectDigest": "Resumo do assunto",
+    "signer": "Assinante",
+    "signerRoots": "Raízes do assinante",
+    "artifact": "Novo hash do artefacto",
+    "artifactVerified": "Coincide",
+    "artifactUnverified": "Não verificado",
+    "tlog": "Registo de transparência",
+    "tlogVerified": "Verificado",
+    "tlogPresent": "Presente (inclusão não verificada)",
+    "tlogAbsent": "Ausente",
+    "resourceCount": "Recursos assinados",
+    "coverage": "Cobertura",
+    "attestedBy": "Atestado por",
+    "attestedAt": "Registado",
+    "none": "Nenhuma tentativa de admissão registada",
+    "noneHint": "Admita esta versão para registar um veredicto de assinatura."
+  },
+  "datasets": {
+    "title": "Conjuntos de dados",
+    "description": "Componentes de linhagem do AIBOM — um nome, uma referência de conteúdo e um hash. Nunca os dados em si.",
+    "new": "Novo conjunto de dados",
+    "search": "Pesquisar conjuntos de dados…",
+    "created": "Conjunto de dados registado.",
+    "deleted": "Conjunto de dados eliminado.",
+    "claimed": "Declaração do operador",
+    "newTitle": "Registar um conjunto de dados",
+    "formBody": "Um registo de linhagem com dados mínimos: identidade, classificação e uma referência de conteúdo — nunca o conteúdo do conjunto de dados.",
+    "deleteTitle": "Eliminar conjunto de dados",
+    "deleteBody": "Eliminar «{{name}}»? A sua referência de linhagem é removida, o que altera os BOM futuros (nunca um selo passado). Fica registado no registo de auditoria.",
+    "drawerSubtitle": "Registo de linhagem — classificação, referência de conteúdo e declaração de proveniência.",
+    "provenanceLabel": "Proveniência",
+    "provenanceClaimed": "Afirmação do operador registada — o operador declara que a proveniência registada foi revista. A Olivares AI não verificou criptograficamente o conjunto de dados nem inspecionou o seu conteúdo.",
+    "provenanceNotClaimed": "Nenhuma afirmação de proveniência registada pelo operador.",
+    "attestedBy": "Registado por",
+    "columns": {
+      "name": "Nome",
+      "classification": "Classificação",
+      "ownedRef": "Referência do modelo",
+      "provenance": "Proveniência",
+      "recorded": "Registado"
+    },
+    "form": {
+      "name": "Nome",
+      "classification": "Classificação",
+      "ownedRef": "Referência do modelo",
+      "ownedRefHint": "Opcional — associe este conjunto de dados a um modelo próprio. Tem de corresponder a um modelo existente, ou o registo é recusado.",
+      "sourceRef": "Referência da origem",
+      "contentHash": "Hash do conteúdo",
+      "contentAlg": "Algoritmo de hash",
+      "contentAlgHint": "Por omissão, sha256 quando um hash é definido.",
+      "governance": "Etiqueta de governação",
+      "verified": "Proveniência revista (declaração do operador)",
+      "verifiedHint": "Afirme que reviu a proveniência deste conjunto de dados. Isto regista uma declaração do operador — não uma verificação feita pela Olivares AI. Não há atualização: corrigir implica eliminar e voltar a criar.",
+      "note": "Nota"
+    },
+    "truncated": "Carregados {{n}} conjuntos de dados; há mais",
+    "truncatedHint": "Há mais conjuntos de dados registados do que os apresentados; esta página obtém as linhas por ID. Estas linhas são componentes de linhagem do AI-BOM: um conjunto de dados que falte aqui não prova que a linhagem não o tenha. A pesquisa e a ordenação da tabela aplicam-se apenas ao que está carregado."
+  },
+  "finetune": {
+    "title": "Tarefas de fine-tuning",
+    "description": "Registos de tarefas de fine-tuning e das versões que produziram. A Olivares AI nunca treina um modelo nem guarda pesos.",
+    "new": "Novo registo de tarefa",
+    "search": "Pesquisar tarefas…",
+    "created": "Tarefa registada.",
+    "updated": "Tarefa atualizada.",
+    "newTitle": "Registar uma tarefa de fine-tuning",
+    "editTitle": "Atualizar tarefa de fine-tuning",
+    "formBody": "Registe o estado de uma tarefa e a versão que produziu. Este é um registo de inventário — a Olivares AI não executa treino.",
+    "trackBanner": "Isto regista trabalho de fine-tuning executado externamente. A Olivares AI não inicia, não cancela nem executa treino e não guarda pesos nem conteúdo de conjuntos de dados.",
+    "columns": {
+      "name": "Nome",
+      "runtime": "Runtime",
+      "status": "Estado",
+      "resultVersion": "Versão resultante",
+      "started": "Iniciada"
+    },
+    "filters": {
+      "allStatuses": "Todos os estados"
+    },
+    "form": {
+      "name": "Nome",
+      "status": "Estado",
+      "runtime": "Runtime",
+      "runtimeNone": "Não especificado",
+      "baseRef": "Referência base",
+      "datasetRef": "Referência do conjunto de dados",
+      "resultVersionRef": "Referência da versão resultante",
+      "resultVersionRefHint": "A versão do modelo que esta tarefa produziu. Tem de corresponder a uma versão existente, ou o registo é recusado.",
+      "startedAt": "Iniciada em",
+      "endedAt": "Terminada em",
+      "clearHint": "Limpar uma data e hora registadas não tem efeito — o motor mantém o valor anterior.",
+      "note": "Nota"
+    },
+    "truncated": "Carregadas {{n}} tarefas; há mais",
+    "truncatedHint": "Há mais registos de fine-tuning do que os apresentados; esta página obtém as linhas por ID. O filtro de estado é aplicado pelo MOTOR, por isso repete a consulta. Uma tarefa que não aparece aqui não prova que nunca tenha sido executada. A pesquisa e a ordenação da tabela aplicam-se apenas ao que está carregado."
+  },
+  "evidenceLedger": {
+    "title": "Selos AIBOM",
+    "description": "O registo de AIBOM selados de todos os modelos — duradouro, só de acréscimo, com deteção de adulteração ancorada no registo. Cada linha é um compromisso de hash do conteúdo, não o documento BOM.",
+    "search": "Pesquisar selos…",
+    "drawerSubtitle": "Um AIBOM selado — a deteção de adulteração ancorada no registo de auditoria.",
+    "sealMeaning": "Um selo é um compromisso de hash do conteúdo, só de acréscimo, ancorado no registo de auditoria — não um arquivo do BOM. O documento completo não é guardado e não pode ser recuperado a partir de um selo.",
+    "noPriorHead": "0 (sem topo de auditoria anterior)",
+    "serialNumber": "Número de série",
+    "ledgerHash": "Hash do registo",
+    "generatedBy": "Selado por",
+    "scopeNote": "Âmbito",
+    "columns": {
+      "ownedRef": "Referência do modelo",
+      "contentHash": "Hash do conteúdo",
+      "components": "Componentes",
+      "spec": "Especificação",
+      "ledgerSeq": "Seq. do registo",
+      "sealed": "Selado"
+    },
+    "truncated": "Carregados {{n}} selos; há mais",
+    "truncatedHint": "Há mais AI-BOM selados do que os apresentados. Esta página obtém as linhas por ID — atribuído na criação — pelo que faltam as linhas para lá dela, o que em funcionamento normal significa evidências recentes. A pesquisa e a ordenação da tabela aplicam-se apenas ao que está carregado. Um modelo sem selo aqui não prova que nunca tenha sido selado."
+  },
+  "documents": {
+    "liveTitle": "Documentos gerados — em direto",
+    "liveSubtitle": "Gerados agora a partir do estado atual do registo. Não selados e não auditados.",
+    "sealsTitle": "Compromissos AIBOM selados",
+    "live": "Em direto",
+    "preview": "Pré-visualizar",
+    "export": "Exportar",
+    "loadError": "Não foi possível gerar o documento.",
+    "sealRecorded": "Selo AIBOM registado",
+    "receiptBody": "O registo guarda apenas o hash do conteúdo — o documento CycloneDX selado existe apenas aqui. Transfira-o agora para guardar uma cópia.",
+    "downloadSealed": "Transferir BOM selado",
+    "noSeals": "Ainda sem selos",
+    "noSealsHint": "Sele o AIBOM para ancorar um compromisso de hash do conteúdo ao registo de auditoria.",
+    "sealConfirmTitle": "Selar este AIBOM?",
+    "sealConfirmBody": "Criar um compromisso de hash do conteúdo CycloneDX, só de acréscimo, a partir do estado atual do registo? Isto não arquiva o documento BOM.",
+    "aibom": {
+      "title": "AIBOM",
+      "cyclonedx": "CycloneDX (JSON)",
+      "spdx": "SPDX 3.0.1 (JSON)",
+      "seal": "Selar AIBOM",
+      "sealHint": "Selar cria um compromisso de hash do conteúdo CycloneDX, só de acréscimo, ancorado no registo de auditoria. Não arquiva o documento BOM. É sempre CycloneDX — a exportação SPDX nunca pode ser selada.",
+      "previewTitle": "AIBOM (em direto)",
+      "previewBody": "Um inventário CycloneDX (ou SPDX) em direto, só de leitura — não selado até o selar."
+    },
+    "card": {
+      "title": "Ficha do modelo",
+      "markdown": "Markdown (.md)",
+      "json": "JSON",
+      "previewTitle": "Ficha do modelo (em direto)",
+      "previewBody": "Gerada a partir do inventário governado. As secções sem evidências registadas são marcadas como não registadas — nunca inventadas.",
+      "name": "Nome",
+      "kind": "Tipo",
+      "status": "Estado",
+      "intendedUse": "Utilização prevista",
+      "versions": "Versões",
+      "noVersions": "Nenhuma versão registada.",
+      "admitted": "Admitida",
+      "notVerified": "Registada, não verificada",
+      "noVerdict": "Sem veredicto",
+      "trainingData": "Dados de treino",
+      "notRecorded": "Não registado.",
+      "admissionsRecorded": "Admissões assinadas registadas",
+      "admissionsVerified": "Admissões assinadas verificadas",
+      "gpaiRecorded": "Postura GPAI do fornecedor registada",
+      "yes": "Sim",
+      "no": "Não"
+    },
+    "sealsTruncated": "Carregados {{n}} selos; há mais",
+    "sealsTruncatedHint": "Este modelo tem mais selos do que os apresentados; a página obtém as linhas por ID, por isso as linhas mais recentes — normalmente o último selo — podem faltar. A ausência de um hash aqui não prova que o documento nunca tenha sido selado.",
+    "sealsLoadError": "Não foi possível ler o histórico de selos — isto NÃO é «sem selos»"
+  },
+  "empty": {
+    "datasets": {
+      "title": "Ainda sem conjuntos de dados registados",
+      "description": "Registe a identidade e a classificação de um conjunto de dados, com uma referência de conteúdo e um hash opcionais, para o acrescentar à linhagem do AIBOM sem guardar o seu conteúdo."
+    },
+    "deployments": {
+      "title": "Ainda sem implementações de inferência registadas",
+      "description": "Registe uma implementação de inferência local ou intermediada; uma entrada local precisa de uma versão de modelo existente e só fica sujeita à barreira onde uma política de admissão exige assinatura."
+    },
+    "finetune": {
+      "title": "Ainda sem registos de tarefas de fine-tuning",
+      "description": "Registe uma tarefa de fine-tuning executada fora da Olivares AI para acompanhar o seu estado, linhagem e versão de modelo produzida; a Olivares AI não executa treino."
+    },
+    "modelEvidence": {
+      "title": "Ainda sem selos AIBOM registados",
+      "description": "Abra um modelo próprio e sele o seu AIBOM para ancorar ao registo de auditoria um compromisso de hash do conteúdo, só de acréscimo."
+    },
+    "ownedModels": {
+      "title": "Ainda sem modelos próprios registados",
+      "description": "Registe um modelo alojado, com fine-tuning ou importado, para gerir as suas versões, evidências de admissão e documentos AIBOM."
+    },
+    "verdict": {
+      "title": "Ainda sem veredictos de admissão registados",
+      "description": "Crie uma versão num modelo próprio e depois admita o seu artefacto assinado. Cada versão mantém um veredicto, substituído quando é admitida de novo."
+    }
+  }
+}

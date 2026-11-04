@@ -23,21 +23,10 @@ vi.mock('@/lib/auth/context', () => ({
   }),
 }))
 
-const recording = { enabled: false }
-vi.mock('@/lib/hooks/use-server-info', () => ({
-  useServerInfo: () => ({
-    isSuccess: true,
-    data: {
-      edition: 'enterprise',
-      modules_not_enabled: recording.enabled ? [] : ['recording'],
-    },
-  }),
+const viewport = { wide: true }
+vi.mock('@/lib/hooks/use-min-width', () => ({
+  useMinWidth: () => viewport.wide,
 }))
-vi.mock('@/features/recordings/api', async (orig) => ({
-  ...(await orig<typeof import('@/features/recordings/api')>()),
-  recordingApi: { notice: vi.fn(), acknowledge: vi.fn() },
-}))
-
 // The view's state IS the address, so the router is the in-memory location double, not a
 // stub that answers the empty string. `navigate` still records every call.
 const navigate = vi.fn()
@@ -49,6 +38,19 @@ vi.mock('@tanstack/react-router', async () => {
     useNavigate: () => (args: unknown) => {
       navigate(args)
       return real(args as never)
+    },
+  }
+})
+
+// The live sessions page names the tool each session runs on (useSessionNames).
+const live = { items: [] as { session_ref: string; engine: string }[] }
+vi.mock('@/features/sessions/api', async (orig) => {
+  const actual = await orig<typeof import('@/features/sessions/api')>()
+  return {
+    ...actual,
+    sessionsApi: {
+      ...actual.sessionsApi,
+      live: () => Promise.resolve({ items: live.items, has_more: false }),
     },
   }
 })
@@ -85,6 +87,9 @@ vi.mock('@/features/shared', async (orig) => {
       onNodeClick,
       onEdgeClick,
       fitMinZoom,
+      fitMaxZoom,
+      minZoom,
+      onViewportZoom,
     }: {
       children?: ReactNode
       nodes?: { id: string; data?: unknown }[]
@@ -92,8 +97,27 @@ vi.mock('@/features/shared', async (orig) => {
       onNodeClick?: (n: { id: string; data?: unknown }) => void
       onEdgeClick?: (e: { id: string }) => void
       fitMinZoom?: number
+      fitMaxZoom?: number
+      minZoom?: number
+      onViewportZoom?: (zoom: number) => void
     }) => (
-      <div data-testid="graph-canvas" data-fit-min-zoom={fitMinZoom ?? ''}>
+      <div
+        data-testid="graph-canvas"
+        data-fit-min-zoom={fitMinZoom ?? ''}
+        data-fit-max-zoom={fitMaxZoom ?? ''}
+        data-min-zoom={minZoom ?? ''}
+      >
+        {/* The viewport is the canvas's own business; the stub reports a zoom the way
+            React Flow's onMoveEnd does, so the level-of-detail switch is reachable. */}
+        <button type="button" onClick={() => onViewportZoom?.(0.6)}>
+          viewport-zoom-out
+        </button>
+        <button type="button" onClick={() => onViewportZoom?.(1)}>
+          viewport-zoom-readable
+        </button>
+        <button type="button" onClick={() => onViewportZoom?.(1.3)}>
+          viewport-zoom-in
+        </button>
         {/* NODE buttons exist so onExpand is reachable at all. Without them the neighbours
             path — the one that WRITES graph state across a tenant switch — could not be
             exercised, and a case written against it would pass vacuously. It did: the first
@@ -124,12 +148,18 @@ vi.mock('@/features/shared', async (orig) => {
   }
 })
 
-import { recordingApi } from '@/features/recordings/api'
+vi.mock('@/lib/notify', () => ({ notify: vi.fn(), resolveNotice: vi.fn() }))
+
 import { ApiError } from '@/lib/api/errors'
+import { navLeader } from '@/lib/keybindings/model'
+import { notify } from '@/lib/notify'
 import { fakeRouter } from '@/test/fake-router'
 import { accessMapApi } from './api'
 import { AccessMapView } from './access-map-view'
 import { buildGraph, emptyFilter } from './graph-model'
+
+// What the page has told: a refused link value is a toast now, not a strip.
+const told = () => vi.mocked(notify).mock.calls.map(([n]) => n.message)
 import { connectedNeighbor } from './neighbor-nav'
 
 const graph: GraphResponse = {
@@ -219,13 +249,15 @@ function renderView() {
 }
 
 beforeEach(() => {
-  recording.enabled = false
-  vi.mocked(recordingApi.notice).mockReset()
+  live.items = []
+  vi.mocked(notify).mockClear()
+  viewport.wide = true
   perm.drift = true
   perm.admin = true
   perm.tenant = 't1'
   navigate.mockClear()
   fakeRouter.reset('/access-map')
+  navLeader.disarm()
   vi.mocked(accessMapApi.graph).mockResolvedValue(graph)
   vi.mocked(accessMapApi.drift).mockResolvedValue(diff)
   vi.mocked(accessMapApi.neighbors).mockReset()
@@ -249,70 +281,11 @@ async function openFinding(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('AccessMapView', () => {
-  it('shows one privileged notice when access-map recording is enabled', async () => {
-    recording.enabled = true
-    vi.mocked(recordingApi.notice).mockResolvedValue({
-      recorded_namespaces: ['accessmap'],
-      breakglass_always: true,
-      consent_mode: 'notice',
-      consent_required: false,
-      acknowledged: false,
-      schema: 'olivares.recording/v1',
-      semconv: '',
-    })
+  it('keeps one audit notice, since recording is a Business capability', async () => {
     renderView()
-    expect(
-      await screen.findByText(/recorded privileged surface/i),
-    ).toBeVisible()
-    expect(screen.queryByText(/privileged, audited action/i)).toBeNull()
-  })
-
-  it.each(['unrecorded', 'loading', 'failed'])(
-    'keeps one audit notice when the recording notice is %s',
-    async (state) => {
-      recording.enabled = true
-      if (state === 'loading') {
-        vi.mocked(recordingApi.notice).mockReturnValue(new Promise(() => {}))
-      } else if (state === 'failed') {
-        vi.mocked(recordingApi.notice).mockRejectedValue(
-          new Error('Unavailable'),
-        )
-      } else {
-        vi.mocked(recordingApi.notice).mockResolvedValue({
-          recorded_namespaces: [],
-          breakglass_always: true,
-          consent_mode: 'notice',
-          consent_required: false,
-          acknowledged: false,
-          schema: 'olivares.recording/v1',
-          semconv: '',
-        })
-      }
-      renderView()
-      await screen.findByTestId('graph-canvas')
-      expect(screen.getAllByText(/privileged, audited action/i)).toHaveLength(1)
-      expect(screen.queryByText(/recorded privileged surface/i)).toBeNull()
-    },
-  )
-
-  it('keeps recording consent in the single notice slot', async () => {
-    recording.enabled = true
-    vi.mocked(recordingApi.notice).mockResolvedValue({
-      recorded_namespaces: ['accessmap'],
-      breakglass_always: true,
-      consent_mode: 'required',
-      consent_required: true,
-      acknowledged: false,
-      schema: 'olivares.recording/v1',
-      semconv: '',
-    })
-    renderView()
-    expect(await screen.findByRole('dialog')).toBeVisible()
-    expect(screen.getAllByText(/recorded privileged surface/i)).toHaveLength(1)
-    expect(screen.queryByText(/privileged, audited action/i)).toBeNull()
-    expect(
-      screen.getByRole('button', { name: /acknowledge and continue/i }),
-    ).toBeVisible()
+    await screen.findByTestId('graph-canvas')
+    expect(screen.getAllByText(/privileged, audited action/i)).toHaveLength(1)
+    expect(told()).toEqual([])
   })
 
   it('offers the ceremony, not the accusation, when the graph is refused for ASSURANCE', async () => {
@@ -1212,6 +1185,304 @@ describe('P1 — the map ASKS FOR the legible zoom floor', () => {
   })
 })
 
+describe('full-screen mode (the map fills the viewport)', () => {
+  const fullButton = () =>
+    screen.findByRole('button', { name: /^full screen$/i })
+  const exitButton = () =>
+    screen.findByRole('button', { name: /^exit full screen$/i })
+
+  it('has a Full screen control that fills the window and keeps the filters, the graph and the notice', async () => {
+    const user = userEvent.setup()
+    fakeRouter.reset('/?focus=agent-1')
+    renderView()
+    await user.click(await fullButton())
+    const exit = await exitButton()
+    expect(exit).toBeVisible()
+    // The window is fixed over the whole viewport, on the body, outside the shell.
+    expect(exit.closest('.fixed')).toHaveClass('inset-0')
+    expect(exit.closest('.fixed')?.parentElement).toBe(document.body)
+    expect(screen.getByTestId('graph-canvas')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /permitted vs observed/i }),
+    ).toBeVisible()
+    expect(screen.getByText(/privileged, audited action/i)).toBeVisible()
+    // The state is the address, and the rest of the address is kept (?focus= deep link).
+    expect(fakeRouter.searchStr()).toBe('?focus=agent-1&full=1')
+    // Focus moves into the window.
+    expect(exit).toHaveFocus()
+  })
+
+  it('F enters and leaves, Escape leaves, and the address follows each', async () => {
+    const user = userEvent.setup()
+    renderView()
+    await fullButton()
+    await user.keyboard('f')
+    expect(await exitButton()).toBeVisible()
+    expect(fakeRouter.searchStr()).toBe('?full=1')
+    await user.keyboard('f')
+    expect(await fullButton()).toBeVisible()
+    expect(fakeRouter.searchStr()).toBe('')
+    await user.keyboard('F')
+    expect(await exitButton()).toBeVisible()
+    await user.keyboard('{Escape}')
+    const enter = await fullButton()
+    expect(fakeRouter.searchStr()).toBe('')
+    // Focus goes back to the control that opened the window.
+    expect(enter).toHaveFocus()
+  })
+
+  it('does not take the F typed into a field, nor Ctrl+F', async () => {
+    const user = userEvent.setup()
+    renderView()
+    await fullButton()
+    await user.type(await screen.findByRole('textbox'), 'foo')
+    await user.keyboard('{Control>}f{/Control}')
+    expect(
+      screen.queryByRole('button', { name: /exit full screen/i }),
+    ).toBeNull()
+    expect(fakeRouter.url()).toBe('/access-map?q=foo')
+  })
+
+  it('leaves F to the `g f` sequence (Cost) while the leader is armed', async () => {
+    const user = userEvent.setup()
+    renderView()
+    await fullButton()
+    navLeader.arm(Date.now() + 60_000)
+    await user.keyboard('f')
+    expect(
+      screen.queryByRole('button', { name: /exit full screen/i }),
+    ).toBeNull()
+    expect(fakeRouter.url()).toBe('/access-map')
+  })
+
+  it('keeps the covered shell inert and restores scrolling when leaving', async () => {
+    const user = userEvent.setup()
+    const view = renderView()
+    view.container.id = 'root'
+    const overflow = document.body.style.overflow
+    await user.click(await fullButton())
+    expect(view.container.inert).toBe(true)
+    expect(document.body.style.overflow).toBe('hidden')
+    await user.click(await exitButton())
+    expect(view.container.inert).toBe(false)
+    expect(document.body.style.overflow).toBe(overflow)
+  })
+
+  it('lets Escape leave full screen while the graph read is still loading', async () => {
+    fakeRouter.reset('/access-map?full=1')
+    vi.mocked(accessMapApi.graph).mockReturnValue(new Promise(() => {}))
+    const user = userEvent.setup()
+    renderView()
+    await exitButton()
+    await user.keyboard('{Escape}')
+    expect(await fullButton()).toBeVisible()
+  })
+
+  it('opens in full screen from ?full=1', async () => {
+    fakeRouter.reset('/?full=1')
+    renderView()
+    expect(await exitButton()).toBeVisible()
+  })
+
+  it('follows the address: a pasted link, Back and Forward', async () => {
+    renderView()
+    expect(await fullButton()).toBeVisible()
+    act(() => fakeRouter.go('/?full=1'))
+    expect(await exitButton()).toBeVisible()
+    act(() => fakeRouter.back())
+    expect(await fullButton()).toBeVisible()
+    act(() => fakeRouter.forward())
+    expect(await exitButton()).toBeVisible()
+  })
+
+  it('reads only full=1: anything else is the normal page', async () => {
+    fakeRouter.reset('/?full=true')
+    renderView()
+    expect(await fullButton()).toBeVisible()
+  })
+
+  it('leaves the detail sheet first: Escape closes it and keeps the full screen', async () => {
+    fakeRouter.reset('/?full=1')
+    const user = userEvent.setup()
+    renderView()
+    await exitButton()
+    await openFinding(user)
+    expect(await screen.findByRole('dialog')).toBeVisible()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(await exitButton()).toBeVisible()
+    expect(fakeRouter.searchStr()).toBe('?full=1&drift=1')
+    await user.keyboard('{Escape}')
+    expect(await fullButton()).toBeVisible()
+  })
+
+  it('opens an individual resource from the list while the phone graph is grouped', async () => {
+    viewport.wide = false
+    const user = userEvent.setup()
+    renderView()
+    await user.click(await screen.findByText(/map as a list/i))
+    await user.click(
+      await screen.findByRole('button', { name: 'appdb.public.secrets' }),
+    )
+    expect(await screen.findByRole('dialog')).toBeVisible()
+    expect(fakeRouter.searchStr()).toBe('?node=R2')
+  })
+
+  it('offers the full-screen map on a narrow screen instead of only a card', async () => {
+    viewport.wide = false
+    const user = userEvent.setup()
+    renderView()
+    expect(await screen.findByText(/click one to open it/i)).toBeVisible()
+    await user.click(
+      await screen.findByRole('button', { name: /open the full-screen map/i }),
+    )
+    expect(await exitButton()).toBeVisible()
+    expect(screen.getByText(/click one to open it/i)).toBeVisible()
+    // The list stays: it is the keyboard path to the same selection.
+    expect(screen.getByText(/map as a list/i)).toBeVisible()
+    // Pinching in still reveals each node; the phone is not locked to groups.
+    await user.click(screen.getByRole('button', { name: 'viewport-zoom-in' }))
+    expect(screen.queryByText(/click one to open it/i)).toBeNull()
+  })
+})
+
+describe('the map at a glance: grouped, short labels, open a group in place', () => {
+  /** 0.6 estate in shape: 30 sessions on two tools touching 166 files of three
+   * repositories under one internal root, every label a full path. */
+  function franEstate(): GraphResponse {
+    const edges = Array.from({ length: 166 }, (_, r) => ({
+      ...graph.edges[1]!,
+      id: `f${r}`,
+      origin_kind: 'session',
+      origin_id: `S${r % 30}`,
+      origin_ref: `sess-${r % 30}`,
+      resource_id: `F${r}`,
+      resource_kind: 'file',
+      resource_ref: `/workspace/${['shop-api', 'shop-web', 'shop-docs'][r % 3]}/src/file-${r}.ts`,
+      mode: r % 4 === 0 ? 'readwrite' : 'read',
+    }))
+    const nodes = [
+      ...Array.from({ length: 30 }, (_, i) => ({
+        id: `S${i}`,
+        kind: 'session',
+        ref: `sess-${i}`,
+      })),
+      ...edges.map((e) => ({
+        id: e.resource_id,
+        kind: 'file',
+        ref: e.resource_ref,
+      })),
+    ]
+    return { nodes, edges, has_more: false }
+  }
+  const drawn = () => screen.queryAllByRole('button', { name: /^graph-node-/ })
+
+  it('draws at most two columns of 16 nodes, by folder and by tool, and opens a folder in place', async () => {
+    live.items = Array.from({ length: 30 }, (_, i) => ({
+      session_ref: `sess-${i}`,
+      engine: i % 2 ? 'codex' : 'claude',
+    }))
+    vi.mocked(accessMapApi.graph).mockResolvedValue(franEstate())
+    const user = userEvent.setup()
+    renderView()
+    const folder = await screen.findByRole('button', {
+      name: 'graph-node-group:dir:/workspace/shop-api',
+    })
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'graph-node-group:tool:codex' }),
+      ).toBeVisible(),
+    )
+    expect(
+      drawn()
+        .map((b) => b.textContent)
+        .sort(),
+    ).toEqual([
+      'graph-node-group:dir:/workspace/shop-api',
+      'graph-node-group:dir:/workspace/shop-docs',
+      'graph-node-group:dir:/workspace/shop-web',
+      'graph-node-group:tool:claude',
+      'graph-node-group:tool:codex',
+    ])
+
+    await user.click(folder)
+    expect(fakeRouter.searchStr()).toContain('group=')
+    // Twelve of its 56 files, the rest in one "+44 more", the other folders as they were.
+    expect(drawn().length).toBeLessThanOrEqual(32)
+    expect(
+      screen.getByRole('button', {
+        name: 'graph-node-more:dir:/workspace/shop-api',
+      }),
+    ).toBeVisible()
+    expect(screen.getByRole('button', { name: 'graph-node-F0' })).toBeVisible()
+    // The chip closes it again.
+    await user.click(screen.getByRole('button', { name: 'Close shop-api' }))
+    expect(screen.queryByRole('button', { name: 'graph-node-F0' })).toBeNull()
+  })
+})
+
+describe('level of detail (text stays readable, zooming out groups)', () => {
+  const zoom = (name: string) =>
+    userEvent.click(screen.getByRole('button', { name }))
+
+  it('switches to groups when zoomed out below the readable zoom, and back when zoomed in', async () => {
+    renderView()
+    const canvas = await screen.findByTestId('graph-canvas')
+    const nodeButtons = () =>
+      screen.queryAllByRole('button', { name: /^graph-node-/ })
+    expect(nodeButtons().length).toBeGreaterThan(0)
+    expect(
+      screen.queryByRole('button', { name: /^graph-node-group:/ }),
+    ).toBeNull()
+    expect(Number(canvas.getAttribute('data-min-zoom'))).toBeLessThan(1)
+
+    await zoom('viewport-zoom-out')
+    expect(
+      await screen.findByRole('button', {
+        name: 'graph-node-group:kind:postgres',
+      }),
+    ).toBeVisible()
+    expect(screen.getByText(/click one to open it/i)).toBeVisible()
+    // In groups there is no zoom below the readable one, and the refit lands on it.
+    expect(Number(canvas.getAttribute('data-min-zoom'))).toBeGreaterThanOrEqual(
+      1,
+    )
+    expect(Number(canvas.getAttribute('data-fit-max-zoom'))).toBe(1)
+
+    await zoom('viewport-zoom-in')
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', { name: /^graph-node-group:/ }),
+      ).toBeNull(),
+    )
+    expect(screen.queryByText(/click one to open it/i)).toBeNull()
+    expect(canvas.getAttribute('data-fit-max-zoom')).toBe('')
+  })
+
+  it('exactly the readable zoom changes nothing, so a refit cannot flip the two views', async () => {
+    renderView()
+    await screen.findByTestId('graph-canvas')
+    await zoom('viewport-zoom-readable')
+    expect(screen.queryByText(/click one to open it/i)).toBeNull()
+    await zoom('viewport-zoom-out')
+    expect(await screen.findByText(/click one to open it/i)).toBeVisible()
+    await zoom('viewport-zoom-readable')
+    expect(screen.getByText(/click one to open it/i)).toBeVisible()
+  })
+
+  it('starts detailed again when the window opens, because the canvas refits', async () => {
+    renderView()
+    await screen.findByTestId('graph-canvas')
+    await zoom('viewport-zoom-out')
+    expect(await screen.findByText(/click one to open it/i)).toBeVisible()
+    await userEvent.click(
+      screen.getByRole('button', { name: /^full screen$/i }),
+    )
+    await screen.findByRole('button', { name: /^exit full screen$/i })
+    expect(screen.queryByText(/click one to open it/i)).toBeNull()
+  })
+})
+
 /**
  * #2914 — the view IS the address. Selection, filters, the drift overlay and the
  * expanded neighbors round-trip through the URL: a pasted link restores the same map,
@@ -1321,18 +1592,14 @@ describe('AccessMapView — the view is the address', () => {
   it('says so and drops a refused value instead of showing a different map', async () => {
     fakeRouter.reset('/access-map?mode=read,root&drift=yes')
     renderView()
-    expect(await screen.findByTestId('url-state-notice')).toHaveTextContent(
-      /mode, drift/,
-    )
+    await waitFor(() => expect(told().join('\n')).toMatch(/mode, drift/))
     await waitFor(() => expect(fakeRouter.searchStr()).toBe(''))
   })
 
   it('says so and clears a node or edge that is not on this map', async () => {
     fakeRouter.reset('/access-map?node=not-here')
     renderView()
-    expect(await screen.findByTestId('url-state-notice')).toHaveTextContent(
-      /node/,
-    )
+    await waitFor(() => expect(told().join('\n')).toMatch(/node/))
     await waitFor(() => expect(fakeRouter.searchStr()).toBe(''))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
@@ -1453,9 +1720,7 @@ describe('AccessMapView — the view is the address', () => {
     expect(
       await screen.findByRole('button', { name: 'graph-node-R9' }),
     ).toBeInTheDocument()
-    expect(await screen.findByTestId('url-state-notice')).toHaveTextContent(
-      /expand/,
-    )
+    await waitFor(() => expect(told().join('\n')).toMatch(/expand/))
     expect(accessMapApi.neighbors).toHaveBeenCalledTimes(1)
     expect(accessMapApi.neighbors).toHaveBeenCalledWith('A1', 'both', 'agent')
     await waitFor(() =>
@@ -1476,7 +1741,7 @@ describe('AccessMapView — the view is the address', () => {
         'postgres.table',
       ),
     )
-    expect(screen.queryByTestId('url-state-notice')).not.toBeInTheDocument()
+    expect(told()).toEqual([])
   })
 
   it('keeps a selected unused grant in the address when the re-check fails', async () => {
@@ -1580,7 +1845,7 @@ describe('AccessMapView — what the canvas draws, the address may name', () => 
       expect(fakeRouter.searchStr()).toContain('expand=db_role%3AU7'),
     )
     await waitFor(() => expect(fakeRouter.depth()).toBe(2))
-    expect(screen.queryByTestId('url-state-notice')).not.toBeInTheDocument()
+    expect(told()).toEqual([])
     expect(fakeRouter.searchStr()).toContain('expand=db_role%3AU7')
   })
 
@@ -1602,7 +1867,7 @@ describe('AccessMapView — what the canvas draws, the address may name', () => 
     // the operator's own expansion, not a value a link asked for.
     await waitFor(() => expect(fakeRouter.searchStr()).not.toContain('drift='))
     expect(fakeRouter.searchStr()).not.toContain('expand=')
-    expect(screen.queryByTestId('url-state-notice')).not.toBeInTheDocument()
+    expect(told()).toEqual([])
   })
 
   it('drops a whole chain that stands on an overlay-only node, and only that chain', async () => {
@@ -1632,7 +1897,7 @@ describe('AccessMapView — what the canvas draws, the address may name', () => 
     )
     await waitFor(() => expect(fakeRouter.searchStr()).not.toContain('drift='))
     expect(decodeURIComponent(fakeRouter.searchStr())).toBe('?expand=agent:A1')
-    expect(screen.queryByTestId('url-state-notice')).not.toBeInTheDocument()
+    expect(told()).toEqual([])
   })
 
   it('NON-FIRING: turning the overlay off keeps the expansion of a node the graph draws', async () => {
@@ -1648,7 +1913,7 @@ describe('AccessMapView — what the canvas draws, the address may name', () => 
     )
     await waitFor(() => expect(fakeRouter.searchStr()).not.toContain('drift='))
     expect(decodeURIComponent(fakeRouter.searchStr())).toBe('?expand=agent:A1')
-    expect(screen.queryByTestId('url-state-notice')).not.toBeInTheDocument()
+    expect(told()).toEqual([])
   })
 
   it('opens the session of a node that only the drift overlay draws', async () => {
@@ -1681,43 +1946,38 @@ describe('AccessMapView — what the canvas draws, the address may name', () => 
     expect(decodeURIComponent(fakeRouter.searchStr())).toBe(
       '?expand=agent:A1,postgres.table:R9',
     )
-    expect(screen.queryByTestId('url-state-notice')).not.toBeInTheDocument()
+    expect(told()).toEqual([])
     expect(
       screen.getByRole('button', { name: 'graph-node-R9' }),
     ).toBeInTheDocument()
   })
 
-  it('keeps the "not on this map" notice dismissed once the operator dismisses it', async () => {
+  it('tells the "not on this map" notice once, and not again when the list opens', async () => {
     const user = userEvent.setup()
     fakeRouter.reset('/access-map?node=GHOST')
     renderView()
-    expect(await screen.findByTestId('url-state-notice')).toHaveTextContent(
-      /node/,
-    )
-    await user.click(screen.getByTestId('url-state-notice-dismiss'))
-    expect(screen.queryByTestId('url-state-notice')).not.toBeInTheDocument()
-    // A render that is no patch of the address: opening the list. It must not bring
-    // the notice back.
+    await waitFor(() => expect(told().join('\n')).toMatch(/node/))
+    // A render that is no patch of the address: opening the list. It must not tell it again.
     await user.click(
       await screen.findByText('Map as a list', { selector: 'summary' }),
     )
     expect(
       await screen.findByRole('button', { name: 'agent-1' }),
     ).toBeInTheDocument()
-    expect(screen.queryByTestId('url-state-notice')).not.toBeInTheDocument()
+    expect(told()).toHaveLength(1)
   })
 
-  it('clears the "not on this map" notice on the operator’s next deliberate change', async () => {
+  it('does not tell the "not on this map" notice again on the operator’s next deliberate change', async () => {
     const user = userEvent.setup()
     fakeRouter.reset('/access-map?node=GHOST')
     renderView()
-    expect(await screen.findByTestId('url-state-notice')).toBeInTheDocument()
+    await waitFor(() => expect(told()).toHaveLength(1))
     await user.click(
       await screen.findByRole('button', { name: 'graph-node-A1' }),
     )
     await user.keyboard('{Escape}')
     await waitFor(() => expect(fakeRouter.searchStr()).toBe(''))
-    expect(screen.queryByTestId('url-state-notice')).not.toBeInTheDocument()
+    expect(told()).toHaveLength(1)
   })
 
   it('reads a chain of expansions whatever order the address lists them in', async () => {
@@ -1749,7 +2009,7 @@ describe('AccessMapView — what the canvas draws, the address may name', () => 
     expect(
       await screen.findByRole('button', { name: 'graph-node-R10' }),
     ).toBeInTheDocument()
-    expect(screen.queryByTestId('url-state-notice')).not.toBeInTheDocument()
+    expect(told()).toEqual([])
     expect(decodeURIComponent(fakeRouter.searchStr())).toBe(
       '?expand=postgres.table:R10,postgres.table:R9,agent:A1',
     )
@@ -1762,9 +2022,7 @@ describe('AccessMapView — what the canvas draws, the address may name', () => 
     vi.mocked(accessMapApi.drift).mockClear()
     fakeRouter.reset('/access-map?expand=db_role:U7')
     renderView()
-    expect(await screen.findByTestId('url-state-notice')).toHaveTextContent(
-      /expand/,
-    )
+    await waitFor(() => expect(told().join('\n')).toMatch(/expand/))
     expect(accessMapApi.neighbors).not.toHaveBeenCalled()
     expect(accessMapApi.drift).not.toHaveBeenCalled()
     await waitFor(() => expect(fakeRouter.searchStr()).toBe(''))
@@ -1789,9 +2047,7 @@ describe('AccessMapView — what the canvas draws, the address may name', () => 
     })
     fakeRouter.reset('/access-map?drift=1&expand=db_role:U8')
     renderView()
-    expect(await screen.findByTestId('url-state-notice')).toHaveTextContent(
-      /expand/,
-    )
+    await waitFor(() => expect(told().join('\n')).toMatch(/expand/))
     expect(accessMapApi.neighbors).not.toHaveBeenCalled()
   })
 
@@ -1855,23 +2111,19 @@ describe('AccessMapView — what the canvas draws, the address may name', () => 
   it('keeps the notice for a refused value when a node is dropped as well', async () => {
     fakeRouter.reset('/access-map?mode=bogus&node=GHOST')
     renderView()
-    await waitFor(() =>
-      expect(screen.getByTestId('url-state-notice')).toHaveTextContent(
-        /mode, node/,
-      ),
-    )
+    await waitFor(() => expect(told().join('\n')).toMatch(/mode, node/))
     await waitFor(() => expect(fakeRouter.searchStr()).toBe(''))
   })
 
-  it('NON-FIRING: a refused value still clears on the next change', async () => {
+  it('NON-FIRING: a refused value is told once and not again on the next change', async () => {
     const user = userEvent.setup()
     fakeRouter.reset('/access-map?mode=bogus')
     renderView()
-    expect(await screen.findByTestId('url-state-notice')).toBeInTheDocument()
+    await waitFor(() => expect(told()).toHaveLength(1))
     await user.click(
       await screen.findByRole('button', { name: 'graph-node-A1' }),
     )
-    expect(screen.queryByTestId('url-state-notice')).not.toBeInTheDocument()
+    expect(told()).toHaveLength(1)
   })
 })
 

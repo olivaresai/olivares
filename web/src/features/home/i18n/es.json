@@ -64,7 +64,20 @@
     "waiting": "Esperando aprobación",
     "needsYou": "Te necesita",
     "idle": "Inactiva",
-    "approvalsUnread": "No se pudieron leer las aprobaciones, así que no se dibujan las esperas de aprobación."
+    "approvalsUnread": "Las aprobaciones aún no se han leído o no se pudieron leer, así que no se dibujan las esperas de aprobación.",
+    "approvalsPartial": "Solo se leyó una parte de las aprobaciones, así que algunas esperas de aprobación podrían no dibujarse.",
+    "step": {
+      "Bash": "Ejecuta {{what}}",
+      "Read": "Lee {{what}}",
+      "Edit": "Edita {{what}}",
+      "Write": "Escribe {{what}}",
+      "Grep": "Busca {{what}}",
+      "Glob": "Busca archivos {{what}}",
+      "WebFetch": "Lee {{what}}",
+      "WebSearch": "Busca en la web {{what}}",
+      "Task": "Trabaja con un agente",
+      "Agent": "Trabaja con un agente"
+    }
   },
   "summary": {
     "heading": "Resumen",
@@ -96,12 +109,5 @@
   "state": {
     "pendingIdle": "Consulta no iniciada — abre para cargar",
     "pendingPaused": "Consulta en pausa — esperando para reanudar"
-  },
-  "proof": {
-    "verified": "Cadena verificada a las {{time}}",
-    "entries_one": "{{n}} entrada",
-    "entries_many": "{{n}} entradas",
-    "entries_other": "{{n}} entradas",
-    "broken": "Cadena rota: abre el Registro"
   }
 }

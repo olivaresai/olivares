@@ -1,0 +1,182 @@
+{
+  "title": "Реєстр аудиту",
+  "subtitle": "Читайте підписаний запис активності ШІ.",
+  "subtitleSystem": "Ланцюг системного тенанта адміністративних операцій між тенантами (лише читання).",
+  "searchLoaded": "Фільтрувати лише завантажені рядки (на боці клієнта)…",
+  "scan": {
+    "incomplete": "Проскановано до seq {{seq}} — не весь реєстр; «Завантажити ще» продовжує сканування."
+  },
+  "scope": {
+    "label": "Область реєстру",
+    "tenant": "Реєстр тенанта",
+    "system": "Системний реєстр",
+    "systemHint": "Ланцюг системного тенанта фіксує адміністративні операції між тенантами й тут доступний лише для читання. Перевірка та експорт працюють із реєстрами тенантів."
+  },
+  "actorKind": {
+    "user": "Користувач",
+    "agent": "Агент",
+    "connector": "Конектор",
+    "system": "Система"
+  },
+  "verify": {
+    "action": "Перевірити ланцюг",
+    "failed": "Не вдалося завершити перевірку.",
+    "chain": "Ланцюг · ланок: {{checked}}",
+    "checkpoints": "Контрольні точки · підписано: {{count}}",
+    "noCheckpoints": "Підписаних контрольних точок ще немає",
+    "attested": "Атестовано до seq {{seq}}",
+    "chainBreak": "Ланцюг розірвано на seq {{seq}}",
+    "checkpointBreak": "Підпис контрольної точки не пройшов перевірку на seq {{seq}}"
+  },
+  "pubkey": {
+    "label": "Ключ підпису реєстру",
+    "key": "ключ",
+    "hint": "Поділіться цим відкритим ключем Ed25519, щоб зовнішня сторона могла перевіряти експортовані події І контрольні точки офлайн — обидва підписує той самий ключ.",
+    "failed": "Ключ перевірки недоступний."
+  },
+  "export": {
+    "action": "Експортувати",
+    "formatLabel": "Формат експорту",
+    "fromSeq": "Від seq",
+    "toSeq": "До seq",
+    "optional": "Необов’язково",
+    "useCurrent": "Використати поточні фільтри й діапазон",
+    "format": {
+      "cef": "CEF",
+      "leef": "LEEF",
+      "syslog": "Syslog",
+      "otlp": "Запит OTLP",
+      "otlp_envelope": "Запит OTLP (псевдонім)",
+      "otlp_log_record": "Рядки OTLP LogRecord",
+      "ocsf": "OCSF"
+    },
+    "done": "Експорт завантажено.",
+    "failed": "Експорт не вдався.",
+    "forbidden": "Ви не маєте дозволу експортувати реєстр.",
+    "download": "Завантажити"
+  },
+  "detail": {
+    "title": "Подія доказу",
+    "seqTitle": "Подія №{{seq}}",
+    "signed": "Підписана подія — цей рядок містить власний підпис над хешем свого ланцюга",
+    "seq": "Послідовність",
+    "occurred": "Сталося",
+    "action": "Дія",
+    "actor": "Виконавець",
+    "actorSystem": "система",
+    "target": "Ціль",
+    "id": "ID події",
+    "prevHash": "Попередній хеш",
+    "prev": "поперед.",
+    "hash": "Хеш події",
+    "this": "цей",
+    "sig": "Підпис події",
+    "checkpoint": "підпис",
+    "actorMember": "Учасник"
+  },
+  "empty": {
+    "title": "Доказів ще немає",
+    "description": "Реєстр для цієї області порожній. Керовані операції додають події з виявленням підробки в міру їх виконання."
+  },
+  "actions": {
+    "governance_approval_create": "Запит на затвердження",
+    "governance_approval_decision": "Рішення щодо затвердження записано",
+    "governance_approval_cancel": "Затвердження скасовано",
+    "sessions_run_launched": "Сесію запущено",
+    "sessions_run_stopping": "Запит на зупинку сесії",
+    "sessions_work_item_create": "Робочий елемент створено",
+    "sessions_work_item_ready": "Робочий елемент позначено готовим",
+    "sessions_work_item_complete": "Робочий елемент завершено",
+    "authorization_decision_record": "Рішення щодо авторизації записано",
+    "policy_artifact_record": "Докази політики записано",
+    "governance_policy_create": "Політику створено",
+    "governance_policy_update": "Політику оновлено",
+    "governance_policy_delete": "Політику видалено",
+    "auth_login": "Вхід виконано",
+    "auth_logout": "Вихід виконано",
+    "auth_login_failed": "Вхід не вдався",
+    "auth_webauthn_register": "Ключ доступу додано",
+    "auth_webauthn_unregister": "Ключ доступу вилучено",
+    "user_set_password": "Пароль змінено",
+    "user_create": "Особу додано",
+    "membership_grant": "Роль надано",
+    "membership_update": "Роль змінено",
+    "membership_offboard": "Особу вилучено",
+    "token_issue": "Токен API створено",
+    "token_revoke": "Токен API відкликано",
+    "secret_delete": "Секрет видалено"
+  },
+  "targets": {
+    "core_policy": "Політика"
+  },
+  "internal": {
+    "hidden": "Приховано внутрішніх записів: {{count}}",
+    "show": "Показати внутрішні записи",
+    "hide": "Приховати внутрішні записи",
+    "allHidden": "Усе, що завантажено досі, — внутрішні записи."
+  },
+  "ledger": {
+    "query": "Запит до реєстру",
+    "placeholder": "person:  action:  since:7d  або слова",
+    "addFilter": "Додати фільтр",
+    "remove": "Вилучити {{token}}",
+    "add": "Додати {{token}} до запиту",
+    "commands": "Пошук і команди",
+    "problem": {
+      "key": "{{token}} не є фільтром реєстру. Використовуйте person:, action:, kind:, target:, tool:, folder:, since:, until: або прості слова.",
+      "time": "{{token}} не є часом. Використовуйте 90m, 24h, 7d, 2w або дату, наприклад 2026-10-20.",
+      "person": "Нікого не знайдено за {{token}}. Використовуйте ім’я, електронну пошту або user:<id>.",
+      "several": "{{token}} підходить кільком особам. Використовуйте повне ім’я, електронну пошту або user:<id>.",
+      "names": "{{token}} тут знайти неможливо. Використовуйте user:<id>."
+    },
+    "entries": "Записи реєстру",
+    "group": {
+      "label": "Показати",
+      "session": "За сесією",
+      "events": "Усі записи"
+    },
+    "needsYou": "Потрібні ви",
+    "outside": "Поза сесією",
+    "session": "Сесія {{ref}}",
+    "count_one": "{{count}} запис",
+    "count_few": "{{count}} записи",
+    "count_many": "{{count}} записів",
+    "count_other": "{{count}} запису",
+    "sentence": "{{what}}, автор: {{who}}",
+    "signed": "Підписано",
+    "histogram": {
+      "hour": "Записів за годину",
+      "day": "Записів за день",
+      "week": "Записів за тиждень",
+      "bar_one": "{{at}}, {{count}} запис",
+      "bar_few": "{{at}}, {{count}} записи",
+      "bar_many": "{{at}}, {{count}} записів",
+      "bar_other": "{{at}}, {{count}} запису",
+      "loaded_one": "Завантажено {{count}} запис",
+      "loaded_few": "Завантажено {{count}} записи",
+      "loaded_many": "Завантажено {{count}} записів",
+      "loaded_other": "Завантажено {{count}} запису",
+      "sessions_one": "{{count}} сесія",
+      "sessions_few": "{{count}} сесії",
+      "sessions_many": "{{count}} сесій",
+      "sessions_other": "{{count}} сесії",
+      "people_one": "{{count}} особа",
+      "people_few": "{{count}} особи",
+      "people_many": "{{count}} осіб",
+      "people_other": "{{count}} особи",
+      "more": "є що завантажити",
+      "now": "Зараз"
+    },
+    "entry": {
+      "title": "Запис {{seq}}",
+      "chain": "Позиція в ланцюгу",
+      "previous": "Попередній · {{seq}}",
+      "this": "Цей запис · {{seq}}",
+      "next": "Наступний · {{seq}}",
+      "newest": "Найновіший запис",
+      "nextUnread": "Наступний непрочитаний",
+      "chainHint": "Кожен запис містить хеш попереднього. Змініть один — і зламаються всі наступні хеші.",
+      "signedEntry": "Підписаний запис"
+    }
+  }
+}

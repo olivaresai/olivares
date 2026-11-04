@@ -123,7 +123,7 @@
     "add": "Добавить {{token}} в запрос",
     "commands": "Поиск и команды",
     "problem": {
-      "key": "{{token}} — не фильтр реестра. Используйте person:, action:, kind:, target:, since:, until: или слова.",
+      "key": "{{token}} — не фильтр реестра. Используйте person:, action:, kind:, target:, tool:, folder:, since:, until: или слова.",
       "time": "{{token}} — не время. Используйте 90m, 24h, 7d, 2w или дату вида 2026-10-20.",
       "person": "Никто не подходит под {{token}}. Укажите имя, почту или user:<id>.",
       "several": "Под {{token}} подходят несколько человек. Укажите полное имя, почту или user:<id>.",

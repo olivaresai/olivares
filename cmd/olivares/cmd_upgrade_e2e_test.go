@@ -177,6 +177,9 @@ type updFixture struct {
 	// the reading the ordering guards were decided against and the swap — which is
 	// where the concurrent-install defects of C03-23 live. A sleep would be a race.
 	onArtifact func()
+	// artifactGap, when set, serves the artifact in parts with this pause between them: a
+	// slow link that keeps delivering bytes.
+	artifactGap time.Duration
 }
 
 type enterpriseGateRequest struct {
@@ -363,7 +366,18 @@ func newUpdFixtureSignedBy(t *testing.T, priv ed25519.PrivateKey, version, minVe
 			body = append([]byte(nil), f.artifact...)
 			body[len(body)/2] ^= 0xFF
 		}
-		_, _ = w.Write(body)
+		if f.artifactGap <= 0 {
+			_, _ = w.Write(body)
+			return
+		}
+		const parts = 8
+		for i := 0; i < parts; i++ {
+			_, _ = w.Write(body[i*len(body)/parts : (i+1)*len(body)/parts])
+			w.(http.Flusher).Flush()
+			if i < parts-1 {
+				time.Sleep(f.artifactGap)
+			}
+		}
 	}
 
 	mux := http.NewServeMux()

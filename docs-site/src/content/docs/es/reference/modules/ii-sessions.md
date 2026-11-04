@@ -103,6 +103,58 @@ imagen rechaza el mensaje por su nombre antes de enviar nada. La API es
 `GET .../attachments/{id}` y `attachments` en `.../input`. Las imágenes viven bajo el
 directorio de datos, por tenant y sesión, y se eliminan junto con la sesión.
 
+## Carpetas de sesión en recursos compartidos NFS o SMB
+
+Una carpeta de sesión es una ruta en el host del motor, así que un recurso compartido de red es una carpeta una vez que el host lo ha montado. `olivares netfolder add` lo hace con las unidades de montaje de systemd y registra el punto de montaje como carpeta; el montaje sigue siendo de systemd, y las unidades son ficheros normales que puedes leer y editar. Ejecútalo como root en el host del motor:
+
+```sh
+printf '%s\n' "$SMB_PASSWORD" | sudo olivares netfolder add files //fileserver/projects --user svc --password-stdin
+sudo olivares netfolder add data fileserver:/export --mode write_no_delete
+olivares netfolder ls
+```
+
+El origen es `//server/share` para SMB o `server:/export` para NFS, tal como lo escribe `mount(8)`. El nombre tiene letras minúsculas y dígitos, y da nombre al punto de montaje `/srv/olivares/mnt/<name>`. `--mode` es el modo de acceso de la carpeta (`rw` por defecto). Las unidades nombran la cuenta `olivares` como propietaria de cada fichero que muestra una carpeta SMB, así que el motor debe ejecutarse con esa cuenta. `ls` muestra cada carpeta como `mounted`, `unmounted` (se monta en el primer uso, y `ls` no lo activa) o `not responding`. Una carpeta que ya existe nunca se sobrescribe.
+
+Para el ejemplo SMB, el comando escribe estas unidades, medidas en Debian 13 (Linux 6.12) contra una exportación NFSv4.2 y un recurso Samba 4.22 (SMB 3.1.1). Los nombres de fichero son los que imprime `systemd-escape -p /srv/olivares/mnt/files` con `.mount` y `.automount` añadidos.
+
+```ini
+# /etc/systemd/system/srv-olivares-mnt-files.mount
+[Unit]
+Description=Olivares network folder files
+After=network-online.target
+Wants=network-online.target
+
+[Mount]
+What=//fileserver/projects
+Where=/srv/olivares/mnt/files
+Type=cifs
+Options=credentials=/etc/olivares/netfolders/files.cred,uid=olivares,gid=olivares,vers=3.1.1,nodev,nosuid,soft,echo_interval=5
+TimeoutSec=30
+```
+
+```ini
+# /etc/systemd/system/srv-olivares-mnt-files.automount
+[Unit]
+Description=Olivares network folder files (mounted on first use)
+
+[Automount]
+Where=/srv/olivares/mnt/files
+TimeoutIdleSec=0
+
+[Install]
+WantedBy=remote-fs.target
+```
+
+Para NFS escribe `Type=nfs4`, `What=fileserver:/export` y `Options=nodev,nosuid,vers=4.2,soft,timeo=50,retrans=2`, y no crea fichero de credenciales. En un host que aplica SELinux con la política del appliance añade `context=system_u:object_r:olivares_workspace_t:s0` a las opciones, la etiqueta que ya usan el motor y sus herramientas de sesión para una carpeta. Para eliminar una carpeta, ejecuta `systemctl disable --now` en sus dos unidades, bórralas junto con su fichero de credenciales y desregistra la carpeta.
+
+- **Todos los que tienen la carpeta actúan como una sola cuenta.** Los ficheros se leen y escriben como la cuenta que presenta el montaje: `uid=` y `gid=` para SMB, el mapeo de usuarios de la exportación para NFS. El recurso compartido no distingue a las personas. Olivares decide quién recibe la carpeta.
+- **La credencial queda en un fichero.** El comando escribe `username=` y `password=` en el fichero `credentials=`, propiedad de root con modo 0600, a partir de la contraseña de la entrada estándar. La contraseña no aparece en ninguna unidad, opción de montaje, argumento de proceso ni línea del journal: `mount.cifs` recibe solo la ruta. NFS con `sec=sys` no necesita credencial.
+- **La unidad automount mantiene el arranque independiente del servidor de ficheros.** Nada espera al recurso compartido durante el arranque. El primer uso lo monta, y un servidor caído en ese momento hace fallar ese uso, no el arranque.
+- **Usa `soft`.** Un montaje NFS `hard`, el valor por defecto, deja bloqueado un proceso que accede a un servidor caído, sin posibilidad de detenerlo. Con las opciones anteriores, una lectura o escritura en un recurso montado falla con un error de entrada/salida o "Host is down" tras 20 a 30 segundos, y el recurso vuelve a funcionar cuando el servidor responde.
+- **Una carpeta que no responde se informa.** Registrar la carpeta, abrirla, listarla e iniciar una sesión en ella esperan 10 segundos al recurso compartido cada una, y luego se rechazan con el mensaje "The folder ... is not responding. If it is on a network share, check that its file server is up and reachable." y el estado 424. La sesión no arranca.
+- **`write_no_delete` se mantiene.** Landlock lo aplica en la capa de sistema de ficheros del kernel, por encima del sistema de ficheros de red. En lanzamientos reales de sesión sobre ambos recursos, una sesión creó y cambió ficheros y no pudo renombrar, borrar ni eliminar directorios, igual que en un disco local, mientras que `rw` lo permitió. Un host que no puede confinar sigue rechazando el lanzamiento.
+- **La carpeta es el límite.** En esos mismos lanzamientos, en ambos modos, una escritura en el padre de la carpeta, que está en el mismo recurso, fue rechazada y no dejó ningún fichero. La sesión escribe solo dentro de su carpeta.
+
 ## Qué consume (y qué deriva)
 
 El módulo II consume el mismo flujo de observaciones de datos mínimos que el

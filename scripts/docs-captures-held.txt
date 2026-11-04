@@ -19,20 +19,13 @@ eventing #1850 the engine resolves a webhook destination when a subscription is 
 voice #1850 a voice session needs a voice-capable provider that the offline demo lacks
 sandbox #1850 scenario runs need a sandbox executor that the demo estate does not provide
 console-bindings #1850 needs a chosen source and posture requests that the dataset does not create
-attestation #1844 the provenance note prints raw backticks and the release number in its content
-logs #1897 prints host paths from the live log stream
-api-playground #1897 prints endpoint and route counts that change every release
-communications-new #1897 is a blank form with nothing to show
+sourceDiff #1897 a comparison is read live from a running GitHub or GitLab source: the offline demo has none, so the page shows its blank form and "A source is required"
+models #1897 the Anthropic and OpenAI model lists need a provider team key and the vendor API: the offline demo's reads fail, so the page shows "team key could not be read" and Failed rows
 rate-limits #1850 shows only provider-unavailable panels: the Admin API connector is not wired
-settings #1897 the language list prints missing-glyph boxes for the CJK names
-sourceDiff #1897 is an empty form with a validation error
 dashboards #2265 retake after #2268: the Active agents card now counts the Working set the Sessions view lists; eight one-event adoption sessions still read working until #2272; judged on the 1440px capture
-work-apply-refused #1897 the view mocks a refusal for a request it never sends, so the page cannot show it
 session-viewer #1843 published image predates #1784/#1785; needs a real signed-in vendor session, not the demo runtime
 permissions #1966 passes the shutter checks; the repeated "This request does not include what will run." note is fixed in #2269 (shown once, only where a command is expected), so the retake waits for the next capture run
-status-page #1897 prints the clock time of the capture ("Last updated")
 setup #1844 the first-boot hint prints raw backticks around its commands
-templates-readonly #1897 the permission strip has no effect: the page shows an enabled New template
 sessions #1843 published image predates #1784/#1785; needs a real signed-in vendor session, not the demo runtime
 agentops #2265 retake after #2268: the seed names ten sessions of three engines and the adoption plane adds eight untitled ones, not 48, which read working until #2272; judged on the 1440px capture
 workspace #2668 the canonical estate has one core workspace, and creating the second one the view selects needs owner step-up with a passkey the capture session cannot satisfy
@@ -50,7 +43,6 @@ claude-policy #2672 fleet managed settings are a Business capability: the Commun
 adoption #1897 no seeder writes the adoption data the view needs, so the page shows its empty state
 adoption-overview #1897 the live telemetry card has no tool table: the dataset writes no per-tool telemetry
 killswitch #1897 the six seeded stops show the role=alert banner, which the shutter reads as an error
-models #1897 the seeded estate has no provider team key, so Anthropic and OpenAI read as unreadable
 access-map #2915 on a fresh estate the access map is empty: no session produces the access it draws
 access-map-drift #2915 the drift overlay has no drift to draw on the demo estate, so its element is not found
 video-05-edge-honesty #2915 the access map graph is not drawn on the demo estate, so the element the shot frames is not found

@@ -67,6 +67,7 @@ func doctorFixture(t *testing.T) (*doctorOptions, doctorDeps) {
 	deps := defaultDoctorDeps()
 	// No exec seam on the test host: the image answer is not what these tests measure.
 	deps.containerImage = nil
+	deps.userBusUnhideable = nil // the user manager of the test host is not what these tests measure
 	deps.confinement = func() confine.State { return confine.State{Mode: confine.ModeLandlock, ABI: 3} }
 	deps.euid = os.Geteuid
 	deps.lookupUID = func(string) (int, error) { return os.Geteuid(), nil }

@@ -73,6 +73,9 @@ func newToolProvidersCmd() *cobra.Command {
 				path += "?tenant_id=" + url.QueryEscape(cfg.tenant)
 			}
 			status, b, err := cfg.do(cmd.Context(), "GET", path, nil, http.StatusOK, http.StatusNotFound)
+			if notSystemAdmin(err) {
+				return cfg.showAccountsAndKeys(cmd)
+			}
 			if err != nil {
 				return err
 			}

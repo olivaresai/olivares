@@ -10,6 +10,10 @@ import '@/features/_intel'
 import { ApiError } from '@/lib/api/errors'
 import './i18n'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 // El conjunto de permisos es MUTABLE por casilla: el motor separa `models:routing:admin` (gastar)
 // de `models:routing:write` (editar la política), y la pantalla tiene que separar lo mismo.
 let permisos = new Set<string>()

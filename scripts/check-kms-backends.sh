@@ -143,6 +143,7 @@ if missing:
 PUBLISHED = [
     "README.md", "README.de.md", "README.es.md", "README.fr.md",
     "README.ja.md", "README.ru.md", "README.zh.md",
+    "README.uk.md", "README.ko.md", "README.pt.md",
     "docs/trust/feature-matrix.md",
     "docs/trust/one-pager.md",
 ]

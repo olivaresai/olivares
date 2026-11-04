@@ -45,6 +45,10 @@ type WorkLaunchSpec struct {
 	// durable agent owner.
 	AuditActorRef string
 	Runtime       CreateRunParams
+	// Schedule is set by a scheduled run, which no person launches: the session then
+	// runs as the work item's owner agent, on that agent's own credential, once the
+	// launch gate has verified the approval it names.
+	Schedule *ScheduledLaunch
 	// askedAgent is the owner agent createRunForWork asked the profile assignments for;
 	// the reservation refuses a launch whose owner changed since.
 	askedAgent string
@@ -176,6 +180,13 @@ func (m *Module) createRunForWork(
 	// The owner agent's department standards, as a person's are asked for POST /runs.
 	spec.Runtime.asks.standing = m.askStanding(ctx, tenant, agent.Principal)
 	spec.askedAgent = agentRef
+	if spec.Schedule != nil {
+		if spec.Runtime.AgentRef != "" && spec.Runtime.AgentRef != agentRef {
+			return runDTO{}, workLaunchReservation{}, false, broken(http.StatusUnprocessableEntity, "owner_ineligible")
+		}
+		spec.Runtime.AgentRef = agentRef
+		spec.Runtime.schedule = spec.Schedule
+	}
 	if strings.TrimSpace(spec.Runtime.ProviderProfileRef) == "" {
 		ref, err := m.workLaunchDefaultProfile(ctx, agent, spec, lease, now)
 		if err != nil {

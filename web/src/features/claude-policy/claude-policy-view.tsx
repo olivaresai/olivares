@@ -7,16 +7,16 @@
 // Cedar/OPA policy-as-code, and read the PERMITTED-vs-OBSERVED drift the engine
 // emits. Presentation + audited action over the SAME API (ARCHITECTURE.md): authoring is
 // wired to the DECLARED contract with an honest pending seam; drift is real.
-import { useNavigate } from '@tanstack/react-router'
 import { ScrollText } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useTabParam } from '@/lib/hooks/use-tab-param'
 import { useTranslation } from 'react-i18next'
 import { ForbiddenState } from '@/components/ui/error-state'
 import { PageHeader } from '@/components/ui/page-header'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { RecordingNotice } from '@/features/recordings/recording-notice'
+import { RecordingNoticeSlot } from '@/features/recording-notice-slot'
 import { useAuth } from '@/lib/auth/context'
 import { CedarOpaView } from './cedar-opa-view'
+import { DepartmentInstructionsPanel } from './department-instructions-panel'
 import { DriftView } from './drift'
 import { ManagedAgentsHitl } from './managed-agents-hitl'
 import { PolicyAuthoringPanel } from './policy-authoring-panel'
@@ -35,27 +35,10 @@ const TAB_VALUES = [
   'hooks',
   'managed-mcp',
   'sandbox',
+  'department-instructions',
   'policy-as-code',
   'hitl',
 ] as const
-
-type TabKey = (typeof TAB_VALUES)[number]
-
-/**
- * — `?tab=` DEEP LINK. The policy-as-code tab is where a policy-derived access edge
- * is actually changed, so the access map links straight to it; with the tab as plain
- * local state seeded at 'drift', that link landed on a different surface and the operator
- * had to go looking. Unknown/absent values fall back to 'drift' rather than rendering an
- * empty shell (same contract as model-ops-view.tsx:55-60).
- */
-function initialTab(): TabKey {
-  const fallback: TabKey = 'drift'
-  if (typeof window === 'undefined') return fallback
-  const want = new URLSearchParams(window.location.search).get('tab')
-  return want && (TAB_VALUES as readonly string[]).includes(want)
-    ? (want as TabKey)
-    : fallback
-}
 
 const MANAGED_SETTINGS_DEFAULT = `{
   "permissions": {
@@ -82,28 +65,9 @@ export default function ClaudePolicyView() {
   const { t } = useTranslation(['claudePolicy', 'common'])
   const { can } = useAuth()
   const canRead = can('governance:claude-policy:read')
-  const navigate = useNavigate()
-  const [tab, setTabState] = useState<TabKey>(initialTab)
-  const pendingTab = useRef<TabKey | null>(null)
-  useEffect(() => {
-    pendingTab.current = null
-  }, [tab])
-
-  function setTab(value: TabKey) {
-    if (value === pendingTab.current) return
-    // Radix focus and mouse-down can request the same tab before state commits.
-    pendingTab.current = value
-    setTabState(value)
-    // REPLACE, so Back leaves the view instead of undoing a tab click.
-    void navigate({
-      search: (prev: Record<string, unknown>) => ({ ...prev, tab: value }),
-      replace: true,
-      // A tab change is not a page change: keep the router's scroll restoration out of
-      // it, or it writes a stale cached scrollLeft back onto the tab strip after render
-      // (see console-view.tsx, measured 2026-09-06).
-      resetScroll: false,
-    } as never)
-  }
+  // `?tab=` is the section: the access map links straight to policy-as-code, and a reload
+  // or Back keeps it. Unknown values fall back to the first tab.
+  const [tab, setTab] = useTabParam(TAB_VALUES)
 
   if (!canRead) {
     return (
@@ -126,9 +90,9 @@ export default function ClaudePolicyView() {
         icon={ScrollText}
       />
 
-      <RecordingNotice namespace="claude-policy" />
+      <RecordingNoticeSlot namespace="claude-policy" />
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="drift">{t('tabs.drift')}</TabsTrigger>
           <TabsTrigger value="managed-settings">
@@ -137,6 +101,9 @@ export default function ClaudePolicyView() {
           <TabsTrigger value="hooks">{t('tabs.hooks')}</TabsTrigger>
           <TabsTrigger value="managed-mcp">{t('tabs.managedMcp')}</TabsTrigger>
           <TabsTrigger value="sandbox">{t('tabs.sandbox')}</TabsTrigger>
+          <TabsTrigger value="department-instructions">
+            {t('tabs.departmentInstructions')}
+          </TabsTrigger>
           <TabsTrigger value="policy-as-code">
             {t('tabs.policyAsCode')}
           </TabsTrigger>
@@ -180,6 +147,10 @@ export default function ClaudePolicyView() {
             defaultDoc={SANDBOX_DEFAULT}
             reference={<SandboxReference />}
           />
+        </TabsContent>
+
+        <TabsContent value="department-instructions">
+          <DepartmentInstructionsPanel />
         </TabsContent>
 
         <TabsContent value="policy-as-code">

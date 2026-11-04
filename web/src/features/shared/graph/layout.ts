@@ -155,7 +155,8 @@ export function layeredLayout(
   // the same arithmetic honest (floor(i/w)=0, i%w=i, min(len,w)=len).
   const wrap = maxPerColumn > 0 ? maxPerColumn : Number.MAX_SAFE_INTEGER
   const subsIn = (n: number) => Math.max(1, Math.ceil(n / wrap))
-  const rowsIn = (n: number) => Math.min(n, wrap)
+  // Balanced: 10 nodes over a wrap of 8 are two sub-columns of 5, not 8 and a stray 2.
+  const rowsIn = (n: number) => Math.ceil(n / subsIn(n))
 
   const height = Math.max(
     0,
@@ -177,12 +178,13 @@ export function layeredLayout(
   columns.forEach((col, l) => {
     const layerHeight = (rowsIn(col.length) - 1) * nodeGapY
     const yLayer = (height - layerHeight) / 2
+    const per = rowsIn(col.length)
     col.forEach((id, i) => {
-      const sub = Math.floor(i / wrap)
-      const row = i % wrap
-      // The last sub-column is usually short; center it against its own layer, the
-      // same instinct this layout already had for short columns.
-      const inThisSub = Math.min(col.length - sub * wrap, wrap)
+      const sub = Math.floor(i / per)
+      const row = i % per
+      // The last sub-column can still be one short; center it against its own layer,
+      // the same instinct this layout already had for short columns.
+      const inThisSub = Math.min(col.length - sub * per, per)
       const subHeight = (inThisSub - 1) * nodeGapY
       positions[id] = {
         x: layerX[l]! + sub * subGapX,

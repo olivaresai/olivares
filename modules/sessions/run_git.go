@@ -82,11 +82,32 @@ func (g sessionGit) branch(ctx context.Context, name string, create bool) error 
 	return (gitpublish.LocalRepository{Run: g.exec}).Branch(ctx, name, create)
 }
 
+// initialize makes a session folder that is not a Git repository one (git init, branch
+// main): the one session Git write that runs where no repository is yet, under the same
+// confinement, environment and offline boundary as every other.
+func (g sessionGit) initialize(ctx context.Context) error {
+	if !g.writable() {
+		return &runErr{http.StatusForbidden, "this session folder does not permit Git changes"}
+	}
+	if _, ok := gitlayout.Read(g.dir); ok {
+		return conflictErr("this session folder is already a Git repository")
+	}
+	_, err := g.run(ctx, nil, nil, []string{"init", "--quiet", "--initial-branch=main"}, "", nil)
+	return err
+}
+
 func (g sessionGit) exec(ctx context.Context, args []string, input string, identity []string) (string, error) {
 	layout, ok := gitlayout.Read(g.dir)
 	if !ok {
 		return "", &runErr{http.StatusNotFound, "this session folder is not a Git repository"}
 	}
+	return g.run(ctx, []string{"--git-dir=" + layout.GitDir, "--work-tree=" + g.dir, "--literal-pathspecs"},
+		[]EnvVar{{"GIT_COMMON_DIR", layout.CommonDir}}, args, input, identity)
+}
+
+// run is one confined Git command in the session folder: repo names the repository it
+// works on (empty only for init) and repoEnv its environment.
+func (g sessionGit) run(ctx context.Context, repo []string, repoEnv []EnvVar, args []string, input string, identity []string) (string, error) {
 	program, err := exec.LookPath("git")
 	if err != nil {
 		return "", &runErr{http.StatusServiceUnavailable, "Git is unavailable on this server"}
@@ -99,14 +120,15 @@ func (g sessionGit) exec(ctx context.Context, args []string, input string, ident
 	env := []EnvVar{{"PATH", os.Getenv("PATH")}, {"LANG", "C"}, {"LC_ALL", "C"},
 		{"GIT_CONFIG_NOSYSTEM", "1"}, {"GIT_CONFIG_GLOBAL", "/dev/null"},
 		{"GIT_TERMINAL_PROMPT", "0"}, {"GIT_NO_REPLACE_OBJECTS", "1"}, {"GIT_NO_LAZY_FETCH", "1"},
-		{"GIT_OPTIONAL_LOCKS", "0"}, {"GIT_COMMON_DIR", layout.CommonDir}}
+		{"GIT_OPTIONAL_LOCKS", "0"}}
+	env = append(env, repoEnv...)
 	for _, pair := range identity {
 		name, value, _ := strings.Cut(pair, "=")
 		env = append(env, EnvVar{name, value})
 	}
-	fixed := []string{"--git-dir=" + layout.GitDir, "--work-tree=" + g.dir, "--literal-pathspecs",
+	fixed := append(append([]string(nil), repo...),
 		"-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "protocol.allow=never",
-		"-c", "commit.gpgsign=false", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "-c", "checkout.workers=1"}
+		"-c", "commit.gpgsign=false", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "-c", "checkout.workers=1")
 	ctx, cancel := context.WithTimeout(ctx, worktreeGitTimeout)
 	defer cancel()
 	spec := LaunchSpec{Program: program, Args: append(fixed, args...), Dir: g.dir, Env: env, Confinement: policy, ConfinementRequired: true,
@@ -286,6 +308,8 @@ func (m *Module) handleRunGit(w http.ResponseWriter, r *http.Request, mc api.Mod
 		err = g.commit(r.Context(), body.Message, mc.Principal)
 	case "branch":
 		err = g.branch(r.Context(), body.Name, body.Create)
+	case "init":
+		err = g.initialize(r.Context())
 	default:
 		err = badRequest("unknown Git action")
 	}

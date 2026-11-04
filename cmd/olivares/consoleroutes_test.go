@@ -2013,6 +2013,22 @@ const consoleUncoveredBudget = 35
 // Edition-specific dispositions are added to a clone at test execution, after
 // thisEdition has been initialized; this shared inventory stays immutable.
 var consoleDeferredOperatorSurface = map[string]string{
+	// Business deployment routes (docs/editions.md, Install): Community answers 501. Each one is a
+	// person-facing operation with no console screen yet; its issue carries the screen.
+	"DELETE /v1/m/deploy/definitions/{}":        "Business deployment: no console screen yet, tracked in #4171; Community answers 501",
+	"GET /v1/m/deploy/definitions":              "Business deployment: no console screen yet, tracked in #4172; Community answers 501",
+	"GET /v1/m/deploy/definitions/{}":           "Business deployment: no console screen yet, tracked in #4173; Community answers 501",
+	"GET /v1/m/deploy/definitions/{}/revisions": "Business deployment: no console screen yet, tracked in #4174; Community answers 501",
+	"GET /v1/m/deploy/executor":                 "Business deployment: no console screen yet, tracked in #4175; Community answers 501",
+	"GET /v1/m/deploy/operations":               "Business deployment: no console screen yet, tracked in #4176; Community answers 501",
+	"GET /v1/m/deploy/wirings":                  "Business deployment: no console screen yet, tracked in #4177; Community answers 501",
+	"POST /v1/m/deploy/definitions":             "Business deployment: no console screen yet, tracked in #4178; Community answers 501",
+	"POST /v1/m/deploy/definitions/{}/apply":    "Business deployment: no console screen yet, tracked in #4179; Community answers 501",
+	"POST /v1/m/deploy/definitions/{}/plan":     "Business deployment: no console screen yet, tracked in #4180; Community answers 501",
+	"POST /v1/m/deploy/definitions/{}/retire":   "Business deployment: no console screen yet, tracked in #4181; Community answers 501",
+	"POST /v1/m/deploy/definitions/{}/rollback": "Business deployment: no console screen yet, tracked in #4182; Community answers 501",
+	"POST /v1/m/deploy/definitions/{}/verify":   "Business deployment: no console screen yet, tracked in #4183; Community answers 501",
+	"PUT /v1/m/deploy/definitions/{}":           "Business deployment: no console screen yet, tracked in #4184; Community answers 501",
 	"POST /v1/m/gitpublish/targets/{}/issue-comments": "fixed run-result comments ship through the authenticated " +
 		"REST/SDK operation; the console shows publication intents but has no run-result submit control yet",
 	// The first console increment of K3 (I1, web/src/features/communications) delivered the
@@ -2048,9 +2064,6 @@ var consoleDeferredOperatorSurface = map[string]string{
 		"has no decision-detail screen that would show a reconstruction yet",
 	"GET /v1/m/sessions/providers/{}": "the providers screen lists, adds, tests, rotates and revokes; " +
 		"list and get return the same record, and there is no detail route that would read one",
-	"GET /v1/m/sessions/provider-presets": "the vendor preset catalog is read by the engine and by " +
-		"`olivares provider add --preset` (tab completion lists the refs); the console's add-provider form " +
-		"does not pick a preset yet",
 	"PUT /v1/m/sessions/workspaces/{}/setup-command": "the folder setup command ships as API and " +
 		"`olivares agent workspace setup`; this increment is engine and CLI only, and no console screen stores it yet",
 	"POST /v1/m/sessions/workspaces/{}/setup-command/approve": "approval of the exact setup command text ships as " +
@@ -2066,15 +2079,6 @@ var consoleDeferredOperatorSurface = map[string]string{
 		"no console panel yet, and Community answers 501 business_required",
 	"POST /v1/m/sessions/tool-rings/{}/rollback": "a ring is rolled back with `olivares tool ring rollback`; " +
 		"no console panel yet, and Community answers 501 business_required",
-	// llama.cpp and vLLM run as managed model servers of the engine (#2568). That increment is
-	// engine, CLI and generated clients; the AI tools page has the Ollama service panel but no
-	// panel for these two yet. The panel that adds the callers removes these lines.
-	"GET /v1/m/agenttools/model-servers": "`olivares tool start llama-cpp|vllm` reads each server's state " +
-		"while it waits for the server to answer; the AI tools page has no llama.cpp or vLLM panel yet",
-	"POST /v1/m/agenttools/model-servers/{}/start": "`olivares tool start llama-cpp|vllm --model` starts " +
-		"the server; the AI tools page has no llama.cpp or vLLM panel with a model field yet",
-	"POST /v1/m/agenttools/model-servers/{}/stop": "`olivares tool stop llama-cpp|vllm` stops the server; " +
-		"the AI tools page has no llama.cpp or vLLM panel yet",
 	// Governed connections are Business: Community answers 501 business_required, and the Business
 	// build is driven from the CLI (`olivares connection ls|add|rm|test|grant|revoke`). Neither build
 	// has a console caller in this increment; the console panel adds its callers and removes these.
@@ -2212,7 +2216,9 @@ func TestDepartmentRoutesHaveEditionConsoleDisposition(t *testing.T) {
 	for _, c := range calls {
 		called[c.method+" "+c.path] = true
 	}
-	for _, key := range []string{"PUT /v1/workspaces/{}/parent", "PUT /v1/groups/{}/workspace"} {
+	for _, key := range []string{
+		"PUT /v1/workspaces/{}/parent", "PUT /v1/groups/{}/workspace", "PUT /v1/groups/{}/parent",
+	} {
 		t.Run(key, func(t *testing.T) {
 			if !routed[key] {
 				t.Fatal("the published department operation must remain registered")
@@ -2374,8 +2380,8 @@ func TestPreviewAndExecutorRoutesHaveConsoleDisposition(t *testing.T) {
 		}
 	})
 	t.Run("REST executor setup", func(t *testing.T) {
-		if !called["GET /v1/m/deploy/executor"] {
-			t.Fatal("the deployment console must retain its executor readiness read")
+		if !called["GET /v1/m/deploy/executor"] && strings.TrimSpace(deferredSurfaces["GET /v1/m/deploy/executor"]) == "" {
+			t.Fatal("the deployment console must retain its executor readiness read or declare its deferral")
 		}
 		for _, key := range []string{
 			"GET /v1/m/deploy/executor/config",
@@ -2732,13 +2738,16 @@ func withEditionConsoleSurfaces(surfaces map[string]string) map[string]string {
 	}
 	if thisEdition.departmentService == nil {
 		maps.Copy(surfaces, map[string]string{
-			// Departments are Business (docs/editions.md, #966): the Community build answers 501
-			// departments_unavailable on these two, and their console control is a Business panel
-			// (PANEL_EXTENSIONS.scopesCards), not part of web/src.
+			// Departments and group nesting are Business (docs/editions.md): the Community build
+			// answers 501 departments_unavailable on these three, and their console controls are
+			// Business panels (PANEL_EXTENSIONS.scopesCards and groupParentActions), not part of
+			// web/src.
 			"PUT /v1/workspaces/{}/parent": "Business department move: Community answers 501 " +
 				"departments_unavailable; the department tree is a Business console panel",
 			"PUT /v1/groups/{}/workspace": "Business group placement: Community answers 501 " +
 				"departments_unavailable; placing a group is a Business console panel",
+			"PUT /v1/groups/{}/parent": "Business group nesting: Community answers 501 " +
+				"departments_unavailable; nesting a group is a Business console panel",
 		})
 	}
 	// The cockpit shares the Identity & Scale cut with these command readers.

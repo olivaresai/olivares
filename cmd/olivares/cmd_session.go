@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -47,7 +48,11 @@ import (
 // sessionRunsPath, sessionSourceItemsPath and sessionWorkspacesPath are the endpoints this
 // file speaks to.
 const (
-	sessionRunsPath        = "/v1/m/sessions/runs"
+	sessionRunsPath = "/v1/m/sessions/runs"
+	sessionLivePath = "/v1/m/sessions/live"
+	// observedAddressPrefix starts the id of a session Olivares only observes (no run
+	// launched here): live:<live_ref>, the address the console shows too.
+	observedAddressPrefix  = "live:"
 	sessionSourceItemsPath = "/v1/m/sessions/source-items"
 	sessionWorkspacesPath  = "/v1/m/sessions/workspaces"
 	// sessionListLimit bounds the one list read a name lookup makes. The API sorts
@@ -74,6 +79,7 @@ func newSessionCmd() *cobra.Command {
 	}
 	cmd.AddCommand(
 		newSessionStartCmd(),
+		newSessionRaceCmd(),
 		newSessionSendCmd(),
 		newSessionFollowCmd(),
 		newSessionListCmd(),
@@ -81,18 +87,22 @@ func newSessionCmd() *cobra.Command {
 		newSessionMessagesCmd(),
 		newSessionDiffCmd(),
 		newSessionPeersCmd(),
+		newSessionUsageCmd(),
 		newSessionLifecycleCmd("stop", "Stop a session", "/stop", "Stopped"),
 		newSessionLifecycleCmd("resume", "Resume a stopped session", "/resume", "Resumed"),
 		newSessionPinCmd("pin", "Pin a session to the top of your list", http.MethodPost, "Pinned"),
 		newSessionPinCmd("unpin", "Unpin a session", http.MethodDelete, "Unpinned"),
 		newSessionSnoozeCmd(),
 		newSessionDoneCmd(),
+		newSessionUnreadCmd(),
 		newSessionRenameCmd(),
 		newSessionTitleCmd(),
 		newSessionArchiveCmd(),
 		newSessionMoveCmd(),
 		newSessionHandoffCmd(),
 		newSessionInterruptCmd(),
+		newSessionDecisionCmd("approve", "Allow the tool request a session is waiting on", "approve", "Allowed"),
+		newSessionDecisionCmd("deny", "Refuse the tool request a session is waiting on", "reject", "Denied"),
 		newSessionShipCmd(),
 		newSessionRemoveCmd(),
 		newSessionEventsCmd(),
@@ -107,6 +117,11 @@ func newSessionStartCmd() *cobra.Command {
 }
 
 func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string]any) *cobra.Command {
+	return newSessionStartCmdWithResult(cfg, registered, nil)
+}
+
+// The race composes normal launches without rendering or sending a turn twice.
+func newSessionStartCmdWithResult(cfg *agentClientConfig, registered *map[string]any, launched func(map[string]any) error) *cobra.Command {
 	var (
 		tool, name, profile, template string
 		account                       string
@@ -126,12 +141,15 @@ func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string
 		Use:         "start [folder] [prompt]",
 		Short:       "Start an agent session in a folder, optionally with a first prompt",
 		Long: "start runs the agent tool in the folder (default: the current folder) and names the\n" +
-			"session after it. With a prompt, it sends the prompt and shows the reply.\n\n" +
+			"session after it. With a prompt, it sends the prompt and shows the reply. A supervised\n" +
+			"session shows each tool request it waits on and, at a terminal, asks your answer.\n\n" +
 			"The first time, it registers the folder for sessions; a folder it registers carries no\n" +
 			"DLP label unless you pass --dlp. Without --tool it runs the first tool that is ready\n" +
 			"(Claude Code, Codex, Grok Build, OpenCode, Gemini CLI), as the console's New session does. Without\n" +
 			"--profile the engine picks how the tool runs (its own login, or a key or local model\n" +
-			"from Providers), and one line says which. --account <name> launches under a provider\n" +
+			"from Providers), and one line says which. When the tool has provider accounts whose\n" +
+			"usage shows capacity, it runs on the first of them, and when every one is at its limit\n" +
+			"the start is refused before anything is made. --account <name> launches under a provider\n" +
 			"account instead (olivares provider account ls); the account fixes the tool.\n\n" +
 			"With --worktree the session works in a git worktree of its own, on a new branch of the\n" +
 			"folder's repository, so two sessions on one repository do not share files. The folder\n" +
@@ -241,17 +259,19 @@ func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string
 				return err
 			}
 			ctx := cmd.Context()
-			// The profile first: a start the engine refuses registers no folder.
+			// The profile first: a start the engine refuses registers no folder. Its
+			// "Using …" line is said once the engine accepts the start, never before a refusal.
 			var profileRef string
+			var using bytes.Buffer
 			if cmd.Flags().Changed("account") {
-				profileRef, err = cfg.accountProfile(ctx, cmd.ErrOrStderr(), tool, profile, account)
+				profileRef, err = cfg.accountProfile(ctx, &using, tool, profile, account)
 			} else if tool == "" && strings.TrimSpace(profile) == "" {
-				profileRef, err = cfg.readyToolProfile(ctx, cmd.ErrOrStderr())
+				profileRef, err = cfg.readyToolProfile(ctx, &using)
 			} else {
 				if tool == "" {
 					tool = "claude"
 				}
-				profileRef, err = cfg.toolProfile(ctx, cmd.ErrOrStderr(), tool, profile)
+				profileRef, err = cfg.toolProfile(ctx, &using, tool, profile)
 			}
 			if err != nil {
 				return err
@@ -362,12 +382,21 @@ func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string
 			}
 			// 202: the launch needs a person's approval; the session exists and waits.
 			_, b, err := cfg.do(ctx, "POST", sessionRunsPath, body, http.StatusCreated, http.StatusAccepted)
+			var refusal *apiRefusal
+			if err != nil && (worktree || worktreeFrom != "") && errors.As(err, &refusal) && refusal.status == http.StatusUnprocessableEntity {
+				// The worktree the flags asked for cannot be made here: a wrong argument.
+				return exitcode.New(exitcode.Usage, refusal)
+			}
 			if err != nil {
 				return err
 			}
 			run := map[string]any{}
 			if err := json.Unmarshal(b, &run); err != nil {
 				return err
+			}
+			_, _ = using.WriteTo(cmd.ErrOrStderr())
+			if launched != nil {
+				return launched(run)
 			}
 			// A tool without an automatic mode asks instead; the engine stored that mode.
 			if stored := str(run, "permission_mode"); permissionMode == "auto" && stored != "" && stored != "auto" {
@@ -578,8 +607,7 @@ func (c *agentClientConfig) toolProfile(ctx context.Context, stderr io.Writer, t
 	if driverConfigHome(tool, "/") == "" {
 		return "", sentence(exitcode.Usage, "Unknown tool %q. Use claude, codex, grok, opencode, gemini-cli or cursor.", tool)
 	}
-	status, b, err := c.resolveProfile(ctx, tool)
-	return profileRefOf(stderr, tool, status, b, err)
+	return c.launchProfile(ctx, stderr, tool)
 }
 
 // accountProfile is the profile a session launches under when the person named an
@@ -627,8 +655,123 @@ func (c *agentClientConfig) readyToolProfile(ctx context.Context, stderr io.Writ
 	default:
 		tool = "claude"
 	}
+	return c.launchProfile(ctx, stderr, tool)
+}
+
+// launchProfile is the profile a session of the tool launches under when the person named
+// neither an account nor a profile: the first account with capacity, else the engine's
+// own choice.
+func (c *agentClientConfig) launchProfile(ctx context.Context, stderr io.Writer, tool string) (string, error) {
+	account, err := c.accountWithCapacity(ctx, tool)
+	if err != nil {
+		return "", err
+	}
+	if account.Ref != "" {
+		fmt.Fprintf(stderr, "Using %s (account %s)\n", toolName(tool), termSafe(account.Name))
+		return account.Ref, nil
+	}
 	status, b, err := c.resolveProfile(ctx, tool)
 	return profileRefOf(stderr, tool, status, b, err)
+}
+
+// accountUsageWindow is one window of the usage the tool reported for an account.
+type accountUsageWindow struct {
+	Window      string   `json:"window"`
+	Utilization *float64 `json:"utilization"`
+	ResetsAt    string   `json:"resets_at"`
+}
+
+// accountLimit reads the usage the tool reported for an account: known when the tool
+// reported a percent for any window, and, when a window of the account itself (not one
+// model's: seven_day:<model>) is used up and has not yet reset, the time the last of
+// those resets (zero when the tool gave none).
+func accountLimit(usage []accountUsageWindow, now time.Time) (known bool, resets time.Time, full bool) {
+	for _, w := range usage {
+		if w.Utilization == nil {
+			continue
+		}
+		known = true
+		if *w.Utilization < 100 || strings.Contains(w.Window, ":") {
+			continue
+		}
+		at, err := time.Parse(time.RFC3339, w.ResetsAt)
+		if err == nil && !at.After(now) {
+			continue
+		}
+		full = true
+		if at.After(resets) {
+			resets = at
+		}
+	}
+	return known, resets, full
+}
+
+// accountWithCapacity is the first active account of the tool, in the engine's order,
+// whose tool reported its usage and shows no window used up: the account a start with
+// no --account runs on, instead of the engine's choice of the host's own login, which
+// can be at its limit and which a start would register as a profile with no name. It is
+// the zero account when none is known to have capacity (no usage reported, the caller
+// may not read accounts, or the engine lists none), and the refusal when every account
+// the list holds is at its limit.
+func (c *agentClientConfig) accountWithCapacity(ctx context.Context, tool string) (toolAccount, error) {
+	q := url.Values{"driver": {tool}, "state": {"active"}, "limit": {"200"}}
+	var listed, atLimit int
+	var soonest time.Time
+	seen := map[string]bool{}
+	now := time.Now()
+	for {
+		status, b, err := c.do(ctx, "GET", providerAccountsPath+"?"+q.Encode(), nil,
+			http.StatusOK, http.StatusForbidden, http.StatusNotFound)
+		if err != nil {
+			return toolAccount{}, err
+		}
+		if status != http.StatusOK {
+			return toolAccount{}, nil
+		}
+		var page struct {
+			Items []struct {
+				Ref   string               `json:"account_ref"`
+				Name  string               `json:"name"`
+				Usage []accountUsageWindow `json:"usage"`
+			} `json:"items"`
+			HasMore bool   `json:"has_more"`
+			Cursor  string `json:"cursor"`
+		}
+		if err := json.Unmarshal(b, &page); err != nil {
+			return toolAccount{}, err
+		}
+		for _, a := range page.Items {
+			known, resets, full := accountLimit(a.Usage, now)
+			listed++
+			if known && !full && a.Ref != "" {
+				return toolAccount{Ref: a.Ref, Name: a.Name, Driver: tool}, nil
+			}
+			if full {
+				atLimit++
+				if !resets.IsZero() && (soonest.IsZero() || resets.Before(soonest)) {
+					soonest = resets
+				}
+			}
+		}
+		if !page.HasMore || page.Cursor == "" || seen[page.Cursor] {
+			break
+		}
+		seen[page.Cursor] = true
+		q.Set("cursor", page.Cursor)
+	}
+	if listed == 0 || atLimit < listed {
+		return toolAccount{}, nil
+	}
+	return toolAccount{}, sentence(exitcode.Conflict, "Every %s account is at its limit%s. Add one (olivares provider account add --driver %s) or wait for a reset.",
+		toolName(tool), resetClause(soonest), tool)
+}
+
+// resetClause is ", the first resets <time>" for a known reset, else nothing.
+func resetClause(at time.Time) string {
+	if at.IsZero() {
+		return ""
+	}
+	return ", the first resets " + at.UTC().Format("Jan 2 15:04 MST")
 }
 
 // profileRefOf is the profile reference in the engine's answer to a resolve, and
@@ -638,10 +781,9 @@ func profileRefOf(stderr io.Writer, tool string, status int, b []byte, err error
 		return "", err
 	}
 	if status != http.StatusOK {
-		// Readiness and operational refusals keep their engine status and code.
-		// The engine's sentence is printed as it is, and with
-		// -o json it keeps its status and code, like every engine refusal.
-		return "", httpErr(status, b)
+		// Readiness and operational refusals keep their engine status and code (-o json);
+		// the step that fixes one is the command, not the console page.
+		return "", startRemedy(tool, httpErr(status, b))
 	}
 	var res struct {
 		Profile  map[string]any `json:"profile"`
@@ -669,6 +811,9 @@ func profileRefOf(stderr io.Writer, tool string, status int, b []byte, err error
 		name = strings.TrimSuffix(name, " ("+provider+")")
 	}
 	switch {
+	case str(res.Profile, "account_name") != "":
+		// The rule chose an account (its own login had used up its plan): name it as --account does.
+		fmt.Fprintf(stderr, "Using %s (account %s)\n", toolName(tool), termSafe(str(res.Profile, "account_name")))
 	case res.Reason == "api_key" && res.Provider.Kind == "ollama":
 		fmt.Fprintf(stderr, "Using %s (local model %s)\n", name, provider)
 	case res.Reason == "api_key":
@@ -677,6 +822,42 @@ func profileRefOf(stderr io.Writer, tool string, status int, b []byte, err error
 		fmt.Fprintf(stderr, "Using %s (own login)\n", name)
 	}
 	return ref, nil
+}
+
+// startRemedy gives a launch refusal its next step as a command: the engine's sentence
+// is for both clients and names the console's AI tools and Providers pages. The
+// engine's diagnosis is kept; any other refusal is returned as it is.
+func startRemedy(tool string, err error) error {
+	var r *apiRefusal
+	facts, ok := driverfacts.Lookup(tool)
+	if !ok || !errors.As(err, &r) {
+		return err
+	}
+	switch r.code {
+	case "tool_not_installed":
+		if strings.HasPrefix(r.text, "Install ") { // not Grok's missing sandbox package
+			r.text = fmt.Sprintf("%s is not installed here. Install it: olivares agent tool install --driver %s --yes", facts.Name, facts.Key)
+		}
+	case "nothing_to_run_on":
+		var steps []string
+		if facts.SignIn != "" {
+			steps = append(steps, "sign it in: olivares tool login "+facts.NameStem())
+		}
+		if len(facts.Bindings) > 0 {
+			kind := facts.OwnKind
+			if kind == "" {
+				kind = "anthropic"
+			}
+			steps = append(steps, "add a key: olivares provider add --kind "+kind+" < key.txt")
+		}
+		if len(steps) == 0 {
+			return err // its sentence already names the flag (--profile)
+		}
+		diagnosis, _, _ := strings.Cut(r.text, ". ")
+		next := strings.Join(steps, ", or ")
+		r.text = strings.TrimSuffix(diagnosis, ".") + ". " + strings.ToUpper(next[:1]) + next[1:]
+	}
+	return err
 }
 
 // builtinTemplate returns the id of the engine's built-in session template with this
@@ -785,7 +966,8 @@ func newSessionSendCmd() *cobra.Command {
 		Short:       "Send a message to a session and show the reply",
 		Long: "send gives the session one turn of input. Without text, it reads the message from\n" +
 			"standard input. For Claude Code and Codex it shows the reply until the turn ends; for\n" +
-			"other tools it returns once the engine accepts the message (follow shows the output).\n\n" +
+			"other tools it returns once the engine accepts the message (follow shows the output).\n" +
+			"A supervised session shows each tool request it waits on and, at a terminal, asks your answer.\n\n" +
 			"--attach adds an image (PNG, JPEG, WebP or GIF) to the message, up to four. The tool must take\n" +
 			"images (Claude Code and Codex do); another tool refuses, and nothing is sent.",
 		Example: "  olivares session send my-app \"run the tests and fix what fails\"\n" +
@@ -963,7 +1145,8 @@ func (c *agentClientConfig) sendTurn(cmd *cobra.Command, run map[string]any, tex
 	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
 	frames, errs := c.openFrames(ctx, str(run, "run_ref"), 0)
-	last, err := settleReplay(frames, errs)
+	view := newSessionView(cmd.OutOrStdout())
+	last, err := settleReplay(frames, errs, view.replayed)
 	if errors.Is(err, errSessionEnded) {
 		// The tool may have exited before its first turn; the engine records why.
 		if now, rerr := c.findSession(ctx, str(run, "run_ref")); rerr == nil {
@@ -978,7 +1161,7 @@ func (c *agentClientConfig) sendTurn(cmd *cobra.Command, run map[string]any, tex
 	if err := c.postTurn(ctx, run, text, images); err != nil {
 		return err
 	}
-	view := newSessionView(cmd.OutOrStdout())
+	defer c.watchToolApproval(ctx, cmd, run)()
 	view.driver, view.engineSupplied, view.readyShown = sessionDriver(run), engineSupplied(run), true
 	view.noOneAsked = noOneAsked(run)
 	// A reply received before the stream stopped is shown before any failure sentence.
@@ -1121,7 +1304,7 @@ func (c *agentClientConfig) readAttach(ctx context.Context, ref string, from int
 // settleReplay drains the frames the attach stream replays at once and returns
 // the last sequence number it saw. The server writes the whole replay before it
 // waits for new output, so a short quiet period marks its end.
-func settleReplay(frames <-chan sessionFrame, errs <-chan error) (int64, error) {
+func settleReplay(frames <-chan sessionFrame, errs <-chan error, seen func(line string)) (int64, error) {
 	const quiet, ceiling = 400 * time.Millisecond, 3 * time.Second
 	var last int64
 	deadline := time.After(ceiling)
@@ -1140,6 +1323,9 @@ func settleReplay(frames <-chan sessionFrame, errs <-chan error) (int64, error) 
 			}
 			if f.Seq > last {
 				last = f.Seq
+			}
+			if seen != nil {
+				seen(f.Line)
 			}
 		case err := <-errs:
 			return 0, err
@@ -1161,7 +1347,9 @@ func newSessionFollowCmd() *cobra.Command {
 		Use:         "follow <session>",
 		Short:       "Show a session's output as it happens",
 		Long: "follow shows what the session has written so far and keeps showing new output\n" +
-			"until the session ends or you press Ctrl-C. -o json prints the raw frames.",
+			"until the session ends or you press Ctrl-C. -o json prints the raw frames.\n\n" +
+			"A supervised session that waits on your answer to a tool request shows the request here: at a\n" +
+			"terminal follow asks and records your answer, elsewhere it prints the command that answers.",
 		Example:           "  olivares session follow my-app\n  olivares session follow my-app -o json",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeSessions,
@@ -1176,8 +1364,9 @@ func newSessionFollowCmd() *cobra.Command {
 			raw := outputIsJSON(cmd)
 			view := newSessionView(cmd.OutOrStdout())
 			view.driver, view.engineSupplied = sessionDriver(run), engineSupplied(run)
-			view.noOneAsked = noOneAsked(run)
+			view.noOneAsked, view.showsPrompts = noOneAsked(run), true
 			defer view.finish()
+			defer cfg.watchToolApproval(cmd.Context(), cmd, run)()
 			frames, errs := cfg.openFrames(cmd.Context(), str(run, "run_ref"), from)
 			for {
 				select {
@@ -1215,8 +1404,10 @@ func newSessionListCmd() *cobra.Command {
 		cfg      agentClientConfig
 		all      bool
 		archived bool
+		observed bool
 		state    string
 		account  string
+		limit    int
 	)
 	cmd := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "read"},
@@ -1225,13 +1416,20 @@ func newSessionListCmd() *cobra.Command {
 		Short:       "List sessions, pinned first, then newest first",
 		Long: "ls prints one row per session: name, state, tool, folder, when it started and its id.\n" +
 			"Sessions you pinned come first, in the order you pinned them (-o json carries pinned and\n" +
-			"pinned_at; the table shows the order), then the rest newest first.\n" +
+			"pinned_at; the table shows the order), then the rest newest first. A session Olivares only\n" +
+			"observes (one you did not start here) is listed once you pin it, with its id live:<id>, which\n" +
+			"pin and unpin take; --observed lists all of them.\n" +
 			"Stopped and failed sessions are listed until you remove them. Archived sessions are left\n" +
-			"out unless --all or --state is given; --archived lists only those. Use the name, the start\n" +
-			"of the name or the id with the other session commands.",
-		Example: "  olivares session ls\n  olivares session ls --state running -o json\n  olivares session ls --state running --account work-2 -o json\n  olivares session ls --archived",
+			"out unless --all or --state is given; --archived lists only those. The table holds every\n" +
+			"open session and the newest --limit finished ones (20), and says how many it left out;\n" +
+			"--all lists every session, and -o json always does. Use the name, the start of the name\n" +
+			"or the id with the other session commands.",
+		Example: "  olivares session ls\n  olivares session ls --limit 50\n  olivares session ls --state running -o json\n  olivares session ls --state running --account work-2 -o json\n  olivares session ls --archived\n  olivares session ls --observed",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if limit < 1 {
+				return sentence(exitcode.Usage, "--limit must be at least 1. For every session: olivares session ls --all")
+			}
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
@@ -1274,10 +1472,36 @@ func newSessionListCmd() *cobra.Command {
 				}
 				shown = append(shown, r)
 			}
+			// Sessions Olivares only observes join the list when pinned (#2176), or all of
+			// them with --observed. A state, an account or --archived names runs only.
+			if state == "" && accountRef == "" && !archived {
+				seen, err := cfg.listObserved(cmd.Context(), !observed)
+				if err != nil {
+					return err
+				}
+				shown = append(shown, seen...)
+			}
 			// The caller's own pins first, in the order they were pinned, then the
 			// rest newest first (#2130). Stable, so the newest-first order survives
 			// among the unpinned, and JSON keeps the order the table shows.
 			sort.SliceStable(shown, func(i, j int) bool { return pinnedBefore(shown[i], shown[j]) })
+			// The table holds every open session and the newest `limit` finished ones;
+			// --all lists them all. -o json gets `shown` whole: a script reads it.
+			listed := shown
+			if !all {
+				listed = make([]map[string]any, 0, len(shown))
+				finished := 0
+				for _, r := range shown {
+					switch str(r, "state") {
+					case "pending", sessionWaitingApproval, "running", "idle":
+					default:
+						if finished++; finished > limit {
+							continue
+						}
+					}
+					listed = append(listed, r)
+				}
+			}
 			table := termrender.Table{
 				Header: []string{"name", "state", "tool", "folder", "started", "id"},
 				Empty:  "No sessions yet. Start one: olivares session start <folder>",
@@ -1289,36 +1513,35 @@ func newSessionListCmd() *cobra.Command {
 				// Every session is archived: "none yet" would be false.
 				table.Empty = fmt.Sprintf("No sessions in the list; %d archived. List them: olivares session ls --archived", hidden)
 			}
-			// A name that two rows carry gets the short tail of each row's id, as the
-			// console does (sharedNames in web/src/features/sessions/provenance.ts).
-			names := map[string]int{}
-			for _, r := range shown {
-				names[sessionDisplay(r)]++
-			}
 			now := time.Now()
 			waiting := 0
-			for _, r := range shown {
+			for _, r := range listed {
 				s := str(r, "state")
 				if s == sessionWaitingApproval {
 					waiting++
 					s = "needs approval"
 				}
 				folder := homeShort(termSafe(str(r, "workspace_path")))
-				if str(r, "workspace_ref") == "" && folder != "" {
+				if str(r, "workspace_ref") == "" && folder != "" && r["observed"] != true {
 					// The engine made this folder for the session; its path is an id.
 					folder = "(its own folder)"
 				}
-				name := sessionDisplay(r)
-				if names[name] > 1 {
-					name += " " + termSafe(refTail(str(r, "run_ref")))
-				}
-				table.Rows = append(table.Rows, []string{name, s, sessionDriver(r),
+				table.Marks = append(table.Marks, toolMark(sessionDriver(r)))
+				table.Rows = append(table.Rows, []string{sessionDisplay(r), s, sessionDriver(r),
 					folder, sinceText(str(r, "created_at"), now), termSafe(sessionShortID(r))})
 				table.Roles = append(table.Roles, []termrender.Role{termrender.RoleNone, sessionStateRole(s)})
 			}
 			return renderOut(cmd, func(out io.Writer) error {
 				r := renderTo(out)
 				r.Table(table)
+				if len(listed) < len(shown) {
+					// The read holds the newest sessionListLimit runs: past that the count is a floor.
+					of := fmt.Sprint(len(shown))
+					if len(runs) >= sessionListLimit {
+						of += " or more"
+					}
+					r.Line(fmt.Sprintf("Showing %d of %s sessions. More: --limit N, or --all for every session.", len(listed), of))
+				}
 				if waiting > 0 {
 					noun := "session needs"
 					if waiting > 1 {
@@ -1331,7 +1554,9 @@ func newSessionListCmd() *cobra.Command {
 		},
 	}
 	cfg.addFlags(cmd)
-	cmd.Flags().BoolVar(&all, "all", false, "include released (cleaned) and archived sessions")
+	cmd.Flags().BoolVar(&all, "all", false, "list every session: released (cleaned) and archived ones too, and no limit")
+	cmd.Flags().IntVar(&limit, "limit", 20, "how many finished sessions the table lists (open sessions are always listed)")
+	cmd.Flags().BoolVar(&observed, "observed", false, "also list sessions Olivares only observes (not started here), not just the ones you pinned")
 	cmd.Flags().BoolVar(&archived, "archived", false, "list only archived sessions")
 	cmd.Flags().StringVar(&state, "state", "", "only sessions in this state (pending|waiting_approval|running|idle|stopped|failed|cleaned)")
 	cmd.Flags().StringVar(&account, "account", "", "only sessions of this account (its name or profile reference; see olivares provider account ls)")
@@ -1370,7 +1595,7 @@ func newSessionShowCmd() *cobra.Command {
 				}, raw)
 			}
 			return renderOut(cmd, func(w io.Writer) error {
-				printSessionFields(w, run)
+				printSessionFields(w, run, cfg.profileName(cmd.Context(), str(run, "provider_profile_ref")))
 				return nil
 			}, run)
 		},
@@ -1380,7 +1605,43 @@ func newSessionShowCmd() *cobra.Command {
 	return cmd
 }
 
-func printSessionFields(w io.Writer, run map[string]any) {
+// profileName is the account name of a session's profile, else its display name; ""
+// when the session names none or the engine does not answer (the line is left out).
+func (c *agentClientConfig) profileName(ctx context.Context, ref string) string {
+	if ref == "" {
+		return ""
+	}
+	status, b, err := c.do(ctx, "GET", profilesPath+"/"+url.PathEscape(ref), nil)
+	if err != nil || status != http.StatusOK {
+		return ""
+	}
+	var p struct {
+		AccountName string `json:"account_name"`
+		DisplayName string `json:"display_name"`
+	}
+	if json.Unmarshal(b, &p) != nil {
+		return ""
+	}
+	if p.AccountName != "" {
+		return p.AccountName
+	}
+	return p.DisplayName
+}
+
+// permissionOfMode is the permission name of a mode the tool reported (supervised for
+// Claude Code's "default"), else the report as the tool gave it (Codex's on-request · …).
+func permissionOfMode(mode string) string {
+	for _, n := range sessions.PermissionNames() {
+		if n.Mode != "" && n.Mode == mode {
+			return n.Name
+		}
+	}
+	return mode
+}
+
+// printSessionFields prints one session; account is the name of the account or profile
+// it runs under ("" when unknown).
+func printSessionFields(w io.Writer, run map[string]any, account string) {
 	state := str(run, "state")
 	fields := []termrender.Field{
 		{Key: "name", Value: sessionLabel(run)},
@@ -1397,12 +1658,16 @@ func printSessionFields(w io.Writer, run map[string]any) {
 		fields = append(fields, termrender.Field{Key: "reason", Value: reason})
 	}
 	fields = append(fields, termrender.Field{Key: "tool", Value: sessionDriver(run)})
+	if account != "" {
+		fields = append(fields, termrender.Field{Key: "account", Value: termSafe(account)})
+	}
 	// A turn the tool ended on a usage or rate limit says so, and until when.
 	if sentence := limitSentence(run, time.Now()); sentence != "" {
 		fields = append(fields, termrender.Field{Key: "limit", Value: sentence, Role: termrender.RoleWarn})
 	}
-	// The mode as the tool itself last reported it (plan, acceptEdits, on-request · …).
-	if mode := termSafe(str(run, "tool_mode")); mode != "" {
+	// The mode the tool itself last reported, by the permission name a person picks when
+	// it is one (supervised, not Claude Code's "default"); any other report as the tool said it.
+	if mode := termSafe(permissionOfMode(str(run, "tool_mode"))); mode != "" {
 		fields = append(fields, termrender.Field{Key: "mode", Value: mode})
 	}
 	fields = append(fields, termrender.Field{Key: "folder", Value: termSafe(str(run, "workspace_path"))})
@@ -1490,7 +1755,9 @@ func newSessionLifecycleCmd(use, short, suffix, done string) *cobra.Command {
 var sessionPinLong = map[string]string{
 	"pin": "pin keeps a session first in YOUR list: the console's rail and \"olivares session ls\" put it\n" +
 		"above the usual order, in the order you pinned. The pin is stored on the server, follows you\n" +
-		"to another browser or machine, and changes no one else's list. It prints \"Pinned <name>.\"",
+		"to another browser or machine, and changes no one else's list. A session Olivares only observes\n" +
+		"(one you did not start here; \"olivares session ls --observed\" lists them) is named by its id\n" +
+		"as that list prints it, live:<id>. It prints \"Pinned <name>.\"",
 	"unpin": "unpin removes your pin; the session returns to the usual order. It prints \"Unpinned <name>.\"",
 }
 
@@ -1511,11 +1778,24 @@ func newSessionPinCmd(use, short, method, done string) *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			run, err := cfg.findSession(cmd.Context(), args[0])
-			if err != nil {
-				return err
+			// The pin routes differ by what is pinned: a run, or the live row of a session
+			// Olivares only observes, named as "olivares session ls --observed" prints it.
+			var run map[string]any
+			var pinPath string
+			if liveRef, observed := strings.CutPrefix(strings.TrimSpace(args[0]), observedAddressPrefix); observed {
+				row, err := cfg.getObserved(cmd.Context(), liveRef)
+				if err != nil {
+					return err
+				}
+				run, pinPath = row, sessionLivePath+"/by-id/"+url.PathEscape(liveRef)+"/pin"
+			} else {
+				found, err := cfg.findSession(cmd.Context(), args[0])
+				if err != nil {
+					return err
+				}
+				run, pinPath = found, sessionRunsPath+"/"+url.PathEscape(str(found, "run_ref"))+"/pin"
 			}
-			_, b, err := cfg.do(cmd.Context(), method, sessionRunsPath+"/"+url.PathEscape(str(run, "run_ref"))+"/pin", nil, http.StatusOK)
+			_, b, err := cfg.do(cmd.Context(), method, pinPath, nil, http.StatusOK)
 			if err != nil {
 				return err
 			}
@@ -1608,6 +1888,39 @@ func newSessionDoneCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&undo, "undo", false, "Remove the done mark")
+	cfg.addFlags(cmd)
+	return cmd
+}
+
+// newSessionUnreadCmd is unread: the caller's own mark that makes a session read as
+// unread in the console, kept on the server like the pin (#2866).
+func newSessionUnreadCmd() *cobra.Command {
+	var (
+		cfg  agentClientConfig
+		undo bool
+	)
+	cmd := &cobra.Command{
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "unread <session>",
+		Short:       "Mark a session unread in your list",
+		Long: "unread makes a session read as unread in YOUR list in the console, until you open it or\n" +
+			"mark it read; --undo marks it read now. The console marks a session read when you open\n" +
+			"it, and a session reads as unread once it does something after that. The mark is stored on\n" +
+			"the server and changes no one else's list. It prints \"Marked <name> unread.\"",
+		Example:           "  olivares session unread my-app\n  olivares session unread my-app --undo",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeFirstSession,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			method, state := http.MethodPost, "unread"
+			if undo {
+				method, state = http.MethodDelete, "read"
+			}
+			return markSession(cmd, &cfg, args[0], method, "/unread", nil, func(run, _ map[string]any) string {
+				return "Marked " + sessionLabel(run) + " " + state + "."
+			})
+		},
+	}
+	cmd.Flags().BoolVar(&undo, "undo", false, "Mark the session read")
 	cfg.addFlags(cmd)
 	return cmd
 }
@@ -2058,6 +2371,70 @@ func (c *agentClientConfig) findSessionBySID(ctx context.Context, sid string) (m
 	}
 }
 
+// observedRow shapes a live row (GET /live) as a session row of the list: the name is
+// the folder it works in, else its id, and its id is the live:<live_ref> address that
+// pin and unpin take. Fields the live row lacks stay absent.
+func observedRow(live map[string]any) map[string]any {
+	name := str(live, "project")
+	if name == "" {
+		name = str(live, "session_ref")
+	}
+	row := map[string]any{
+		"id": observedAddressPrefix + str(live, "live_ref"), "live_ref": str(live, "live_ref"),
+		"name": name, "state": str(live, "cc_state"), "provider_driver": str(live, "engine"),
+		"workspace_path": str(live, "project"), "created_at": str(live, "first_event_at"),
+		"observed": true,
+	}
+	if pinned, ok := live["pinned"].(bool); ok {
+		row["pinned"] = pinned
+		row["pinned_at"] = str(live, "pinned_at")
+	}
+	return row
+}
+
+// getObserved reads one observed session by its live_ref, shaped as observedRow.
+func (c *agentClientConfig) getObserved(ctx context.Context, liveRef string) (map[string]any, error) {
+	_, b, err := c.do(ctx, "GET", sessionLivePath+"/by-id/"+url.PathEscape(liveRef), nil)
+	if err != nil {
+		return nil, err
+	}
+	live := map[string]any{}
+	if err := json.Unmarshal(b, &live); err != nil {
+		return nil, err
+	}
+	return observedRow(live), nil
+}
+
+// listObserved reads the sessions Olivares only observes (live rows that belong to no
+// run): all of them, or only the ones the caller pinned. A caller who may not read live
+// sessions (403) has none to show unless they asked for the list itself.
+func (c *agentClientConfig) listObserved(ctx context.Context, onlyPinned bool) ([]map[string]any, error) {
+	_, b, err := c.do(ctx, "GET", sessionLivePath+"?"+url.Values{"limit": {fmt.Sprint(sessionListLimit)}}.Encode(), nil)
+	if err != nil {
+		var refusal *apiRefusal
+		if onlyPinned && errors.As(err, &refusal) && refusal.status == http.StatusForbidden {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var page struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(b, &page); err != nil {
+		return nil, err
+	}
+	rows := make([]map[string]any, 0, len(page.Items))
+	for _, live := range page.Items {
+		if str(live, "run_ref") != "" {
+			continue // a run's own row: the run is listed
+		}
+		if row := observedRow(live); !onlyPinned || runIsPinned(row) {
+			rows = append(rows, row)
+		}
+	}
+	return rows, nil
+}
+
 // listRuns reads the newest runs (the API sorts by creation, newest first). The
 // engine applies filter (state, provider_profile_ref) before it pages.
 func (c *agentClientConfig) listRuns(ctx context.Context, filter url.Values) ([]map[string]any, error) {
@@ -2078,8 +2455,9 @@ func (c *agentClientConfig) listRuns(ctx context.Context, filter url.Values) ([]
 	return page.Items, nil
 }
 
-// findSession resolves a session by id or by name. A name resolves to its newest
-// session; `start` and `rename` keep names unique among sessions that are not released.
+// findSession resolves a session by id or by name. A name two sessions hold is
+// refused, never resolved to the newer one; `start` and `rename` keep names unique
+// among sessions that are not cleaned, and the engine refuses a held name now.
 func (c *agentClientConfig) findSession(ctx context.Context, arg string) (map[string]any, error) {
 	arg = strings.TrimSpace(arg)
 	if arg == "" {
@@ -2114,6 +2492,21 @@ func (c *agentClientConfig) findSession(ctx context.Context, arg string) (map[st
 			return nil, sentence(exitcode.Usage, "%d sessions match %q. Name one by its id: olivares session ls", len(matches), arg)
 		}
 	}
+	// A name two sessions hold is refused, never resolved to the newer one: the
+	// person named a session and the engine cannot say which. A cleaned session
+	// holds nothing, so when one holder is left, the name picks it.
+	live := make([]map[string]any, 0, len(matches))
+	for _, r := range matches {
+		if str(r, "state") != "cleaned" {
+			live = append(live, r)
+		}
+	}
+	if len(live) > 1 {
+		return nil, sentence(exitcode.Usage, "%d sessions match %q. Name one by its id: olivares session ls", len(live), arg)
+	}
+	if len(live) == 1 {
+		return live[0], nil
+	}
 	sort.SliceStable(matches, func(i, j int) bool { return str(matches[i], "created_at") > str(matches[j], "created_at") })
 	return matches[0], nil
 }
@@ -2138,6 +2531,9 @@ func sessionsMatching(runs []map[string]any, arg string) []map[string]any {
 // sessionShortID is the id `session ls` shows: the short tail of the reference
 // (refTail), which names the session wherever a name does.
 func sessionShortID(run map[string]any) string {
+	if observed, ok := run["observed"].(bool); ok && observed {
+		return str(run, "id") // the address pin and unpin take, whole
+	}
 	return strings.TrimPrefix(refTail(str(run, "run_ref")), "…")
 }
 
@@ -2220,7 +2616,7 @@ func homeShort(p string) string {
 	return p
 }
 
-// sinceText is a timestamp as "5m ago", or the date when it is older than a week.
+// sinceText is a timestamp as "5m ago", "3h ago" or "12d ago": one form for every age.
 func sinceText(stamp string, now time.Time) string {
 	t, err := time.Parse(time.RFC3339Nano, stamp)
 	if err != nil {
@@ -2234,10 +2630,8 @@ func sinceText(stamp string, now time.Time) string {
 		return fmt.Sprintf("%dm ago", int(d.Minutes()))
 	case d < 24*time.Hour:
 		return fmt.Sprintf("%dh ago", int(d.Hours()))
-	case d < 7*24*time.Hour:
-		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
 	}
-	return t.Local().Format("2006-01-02")
+	return fmt.Sprintf("%dd ago", int(d.Hours()/24))
 }
 
 // sentence is a message a person reads: a full sentence with its next command, in the

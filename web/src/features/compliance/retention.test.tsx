@@ -25,6 +25,10 @@ import '@/features/_intel'
 import { ApiError } from '@/lib/api/errors'
 import type { DataClassEntry, RetentionPolicy, RetentionSummary } from './types'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 const api = {
   dataClasses: vi.fn(),
   retentionPolicies: vi.fn(),

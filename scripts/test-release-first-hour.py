@@ -133,6 +133,20 @@ else: raise AssertionError(name)
 '''
 
 
+# Stands in for scripts/session-journey-smoke.sh: records its arguments and the bytes of the
+# binary it was handed, and fails the way a session ended by a long output line does.
+CHAT_LEG = r'''#!/usr/bin/env bash
+python3 - "$@" <<'PY'
+import json, os, pathlib, sys
+args = sys.argv[1:]
+with pathlib.Path(os.environ['RUNNER_TEMP'], 'calls.jsonl').open('a') as calls:
+    calls.write(json.dumps(['session-journey', *args, pathlib.Path(args[1]).read_bytes().decode()]) + '\n')
+if os.environ.get('CASE') == 'chat':
+    sys.exit('session-journey: FAIL at large output: the session ended before its answer')
+PY
+'''
+
+
 class ReleaseFirstHourTest(unittest.TestCase):
     def prepare(self, tmp: str, case: str, candidate: str = '1.0', latest: str = '0.9',
                 previous: str = '0.8', **overrides: str | None) -> tuple[Path, dict[str, str]]:
@@ -145,6 +159,11 @@ class ReleaseFirstHourTest(unittest.TestCase):
         shutil.copy(ROOT / 'scripts/release-first-hour.sh', root / 'scripts')
         shutil.copy(ROOT / 'scripts/assemble-runtime-context.sh', root / 'scripts')
         shutil.copy(ROOT / 'scripts/sanitize-first-hour.py', root / 'scripts')
+        # The chat leg is its own script, tested on a real engine elsewhere; here only what the
+        # orchestration hands it: the verified candidate binary, and a failure that stops the run.
+        journey = root / 'scripts/session-journey-smoke.sh'
+        journey.write_text(CHAT_LEG)
+        journey.chmod(0o755)
         shutil.copytree(ROOT / 'scripts/userspace', root / 'scripts/userspace')
         for name in ['.goreleaser.yaml', 'Dockerfile.release', 'LICENSE', 'NOTICE',
                      'LICENSING.md', 'DISCLAIMER.md']:
@@ -197,12 +216,27 @@ class ReleaseFirstHourTest(unittest.TestCase):
                 self.assertNotIn('test-only-bearer', log)
                 if (root / 'browser-ran').exists():
                     self.assertIn('late engine warning: provider request stalled', log)
-            if expected and case not in ['copy', 'detect', 'browser', 'logs', 'setup-banner', 'pull', 'port-public', 'dirty', 'rm-busy', 'config-public', 'bind-all', 'browser-version', 'browser-rm', 'browser-interrupted'] and not case.startswith('releases-'):
+            if expected and case not in ['copy', 'detect', 'browser', 'logs', 'setup-banner', 'pull', 'port-public', 'dirty', 'rm-busy', 'config-public', 'bind-all', 'browser-version', 'browser-rm', 'browser-interrupted', 'chat'] and not case.startswith('releases-'):
                 self.assertIn('O1 J1-release-container: FAIL', result.stdout)
                 self.assertIn('O7 J7-release-container: FAIL', result.stdout)
             image = 'docker.io/olivaresai/olivares:'
             calls_file = root / 'calls.jsonl'
             calls = [json.loads(line) for line in calls_file.read_text().splitlines()] if calls_file.exists() else []
+            # The chat leg runs once, on the verified candidate bytes, only when the identity held,
+            # and before the browser; a failure of it stops the run there.
+            chat = [i for i, call in enumerate(calls) if call[0] == 'session-journey']
+            self.assertLessEqual(len(chat), 1)
+            if (root / 'browser-ran').exists() or case == 'chat':
+                self.assertEqual(len(chat), 1, 'the browser never runs without the chat leg before it')
+            if 'release-container: FAIL' in result.stdout:
+                self.assertEqual(chat, [], 'drifted bytes are not chatted with')
+            if chat:
+                *args, binary = calls[chat[0]][1:]
+                self.assertEqual([args[0], *args[2:]], ['--binary', '--label', 'release-candidate', '--large-output'])
+                self.assertRegex(args[1], r'/first-hour\.[^/]+/olivares$')
+                self.assertEqual(binary, 'canonical release binary')
+                self.assertLess(next(i for i, call in enumerate(calls) if call[:2] == ['docker', 'cp']), chat[0])
+                self.assertFalse(any(call[:2] == ['docker', 'create'] for call in calls[:chat[0]]))
             # Only the tags this run created are removed, after a build and on any outcome.
             tagged = any(call[:2] == ['docker', 'pull'] for call in calls) and case != 'pull'
             built = any(call[:2] == ['docker', 'build'] for call in calls)
@@ -244,6 +278,9 @@ class ReleaseFirstHourTest(unittest.TestCase):
 
     def test_release_image_needs_no_probe_utilities(self) -> None:
         self.run_case('', 0)
+
+    def test_a_session_ended_by_a_long_output_line_stops_the_release_before_the_browser(self) -> None:
+        self.run_case('chat', 1, message='ended before its answer')
 
     def test_runs_on_a_shared_self_hosted_daemon(self) -> None:
         self.run_case('', 0, RUNNER_ENVIRONMENT='self-hosted')

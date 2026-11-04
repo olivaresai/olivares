@@ -41,7 +41,7 @@ func TestConsoleDRUsesTheRecipeMarkerWithoutTheAccountSplitContract(t *testing.T
 	defer func() { readApplianceImage = original }()
 	asked := ""
 	readApplianceImage = func(path string) bool { asked = path; return true }
-	cfg := consoleDRConfig(bootConfig{DataDir: t.TempDir()}, store.EngineSQLite, nil, nil)
+	cfg := consoleDRConfig(bootConfig{DataDir: t.TempDir()}, store.EngineSQLite, nil, nil, nil)
 	if asked != "/etc/olivares-appliance/image" || !cfg.Appliance {
 		t.Fatalf("wrong image detection: path=%q appliance=%v", asked, cfg.Appliance)
 	}

@@ -137,6 +137,9 @@ echo "$*" >> "$(dirname "$0")/$(basename "$0").runs"
 
 const providerClaude = `#!/bin/sh
 ` + providerStubGuard + `
+# --setting-sources "" is what a governed session runs with: no user settings at all.
+sources=all
+if [ "$1" = "--setting-sources" ]; then sources="$2"; shift 2; [ -z "$sources" ] || fire "a status read named a setting source"; fi
 case "$1" in
 --version) echo "2.1.289 (Claude Code)"; exit 0;;
 -p)
@@ -166,6 +169,7 @@ esac
 case "$1 $2" in
 "auth status")
   if [ -f "$CLAUDE_CONFIG_DIR/.stub-garbage" ]; then echo "boom" >&2; echo "segmentation fault"; exit 2; fi
+  if [ "$sources" = all ] && [ -f "$CLAUDE_CONFIG_DIR/settings.json" ]; then echo '{"loggedIn":true,"authMethod":"api_key"}'; exit 0; fi
   if [ -f "$CLAUDE_CONFIG_DIR/.credentials.json" ]; then echo '{"loggedIn":true,"authMethod":"claude.ai","email":"fran@example.test","orgName":"fran@example.test'"'"'s Organization","subscriptionType":"max"}'; exit 0; fi
   echo '{"loggedIn":false,"authMethod":"none"}'; exit 1;;
 "auth login")
@@ -213,7 +217,9 @@ app-server)
 esac
 case "$1 $2" in
 "login status")
-  # The real codex-cli 0.160 prints this on stderr, not stdout.
+  # The real codex-cli 0.160 prints this on stderr, not stdout. Run confined with a home it
+  # may not write, 0.166 warns first (measured 2026-11-01).
+  [ -f "$CODEX_HOME/.stub-warning" ] && echo "WARNING: proceeding, even though we could not create PATH aliases: Permission denied (os error 13)" >&2
   if [ -f "$CODEX_HOME/auth.json" ]; then echo "Logged in using ChatGPT" >&2; exit 0; fi
   echo "Not logged in" >&2; exit 1;;
 esac
@@ -418,6 +424,22 @@ func TestProvidersNameTheToolsOwnLoginCommandWhenNotSignedIn(t *testing.T) {
 	}
 	if p := all["codex"]; p["state"] != "not_signed_in" || p["next_command"] != "codex login --device-auth" {
 		t.Fatalf("codex = %v", p)
+	}
+}
+
+// A warning Codex prints before its answer is not the answer: a Codex that says it is not
+// signed in is "not signed in", never an error.
+func TestProvidersReadCodexsAnswerAfterAWarning(t *testing.T) {
+	call, _, _ := newProvidersServer(t)
+	codexHome := os.Getenv("CODEX_HOME")
+	if err := os.Remove(codexHome + "/auth.json"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(codexHome+"/.stub-warning", nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if p := providers(t, call, "")["codex"]; p["state"] != "not_signed_in" || p["error"] != nil || p["next_command"] != "codex login --device-auth" {
+		t.Fatalf("codex = %v, want not_signed_in and no error", p)
 	}
 }
 

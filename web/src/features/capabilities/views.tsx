@@ -22,6 +22,10 @@ export const VIEWS = [
     helpHref: '/reference/modules/v-capabilities',
     icon: Plug,
     permission: 'capabilities:catalog:read',
+    changes: [
+      { permission: 'capabilities:config:write' },
+      { permission: 'tenant:admin' },
+    ],
     element: lazyView(CapabilitiesView),
   },
 ] satisfies ViewEntry[]

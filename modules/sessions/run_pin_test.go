@@ -638,3 +638,150 @@ func TestRunPinWorksForAWorkspaceConfinedMember(t *testing.T) {
 		t.Fatalf("confined unpin = %d %s", r.code, r.raw)
 	}
 }
+
+// seedLiveRow creates one observed session row (no run) and returns its live_ref, plus
+// the run it belongs to when runRef is set (the plane's own managed row).
+func seedLiveRow(t *testing.T, st store.Store, tenant model.TenantID, sessionRef, runRef string) string {
+	t.Helper()
+	var id string
+	if err := st.Mutate(context.Background(), tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(liveKind)
+		if err != nil {
+			return err
+		}
+		at := model.NewTimestamp(time.Now()).String()
+		rec := model.Record{colSessionRef: sessionRef, colInputTokens: int64(0), colOutputTokens: int64(0),
+			colCostMicroUSD: int64(0), colEventCount: int64(0), colToolCalls: int64(0),
+			colFirstEventAt: at, colLastEventAt: at}
+		if runRef != "" {
+			rec[colLiveRunRef] = runRef
+		}
+		created, err := repo.Create(context.Background(), rec)
+		id = created.String(model.ColID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func liveItemsOf(r resp) map[string]map[string]any {
+	out := map[string]map[string]any{}
+	items, _ := r.body["items"].([]any)
+	for _, it := range items {
+		if m, ok := it.(map[string]any); ok {
+			if ref, ok := m["live_ref"].(string); ok {
+				out[ref] = m
+			}
+		}
+	}
+	return out
+}
+
+// A session the plane only observes (no run) is pinned by its live row, as a launched one
+// is by its run (#2176): the caller's own mark on the live reads, in the same order and
+// under the same ceiling as the run pins, refused for a row that belongs to a run, and gone
+// with the observed session.
+func TestObservedSessionPinSharesTheRunPinsOrderAndCeiling(t *testing.T) {
+	m := New()
+	h := newHarness(t, m)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "pins-observed")
+	viewer := h.viewerToken(admin, tenant, "v@pins.io")
+	colleague := h.viewerToken(admin, tenant, "w@pins.io")
+	seedRunRows(t, h.st, tenant, stateRunning, "run-1")
+	obs := seedLiveRow(t, h.st, tenant, "obs-a", "")
+	other := seedLiveRow(t, h.st, tenant, "obs-b", "")
+	managed := seedLiveRow(t, h.st, tenant, "ses_managed", "run-1")
+	pinPath := func(id string) string { return "/v1/m/sessions/live/by-id/" + id + "/pin" }
+
+	if r := h.do("POST", "/v1/m/sessions/runs/run-1/pin", viewer, tenantHdr(tenant)); r.code != http.StatusOK {
+		t.Fatalf("pin run = %d %s", r.code, r.raw)
+	}
+	r := h.do("POST", pinPath(obs), viewer, tenantHdr(tenant))
+	if r.code != http.StatusOK || r.body["pinned"] != true || r.body["live_ref"] != obs {
+		t.Fatalf("pin observed = %d %s", r.code, r.raw)
+	}
+	if at, _ := r.body["pinned_at"].(string); at == "" {
+		t.Fatalf("pin answer carries no pinned_at: %s", r.raw)
+	}
+
+	// The mark is the caller's own, on the list and on both gets.
+	for who, tok := range map[string]string{"viewer": viewer, "colleague": colleague} {
+		items := liveItemsOf(h.do("GET", "/v1/m/sessions/live", tok, tenantHdr(tenant)))
+		if got, want := items[obs]["pinned"], who == "viewer"; got != want {
+			t.Fatalf("%s sees pinned=%v on the observed row, want %v", who, got, want)
+		}
+		if items[other]["pinned"] != false {
+			t.Fatalf("%s sees %v on an unpinned row, want false", who, items[other]["pinned"])
+		}
+	}
+	if g := h.do("GET", "/v1/m/sessions/live/by-id/"+obs, viewer, tenantHdr(tenant)); g.body["pinned"] != true {
+		t.Fatalf("get by id = %d %s", g.code, g.raw)
+	}
+	// The row that belongs to a run reads the run's pin and takes none of its own.
+	if items := liveItemsOf(h.do("GET", "/v1/m/sessions/live", viewer, tenantHdr(tenant))); items[managed]["pinned"] != true {
+		t.Fatalf("a run's live row does not read the run's pin: %v", items[managed])
+	}
+	if r = h.do("POST", pinPath(managed), viewer, tenantHdr(tenant)); r.code != http.StatusConflict {
+		t.Fatalf("pin of a run's live row = %d %s, want 409", r.code, r.raw)
+	}
+	if r = h.do("POST", pinPath("00000000-0000-4000-8000-000000000000"), viewer, tenantHdr(tenant)); r.code != http.StatusNotFound {
+		t.Fatalf("pin of an unknown row = %d %s, want 404", r.code, r.raw)
+	}
+
+	// One order: the run was pinned first, the observed session second. Only the
+	// viewer holds pins, so every row is theirs.
+	var order []string
+	if err := h.st.View(context.Background(), tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(runPinKind)
+		if err != nil {
+			return err
+		}
+		recs, _, err := repo.List(context.Background(), model.Query{Limit: 10, Sort: []model.Sort{{Column: model.ColCreatedAt}}})
+		for _, rec := range recs {
+			order = append(order, rec.String(colRunPinRun))
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(order) != 2 || order[0] != "run-1" || order[1] != livePinPrefix+obs {
+		t.Fatalf("pin order = %v, want the run then the observed session", order)
+	}
+
+	// Unpin is idempotent; the observed session going away leaves its pin to the ceiling,
+	// which drops it before the oldest live pin: 1 + 19 run pins all stay.
+	if r = h.do("DELETE", pinPath(other), viewer, tenantHdr(tenant)); r.code != http.StatusOK {
+		t.Fatalf("unpin of an unpinned row = %d %s", r.code, r.raw)
+	}
+	if err := h.st.Mutate(context.Background(), tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(liveKind)
+		if err != nil {
+			return err
+		}
+		id, err := model.ParseID(obs)
+		if err != nil {
+			return err
+		}
+		return repo.Delete(context.Background(), id)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	refs := make([]string, maxRunPins-1)
+	for i := range refs {
+		refs[i] = "run-x" + string(rune('a'+i))
+	}
+	seedRunRows(t, h.st, tenant, stateRunning, refs...)
+	for _, ref := range refs {
+		if r = h.do("POST", "/v1/m/sessions/runs/"+ref+"/pin", viewer, tenantHdr(tenant)); r.code != http.StatusOK {
+			t.Fatalf("pin %s = %d %s", ref, r.code, r.raw)
+		}
+	}
+	if n := countRunPins(t, h.st, tenant); n != maxRunPins {
+		t.Fatalf("%d pin rows, want %d", n, maxRunPins)
+	}
+	if got := runItemsOf(t, h.do("GET", "/v1/m/sessions/runs", viewer, tenantHdr(tenant)))["run-1"]["pinned"]; got != true {
+		t.Fatalf("the erased observed pin was not the one dropped at the ceiling: run-1 pinned=%v", got)
+	}
+}

@@ -22,6 +22,7 @@ import {
 import { firstHourKeys } from '@/features/first-hour/api'
 import { useTenantStore } from '@/stores/tenant'
 import { useReadyTools } from '@/features/first-hour/first-hour'
+import { ModelServers } from './model-servers'
 import { OllamaService } from './ollama-service'
 import '@/features/first-hour/i18n'
 import { QueryErrorState } from '@/components/layout/query-error-state'
@@ -64,7 +65,7 @@ export function AgentToolsView() {
 }
 
 function Tools({ epoch }: { epoch: number }) {
-  const { t } = useTranslation('agentTools')
+  const { t } = useTranslation(['agentTools', 'providers'])
   const { isSuperadmin, activeTenant, can } = useAuth()
   const qc = useQueryClient()
   // The page's next step (#3388): whoever may add a provider key does it from the header.
@@ -256,7 +257,7 @@ function Tools({ epoch }: { epoch: number }) {
               {canAddKey ? (
                 <Button variant="primary" onClick={() => setAddingKey(true)}>
                   <Plus aria-hidden />
-                  {t('addProviderKey')}
+                  {t('providers:section.add')}
                 </Button>
               ) : null}
             </>
@@ -334,6 +335,7 @@ function Tools({ epoch }: { epoch: number }) {
                     job={job.data?.driver === f.driver ? job.data : undefined}
                   />
                 ))}
+              <ModelServers />
               {missing.length > 0 && (
                 <div
                   data-testid="not-installed"

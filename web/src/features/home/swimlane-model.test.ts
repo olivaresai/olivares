@@ -51,6 +51,13 @@ describe('buildLanes: the demo estate', () => {
     expect(lanes()).toHaveLength(7)
   })
 
+  it('orders the one live list by attention: waiting, failed, working, idle', () => {
+    const rank = { waiting: 0, failed: 1, working: 2, idle: 3 }
+    const states = lanes().map((l) => l.state)
+    expect(new Set(states).size).toBeGreaterThan(1)
+    expect(states).toEqual([...states].sort((a, b) => rank[a] - rank[b]))
+  })
+
   it('draws a run per stretch of activity, and the live one reaches now', () => {
     expect(spans('lena')).toEqual([
       '15:44-15:53',

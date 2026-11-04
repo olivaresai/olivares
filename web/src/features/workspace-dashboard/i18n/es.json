@@ -8,7 +8,7 @@
   "selectTitle": "Ningún espacio de trabajo seleccionado",
   "selectPrompt": "Seleccione un espacio de trabajo en el rail de navegación para abrir este resumen, o vaya al inventario del inquilino.",
   "selectPromptWorkspaceOnly": "Seleccione un espacio de trabajo en el rail de navegación para abrir este resumen.",
-  "viewInventory": "Abrir inventario",
+  "viewInventory": "Abrir recursos descubiertos",
   "agents": "Agentes",
   "sessions": "Sesiones",
   "resources": "Recursos",
@@ -46,5 +46,24 @@
     "truncationHint": "Abra Sesiones para ver todas las carpetas.",
     "filter": "Buscar una carpeta",
     "noMatch": "Ninguna carpeta coincide con «{{query}}»."
+  },
+  "connect": {
+    "title": "Copiar archivos con SFTP o SCP",
+    "intro": "Pide una clave válida unos minutos y usa cualquier cliente sftp o scp. Solo llega a esta carpeta.",
+    "button": "Conectar",
+    "connecting": "Conectando…",
+    "privateKey": "Clave privada",
+    "copyKey": "Copiar la clave privada",
+    "copied": "Clave privada copiada",
+    "copyFailed": "No se pudo copiar. Selecciona la clave y cópiala a mano.",
+    "keyHint": "Se muestra una sola vez. Guárdala como {{file}} y ejecuta chmod 600 {{file}}.",
+    "sftp": "Explorar y copiar con sftp",
+    "scp": "Copiar un archivo con scp",
+    "hostKey": "Clave del servidor para comparar cuando tu cliente la pida:",
+    "expires": "Conéctate antes de {{time}}. Después, la clave no abre conexiones nuevas.",
+    "readOnly": "Esta clave solo puede leer archivos: no tienes permisos de escritura en esta carpeta.",
+    "stepUp": "Completa el paso de inicio de sesión que exige este servidor y vuelve a intentarlo.",
+    "failed": "No se pudo obtener una clave. Inténtalo de nuevo.",
+    "statusFailed": "No se pudo comprobar si esta carpeta está disponible por SFTP."
   }
 }

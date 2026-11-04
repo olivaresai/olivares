@@ -48,7 +48,7 @@ if grep -qsw userns_create /sys/kernel/security/apparmor/features/namespaces/mas
   sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions
   apparmor=--security-opt=apparmor=olivares-sessions
 fi
-docker run -d --name olivares -p 127.0.0.1:8443:8443 -p 127.0.0.1:8444:8444 \
+docker run -d --name olivares --hostname olivares -p 127.0.0.1:8443:8443 -p 127.0.0.1:8444:8444 \
   -v olivares-data:/var/lib/olivares \
   --user 65532:65532 --read-only --tmpfs /tmp --cap-drop ALL \
   --security-opt no-new-privileges --security-opt seccomp=olivares-sessions.json $apparmor \

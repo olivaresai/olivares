@@ -8,7 +8,8 @@
     "managedMcp": "MCP 与插件",
     "sandbox": "沙箱与出站",
     "policyAsCode": "策略即代码",
-    "hitl": "受管智能体人工介入"
+    "hitl": "受管智能体人工介入",
+    "departmentInstructions": "部门指令"
   },
   "seam": {
     "badge": "后端待接入",
@@ -292,5 +293,18 @@
     "unverified": "未验证",
     "contentUnknown": "内容未知（仅证明）",
     "openFindings_other": "{{count}} 个未处理发现项"
+  },
+  "department": {
+    "title": "部门指令文件",
+    "hint": "由部门所携带内容生成的指令文件，与其会话收到的文本相同。先预览，再发布到部门的工作站。不再有指令的部门会撤回已发布的文件。",
+    "select": "部门",
+    "selectPlaceholder": "选择部门",
+    "preview": "预览",
+    "publish": "发布",
+    "published": "指令文件已发布。",
+    "previewFailed": "无法预览部门文件",
+    "fileLabel": "部门指令文件",
+    "digest": "SHA-256 {{sha}}",
+    "revisions_other": "已发布 {{count}} 个修订"
   }
 }

@@ -196,7 +196,7 @@ export function useUrlState(
  *             SILENTLY is what both original consumers did, and a deep-link
  *             that quietly ignores half of what it was handed shows the
  *             recipient different data than the author saw while looking
- *             identical. A view is expected to render this (UrlStateNotice).
+ *             identical. A view is expected to say it (useUrlStateNotice).
  */
 export interface UrlStateDecoded<T> {
   value: T

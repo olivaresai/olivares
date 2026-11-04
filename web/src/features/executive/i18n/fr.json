@@ -93,6 +93,7 @@
     "driftFirm": "Accès inattendus",
     "driftPending": "En attente de liaison d’identité",
     "driftUnused": "Octrois inutilisés",
+    "driftNoRules": "Aucune règle d'accès déclarée, donc rien à comparer : déclarez des règles pour voir les écarts.",
     "coverageNote": "Certains accès sont observés avec une couverture partielle (capture approximative ou opaque) ; les chiffres de dérive constituent une borne inférieure.",
     "driftTruncated": "La lecture de la dérive des accès est partielle ; les chiffres constituent une borne inférieure.",
     "driftUnavailable": "La dérive des accès n’a pas pu être lue.",

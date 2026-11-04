@@ -19,6 +19,7 @@ const SOURCES = new Set(['built-in', 'user', 'project', 'plugin'])
  */
 export function SlashMenu({
   listId,
+  label,
   items,
   active,
   emptyText,
@@ -26,6 +27,8 @@ export function SlashMenu({
   onPick,
 }: {
   listId: string
+  /** The listbox's name: what the menu lists. */
+  label: string
   items: readonly RunCommandDTO[]
   active: number
   emptyText: string
@@ -33,7 +36,6 @@ export function SlashMenu({
   notice: string
   onPick: (command: RunCommandDTO) => void
 }) {
-  const { t } = useTranslation('nav')
   useEffect(() => {
     document
       .getElementById(slashOptionId(listId, active))
@@ -60,7 +62,7 @@ export function SlashMenu({
       <ul
         id={listId}
         role="listbox"
-        aria-label={t('launcher.slashLabel')}
+        aria-label={label}
         className="max-h-64 overflow-y-auto p-1"
       >
         {items.map((command, index) => (

@@ -94,6 +94,7 @@ prefixes = [
     "/usr/bin/olivares", "/usr/share/olivares", "/etc/init.d/olivares",
     "/etc/olivares", "/var/lib/olivares", "/var/log/olivares", "/run/olivares",
     "/etc/systemd/system", "/etc/apparmor.d", "/sys/kernel/security/apparmor", "/boot", "/proc",
+    "/run/install", "/run/initramfs",
 ]
 restriction = "/proc/sys/kernel/apparmor_restrict_unprivileged_userns"
 prefixes.insert(0, restriction)
@@ -137,6 +138,7 @@ case "$verb" in
   daemon-reload) exit 0 ;;
   is-enabled) echo "$en"; case "$en" in enabled|enabled-runtime|linked|static|indirect) exit 0 ;; esac; exit 1 ;;
   is-active) echo "$ac"; [ "$ac" = active ] || exit 3 ;;
+  is-system-running) [ ! -f "$S/systemd-not-running" ] ;;
   disable)
     # A host where systemctl cannot stop the unit (no systemd as PID 1: a container, WSL).
     [ ! -f "$S/stop-fails" ] || { echo "Removed /etc/systemd/system/multi-user.target.wants/olivares.service." >&2; echo "System has not been booted with systemd as init system (PID 1). Can't operate." >&2; exit 1; }
@@ -896,6 +898,38 @@ admit 'deb prerm remove in-favour' deb preremove.sh remove in-favour other 1.0
 admit 'deb prerm failed-upgrade' deb preremove.sh failed-upgrade 1.0.0 2.0.0
 admit 'apk .pre-upgrade NEW OLD' apk apk-preupgrade.sh 2.0.0-r0 1.0.0-r0
 admit 'deb postrm abort-install' deb postremove.sh abort-install
+
+new_box installroot
+ship deb
+rm -f "$box/usr/lib/olivares/package-init" "$box/usr/lib/systemd/system/olivares.service" \
+  "$box/usr/share/olivares/migrate-agentops-dropin.sh"
+mkdir -p "$box/run/install"
+run new postinstall.sh 1
+if [[ "$last_rc" -ne 0 ]]; then
+	not_ok "installroot admits no identity files: rc=$last_rc $(tr '\n' ' ' <"$last_out.stderr")"
+else
+	ok "installroot admits no identity files"
+fi
+new_box running-host-no-identity
+ship deb
+rm -f "$box/usr/lib/olivares/package-init" "$box/usr/lib/systemd/system/olivares.service"
+mkdir -p "$box/run/initramfs"
+run new postinstall.sh 1
+if [[ "$last_rc" -eq 0 ]] || ! grep -Fq 'package-init-unknown' "$last_out.stderr"; then
+	not_ok "a real running host with no identity refuses: rc=$last_rc $(tr '\n' ' ' <"$last_out.stderr")"
+else
+	ok "a real running host with no identity refuses"
+fi
+new_box running-host-missing-helper
+ship deb
+rm -f "$box/usr/share/olivares/migrate-agentops-dropin.sh"
+mkdir -p "$box/run/initramfs"
+run new postinstall.sh 1
+if [[ "$last_rc" -eq 0 ]] || ! grep -Fq 'migration helper is missing' "$last_out.stderr"; then
+	not_ok "a real running host with no migration helper refuses: rc=$last_rc $(tr '\n' ' ' <"$last_out.stderr")"
+else
+	ok "a real running host with no migration helper refuses"
+fi
 
 refuse() { # CASE INIT SCRIPT WANT ARGS...
 	local id=$1 init=$2 script=$3 want=$4

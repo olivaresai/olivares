@@ -271,15 +271,16 @@
     "submit": "제출",
     "message": "커밋 메시지",
     "messageHint": "세션 폴더에 변경 사항이 있을 때만 사용됩니다. 기본값은 제목입니다.",
-    "shipped": "제출됨: {{branch}}을(를) 푸시했습니다.",
+    "shipped": "제출됨: <branch />을(를) 푸시했습니다.",
+    "shippedToast": "제출됨.",
     "pullRequest": "풀 리퀘스트 #{{number}}",
     "pullRequestOpen": "풀 리퀘스트 열기",
     "awaitingTitle": "다른 사람의 승인을 기다리는 중",
     "awaitingBody": "변경 사항이 커밋되었습니다. 푸시가 나가기 전에 다른 사람이 승인해야 합니다(승인 {{id}}). 승인되면 다시 제출하세요.",
     "again": "다시 제출",
     "incompleteTitle": "제출이 끝나지 않았습니다",
-    "incompletePush": "{{branch}}의 푸시가 적용되지 않았습니다({{state}}). 이 대상의 인텐트를 확인한 뒤 다시 제출하세요.",
-    "incompletePullRequest": "{{branch}}은(는) 푸시되었지만 풀 리퀘스트가 열리지 않았습니다({{code}}). 다시 제출하여 재시도하세요.",
+    "incompletePush": "<branch />의 푸시가 적용되지 않았습니다({{state}}). 이 대상의 인텐트를 확인한 뒤 다시 제출하세요.",
+    "incompletePullRequest": "<branch />은(는) 푸시되었지만 풀 리퀘스트가 열리지 않았습니다({{code}}). 다시 제출하여 재시도하세요.",
     "pullRequests": "풀 리퀘스트"
   }
 }

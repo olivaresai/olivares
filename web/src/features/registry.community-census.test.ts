@@ -1,12 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import census from './route-census.json'
 import { FEATURE_EXTENSIONS } from './extensions'
-import { FEATURE_VIEWS, ROUTE_ALIASES } from './registry'
+import {
+  BUSINESS_ONLY_VIEW_IDS,
+  FEATURE_VIEWS,
+  ROUTE_ALIASES,
+} from './registry'
 
 // docs/editions.md ("Console pages") lists the pages it places in Business.
 const editions = readFileSync(
@@ -38,6 +42,14 @@ describe('edition placement of the console routes', () => {
         census.business_paths.includes(path),
       ),
     ).toEqual([])
+  })
+
+  // Paid source never enters Community, hidden or disabled (docs/editions.md): the Deployment
+  // page's source lives in the private overlay and arrives through FEATURE_EXTENSIONS.
+  it('ships no source of the Deployment page in the Community tree', () => {
+    if (FEATURE_EXTENSIONS.length > 0) return
+    expect(BUSINESS_ONLY_VIEW_IDS).not.toContain('deploy')
+    expect(existsSync(resolve(__dirname, 'deploy'))).toBe(false)
   })
 
   it('answers a Business path with the Business notice, not a redirect', () => {

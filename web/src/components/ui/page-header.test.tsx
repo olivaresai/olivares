@@ -18,6 +18,7 @@ import { clippingAncestors } from '@/test/clipping'
 import { stubViewportWidth } from '@/test/viewport'
 import { Button } from './button'
 import { PageHeader, WORK_CHROME_ROW, plainText } from './page-header'
+import { PagePlaceContext } from './page-place'
 
 /** The title row itself — the element the `as` prop emits, not the block around it. */
 function titleRow(container: HTMLElement): HTMLElement {
@@ -53,6 +54,25 @@ describe('PageHeader', () => {
     render(<PageHeader title="Inventory" />)
     expect(
       screen.getByRole('heading', { level: 1, name: 'Inventory' }),
+    ).toBeInTheDocument()
+  })
+
+  it('is headed by the sidebar place whose link opened the page, and by its own title elsewhere', () => {
+    const { rerender } = render(
+      <PagePlaceContext.Provider value="Operations">
+        <PageHeader title="Backup & Restore" />
+      </PagePlaceContext.Provider>,
+    )
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Operations' }),
+    ).toBeInTheDocument()
+    rerender(
+      <PagePlaceContext.Provider value={null}>
+        <PageHeader title="Backup & Restore" />
+      </PagePlaceContext.Provider>,
+    )
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Backup & Restore' }),
     ).toBeInTheDocument()
   })
 

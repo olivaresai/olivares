@@ -92,6 +92,13 @@ NOTICES FOR THIRD-PARTY COMPONENTS:
     MIT License; the license text ships with the console as
     web/public/licenses/whisper/Whisper-MIT.txt.
 
+  * Simple Icons 16.36.0 (https://github.com/simple-icons/simple-icons): the path
+    data of seven vendor marks (Claude, Google Gemini, Ollama, OpenCode, Cursor,
+    GitHub, GitLab), unaltered, in web/src/components/ui/vendor-marks.ts. Copyright Simple Icons
+    contributors. CC0 1.0 Universal; the text ships with the console as
+    web/public/licenses/simple-icons/LICENSE.txt. The marks are trademarks of their
+    owners and imply no endorsement.
+
   * ECC (https://github.com/affaan-m/ECC), release v2.2.3, commit
     c05b2d6614f62f6db0047669aa4eefb223d478f9: 285 of its skills, with file contents
     unmodified, as the built-in skills catalog (modules/skills/builtin/, pinned in

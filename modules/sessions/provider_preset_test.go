@@ -261,8 +261,9 @@ func TestProviderPresetsRouteServesTheCatalog(t *testing.T) {
 		t.Fatalf("route answered %d rows, the catalog has %d", len(page.Items), len(want))
 	}
 	for i := range want {
-		// Key verification and Claude roles are internal launch/probe policy.
+		// Key verification, Responses routing and Claude roles are internal launch/probe policy.
 		want[i].KeyCheckURL = ""
+		want[i].Responses = false
 		want[i].Models = modelprovider.PresetModels{Default: want[i].Models.Default}
 		if page.Items[i] != want[i] {
 			t.Fatalf("row %d = %+v, want %+v", i, page.Items[i], want[i])

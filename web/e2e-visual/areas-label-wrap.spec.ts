@@ -62,6 +62,10 @@ for (const lang of LOCALES) {
         await mockApi(page, lang)
         await page.goto('/model-operations')
         await page.locator('[data-slot="sidebar"]').waitFor()
+        // Every place is measured, in any language: More is the one closed disclosure.
+        await page
+          .locator('[data-slot="sidebar"] button[aria-expanded="false"]')
+          .click()
         // The language is the thing under test: a detection that fell back to English
         // would measure English labels in every case and pass.
         await expect(page.locator('html')).toHaveAttribute('lang', lang)

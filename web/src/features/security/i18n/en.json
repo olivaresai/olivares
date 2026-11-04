@@ -1,12 +1,56 @@
 {
   "title": "Security & forensics",
-  "description": "Guardrail findings, the enforcement posture, the anomaly queue and tamper-evident incident forensics. The plane is detective by default — it records, it does not block on its own unless enforcement is enabled and governed.",
+  "description": "Guardrail findings, the enforcement posture, the anomaly queue and tamper-evident incident forensics. By default it records only: nothing is blocked until you turn on a rule.",
   "tabs": {
+    "overview": "Overview",
     "safety": "Safety posture",
     "findings": "Findings",
     "guardrails": "Guardrails",
     "anomalies": "Anomalies",
     "forensics": "Forensics"
+  },
+  "posture": {
+    "title": "Current exposure",
+    "description": "Live reads of the people, credentials and controls that need attention now.",
+    "review": "Review",
+    "notAvailable": "Not available",
+    "partialHint": "A plus sign means the read has more rows beyond this page, so the count is a floor.",
+    "secondFactor": {
+      "label": "People without a second factor",
+      "description": "A bounded read covering every accepted second factor is not available yet."
+    },
+    "administrators": {
+      "label": "Administrators",
+      "description": "Active owners and administrators in this organization."
+    },
+    "apiKeys": {
+      "label": "API keys without expiry or unused",
+      "description": "Registered keys with no expiry or no recorded use. Revoked keys do not count.",
+      "value": "{{noExpiry}} no expiry · {{unused}} unused"
+    },
+    "approvals": {
+      "label": "Pending approvals",
+      "description": "Requests waiting for a person to approve or reject them."
+    },
+    "killSwitch": {
+      "label": "Kill switch",
+      "description": "The current stop posture for the estate and individual agents.",
+      "estateStopped": "Estate stopped",
+      "agentStops_one": "{{count}} agent stopped",
+      "agentStops_other": "{{count}} agents stopped",
+      "notEngaged": "Not engaged"
+    },
+    "providers": {
+      "label": "Providers with a key",
+      "description": "Active provider credential registrations. Secret values are never read."
+    },
+    "policy": {
+      "label": "Policy mode",
+      "description": "Whether signed-model admission is unconfigured, observing or enforcing.",
+      "unconfigured": "Not configured",
+      "observe": "Observe",
+      "enforce": "Enforce"
+    }
   },
   "findings": {
     "title": "Findings",
@@ -59,10 +103,10 @@
   },
   "safetyPosture": {
     "title": "Provider safety posture",
-    "description": "Read-first AI-safety posture ingested from the providers' own controls — OpenAI Moderation, AWS Bedrock Guardrails and Azure Responsible AI. The plane reads and records it; enforcement stays with the provider.",
+    "description": "Read-first AI-safety posture ingested from the providers' own controls — OpenAI Moderation, AWS Bedrock Guardrails and Azure Responsible AI. Olivares reads and records it; enforcement stays with the provider.",
     "empty": "No safety posture findings",
     "emptyHint": "Connect the OpenAI, AWS or Azure connectors with their safety reads enabled to populate this view.",
-    "countsPartial": "Showing a partial roll-up — this tenant has more safety posture findings than the summary scan covers.",
+    "countsPartial": "Showing a partial roll-up — this organization has more safety posture findings than the summary scan covers.",
     "columns": {
       "open": "Open"
     }
@@ -72,14 +116,14 @@
     "description": "Run the guardrail inspection service over a surface. The text is hashed redacted and never stored — the result is a verdict plus minimal, already-redacted evidence.",
     "verdictTitle": "Verdict",
     "clean": "No detections — clean.",
-    "detectiveNote": "This verdict came from the detective plane: the trip was detected and recorded, not blocked. A block is only reachable when enforcement is enabled and governed.",
+    "detectiveNote": "This verdict only recorded the trip: it was detected, not blocked. A block is only possible when enforcement is enabled and governed.",
     "wouldBlock": "Would block (enforced)",
     "detectOnly": "Detect only",
     "findingsRecorded": "{{count}} finding recorded",
     "findingsRecorded_one": "{{count}} finding recorded",
     "findingsRecorded_other": "{{count}} findings recorded",
     "enforcement": {
-      "detective": "Detective",
+      "detective": "Records only",
       "enforced": "Enforced"
     },
     "class": {
@@ -108,10 +152,10 @@
   },
   "enforcement": {
     "title": "Enforcement posture",
-    "description": "The one action that touches production. Each guardrail class is detective by default; enabling inline enforcement is an admin action, governed where a gate is set up.",
-    "defaultDetectiveNote": "The default plane is detective: classes only block when explicitly enabled here and governed.",
-    "fullyDetective": "No enforcement is enabled — the plane is fully detective, the safe default. Nothing blocks on its own.",
-    "detective": "Detective",
+    "description": "The one action that touches production. Each guardrail class only records by default; enabling inline enforcement is an admin action, governed where a gate is set up.",
+    "defaultDetectiveNote": "By default nothing is blocked: classes only block when explicitly enabled here and governed.",
+    "fullyDetective": "No enforcement is enabled — it records only and blocks nothing until you turn on a rule.",
+    "detective": "Records only",
     "enforced": "Enforced",
     "governed": "Governed",
     "ungoverned": "Enabled without human governance",
@@ -127,7 +171,7 @@
     },
     "dialog": {
       "title": "Change enforcement",
-      "description": "Disabling (back to detective) is always allowed. Enabling inline enforcement is governed where a gate is set up — a governance denial is shown as the reason.",
+      "description": "Disabling (back to records only) is always allowed. Enabling inline enforcement is governed where a gate is set up — a governance denial is shown as the reason.",
       "enabledLabel": "Enable inline enforcement",
       "minSeverity": "Minimum severity",
       "reason": "Reason",
@@ -205,7 +249,7 @@
   "empty": {
     "enforcement": {
       "title": "No enforcement classes configured",
-      "description": "Rows appear only after a guardrail class posture is set; until then every class remains detective and nothing blocks inline."
+      "description": "Rows appear only after a guardrail class posture is set; until then every class only records and nothing blocks inline."
     },
     "findings": {
       "title": "No security findings recorded yet",

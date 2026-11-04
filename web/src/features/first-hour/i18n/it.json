@@ -86,7 +86,6 @@
     "folderHint": "Una cartella su questo server. Lasciala vuota per partire in una nuova cartella.",
     "folderNew": "Una nuova cartella per questa sessione",
     "folderTyped": "Un'altra cartella…",
-    "folderChange": "Cambia cartella",
     "readingFolder": "Lettura della cartella dell'ultima sessione…",
     "prompt": "Primo messaggio (facoltativo)",
     "promptPlaceholder": "Cosa deve fare per prima cosa?",
@@ -126,8 +125,6 @@
     "autoAsks": "{{tool}} non ha una modalità automatica: chiederà prima di ogni azione."
   },
   "lists": {
-    "runsTruncated": "Sessioni recenti: {{count}} caricate; ce ne sono altre.",
-    "runsHint": "Le sessioni più vecchie non sono in questo elenco.",
     "foldersTruncated": "Cartelle registrate: {{count}} caricate; ce ne sono altre.",
     "foldersHint": "Alcune cartelle registrate non sono in questo elenco."
   },
@@ -147,9 +144,7 @@
     "mcp": "Aggiungi server MCP",
     "budgets": "Imposta i budget",
     "cli": "Usa la riga di comando olivares",
-    "cliHint": "Su questo server il comando olivares è già installato. Da un altro computer, installalo con:",
-    "copy": "Copia",
-    "copied": "Copiato"
+    "cliHint": "Su questo server il comando olivares è già installato. Da un altro computer, installalo con:"
   },
   "permissionSummary": {
     "readOnly": "Legge e pianifica. Ogni modifica viene rifiutata.",
@@ -158,5 +153,29 @@
     "editsAndCommands": "Legge, modifica i file ed esegue comandi senza chiedere. Gli altri strumenti vengono rifiutati.",
     "auto": "Decide la modalità automatica verificata dello strumento stesso. Uno strumento che non ne ha chiede, come in Supervisionato. Richiede l'amministrazione delle esecuzioni.",
     "full": "Nulla chiede. Olivares continua a confinare la sessione e registra ogni azione. Richiede l'amministrazione delle esecuzioni."
+  },
+  "bring": {
+    "title": "Porta le tue cartelle",
+    "body": "Le cartelle in cui i tuoi strumenti hanno già lavorato, lette dai registri propri degli strumenti su percorsi di progetto e date. Non viene registrato nulla finché non confermi.",
+    "error": "Impossibile cercare le cartelle dei tuoi strumenti.",
+    "unreadable": "Non è stato possibile leggere i registri di {{tool}}. Aggiungi le cartelle a mano.",
+    "cols": {
+      "folder": "Cartella",
+      "tool": "Strumento",
+      "lastUsed": "Ultimo uso",
+      "conversations": "Conversazioni"
+    },
+    "pick": "Registra {{folder}}",
+    "confirm": "Registra le selezionate ({{n}})",
+    "skipStep": "Non ora",
+    "skip": {
+      "missing": "La cartella non esiste più",
+      "unreadable": "La cartella non può essere letta",
+      "outside_allowed_roots": "Fuori dalle cartelle consentite: si sovrappone a una cartella protetta",
+      "already_registered": "Già registrata"
+    },
+    "failed": "Non è stato possibile registrarla.",
+    "toast": "Registrate: {{n}}",
+    "result": "Registrate: {{imported}}. Saltate: {{skipped}}."
   }
 }

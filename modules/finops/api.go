@@ -199,7 +199,10 @@ func (m *Module) handleListBudgets(w http.ResponseWriter, r *http.Request, mc ap
 	q := listQuery(r)
 	q.Filters = append(q.Filters, eq("kind", policyKindBudget))
 	out := listResponse[budgetDTO]{Items: []budgetDTO{}}
-	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
+	// Budgets are tenant-wide policies a caller confined to its department cannot
+	// read; the route admitted it at that department and the loop below keeps
+	// that department's budgets only.
+	err := mc.Data.View(api.DepartmentAuthority(r.Context(), mc), func(sc store.Scope) error {
 		var workspace model.Workspace
 		if !mc.Resource.WorkspaceID.IsZero() {
 			var err error

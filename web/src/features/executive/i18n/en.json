@@ -93,6 +93,7 @@
     "driftFirm": "Unexpected accesses",
     "driftPending": "Awaiting identity link",
     "driftUnused": "Unused grants",
+    "driftNoRules": "No access rules declared, so there is nothing to compare: declare rules to see drift.",
     "coverageNote": "Some access is observed with partial coverage (approximate or opaque capture); the drift figures are a lower bound.",
     "driftTruncated": "The drift read is partial; the access drift figures are a lower bound.",
     "driftUnavailable": "Access drift could not be read.",

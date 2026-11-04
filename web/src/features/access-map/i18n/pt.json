@@ -1,0 +1,227 @@
+{
+  "title": "Mapa de acessos",
+  "subtitle": "O que cada agente lê e escreve em todo o parque — origens à esquerda, os recursos que tocam à direita, R/RW por cor.",
+  "auditedNote": "Abrir este mapa é uma ação privilegiada e auditada. Apenas para revisão defensiva — mostra relações, nunca SQL, conteúdos ou segredos.",
+  "refresh": "Atualizar",
+  "stats": {
+    "origins": "Origens",
+    "resources": "Recursos",
+    "read": "Leitura",
+    "write": "Escrita / RW",
+    "approximate": "Aproximado",
+    "unexpected": "Inesperado",
+    "truncated": "A mostrar os primeiros {{n}}",
+    "truncatedHint": "O parque tem mais arestas do que as mostradas; restrinja com filtros ou expanda um nó para ver os seus vizinhos."
+  },
+  "webgl": {
+    "badge": "Vista de alta densidade",
+    "hint": "A mostrar {{n}} nós — mudou para o renderizador WebGL acelerado, para suportar a escala."
+  },
+  "lod": {
+    "grouped": "Grupos: clique num para o abrir."
+  },
+  "filters": {
+    "search": "Pesquisar origem, recurso, ferramenta…",
+    "mode": "Modo de acesso",
+    "attributedOnly": "Apenas atribuídos",
+    "attributedHint": "Oculte as arestas aproximadas (inferidas) e mostre apenas o acesso firmemente atribuído.",
+    "signal": "Sinal",
+    "allSignals": "Todos os sinais",
+    "clear": "Limpar",
+    "drift": "Permitido vs observado",
+    "driftHint": "Sobreponha a diferença de privilégio mínimo: destaque o acesso inesperado (observado, não permitido) e as concessões não utilizadas.",
+    "driftForbidden": "A sua função não pode ver desvios."
+  },
+  "legend": {
+    "read": "Leitura",
+    "write": "Escrita",
+    "writeRw": "Escrita / RW",
+    "unknown": "Desconhecido",
+    "approximate": "Aproximado",
+    "unexpected": "Acesso inesperado",
+    "pending": "Pendente (por decidir)",
+    "unused": "Concessão não utilizada"
+  },
+  "drift": {
+    "title": "Desvio de privilégio mínimo",
+    "cleanTitle": "Nenhum desvio encontrado",
+    "cleanHint": "Todos os acessos observados são permitidos e todas as concessões estão em uso.",
+    "unexpectedTitle": "Acesso inesperado",
+    "unexpectedHint": "Observado mas NÃO permitido — a deteção de maior prioridade.",
+    "pendingTitle": "Reconciliação pendente",
+    "pendingHint": "Observado sem uma concessão correspondente, e o motor ainda não consegue decidir se é permitido — uma ligação agente-identidade por resolver, um modo de concessão desconhecido ou um modo observado indecidível. Não diz qual, pelo que ainda não é uma violação firme.",
+    "unusedTitle": "Concessões não utilizadas",
+    "unusedHint": "Permitido mas nunca observado — sobreaprovisionamento a reduzir.",
+    "forbiddenTitle": "Desvio não autorizado",
+    "forbiddenHint": "A sua função pode ver o grafo, mas não a diferença entre o que é permitido e o que foi observado.",
+    "partial": "Resultado parcial: o motor reconciliou esta diferença sobre uma janela de desvio truncada, pelo que estas contagens não abrangem todo o parque e uma aresta em falta aqui pode simplesmente estar para lá do limite.",
+    "emptyWindowTitle": "Sem deteções na janela analisada",
+    "emptyWindowHint": "A análise parou no limite de páginas, pelo que isto não é uma afirmação sobre todo o parque.",
+    "scopeHint": "A lista de desvios abrange toda a organização; os filtros do mapa não se aplicam a ela"
+  },
+  "detail": {
+    "edgeTitle": "Aresta de acesso",
+    "nodeSubtitle": "Um nó do grafo — expanda para ver a que se liga.",
+    "ref": "Referência",
+    "id": "ID",
+    "expand": "Expandir vizinhos",
+    "unexpectedFlag": "Observado sem uma concessão correspondente",
+    "origin": "Origem",
+    "kind": "Tipo",
+    "bridge": "Ponte",
+    "unbridged": "Agente por resolver",
+    "resource": "Recurso",
+    "coverage": "Cobertura",
+    "tool": "Ferramenta",
+    "attribution": "Atribuição por agente",
+    "signal": "Sinal e confiança",
+    "confidence": "Confiança",
+    "sources": "Origens",
+    "reason": "Atribuição",
+    "diff": "Permitido vs observado",
+    "observed": "Observado",
+    "permitted": "Permitido",
+    "activity": "Atividade",
+    "occurrences": "Ocorrências",
+    "firstSeen": "Visto pela primeira vez",
+    "lastSeen": "Visto pela última vez",
+    "yes": "Sim",
+    "no": "Não",
+    "minimalData": "Só são mostrados metadados. Por conceção, o motor nunca transporta aqui SQL, conteúdos ou segredos (dados mínimos).",
+    "open": {
+      "session": "Abrir sessão",
+      "agent": "Abrir agentes",
+      "nhiRoster": "Abrir identidades"
+    },
+    "expandLimit": "Este mapa já mostra {{n}} nós expandidos. Retroceda ou atualize para recomeçar."
+  },
+  "authority": {
+    "title": "Autoridade e passo seguinte",
+    "declaredBy": "Sinais nesta aresta:",
+    "multiple": "Está registada aqui mais do que uma permissão independente. Tratar uma deixa a outra em vigor.",
+    "noRetraction": "O mapa regista sinais e nunca os retira, pelo que esta aresta pode persistir depois de alterar a origem. Volte a verificar em vez de presumir.",
+    "explain": {
+      "sourceScope": "Uma ligação entre origem e âmbito registou a permissão para esta aresta. Esse plano de ligações é onde é configurada.",
+      "declared": "Foi registado um sinal de permissão declarado para esta aresta. O mapa não indica que sistema o emitiu — um fornecedor de identidade, uma implementação, ou uma ACL de repositório ou de cofre de segredos — pelo que não o consegue apontar.",
+      "unattributed": "Este acesso é permitido, mas não existe na aresta nenhum sinal que nomeie uma permissão. Não há aqui nada que identifique o sistema responsável, e adivinhar um seria pior do que dizê-lo.",
+      "unpermitted": "Não existe neste mapa nenhum sinal de permissão para este acesso. É isso que faz dele uma deteção — mas não é prova de que nada o permite: um resolvedor em direto pode permitir um acesso que este mapa nunca vê.",
+      "undetermined": "Nem observado nem permitido. É uma capacidade declarada, não evidência de acesso, pelo que não há nada a corrigir.",
+      "undecided": "Ainda não é possível decidir se esta aresta é permitida, pelo que não é uma violação confirmada. O motor não diz que condição está por resolver — uma ligação agente-identidade, um modo de concessão desconhecido ou um modo observado indecidível — pelo que não é oferecida nenhuma correção específica.",
+      "unchecked": "Este mapa mostra o acesso sem sinal de permissão, mas o estado de desvio desta aresta não foi estabelecido aqui. Só a diferença de privilégio mínimo diz se o motor confirmou uma deteção ou ainda está a reconciliar, e este painel não tem resposta dela. Até lá, isto não é uma deteção, nem uma aresta limpa.",
+      "reconciled": "O motor leu a diferença de privilégio mínimo e não listou este acesso nela, pelo que não é uma deteção confirmada e não há aqui nada a corrigir. O que o mapa não diz é PORQUÊ: pode estar registada noutra aresta uma concessão que o cobre, ou uma permissão pode ter chegado a esta — o grafo e a diferença são leituras separadas, pelo que este painel não lhe consegue dizer qual."
+    },
+    "target": {
+      "sourceBindings": "Abrir ligações de origem",
+      "nhiRoster": "Abrir identidades"
+    },
+    "needsPermission": "{{action}} precisa de {{permission}} para isto; esta função não a possui.",
+    "recheck": "Voltar a verificar o desvio",
+    "verdict": {
+      "clear": "Verificado de novo: esta aresta já não está no conjunto de desvios. A explicação acima descreve o estado anterior a essa verificação.",
+      "present": "Verificado de novo: esta aresta continua no conjunto de desvios.",
+      "unknown": "Não foi possível confirmar — a leitura do desvio não voltou, ou abrangeu apenas parte do parque. Nenhum dos casos equivale a limpo."
+    },
+    "checkDrift": "Ler o desvio desta aresta",
+    "closes": "Registar uma permissão é o que elimina esta deteção — embora não necessariamente nesta aresta: uma concessão na identidade para a qual o acesso é resolvido elimina-a a partir de outra. A projeção do âmbito de origem é feita com o melhor esforço, e as ligações de grupo, função e pasta são impostas sem projetar nada no mapa, pelo que pode existir uma permissão real que esta diferença nunca vê. Parar o acesso também não a elimina: uma observação nunca é retirada. Volte a verificar em vez de presumir.",
+    "cannotClose": "Eliminar a concessão não removerá o indicador de permitido desta aresta — o mapa nunca retira uma permissão, pelo que esta deteção não desaparece por causa dessa eliminação. (Ainda pode sair da diferença por um motivo não relacionado, como o acesso ser finalmente observado.) Verifique a remoção no sistema responsável, não aqui.",
+    "signalsNotFused": "Esta aresta apenas transporta o seu sinal mais recente — o conjunto corroborante não foi incluído nesta resposta, pelo que podem existir outros sinais, incluindo outras permissões, que não são mostrados aqui."
+  },
+  "kinds": {
+    "agent": "Agente",
+    "session": "Sessão",
+    "identity": "Identidade",
+    "resource": "Recurso"
+  },
+  "coverage": {
+    "clean": "Limpa",
+    "lossy": "Com perdas",
+    "opaque": "Opaca",
+    "mixed": "Mista"
+  },
+  "coverageHint": {
+    "clean": "Captura de alta fidelidade (p. ex. auditoria de SQL/objetos/armazém de dados).",
+    "lossy": "Captura parcial — alguns acessos não são classificáveis.",
+    "opaque": "Não pode ser capturada passivamente (p. ex. Redis/SQLite).",
+    "mixed": "Fidelidade mista entre sinais."
+  },
+  "attributionTier": {
+    "firm": "Exata",
+    "approximate": "Aproximada",
+    "unknown": "Desconhecida"
+  },
+  "attributionTierHint": {
+    "firm": "Ligada a um agente através da sua própria identidade ou de uma credencial dedicada.",
+    "approximate": "Uma conta partilhada — a identidade é conhecida, mas não é a de um único agente.",
+    "unknown": "Sem auditoria por identidade (p. ex. Redis/SQLite/D1) — atribuição impossível."
+  },
+  "empty": {
+    "title": "Ainda não foi observado nenhum acesso",
+    "description": "Quando os conectores comunicarem atividade de agentes, as relações R/RW aparecem aqui."
+  },
+  "list": {
+    "summary": "Mapa como lista",
+    "hint": "Lista acessível por teclado de todos os nós deste mapa. Selecionar uma linha abre o mesmo detalhe que o grafo.",
+    "node": "Nó",
+    "kind": "Tipo"
+  },
+  "forbidden": {
+    "title": "Mapa de acessos não autorizado",
+    "description": "A sua função não inclui permissão para ver o grafo de acessos."
+  },
+  "mobile": {
+    "title": "O mapa abre em ecrã inteiro",
+    "hint": "Desloque com um dedo e use o gesto de pinça para ampliar. A lista abaixo também funciona.",
+    "open": "Abrir o mapa em ecrã inteiro"
+  },
+  "fullscreen": {
+    "enter": "Ecrã inteiro",
+    "exit": "Sair do ecrã inteiro"
+  },
+  "attackPaths": {
+    "chooseAgent": "Escolha um agente no grafo para ver os seus caminhos de ataque.",
+    "auditedNote": "Cada uma destas leituras fica selada no registo de auditoria, tal como o próprio grafo.",
+    "loading": "A calcular…",
+    "error": "Não foi possível ler esta análise.",
+    "none": "Nenhum caminho encontrado.",
+    "weakestLink": "elo mais fraco:",
+    "sensitivity": "sensibilidade máxima",
+    "sensitivityAbsent": "não indicada",
+    "sensitivityAbsentHint": "O motor omite este campo quando está vazio, pelo que um valor ausente NÃO é uma afirmação de que nada sensível está envolvido.",
+    "kind": {
+      "reachability": "O que consegue alcançar",
+      "escalation": "Onde poderia escalar",
+      "exfil": "Rotas de exfiltração"
+    },
+    "attribution": {
+      "firm": "exata",
+      "approximate": "aproximada",
+      "unknown": "não atribuída"
+    },
+    "confidence": {
+      "attributed": "atribuída",
+      "approximate": "aproximada"
+    },
+    "analyse": "Analisar caminhos de ataque (auditado)",
+    "truncated": "O motor limitou esta análise, pelo que os caminhos mostrados não são a resposta completa."
+  },
+  "expand": {
+    "partial": "Alguns nós expandidos não puderam ser lidos, pelo que o mapa está incompleto.",
+    "retry": "Repetir"
+  },
+  "graph": {
+    "keyboardHint": "Dê foco a um nó e use as teclas de seta para passar a um nó ligado e Enter para o abrir. A lista abaixo do grafo faz o mesmo sem a área de desenho."
+  },
+  "groupKinds": {
+    "session": "Sessões",
+    "agent": "Agentes",
+    "identity": "Identidades"
+  },
+  "group": {
+    "items_one": "{{count}} item",
+    "items_many": "{{count}} de itens",
+    "items_other": "{{count}} itens",
+    "more": "+{{count}} mais",
+    "close": "Fechar {{name}}",
+    "members": "Membros"
+  }
+}

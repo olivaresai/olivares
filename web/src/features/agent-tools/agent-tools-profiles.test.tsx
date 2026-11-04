@@ -67,6 +67,10 @@ import { useTenantStore } from '@/stores/tenant'
 import { AgentToolsView } from './agent-tools-view'
 import type { ProviderSnapshot } from './api'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 const snap = (driver: string, over: Partial<ProviderSnapshot> = {}) =>
   ({
     instance: driver,

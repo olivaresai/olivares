@@ -21,6 +21,11 @@ export const VIEWS = [
     helpHref: '/reference/modules/xxiii-model-operations',
     icon: BadgeCheck,
     permission: 'models:registry:read',
+    changes: [
+      { permission: 'models:admission:write' },
+      { permission: 'models:admission:admin' },
+      { permission: 'models:registry:write' },
+    ],
     element: lazyView(ModelOpsView),
   },
 ] satisfies ViewEntry[]

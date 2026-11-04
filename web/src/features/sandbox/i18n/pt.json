@@ -1,0 +1,190 @@
+{
+  "truncation": {
+    "label": "Carregadas {{n}} linhas; existem mais",
+    "hint": "Esta lista de sandbox tem um limite. Só são apresentadas as linhas carregadas."
+  },
+  "title": "Sandbox de testes",
+  "description": "Execuções isoladas e efémeras contra recursos simulados — simulações de cenários, reproduções determinísticas e comparações antes/depois da implementação. As saídas são sintéticas; nunca é guardado texto real de um alvo.",
+  "tabs": {
+    "runs": "Execuções",
+    "comparisons": "Comparações",
+    "scenarios": "Cenários"
+  },
+  "kind": {
+    "scenario": "Cenário",
+    "replay": "Reprodução",
+    "compare": "Comparação"
+  },
+  "runner": {
+    "inproc-mock": "simulação in-proc",
+    "container": "Contentor",
+    "microvm": "microVM"
+  },
+  "subjectKind": {
+    "agent": "Agente",
+    "model": "Modelo",
+    "prompt": "Prompt",
+    "session": "Sessão",
+    "sandbox_run": "Execução de sandbox"
+  },
+  "verdict": {
+    "improved": "Melhorou",
+    "regressed": "Piorou",
+    "unchanged": "Inalterado",
+    "inconclusive": "Inconclusivo"
+  },
+  "run": {
+    "isolated": "Isolada",
+    "isolatedHint": "O executor garante o isolamento: sem saída de rede, sem segredos, sem produção. Registado conforme comunicado pelo executor, não inferido.",
+    "notIsolated": "Não isolada",
+    "notIsolatedHint": "Este backend não garante o isolamento — mostrado tal como é, não ocultado.",
+    "destroyed": "Destruída",
+    "destroyedHint": "O estado do ambiente efémero foi descartado após a execução.",
+    "notScored": "Executada, sem pontuação",
+    "pass": "Aprovada",
+    "fail": "Reprovada"
+  },
+  "runs": {
+    "title": "Execuções",
+    "description": "Cada execução isolada, com o backend que a executou e se foi pontuada.",
+    "isolationNote": "O isolamento é real, não simulado: o executor e o indicador de isolamento são mostrados exatamente como foram registados. Uma execução degradada foi executada mas não pontuada — não é uma aprovação.",
+    "empty": "Ainda sem execuções",
+    "emptyHint": "Cada execução de cenário está listada aqui com o seu veredicto e as suas saídas. Execute um cenário para registar a primeira.",
+    "errored": "{{count}} erro",
+    "errored_one": "{{count}} erro",
+    "errored_many": "{{count}} de erros",
+    "errored_other": "{{count}} erros",
+    "columns": {
+      "kind": "Tipo",
+      "subject": "Objeto",
+      "runner": "Executor",
+      "isolation": "Isolamento",
+      "status": "Estado",
+      "steps": "Passos",
+      "score": "Pontuação",
+      "started": "Início"
+    }
+  },
+  "outputs": {
+    "title": "Saídas dos passos",
+    "empty": "Nenhuma saída registada",
+    "emptyHint": "Tudo o que um passo de um cenário escreve é capturado aqui. Esta execução não registou nenhuma saída.",
+    "syntheticNote": "Estas são saídas sintéticas limitadas do executor simulado — não são saídas de produção. Uma falha de simulação é um marcador determinístico; nunca chegou a um recurso real.",
+    "mockHit": "Acerto na simulação",
+    "mockMiss": "Falha de simulação"
+  },
+  "stream": {
+    "replayNote": "O motor reproduz as saídas dos passos registadas desta execução numa só ligação e depois fecha-a. Uma execução de sandbox é executada de forma síncrona quando é iniciada, pelo que isto é evidência confirmada a chegar progressivamente — não a vista de uma execução ainda em curso.",
+    "waiting": "A aguardar a primeira saída de passo — o estado da ligação é mostrado acima.",
+    "connecting": "A ligar…",
+    "receiving": "A receber a reprodução",
+    "complete": "Reprodução concluída",
+    "completePartial": "A reprodução terminou, mas não é o registo completo",
+    "unreadable": "Frames que esta vista não conseguiu ler: {{n}}. Chegaram e foram descartados, pelo que a evidência que transportavam falta aqui — esta não é uma reprodução limpa.",
+    "emptyUnreadable": "Não foi possível ler nenhuma saída de passo",
+    "emptyUnreadableHint": "A saída dos passos é transmitida a partir da sandbox à medida que a execução avança. Não foi possível reler nada para este passo.",
+    "disconnected": "Sem ligação",
+    "lost": "Ligação perdida — deixou de ver esta execução.",
+    "lostHint": "Isto NÃO é a execução a terminar: a ligação terminou antes de o motor sinalizar o fim da reprodução. O estado da execução é o que o motor registou, mostrado na tabela de execuções — nunca é derivado desta ligação. Volte a ligar para retomar; as saídas já mostradas não são repetidas.",
+    "reconnect": "Voltar a ligar",
+    "snapshot": "O fluxo não entregou nada, por isso estas são as saídas guardadas lidas através da API JSON — um instantâneo, não a vista em direto.",
+    "summary": "Resumo do motor: {{ok}} de {{total}} passos resolvidos com uma simulação, {{error}} falhas de simulação."
+  },
+  "comparisons": {
+    "title": "Comparações antes/depois da implementação",
+    "description": "Linha de base versus candidata pontuadas contra a mesma suite — o veredicto que condiciona uma implementação.",
+    "empty": "Ainda sem comparações",
+    "emptyHint": "Execute uma comparação para avaliar uma variante candidata face à sua linha de base.",
+    "baseline": "Linha de base",
+    "candidate": "Candidata",
+    "delta": "Delta",
+    "decidedBy": "Decidido por",
+    "scoredAgainst": "Pontuada contra",
+    "noSuite": "Sem suite — o veredicto é inconclusivo sem uma linha de base e uma candidata pontuadas."
+  },
+  "scenarios": {
+    "title": "Cenários",
+    "description": "Especificações reutilizáveis de entradas de passos sintéticas mais respostas simuladas de MCP/recursos.",
+    "empty": "Ainda sem cenários",
+    "emptyHintAuthor": "Registe a primeira fixture sintética: as entradas de passos que um objeto de teste recebe, mais as respostas simuladas com que são resolvidas.",
+    "emptyHintReadOnly": "Os cenários são criados por quem tem a permissão de escrita de cenários de sandbox. Sem ela, pode ler os que existem e as respetivas execuções.",
+    "emptyHintConfined": "A sua associação está confinada a um espaço de trabalho. Um cenário é uma fixture ao nível do tenant, por isso o motor recusa registar um a partir de uma associação confinada — um membro de todo o tenant tem de o criar.",
+    "columns": {
+      "name": "Nome",
+      "subjectKind": "Objeto",
+      "steps": "Passos",
+      "status": "Estado",
+      "actions": "Ações"
+    },
+    "create": {
+      "action": "Novo cenário",
+      "title": "Novo cenário",
+      "description": "Um cenário é uma fixture sintética: as entradas de passos que um objeto de teste recebe e as respostas simuladas de MCP/recursos com que são resolvidas. Nada aqui chega a um recurso real.",
+      "name": "Nome",
+      "namePlaceholder": "Agente de checkout — caminho feliz",
+      "subjectKind": "Objeto",
+      "subjectKindHint": "O que o cenário exercita — agente, modelo, prompt ou sessão. Texto livre, sem espaços nas extremidades e guardado até 200 carateres.",
+      "subjectKindPlaceholder": "agente",
+      "descriptionLabel": "Descrição",
+      "descriptionPlaceholder": "O que esta fixture exercita e porque existe.",
+      "steps": "Passos",
+      "stepsHint": "As entradas que o objeto de teste recebe, por ordem. Deixe uma chave em branco e o motor atribui step-1, step-2, e assim sucessivamente.",
+      "stepsEmpty": "Ainda sem passos — uma execução deste cenário não produziria nenhuma saída.",
+      "addStep": "Adicionar passo",
+      "removeStep": "Remover passo {{index}}",
+      "stepKey": "Chave do passo {{index}}",
+      "stepKeyPlaceholder": "step-1-classify",
+      "stepInput": "Entrada do passo {{index}}",
+      "stepInputPlaceholder": "Classifique este pedido de reembolso.",
+      "mocks": "Simulações",
+      "mocksHint": "A resposta que cada MCP/recurso simulado devolve. Um passo que não encontra nenhuma simulação regista um marcador determinístico de falha de simulação — nunca faz chamadas externas.",
+      "mocksEmpty": "Ainda sem simulações — cada passo registaria um marcador de falha de simulação.",
+      "addMock": "Adicionar simulação",
+      "removeMock": "Remover simulação {{index}}",
+      "mockResource": "Recurso da simulação {{index}}",
+      "mockResourcePlaceholder": "catalog.lookup",
+      "mockResponse": "Resposta da simulação {{index}}",
+      "mockResponsePlaceholder": "{\"status\":\"authorized\"}",
+      "syntheticNote": "Introduza apenas texto sintético: nada aqui é classificado, ocultado nem rejeitado, pelo que um segredo que cole é um segredo que guardou. O motor só limita o comprimento — um nome a 200 carateres, uma descrição a 1024, cada corpo de passo ou de simulação a 8192 — acrescentando reticências quando trunca.",
+      "submit": "Criar cenário",
+      "submitting": "A criar…",
+      "success": "Cenário criado",
+      "failed": "O cenário não foi criado."
+    },
+    "archive": {
+      "action": "Arquivar",
+      "alreadyArchived": "Já arquivado",
+      "confirmTitle": "Arquivar este cenário?",
+      "confirmBody": "«{{name}}» é marcado como arquivado e a decisão fica registada no registo de auditoria. As execuções e comparações que já o usaram são mantidas — arquivar nunca elimina evidência. É uma mudança de estado, não um bloqueio: o motor continua a executar um cenário neste estado se algo lho pedir.",
+      "success": "Cenário arquivado"
+    }
+  },
+  "seam": {
+    "synthetic": "Geração local de dados",
+    "syntheticData": "Gere entradas de cenário reprodutíveis através da API de sandbox com modelos locais limitados. Não é feito nenhum pedido a modelos nem à rede."
+  },
+  "empty": {
+    "runs": {
+      "title": "Ainda nenhuma execução de sandbox registada",
+      "description": "As execuções aparecem depois de um chamador autorizado iniciar um cenário, uma reprodução ou uma comparação guardados através da API de sandbox."
+    },
+    "scenarios": {
+      "title": "Ainda nenhum cenário de sandbox definido",
+      "description": "Um cenário é uma fixture sintética criada por um operador, registada por quem tem a permissão de escrita de cenários de sandbox — a partir deste ecrã ou através da API de sandbox."
+    }
+  },
+  "actions": {
+    "replay": "Reproduzir uma sessão",
+    "compare": "Comparar variantes",
+    "run": "Reproduzir",
+    "compareRun": "Comparar",
+    "sessionRef": "Referência da sessão",
+    "scenarioRef": "Referência do cenário (opcional)",
+    "baseline": "Variante de base",
+    "candidate": "Variante candidata",
+    "replayHint": "Volta a executar uma sessão histórica de forma determinística contra simulações. Se a cronologia não puder ser reconstruída, a reprodução regressa DEGRADADA com zero passos — isso não é uma sessão que não fez nada, é uma cronologia que não pôde ser reconstruída.",
+    "compareHint": "Uma comparação é evidência de DECISÃO antes/depois da implementação e é guardada só de acréscimo, razão pela qual exige o nível de administração e não o que apenas executa.",
+    "liveRef": "Referência da instância da sessão",
+    "legacySessionRef": "Referência de sessão legada (alternativa)"
+  }
+}

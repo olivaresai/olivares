@@ -3,6 +3,7 @@ Olivares AI dev
 ENGINE     none found on this machine
 SIGNED IN  no
 NEXT       olivares quickstart
+To use an engine on another computer: olivares login --server <url>
 
 Start here:
   doctor     Check this host's installation and say what to fix

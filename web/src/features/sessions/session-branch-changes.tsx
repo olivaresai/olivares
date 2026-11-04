@@ -9,11 +9,12 @@
 // work only: uncommitted edits are what session-changes.tsx shows. The engine reads git's
 // objects and runs nothing in the session's folder (modules/sessions/run_worktree_diff.go).
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { ArrowLeft, FileText } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { FileTypeIcon } from '@/components/ui/file-type-icon'
 import { CodeDiff } from '@/components/ui/code-diff'
 import { Input } from '@/components/ui/input'
 import { PathText } from '@/components/ui/path-text'
@@ -170,9 +171,9 @@ export function SessionBranchChanges({ run }: { run: RunDTO }) {
                 onClick={() => openFile(f.path)}
                 className="flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <FileText
+                <FileTypeIcon
+                  path={f.path}
                   className="size-3.5 shrink-0 text-muted-foreground"
-                  aria-hidden
                 />
                 <PathText value={f.path} copy={false} className="flex-1" />
                 <Badge variant="neutral">

@@ -123,7 +123,7 @@
     "add": "Ajouter {{token}} à la requête",
     "commands": "Recherche et commandes",
     "problem": {
-      "key": "{{token}} n'est pas un filtre du registre. Utilisez person:, action:, kind:, target:, since:, until: ou des mots.",
+      "key": "{{token}} n'est pas un filtre du registre. Utilisez person:, action:, kind:, target:, tool:, folder:, since:, until: ou des mots.",
       "time": "{{token}} n'est pas une durée. Utilisez 90m, 24h, 7d, 2w ou une date comme 2026-10-20.",
       "person": "Personne ne correspond à {{token}}. Utilisez un nom, un e-mail ou user:<id>.",
       "several": "{{token}} correspond à plusieurs personnes. Utilisez le nom complet, un e-mail ou user:<id>.",

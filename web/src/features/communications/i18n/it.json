@@ -89,11 +89,11 @@
   },
   "catalog": {
     "title": "Canali visibili",
-    "description": "Solo i canali attivi che questa identità può leggere ora, con i suoi bit locali correnti. Una pagina non è una ricerca nell'intero catalogo: carica altri per continuare dalla continuazione del server.",
+    "description": "Solo i canali attivi che puoi leggere ora, con il tuo accesso. Una pagina non è una ricerca nell'intero catalogo: carica altri per vedere altri canali.",
     "emptyTitle": "Nessun canale visibile",
-    "emptyBody": "Questa identità non ha alcun canale che possa leggere in questo workspace, oppure non ne esiste ancora nessuno. Una concessione di lettura e il permesso channel:read ne fanno comparire uno qui.",
+    "emptyBody": "Non puoi leggere alcun canale in questo workspace, oppure non ne esiste ancora nessuno. L'accesso in lettura a un canale e il permesso channel:read ne fanno comparire uno qui.",
     "truncated": "Esistono altri canali oltre questa pagina",
-    "truncatedHint": "Il server ha segnalato altri canali visibili. Carica altri per continuare dalla sua continuazione.",
+    "truncatedHint": "Ci sono altri canali visibili. Carica altri per vederli.",
     "columns": {
       "name": "Nome",
       "slug": "Slug",
@@ -111,9 +111,9 @@
     "read": "lettura",
     "write": "scrittura",
     "admin": "admin",
-    "none": "nessun bit locale",
+    "none": "nessun accesso",
     "unknown": "non riportato da questa lettura",
-    "hint": "I bit locali sono le concessioni proprie del canale per questa identità. Serve anche un permesso del core, e il motore decide ogni atto nel momento in cui viene richiesto."
+    "hint": "Il tuo accesso è ciò che il canale stesso ti concede. Serve anche il permesso, e il motore decide ogni atto nel momento in cui viene richiesto."
   },
   "kind": {
     "coordination": "Coordinamento",
@@ -171,15 +171,15 @@
       "tenant": "Tenant"
     },
     "sendHint": {
-      "canWrite": "Il tuo bit locale di scrittura è corrente in questa pagina del catalogo e hai il permesso di invio. Il motore decide di nuovo all'invio.",
-      "noWrite": "Questa pagina del catalogo non riporta alcun bit locale di scrittura per te. Il motore rifiuterebbe un invio; la scrittura non viene offerta.",
-      "unknown": "Questa lettura non riporta i tuoi bit locali. Hai il permesso di invio; il motore decide l'autorità locale all'invio.",
+      "canWrite": "Puoi scrivere in questo canale e hai il permesso di invio. Il motore decide di nuovo all'invio.",
+      "noWrite": "Questa pagina del catalogo indica che non puoi scrivere in questo canale. Il motore rifiuterebbe un invio; la scrittura non viene offerta.",
+      "unknown": "Questa lettura non indica il tuo accesso al canale. Hai il permesso di invio; il motore decide all'invio.",
       "noPermission": "Non hai il permesso di invio dei messaggi, quindi la scrittura non viene offerta."
     }
   },
   "create": {
     "title": "Crea un canale",
-    "description": "Ogni campo del contratto è disponibile. Le concessioni iniziali sono esplicite: aggiungi ogni soggetto e spunta ogni bit che intendi. Nulla viene aggiunto al posto tuo.",
+    "description": "Ogni campo del contratto è disponibile. Le concessioni iniziali sono esplicite: aggiungi ogni soggetto e spunta ogni accesso che intendi. Nulla viene aggiunto al posto tuo.",
     "fields": {
       "slug": "Slug",
       "slugHint": "Lettere minuscole, cifre e trattini; univoco nel workspace.",
@@ -196,7 +196,7 @@
       "maxFanout": "Fanout massimo",
       "maxAutomationDepth": "Profondità massima di automazione",
       "grants": "Concessioni iniziali",
-      "grantsHint": "Almeno una concessione con almeno un bit. Una concessione è un soggetto e i suoi tre bit, ciascuno indipendente. Il tuo account è un soggetto come tutti gli altri."
+      "grantsHint": "Almeno una concessione con almeno un accesso. Una concessione è un soggetto e i suoi tre accessi, ciascuno indipendente. Il tuo account è un soggetto come tutti gli altri."
     },
     "grant": {
       "subject": "Soggetto",
@@ -211,7 +211,7 @@
       "name": "Il nome è obbligatorio.",
       "grants": "Serve almeno una concessione iniziale.",
       "grantRef": "Ogni concessione richiede un riferimento al soggetto.",
-      "grantBits": "Ogni concessione richiede almeno un bit.",
+      "grantBits": "Ogni concessione richiede almeno un accesso.",
       "number": "Deve essere un numero intero pari o maggiore di zero.",
       "fanout": "Deve essere un numero intero pari o maggiore di uno."
     },
@@ -325,11 +325,12 @@
   },
   "inbox": {
     "title": "Inbox personale",
-    "description": "Le consegne indirizzate a questa identità in questo workspace, come il motore le autorizza ora. Leggere una pagina non conferma nulla e non fa avanzare alcun cursore.",
-    "emptyTitle": "Nessuna consegna",
-    "emptyBody": "In questo workspace, al momento non è visibile nulla di indirizzato a questa identità.",
+    "description": "Le consegne indirizzate a te in questo workspace, come il motore le autorizza ora. Leggere una pagina non conferma nulla e non sposta alcun segno di visto.",
+    "emptyTitle": "La tua inbox è vuota",
+    "emptyBody": "Qui compare ciò che persone o sessioni ti inviano tramite un canale. Per inviarne uno, apri Canali, scegli un canale e poi Invia avviso.",
+    "showChannels": "Vai a Canali",
     "truncated": "Esistono altre consegne oltre questa pagina",
-    "truncatedHint": "Il server ha segnalato altre consegne visibili. Carica altri per continuare dalla sua continuazione.",
+    "truncatedHint": "Ci sono altre consegne visibili. Carica altri per vederle.",
     "columns": {
       "subject": "Oggetto",
       "sender": "Mittente",
@@ -343,7 +344,7 @@
   },
   "delivery": {
     "title": "Consegna",
-    "description": "Letta da zero per questa identità. Confermare è un atto esplicito con la versione che hai appena letto.",
+    "description": "Letta da zero per te. Confermare è un atto esplicito con la versione che hai appena letto.",
     "fields": {
       "id": "ID della consegna",
       "messageId": "ID del messaggio",
@@ -439,9 +440,9 @@
     "late": "Tardiva"
   },
   "failure": {
-    "forbidden": "Il motore ha rifiutato questo per l'identità corrente.",
+    "forbidden": "Il motore lo ha rifiutato per te.",
     "step_up": "Il tuo ruolo lo consente, ma prima la sessione deve essere elevata.",
-    "not_found": "Non trovato, oppure non visibile a questa identità.",
+    "not_found": "Non trovato, oppure non visibile a te.",
     "unavailable": "Il motore non ha potuto verificare: l'autorità corrente, la custodia o le prove dello store non sono disponibili. Questo non è né un risultato vuoto né un rifiuto.",
     "version_mismatch": "La versione che hai letto non è più corrente.",
     "version_required": "Il motore richiedeva una precondizione di versione che la console non ha inviato.",
@@ -462,7 +463,7 @@
   "authority": {
     "lost": "Il permesso per questo atto non è più in tuo possesso; nulla è stato inviato.",
     "confirmationClosed": "Una conferma in sospeso è stata chiusa perché il permesso che la sosteneva è stato perso.",
-    "notAddressable": "Questa identità non ha un riferimento nella directory per questo tipo e non può essere indirizzata."
+    "notAddressable": "Questo soggetto non ha un riferimento nella directory per questo tipo e non può essere indirizzato."
   },
   "states": {
     "loading": "Caricamento…",
@@ -470,7 +471,7 @@
   },
   "administration": {
     "title": "Canali amministrabili",
-    "description": "I canali che questa identità può amministrare ora: channel:admin del core e un bit locale di amministrazione corrente, decisi dal motore a ogni lettura. I canali archiviati restano elencati e ispezionabili. Non è il catalogo di lettura: un bit locale di lettura non è né richiesto né implicito.",
+    "description": "I canali che puoi amministrare ora: il permesso channel:admin e l'accesso di amministrazione al canale, decisi dal motore a ogni lettura. I canali archiviati restano elencati e ispezionabili. Non è il catalogo di lettura: l'accesso in lettura a un canale non è né richiesto né implicito.",
     "stateFilter": "Stato persistito",
     "states": {
       "all": "Tutti gli stati",
@@ -490,9 +491,9 @@
     "openById": "Amministra un canale per ID",
     "openByIdHint": "La scheda viene letta tramite lo storico delle concessioni sotto channel:admin; non usa mai la lettura del canale di livello lettura.",
     "emptyTitle": "Nessun canale amministrabile",
-    "emptyBody": "Nessun canale di questo workspace concede a questa identità un bit di amministrazione corrente, oppure nessuno corrisponde allo stato persistito selezionato. Una concessione admin locale e il permesso channel:admin ne fanno comparire uno qui.",
+    "emptyBody": "Nessun canale di questo workspace ti dà accesso di amministrazione, oppure nessuno corrisponde allo stato selezionato. L'accesso di amministrazione a un canale e il permesso channel:admin ne fanno comparire uno qui.",
     "truncated": "Esistono altri canali amministrabili oltre questa pagina",
-    "truncatedHint": "Il server ha segnalato altri canali amministrabili. Carica altri per continuare dalla sua continuazione."
+    "truncatedHint": "Ci sono altri canali amministrabili. Carica altri per vederli."
   },
   "channelState": {
     "active": "Attivo",
@@ -580,7 +581,7 @@
     },
     "columns": {
       "subject": "Soggetto",
-      "bits": "Bit",
+      "bits": "Accesso",
       "generation": "Generazione",
       "stored": "Stato memorizzato",
       "temporal": "All'osservazione",
@@ -589,7 +590,7 @@
       "created": "Creata"
     },
     "truncated": "Esistono altre generazioni oltre questa pagina",
-    "truncatedHint": "Il server ha segnalato altre generazioni. Carica altri per continuare dalla sua continuazione; una modifica del canale tra una pagina e l'altra riavvia l'elenco.",
+    "truncatedHint": "Ci sono altre generazioni. Carica altri per vederle; una modifica del canale tra una pagina e l'altra riavvia l'elenco.",
     "emptyTitle": "Nessuna generazione",
     "emptyBody": "Nessuna generazione di concessione memorizzata corrisponde allo stato e al soggetto selezionati. Una nuova concessione ne aggiunge una.",
     "temporalHint": "“Stato memorizzato” è ciò che il motore ha persistito; “all'osservazione” indica se la riga era in vigore all'istante osservato. Una scadenza già passata viene riportata, non materializzata: non revoca la riga, e un successore per quel soggetto richiede comunque prima una revoca esplicita.",
@@ -605,7 +606,7 @@
     },
     "form": {
       "title": "Nuova generazione di concessione",
-      "hint": "Un soggetto, tre bit indipendenti, una scadenza facoltativa. Una riga della directory è un candidato, non un soggetto idoneo: il motore decide all'atto, e una generazione registrata non è una promessa di accesso effettivo."
+      "hint": "Un soggetto, tre accessi indipendenti, una scadenza facoltativa. Una riga della directory è un candidato, non un soggetto idoneo: il motore decide all'atto, e una generazione registrata non è una promessa di accesso effettivo."
     },
     "validation": {
       "expiry": "Non è stato possibile leggere la scadenza come data.",
@@ -647,17 +648,17 @@
   },
   "cursor": {
     "title": "Segna come visto fino a qui",
-    "description": "Sposta il tuo cursore personale dei visti fino all'ultima consegna di una pagina dell'inbox. Non conferma nulla e non modifica alcuna consegna.",
+    "description": "Sposta il tuo segno personale di visto fino all'ultima consegna di una pagina dell'inbox. Non conferma nulla e non modifica alcuna consegna.",
     "section": {
-      "title": "Cursore dei visti",
+      "title": "Segno di visto",
       "hint": "Ogni pagina caricata può essere segnata come vista fino alla sua ultima consegna. Il target è quello della pagina stessa, generato dal motore per quella esatta consegna; il filtro locale della tabella deve essere vuoto perché l'ambito sia inequivocabile.",
       "page": "Pagina {{page}} · {{count}} consegne",
       "upTo": "fino a"
     },
     "reasons": {
       "noPermission": "Richiede il permesso delivery:write.",
-      "noRecipient": "Questa sessione non è un'identità utente; il cursore personale appartiene alla casella di un utente.",
-      "filtered": "Cancella prima il filtro della tabella: il target del cursore è la pagina del server, non le righe filtrate.",
+      "noRecipient": "Questa sessione non è un'identità utente; il segno di visto personale appartiene alla casella di un utente.",
+      "filtered": "Cancella prima il filtro della tabella: il segno punta alla pagina del server, non alle righe filtrate.",
       "emptyPage": "Questa pagina non ha consegne da segnare.",
       "otherRecipient": "L'ultima consegna di questa pagina non è indirizzata alla tua identità utente."
     },
@@ -669,36 +670,36 @@
       "lastSubject": "Ultimo oggetto",
       "lastDelivery": "Ultima consegna",
       "lastSeq": "Sequenza della consegna",
-      "cursorVersion": "Versione del cursore",
-      "cursorId": "ID del cursore",
+      "cursorVersion": "Versione del segno",
+      "cursorId": "ID del segno",
       "replayed": "Replay",
       "lastSeenSeq": "Ultima sequenza vista",
       "barrierDelivery": "Consegna di barriera",
       "barrierReason": "Motivo della barriera",
       "barrierSince": "Barriera dal"
     },
-    "preparing": "Preparazione: richiesta al motore del target del cursore per questa pagina…",
-    "prepareFailedTitle": "Non è stato possibile preparare il target del cursore",
+    "preparing": "Preparazione: richiesta al motore del target di questa pagina…",
+    "prepareFailedTitle": "Non è stato possibile preparare il target",
     "prepareFailedBody": "Nulla è stato spostato. Aggiorna l'inbox e prepara di nuovo da una pagina aggiornata.",
     "confirm": {
       "title": "Conferma lo spostamento",
-      "body": "Invia il target preparato e la consegna qui sopra con la versione del cursore che hai letto, più una chiave propria. Solo la conferma sposta qualcosa. Un nuovo tentativo dopo un esito ambiguo reinvia esattamente questo."
+      "body": "Invia il target preparato e la consegna qui sopra con la versione del segno che hai letto, più una chiave propria. Solo la conferma sposta qualcosa. Un nuovo tentativo dopo un esito ambiguo reinvia esattamente questo."
     },
-    "conflictTitle": "Il cursore è cambiato dopo la preparazione",
-    "conflictBody": "Il motore ha rifiutato lo spostamento: la versione del cursore o il target non sono più attuali. Nulla è stato reinviato. Aggiorna l'inbox e prepara di nuovo da una pagina aggiornata.",
+    "conflictTitle": "Il segno è cambiato dopo la preparazione",
+    "conflictBody": "Il motore ha rifiutato lo spostamento: la versione del segno o il target non sono più attuali. Nulla è stato reinviato. Aggiorna l'inbox e prepara di nuovo da una pagina aggiornata.",
     "ambiguousTitle": "Esito sconosciuto",
     "ambiguousBody": "La connessione è caduta prima che arrivasse una risposta. Riprovando si inviano lo stesso target, la stessa versione e la stessa chiave; il motore lo applica una sola volta, lo riproduce (replay) oppure lo rifiuta indicando la versione attuale. Lasciarlo indeterminato mantiene sconosciuto il risultato precedente.",
     "refusedTitle": "Spostamento rifiutato",
-    "refusedBody": "Il motore non ha spostato il cursore. Aggiorna l'inbox prima di preparare di nuovo.",
+    "refusedBody": "Il motore non ha spostato il segno. Aggiorna l'inbox prima di preparare di nuovo.",
     "result": {
-      "appliedTitle": "Cursore spostato",
-      "appliedBody": "Il motore ha confermato lo spostamento e ha restituito la posizione qui sotto. L'inbox viene riletta dal cursore durevole.",
+      "appliedTitle": "Segno spostato",
+      "appliedBody": "Il motore ha confermato lo spostamento e ha restituito la posizione qui sotto. L'inbox viene riletta dal segno salvato.",
       "replayedTitle": "Già spostato",
       "replayedBody": "Il motore ha riprodotto (replay) il risultato di un comando identico precedente. Nulla è stato applicato due volte.",
       "barrierTitle": "Spostamento limitato da una barriera",
-      "barrierBody": "Il motore si è fermato alla consegna qui sotto per il motivo che indica; il cursore non ha raggiunto il target. Non è uno spostamento completo.",
+      "barrierBody": "Il motore si è fermato alla consegna qui sotto per il motivo che indica; il segno non ha raggiunto il target. Non è uno spostamento completo.",
       "barrierHint": "Apri la consegna di barriera con una lettura aggiornata. Risolverla non sposta nulla da sola: aggiorna l'inbox, prepara un nuovo target e conferma di nuovo.",
-      "notAck": "Un cursore dei visti non è una conferma di ricezione e non modifica lo stato di alcuna consegna né il contrassegno di prima visualizzazione."
+      "notAck": "Un segno di visto non è una conferma di ricezione e non modifica lo stato di alcuna consegna né il contrassegno di prima visualizzazione."
     }
   },
   "capability": {
@@ -833,7 +834,7 @@
     },
     "inbox": {
       "title": "Passaggi di consegne indirizzati a te",
-      "description": "Una pagina alla volta sulla continuazione del server. Questa raccolta è priva di contenuto: riepilogo, prossima azione e rischio di un'offerta si leggono solo aprendola.",
+      "description": "Una pagina alla volta; carica altri per vedere altri passaggi di consegne. Questa raccolta è priva di contenuto: riepilogo, prossima azione e rischio di un'offerta si leggono solo aprendola.",
       "filter": "Stato",
       "truncated": "Esistono altre offerte oltre questa pagina",
       "truncatedHint": "Il motore segnala che un'ulteriore offerta è stata autorizzata nella stessa transazione. Non è un totale e non è un conteggio delle righe nascoste.",

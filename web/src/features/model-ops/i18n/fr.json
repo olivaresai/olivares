@@ -120,7 +120,7 @@
   },
   "policy": {
     "title": "Politique d'admission",
-    "description": "La politique de confiance du locataire pour l'admission par signature. La méthode de signature est déduite de ce que vous configurez.",
+    "description": "La politique de confiance de l'organisation pour l'admission par signature. La méthode de signature est déduite de ce que vous configurez.",
     "edit": "Modifier la politique",
     "editTitle": "Modifier la politique d'admission",
     "editBody": "Rédigez les ancres de confiance. Enregistrées de façon atomique ; le moteur reste l'autorité.",
@@ -285,14 +285,14 @@
   },
   "finetune": {
     "title": "Tâches de fine-tuning",
-    "description": "Enregistrements des tâches de fine-tuning et des versions qu'elles ont produites. Le plan n'entraîne jamais de modèle et ne détient aucun poids.",
+    "description": "Enregistrements des tâches de fine-tuning et des versions qu'elles ont produites. Olivares n'entraîne jamais de modèle et ne détient aucun poids.",
     "new": "Nouvel enregistrement de tâche",
     "search": "Rechercher des tâches…",
     "created": "Tâche enregistrée.",
     "updated": "Tâche mise à jour.",
     "newTitle": "Enregistrer une tâche de fine-tuning",
     "editTitle": "Mettre à jour la tâche de fine-tuning",
-    "formBody": "Enregistrez l'état d'une tâche et la version qu'elle a produite. Il s'agit d'un enregistrement d'inventaire — le control plane n'exécute pas d'entraînement.",
+    "formBody": "Enregistrez l'état d'une tâche et la version qu'elle a produite. Il s'agit d'un enregistrement d'inventaire — Olivares n'exécute pas d'entraînement.",
     "columns": {
       "name": "Nom",
       "runtime": "Runtime",
@@ -405,7 +405,7 @@
     },
     "finetune": {
       "title": "Aucun enregistrement de tâche de fine-tuning",
-      "description": "Enregistrez une tâche de fine-tuning exécutée hors d’Olivares pour suivre son état, sa traçabilité et la version produite ; le plan de contrôle n’exécute aucun entraînement."
+      "description": "Enregistrez une tâche de fine-tuning exécutée hors d’Olivares pour suivre son état, sa traçabilité et la version produite ; Olivares n’exécute aucun entraînement."
     },
     "modelEvidence": {
       "title": "Aucun scellé AIBOM enregistré",

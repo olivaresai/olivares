@@ -2,7 +2,7 @@
 
 <a href="https://olivares.ai"><img src=".github/assets/olivares-banner.png" alt="Olivares AI — Ground truth for enterprise AI" width="720"></a>
 
-**语言:** [English](./README.md) · [Español](./README.es.md) · **简体中文** · [Русский](./README.ru.md) · [日本語](./README.ja.md) · [Deutsch](./README.de.md) · [Français](./README.fr.md)
+**语言:** [English](./README.md) · [Español](./README.es.md) · **简体中文** · [Русский](./README.ru.md) · [日本語](./README.ja.md) · [Deutsch](./README.de.md) · [Français](./README.fr.md) · [Українська](./README.uk.md) · [한국어](./README.ko.md) · [Português](./README.pt.md)
 
 **运行团队已经在用的 AI，像管理其他基础设施一样掌握它。**
 
@@ -55,6 +55,8 @@ Olivares AI 把答案汇集在一处。它连接你已经在用的 agent 和工�
 <br><sub><b>工作</b>： 会话结束后仍然保留的任务、负责人和决定。</sub>
 </div>
 
+[支持的工具](docs-site/src/content/docs/reference/supported-tools.md) (English).
+
 ## 它做什么
 
 - **知道什么在运行。** 在一份清单中查看所有 agent、会话、模型、MCP 服务器和工具。读写访问图展示每个对象读取和写入的内容，并标出没有任何规则允许的访问。
@@ -68,7 +70,7 @@ Olivares AI 把答案汇集在一处。它连接你已经在用的 agent 和工�
 
 Community 保留本地可观测性、已保存的设置和备份导出。SIEM/ITSM 推送、外部遥测传输和安全态势导出包含在 Business 基础版中。
 
-**会话网络隔离覆盖绑定到提供商密钥的 Claude Code、Codex 和 OpenCode 会话，以及使用工具自身登录的 OpenCode 会话。** 这类会话只能通过其网络命名空间中的每会话代理访问其提供商的端点或其登录所用的主机，否则不会启动。对于使用提供商密钥的 OpenCode，主机列表基于先前的清单，而不是在代理之后实际演示过的一轮对话。Grok Build 会话以及其他工具的账户登录会话仍可访问网络允许的任何主机。在运行需要独占访问单一提供商的工作负载之前，请参阅[会话网络隔离](SECURITY.md#session-network-isolation)。
+网络隔离取决于工具和连接方式。Claude Code、Codex、OpenCode 和 Gemini CLI 的提供商密钥会话，以及受支持的 OpenCode 和 Cursor 账户会话，具有网络命名空间和代理边界。Grok Build 和其他账户会话没有此边界。具体范围和验证限制请参阅[支持的工具和隔离限制](docs-site/src/content/docs/reference/supported-tools.md#confinement-depends-on-the-connection)（英文）。
 
 ## 安装
 
@@ -98,7 +100,7 @@ if grep -qsw userns_create /sys/kernel/security/apparmor/features/namespaces/mas
   sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions &&
   apparmor=--security-opt=apparmor=olivares-sessions
 fi &&
-docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
+docker run -d --name olivares --hostname olivares -p 8443:8443 -p 8444:8444 \
   --security-opt no-new-privileges --security-opt seccomp=olivares-sessions.json $apparmor \
   -v olivares-data:/var/lib/olivares \
   "$img" \

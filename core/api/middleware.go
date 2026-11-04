@@ -557,7 +557,7 @@ func (s *Server) authzTenantResourcePolicy(
 // inside its transaction (TOCTOU); this edge gate is sufficient for config CRUD.
 func (s *Server) requireStepUp(w http.ResponseWriter, r *http.Request, p auth.Principal) bool {
 	if !auth.StepUpSatisfied(r.Context(), p) {
-		s.writeError(w, r, auth.StepUpRequiredFor(auth.StepUpPolicyFrom(r.Context())))
+		s.writeError(w, r, auth.StepUpRefusal(r.Context(), p))
 		return false
 	}
 	return true
@@ -679,7 +679,7 @@ func (s *Server) authzScopedCollectionPolicy(
 		s.authz.RecordStepUpRefusal(r.Context(), auth.Request{
 			Principal: p, Permission: perm, Tenant: tenant, Resource: resource, Route: meta,
 		})
-		s.writeError(w, r, auth.StepUpRequiredFor(auth.StepUpPolicyFrom(r.Context())))
+		s.writeError(w, r, auth.StepUpRefusal(r.Context(), p))
 		return auth.Principal{}, "", resource, none, false
 	}
 	if !wellFormed {

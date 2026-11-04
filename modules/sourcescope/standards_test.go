@@ -5,6 +5,8 @@
 package sourcescope_test
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -134,11 +136,17 @@ var approvers int
 // it waits for a second administrator, who approves it.
 func (h *harness) lift(admin string, tenant model.TenantID, template, tree, ref string) {
 	h.t.Helper()
+	h.liftWith(admin, tenant, "forbid", template, tree, ref)
+}
+
+// liftWith lifts a standard with the given effect (forbid, or decline on a department).
+func (h *harness) liftWith(admin string, tenant model.TenantID, effect, template, tree, ref string) {
+	h.t.Helper()
 	r := h.createBinding(admin, tenant, map[string]any{
-		"source_type": "instructions", "source_ref": template, "scope_tree": tree, "scope_ref": ref, "effect": "forbid", "enabled": true,
+		"source_type": "instructions", "source_ref": template, "scope_tree": tree, "scope_ref": ref, "effect": effect, "enabled": true,
 	})
 	if r.code != http.StatusAccepted {
-		h.t.Fatalf("lifting a standard = %d %s, want 202 pending a second approver", r.code, r.raw)
+		h.t.Fatalf("lifting a standard with %s = %d %s, want 202 pending a second approver", effect, r.code, r.raw)
 	}
 	approvers++
 	approver := h.tokenFor(admin, tenant, fmt.Sprintf("approver%d@acme.io", approvers), auth.RoleAdmin)
@@ -246,6 +254,118 @@ func TestAForbidAtASubDepartmentHolds(t *testing.T) {
 	}
 }
 
+// A sub-department can stop one standard from reaching it without forbidding it: the decline drops
+// what an ancestor assigned, and only that one, while a forbid is absolute. What the sub-department
+// or a department below it assigns itself still applies.
+func TestASubDepartmentDeclinesOneInheritedStandardWithoutForbiddingIt(t *testing.T) {
+	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	eng := h.createWorkspace(tenant, "eng")
+	platform := h.createWorkspaceUnder(tenant, "platform", eng)
+	h.createWorkspaceUnder(tenant, "edge", platform)
+
+	h.mustAssign(admin, tenant, "instructions", tplOrg, "workspace", "eng")
+	h.mustAssign(admin, tenant, "instructions", tplA, "workspace", "eng")
+	h.mustAssign(admin, tenant, "instructions", tplPlatform, "workspace", "platform")
+
+	// Declining is a relaxation like a forbid: a second administrator approves it, and it
+	// applies to departments only, to the two standards only.
+	for name, body := range map[string]map[string]any{
+		"on a directory group": {"source_type": "instructions", "source_ref": tplOrg, "scope_tree": "user_group", "scope_ref": "devs", "effect": "decline", "enabled": true},
+		"on a tool":            {"source_type": "tool", "source_ref": "claude", "scope_tree": "workspace", "scope_ref": "platform", "effect": "decline", "enabled": true},
+	} {
+		if r := h.createBinding(admin, tenant, body); r.code != http.StatusBadRequest || !strings.Contains(r.raw, "decline applies to") {
+			t.Errorf("decline %s = %d %s, want 400 saying where a decline applies", name, r.code, r.raw)
+		}
+	}
+	pending := h.createBinding(admin, tenant, map[string]any{
+		"source_type": "instructions", "source_ref": tplOrg, "scope_tree": "workspace", "scope_ref": "platform", "effect": "decline", "enabled": true,
+	})
+	if pending.code != http.StatusAccepted {
+		t.Fatalf("a decline = %d %s, want 202 pending a second administrator", pending.code, pending.raw)
+	}
+	if got := h.assigned(tenant, "platform", "instructions"); !reflect.DeepEqual(got, []string{tplOrg, tplA, tplPlatform}) {
+		t.Fatalf("a pending decline already dropped a standard: %v", got)
+	}
+	approvers++
+	approver := h.tokenFor(admin, tenant, fmt.Sprintf("approver%d@acme.io", approvers), auth.RoleAdmin)
+	if a := h.do("POST", "/v1/m/sourcescope/posture-requests/"+pending.body["id"].(string)+"/approve", approver, nil, tenantHdr(tenant)); a.code != http.StatusOK {
+		t.Fatalf("approving the decline = %d %s", a.code, a.raw)
+	}
+
+	h.mustAssign(admin, tenant, "instructions", tplOrg, "workspace", "edge") // a department below assigns it back
+	for department, want := range map[string][]string{
+		"eng":      {tplOrg, tplA},
+		"platform": {tplA, tplPlatform}, // tplOrg stops reaching platform; tplA still does
+		"edge":     {tplA, tplPlatform, tplOrg},
+	} {
+		if got := h.assigned(tenant, department, "instructions"); !reflect.DeepEqual(got, want) {
+			t.Errorf("instructions of %s = %v, want %v", department, got, want)
+		}
+	}
+}
+
+// A person belongs to every department their directory groups are filed in. A decline drops only
+// what reaches its own department from the departments above it: sales is not above platform, so
+// what sales assigns still reaches a person in both.
+func TestASubDepartmentDeclinesNothingAnotherDepartmentOfThePersonAssigns(t *testing.T) {
+	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	eng := h.createWorkspace(tenant, "eng")
+	h.createWorkspaceUnder(tenant, "platform", eng)
+	h.createWorkspace(tenant, "sales")
+
+	h.mustAssign(admin, tenant, "instructions", tplOrg, "workspace", "eng")
+	h.mustAssign(admin, tenant, "instructions", tplOrg, "workspace", "sales")
+	h.liftWith(admin, tenant, "decline", tplOrg, "workspace", "platform")
+
+	if got := h.assigned(tenant, "sales", "instructions"); !reflect.DeepEqual(got, []string{tplOrg}) {
+		t.Fatalf("sales alone = %v, want [%s]", got, tplOrg)
+	}
+	if got := h.assignedTo(tenant, auth.Principal{}, []string{"platform", "sales"}, "instructions"); !reflect.DeepEqual(got, []string{tplOrg}) {
+		t.Errorf("a person in platform and sales = %v, want [%s]: sales assigns it, and sales is not above platform", got, tplOrg)
+	}
+}
+
+// A forbid also lifts what the department and the ones below it assign themselves, and creating
+// one waits for a second administrator, so turning an approved decline into a forbid waits too.
+func TestASubDepartmentDeclinesAndAForbidInItsPlaceWaitsForASecondAdministrator(t *testing.T) {
+	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	eng := h.createWorkspace(tenant, "eng")
+	platform := h.createWorkspaceUnder(tenant, "platform", eng)
+	h.createWorkspaceUnder(tenant, "edge", platform)
+
+	h.mustAssign(admin, tenant, "instructions", tplOrg, "workspace", "eng")
+	h.mustAssign(admin, tenant, "instructions", tplOrg, "workspace", "edge")
+	h.liftWith(admin, tenant, "decline", tplOrg, "workspace", "platform")
+	if got := h.assigned(tenant, "edge", "instructions"); !reflect.DeepEqual(got, []string{tplOrg}) {
+		t.Fatalf("edge after the decline = %v, want [%s]", got, tplOrg)
+	}
+	var id string
+	for _, it := range h.do("GET", "/v1/m/sourcescope/bindings?source_type=instructions", admin, nil, tenantHdr(tenant)).body["items"].([]any) {
+		if b := it.(map[string]any); b["effect"] == "decline" {
+			id = b["id"].(string)
+		}
+	}
+	if id == "" {
+		t.Fatal("the decline binding is not listed")
+	}
+	put := h.do("PUT", "/v1/m/sourcescope/bindings/"+id, admin, map[string]any{
+		"source_type": "instructions", "source_ref": tplOrg, "scope_tree": "workspace", "scope_ref": "platform", "effect": "forbid", "enabled": true,
+	}, tenantHdr(tenant))
+	if put.code != http.StatusAccepted {
+		t.Errorf("decline -> forbid = %d %s, want 202 pending a second administrator; edge now carries %v",
+			put.code, put.raw, h.assigned(tenant, "edge", "instructions"))
+	}
+	if got := h.assigned(tenant, "edge", "instructions"); !reflect.DeepEqual(got, []string{tplOrg}) {
+		t.Errorf("edge while the forbid waits = %v, want [%s]", got, tplOrg)
+	}
+}
+
 func TestADisabledAssignmentAssignsNothing(t *testing.T) {
 	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
 	admin := h.adminLogin()
@@ -344,6 +464,239 @@ func TestADepartmentHasOneDefaultTemplate(t *testing.T) {
 	}
 	if got := h.assigned(tenant, "platform", "template"); !reflect.DeepEqual(got, []string{tplA, tplB}) {
 		t.Errorf("templates reaching platform = %v, want [tpl_a tpl_b] (nearest last)", got)
+	}
+}
+
+// The ADR folder of a department is its workspace setting adr_folder, read from the store: a
+// department without one or without the setting names none, and a setting that is not text is
+// an error, never an empty folder.
+func TestTheADRFolderOfADepartmentIsItsWorkspaceSetting(t *testing.T) {
+	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	if err := h.st.Mutate(context.Background(), tenant, func(sc store.Scope) error {
+		for slug, settings := range map[string]map[string]any{
+			"eng":    {"adr_folder": "docs/adr"},
+			"ops":    nil,
+			"broken": {"adr_folder": 7},
+		} {
+			if _, err := sc.Workspaces().Create(context.Background(), model.Workspace{
+				Name: slug, Slug: slug, Status: model.StatusActive, Settings: settings,
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("create departments: %v", err)
+	}
+	for department, want := range map[string]string{"eng": "docs/adr", "ops": "", "nowhere": ""} {
+		if got, err := h.resolver.ADRFolder(t.Context(), tenant, department); err != nil || got != want {
+			t.Errorf("ADRFolder(%s) = %q, %v, want %q", department, got, err, want)
+		}
+	}
+	if got, err := h.resolver.ADRFolder(t.Context(), tenant, "broken"); !errors.Is(err, sourcescope.ErrSettingNotText) || got != "" {
+		t.Errorf("ADRFolder(broken) = %q, %v, want ErrSettingNotText", got, err)
+	}
+}
+
+// A mandatory template is a restriction like a forbid: the tenant expiry policy neither
+// stamps it with a lapse date nor refuses it, and only a second administrator can give it one.
+func TestAMandatoryTemplateKeepsOnlyTheExpiryItsWriterSent(t *testing.T) {
+	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	h.createWorkspace(tenant, "eng")
+	if err := h.st.Mutate(context.Background(), tenant, func(sc store.Scope) error {
+		_, err := sc.Policies().Create(context.Background(), model.Policy{
+			Name: "Access expiry", Kind: "grant_expiry", Enabled: true,
+			Spec: map[string]any{"default_seconds": 3600, "maximum_seconds": 7200},
+		})
+		return err
+	}); err != nil {
+		t.Fatalf("seed expiry policy: %v", err)
+	}
+
+	r := h.createBinding(admin, tenant, map[string]any{
+		"source_type": "template", "source_ref": tplA, "scope_tree": "workspace", "scope_ref": "eng", "effect": "require", "enabled": true,
+	})
+	if got, _ := r.body["expires_at"].(string); r.code != http.StatusCreated || got != "" {
+		t.Fatalf("a mandatory template must not inherit the tenant default expiry: %d %s", r.code, r.raw)
+	}
+	put := h.do("PUT", "/v1/m/sourcescope/bindings/"+r.body["id"].(string), admin, map[string]any{
+		"source_type": "template", "source_ref": tplA, "scope_tree": "workspace", "scope_ref": "eng", "effect": "require", "enabled": true,
+		"expires_at": time.Now().Add(time.Minute).Format(time.RFC3339),
+	}, tenantHdr(tenant))
+	if put.code != http.StatusAccepted {
+		t.Fatalf("giving a mandatory template an expiry = %d %s, want 202 pending a second administrator", put.code, put.raw)
+	}
+	if got := h.assigned(tenant, "eng", "required-template"); !reflect.DeepEqual(got, []string{tplA}) {
+		t.Errorf("a pending expiry changed what is mandatory: %v", got)
+	}
+}
+
+// A template assigned with effect require is mandatory: it is also the department's template
+// (kind "template"), it is the only one kind "required-template" lists, a sub-department inherits
+// it and a forbid lifts it, a department still holds one template, and relaxing it to a default
+// waits for a second administrator. Only a template can be required.
+func TestADepartmentCanRequireATemplate(t *testing.T) {
+	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	eng := h.createWorkspace(tenant, "eng")
+	h.createWorkspaceUnder(tenant, "platform", eng)
+
+	if r := h.createBinding(admin, tenant, map[string]any{
+		"source_type": "instructions", "source_ref": tplEng, "scope_tree": "workspace", "scope_ref": "eng", "effect": "require", "enabled": true,
+	}); r.code != http.StatusBadRequest || !strings.Contains(r.raw, "template") {
+		t.Fatalf("requiring instructions = %d %s, want 400 saying only a template can be required", r.code, r.raw)
+	}
+	r := h.createBinding(admin, tenant, map[string]any{
+		"source_type": "template", "source_ref": tplA, "scope_tree": "workspace", "scope_ref": "eng", "effect": "require", "enabled": true,
+	})
+	if r.code != http.StatusCreated || r.body["effect"] != "require" {
+		t.Fatalf("requiring a template = %d %s, want 201 with effect require", r.code, r.raw)
+	}
+	if r2 := h.createBinding(admin, tenant, map[string]any{
+		"source_type": "template", "source_ref": tplB, "scope_tree": "workspace", "scope_ref": "eng", "enabled": true,
+	}); r2.code != http.StatusConflict {
+		t.Fatalf("a default beside a mandatory template on one department = %d %s, want 409", r2.code, r2.raw)
+	}
+	h.mustAssign(admin, tenant, "template", tplB, "workspace", "platform") // a default of the sub-department
+
+	for _, c := range []struct {
+		department, kind string
+		want             []string
+	}{
+		{"eng", "template", []string{tplA}},
+		{"eng", "required-template", []string{tplA}},
+		{"platform", "template", []string{tplA, tplB}},
+		{"platform", "required-template", []string{tplA}}, // inherited; the sub-department's default is not mandatory
+	} {
+		if got := h.assigned(tenant, c.department, c.kind); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s of %s = %v, want %v", c.kind, c.department, got, c.want)
+		}
+	}
+
+	// Relaxing the requirement to a default is a relaxation: a second administrator approves it.
+	put := h.do("PUT", "/v1/m/sourcescope/bindings/"+r.body["id"].(string), admin, map[string]any{
+		"source_type": "template", "source_ref": tplA, "scope_tree": "workspace", "scope_ref": "eng", "effect": "allow", "enabled": true,
+	}, tenantHdr(tenant))
+	if put.code != http.StatusAccepted {
+		t.Fatalf("relaxing a mandatory template to a default = %d %s, want 202 pending a second administrator", put.code, put.raw)
+	}
+	if got := h.assigned(tenant, "eng", "required-template"); !reflect.DeepEqual(got, []string{tplA}) {
+		t.Errorf("a pending relaxation changed what is mandatory: %v", got)
+	}
+
+	// A forbid at the sub-department lifts the requirement there only, once a second
+	// administrator approves it.
+	lift := h.createBinding(admin, tenant, map[string]any{
+		"source_type": "template", "source_ref": tplA, "scope_tree": "workspace", "scope_ref": "platform", "effect": "forbid", "enabled": true,
+	})
+	if lift.code != http.StatusAccepted {
+		t.Fatalf("lifting a mandatory template = %d %s, want 202", lift.code, lift.raw)
+	}
+	approvers++
+	approver := h.tokenFor(admin, tenant, fmt.Sprintf("approver%d@acme.io", approvers), auth.RoleAdmin)
+	if a := h.do("POST", "/v1/m/sourcescope/posture-requests/"+lift.body["id"].(string)+"/approve", approver, nil, tenantHdr(tenant)); a.code != http.StatusOK {
+		t.Fatalf("approving the lift = %d %s", a.code, a.raw)
+	}
+	if got := h.assigned(tenant, "platform", "required-template"); len(got) != 0 {
+		t.Errorf("mandatory templates of platform after a forbid = %v, want none", got)
+	}
+	if got := h.assigned(tenant, "eng", "required-template"); !reflect.DeepEqual(got, []string{tplA}) {
+		t.Errorf("a forbid on platform changed eng: %v", got)
+	}
+}
+
+// Requiring a template asks no second administrator, so a sub-department can require another one
+// beside its parent's. The resolver lists the outer requirement first, and a launch obeys the first.
+func TestANearerRequirementIsListedAfterTheOuterOne(t *testing.T) {
+	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	eng := h.createWorkspace(tenant, "eng")
+	h.createWorkspaceUnder(tenant, "platform", eng)
+
+	for _, c := range []struct{ template, department string }{{tplA, "eng"}, {tplB, "platform"}} {
+		if r := h.createBinding(admin, tenant, map[string]any{
+			"source_type": "template", "source_ref": c.template, "scope_tree": "workspace", "scope_ref": c.department, "effect": "require", "enabled": true,
+		}); r.code != http.StatusCreated {
+			t.Fatalf("requiring %s on %s = %d %s, want 201", c.template, c.department, r.code, r.raw)
+		}
+	}
+	if got := h.assigned(tenant, "platform", "required-template"); !reflect.DeepEqual(got, []string{tplA, tplB}) {
+		t.Errorf("mandatory templates of platform = %v, want the parent's first: [%s %s]", got, tplA, tplB)
+	}
+}
+
+// Requiring a template asks nobody, so requiring a parent's mandatory template again nearer to
+// the launch, on a sub-department or a directory group, must not move it behind a middle
+// department's: a mandatory template stands where it is required farthest out.
+func TestAParentsRequirementRequiredAgainNearerStillComesFirst(t *testing.T) {
+	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	eng := h.createWorkspace(tenant, "eng")
+	platform := h.createWorkspaceUnder(tenant, "platform", eng)
+	h.createWorkspaceUnder(tenant, "core", platform)
+	member, groups := h.principalWithGroups(admin, tenant, "dev@acme.io", auth.RoleEditor, "devs")
+
+	for _, c := range []struct{ template, tree, ref string }{
+		{tplA, "workspace", "eng"}, {tplB, "workspace", "platform"}, {tplA, "workspace", "core"}, {tplA, "user_group", groups[0]},
+	} {
+		if r := h.createBinding(admin, tenant, map[string]any{
+			"source_type": "template", "source_ref": c.template, "scope_tree": c.tree, "scope_ref": c.ref, "effect": "require", "enabled": true,
+		}); r.code != http.StatusCreated {
+			t.Fatalf("requiring %s on %s = %d %s, want 201", c.template, c.ref, r.code, r.raw)
+		}
+	}
+	want := []string{tplA, tplB}
+	if got := h.assigned(tenant, "core", "required-template"); !reflect.DeepEqual(got, want) {
+		t.Errorf("mandatory templates of core = %v, want eng's first: %v", got, want)
+	}
+	if got := h.assignedTo(tenant, member, []string{"platform"}, "required-template"); !reflect.DeepEqual(got, want) {
+		t.Errorf("mandatory templates of a devs member in platform = %v, want eng's first: %v", got, want)
+	}
+}
+
+// A requirement a decline drops does not stand where it was made: when platform declines eng's
+// mandatory template and core requires it again, it stands at core, behind what mid requires.
+func TestADeclinedRequirementStandsWhereItIsRequiredAgain(t *testing.T) {
+	h := newHarness(t, sourcescope.WithProfileAssignment(licensed))
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	eng := h.createWorkspace(tenant, "eng")
+	platform := h.createWorkspaceUnder(tenant, "platform", eng)
+	mid := h.createWorkspaceUnder(tenant, "mid", platform)
+	h.createWorkspaceUnder(tenant, "core", mid)
+
+	require := func(template, department string) {
+		t.Helper()
+		if r := h.createBinding(admin, tenant, map[string]any{
+			"source_type": "template", "source_ref": template, "scope_tree": "workspace", "scope_ref": department, "effect": "require", "enabled": true,
+		}); r.code != http.StatusCreated {
+			t.Fatalf("requiring %s on %s = %d %s, want 201", template, department, r.code, r.raw)
+		}
+	}
+	require(tplA, "eng")
+	decline := h.createBinding(admin, tenant, map[string]any{
+		"source_type": "template", "source_ref": tplA, "scope_tree": "workspace", "scope_ref": "platform", "effect": "decline", "enabled": true,
+	})
+	if decline.code != http.StatusAccepted {
+		t.Fatalf("declining %s on platform = %d %s, want 202", tplA, decline.code, decline.raw)
+	}
+	approvers++
+	approver := h.tokenFor(admin, tenant, fmt.Sprintf("approver%d@acme.io", approvers), auth.RoleAdmin)
+	if a := h.do("POST", "/v1/m/sourcescope/posture-requests/"+decline.body["id"].(string)+"/approve", approver, nil, tenantHdr(tenant)); a.code != http.StatusOK {
+		t.Fatalf("approving the decline = %d %s", a.code, a.raw)
+	}
+	require(tplB, "mid")
+	require(tplA, "core")
+
+	if got, want := h.assigned(tenant, "core", "required-template"), []string{tplB, tplA}; !reflect.DeepEqual(got, want) {
+		t.Errorf("mandatory templates of core = %v, want mid's first, then core's own: %v", got, want)
 	}
 }
 

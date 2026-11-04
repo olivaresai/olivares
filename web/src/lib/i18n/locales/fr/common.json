@@ -106,7 +106,19 @@
     "scope": "dans {{name}}",
     "footerMove": "déplacer",
     "footerOpen": "ouvrir",
-    "footerCommands": "commandes seulement"
+    "footerCommands": "commandes seulement",
+    "objectActions": "Pour {{name}}",
+    "footerPeople": "personnes",
+    "footerSessions": "sessions",
+    "peopleHint": "Saisissez un nom."
+  },
+  "hintBar": {
+    "move": "déplacer",
+    "open": "ouvrir",
+    "approve": "approuver",
+    "deny": "refuser",
+    "launcher": "lanceur",
+    "command": "commandes"
   },
   "permissionWords": {
     "read": "un accès en lecture",
@@ -327,11 +339,16 @@
         "last": "Dernière session",
         "open": "Ouvrir la session",
         "pin": "L’épingler ou la détacher",
+        "undo": "Annuler le dernier archivage, report, terminé ou détachement",
         "menu": "Ouvrir le menu d’actions de la session"
       },
       "session": {
         "new": "Nouvelle session",
         "previous": "Revenir à la session précédente"
+      },
+      "list": {
+        "next": "Aller à la ligne suivante",
+        "previous": "Aller à la ligne précédente"
       },
       "sourceDiff": {
         "nextFile": "Fichier suivant",
@@ -342,15 +359,20 @@
       "approvals": {
         "approve": "Approuver une fois la demande ouverte",
         "deny": "Rejeter la demande ouverte"
+      },
+      "accessMap": {
+        "fullScreen": "Entrer dans la carte en plein écran ou la quitter"
       }
     },
     "when": {
       "railFocused": "dans le rail des sessions",
+      "outsideList": "hors d’une liste",
       "launcherFocused": "dans le champ du lanceur",
       "workSurface": "sur l’écran des sessions",
       "sessionHistory": "quand une session précédente est disponible",
       "paletteRecent": "dans les résultats de la palette avec une recherche vide",
-      "approvalQueue": "dans la file des approbations"
+      "approvalQueue": "dans la file des approbations",
+      "accessMap": "sur la carte des accès"
     },
     "precedence": "Quand deux lignes partagent les mêmes touches, la dernière applicable l’emporte.",
     "problems_one": "{{count}} raccourci n’a pas pu être lu et ne se déclenche pas : {{commands}}",
@@ -406,7 +428,6 @@
     },
     "quoteReply": "Citer la réponse",
     "copy": {
-      "markdown": "Copier le bloc Markdown",
       "message": "Copier le message",
       "code": "Copier le code",
       "copied": "Copié",

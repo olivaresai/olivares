@@ -73,10 +73,13 @@ func TestGovernanceRequestBodiesClassifyAllMutations(t *testing.T) {
 		{http.MethodDelete, "/routine-policies/{id}", governanceBodyless},
 		{http.MethodPost, "/agentcore-export/plan", governanceBodyful},
 		{http.MethodPost, "/agentcore-export/apply", governanceBodyful},
+		{http.MethodPost, "/vaults", governanceBodyful},
+		{http.MethodPut, "/vaults/{id}/shares", governanceBodyful},
+		{http.MethodDelete, "/vaults/{id}/shares", governanceBodyful},
 	}
 
 	wantCounts := map[governanceRequestBodyKind]int{
-		governanceBodyful:         38,
+		governanceBodyful:         41,
 		governanceBodyless:        16,
 		governanceBodyNoDerivable: 0,
 		governanceBodyPending:     0,
@@ -111,8 +114,8 @@ func TestGovernanceRequestBodiesClassifyAllMutations(t *testing.T) {
 			t.Errorf("%s returned a body with ok=false: %#v", key, body)
 		}
 	}
-	if len(seen) != 54 {
-		t.Fatalf("classified %d mutations, want 54", len(seen))
+	if len(seen) != 57 {
+		t.Fatalf("classified %d mutations, want 57", len(seen))
 	}
 	if !reflect.DeepEqual(gotCounts, wantCounts) {
 		t.Fatalf("classification counts = %#v, want %#v", gotCounts, wantCounts)

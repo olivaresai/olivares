@@ -37,9 +37,11 @@ import { hasThread } from './has-thread'
 import { modelMismatch } from './session-usage'
 import { SessionConversation } from './session-conversation'
 import { SessionOverview } from './session-overview'
+import { useMarkSeen } from './use-session-marks'
 import { SessionFailure } from './session-failure'
 import type { SessionResolution } from './use-session-resolution'
 import { ThreadHeader } from './thread-header'
+import { PathRoot } from './path-chip'
 import './i18n'
 
 export function SessionNarrative({
@@ -88,6 +90,8 @@ export function SessionNarrative({
   const { t } = useTranslation('sessions')
   const { target, session, live, loading, grants } = resolution
   const [inUseModel, setInUseModel] = useState<string | null>(null)
+  // Opening a session is seeing it (#2866); the pane is where a session is open.
+  useMarkSeen(session, !!target && !loading && grants.runRead)
 
   // Recovery belongs to the pane, including before its session can be read.
   if (!target || loading || (!grants.liveRead && !grants.runRead))
@@ -201,14 +205,17 @@ export function SessionNarrative({
       )}
 
       {hasThread(resolution) && run ? (
-        <SessionConversation
-          run={run}
-          composerId={composerId}
-          selectedId={inspectedId}
-          onInspect={onInspect}
-          onFolder={onFolder}
-          onModel={setInUseModel}
-        />
+        // Paths in the replies are read against the session's folder (#4011).
+        <PathRoot root={run.workspace_path}>
+          <SessionConversation
+            run={run}
+            composerId={composerId}
+            selectedId={inspectedId}
+            onInspect={onInspect}
+            onFolder={onFolder}
+            onModel={setInUseModel}
+          />
+        </PathRoot>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           <SessionOverview

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"strings"
 
@@ -293,6 +294,69 @@ func (c *agentClientConfig) listItems(ctx context.Context, path string) ([]map[s
 	return page.Items, nil
 }
 
+// providerRefPrefix marks a provider reference (modules/sessions providerRecordRefPrefix).
+const providerRefPrefix = "prv_"
+
+// providerRefOf is the reference a verb acts on for what the person typed: a prv_
+// reference as it is, else the name `provider ls` prints. A name must match one
+// provider; when a revoked provider carries the name of an active one, the active
+// one is meant.
+func (c *agentClientConfig) providerRefOf(ctx context.Context, typed string) (string, error) {
+	if strings.HasPrefix(typed, providerRefPrefix) {
+		return typed, nil
+	}
+	var named, active []string
+	cursor := ""
+	for seen := map[string]bool{}; ; {
+		q := url.Values{"limit": []string{"200"}}
+		if cursor != "" {
+			q.Set("cursor", cursor)
+		}
+		status, b, err := c.do(ctx, "GET", providersPath+"?"+q.Encode(), nil)
+		if err != nil {
+			return "", err
+		}
+		if status != 200 {
+			return "", httpErr(status, b)
+		}
+		var page struct {
+			Items   []map[string]any `json:"items"`
+			HasMore bool             `json:"has_more"`
+			Cursor  string           `json:"cursor"`
+		}
+		if err := json.Unmarshal(b, &page); err != nil {
+			return "", err
+		}
+		for _, rec := range page.Items {
+			if str(rec, "display_name") != typed {
+				continue
+			}
+			named = append(named, str(rec, "provider_ref"))
+			if str(rec, "state") == "active" {
+				active = append(active, str(rec, "provider_ref"))
+			}
+		}
+		if !page.HasMore {
+			break
+		}
+		if page.Cursor == "" || seen[page.Cursor] {
+			return "", sentence(exitcode.Server, "The provider list could not be read completely. Use the provider reference (prv_...) from olivares provider ls.")
+		}
+		cursor = page.Cursor
+		seen[cursor] = true
+	}
+	if len(active) > 0 {
+		named = active
+	}
+	switch len(named) {
+	case 0:
+		return "", sentence(exitcode.NotFound, "No provider is named %q. List them: olivares provider ls", termSafe(typed))
+	case 1:
+		return named[0], nil
+	}
+	return "", sentence(exitcode.Conflict, "More than one provider is named %q. Use its reference (prv_...) from olivares provider ls.", termSafe(typed))
+}
+
 // providerKindFromKey is the provider a key belongs to by its own prefix, or
 // openai_compatible when an endpoint is named; "" when neither says.
 func providerKindFromKey(key, baseURL string) string {
@@ -390,7 +454,11 @@ func newProviderGetCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			return providerPointCall(cmd, &cfg, "GET", "/"+args[0], nil, 200)
+			ref, err := cfg.providerRefOf(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			return providerPointCall(cmd, &cfg, "GET", "/"+ref, nil, 200)
 		},
 	}
 	cfg.addFlags(cmd)
@@ -428,7 +496,11 @@ func newProviderTestCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			return providerPointCall(cmd, &cfg, "POST", "/"+args[0]+"/test", nil, 200)
+			ref, err := cfg.providerRefOf(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			return providerPointCall(cmd, &cfg, "POST", "/"+ref+"/test", nil, 200)
 		},
 	}
 	cfg.addFlags(cmd)
@@ -453,7 +525,11 @@ func newProviderSetCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			return providerPointCall(cmd, &cfg, "PATCH", "/"+args[0], map[string]any{"default_model": strings.TrimSpace(defaultModel)}, 200)
+			ref, err := cfg.providerRefOf(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			return providerPointCall(cmd, &cfg, "PATCH", "/"+ref, map[string]any{"default_model": strings.TrimSpace(defaultModel)}, 200)
 		},
 	}
 	cfg.addFlags(cmd)
@@ -486,7 +562,11 @@ func newProviderRotateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return providerPointCall(cmd, &cfg, "PATCH", "/"+args[0], map[string]any{"api_key": key}, 200)
+			ref, err := cfg.providerRefOf(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			return providerPointCall(cmd, &cfg, "PATCH", "/"+ref, map[string]any{"api_key": key}, 200)
 		},
 	}
 	cfg.addFlags(cmd)
@@ -528,6 +608,12 @@ func newProviderBindCmd() *cobra.Command {
 				return sessionCLIUsage("--unbind takes no provider reference: it clears whatever the profile names")
 			case !unbind && ref == "":
 				return sessionCLIUsage("name the provider to bind, or pass --unbind to clear the profile's binding")
+			}
+			if ref != "" {
+				var err error
+				if ref, err = cfg.providerRefOf(cmd.Context(), ref); err != nil {
+					return err
+				}
 			}
 			saved, err := bindProviderToProfile(cmd, &cfg, ref, profile)
 			if err != nil {
@@ -607,7 +693,11 @@ func newProviderRemoveCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			return providerPointCall(cmd, &cfg, "POST", "/"+args[0]+"/revoke", nil, 200)
+			ref, err := cfg.providerRefOf(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			return providerPointCall(cmd, &cfg, "POST", "/"+ref+"/revoke", nil, 200)
 		},
 	}
 	cfg.addFlags(cmd)
@@ -806,6 +896,7 @@ func providerTable(items []map[string]any) termrender.Table {
 		if connection == "" {
 			connection = "not tested"
 		}
+		t.Marks = append(t.Marks, providerMark(str(rec, "display_name"), str(rec, "kind")))
 		t.Rows = append(t.Rows, []string{
 			str(rec, "provider_ref"), str(rec, "display_name"), str(rec, "kind"),
 			str(rec, "key_hint"), str(rec, "state"), connection,

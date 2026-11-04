@@ -123,7 +123,7 @@
     "add": "{{token}} をクエリに追加",
     "commands": "検索とコマンド",
     "problem": {
-      "key": "{{token}} は台帳のフィルターではありません。person:、action:、kind:、target:、since:、until: または語句を使ってください。",
+      "key": "{{token}} は台帳のフィルターではありません。person:、action:、kind:、target:、tool:、folder:、since:、until: または語句を使ってください。",
       "time": "{{token}} は時間ではありません。90m、24h、7d、2w、または 2026-10-20 のような日付を使ってください。",
       "person": "{{token}} に一致する人はいません。名前、メール、または user:<id> を使ってください。",
       "several": "{{token}} に一致する人が複数います。フルネーム、メール、または user:<id> を使ってください。",

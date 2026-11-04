@@ -179,6 +179,19 @@ describe('nav labels for every registered view', () => {
     },
   )
 
+  // One MCP place: MCP servers are set up, tested and observed on MCP & skills' Servers
+  // tab. A second entry that names MCP is a second place to look for the same list.
+  it.each([...LANGUAGE_CODES])(
+    '"%s" names MCP in exactly one navigation entry',
+    (lng) => {
+      const items = navItems(lng)
+      const naming = FEATURE_VIEWS.filter((v) =>
+        /\bMCP\b/i.test(String(items[v.id] ?? '')),
+      ).map((v) => v.id)
+      expect(naming).toEqual(['capabilities'])
+    },
+  )
+
   it.each([...LANGUAGE_CODES])(
     '"%s" carries no nav:items key without a view',
     (lng) => {

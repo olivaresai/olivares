@@ -8,7 +8,7 @@
   "selectTitle": "No workspace selected",
   "selectPrompt": "Select a workspace in the navigation rail to open this overview, or go to the tenant-wide inventory.",
   "selectPromptWorkspaceOnly": "Select a workspace in the navigation rail to open this overview.",
-  "viewInventory": "Open inventory",
+  "viewInventory": "Open discovered resources",
   "agents": "Agents",
   "sessions": "Sessions",
   "resources": "Resources",
@@ -46,5 +46,24 @@
     "truncationHint": "Open Sessions to see every folder.",
     "filter": "Find a folder",
     "noMatch": "No folder matches “{{query}}”."
+  },
+  "connect": {
+    "title": "Copy files with SFTP or SCP",
+    "intro": "Get a key that works for a few minutes, then use any sftp or scp client. It reaches only this folder.",
+    "button": "Connect",
+    "connecting": "Connecting…",
+    "privateKey": "Private key",
+    "copyKey": "Copy private key",
+    "copied": "Private key copied",
+    "copyFailed": "Could not copy. Select the key and copy it by hand.",
+    "keyHint": "Shown once. Save it as {{file}}, then run chmod 600 {{file}}.",
+    "sftp": "Browse and copy with sftp",
+    "scp": "Copy one file with scp",
+    "hostKey": "Host key to compare when your client asks:",
+    "expires": "Connect before {{time}}. After that the key opens no new connection.",
+    "readOnly": "This key can only read files: you do not hold the write rights on this folder.",
+    "stepUp": "Complete the sign-in step this server requires, then try again.",
+    "failed": "Could not get a key. Try again.",
+    "statusFailed": "Could not check whether this folder is available over SFTP."
   }
 }

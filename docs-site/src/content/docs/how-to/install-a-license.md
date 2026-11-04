@@ -97,10 +97,10 @@ uses and tells you which source is actually in effect, which is the question tha
 olivares license status --data-dir /var/lib/olivares
 ```
 
-`status` is offline and resolves the license by the same precedence the engine uses, so it
+On the engine's host, or with `--data-dir`, `status` is offline and resolves the license by the same precedence the engine uses, so it
 answers the question that matters — *which license is actually in effect* — rather than
 "is there a file". It reports the source it resolved, the holder, the plan and the
-expiry.
+expiry. Signed in to an engine on another host, it asks that engine instead.
 
 Run it after every install, and after removing an override.
 

@@ -18,11 +18,18 @@ type toolDTO struct {
 	Name string `json:"name"`
 	// NameStem is the word an account of the tool is named from (driverfacts NameStem).
 	NameStem string `json:"name_stem"`
+	// Vendor, Monogram and Color are the tool's one mark (driverfacts).
+	Vendor   string `json:"vendor"`
+	Monogram string `json:"monogram"`
+	Color    string `json:"color"`
 	Session  bool   `json:"session"`
 	// Bindings are the provider kinds a session of the tool runs on, each with the
 	// endpoint rule CanBind applies (configured-endpoint, vendor-default-only or
 	// local-endpoint-only).
 	Bindings []toolBindingDTO `json:"bindings"`
+	// RefusedServices are the provider presets the tool cannot be bound to though their
+	// kind is one of its bindings: the console offers none of them (refusedServices).
+	RefusedServices []string `json:"refused_services,omitempty"`
 }
 
 type toolBindingDTO struct {
@@ -38,7 +45,7 @@ func toolList() []toolDTO {
 		for _, b := range f.Bindings {
 			bindings = append(bindings, toolBindingDTO{Kind: b.Kind, Egress: b.Egress})
 		}
-		out = append(out, toolDTO{Key: f.Key, Name: f.Name, NameStem: f.NameStem(), Session: f.Session, Bindings: bindings})
+		out = append(out, toolDTO{Key: f.Key, Name: f.Name, NameStem: f.NameStem(), Vendor: f.Vendor, Monogram: f.Monogram, Color: f.Color, Session: f.Session, Bindings: bindings, RefusedServices: refusedServices(f)})
 	}
 	return out
 }

@@ -21,6 +21,23 @@ describe('CodeEditor', () => {
     expect(box.textContent).toContain('"a": 1')
   })
 
+  it('highlights a Markdown file: its heading and its code are marked, not plain text', () => {
+    // The Files source view of CLAUDE.md was plain monospace.
+    const { container } = render(
+      <CodeEditor
+        value={'# Rules\n\nRun `task build` first.'}
+        language="markdown"
+        readOnly
+        ariaLabel="CLAUDE.md"
+      />,
+    )
+    const marked = [...container.querySelectorAll('.cm-line span')].map(
+      (s) => s.textContent,
+    )
+    expect(marked).toContain('# Rules')
+    expect(marked).toContain('`task build`')
+  })
+
   it('is contenteditable when writable and locked when read-only', () => {
     const { rerender } = render(
       <CodeEditor value="permit;" language="cedar" ariaLabel="Policy" />,

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -463,17 +464,59 @@ func validProviderRecordRef(ref string) bool {
 // has heard of. Until 26.10.1 an openai_compatible record served every driver because
 // it names what it injects; naming OPENAI_* holds no CLI to its address, so it now
 // serves only Codex, whose own provider configuration takes the endpoint. An unknown
-// driver serves nothing.
-func recordServesDriver(kind, baseURL, driver string) bool {
+// driver serves nothing. A Responses-only tool (Codex) is also not held to a preset whose
+// vendor does not serve the Responses API (refusedServices).
+//
+// OpenCode's own closed-endpoint rule (driverfacts.CanBind, EgressLocal) is "a local
+// model server" because that rule lives in core/driverfacts, which never imports a
+// connector; the provider preset catalog (connectors/modelprovider) is read here
+// instead, the one place that already imports both. OpenCode ships a native provider
+// for OpenRouter, DeepSeek, Mistral, Moonshot and Z.ai, each at the catalog's own
+// documented address (driver_opencode.go), so a BYO key at exactly that address is
+// confined the same way a local model server is, and nothing else of this kind. The
+// governed DeepSeek row (API use only, modelprovider.NativeService) serves no native
+// session, here as at launch.
+func recordServesDriver(kind, baseURL, service, driver string) bool {
 	facts, _ := driverfacts.Lookup(driver)
-	return facts.CanBind(kind, baseURL)
+	if slices.Contains(refusedServices(facts), service) {
+		return false
+	}
+	if facts.CanBind(kind, baseURL) {
+		return true
+	}
+	if driver != providerDriverOpenCode || kind != ProviderKindOpenAICompatible || !modelprovider.NativeService(service) {
+		return false
+	}
+	_, ok := modelprovider.LookupPresetByEndpoint(kind, baseURL)
+	return ok
+}
+
+// refusedServices is the presets whose endpoint a tool could be pointed at but whose API
+// is not the one it speaks: a Responses-only tool (Codex) and a preset that does not serve
+// the Responses API. A record with no preset is never listed, so it binds as it always did.
+// The bind rule, the refusal sentence and GET /tools all read this one list.
+func refusedServices(facts driverfacts.Facts) []string {
+	if !facts.ResponsesOnly {
+		return nil
+	}
+	var refs []string
+	for _, row := range modelprovider.Presets() {
+		if !row.Responses && facts.CanBind(row.Kind, row.BaseURL) {
+			refs = append(refs, row.Ref)
+		}
+	}
+	return refs
 }
 
 // recordDriverRefusal is the one sentence for a record a driver cannot be held to.
-func recordDriverRefusal(driver, recordName, kind string) string {
+func recordDriverRefusal(driver, recordName, kind, service string) string {
 	facts, ok := driverfacts.Lookup(driver)
 	if !ok || facts.BindingDescription == "" {
 		return "driver " + driver + " cannot be held to a provider from Providers; use its own sign-in"
+	}
+	if slices.Contains(refusedServices(facts), service) {
+		row, _ := modelprovider.LookupPreset(service)
+		return facts.Name + " needs the Responses API; " + row.Title + " offers Chat Completions. Use OpenCode or Claude Code."
 	}
 	return facts.BindingDescription + "; " + strconv.Quote(recordName) + " (kind " + kind + ") is not one of these, so the session does not start"
 }

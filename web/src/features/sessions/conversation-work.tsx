@@ -44,8 +44,9 @@ export type Part =
 /**
  * The items as the thread paints them. The calls between two other rows (a reply,
  * the person's turn, the end of a turn, a notice) are one work row; a subagent's calls and
- * replies belong to the Agent call that started it, wherever they arrive. Nothing is
- * dropped: every call is still in the document, one click away.
+ * replies belong to the Agent call that started it, wherever they arrive. Every call is
+ * still in the document, one click away. The session-start frame is no row: its
+ * model and folder are in the header, and it comes again before each later turn.
  */
 export function threadParts(
   items: readonly ConversationItem[],
@@ -63,6 +64,7 @@ export function threadParts(
     .lastIndexOf(true)
   for (const [index, item] of items.entries()) {
     place.set(item, index)
+    if (item.kind === 'system' && item.systemKind === 'init') continue
     const parent = item.parentToolId
     if (item.kind === 'tool' && item.toolId) calls.add(item.toolId)
     if (parent && parent !== item.toolId && calls.has(parent)) {
@@ -209,16 +211,6 @@ function workWords(
   }
 }
 
-/** From the first call to the last answer, where the engine said when. */
-function workDuration(items: readonly ConversationItem[]): number | undefined {
-  const times = items
-    .flatMap((item) => [item.at, item.toolEndAt])
-    .flatMap((at) => (at ? [Date.parse(at)] : []))
-    .filter(Number.isFinite)
-  if (times.length < 2) return undefined
-  return Math.max(...times) - Math.min(...times)
-}
-
 const capitalized = (words: string) =>
   words.charAt(0).toLocaleUpperCase() + words.slice(1)
 
@@ -287,8 +279,8 @@ function liveWords(
 }
 
 /**
- * THE WORK BETWEEN TWO REPLIES IS ONE ROW (the regression, T3 "Worked for 22s ›"): "Worked for
- * 1m 12s · ran 3 commands, edited 2 files", closed. Open, it is one line per call, an edit
+ * THE WORK BETWEEN TWO REPLIES IS ONE ROW (the regression): "Ran 3 commands, edited 2 files",
+ * closed; the turn's one duration is its end line ("Worked for 1m 12s", T3's "Worked for 22s ›"). Open, it is one line per call, an edit
  * with its diff, a subagent under its Agent row. While its calls run it is the live line
  * instead: "Running 1 shell command · 1m 30s", with Esc to interrupt where the turn can be.
  */
@@ -313,16 +305,8 @@ function WorkRowView({
 }) {
   const { t } = useTranslation('sessions')
   const words = workWords(t, items)
-  const duration = workDuration(items)
-  const label =
-    duration !== undefined && duration >= 1000
-      ? [
-          t('conversation.workedFor', { duration: formatDuration(duration) }),
-          words.done,
-        ]
-          .filter(Boolean)
-          .join(' · ')
-      : capitalized(words.done)
+  // What the work did; how long the turn took is said once, on its end line.
+  const label = capitalized(words.done)
   return (
     <li>
       <details

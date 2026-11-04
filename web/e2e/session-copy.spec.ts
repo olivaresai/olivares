@@ -103,15 +103,10 @@ test('copies a message, a reply and a code block, by selection and by Copy', asy
   await reply.getByRole('button', { name: 'Copy code' }).click()
   await expect.poll(() => clipboard(page)).toBe('make test')
 
-  await reply
-    .getByRole('button', { name: 'Copy Markdown block' })
-    .nth(1)
-    .click()
-  await expect
-    .poll(() => clipboard(page))
-    .toBe(
-      '- **Identify clients:** list who calls the API\n- Check `README.md` for the title',
-    )
+  // One copy per message: no paragraph carries its own (#3947).
+  await expect(
+    reply.getByRole('button', { name: 'Copy Markdown block' }),
+  ).toHaveCount(0)
 
   // The keyboard alone: from the composer, back to the reply's Copy, and Enter.
   await page.evaluate(() => navigator.clipboard.writeText(''))

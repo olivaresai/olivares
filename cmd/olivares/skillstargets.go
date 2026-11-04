@@ -260,6 +260,9 @@ func (a skillsTargetAuthority) PrepareSkillsTarget(ctx context.Context, mc api.M
 	if err := a.requireAdminForAssignedTemplate(bounded, tenant, p, t, write); err != nil {
 		return ctx, noop, err
 	}
+	if err := a.requireAssignedProfile(bounded, tenant, p, t); err != nil {
+		return ctx, noop, err
+	}
 	if !write {
 		if err := a.authorizeProfilePinsRead(bounded, request, t); err != nil {
 			return ctx, noop, err
@@ -305,6 +308,9 @@ func (a skillsTargetAuthority) prepareSessionTarget(ctx, bounded context.Context
 	if err := a.requireAdminForAssignedTemplate(bounded, tenant, p, t, write); err != nil {
 		return ctx, noop, err
 	}
+	if err := a.requireAssignedProfile(bounded, tenant, p, t); err != nil {
+		return ctx, noop, err
+	}
 	if !write {
 		if err := a.authorizeProfilePinsRead(bounded, request, t); err != nil {
 			return ctx, noop, err
@@ -326,6 +332,16 @@ func (a skillsTargetAuthority) requireAdminForAssignedTemplate(ctx context.Conte
 		return nil
 	}
 	return a.sessions.RequireAdminToChangeAssigned(ctx, tenant, p, model.ID(t.ID))
+}
+
+// requireAssignedProfile holds a profile target, read or written, to the people the profile
+// was assigned to: its native permission says what a caller may do with profiles, never which
+// profiles. Sessions owns that question. It has nothing to say about any other kind of target.
+func (a skillsTargetAuthority) requireAssignedProfile(ctx context.Context, tenant model.TenantID, p auth.Principal, t skills.Target) error {
+	if t.Kind != "profile" {
+		return nil
+	}
+	return a.sessions.RequireProfileAssigned(ctx, tenant, p, t.ID)
 }
 
 func (a skillsTargetAuthority) retainSessionDecision(ctx context.Context, p *skillsPreparedTarget, request auth.Request) error {

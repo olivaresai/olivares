@@ -123,14 +123,20 @@ describe('modules not enabled on this installation (ARCH C1)', () => {
     expect(
       [...named].filter((id) => !FEATURE_VIEWS.some((v) => v.id === id)).sort(),
     ).toEqual(
-      // docs/editions.md: FinOps analysis, red-team execution and reporting moved
-      // to Business. Their spec entries remain for the paid console extensions.
-      // Deployment, recordings and compliance are Business pages of shared source:
-      // a build that does not serve them leaves their entries unused too.
+      // docs/editions.md: FinOps analysis, red-team execution, reporting, recording
+      // and deployment moved to Business. Their spec entries remain for the paid console
+      // extensions. Compliance is a Business page of shared source: a build that does not
+      // serve it leaves its entry unused too.
       [
-        ...['finops', 'team-costs', 'redteam', 'reporting'].filter(
-          (id) => !FEATURE_EXTENSIONS.some((v) => v.id === id),
-        ),
+        ...[
+          'finops',
+          'team-costs',
+          'redteam',
+          'reporting',
+          'deploy',
+          'recordings',
+          'session-viewer',
+        ].filter((id) => !FEATURE_EXTENSIONS.some((v) => v.id === id)),
         ...BUSINESS_ONLY_VIEW_IDS.filter(
           (id) => !FEATURE_VIEWS.some((v) => v.id === id),
         ),

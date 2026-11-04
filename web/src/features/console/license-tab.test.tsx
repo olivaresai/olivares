@@ -708,7 +708,11 @@ describe('LicenseTab', () => {
   it('refuses to render to a non-superadmin', async () => {
     authState.isSuperadmin = false
     wrap(<LicenseTab />)
-    expect(await screen.findByText(/only a superadmin/i)).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        /ask a system administrator to view or change it/i,
+      ),
+    ).toBeInTheDocument()
     expect(api.getLicense).not.toHaveBeenCalled()
   })
   /**

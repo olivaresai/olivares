@@ -104,7 +104,11 @@ describe('ConnectorsTab', () => {
   it('is superadmin-only', async () => {
     authState.isSuperadmin = false
     wrap(<ConnectorsTab />)
-    expect(await screen.findByText(/only a superadmin/i)).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        /ask a system administrator to view or change it/i,
+      ),
+    ).toBeInTheDocument()
     expect(api.listConnectors).not.toHaveBeenCalled()
   })
 
@@ -1205,7 +1209,11 @@ describe('ConnectorsTab — catalog and roster are independent authorities', () 
 
     authState.isSuperadmin = false
     view.again()
-    expect(await screen.findByText(/only a superadmin/i)).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        /ask a system administrator to view or change it/i,
+      ),
+    ).toBeInTheDocument()
     expect(screen.queryByText('vault-prod')).not.toBeInTheDocument()
     expect(catalogHeading()).toBeNull()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
@@ -1246,7 +1254,11 @@ describe('ConnectorsTab — catalog and roster are independent authorities', () 
 
     authState.isSuperadmin = false
     view.again()
-    expect(await screen.findByText(/only a superadmin/i)).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        /ask a system administrator to view or change it/i,
+      ),
+    ).toBeInTheDocument()
     await waitFor(() => expect(signal?.aborted).toBe(true))
 
     // The abandoned read answers late, into a context that is no longer its own.

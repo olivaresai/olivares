@@ -19,6 +19,7 @@ const { api, authState, build } = vi.hoisted(() => ({
     scimServiceProviderConfig: vi.fn(),
     scimUsers: vi.fn(),
     audit: vi.fn(),
+    auditHead: vi.fn(),
   },
   authState: {
     activeTenant: 't1' as string | null,
@@ -56,6 +57,7 @@ function mount(ui: React.ReactElement) {
 }
 
 beforeEach(() => {
+  api.auditHead.mockResolvedValue(1)
   api.ssoStatus.mockRejectedValue(new Error('not under test'))
   api.scimServiceProviderConfig.mockRejectedValue(business())
   api.scimUsers.mockRejectedValue(business())

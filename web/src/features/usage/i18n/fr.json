@@ -1,20 +1,13 @@
 {
   "title": "Usage et coût, par compte",
   "subtitle": "Les limites officielles sur 5 heures et à la semaine, à côté des jetons et du coût du jour.",
-  "windows": {
-    "fiveHour": "5 heures",
-    "week": "hebdomadaire"
-  },
   "accounts": {
     "heading": "Comptes",
     "loading": "Lecture des comptes de chaque outil…",
     "error": "Les limites des comptes n'ont pas pu être lues.",
     "empty": "Aucun compte n'a encore indiqué ses limites.",
-    "resets": "réinitialisation {{when}}",
-    "stale": "lu pour la dernière fois {{at}}",
     "details": "Détails",
-    "detailsFor": "Détails de {{account}}",
-    "adminOnly": "Les limites des comptes sont visibles par un administrateur système."
+    "detailsFor": "Détails de {{account}}"
   },
   "today": {
     "heading": "Aujourd'hui",

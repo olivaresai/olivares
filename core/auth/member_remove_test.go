@@ -15,6 +15,39 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
+// leaverAction is the action the tenant's Identity leaver card reads
+// (GET /v1/audit?action=scim.user.deprovision; docs/contracts-identity.md).
+const leaverAction = "scim.user.deprovision"
+
+// tenantEventsNamed returns, in chain order, the tenant's own ledger events with
+// the given action, each with its stored metadata decoded (a plain Walk leaves
+// Meta nil by design).
+func tenantEventsNamed(t *testing.T, ctx context.Context, st store.Store, tenant model.TenantID, action string) []model.AuditEvent {
+	t.Helper()
+	var out []model.AuditEvent
+	if err := st.View(ctx, tenant, func(sc store.Scope) error {
+		walker, ok := sc.Audit().(store.CanonicalWalker)
+		if !ok {
+			return errors.New("audit lacks canonical metadata")
+		}
+		return walker.WalkCanonical(ctx, 1, func(ev model.AuditEvent, meta string, _ []byte) error {
+			if ev.Action != action {
+				return nil
+			}
+			if meta != "" {
+				if err := json.Unmarshal([]byte(meta), &ev.Meta); err != nil {
+					return err
+				}
+			}
+			out = append(out, ev)
+			return nil
+		})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
 // offboardCauses returns the cause of every membership.offboard event on the system
 // chain that targets user, in chain order.
 func offboardCauses(t *testing.T, ctx context.Context, st store.Store, user model.ID) []string {
@@ -53,7 +86,7 @@ func TestRemoveMemberIsRecordedAsARemovalNotAsSCIM(t *testing.T) {
 	a := auth.NewAuthenticator(st, nil)
 	super := mustSuperadmin(t, ctx, a)
 	tenant := provisionTenant(t, st, "acme")
-	u, _, err := a.SCIMProvisionUser(ctx, super, tenant, auth.SCIMUserInput{UserName: "leaver@acme.com", Active: true})
+	u, err := a.CreateUser(ctx, super, auth.NewUser{Email: "leaver@acme.com", Password: "pw-" + model.NewID().String(), Tenant: tenant, Role: auth.RoleViewer})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +121,7 @@ func TestRemoveMemberOfANonMemberWritesNothing(t *testing.T) {
 	super := mustSuperadmin(t, ctx, a)
 	tenant := provisionTenant(t, st, "acme")
 	other := provisionTenant(t, st, "other")
-	foreign, _, err := a.SCIMProvisionUser(ctx, super, other, auth.SCIMUserInput{UserName: "foreign@other.com", Active: true})
+	foreign, err := a.CreateUser(ctx, super, auth.NewUser{Email: "foreign@other.com", Password: "pw-" + model.NewID().String(), Tenant: other, Role: auth.RoleViewer})
 	if err != nil {
 		t.Fatal(err)
 	}

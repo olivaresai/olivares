@@ -157,10 +157,16 @@ type LaunchSpec struct {
 	// Env is the EXPLICIT environment (the governed token by value) the runner sets
 	// on the child; it is authoritative over any host value.
 	Env []EnvVar
+	// SessionMCPReach names the enabled servers assigned by the MCP gateway.
+	SessionMCPReach []string `json:"-"`
 	// SessionMCPURL and SessionMCPTokenEnv describe the server carried by ACP.
 	// The credential remains in Env until sent over the owned child's stdin.
 	SessionMCPURL      string `json:"-"`
 	SessionMCPTokenEnv string `json:"-"`
+	// EngineControls are engine control URLs a launch's tool calls that no environment
+	// variable names: the session MCP server a Claude config file or a Codex argument
+	// carries. A container runner relays them; a launch with a NetworkPolicy lists them there.
+	EngineControls []string `json:"-"`
 	// BoundProvider is the non-secret provider authority resolved for this spawn.
 	BoundProvider BoundProvider
 	// NetworkPolicy is server-resolved launch authority. A non-nil empty policy
@@ -195,6 +201,9 @@ type LaunchSpec struct {
 	Confinement *confine.Policy
 	// ConfinementFiles are borrowed native launch handles, never a serialized policy.
 	ConfinementFiles []*os.File `json:"-"`
+	// ConfinementReadFiles are files a confined child may read that were checked as regular
+	// files of their own (AllowReadFile); the helper checks each again when it grants it.
+	ConfinementReadFiles []string `json:"-"`
 	// ConfinementNoDelete are folders the child may write but never remove a name
 	// from or move one out of (workspace mount_mode write_no_delete). They are not in
 	// Confinement.ReadWrite: a writable grant over one would give the rights back.
@@ -213,6 +222,9 @@ type LaunchSpec struct {
 	ConfinementRequireTruncateProtection bool `json:"-"`
 	// ConfinementRequired refuses the launch when the host cannot confine.
 	ConfinementRequired bool
+	// MemoryMax and TasksMax are the ceilings of the child's transient systemd scope
+	// (SessionLimits); only the native runner reads them, and empty sets none.
+	MemoryMax, TasksMax string `json:"-"`
 	// ScratchHome, when set, is called by the native runner with the private temporary
 	// directory it has just made and named HOME for a confined child whose Env names
 	// none. An error refuses the launch. It is how a launch learns a home that does not
@@ -243,6 +255,18 @@ func (s *LaunchSpec) AllowRead(path string) {
 	case s.Isolation == IsolationContainer && !underImageSystemDir(path):
 		s.Binds = append(s.Binds, ContainerBind{HostPath: path, Target: path, ReadOnly: true})
 	}
+}
+
+// AllowReadFile is AllowRead for a file the core checked as a regular file of its own and judged
+// where it really is (a credential broker's result). A confined native child is granted it
+// through a descriptor opened when the grant is made, so a name swapped for a link or a folder
+// since the check refuses the launch instead of granting what it leads to.
+func (s *LaunchSpec) AllowReadFile(path string) {
+	if s.Confinement != nil && path != "" {
+		s.ConfinementReadFiles = append(s.ConfinementReadFiles, path)
+		return
+	}
+	s.AllowRead(path)
 }
 
 // WorkspaceMount is one resolved workspace bind for a containerized launch.
@@ -514,6 +538,14 @@ const (
 	LaunchActionResume LaunchAction = "resume"
 )
 
+// ScheduledLaunch names the schedule of a scheduled run, the approval a second
+// administrator granted for its period and the plan hash that approval binds.
+type ScheduledLaunch struct {
+	ScheduleRef string
+	ApprovalRef string
+	PlanHash    string
+}
+
 // LaunchIntent is the references-only attribution the launch gate scopes on. It
 // carries NO secrets/payloads: only the actor/agent references the
 // budget/HITL/kill-switch decisions key on and the launch parameters the CRITICAL
@@ -526,7 +558,10 @@ type LaunchIntent struct {
 	// LauncherPrincipal is the authenticated current launch authority, carried
 	// only in memory to the single session credential issuer. A queued launch
 	// rebuilds it from its pinned initiating credential after approval.
-	LauncherPrincipal   auth.Principal `json:"-"`
+	LauncherPrincipal auth.Principal `json:"-"`
+	// Schedule is the provenance of a scheduled launch, which has no launcher: the gate
+	// verifies its approval and launches as the owner agent (AgentRef).
+	Schedule            *ScheduledLaunch `json:"-"`
 	ToolSurface         []string
 	ToolSurfaceDeclared bool
 	// ApprovalRef is server-owned and pins a queued launch to its original approval.

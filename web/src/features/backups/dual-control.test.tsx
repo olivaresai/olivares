@@ -72,6 +72,25 @@ describe('PendingRestores (dual-control queue)', () => {
     expect(screen.getByText('drr_abc')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /approve/i })).toBeInTheDocument()
   })
+
+  it('keeps the approve action and its dialog out of a brand accent (trust chrome)', async () => {
+    api.listPendingRestores.mockResolvedValue({
+      items: [
+        {
+          request_id: 'drr_abc',
+          upload_id: 'restore-upload-xyz.drbundle',
+          initiator: 'alice',
+          created_at: '2026-07-09T10:00:00Z',
+        },
+      ],
+    })
+    wrap(<PendingRestores />)
+    const row = await screen.findByRole('button', { name: /approve/i })
+    expect(row.closest('[data-trust-chrome]')).not.toBeNull()
+    await userEvent.click(row)
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveAttribute('data-trust-chrome')
+  })
 })
 
 describe('BackupSchedule dual-control toggle', () => {

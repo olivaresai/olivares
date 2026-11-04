@@ -124,6 +124,19 @@ def release_fixture(dist):
 
 
 class NativeReleaseVersions(unittest.TestCase):
+    def test_rpm_requires_its_scriptlet_interpreter(self) -> None:
+        with tempfile.TemporaryDirectory(prefix='native-rpm-shell-', dir=os.environ.get('TMPDIR')) as tmp:
+            dist = Path(tmp)
+            release_fixture(dist)
+            paths = builder.build(ROOT, dist, '26.1100', 1790812800, ROOT / 'packaging/nfpm/packages.json', False)
+            for path in paths:
+                if path.suffix != '.rpm':
+                    continue
+                data = path.read_bytes()
+                _, signature_end = packages._parse_rpm_header(data, 96)
+                tags, _ = packages._parse_rpm_header(data, (signature_end + 7) & ~7)
+                self.assertIn('/bin/sh', tags.get(1049, []), f'{path.name}: RPM may run %post before bash is installed')
+
     def test_deb_ships_engine_userns_profile_only(self) -> None:
         profile_path = '/usr/share/olivares/apparmor/usr.bin.olivares'
         with tempfile.TemporaryDirectory(prefix='native-apparmor-', dir=os.environ.get('TMPDIR')) as tmp:

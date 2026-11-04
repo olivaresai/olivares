@@ -186,6 +186,8 @@ export default defineConfig({
         dark: './src/assets/olivares-mark-dark.svg',
         replacesTitle: false,
       },
+      // The one visible edge from this separate property to the apex site (scripts/check-header-link.mjs).
+      social: [{ icon: 'external', label: 'Olivares AI', href: 'https://olivares.ai' }],
       // English at the root, with six machine-translated locales. Every
       // non-root page carries a "machine-translated — English is authoritative,
       // native review pending" notice (src/components/Banner.astro); any page not
@@ -426,6 +428,7 @@ export default defineConfig({
             },
             { label: 'API stability & deprecation policy', slug: 'reference/api-stability' },
             { label: 'Session permissions', slug: 'reference/permission-modes' },
+            { label: 'Providers & tools', slug: 'reference/providers-and-tools' },
             //the console had no section here at all — 57 published routes and no
             // way into any of them from the sidebar. Both pages are generated.
             { label: 'Console screens & permissions', slug: 'reference/console' },

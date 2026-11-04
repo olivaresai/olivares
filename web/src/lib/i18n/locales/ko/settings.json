@@ -36,7 +36,7 @@
     "density": "밀도",
     "densityHint": "촘촘하게는 더 많은 행을 표시하고, 여유 있게는 읽기 쉽습니다.",
     "language": "언어",
-    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어.",
+    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어, Українська, Português.",
     "time": "시간",
     "timeHint": "시간은 사용자의 시간대({{zone}})로 표시됩니다. 기록 및 내보내기는 UTC로 유지됩니다.",
     "clock24": "24시간제",

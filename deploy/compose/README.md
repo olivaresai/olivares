@@ -104,7 +104,7 @@ To serve a certificate from your own CA, mount it and restate the container's co
 whole, so the override repeats the base file's flags:
 
 ```yaml
-# docker-compose.tls.yml, next to the base file
+# deploy/compose/docker-compose.tls.yml, next to the base file; ./certs is deploy/compose/certs
 services:
   olivares:
     command:
@@ -124,7 +124,7 @@ file readable by anyone but its owner, so give the key mode `0600` and owner UID
 container user. Then start both files together and give clients your CA, not a pin:
 
 ```sh
-docker compose -f deploy/compose/docker-compose.yml -f docker-compose.tls.yml up -d --wait
+docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.tls.yml up -d --wait
 olivares auth login --server https://192.168.8.17:8443 --ca-cert <your-ca.pem> --token-file <file>
 ```
 
@@ -306,7 +306,7 @@ export OLIVARES_PROJECT_DIR=/home/you/code/my-app
 docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 ```
 
-In the console, choose **Change folder** on the New session form and enter `/project`; the
+In the console, choose **Folder → Another folder…** on the New session form and enter `/project`; the
 form offers it again for the next session. A session in `/project` is confined to that
 folder like any session folder: Landlock, where the host kernel supports it, keeps the
 engine's data out of its reach.

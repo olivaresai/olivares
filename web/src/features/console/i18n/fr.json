@@ -60,7 +60,6 @@
     "caption": "Édition actuelle, état de la licence et actions de cette installation.",
     "helpSummary": "Application de la licence par rapport à cette compilation",
     "helpBody": "Le remplacement de la licence s'applique sur ce processus sans redémarrage. Ce n'est ni un remplacement de binaire ni une mise à niveau des données : ce sont des opérations distinctes, avec leurs propres procédures. En Community, appliquer une licence vérifiée en affiche les détails ici ; cela ne modifie pas cette compilation.",
-    "superadminOnly": "Seul un superadministrateur peut consulter ou modifier la licence.",
     "install": "Installer / mettre à jour",
     "remove": "Supprimer la licence",
     "edition": "Édition",
@@ -200,7 +199,7 @@
     "mode": "Mode de connexion",
     "modePassword": "Définir un mot de passe initial",
     "modeInvite": "Envoyer une invitation par e-mail",
-    "inviteUnavailable": "Ce serveur ne peut pas envoyer d'invitations par e-mail (voir OLIVARES_INVITE_MAIL_DESTINATION dans la référence de configuration) : définissez un mot de passe initial.",
+    "inviteUnavailable": "Ce serveur ne peut pas envoyer d'invitations par e-mail : définissez un mot de passe initial.",
     "password": "Mot de passe initial",
     "passwordHint": "Au moins 8 caractères. L'utilisateur pourra le modifier ultérieurement.",
     "submit": "Intégrer",
@@ -216,7 +215,6 @@
   "sso": {
     "title": "Authentification unique",
     "caption": "Connectez votre fournisseur d'identité (OIDC ou SAML). Les secrets sont chiffrés au repos et ne sont plus jamais affichés. La configuration du SSO est une action à l'échelle du déploiement, réservée au superadministrateur.",
-    "superadminOnly": "Le SSO est un paramètre à l'échelle du déploiement ; seul un superadministrateur peut le consulter ou le modifier.",
     "builderUnavailable": "Cette version peut stocker la configuration SSO mais ne peut pas l'activer : aucun fournisseur OIDC/SAML n'est disponible dans ce moteur.",
     "statusConfigured": "Configuré",
     "statusNotConfigured": "Non configuré",
@@ -285,7 +283,6 @@
   "secrets": {
     "title": "Coffre de secrets",
     "caption": "Secrets nommés dans le coffre scellé à l'échelle du déploiement. Référencez-en un depuis la configuration d'un connecteur sous la forme store:<name> ; la valeur est résolue au moment de la connexion, vous reconfigurez donc sans redémarrer. La valeur n'est jamais affichée — seule une courte empreinte confirme qu'un secret est défini ou modifié.",
-    "superadminOnly": "Le coffre de secrets est un paramètre à l'échelle du déploiement ; seul un superadministrateur peut le consulter ou le modifier.",
     "sealerUnavailable": "Cette build peut lister les secrets mais aucun scelleur n'est branché, les valeurs ne peuvent donc pas être stockées. Configurez un backend de scellement pour activer le coffre.",
     "create": "Nouveau secret",
     "colName": "Nom",
@@ -345,7 +342,6 @@
   "connectors": {
     "title": "Connecteurs",
     "caption": "Ajoutez et configurez les connecteurs depuis lesquels le moteur ingère, avec leurs identifiants scellés au repos. Une modification est appliquée au moteur en cours d'exécution sans redémarrage. À l'échelle du déploiement et réservé au superadministrateur.",
-    "superadminOnly": "Les connecteurs sont un paramètre à l'échelle du déploiement ; seul un superadministrateur peut les consulter ou les modifier.",
     "unavailable": "Cette build n'a pas branché l'intégration des connecteurs ; les connecteurs sont configurés depuis le fichier de démarrage à la place.",
     "sourcesUnavailable": "Cette build ne sert pas l'inventaire des sources ; les connecteurs en cours d'exécution ne peuvent pas être listés ici.",
     "catalogForbidden": "Vous n’êtes pas autorisé à consulter le catalogue de connecteurs",
@@ -362,7 +358,8 @@
       "failed": "En échec",
       "stopped": "Arrêté",
       "disabled": "Désactivé",
-      "not_wired": "Non branché"
+      "not_wired": "Non branché",
+      "credential_missing": "Identifiant manquant"
     },
     "edit": "Modifier",
     "delete": "Supprimer",
@@ -477,7 +474,24 @@
       "unknownHint": "Ce connecteur ne déclare aucun point de terminaison ; l’endroit où il s’exécute n’a donc pas été déterminé. Cela ne veut PAS dire « cloud du fournisseur ».",
       "vendor_hosted": "Cloud du fournisseur",
       "vendor_hostedHint": "Une API exploitée par le fournisseur — le point de terminaison déclaré pointe par défaut vers son URL."
-    }
+    },
+    "import": "Importer la définition",
+    "export": "Exporter la définition",
+    "imported": "Source importée.",
+    "importInvalid": "Ce fichier n’est pas une définition de source exportée.",
+    "previewTitle": "Aperçu",
+    "previewEmpty": "La source ne liste aucun document.",
+    "previewDocument": "Document",
+    "previewAcl": "Accès (ACL)",
+    "previewSkipped": "Ignoré : non ingérable",
+    "previewUnreadable": "Illisible",
+    "previewNoAcl": "Sans ACL : refusé sauf si la source est publique",
+    "scheduleTitle": "Planification",
+    "kb": "Base de connaissances",
+    "kbHint": "Synchronisée à l’enregistrement puis à chaque intervalle d’interrogation. Sans elle, la source n’est lue que par une ingestion ou une synchronisation explicite.",
+    "kbNone": "Aucune (ingestion manuelle)",
+    "maxDelete": "Garde-fou de suppression (%)",
+    "maxDeleteHint": "Si une synchronisation supprimait une part plus grande des documents de la source, elle n’en supprime aucun et indique pourquoi. 0 le désactive."
   },
   "workspaces": {
     "title": "Espaces de travail",
@@ -500,7 +514,12 @@
     "renamed": "Espace de travail renommé.",
     "none": "Aucun espace de travail pour le moment.",
     "noneHint": "Un espace de travail délimite les agents, les sessions et les attributions dans cette organisation. Créez-en un pour commencer.",
-    "ownerOnly": "Seul le propriétaire de l'organisation peut créer des espaces de travail."
+    "ownerOnly": "Seul le propriétaire de l'organisation peut créer des espaces de travail.",
+    "template": "Partir d'un modèle",
+    "templateNone": "Aucun modèle",
+    "templateHint": "Le modèle de session par défaut du département : un lancement qui n'en nomme aucun part de celui-ci.",
+    "templateMandatory": "Obligatoire : un lancement ne peut pas nommer un autre modèle",
+    "templateNotAssigned": "Espace de travail créé, mais son modèle n'a pas été attribué : {{reason}}"
   },
   "agents": {
     "readOnlyNotice": "Vous devez disposer d'un accès en lecture aux agents pour voir les agents.",
@@ -609,7 +628,9 @@
       "groupScope": "Groupe d'agents : {{ref}}",
       "classLabel": "limité à {{class}}",
       "loadError": "Impossible de charger votre autorité de délégation. Réessayez.",
-      "folderScope": "Dossier : {{ref}}"
+      "folderScope": "Dossier : {{ref}}",
+      "levelCount": "{{level}} : {{count}}",
+      "exactPermissions": "Permissions exactes"
     },
     "grants": {
       "title": "Octrois délimités",
@@ -748,7 +769,7 @@
     "groupSubjects": {
       "managedBy": "Géré par {{provisioner}} · lecture seule",
       "title": "Groupes sujets et hiérarchie",
-      "caption": "Accordez des rôles aux groupes d'utilisateurs provisionnés et configurez la hiérarchie des groupes. Les membres d'un groupe enfant héritent des octrois du parent.",
+      "caption": "Accordez des rôles aux groupes d'utilisateurs provisionnés. Les membres d'un groupe enfant héritent des octrois du parent.",
       "noGroups": "Aucun groupe pour l’instant. Les groupes viennent de votre fournisseur d’identité.",
       "noGroupsHint": "La console ne crée pas de groupes. Ajoutez un groupe chez votre fournisseur d’identité et il apparaîtra ici.",
       "colName": "Groupe",
@@ -756,16 +777,7 @@
       "colMembers": "Membres",
       "colRole": "Rôle mappé",
       "noParent": "Aucun (racine)",
-      "setParent": "Définir le parent",
-      "clearParent": "Supprimer le parent",
-      "setParentTitle": "Définir le groupe parent",
-      "setParentBody": "Les membres de {{child}} hériteront des octrois de {{parent}}. Le moteur réévalue à la prochaine demande.",
-      "clearParentTitle": "Supprimer le groupe parent",
-      "clearParentBody": "{{child}} n'héritera plus des octrois de son parent.",
-      "parentSet": "Groupe parent mis à jour.",
-      "selectParent": "Sélectionner le groupe parent…",
       "selectGroup": "Sélectionner le groupe…",
-      "cycleError": "Impossible de définir le parent : cela créerait un cycle.",
       "mapRole": "Associer un rôle",
       "changeRole": "Changer le rôle",
       "role": "Rôle du locataire",
@@ -974,7 +986,9 @@
       "knowledge": "Connaissances",
       "data": "Données",
       "profile": "Profil de fournisseur",
-      "tool": "Outil d’IA"
+      "tool": "Outil d’IA",
+      "instructions": "Instructions du département",
+      "template": "Modèle de session par défaut"
     },
     "sourceRef": "Référence de source",
     "sourceRefHint": "Utilisez la référence de source exacte. Il n’existe pas de catalogue unique pour chaque type de source.",
@@ -1026,7 +1040,9 @@
     "folderSelectedId": "ID de ressource sélectionnée : {{id}}",
     "effects": {
       "allow": "Autoriser",
-      "forbid": "Interdire"
+      "forbid": "Interdire",
+      "require": "Imposer",
+      "decline": "Exclure"
     },
     "credName": "Nom de l’identifiant",
     "credentialHint": "Facultatif. Si un champ d’identifiant est renseigné, le nom, le type et le localisateur sont requis.",
@@ -1167,7 +1183,7 @@
   },
   "mcpGateway": {
     "title": "Passerelle MCP",
-    "caption": "Gérez les serveurs MCP et les outils de session de ce tenant. Les tests découvrent les outils ; leur exécution exige une politique explicite.",
+    "caption": "Gérez les serveurs MCP et les outils de session de cette organisation. Les tests découvrent les outils ; leur exécution exige une politique explicite.",
     "add": "Ajouter un serveur",
     "configure": "Configurer",
     "test": "Tester la connexion",
@@ -1181,17 +1197,17 @@
     "emptyHint": "Ajoutez un serveur Streamable HTTP, testez sa connexion et configurez la confiance et les autorisations avant de l'activer.",
     "source": {
       "file": "Fichier de l'opérateur",
-      "store": "Configuration du tenant"
+      "store": "Paramètres de l’organisation"
     },
     "fileOwned": "Le fichier de l'opérateur gouverne MCP sur son listener configuré. Cette vue est en lecture seule. La configuration stockée reste inactive, sans fusion ni remplacement.",
-    "storeOwned": "La configuration du tenant gouverne MCP sur le listener HTTP de cette installation. Aucun fichier de configuration n'est nécessaire.",
+    "storeOwned": "Les paramètres de l’organisation gouvernent MCP sur le listener HTTP de cette installation. Aucun fichier de configuration n'est nécessaire.",
     "sessionTitle": "Outils de session",
     "sessionHint": "Les sessions peuvent s’envoyer des messages et utiliser le travail qui leur est attribué. Cela ne donne aux sessions aucune nouvelle autorisation.",
     "tools": "Outils ({{count}})",
     "observationHint": "La découverte n'accorde aucune autorité. Autorisez chaque outil avec un scope explicite et indiquez si les actions destructives nécessitent une approbation.",
     "destructive": "Approbation destructive requise",
     "credentials": "Gérer les identifiants",
-    "credentialCaption": "Uniquement les secrets MCP du tenant (noms mcp/). Stockez la valeur Authorization complète du serveur, par exemple Bearer suivi du jeton. Les valeurs sont scellées et jamais renvoyées.",
+    "credentialCaption": "Uniquement les secrets MCP de l’organisation (noms mcp/). Stockez la valeur Authorization complète du serveur, par exemple Bearer suivi du jeton. Les valeurs sont scellées et jamais renvoyées.",
     "noCredential": "Sans connexion",
     "name": "Nom",
     "url": "Adresse du serveur",
@@ -1216,7 +1232,7 @@
     "formHint": "Un nouveau serveur démarre désactivé. Enregistrez-le, testez la connexion, examinez ses outils et activez-le.",
     "saveDisabled": "Enregistrer",
     "removeTitle": "Supprimer le serveur MCP",
-    "removeHint": "Supprimer {{name}} de la passerelle de ce tenant ? Les nouvelles requêtes seront refusées ; son identifiant scellé restera dans le gestionnaire de secrets.",
+    "removeHint": "Supprimer {{name}} de la passerelle de cette organisation ? Les nouvelles requêtes seront refusées ; son identifiant scellé restera dans le gestionnaire de secrets.",
     "conflict": "La configuration a changé. Actualisez et vérifiez la version actuelle avant un nouvel envoi.",
     "enableHint": "L'activation exige un test actuel réussi, une confiance de ressource et d'émetteur concordante et des scopes explicites pour les outils observés.",
     "governance": "Gouvernance appliquée",
@@ -1247,8 +1263,8 @@
       "network_confinement": "Confinement réseau"
     },
     "governanceValues": {
-      "tenant_store": "Magasin du tenant",
-      "tenant_sealed_reference": "Références scellées du propre tenant",
+      "tenant_store": "Paramètres de l’organisation",
+      "tenant_sealed_reference": "Références scellées de l’organisation elle-même",
       "control_plane_http_listener": "Listener HTTP de l'installation",
       "declared_inventory_and_consent": "Modèles déclarés et consentement",
       "not_configured": "Non configuré",

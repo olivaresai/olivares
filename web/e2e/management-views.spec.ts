@@ -138,13 +138,13 @@ const VIEWS: {
   {
     id: 'permissions',
     path: '/permissions',
-    heading: 'Approvals and permissions',
+    heading: 'Rules & approvals',
   },
   // Deployment is a Business page: only a build that carries edition views registers it.
   ...(FEATURE_EXTENSIONS.length > 0
     ? [{ id: 'deploy', path: '/deploy', heading: 'Deployment & integration' }]
     : []),
-  { id: 'knowledge', path: '/knowledge', heading: 'Data, knowledge & context' },
+  { id: 'knowledge', path: '/knowledge', heading: 'Sources' },
 ]
 
 async function seed(page: Page, theme: 'light' | 'dark') {

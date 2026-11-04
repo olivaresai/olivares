@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 )
@@ -350,6 +351,237 @@ func TestVerifyPolicyArtifactRefusesAMalformedArtifact(t *testing.T) {
 		mutate(&bad)
 		if err := verifyPolicyArtifact(bad, "sandbox", 0, "tenant-a", pin); err == nil {
 			t.Errorf("%s: want a refusal", name)
+		}
+	}
+}
+
+// A plane or database that replays an older, validly signed revision as the newest passes every
+// signature check. Only this host's own record of the highest revision it applied shows it is a
+// rollback, so the pull refuses it before the write; going back on purpose needs --allow-rollback.
+func TestClaudePolicyPullRefusesARevisionRecordThatHoldsNull(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "sandbox.json")
+	if err := os.WriteFile(policyHighWaterPath(out), []byte("null"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	plane := newPullPlane(t, "tenant-a", "sandbox", 5, `{"v":5}`, nil)
+	_, _, err := execRoot(t, pullArgs(plane, "sandbox", out)...)
+	if err == nil || exitcode.From(err) != exitcode.Degraded || !strings.Contains(err.Error(), "not a revision record") {
+		t.Fatalf("err = %v (exit %d), want exit %d naming a damaged revision record", err, exitcode.From(err), exitcode.Degraded)
+	}
+	if _, serr := os.Stat(out); !os.IsNotExist(serr) {
+		t.Fatalf("the host file was written over a damaged record: stat err = %v", serr)
+	}
+}
+
+func TestClaudePolicyPullRefusesARevisionBelowWhatTheHostAlreadyApplied(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "sandbox.json")
+	newest := newPullPlane(t, "tenant-a", "sandbox", 5, `{"v":5}`, nil)
+	if _, _, err := execRoot(t, pullArgs(newest, "sandbox", out)...); err != nil {
+		t.Fatalf("revision 5: %v", err)
+	}
+	replay := newPullPlane(t, "tenant-a", "sandbox", 3, `{"v":3}`, nil)
+	refused := func(args []string, wantFile string) {
+		t.Helper()
+		_, _, err := execRoot(t, args...)
+		if err == nil || exitcode.From(err) != exitcode.Degraded || !strings.Contains(err.Error(), "already applied revision 5") {
+			t.Fatalf("err = %v (exit %d), want exit %d naming the applied revision 5", err, exitcode.From(err), exitcode.Degraded)
+		}
+		if got, _ := os.ReadFile(out); string(got) != wantFile {
+			t.Fatalf("the host file was changed to %q by a rollback, want %q", got, wantFile)
+		}
+	}
+	refused(pullArgs(replay, "sandbox", out), `{"v":5}`)
+	refused(pullArgs(replay, "sandbox", out, "--revision", "3"), `{"v":5}`) // asking for it is not enough
+	replay.mu.Lock()
+	if replay.checkin != nil {
+		t.Errorf("an attestation %v was sent for a refused rollback", replay.checkin)
+	}
+	replay.mu.Unlock()
+
+	if _, _, err := execRoot(t, pullArgs(replay, "sandbox", out, "--allow-rollback")...); err == nil || exitcode.From(err) != exitcode.Usage {
+		t.Errorf("--allow-rollback without --revision: err = %v, want a usage error", err)
+	}
+	if _, _, err := execRoot(t, pullArgs(replay, "sandbox", out, "--revision", "3", "--allow-rollback")...); err != nil {
+		t.Fatalf("an explicit rollback: %v", err)
+	}
+	if got, _ := os.ReadFile(out); string(got) != `{"v":3}` {
+		t.Fatalf("file = %q, want revision 3 after the explicit rollback", got)
+	}
+	// The record is the highest revision ever applied: a rollback does not lower it.
+	refused(pullArgs(replay, "sandbox", out), `{"v":3}`)
+	// The same revision again is not a rollback.
+	if _, _, err := execRoot(t, pullArgs(newest, "sandbox", out)...); err != nil {
+		t.Fatalf("revision 5 again: %v", err)
+	}
+}
+
+// The short fingerprint is 64 bits of the key's SHA-256. The full digest is pinnable, the short
+// form keeps working, and a pin that has the right start and the wrong rest is not the key.
+func TestClaudePolicyPullAcceptsAFullLengthPin(t *testing.T) {
+	p := newPullPlane(t, "tenant-a", "sandbox", 1, "{}", nil)
+	sum := sha256.Sum256(p.pub)
+	full := hex.EncodeToString(sum[:])
+	pull := func(pin string) error {
+		_, _, err := execRoot(t, lot3Args(p.URL, "claude-policy", "pull", "sandbox",
+			"--out", filepath.Join(t.TempDir(), "sandbox.json"), "--scope", "host-7", "--pin-key-fingerprint", pin)...)
+		return err
+	}
+	if err := pull(full); err != nil {
+		t.Fatalf("the full 64-hex pin: %v", err)
+	}
+	if err := pull(full[:16]); err != nil {
+		t.Fatalf("the short pin must keep working: %v", err)
+	}
+	err := pull(full[:16] + strings.Repeat("0", 48))
+	if err == nil || exitcode.From(err) != exitcode.Degraded || !strings.Contains(err.Error(), "does not match the pinned key fingerprint") {
+		t.Fatalf("a pin with a wrong tail: err = %v (exit %d)", err, exitcode.From(err))
+	}
+}
+
+// A document with a credential in an MCP headers, env or http_headers entry would be written
+// world-readable (0644) on the workstation: the pull refuses what the plane's
+// redactInlineCredentials redacts (its token shapes and secret names), before anything reaches
+// the disk.
+func TestClaudePolicyPullRefusesADocumentThatCarriesACredential(t *testing.T) {
+	fill := strings.Repeat("a1B2", 9)                       // fakes are built at run time, never literals
+	key, literal := "sk-"+"ant-"+fill, "literal"+"value123" // a provider key; a value only its name marks
+	for name, doc := range map[string]string{
+		"json header":          `{"mcpServers":{"x":{"headers":{"Authorization":"Bearer ` + key + `"}}}}`,
+		"json env":             `{"mcpServers":{"x":{"env":{"TOKEN":"` + key + `"}}}}`,
+		"toml header":          "[mcp_servers.x.http_headers]\nAuthorization = \"Bearer " + key + "\"\n",
+		"json github token":    `{"mcpServers":{"x":{"env":{"GITHUB_TOKEN":"` + "gh" + "p_" + fill + `"}}}}`,
+		"json slack token":     `{"any":"` + "xox" + "b-" + fill + `"}`,
+		"json google key":      `{"any":"` + "AI" + "za" + fill + `"}`,
+		"json webhook secret":  `{"any":"` + "whs" + "ec_" + fill + `"}`,
+		"json jwt":             `{"any":"` + "ey" + "J" + fill + "." + fill + "." + fill + `"}`,
+		"json literal header":  `{"mcpServers":{"x":{"headers":{"Authorization":"Bearer ` + literal + `"}}}}`,
+		"json token member":    `{"token":"` + literal + `"}`,
+		"json apiKey member":   `{"provider":{"x":{"options":{"apiKey":"` + literal + `"}}}}`,
+		"json credential":      `{"credential":"` + literal + `"}`,
+		"toml access_key":      "[mcp_servers.x.env]\nAWS_ACCESS_KEY = \"" + literal + "\"\n",
+		"toml api_key in list": "[[servers]]\napi_key = \"" + literal + "\"\n",
+		// managed-instructions is Markdown: lines that are all headings are valid TOML comments,
+		// and a parsed document must not hide what its raw text carries.
+		"markdown headings only":  "# deployment\n# GITHUB_TOKEN=" + "gh" + "p_" + fill + "\n",
+		"markdown provider key":   "# keys\n# " + key + "\n",
+		"toml comment with a key": "model = \"gpt-5\"\n# " + key + "\n",
+		"toml comment with a url": "model = \"gpt-5\"\n# postgres://app:" + literal + "@db/app\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			p := newPullPlane(t, "tenant-a", "sandbox", 1, doc, nil)
+			out := filepath.Join(t.TempDir(), "sandbox.json")
+			if err := os.WriteFile(out, []byte("previous"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			_, _, err := execRoot(t, pullArgs(p, "sandbox", out)...)
+			if err == nil || exitcode.From(err) != exitcode.Degraded || !strings.Contains(err.Error(), "inline credential") {
+				t.Fatalf("err = %v (exit %d), want exit %d naming the inline credential", err, exitcode.From(err), exitcode.Degraded)
+			}
+			if strings.Contains(err.Error(), fill) || strings.Contains(err.Error(), literal) {
+				t.Error("the refusal printed the credential")
+			}
+			if got, _ := os.ReadFile(out); string(got) != "previous" {
+				t.Errorf("the host file was changed to %q", got)
+			}
+			// Nothing else reached the disk either: no revision record, no temporary.
+			if left, _ := os.ReadDir(filepath.Dir(out)); len(left) != 1 {
+				t.Errorf("the refused pull left %v on the host", left)
+			}
+		})
+	}
+	// The controls: a value that points at a secret instead of carrying it is applied.
+	for _, doc := range []string{
+		`{"mcpServers":{"x":{"headers":{"Authorization":"Bearer ${MCP_TOKEN}"}}}}`,
+		`{"mcpServers":{"x":{"env":{"GITHUB_TOKEN":"${GITHUB_TOKEN}"}}}}`,
+		`{"provider":{"x":{"options":{"apiKey":"{env:OPENAI_API_KEY}"}}}}`,
+		`{"apiKeyHelper":"get-key.sh","env":{"MAX_TOKENS":"4096"}}`,
+		"[mcp_servers.x]\nbearer_token_env_var = \"MCP_TOKEN\"\n",
+		"[mcp_servers.x]\nenv_http_headers = { \"X-Api-Token\" = \"MCP_TOKEN\" }\n",
+	} {
+		p := newPullPlane(t, "tenant-a", "sandbox", 1, doc, nil)
+		if _, _, err := execRoot(t, pullArgs(p, "sandbox", filepath.Join(t.TempDir(), "f"))...); err != nil {
+			t.Errorf("%s is not a credential: %v", doc, err)
+		}
+	}
+}
+
+// When the disk does not hold what was written, the plane is told what the disk holds (so it
+// records the drift) instead of learning nothing; the pull still exits 7.
+func TestClaudePolicyPullTellsThePlaneWhenTheDiskChangedTheFile(t *testing.T) {
+	p := newPullPlane(t, "tenant-a", "sandbox", 3, "{}", nil)
+	altered := []byte(`{"changed":"by the disk"}`)
+	prev := readPulledFile
+	readPulledFile = func(string) ([]byte, error) { return altered, nil }
+	t.Cleanup(func() { readPulledFile = prev })
+
+	_, _, err := execRoot(t, pullArgs(p, "sandbox", filepath.Join(t.TempDir(), "sandbox.json"))...)
+	if err == nil || exitcode.From(err) != exitcode.Degraded || !strings.Contains(err.Error(), "NOT ATTESTED") {
+		t.Fatalf("err = %v (exit %d), want exit %d NOT ATTESTED", err, exitcode.From(err), exitcode.Degraded)
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.checkin == nil {
+		t.Fatal("the plane was not told that the disk holds other bytes")
+	}
+	sum := sha256.Sum256(altered)
+	if p.checkin["artifact_sha256"] != hex.EncodeToString(sum[:]) || p.checkin["observed_content"] != string(altered) {
+		t.Errorf("check-in = %v, want the hash and the bytes the disk holds", p.checkin)
+	}
+}
+
+// Two pulls must not interleave read, check and write: a stale revision admitted from a stale read
+// would replace the policy of a newer one that updated the record meanwhile. While another process
+// holds the lock the pull waits, and then it sees the record that process left.
+func TestClaudePolicyPullWaitsForTheLockAndThenSeesTheRecord(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "sandbox.json")
+	stale := newPullPlane(t, "tenant-a", "sandbox", 4, `{"v":4}`, nil)
+	unlock, err := lockPolicyOut(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, _, err := execRoot(t, pullArgs(stale, "sandbox", out)...)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		unlock()
+		t.Fatalf("the pull ran while another pull held the lock: %v", err)
+	case <-time.After(500 * time.Millisecond):
+	}
+	// What the other pull leaves behind before it lets go: revision 6 applied.
+	if err := os.WriteFile(policyHighWaterPath(out), []byte(`{"tenant-a|sandbox":6}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	unlock()
+	select {
+	case err := <-done:
+		if err == nil || exitcode.From(err) != exitcode.Degraded || !strings.Contains(err.Error(), "already applied revision 6") {
+			t.Fatalf("err = %v (exit %d), want exit %d naming the applied revision 6", err, exitcode.From(err), exitcode.Degraded)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the pull did not run after the lock was released")
+	}
+	if _, err := os.Stat(out); err == nil {
+		t.Error("the stale revision replaced the policy")
+	}
+}
+
+// A variable in the password slot of a URL is expanded by the tool that reads the document, so it
+// carries no secret: a policy written that way is applied, and a written-out password is not.
+func TestClaudePolicyPullAppliesAURLWhosePasswordIsAVariable(t *testing.T) {
+	for doc, refused := range map[string]bool{
+		`{"mcpServers":{"db":{"env":{"DATABASE_URL":"postgres://app:${DB_PASS}@db/app"}}}}`:          false,
+		`{"mcpServers":{"db":{"env":{"DATABASE_URL":"postgres://app:$DB_PASS@db/app"}}}}`:            false,
+		"[mcp_servers.db.env]\nDATABASE_URL = \"postgres://app:${DB_PASS}@db/app\"\n":                false,
+		`{"mcpServers":{"db":{"env":{"DATABASE_URL":"postgres://app:` + "pass" + `word1@db/app"}}}}`: true,
+		`{"mcpServers":{"db":{"env":{"DATABASE_URL":"postgres://app:${DB_PASS}x@db/app"}}}}`:         true,
+	} {
+		p := newPullPlane(t, "tenant-a", "sandbox", 1, doc, nil)
+		_, _, err := execRoot(t, pullArgs(p, "sandbox", filepath.Join(t.TempDir(), "f"))...)
+		if refused != (err != nil && exitcode.From(err) == exitcode.Degraded && strings.Contains(err.Error(), "inline credential")) {
+			t.Errorf("%s: err = %v, want refused=%v", doc, err, refused)
 		}
 	}
 }

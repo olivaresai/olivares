@@ -297,6 +297,32 @@ describe('MessageNavigator rail', () => {
     )
   })
 
+  it('previews a turn as words, without its Markdown markers, from a rail at the left edge', async () => {
+    const user = userEvent.setup()
+    const all = transcript(2)
+    all[0] = { ...all[0]!, first_line: '**Next step:** run `make test`' }
+    show(all)
+    const [mark] = await screen.findAllByTestId('message-mark')
+    expect(screen.getByTestId('message-rail')).toHaveClass('left-0')
+    await user.hover(mark!)
+    const preview = await screen.findByTestId('message-preview')
+    expect(preview).toHaveTextContent('Next step: run make test')
+    expect(preview).not.toHaveTextContent('**')
+    expect(mark).toHaveAccessibleName(/Next step: run make test$/)
+  })
+
+  it('keeps the Messages toggle out of the transcript until the conversation is hovered or focused', async () => {
+    show()
+    const toggle = await screen.findByRole('button', { name: /Messages/ })
+    // jsdom has no CSS, so the class is the check.
+    expect(toggle.parentElement).toHaveClass(
+      'absolute',
+      'opacity-0',
+      'group-hover/conv:opacity-100',
+      'focus-within:opacity-100',
+    )
+  })
+
   it('scrolls to the row and highlights it, and tells the conversation to stop following', async () => {
     const user = userEvent.setup()
     const { onJump } = show()

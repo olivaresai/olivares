@@ -331,7 +331,7 @@ describe('the bar speaks the platform and names its icons (#3121)', () => {
     expect(search.textContent).toBe('Search')
   })
 
-  it('gives every control that shows only an icon a tooltip with its name', () => {
+  it('gives every control that shows only an icon a tooltip with its name', async () => {
     const { container } = renderIntel(<Topbar onMenu={() => {}} />)
     const header = container.querySelector('header') as HTMLElement
     /** The text a sighted person reads on the control: screen-reader-only text aside. */
@@ -351,8 +351,10 @@ describe('the bar speaks the platform and names its icons (#3121)', () => {
     expect(
       within(header).getByRole('button', { name: 'Search and commands' }),
     ).toHaveAttribute('title', 'Search and commands')
-    expect(
-      within(header).getByRole('button', { name: /, Account$/ }),
-    ).toHaveAttribute('title', 'Account')
+    // The account control names itself in the console's tooltip, not a native title.
+    const account = within(header).getByRole('button', { name: /, Account$/ })
+    expect(account).not.toHaveAttribute('title')
+    await userEvent.setup().hover(account)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Account')
   })
 })

@@ -93,6 +93,7 @@
     "driftFirm": "Unerwartete Zugriffe",
     "driftPending": "Wartet auf Identitätsverknüpfung",
     "driftUnused": "Ungenutzte Gewährungen",
+    "driftNoRules": "Keine Zugriffsregeln deklariert, daher gibt es nichts zu vergleichen: Regeln deklarieren, um Abweichungen zu sehen.",
     "coverageNote": "Einige Zugriffe werden mit teilweiser Abdeckung beobachtet (annähernde oder undurchsichtige Erfassung); die Abweichungswerte sind eine Untergrenze.",
     "driftTruncated": "Die Abfrage der Zugriffsabweichung ist unvollständig; die Werte sind eine Untergrenze.",
     "driftUnavailable": "Die Zugriffsabweichung konnte nicht gelesen werden.",

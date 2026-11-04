@@ -11,3 +11,6 @@ package tui
 // sequence in one read, which is the usual case; the frame itself is supported
 // on the platforms this repository builds.
 func inputPending(int, int) bool { return false }
+
+// waitInput has no poll to wait on here: the read itself blocks, as before.
+func waitInput(int, <-chan struct{}) bool { return true }

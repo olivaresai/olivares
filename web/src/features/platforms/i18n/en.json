@@ -13,7 +13,7 @@
   },
   "surfaces": {
     "title": "Deployment surfaces",
-    "description": "The six modeled Claude surfaces (ANT2-01/17). Each differs in base URL, auth, model-id form, billing, residency and compliance posture — they are not interchangeable.",
+    "description": "The six modeled Claude surfaces. Each differs in base URL, auth, model-id form, billing, residency and compliance posture — they are not interchangeable.",
     "matrixTitle": "Surface attribute matrix",
     "matrixSummary": "Six deployment surfaces compared across operator, endpoint, auth, model-id form, API support, billing, HIPAA, ZDR and residency.",
     "unmodeled": "Unmodeled surface — no attribute matrix.",
@@ -60,7 +60,7 @@
   },
   "lifecycle": {
     "title": "Per-platform model lifecycle",
-    "description": "Model retirement is per-platform, not global (ANT2-03). Anthropic-operated surfaces retire a model on a different date than Bedrock and Vertex — a single \"retired\" flag would give a false migration deadline on half the estate.",
+    "description": "Model retirement is per-platform, not global. Anthropic-operated surfaces retire a model on a different date than Bedrock and Vertex — a single \"retired\" flag would give a false migration deadline on half the estate.",
     "datePending": "date not published / to-confirm",
     "noSuccessor": "No successor declared",
     "noSuccessorHint": "The authority named no replacement model for this family. None is inferred.",
@@ -75,7 +75,7 @@
     "paramDeprecation": {
       "title": "Parameter deprecation pre-advice",
       "badge": "Informational",
-      "body": "{{affected}} reject a non-default {{params}} with an HTTP {{status}}. This is Anthropic's deprecation (ANT2-03), not a product bug and not a fixable error — the inference plane withholds these parameters as pre-advice.",
+      "body": "{{affected}} reject a non-default {{params}} with an HTTP {{status}}. This is Anthropic's deprecation, not a product bug and not a fixable error — Olivares withholds these parameters as pre-advice.",
       "paramsJoin": ", "
     },
     "notes": {
@@ -90,11 +90,11 @@
   "empty": {
     "lifecycle": {
       "title": "No model retirement schedules declared",
-      "description": "The engine's compiled Claude lifecycle reference must supply these deadlines; tenant activity and console input do not populate them."
+      "description": "The engine's compiled Claude lifecycle reference must supply these deadlines; your activity and console input do not populate them."
     },
     "surface": {
       "title": "No deployment surfaces declared",
-      "description": "The engine's compiled Claude surface reference must supply these rows; tenant activity and console input do not populate them."
+      "description": "The engine's compiled Claude surface reference must supply these rows; your activity and console input do not populate them."
     }
   },
   "effectiveState": {

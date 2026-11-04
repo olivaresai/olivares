@@ -422,6 +422,13 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 	// engine — it deny-closes exactly those launches, and the ERROR line names the
 	// remedy — so the error is reported here and not returned.
 	_ = useSessionWorkspaceRoot(sm, dataDir, log)
+	// Each person's own folder, "My files", lives in the data directory so the backup
+	// and the pre-upgrade snapshot cover it. No data directory, no personal folders.
+	if dataDir != "" && filepath.IsAbs(dataDir) {
+		if err := sm.UsePersonalFilesRoot(filepath.Join(filepath.Clean(dataDir), personalFilesDirName)); err != nil && log != nil {
+			log.Error("session runtime: personal folders are off on this node", "remedy", err.Error())
+		}
+	}
 	// K4.A1: where a session launched with the opt-in new worktree works. A refusal
 	// refuses that option only.
 	_ = useSessionWorktrees(sm, dataDir, osGetenv, log)
@@ -515,7 +522,7 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 	bridge := newApprovalBridge(approvalCfg, log)
 	if bridge != nil {
 		sessionDependencies.ApprovalGate = providerApprovalAdapter{bridge: bridge, approvalWait: sm.BeginApprovalWait}
-		sessions.WithDriverTimeouts(0, 15*time.Minute)(sm)
+		sessions.WithDriverTimeouts(0, sessions.ApprovalWait)(sm)
 	}
 	var (
 		deployOpts []deploy.Option
@@ -668,6 +675,7 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 	compOpts = append(compOpts, complianceRecordsOptions(thisEdition.name)...)
 	comp := compliance.New(compOpts...)
 	knowledgeOpts = append(knowledgeOpts, knowledge.WithHoldGate(complianceHoldGate{m: comp}))
+	sessions.WithHoldGate(sessionsHoldGate{m: comp})(sm)
 
 	// wire the REAL deploy executor (module VII ACTS), the firm IdentityBinder
 	// and the drift loop from the operator config (OLIVARES_DEPLOY_EXECUTOR_CONFIG).
@@ -1301,6 +1309,18 @@ func (g complianceHoldGate) Check(ctx context.Context, tenant model.TenantID, su
 		holds = append(holds, knowledge.HoldRef{ID: h.ID, MatterRef: h.MatterRef, ScopeKind: h.ScopeKind})
 	}
 	return dec.Held, holds, nil
+}
+
+// sessionsHoldGate bridges the sessions.HoldGate seam to the same CheckHold: a
+// registered folder is the subject ("workspace", workspace_ref). An error propagates
+// so the folder edit is refused (fail closed).
+type sessionsHoldGate struct{ m *compliance.Module }
+
+var _ sessions.HoldGate = sessionsHoldGate{}
+
+func (g sessionsHoldGate) Check(ctx context.Context, tenant model.TenantID, subjectKind, subjectRef string) (bool, error) {
+	dec, err := g.m.CheckHold(ctx, tenant, compliance.HoldSubject{Kind: subjectKind, Ref: subjectRef})
+	return dec.Held, err
 }
 
 // modelsProviderRetention bridges compliance.ProviderRetention to the models

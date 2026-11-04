@@ -19,6 +19,27 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/internal/tui"
 )
 
+// Every row of the main menu opens a screen on an engine that answers and a
+// person signed in to it. A row that only showed its command was a dead end
+// (#3911). "All commands" is the full reference and names `olivares --help`.
+func TestEveryMainMenuRowOpensAScreen(t *testing.T) {
+	e := newUIEngine(t)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("OLIVARES_SERVER_URL", e.URL)
+	t.Setenv("OLIVARES_TOKEN", uiTestToken)
+	t.Setenv("OLIVARES_TENANT", uiTestTenant)
+	report := rootStatusReport{Engine: e.URL, Reachable: true, SignedIn: "Rehema", Next: "olivares session start <folder>"}
+	frame := mainMenuFrame(report)
+	if wireMainMenu(&frame, &cobra.Command{Use: "ui"}, report) == nil {
+		t.Fatal("no screens were wired for an engine that answers and a signed-in person")
+	}
+	for _, item := range frame.Items {
+		if item.Open == nil && item.Label != "All commands" {
+			t.Errorf("the %q row opens nothing; Enter only shows %q", item.Label, item.Command)
+		}
+	}
+}
+
 func TestUIWithoutATerminalNamesTheCommands(t *testing.T) {
 	cmd := newUICmd()
 	cmd.SetArgs([]string{}) // empty, not nil: nil makes cobra read os.Args

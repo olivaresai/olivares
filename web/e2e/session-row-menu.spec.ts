@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// A SESSION ROW'S ACTIONS MENU (#2795), in a real browser against a live `--seed-demo`
+// A SESSION ROW'S ACTIONS MENU (#2795, #2866), in a real browser against a live `--seed-demo`
 // engine: each action from a right-click, from the row's `⋯` and from the keyboard, and
 // each one still true after a reload, because the engine keeps it. Nothing is intercepted.
 //
@@ -418,6 +418,99 @@ test.describe('a session row has one actions menu', () => {
     for (const ref of refs) await expect(rowOf(page, ref)).toHaveCount(0)
   })
 
+  test('mark unread, snooze and mark done from every opener, each surviving a reload', async ({
+    page,
+  }) => {
+    test.setTimeout(360_000)
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await signIn(page)
+    const openers: Opener[] = ['right-click', 'more', 'keyboard']
+    const refs: string[] = []
+    for (const how of openers) {
+      const ref = await launch(page, `marks ${how}`)
+      launched.push(ref)
+      refs.push(ref)
+    }
+    const answered = (ref: string, tail: string) =>
+      page.waitForResponse(
+        (r) => r.url().endsWith(`/runs/${ref}/${tail}`) && r.ok(),
+      )
+    await page.goto('/sessions')
+    await openWorkingFold(page)
+    // OPENING A SESSION MARKS IT READ, and a reload opens the one the address names. Keep
+    // another session open, so the sessions under test are never the one a reload reads.
+    await page
+      .getByTestId('work-rail')
+      .getByText('conversation-fixture')
+      .first()
+      .click()
+    const snoozed = page.getByRole('button', { name: /^Snoozed\s*\d+$/ })
+
+    for (const [i, how] of openers.entries()) {
+      const ref = refs[i]
+      await expect(rowOf(page, ref)).toBeVisible()
+
+      // MARK UNREAD: the row says so, the engine keeps it, Mark read takes it back.
+      await openRowMenu(page, ref, how)
+      await Promise.all([
+        answered(ref, 'unread'),
+        choose(page, how, 'Mark unread', 'Mark u'),
+      ])
+      await expect(rowOf(page, ref)).toContainText('Unread')
+      if (i === 0) await capture(page, 'rail-unread-1280')
+      await page.reload()
+      await openWorkingFold(page)
+      await expect(rowOf(page, ref)).toContainText('Unread')
+      await openRowMenu(page, ref, how)
+      await Promise.all([
+        answered(ref, 'unread'),
+        choose(page, how, 'Mark read', 'Mark r'),
+      ])
+      await expect(rowOf(page, ref)).not.toContainText('Unread')
+
+      // SNOOZE: the row leaves the list for a Snoozed fold, and is still there after a reload.
+      await openRowMenu(page, ref, how)
+      await Promise.all([
+        answered(ref, 'snooze'),
+        choose(page, how, 'Snooze for 1 hour', 'Snooze for 1 h'),
+      ])
+      await expect(rowOf(page, ref)).toHaveCount(0)
+      await page.reload()
+      await openWorkingFold(page)
+      await expect(rowOf(page, ref)).toHaveCount(0)
+      await snoozed.click()
+      await expect(rowOf(page, ref)).toBeVisible()
+      await openRowMenu(page, ref, how)
+      await Promise.all([
+        answered(ref, 'snooze'),
+        choose(page, how, 'Unsnooze', 'Unsn'),
+      ])
+      await expect(rowOf(page, ref)).toBeVisible()
+
+      // MARK DONE: after a reload the menu offers the way back, which takes it.
+      await openRowMenu(page, ref, how)
+      await Promise.all([
+        answered(ref, 'done'),
+        choose(page, how, 'Mark done', 'Mark d'),
+      ])
+      await page.reload()
+      await openWorkingFold(page)
+      await openRowMenu(page, ref, how)
+      await expect(
+        page.getByRole('menuitem', { name: 'Mark not done' }),
+      ).toBeVisible()
+      await Promise.all([
+        answered(ref, 'done'),
+        choose(page, how, 'Mark not done', 'Mark n'),
+      ])
+      await openRowMenu(page, ref, how)
+      await expect(
+        page.getByRole('menuitem', { name: 'Mark done' }),
+      ).toBeVisible()
+      await page.keyboard.press('Escape')
+    }
+  })
+
   test('captures: the open menu at 1280 and 390 px, light and dark', async ({
     page,
   }) => {
@@ -439,8 +532,37 @@ test.describe('a session row has one actions menu', () => {
           .toBe(colorScheme === 'dark')
         const row = rowOf(page, runRef)
         await expect(row).toBeVisible()
+        // OPENING A SESSION MARKS IT READ, and the console may have opened this one. So the
+        // capture marks it unread from its own menu, as a person would: Mark unread on an
+        // open session stays until it does something new. Then the row shows the dot, the
+        // bold name, and its menu offers Mark read.
+        if ((await row.getAttribute('aria-selected')) === 'true')
+          await page
+            .waitForResponse(
+              (r) =>
+                r.url().endsWith(`/runs/${runRef}/unread`) &&
+                r.request().method() === 'DELETE',
+              { timeout: 8_000 },
+            )
+            .catch(() => undefined)
+        if (!(await row.textContent())?.includes('Unread')) {
+          await row.click({ button: 'right' })
+          await Promise.all([
+            page.waitForResponse(
+              (r) => r.url().endsWith(`/runs/${runRef}/unread`) && r.ok(),
+            ),
+            page.getByRole('menuitem', { name: 'Mark unread' }).click(),
+          ])
+          await expect(row).toContainText('Unread')
+        }
         await row.click({ button: 'right' })
         await expect(page.getByRole('menu')).toBeVisible()
+        await expect(
+          page.getByRole('menuitem', { name: 'Snooze for 1 hour' }),
+        ).toBeVisible()
+        await expect(
+          page.getByRole('menuitem', { name: 'Mark read' }),
+        ).toBeVisible()
         await capture(page, `menu-${width}-${colorScheme}`)
         await page.keyboard.press('Escape')
       }

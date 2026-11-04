@@ -313,7 +313,7 @@ func (m *Module) confinementDetail(proc Process, runRef string) string {
 		m.warnf("sessions: this session runs UNCONFINED and can read what the engine user can", "run_ref", runRef, "reason", state.Reason)
 	}
 	if state.Mode == confine.ModeLandlock && state.Reason != "" {
-		m.warnf("sessions: filesystem confinement has a kernel limit", "run_ref", runRef, "reason", state.Reason)
+		m.warnf("sessions: this session's confinement is limited on this host", "run_ref", runRef, "reason", state.Reason)
 	}
 	return "confinement: " + state.String()
 }

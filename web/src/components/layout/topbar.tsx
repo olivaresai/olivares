@@ -3,13 +3,17 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useRouterState } from '@tanstack/react-router'
 import { Menu, Search } from 'lucide-react'
+import { useContext } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Kbd } from '@/components/ui/kbd'
+import { PagePlaceContext } from '@/components/ui/page-place'
 import { chordHint } from '@/lib/keybindings/model'
 import { PALETTE_KEYS } from '@/lib/keybindings/table'
 import { useCommandStore } from '@/stores/command'
 import { pageLabel } from './document-title'
+import { HintBar } from './hint-bar'
 import { NotificationBell } from './notification-bell'
+import { frameFor } from './page-frames'
 import { SidePanelToggle } from './side-panel'
 import { TopbarSearchSlot } from './topbar-search'
 import { UserMenu } from './user-menu'
@@ -31,6 +35,8 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
   const search = useRouterState({
     select: (s) => (s.location.search ?? {}) as Record<string, unknown>,
   })
+  // The page a sidebar place opens is named by the place (page-place-provider.tsx).
+  const label = useContext(PagePlaceContext) ?? pageLabel(t, pathname, search)
 
   return (
     <header
@@ -50,8 +56,11 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
         data-slot="topbar-title"
         className="min-w-0 flex-1 truncate text-heading font-semibold text-text"
       >
-        {pageLabel(t, pathname, search)}
+        {/* A work page (Sessions) names itself in its list's heading: once. */}
+        {frameFor(pathname) === 'work' ? null : label}
       </p>
+
+      <HintBar />
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
         {/* A place whose list is a query (the Ledger) puts its own field here. */}

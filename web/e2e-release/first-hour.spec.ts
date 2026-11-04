@@ -20,7 +20,7 @@ import {
   watchSurface,
 } from './surface'
 
-const [WIZARD, PROVIDERS, SESSIONS] = JOURNEYS.firstHour
+const [, PROVIDERS, SESSIONS] = JOURNEYS.firstHour
 
 // The one path every tool takes: provider, install, a session that asks before it
 // acts, stop and resume. Only the provider is a labelled stand-in (provider.py, on
@@ -194,7 +194,7 @@ test('release container: a fresh administrator reaches a first answer and the co
       await page.locator('#setup-email').fill('first-hour@example.invalid')
       await page.locator('#setup-password').fill(password)
       await page.getByRole('button', { name: /create administrator/i }).click()
-      await page.waitForURL(`**${stepHref(WIZARD)}`)
+      await page.waitForURL(`**${stepHref(SESSIONS)}`)
       await expect(
         page
           .getByRole('navigation', { name: 'Main navigation', exact: true })
@@ -383,10 +383,9 @@ test('release container: a fresh administrator reaches a first answer and the co
     // Edition is the License place of the sidebar (0.5), not a row of the Settings list.
     await stage('05-settings-edition', async () => {
       await visit('/')
-      await page
-        .getByRole('navigation', { name: 'Main navigation' })
-        .getByRole('link', { name: 'License', exact: true })
-        .click()
+      const nav = page.getByRole('navigation', { name: 'Main navigation' })
+      await nav.getByRole('button', { name: 'More', exact: true }).click()
+      await nav.getByRole('link', { name: 'License', exact: true }).click()
       await expect(page).toHaveURL(/\/settings\?section=edition$/)
       await expect(
         page.locator(

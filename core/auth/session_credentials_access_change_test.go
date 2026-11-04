@@ -7,12 +7,14 @@ package auth_test
 import (
 	"context"
 	"errors"
-	"github.com/olivaresai/olivares/core/auth"
-	"github.com/olivaresai/olivares/core/model"
-	"github.com/olivaresai/olivares/core/store"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/auth/authtest"
+	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 func TestSessionCredentialAccessChangeNotifiesOnceOutsideIssuerLock(t *testing.T) {
@@ -45,9 +47,8 @@ func TestSessionCredentialAccessChangeNotifiesOnceOutsideIssuerLock(t *testing.T
 	issuer = auth.NewSessionCredentials(a, func(ctx context.Context, _ auth.SessionScope) error {
 		if changeBetweenReads {
 			changeBetweenReads = false
-			var err error
-			betweenReadsGroup, err = a.SCIMCreateGroup(ctx, admin, tenant, auth.SCIMGroupInput{DisplayName: "Between reads", Members: []model.ID{user.ID}})
-			return err
+			betweenReadsGroup = authtest.Group(t, st, tenant, "Between reads", "", user.ID)
+			return nil
 		}
 		return nil
 	}, func(ctx context.Context, got auth.SessionScope, label string) error {
@@ -66,10 +67,7 @@ func TestSessionCredentialAccessChangeNotifiesOnceOutsideIssuerLock(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	group, err := a.SCIMCreateGroup(ctx, admin, tenant, auth.SCIMGroupInput{DisplayName: "Changed", Members: []model.ID{user.ID}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	group := authtest.Group(t, st, tenant, "Changed", "", user.ID)
 	for range 2 {
 		if _, _, err = issuer.Resolve(ctx, token); err == nil {
 			t.Fatal("changed generation retained authority")
@@ -90,9 +88,7 @@ func TestSessionCredentialAccessChangeNotifiesOnceOutsideIssuerLock(t *testing.T
 	if p, _, err := issuer.Resolve(ctx, successor); err != nil || len(p.GroupsIn(tenant)) != 1 {
 		t.Fatalf("successor groups=%d err=%v", len(p.GroupsIn(tenant)), err)
 	}
-	if err = a.SCIMDeleteGroup(ctx, admin, tenant, group.Group.ID); err != nil {
-		t.Fatal(err)
-	}
+	authtest.Delete(t, st, group.Group.ID)
 	if _, _, err = issuer.Resolve(ctx, successor); !errors.Is(err, auth.ErrSessionAccessChanged) {
 		t.Fatalf("removed group=%v", err)
 	}
@@ -120,9 +116,7 @@ func TestSessionCredentialAccessChangeNotifiesOnceOutsideIssuerLock(t *testing.T
 	if _, _, _, err := a.ResolveSessionLauncherScope(bounded, configure, tenant); !errors.Is(err, auth.ErrSessionAccessChanged) {
 		t.Fatalf("between-read group change=%v", err)
 	}
-	if err := a.SCIMDeleteGroup(ctx, admin, tenant, betweenReadsGroup.Group.ID); err != nil {
-		t.Fatal(err)
-	}
+	authtest.Delete(t, st, betweenReadsGroup.Group.ID)
 	for range 2 {
 		if _, err := issuer.AuthenticateLauncher(ctx, successor); err == nil {
 			t.Fatal("source reconstruction observed a group change but the old child revived")

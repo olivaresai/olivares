@@ -11,9 +11,9 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/auth/authtest"
 	"github.com/olivaresai/olivares/core/internal/pgtest"
 	"github.com/olivaresai/olivares/core/internal/store/sqlstore"
-	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
 
@@ -35,12 +35,7 @@ func TestGroupTokenBackfillOnUpgrade(t *testing.T) {
 			tenant := provisionTenant(t, st, "acme")
 			uid, _ := mustMember(t, ctx, a, super, tenant, "group@acme.test", auth.RoleViewer)
 			directID, direct := mustMember(t, ctx, a, super, tenant, "direct@acme.test", auth.RoleAdmin)
-			group, err := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{
-				DisplayName: "Admins", ExternalID: "admins", Members: []model.ID{uid, directID},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			group := authtest.Group(t, st, tenant, "Admins", "admins", uid, directID)
 			if _, err := a.ConfigureGroupRole(ctx, super, tenant, group.Group.ID, auth.RoleAdmin); err != nil {
 				t.Fatal(err)
 			}
@@ -102,9 +97,7 @@ func TestGroupTokenBackfillOnUpgrade(t *testing.T) {
 			if err != nil || gotDirect.GroupDerivedRole {
 				t.Fatalf("legacy direct token provenance = %v, %v, want direct", gotDirect.GroupDerivedRole, err)
 			}
-			if err := a.SCIMDeleteGroup(ctx, super, tenant, group.Group.ID); err != nil {
-				t.Fatal(err)
-			}
+			authtest.Delete(t, reopened, group.Group.ID)
 			principal, err := a.Authenticate(ctx, groupToken)
 			if err != nil {
 				t.Fatal(err)

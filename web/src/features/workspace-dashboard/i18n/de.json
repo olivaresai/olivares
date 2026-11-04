@@ -8,7 +8,7 @@
   "selectTitle": "Kein Arbeitsbereich ausgewählt",
   "selectPrompt": "Wählen Sie einen Arbeitsbereich in der Navigationsleiste, um diese Übersicht zu öffnen, oder gehen Sie zum Inventar der Organisation.",
   "selectPromptWorkspaceOnly": "Wählen Sie einen Arbeitsbereich in der Navigationsleiste, um diese Übersicht zu öffnen.",
-  "viewInventory": "Inventar öffnen",
+  "viewInventory": "Erkannte Ressourcen öffnen",
   "agents": "Agenten",
   "sessions": "Sitzungen",
   "resources": "Ressourcen",
@@ -46,5 +46,24 @@
     "truncationHint": "Öffnen Sie Sitzungen, um alle Ordner zu sehen.",
     "filter": "Ordner suchen",
     "noMatch": "Kein Ordner passt zu „{{query}}“."
+  },
+  "connect": {
+    "title": "Dateien mit SFTP oder SCP kopieren",
+    "intro": "Holen Sie sich einen Schlüssel, der einige Minuten gilt, und nutzen Sie einen beliebigen sftp- oder scp-Client. Er erreicht nur diesen Ordner.",
+    "button": "Verbinden",
+    "connecting": "Verbindung wird hergestellt…",
+    "privateKey": "Privater Schlüssel",
+    "copyKey": "Privaten Schlüssel kopieren",
+    "copied": "Privater Schlüssel kopiert",
+    "copyFailed": "Kopieren nicht möglich. Markieren Sie den Schlüssel und kopieren Sie ihn von Hand.",
+    "keyHint": "Wird nur einmal angezeigt. Speichern Sie ihn als {{file}} und führen Sie chmod 600 {{file}} aus.",
+    "sftp": "Mit sftp durchsuchen und kopieren",
+    "scp": "Eine Datei mit scp kopieren",
+    "hostKey": "Hostschlüssel zum Abgleich, wenn Ihr Client danach fragt:",
+    "expires": "Verbinden Sie sich vor {{time}}. Danach öffnet der Schlüssel keine neue Verbindung mehr.",
+    "readOnly": "Dieser Schlüssel kann Dateien nur lesen: Sie haben in diesem Ordner keine Schreibrechte.",
+    "stepUp": "Schließen Sie den Anmeldeschritt ab, den dieser Server verlangt, und versuchen Sie es erneut.",
+    "failed": "Es konnte kein Schlüssel geholt werden. Versuchen Sie es erneut.",
+    "statusFailed": "Es konnte nicht geprüft werden, ob dieser Ordner per SFTP verfügbar ist."
   }
 }

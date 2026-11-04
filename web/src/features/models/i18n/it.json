@@ -9,7 +9,8 @@
     "keys": "Chiavi dei provider",
     "gpai": "Posizione GPAI",
     "access": "Accesso",
-    "governance": "Governance"
+    "governance": "Governance",
+    "usage": "Utilizzo"
   },
   "catalog": {
     "title": "Matrice delle capacità",
@@ -122,9 +123,9 @@
   "keys": {
     "title": "Riferimenti alle chiavi dei provider",
     "description": "Riferimenti governati a chiavi API e workspace dei provider. Viene salvato solo un suggerimento mascherato, mai il valore del segreto.",
-    "new": "Aggiungi riferimento a una chiave",
+    "new": "Aggiungi riferimento",
     "empty": "Nessun riferimento a chiavi",
-    "emptyHint": "Un riferimento a una chiave punta a una credenziale che il motore custodisce, mai al segreto stesso. Aggiungine uno per permettere di chiamare un modello.",
+    "emptyHint": "Un riferimento a una chiave punta a una credenziale che il motore custodisce, mai al segreto stesso. Non serve per chiamare un modello: aggiungi la chiave stessa come chiave API.",
     "maskedOnly": "Solo riferimento: il valore del segreto non viene mai salvato né mostrato.",
     "columns": {
       "name": "Nome",
@@ -141,7 +142,7 @@
       "workspace": "Workspace"
     },
     "dialog": {
-      "title": "Aggiungi riferimento a una chiave",
+      "title": "Aggiungi riferimento",
       "name": "Nome",
       "provider": "Provider",
       "kind": "Tipo di riferimento",
@@ -273,6 +274,41 @@
     "truncatedHint": "Le regole di accesso sono più di quelle mostrate; questa pagina prende le righe per id. I contrassegni su queste righe riflettono SOLO le regole caricate: possono mancare consensi che introdurrebbero un confinamento o aggiungerebbero destinazioni consentite, e possono mancare anche divieti che sottraggono accesso. Quindi questa pagina può risultare più ampia O più stretta della realtà, e un soggetto senza regole caricate non compare affatto. Non dedurne l'accesso effettivo: il motore scorre tutte le pagine prima di decidere e risolve un principal tra utente, ruolo e gruppo, cosa che una riga non può mostrare.",
     "groupsTruncated": "Caricati {{n}} gruppi; ce ne sono altri",
     "groupsTruncatedHint": "I gruppi di modelli sono più di quelli mostrati; questa pagina prende le righe per id. Un gruppo non elencato qui non dimostra che non esista: una regola potrebbe ancora averlo come destinazione."
+  },
+  "usage": {
+    "byLabel": "Raggruppa l'utilizzo per",
+    "periodLabel": "Periodo",
+    "by": {
+      "model": "Modello",
+      "account": "Account",
+      "provider": "Provider",
+      "tool": "Strumento"
+    },
+    "period": {
+      "days7": "7 giorni",
+      "days30": "30 giorni"
+    },
+    "chartTitle": "Esecuzioni al giorno",
+    "chartSummary": "Esecuzioni al giorno. Raggruppamento: {{by}}. Periodo: {{period}}. Totale {{total}}; giorno più intenso {{day}} con {{peak}}.",
+    "totalsTitle": "Totali",
+    "columns": {
+      "day": "Giorno",
+      "runs": "Esecuzioni",
+      "input": "Token in ingresso",
+      "output": "Token in uscita",
+      "cost": "Costo",
+      "unreported": "Non comunicato"
+    },
+    "notReported": "non comunicato",
+    "withoutTokens": "{{n}} senza token",
+    "withoutCost": "{{n}} senza costo",
+    "allReported": "Tutto comunicato",
+    "noKey": "Non registrato",
+    "other": "Altri",
+    "empty": {
+      "title": "Nessun utilizzo in questo periodo",
+      "description": "L'utilizzo compare qui dopo l'esecuzione della prima sessione."
+    }
   },
   "available": {
     "title": "Disponibili ora",

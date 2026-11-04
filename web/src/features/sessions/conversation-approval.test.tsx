@@ -120,6 +120,8 @@ describe('ConversationApproval — the request, answered where it is read', () =
   it('says what runs, why, the rule, the reach and who asks, with Approve once and Deny', async () => {
     wrap(<ConversationApproval run={RUN} />)
     const card = await screen.findByRole('region', { name: 'Approval needed' })
+    // The card paints the accent, so the marker sits on the card itself, not on a child.
+    expect(card).toHaveAttribute('data-trust-chrome')
     expect(await within(card).findByText('make migrate')).toBeInTheDocument()
     expect(
       within(card).getByText(

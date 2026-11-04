@@ -12,14 +12,13 @@ export LC_ALL
 lot6_root="${OLIVARES_CLONE:-$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")/.." && pwd -P)}"
 lot6_scratch="${TMPDIR:-/tmp}/console-func-l6-mutants.$$"
 lot6_files=(
-	web/src/features/deploy/definition-detail.tsx
 	modules/sessions/communication_binding_spec_api.go
 	web/src/features/eventing/eventing-view.tsx
 	modules/deploy/lifecycle.go
 )
 
 if [ -d "$lot6_root/enterprise" ]; then
- lot6_files+=(web/src/features/orchestration/orchestration-view.tsx)
+ lot6_files+=(web/src/features/deploy/definition-detail.tsx web/src/features/orchestration/orchestration-view.tsx)
 fi
 
 mkdir -p "$lot6_scratch" || exit 2
@@ -93,8 +92,6 @@ lot6_mutant() {
 	}
 }
 
-lot6_mutant deploy-apply-phrase web/src/features/deploy/definition-detail.tsx \
-	'confirmPhrase="APPLY"' 'confirmPhrase="DEPLOY"' DEPLOY_APPLY_TYPED
 lot6_mutant protocol-loss-array modules/sessions/communication_binding_spec_api.go \
 	'if spec.KnownLosses == nil {' 'if false {' PROTOCOL_LOSSES_ARRAY
 lot6_mutant eventing-bulk-fresh web/src/features/eventing/eventing-view.tsx \
@@ -106,6 +103,8 @@ lot6_mutant deploy-plan-array modules/deploy/lifecycle.go \
 lot6_mutant deploy-verify-array modules/deploy/lifecycle.go \
 	'if result.Changes == nil {' 'if false {' DEPLOY_VERIFY_ARRAY
 if [ -d "$lot6_root/enterprise" ]; then
+lot6_mutant deploy-apply-phrase web/src/features/deploy/definition-detail.tsx \
+	'confirmPhrase="APPLY"' 'confirmPhrase="DEPLOY"' DEPLOY_APPLY_TYPED
 lot6_mutant orchestration-fire-outcome web/src/features/orchestration/orchestration-view.tsx \
 	"'declared_not_fired'," "'dispatched'," ORCHESTRATION_DECLARED_NOT_FIRED
 fi

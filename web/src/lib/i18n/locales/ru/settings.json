@@ -36,7 +36,7 @@
     "density": "Плотность",
     "densityHint": "Компактная показывает больше строк; удобная легче читается.",
     "language": "Язык",
-    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어.",
+    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어, Українська, Português.",
     "time": "Время",
     "timeHint": "Время показывается в вашем поясе ({{zone}}). Записи и экспорт остаются в UTC.",
     "clock24": "24 часа",

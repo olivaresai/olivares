@@ -123,9 +123,10 @@ func StepUpPolicyFrom(ctx context.Context) string {
 
 // StepUpSatisfied is the one predicate behind every administrative step-up
 // gate (core handlers, sealed route floors, core/auth credential changes and
-// module gates). A token or delegated handle (AAL 0) never satisfies it.
+// module gates). A token or delegated handle (AAL 0) never satisfies it, and
+// neither does a session whose rights data the freshness port reports stale.
 func StepUpSatisfied(ctx context.Context, p Principal) bool {
-	if p.Kind != KindUser || p.AAL < AAL1 {
+	if p.Kind != KindUser || p.AAL < AAL1 || p.rightsStale {
 		return false
 	}
 	if p.AAL >= AAL3 {

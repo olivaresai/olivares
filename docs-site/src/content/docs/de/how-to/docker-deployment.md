@@ -98,6 +98,7 @@ if grep -qsw userns_create /sys/kernel/security/apparmor/features/namespaces/mas
 fi
 
 docker run -d --name olivares \
+  --hostname olivares \
   --user 65532:65532 \
   --read-only \
   --tmpfs /tmp \

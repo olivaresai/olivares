@@ -1,0 +1,29 @@
+{
+  "title": "Utilização e custo, por conta",
+  "subtitle": "Limites oficiais de 5 horas e semanais ao lado dos tokens e do custo de hoje.",
+  "accounts": {
+    "heading": "Contas",
+    "loading": "A ler as contas de cada ferramenta…",
+    "error": "Não foi possível ler os limites das contas.",
+    "empty": "Nenhuma conta comunicou ainda os seus limites.",
+    "details": "Detalhes",
+    "detailsFor": "Detalhes de {{account}}"
+  },
+  "today": {
+    "heading": "Hoje",
+    "loading": "A ler as sessões de hoje…",
+    "error": "Não foi possível ler as sessões de hoje.",
+    "sessions_one": "{{count}} sessão",
+    "sessions_many": "{{count}} de sessões",
+    "sessions_other": "{{count}} sessões",
+    "tokens": "{{input}} de entrada · {{output}} de saída",
+    "atLeast": "Pelo menos",
+    "unpriced_one": "{{count}} sessão não comunicou custo.",
+    "unpriced_many": "{{count}} de sessões não comunicaram custo.",
+    "unpriced_other": "{{count}} sessões não comunicaram custo.",
+    "untokened_one": "{{count}} sessão não comunicou tokens.",
+    "untokened_many": "{{count}} de sessões não comunicaram tokens.",
+    "untokened_other": "{{count}} sessões não comunicaram tokens.",
+    "viewSessions": "Ver sessões"
+  }
+}

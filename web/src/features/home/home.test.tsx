@@ -45,6 +45,7 @@ import './i18n'
 const panels = vi.hoisted(() => ({
   complianceView: undefined as undefined | (() => null),
   estateFleet: undefined as undefined | ((p: SwimlaneProps) => ReactNode),
+  useEstateBudgetClause: undefined as undefined | (() => string | null),
 }))
 vi.mock('@/features/extensions', () => ({
   PANEL_EXTENSIONS: panels,
@@ -86,6 +87,7 @@ vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 afterEach(() => {
   panels.complianceView = undefined
   panels.estateFleet = undefined
+  panels.useEstateBudgetClause = undefined
   onlineManager.setOnline(true)
 
   vi.restoreAllMocks()
@@ -99,7 +101,7 @@ afterEach(() => {
 const page = (items: unknown[], has_more = false) =>
   ({ items, has_more }) as never
 
-describe('Estate: three regions, one orange control, the proof line (#2546)', () => {
+describe('Estate: three regions, one orange control (#2546)', () => {
   const now = () => new Date().toISOString()
   const run = (over: Record<string, unknown>) => ({
     tenant_id: 'demo',
@@ -194,9 +196,9 @@ describe('Estate: three regions, one orange control, the proof line (#2546)', ()
     ).toHaveTextContent(
       '3 sessions open for 2 people · $2.42 today · 2 need you',
     )
-    // Region 2: each session with its cost, on the first screen.
-    const cards = await screen.findByTestId('now-live')
-    expect(within(cards).getByText('$1.42')).toBeInTheDocument()
+    // Region 2: every live session once, in the last-hour lanes, on the first screen.
+    await screen.findByTestId('estate-swimlane')
+    expect(screen.queryByTestId('now-live')).toBeNull()
     // Region 3: the flagged request, decided from here.
     const flagged = await screen.findByTestId('now-flagged-request')
     expect(flagged).toHaveTextContent('pnpm db:migrate --env payments-staging')
@@ -206,6 +208,25 @@ describe('Estate: three regions, one orange control, the proof line (#2546)', ()
     // Three regions under the header, and no fourth.
     expect(container.querySelectorAll('[data-estate-region]')).toHaveLength(3)
     expectNoRawI18nKeys(container)
+  })
+
+  it('a build that supplies the budget clause ends the sentence with it; without one the sentence is unchanged', async () => {
+    estate()
+    panels.useEstateBudgetClause = () => 'Payments is at 92% of its budget'
+    const { unmount } = renderIntel(<HomeView />)
+    expect(
+      await screen.findByTestId('estate-summary-sentence'),
+    ).toHaveTextContent(
+      '3 sessions open for 2 people · $2.42 today · 2 need you · Payments is at 92% of its budget',
+    )
+    unmount()
+    panels.useEstateBudgetClause = undefined
+    renderIntel(<HomeView />)
+    expect(
+      await screen.findByTestId('estate-summary-sentence'),
+    ).toHaveTextContent(
+      /^3 sessions open for 2 people · \$2\.42 today · 2 need you$/,
+    )
   })
 
   it('the spend line puts the month against the monthly budget', async () => {
@@ -256,6 +277,25 @@ describe('Estate: three regions, one orange control, the proof line (#2546)', ()
       expect(
         await screen.findByTestId('estate-summary-sentence'),
       ).toHaveTextContent(/^3\+ sessions open · /),
+    )
+  })
+
+  it('says the exact open count the Sessions badge says, never "16+" beside a 16', async () => {
+    estate()
+    const first = await sessionsApi.live({})
+    // Now's own read is one page with more behind it; the rail reads every page.
+    vi.spyOn(sessionsApi, 'live').mockImplementation(async (params) =>
+      params?.pagination !== 'cursor'
+        ? page([], true)
+        : params.cursor
+          ? ({ items: [], has_more: false } as never)
+          : ({ ...first, has_more: true, cursor: 'c2' } as never),
+    )
+    renderIntel(<HomeView />)
+    await waitFor(async () =>
+      expect(
+        await screen.findByTestId('estate-summary-sentence'),
+      ).toHaveTextContent(/^3 sessions open/),
     )
   })
 
@@ -350,22 +390,22 @@ describe('Estate: three regions, one orange control, the proof line (#2546)', ()
     expect(screen.queryByRole('button', { name: 'Approve once' })).toBeNull()
   })
 
-  it('the proof line says the chain verifies and how many entries the ledger holds', async () => {
+  it('says its name once: the top bar names the page, the heading is not painted', () => {
     estate()
     renderIntel(<HomeView />)
-    const proof = await screen.findByRole('link', { name: /^Chain verified/ })
-    await waitFor(() => expect(proof).toHaveTextContent('12,408 entries'))
-    expect(proof).toHaveAttribute('href', '/audit')
+    expect(screen.getByRole('heading', { level: 1, name: 'Now' })).toHaveClass(
+      'sr-only',
+    )
   })
 
-  it('a role that cannot read the ledger gets the verdict without the count, and no ledger read', async () => {
+  it('leaves the chain proof to Activity & audit: no proof chip and no ledger read on the first screen', async () => {
     estate()
-    authState.can = (p) => p !== 'audit:read'
     const recent = vi.spyOn(auditApi, 'recent')
     renderIntel(<HomeView />)
-    expect(
-      await screen.findByRole('link', { name: /^Chain verified/ }),
-    ).toHaveTextContent(/^Chain verified at \d\d:\d\d$/)
+    // The runs, which carry the chain verdict, have answered.
+    await screen.findByTestId('estate-swimlane')
+    expect(screen.queryByText(/^Chain verified/)).toBeNull()
+    expect(screen.queryByText(/^Chain broken/)).toBeNull()
     expect(recent).not.toHaveBeenCalled()
   })
 
@@ -491,6 +531,33 @@ describe('Estate — live session cards and the summary sentence (#2245, #2546)'
     ).toBeInTheDocument()
   })
 
+  it('tells the fleet panel when the approvals are not answered yet or a page has more', async () => {
+    authState.can = (p) => role(p) || p === 'governance:approval:read'
+    panels.estateFleet = (p) => (
+      <p>
+        approvals read {String(p.approvalsRead)}, more {String(p.approvalsMore)}
+      </p>
+    )
+    stub(
+      Array.from({ length: FLEET_SESSIONS + 1 }, (_, i) => ({
+        ...running(),
+        run_ref: `run-live-${i}`,
+      })),
+    )
+    let answer: (v: never) => void = () => {}
+    vi.spyOn(governanceApi, 'listApprovals').mockReturnValue(
+      new Promise((resolve) => (answer = resolve)),
+    )
+    renderIntel(<HomeView />)
+    expect(
+      await screen.findByText('approvals read false, more false'),
+    ).toBeInTheDocument()
+    answer({ items: [], has_more: true } as never)
+    expect(
+      await screen.findByText('approvals read true, more true'),
+    ).toBeInTheDocument()
+  })
+
   it('the header holds no lone Executive report button', async () => {
     authState.can = role
     stub([running(), ended()])
@@ -501,17 +568,17 @@ describe('Estate — live session cards and the summary sentence (#2245, #2546)'
     expect(screen.queryByRole('link', { name: /Executive report/ })).toBeNull()
   })
 
-  it('a live session is a card and an ended one a Recent work row, each once', async () => {
+  it('a live session is one lane and an ended one a Recent work row, each once', async () => {
     authState.can = role
     stub([running(), ended()])
     renderIntel(<HomeView />)
-    const cards = await screen.findByTestId('now-live')
-    expect(within(cards).getByText('Claude Code')).toBeInTheDocument()
+    const lanes = await screen.findByTestId('estate-swimlane')
     expect(
-      within(cards).getByText('Fix the flaky login test'),
-    ).toBeInTheDocument()
-    expect(within(cards).getByText('$0.42')).toBeInTheDocument()
-    expect(within(cards).queryByText('Nightly report')).toBeNull()
+      within(lanes).getAllByText('Fix the flaky login test').length,
+    ).toBeGreaterThan(0)
+    expect(within(lanes).queryByText('Nightly report')).toBeNull()
+    // THE ONE LIVE LIST (#4021): the lanes are the list; no card repeats a session.
+    expect(screen.queryByTestId('now-live')).toBeNull()
     const recent = screen.getByTestId('home-recent')
     expect(within(recent).getByText('Nightly report')).toBeInTheDocument()
     expect(within(recent).queryByText('Fix the flaky login test')).toBeNull()
@@ -546,7 +613,7 @@ describe('Estate — live session cards and the summary sentence (#2245, #2546)'
     )
   })
 
-  it('a role that reads only live sessions gets cards and the sentence from them', async () => {
+  it('a role that reads only live sessions gets the lanes and the sentence from them', async () => {
     authState.can = (p) => p === 'sessions:live:read'
     const runs = vi.spyOn(agentOpsApi, 'listRuns')
     vi.spyOn(sessionsApi, 'live').mockResolvedValue(
@@ -569,8 +636,8 @@ describe('Estate — live session cards and the summary sentence (#2245, #2546)'
       ]),
     )
     renderIntel(<HomeView />)
-    const cards = await screen.findByTestId('now-live')
-    expect(within(cards).getByText('Claude Code')).toBeInTheDocument()
+    const lanes = await screen.findByTestId('estate-swimlane')
+    expect(within(lanes).getAllByText(/Claude Code/).length).toBeGreaterThan(0)
     await waitFor(async () =>
       expect(await sentence()).toHaveTextContent(
         /^1 session open · \$0\.25 today$/,
@@ -589,18 +656,20 @@ describe('Estate — live session cards and the summary sentence (#2245, #2546)'
     expect(await sentence()).toHaveTextContent(/^Nothing is running$/)
   })
 
-  it('when every session is live the cards carry the link to all sessions', async () => {
+  it('when every session is live the lanes are the one list: no cards, no empty Recent work', async () => {
     authState.can = role
     stub([running()])
     renderIntel(<HomeView />)
-    const cards = await screen.findByTestId('now-live')
     expect(
-      within(cards).getByRole('link', { name: /All sessions/ }),
-    ).toHaveAttribute('href', '/sessions')
+      within(await screen.findByTestId('estate-swimlane')).getAllByText(
+        'Fix the flaky login test',
+      ).length,
+    ).toBeGreaterThan(0)
+    expect(screen.queryByTestId('now-live')).toBeNull()
     expect(screen.queryByTestId('home-recent')).toBeNull()
   })
 
-  it('a failed Recent work read is still said beside the cards', async () => {
+  it('a failed Recent work read is still said beside the lanes', async () => {
     authState.can = role
     vi.spyOn(sessionsApi, 'live').mockResolvedValue(
       page([
@@ -626,8 +695,9 @@ describe('Estate — live session cards and the summary sentence (#2245, #2546)'
     )
     renderIntel(<HomeView />)
     expect(
-      within(await screen.findByTestId('now-live')).getByText('Codex'),
-    ).toBeInTheDocument()
+      within(await screen.findByTestId('estate-swimlane')).getAllByText(/Codex/)
+        .length,
+    ).toBeGreaterThan(0)
     expect(
       await screen.findByText('Couldn’t load recent work'),
     ).toBeInTheDocument()
@@ -928,7 +998,7 @@ describe('Now: the header block holds still while the page loads (#3121)', () =>
     ).toBeInTheDocument()
   })
 
-  it('puts New session first: the proof link comes after the verb', async () => {
+  it('puts New session first in the header', async () => {
     vi.spyOn(signInApi, 'status').mockImplementation(
       async (driver) =>
         ({
@@ -954,16 +1024,14 @@ describe('Now: the header block holds still while the page loads (#3121)', () =>
       ]),
     )
     const { container } = renderIntel(<HomeView />)
-    const proof = await screen.findByRole('link', { name: /^Chain verified/ })
     const header = container.querySelector(
       '[data-slot="page-header"]',
     ) as HTMLElement
-    const verb = within(header).getByRole('button', { name: /New session/ })
-    // The first control of the page is the verb; the proof link follows it.
+    const verb = await within(header).findByRole('button', {
+      name: /New session/,
+    })
+    // The first control of the page is the verb.
     expect(header.querySelector('a[href], button')).toBe(verb)
-    expect(
-      verb.compareDocumentPosition(proof) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy()
   })
 
   it('gives a role that cannot start sessions no empty row under the title', () => {

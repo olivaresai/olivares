@@ -2,7 +2,7 @@
 
 <a href="https://olivares.ai"><img src=".github/assets/olivares-banner.png" alt="Olivares AI — Ground truth for enterprise AI" width="720"></a>
 
-**Языки:** [English](./README.md) · [Español](./README.es.md) · [简体中文](./README.zh.md) · **Русский** · [日本語](./README.ja.md) · [Deutsch](./README.de.md) · [Français](./README.fr.md)
+**Языки:** [English](./README.md) · [Español](./README.es.md) · [简体中文](./README.zh.md) · **Русский** · [日本語](./README.ja.md) · [Deutsch](./README.de.md) · [Français](./README.fr.md) · [Українська](./README.uk.md) · [한국어](./README.ko.md) · [Português](./README.pt.md)
 
 **Запускайте AI, которым уже пользуется ваша команда, с тем же контролем, что и над остальной инфраструктурой.**
 
@@ -55,6 +55,8 @@ Olivares AI собирает ответы в одном месте. Он под�
 <br><sub><b>Работа</b>: задачи, ответственные и решения, которые остаются после завершения сессии.</sub>
 </div>
 
+[Поддерживаемые инструменты](docs-site/src/content/docs/reference/supported-tools.md) (English).
+
 ## Что оно делает
 
 - **Знать, что работает.** Все агенты, сессии, модели, MCP-серверы и инструменты в одном реестре. Карта доступа показывает, что каждый читает и записывает, и отмечает доступ, который не разрешён ни одним правилом.
@@ -68,7 +70,7 @@ Olivares AI собирает ответы в одном месте. Он под�
 
 Community сохраняет локальную наблюдаемость, настройки и экспорт резервных копий. Отправка в SIEM/ITSM, внешняя телеметрия и экспорт состояния безопасности входят в базовую редакцию Business.
 
-**Сетевая изоляция сессий распространяется на сессии Claude Code, Codex и OpenCode, привязанные к ключу провайдера, и на сессии OpenCode со входом через собственную учётную запись инструмента.** Такая сессия достигает только конечной точки своего провайдера или хостов своего входа через прокси отдельной сессии в собственном сетевом пространстве имён — иначе она не запускается. Для OpenCode с ключом провайдера список хостов опирается на более раннюю инвентаризацию, а не на ход, показанный за прокси. Сессии Grok Build и сессии других инструментов со входом в учётную запись по-прежнему могут достичь любого хоста, который разрешает сеть. Прочитайте раздел [сетевая изоляция сессий](SECURITY.md#session-network-isolation), прежде чем запускать нагрузки, которым нужен исключительный доступ к одному провайдеру.
+Сетевая изоляция зависит от инструмента и подключения. Сессии Claude Code, Codex, OpenCode и Gemini CLI с ключом провайдера, а также поддерживаемые сессии учётных записей OpenCode и Cursor имеют границу из сетевого пространства имён и прокси. У Grok Build и других сессий учётных записей её нет. Область действия и ограничения проверок описаны в [таблице инструментов и изоляции](docs-site/src/content/docs/reference/supported-tools.md#confinement-depends-on-the-connection) (на английском).
 
 ## Установка
 
@@ -98,7 +100,7 @@ if grep -qsw userns_create /sys/kernel/security/apparmor/features/namespaces/mas
   sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions &&
   apparmor=--security-opt=apparmor=olivares-sessions
 fi &&
-docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
+docker run -d --name olivares --hostname olivares -p 8443:8443 -p 8444:8444 \
   --security-opt no-new-privileges --security-opt seccomp=olivares-sessions.json $apparmor \
   -v olivares-data:/var/lib/olivares \
   "$img" \

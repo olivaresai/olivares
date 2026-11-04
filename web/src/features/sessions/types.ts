@@ -102,6 +102,19 @@ export interface LiveDTO {
    * run that owns it. An observed row that copies a run's id carries neither. */
   canonical_sid?: string
   run_ref?: string
+  /** THE CALLER'S OWN pin on this row (`pinned`, `pinned_at`), as on a run: present on
+   * the live reads, never another person's. A row that belongs to a run reads the run's
+   * pin. ABSENT on a stream frame, which says nothing about it. */
+  pinned?: boolean
+  pinned_at?: string
+}
+
+/** The answer of POST and DELETE /live/by-id/{live_ref}/pin: the signed-in person's pin
+ * state on an observed session. */
+export interface LivePinDTO {
+  live_ref: string
+  pinned: boolean
+  pinned_at?: string
 }
 
 /** One reconstructible timeline entry (GET /live/by-id/{live_ref}/timeline, or the

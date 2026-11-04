@@ -19,8 +19,9 @@
     "managed": "Managed",
     "managedRev": "Managed · rev {{rev}}",
     "discovered": "Discovered",
+    "caption": "Servers the connectors observed, whether or not Olivares connects them.",
     "empty": "No MCP servers discovered",
-    "emptyHint": "Servers appear here as the inventory and introspection planes discover them.",
+    "emptyHint": "Servers appear here as inventory and introspection discover them.",
     "truncated": "Loaded {{n}} servers; there are more"
   },
   "connection": {
@@ -126,7 +127,7 @@
     "endpoint": "Endpoint",
     "endpointHint": "A reference only — never embed a credential in the endpoint.",
     "scope": "Scope",
-    "scopeHint": "Optional deployment/tenant scope label (e.g. team-a).",
+    "scopeHint": "Optional deployment/organization scope label (e.g. team-a).",
     "enabled": "Enabled",
     "note": "Note",
     "secretRefs": "Secret references",
@@ -187,7 +188,7 @@
     },
     "server": {
       "title": "No MCP servers discovered yet",
-      "description": "MCP servers appear when connector observations identify them in the tenant’s inventory."
+      "description": "MCP servers appear when connector observations identify them in the organization’s inventory."
     },
     "skill": {
       "title": "No skills discovered yet",
@@ -195,7 +196,7 @@
     },
     "tool": {
       "title": "No MCP tools discovered yet",
-      "description": "Tools appear when MCP introspection or observed tool activity reports them to the tenant’s inventory."
+      "description": "Tools appear when MCP introspection or observed tool activity reports them to the organization’s inventory."
     }
   },
   "truncatedHint": "There are more rows than shown; this page takes them by row id (assigned at creation), so the later ones are missing. A server, tool, skill or config NOT listed here is not proof that it does not exist."

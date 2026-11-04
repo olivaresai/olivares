@@ -35,6 +35,7 @@ const toast = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
   warning: vi.fn(),
+  dismiss: vi.fn(),
 }))
 vi.mock('@/components/ui/toaster', () => ({ toast, Toaster: () => null }))
 
@@ -70,6 +71,10 @@ import { AgentCoreExportView } from './agentcore-export-view'
 import AgentCoreExportRoute from './agentcore-export-route'
 import GovernanceView from './governance-view'
 import { FEATURE_VIEWS } from '@/features/registry'
+
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 
 /**
  * The bytes the engine's own tests POST at the real route, read from the SAME

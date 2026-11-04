@@ -29,6 +29,7 @@
   "waitingSummary": "Wartet auf Genehmigung: {{destinations}}",
   "empty": "Noch keine Reichweite aufgezeichnet.",
   "partial": "Teilansicht: die Zugriffskarte enthält mehr.",
+  "otherReach": "Andere Werkzeugaktivität (Shell-Befehle, Suchen, Datenbanken) ist weder ein Ordner noch ein MCP-Server oder Netzwerk-Endpunkt und steht deshalb nicht in dieser Liste. Die Zugriffskarte zeigt sie.",
   "loading": "Reichweite wird geladen…",
   "error": "Das Reichweitendiagramm konnte nicht geladen werden.",
   "off": "Dieses Modul ist ausgeschaltet.",

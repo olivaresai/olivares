@@ -689,9 +689,13 @@ type ContrastRow = {
  * browser would paint, including the variants no probe can trigger by itself.
  * A class whose rule is not in the bundle is reported UNMEASURED, never passed.
  */
-async function measureContrast(page: Page, derived: DerivedPair[]) {
+async function measureContrast(
+  page: Page,
+  derived: DerivedPair[],
+  hostile: '' | 'trust' | 'plain' = '',
+) {
   return page.evaluate(
-    ({ TOKENS, DERIVED }) => {
+    ({ TOKENS, DERIVED, HOSTILE }) => {
       // The probe hangs inside a parent pinned to a colour nothing in this
       // palette uses. A `var()` naming a property that does not exist is
       // invalid-at-computed-value-time: the declaration is dropped and `color`
@@ -728,6 +732,24 @@ async function measureContrast(page: Page, derived: DerivedPair[]) {
       probe.style.transition = 'none'
       probeParent.appendChild(probe)
       document.body.appendChild(probeParent)
+      // #3140 AT_HOSTILE_ACCENT: a brand whose whole accent family equals the page
+      // background. `trust` measures the pairs inside a trust surface (they must still
+      // pass AA: the host's colours); `plain` is the control (outside one, the accent
+      // pairs must fail, or the fixture proves nothing).
+      const HOSTILE_VARS = [
+        '--accent',
+        '--on-accent',
+        '--accent-text',
+        '--accent-soft',
+        '--accent-line',
+        '--accent-border',
+      ]
+      if (HOSTILE) {
+        for (const name of HOSTILE_VARS)
+          document.documentElement.style.setProperty(name, 'var(--canvas)')
+        if (HOSTILE === 'trust')
+          probeParent.setAttribute('data-trust-chrome', '')
+      }
       const canvas = document.createElement('canvas')
       canvas.width = canvas.height = 1
       const ctx = canvas.getContext('2d')!
@@ -988,6 +1010,8 @@ async function measureContrast(page: Page, derived: DerivedPair[]) {
       // ⛔ LA ENTRADA SE TESTIFICA ANTES DE EMITIR VEREDICTO. Un contraste medido
       // sobre una hoja que no se aplicó no es «malo»: es NO MEDIDO, y el gate no
       probeParent.remove()
+      for (const name of HOSTILE_VARS)
+        document.documentElement.style.removeProperty(name)
       return {
         rows,
         classesResolved: decls.size,
@@ -995,7 +1019,7 @@ async function measureContrast(page: Page, derived: DerivedPair[]) {
         themeProbe,
       }
     },
-    { TOKENS: TOKEN_PAIRS, DERIVED: derived },
+    { TOKENS: TOKEN_PAIRS, DERIVED: derived, HOSTILE: hostile },
   )
 }
 
@@ -1451,7 +1475,12 @@ async function main() {
     if (!measurePage) throw new Error('contrast walk produced no page')
     await measurePage.goto(ORIGIN + '/', { waitUntil: 'domcontentloaded' })
     await measurePage.waitForTimeout(600)
-    const measured = await measureContrast(measurePage, src.pairs)
+    const hostileEnv = process.env.AT_HOSTILE_ACCENT ?? ''
+    if (hostileEnv !== '' && hostileEnv !== 'trust' && hostileEnv !== 'plain')
+      throw new Error(
+        `AT_HOSTILE_ACCENT must be "trust" or "plain", got "${hostileEnv}"`,
+      )
+    const measured = await measureContrast(measurePage, src.pairs, hostileEnv)
     // ⛔ NO STYLESHEET APPLIED — la tercera respuesta, antes de cualquier veredicto.
     //
     // Sin esto, una hoja que no se aplica no da un gate rojo: da MIL DOSCIENTAS

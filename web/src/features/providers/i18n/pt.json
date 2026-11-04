@@ -1,0 +1,174 @@
+{
+  "title": "Fornecedores",
+  "subtitle": "Uma credencial de fornecedor na nuvem ou um endpoint de modelos local em que as suas ferramentas de agente são executadas.",
+  "nav": "Fornecedores",
+  "rowMenu": "Ações da linha para {{name}}",
+  "empty": {
+    "title": "Ainda nenhum fornecedor registado",
+    "description": "Ligue a Anthropic, a OpenAI ou a xAI com uma chave de API, ou adicione um endpoint Ollama local sem chave, e depois teste a ligação.",
+    "action": "Adicionar o seu primeiro fornecedor"
+  },
+  "emptyFiltered": {
+    "title": "Nenhum fornecedor corresponde a este filtro",
+    "description": "Limpe o filtro para ver todos os fornecedores registados.",
+    "action": "Mostrar todos"
+  },
+  "forbidden": {
+    "title": "Não pode ler os fornecedores deste tenant",
+    "description": "A sua função não pode ler os fornecedores registados. Peça acesso a um administrador desta organização."
+  },
+  "columns": {
+    "name": "Nome",
+    "kind": "Tipo",
+    "key": "Chave",
+    "state": "Estado",
+    "connection": "Ligação",
+    "actions": "Ações"
+  },
+  "kinds": {
+    "anthropic": "Anthropic",
+    "openai": "OpenAI",
+    "xai": "xAI",
+    "gemini": "Gemini",
+    "openai_compatible": "Compatível com OpenAI",
+    "ollama": "Ollama"
+  },
+  "kindHints": {
+    "anthropic": "Claude Code. Injeta ANTHROPIC_API_KEY.",
+    "openai": "Codex. Injeta OPENAI_API_KEY.",
+    "xai": "Grok. Injeta XAI_API_KEY.",
+    "gemini": "Gemini CLI no endereço de API do próprio Google. Usa uma chave de API Gemini.",
+    "openai_compatible": "Qualquer endpoint no formato OpenAI. Injeta OPENAI_API_KEY e OPENAI_BASE_URL; o endpoint é obrigatório.",
+    "ollama": "Modelos locais para o OpenCode. Sem chave de API. Use o endpoint nativo do Ollama; o teste lê os metadados dos modelos."
+  },
+  "states": {
+    "active": "Ativo",
+    "revoked": "Revogado"
+  },
+  "probe": {
+    "never": "Não testado",
+    "ok": "Aceite",
+    "refused": "Recusado",
+    "unreachable": "Inacessível",
+    "neverHint": "Ninguém testou esta credencial. Registá-la não é evidência de que funciona.",
+    "okHint": "O fornecedor respondeu e aceitou esta credencial.",
+    "refusedHint": "O fornecedor respondeu e rejeitou esta credencial. Rode-a.",
+    "unreachableHint": "O endpoint não respondeu. Isto não diz nada sobre a credencial.",
+    "models": "{{n}} modelos",
+    "latency": "{{ms}} ms",
+    "at": "Testado {{when}}",
+    "local": {
+      "neverHint": "Este endpoint não foi testado. O registo não é evidência de que funciona.",
+      "okHint": "O endpoint local respondeu e listou os seus modelos.",
+      "refusedHint": "O endpoint recusou o pedido de metadados. Verifique as suas definições de acesso.",
+      "unreachableHint": "O endpoint local não respondeu. Verifique o seu endereço e a sua disponibilidade."
+    }
+  },
+  "actions": {
+    "test": "Testar ligação",
+    "testing": "A testar…",
+    "rotate": "Rodar chave",
+    "revoke": "Revogar",
+    "details": "Detalhes"
+  },
+  "create": {
+    "title": "Adicionar um fornecedor",
+    "description": "O motor sela a chave e nunca a devolve. Verá uma pista de quatro carateres e nada mais.",
+    "kind": "Fornecedor",
+    "kindPlaceholder": "Escolha um fornecedor",
+    "name": "Nome",
+    "nameHint": "Opcional. Deixe vazio para usar o nome do fornecedor.",
+    "namePlaceholder": "Anthropic (produção)",
+    "baseURL": "Endpoint",
+    "baseURLHint": "Deixe vazio para o endpoint oficial do fornecedor. Tem de ser https.",
+    "baseURLLocalHint": "Deixe vazio para o endpoint oficial do fornecedor. Caso contrário, https, ou http simples num endereço de loopback ou de rede privada.",
+    "baseURLPlaceholder": "https://llm.example.com",
+    "apiKey": "Chave de API",
+    "apiKeyHint": "Enviada uma só vez, selada pelo motor, nunca devolvida a este navegador.",
+    "apiKeyPlaceholder": "Cole a chave",
+    "submit": "Adicionar fornecedor",
+    "submitting": "A selar…",
+    "cancel": "Cancelar",
+    "success": "Fornecedor adicionado.",
+    "testNext": "Testar ligação agora",
+    "registering": "A registar…",
+    "localNameHint": "Opcional. Deixe vazio para usar o nome do fornecedor.",
+    "advanced": "Avançado: endpoint personalizado",
+    "missingFields": "Introduza os campos em falta: {{fields}}.",
+    "requiredEndpointHint": "Introduza o endpoint do serviço: https, ou http simples num endereço de loopback ou de rede privada.",
+    "worksWith": "Funciona com {{tools}}",
+    "otherKinds": "Outro (endpoint personalizado)",
+    "keyLink": "Obter uma chave de API de {{vendor}}",
+    "docsLink": "Guia de configuração de {{vendor}}"
+  },
+  "rotate": {
+    "title": "Rodar a chave deste fornecedor",
+    "description": "A nova chave substitui a antiga sob a mesma referência, pelo que todos os perfis associados a ela continuam a funcionar. Uma sessão já em curso mantém a credencial com que começou.",
+    "verdictCleared": "O teste de ligação anterior é limpo: um veredicto medido numa credencial que já não existe não é evidência sobre a que a substitui.",
+    "submit": "Rodar chave",
+    "submitting": "A selar…",
+    "success": "Chave rodada. Teste a ligação para confirmar que a nova funciona."
+  },
+  "revoke": {
+    "title": "Revogar este fornecedor",
+    "description": "Isto destrói a credencial selada. Não pode ser anulado para esta referência.",
+    "consequence": "Todos os perfis de fornecedor associados a ele recusarão iniciar, indicando este fornecedor. A credencial não é revogada no próprio fornecedor: faça-o na consola do fornecedor.",
+    "confirm": "Revogar",
+    "success": "Fornecedor revogado e respetiva credencial selada destruída.",
+    "localDescription": "Isto revoga o registo do endpoint. Os perfis associados recusarão novos arranques. O serviço Ollama e os seus modelos permanecem no anfitrião.",
+    "localSuccess": "Registo do endpoint revogado."
+  },
+  "detail": {
+    "title": "Fornecedor",
+    "reference": "Referência",
+    "endpoint": "Endpoint",
+    "officialEndpoint": "O endpoint oficial do fornecedor",
+    "created": "Registado",
+    "revoked": "Revogado",
+    "models": "Modelos listados pelo último teste",
+    "noModels": "Ainda sem lista de modelos. Teste a ligação.",
+    "close": "Fechar"
+  },
+  "vaultUnavailable": {
+    "title": "Esta implementação não pode guardar uma credencial de fornecedor",
+    "description": "Não está configurado nenhum cofre de credenciais seladas, pelo que o motor recusa guardar uma chave em vez de guardar uma que não consegue proteger. Um administrador tem de configurar o selador de segredos."
+  },
+  "truncation": {
+    "label": "A mostrar {{n}} fornecedores; existem mais",
+    "hint": "Esta lista é uma página. Restrinja-a ou use `olivares provider ls` para o conjunto completo."
+  },
+  "bind": {
+    "title": "Associar perfil",
+    "description": "Os próximos arranques a partir do perfil selecionado usam {{name}}. As sessões existentes mantêm o fornecedor atual.",
+    "profile": "Perfil",
+    "choose": "Escolha um perfil compatível",
+    "empty": "Nenhum perfil ativo compatível. Crie um em Perfis de fornecedor.",
+    "more": "Carregar mais perfis",
+    "unavailable": "As permissões de perfis ou um perfil ativo compatível não estão disponíveis.",
+    "loadError": "Não foi possível carregar os perfis.",
+    "success": "Fornecedor associado ao perfil."
+  },
+  "defaultModel": {
+    "title": "Modelo predefinido",
+    "model": "Modelo",
+    "hint": "As novas sessões usam este modelo, a menos que seja escolhido outro.",
+    "modelsHint": "Modelos listados pelo último teste de ligação deste fornecedor.",
+    "native": "Sem predefinição guardada",
+    "save": "Guardar",
+    "success": "Modelo predefinido guardado.",
+    "createHint": "Opcional. Deixe vazio para escolher uma predefinição depois do teste de ligação."
+  },
+  "prepare": {
+    "pending": "A preparar {{tool}} para a sua primeira sessão…",
+    "installing": "A instalar {{tool}} para a sua primeira sessão: {{progress}}",
+    "ready": "Pronto para iniciar uma sessão.",
+    "start": "Nova sessão",
+    "failed": "Fornecedor guardado. A configuração da sessão falhou: {{error}}",
+    "retry": "Repetir configuração",
+    "incomplete": "A instalação da ferramenta está {{state}}. Verifique Ferramentas de IA e tente novamente."
+  },
+  "section": {
+    "title": "Chaves de API",
+    "add": "Adicionar uma chave de API"
+  }
+}

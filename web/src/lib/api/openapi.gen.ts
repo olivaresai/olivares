@@ -1488,6 +1488,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/v1/console/errors': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Report a console render error from a person's browser session; the engine logs it, shortened to its limits, only when telemetry is enabled
+     * @description Records a console view's render failure (error id, error text, component stack, route) from a person's browser session in the engine log when telemetry is enabled, shortened to 16 KiB, 64 KiB and 2 KiB; otherwise it logs nothing. Either way it answers 204; API and machine tokens get 401.
+     */
+    post: operations['reportConsoleError']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/v1/console/health-summary': {
     parameters: {
       query?: never
@@ -1801,7 +1821,7 @@ export interface paths {
   '/v1/console/secrets': {
     parameters: {
       query?: {
-        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
+        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone, and a shared vault's vault/<vault-id>/ items for the people granted it. Writes require the deployment's step-up in either scope. */
         scope?: 'tenant'
       }
       header?: {
@@ -1813,18 +1833,18 @@ export interface paths {
     }
     /**
      * List sealed secrets (names and hints, never values)
-     * @description Lists secret names and non-secret hints, never values. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant and returns the tenant's mcp/, env/ and credential/ names to its admins only, and to every member only their own vault/<user-id>/ items, whose hint is the item's kind (login, login+totp, note or totp).
+     * @description Lists secret names and non-secret hints, never values. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant and returns the tenant's mcp/, env/ and credential/ names to its admins only, and to every member only their own vault/<user-id>/ items and the items of the shared vaults granted to them, whose hint is the item's kind (login, login+totp, note or totp).
      */
     get: operations['listSecrets']
     /**
      * Create or update a sealed secret
-     * @description Creates or rotates a sealed secret using its name in the body. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant: its admins reach mcp/, env/ and credential/ names, and every member only their own vault/<user-id>/ items, which are JSON item documents (login, note or totp) whose kind is the listed hint. Writes require AAL3.
+     * @description Creates or rotates a sealed secret using its name in the body. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant: its admins reach mcp/, env/ and credential/ names, and every member only their own vault/<user-id>/ items and, where a Business grant gives the write right at the vault, the items of that shared vault (vault/<vault-id>/), which are JSON item documents (login, note or totp) whose kind is the listed hint. Writes require AAL3.
      */
     put: operations['putSecret']
     post?: never
     /**
      * Delete a sealed secret
-     * @description Deletes one sealed secret by the name carried in the body. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant: its admins reach mcp/, env/ and credential/ names, and every member only their own vault/<user-id>/ items, which are JSON item documents (login, note or totp) whose kind is the listed hint. Writes require AAL3.
+     * @description Deletes one sealed secret by the name carried in the body. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant: its admins reach mcp/, env/ and credential/ names, and every member only their own vault/<user-id>/ items and, where a Business grant gives the write right at the vault, the items of that shared vault (vault/<vault-id>/), which are JSON item documents (login, note or totp) whose kind is the listed hint. Writes require AAL3.
      */
     delete: operations['deleteSecret']
     options?: never
@@ -1835,7 +1855,7 @@ export interface paths {
   '/v1/console/secrets/generate': {
     parameters: {
       query?: {
-        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
+        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone, and a shared vault's vault/<vault-id>/ items for the people granted it. Writes require the deployment's step-up in either scope. */
         scope?: 'tenant'
       }
       header?: {
@@ -1861,7 +1881,7 @@ export interface paths {
   '/v1/console/secrets/reveal': {
     parameters: {
       query?: {
-        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
+        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone, and a shared vault's vault/<vault-id>/ items for the people granted it. Writes require the deployment's step-up in either scope. */
         scope?: 'tenant'
       }
       header?: {
@@ -1874,8 +1894,8 @@ export interface paths {
     get?: never
     put?: never
     /**
-     * Reveal one item of the caller's own personal vault (step-up, audited, rate limited)
-     * @description Returns the plaintext of one item of the caller's own vault/<user-id>/ namespace, from the tenant scope only. Requires a signed-in person who passed the deployment's step-up; another user, the superadmin and every token are refused, and global, mcp/, env/ and credential/ names never reveal. Rate limited per person, never cached, and recorded in the audit ledger without the value.
+     * Reveal one vault item the caller owns or may read in a shared vault (step-up, audited, rate limited)
+     * @description Returns the plaintext of one item of the caller's own vault/<user-id>/ namespace or of a shared vault the caller was granted read on, from the tenant scope only. Requires a signed-in person who passed the deployment's step-up; a person with no grant at the vault, the superadmin and every token are refused, and global, mcp/, env/ and credential/ names never reveal. Rate limited per person, never cached, and recorded in the audit ledger without the value.
      */
     post: operations['revealSecret']
     delete?: never
@@ -1887,7 +1907,7 @@ export interface paths {
   '/v1/console/secrets/totp': {
     parameters: {
       query?: {
-        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
+        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone, and a shared vault's vault/<vault-id>/ items for the people granted it. Writes require the deployment's step-up in either scope. */
         scope?: 'tenant'
       }
       header?: {
@@ -1900,8 +1920,8 @@ export interface paths {
     get?: never
     put?: never
     /**
-     * Current authenticator code of one of the caller's own vault items (step-up, audited, rate limited; never the seed)
-     * @description Returns the current RFC 6238 authenticator code and the seconds it stays valid for one item of the caller's own vault/<user-id>/ namespace, from the tenant scope only; the seed is never returned. Guarded and limited exactly like reveal (signed-in person with the deployment's step-up, owner only, rate limited per person), never cached, and recorded in the audit ledger without the code.
+     * Current authenticator code of a vault item the caller owns or may read in a shared vault (step-up, audited, rate limited; never the seed)
+     * @description Returns the current RFC 6238 authenticator code and the seconds it stays valid for one item of the caller's own vault/<user-id>/ namespace or of a shared vault the caller was granted read on, from the tenant scope only; the seed is never returned. Guarded and limited exactly like reveal (signed-in person with the deployment's step-up, the owner or a grantee, rate limited per person), never cached, and recorded in the audit ledger without the code.
      */
     post: operations['getVaultCode']
     delete?: never
@@ -2584,6 +2604,26 @@ export interface paths {
      * @description Creates the first organization and the superadmin that owns it, using the one-time setup token. It is atomic against a concurrent setup and consumes the token on success.
      */
     post: operations['setupFirstAdmin']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/system/host': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the host's CPU, memory, load, filesystems and session-folder disk use (superadmin)
+     * @description Reads the host the engine runs on: load average, CPU percent, memory, swap, each mounted filesystem, the disk use of each session folder (cached for 60 seconds, bounded) and the last 24 hours of one-minute samples. Linux only; other hosts answer 501. Requires system administration.
+     */
+    get: operations['getHostStatus']
+    put?: never
+    post?: never
     delete?: never
     options?: never
     head?: never
@@ -4994,7 +5034,13 @@ export interface paths {
               endpoint?: string
               installed: boolean
               message?: string
+              /** @description Bytes each model in models takes on disk, as Ollama reports it, keyed by model name. */
+              model_sizes?: {
+                [key: string]: number
+              }
               models: string[]
+              /** @description Present when Ollama's model list could not be read; models is then not an authoritative empty list. */
+              models_error?: string
               /**
                * @description Which flavour serves the row: the installed program or a container.
                * @enum {string}
@@ -5064,6 +5110,123 @@ export interface paths {
     put?: never
     post?: never
     delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/agenttools/ollama/models': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    /**
+     * Deletes one installed model from the running Ollama.
+     * @description Deletes one installed model from the running Ollama. The models directory belongs to the engine, so a terminal's remove command would not reach it.
+     */
+    delete: {
+      parameters: {
+        query?: never
+        header?: never
+        path?: never
+        cookie?: never
+      }
+      requestBody: {
+        content: {
+          'application/json': {
+            model: string
+          }
+        }
+      }
+      responses: {
+        /** @description The model was deleted from the Ollama this engine runs; the status lists what is left */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              endpoint?: string
+              installed: boolean
+              message?: string
+              /** @description Bytes each model in models takes on disk, as Ollama reports it, keyed by model name. */
+              model_sizes?: {
+                [key: string]: number
+              }
+              models: string[]
+              /** @description Present when Ollama's model list could not be read; models is then not an authoritative empty list. */
+              models_error?: string
+              /**
+               * @description Which flavour serves the row: the installed program or a container.
+               * @enum {string}
+               */
+              runtime?: 'process' | 'container'
+              /** @enum {string} */
+              state: 'stopped' | 'starting' | 'running' | 'failed'
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden / step-up required */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description required evidence or store unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
     options?: never
     head?: never
     patch?: never
@@ -5282,7 +5445,99 @@ export interface paths {
     }
     put?: never
     post?: never
-    delete?: never
+    /**
+     * Ends a running download: the request to Ollama is closed, which stops its pull (what it fetched stays for the next try).
+     * @description Ends a running download: the request to Ollama is closed, which stops its pull (what it fetched stays for the next try).
+     */
+    delete: {
+      parameters: {
+        query?: never
+        header?: never
+        path: {
+          /** @description Path parameter id. */
+          id: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description The model download was cancelled (failed, with the error "Download cancelled."); one that already ended is returned unchanged */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              /** Format: int64 */
+              completed: number
+              error?: string
+              /** Format: uuid */
+              id: string
+              model: string
+              /** @enum {string} */
+              state: 'running' | 'succeeded' | 'failed'
+              status?: string
+              /** Format: int64 */
+              total: number
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden / step-up required */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description required evidence or store unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
     options?: never
     head?: never
     patch?: never
@@ -5335,7 +5590,13 @@ export interface paths {
               endpoint?: string
               installed: boolean
               message?: string
+              /** @description Bytes each model in models takes on disk, as Ollama reports it, keyed by model name. */
+              model_sizes?: {
+                [key: string]: number
+              }
               models: string[]
+              /** @description Present when Ollama's model list could not be read; models is then not an authoritative empty list. */
+              models_error?: string
               /**
                * @description Which flavour serves the row: the installed program or a container.
                * @enum {string}
@@ -5440,7 +5701,13 @@ export interface paths {
               endpoint?: string
               installed: boolean
               message?: string
+              /** @description Bytes each model in models takes on disk, as Ollama reports it, keyed by model name. */
+              model_sizes?: {
+                [key: string]: number
+              }
               models: string[]
+              /** @description Present when Ollama's model list could not be read; models is then not an authoritative empty list. */
+              models_error?: string
               /**
                * @description Which flavour serves the row: the installed program or a container.
                * @enum {string}
@@ -6136,6 +6403,8 @@ export interface paths {
                 user_code?: string
               }
               plan?: string
+              /** @description Why a tool that is logged in some other way cannot run a session here; absent otherwise. */
+              reason?: string
               signed_in: boolean
             }
           }
@@ -42861,6 +43130,473 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/v1/m/governance/vaults': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * governance module route (requires governance:vault:read)
+     * @description Returns HTTP 501 with business_required because shared vaults require Business; no vault or share is read or changed.
+     */
+    get: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    put?: never
+    /**
+     * governance module route (requires governance:vault:write)
+     * @description Returns HTTP 501 with business_required because shared vaults require Business; no vault or share is read or changed.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      requestBody: {
+        content: {
+          'application/json': {
+            name: string
+            /** @enum {string} */
+            share_by?: 'owner' | 'editor'
+          }
+        }
+      }
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/governance/vaults/{id}/shares': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * governance module route (requires governance:vault:read)
+     * @description Returns HTTP 501 with business_required because shared vaults require Business; no vault or share is read or changed.
+     */
+    get: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter id. */
+          id: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    /**
+     * governance module route (requires governance:vault:write)
+     * @description Returns HTTP 501 with business_required because shared vaults require Business; no vault or share is read or changed.
+     */
+    put: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter id. */
+          id: string
+        }
+        cookie?: never
+      }
+      requestBody: {
+        content: {
+          'application/json': {
+            /** @enum {string} */
+            role: 'viewer' | 'editor' | 'owner'
+            /** @enum {string} */
+            subject_kind: 'user' | 'group'
+            subject_ref: string
+          }
+        }
+      }
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    post?: never
+    /**
+     * governance module route (requires governance:vault:write)
+     * @description Returns HTTP 501 with business_required because shared vaults require Business; no vault or share is read or changed.
+     */
+    delete: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter id. */
+          id: string
+        }
+        cookie?: never
+      }
+      requestBody: {
+        content: {
+          'application/json': {
+            /** @enum {string} */
+            subject_kind: 'user' | 'group'
+            subject_ref: string
+          }
+        }
+      }
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/v1/m/health/checks': {
     parameters: {
       query?: never
@@ -75306,6 +76042,202 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/v1/m/sessions/live/by-id/{live_ref}/pin': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Pins an observed session for the caller, idempotently.
+     * @description Pins an observed session for the caller, idempotently. A session the plane launched has a run: its pin is the run's, so this refuses with a 409 that says so.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter live_ref. */
+          live_ref: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description the observed session's pin state for the caller */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              /** @description The observed session row's own reference. */
+              live_ref: string
+              /** @description Whether THIS caller has the session pinned; both directions are idempotent. */
+              pinned: boolean
+              /** @description When this caller pinned it; present when pinned is true. Live list and get reads carry the same per-caller fields. */
+              pinned_at?: string
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description The session was launched through Olivares: pin its run */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    /**
+     * Removes the caller's pin on an observed session, idempotently.
+     * @description Removes the caller's pin on an observed session, idempotently.
+     */
+    delete: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter live_ref. */
+          live_ref: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description the observed session's pin state for the caller */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              /** @description The observed session row's own reference. */
+              live_ref: string
+              /** @description Whether THIS caller has the session pinned; both directions are idempotent. */
+              pinned: boolean
+              /** @description When this caller pinned it; present when pinned is true. Live list and get reads carry the same per-caller fields. */
+              pinned_at?: string
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description The session was launched through Olivares: pin its run */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/v1/m/sessions/live/by-id/{live_ref}/timeline': {
     parameters: {
       query?: never
@@ -76007,6 +76939,192 @@ export interface paths {
       }
     }
     put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/sessions/personal-folders-settings': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Reads or changes whether this organization gives each person a personal folder, My files; changing it takes folder administration and is audited.
+     * @description Reads or changes whether this organization gives each person a personal folder, My files; changing it takes folder administration and is audited.
+     */
+    get: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description Whether this organization gives each person a personal folder */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              enabled: boolean
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    /**
+     * Reads or changes whether this organization gives each person a personal folder, My files; changing it takes folder administration and is audited.
+     * @description Reads or changes whether this organization gives each person a personal folder, My files; changing it takes folder administration and is audited.
+     */
+    put: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      requestBody: {
+        content: {
+          'application/json': {
+            enabled: boolean
+          }
+        }
+      }
+      responses: {
+        /** @description Whether this organization gives each person a personal folder */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              enabled: boolean
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
     post?: never
     delete?: never
     options?: never
@@ -77615,7 +78733,10 @@ export interface paths {
                 /** @enum {string} */
                 auth: 'bearer' | 'x-api-key'
                 base_url: string
+                color: string
                 docs_url: string
+                /** @description The row registers the governed inference service, which no tool session uses. */
+                governed?: boolean
                 key_url?: string
                 /** @enum {string} */
                 kind: 'anthropic' | 'openai_compatible'
@@ -77623,6 +78744,7 @@ export interface paths {
                   default?: string
                 }
                 models_url?: string
+                monogram: string
                 ref: string
                 title: string
               }[]
@@ -79020,8 +80142,8 @@ export interface paths {
       cookie?: never
     }
     /**
-     * Lists the models and effort levels that the installed tool or bound provider of one provider profile reports now, cached for two minutes; it sends no prompt, starts no conversation and returns no credential.
-     * @description Lists the models and effort levels that the installed tool or bound provider of one provider profile reports now, cached for two minutes; it sends no prompt, starts no conversation and returns no credential.
+     * Lists the models and effort levels that the installed tool or bound provider of one provider profile reports now, cached for two minutes, then answered from the last read while it is read again; it sends no prompt, starts no conversation and returns no credential.
+     * @description Lists the models and effort levels that the installed tool or bound provider of one provider profile reports now, cached for two minutes, then answered from the last read while it is read again; it sends no prompt, starts no conversation and returns no credential.
      */
     get: {
       parameters: {
@@ -79063,6 +80185,8 @@ export interface paths {
                 is_default?: boolean
                 is_legacy?: boolean
                 is_new?: boolean
+                /** @description The exact model id a Claude Code selector launches on and a session records. Present only for a Claude Code selector on the tool's own sign-in. */
+                launch_model?: string
                 service_tiers?: string[]
                 supports_fast_mode?: boolean
               }[]
@@ -81781,15 +82905,6 @@ export interface paths {
             'application/json': Record<string, never>
           }
         }
-        /** @description the session already holds as many images as it keeps */
-        507: {
-          headers: {
-            [name: string]: unknown
-          }
-          content: {
-            'application/json': Record<string, never>
-          }
-        }
       }
     }
     delete?: never
@@ -82103,6 +83218,276 @@ export interface paths {
     }
     put?: never
     post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/sessions/runs/{ref}/checkpoints': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Lists the session's turns, oldest first: the prompt of each and the files it changed, read from snapshots the engine took (nothing is executed in the folder).
+     * @description Lists the session's turns, oldest first: the prompt of each and the files it changed, read from snapshots the engine took (nothing is executed in the folder).
+     */
+    get: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter ref. */
+          ref: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description The session's turns, oldest first, each with the files it changed */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              /** @description False when this session's folder cannot be checkpointed; reason says why. */
+              available: boolean
+              /** @description Why the folder cannot be checkpointed. Absent when it can. */
+              reason?: string
+              /** @description The session's turns, oldest first. */
+              turns: {
+                /**
+                 * Format: date-time
+                 * @description When the turn started.
+                 */
+                at: string
+                /** @description True when prompt is only the start of a longer message. */
+                clipped: boolean
+                /** @description The files the turn changed. */
+                files: {
+                  /** @description The file's path, relative to the session's folder. */
+                  path: string
+                  /**
+                   * @description What the turn did to the file.
+                   * @enum {string}
+                   */
+                  status: 'added' | 'modified' | 'deleted'
+                }[]
+                /** @description True for the newest turn until the next one starts: its files are the folder's changes so far. */
+                open: boolean
+                /** @description The message that started the turn. */
+                prompt: string
+                /** @description The turn's number in this session, from 1. */
+                seq: number
+                /** @description True when the turn changed more files than are listed. */
+                truncated: boolean
+              }[]
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/sessions/runs/{ref}/checkpoints/{seq}/rewind': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Puts the session's folder back as it was before a turn (to start), or as it was when the turn ended (to end, which undoes a rewind).
+     * @description Puts the session's folder back as it was before a turn (to start), or as it was when the turn ended (to end, which undoes a rewind).
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter ref. */
+          ref: string
+          /** @description Path parameter seq. */
+          seq: string
+        }
+        cookie?: never
+      }
+      requestBody: {
+        content: {
+          'application/json': {
+            /**
+             * @description start puts the folder back as it was before the turn; end as it was when the turn ended, which undoes a rewind made after it.
+             * @enum {string}
+             */
+            to: 'start' | 'end'
+          }
+        }
+      }
+      responses: {
+        /** @description The files that were put back or removed */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              /** @description Every file that was put back or removed. */
+              files: {
+                /**
+                 * @description restored: the file is back as it was. removed: it did not exist then.
+                 * @enum {string}
+                 */
+                action: 'restored' | 'removed'
+                /** @description The file's path, relative to the session's folder. */
+                path: string
+              }[]
+              /** @description The turn the folder was rewound to. */
+              seq: number
+              /**
+               * @description Whether the folder was put back as before the turn or as when it ended.
+               * @enum {string}
+               */
+              to: 'start' | 'end'
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description The session is working on a turn; interrupt it or wait for it to end */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description Too many files differ to rewind here */
+        422: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
     delete?: never
     options?: never
     head?: never
@@ -82584,7 +83969,7 @@ export interface paths {
       }
       requestBody?: never
       responses: {
-        /** @description the caller's snooze and done marks on the run */
+        /** @description the caller's snooze, done and unread marks on the run */
         200: {
           headers: {
             [name: string]: unknown
@@ -82600,6 +83985,8 @@ export interface paths {
                * @description When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields.
                */
               snoozed_until?: string
+              /** @description Whether the session did something after THIS caller last saw it; a session they never opened or marked reads as read. */
+              unread: boolean
             }
           }
         }
@@ -82678,7 +84065,7 @@ export interface paths {
       }
       requestBody?: never
       responses: {
-        /** @description the caller's snooze and done marks on the run */
+        /** @description the caller's snooze, done and unread marks on the run */
         200: {
           headers: {
             [name: string]: unknown
@@ -82694,6 +84081,8 @@ export interface paths {
                * @description When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields.
                */
               snoozed_until?: string
+              /** @description Whether the session did something after THIS caller last saw it; a session they never opened or marked reads as read. */
+              unread: boolean
             }
           }
         }
@@ -83171,6 +84560,273 @@ export interface paths {
             /** Format: int64 */
             work_lease_fence?: number
           }
+        }
+      }
+      responses: {
+        /** @description Local Git operation completed */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              ok: boolean
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description Git refused the operation, the workspace changed, or the work lease is stale */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unsupported isolation or Git output limit exceeded */
+        422: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description session OS boundary could not be established; no unconfined fallback */
+        502: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description session confinement, Git, policy or store is unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/sessions/runs/{ref}/git/init': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * sessions module route (requires sessions:run:write)
+     * @description Makes the session's folder a Git repository on branch main when it is not one yet.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter ref. */
+          ref: string
+        }
+        cookie?: never
+      }
+      requestBody: {
+        content: {
+          'application/json': {
+            /** Format: int64 */
+            work_lease_fence?: number
+          }
+        }
+      }
+      responses: {
+        /** @description Local Git operation completed */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              ok: boolean
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description Git refused the operation, the workspace changed, or the work lease is stale */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unsupported isolation or Git output limit exceeded */
+        422: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description session OS boundary could not be established; no unconfined fallback */
+        502: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description session confinement, Git, policy or store is unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/sessions/runs/{ref}/git/merge': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Fast-forwards the workspace's current branch to the stopped session's owned branch.
+     * @description Fast-forwards the workspace's current branch to the stopped session's owned branch.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter ref. */
+          ref: string
+        }
+        cookie?: never
+      }
+      requestBody: {
+        content: {
+          'application/json': Record<string, never>
         }
       }
       responses: {
@@ -83857,6 +85513,15 @@ export interface paths {
             'application/json': Record<string, never>
           }
         }
+        /** @description the message is over the 128 MB one request to the model takes */
+        413: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
         /** @description rate limited */
         429: {
           headers: {
@@ -84069,7 +85734,7 @@ export interface paths {
           cursor?: number
           /** @description Reads one message whole, with text and later_same; the filters do not apply. */
           id?: number
-          /** @description 1: every item of the page carries its whole text, bounded at 64 KiB per message as a read by id is, and the page holds at most 50 messages; later_same is not added. */
+          /** @description 1: every item of the page carries its text, cut at 64 KiB and marked clipped (read the message by id for the whole of it), and the page holds at most 50 messages; later_same is not added. */
           text?: '1'
         }
         header?: {
@@ -85714,7 +87379,7 @@ export interface paths {
         }
       }
       responses: {
-        /** @description the caller's snooze and done marks on the run */
+        /** @description the caller's snooze, done and unread marks on the run */
         200: {
           headers: {
             [name: string]: unknown
@@ -85730,6 +87395,8 @@ export interface paths {
                * @description When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields.
                */
               snoozed_until?: string
+              /** @description Whether the session did something after THIS caller last saw it; a session they never opened or marked reads as read. */
+              unread: boolean
             }
           }
         }
@@ -85808,7 +87475,7 @@ export interface paths {
       }
       requestBody?: never
       responses: {
-        /** @description the caller's snooze and done marks on the run */
+        /** @description the caller's snooze, done and unread marks on the run */
         200: {
           headers: {
             [name: string]: unknown
@@ -85824,6 +87491,8 @@ export interface paths {
                * @description When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields.
                */
               snoozed_until?: string
+              /** @description Whether the session did something after THIS caller last saw it; a session they never opened or marked reads as read. */
+              unread: boolean
             }
           }
         }
@@ -86029,6 +87698,107 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/v1/m/sessions/runs/{ref}/tasks/{task}/stop': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Stops one background task of a live session and answers with the session, which stays running (stopRunTask).
+     * @description Stops one background task of a live session and answers with the session, which stays running (stopRunTask).
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter ref. */
+          ref: string
+          /** @description Path parameter task. */
+          task: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/v1/m/sessions/runs/{ref}/title': {
     parameters: {
       query?: never
@@ -86142,6 +87912,212 @@ export interface paths {
       }
     }
     delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/sessions/runs/{ref}/unread': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Marks the run unread for the caller, idempotently: the moment they last saw it goes back before anything it ever did.
+     * @description Marks the run unread for the caller, idempotently: the moment they last saw it goes back before anything it ever did.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter ref. */
+          ref: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description the caller's snooze, done and unread marks on the run */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              /** @description Whether THIS caller has marked the session done; every direction is idempotent. */
+              done: boolean
+              /** @description The operated session's stable reference. */
+              run_ref: string
+              /**
+               * Format: date-time
+               * @description When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields.
+               */
+              snoozed_until?: string
+              /** @description Whether the session did something after THIS caller last saw it; a session they never opened or marked reads as read. */
+              unread: boolean
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    /**
+     * Marks the run read for the caller, idempotently: they have seen all it did up to now.
+     * @description Marks the run read for the caller, idempotently: they have seen all it did up to now.
+     */
+    delete: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter ref. */
+          ref: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description the caller's snooze, done and unread marks on the run */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              /** @description Whether THIS caller has marked the session done; every direction is idempotent. */
+              done: boolean
+              /** @description The operated session's stable reference. */
+              run_ref: string
+              /**
+               * Format: date-time
+               * @description When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields.
+               */
+              snoozed_until?: string
+              /** @description Whether the session did something after THIS caller last saw it; a session they never opened or marked reads as read. */
+              unread: boolean
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
     options?: never
     head?: never
     patch?: never
@@ -87552,6 +89528,144 @@ export interface paths {
           }
           content: {
             'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/sessions/usage': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Totals the runs the caller may read, one row per model, account, provider or tool, over an optional time range.
+     * @description Totals the runs the caller may read, one row per model, account, provider or tool, over an optional time range.
+     */
+    get: {
+      parameters: {
+        query: {
+          /** @description What to total by: the model a run used, its provider account, the provider kind it ran on, or its tool. */
+          group_by: 'model' | 'account' | 'provider' | 'tool'
+          /** @description Only runs created at or after this time. */
+          since?: string
+          /** @description Only runs created before this time; it must be after since. */
+          until?: string
+          /** @description day splits every row by the day (UTC) its runs were created. */
+          bucket?: 'day'
+        }
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description What the runs the caller may read used, totalled by the requested dimension */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              /** @enum {string} */
+              bucket?: 'day'
+              /** @enum {string} */
+              group_by: 'model' | 'account' | 'provider' | 'tool'
+              items: {
+                cost_micro_usd: number | null
+                /** @description The day (UTC, YYYY-MM-DD) the runs were created. Present only with bucket=day. */
+                day?: string
+                input_tokens: number | null
+                /** @description The model, account reference, provider kind or tool of the runs in this row. Absent when those runs recorded none. */
+                key?: string
+                output_tokens: number | null
+                /**
+                 * Format: int64
+                 * @description Runs in this row.
+                 */
+                runs: number
+                /**
+                 * Format: int64
+                 * @description Runs that reported no cost.
+                 */
+                runs_without_cost: number
+                /**
+                 * Format: int64
+                 * @description Runs that reported neither input nor output tokens.
+                 */
+                runs_without_tokens: number
+              }[]
+              /** Format: date-time */
+              since?: string
+              /** Format: date-time */
+              until?: string
+            }
           }
         }
         /** @description bad request */
@@ -90891,6 +93005,127 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/v1/m/sessions/workspace-candidates': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Lists the folders the tools of the engine's own account already worked in, read from the tools' own records of project paths and dates (never a credential or conversation text), each with the tool, the last use, the number of conversations, whether it is preselected (used in the last 30 days in at least 3 conversations) and the reason it cannot be registered.
+     * @description Lists the folders the tools of the engine's own account already worked in, read from the tools' own records of project paths and dates (never a credential or conversation text), each with the tool, the last use, the number of conversations, whether it is preselected (used in the last 30 days in at least 3 conversations) and the reason it cannot be registered.
+     */
+    get: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description The folders the tools already worked in, and which tools' records could be read */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              folders: {
+                conversations: number
+                /** Format: date-time */
+                last_used: string
+                path: string
+                /** @description Used in the last 30 days in at least 3 conversations, and not skipped. */
+                preselected: boolean
+                /**
+                 * @description Why the folder cannot be registered now; absent when it can.
+                 * @enum {string}
+                 */
+                skip?:
+                  | 'missing'
+                  | 'unreadable'
+                  | 'outside_allowed_roots'
+                  | 'already_registered'
+                tool: string
+              }[]
+              tools: {
+                name: string
+                /** @description False when the tool's records exist but could not be read. */
+                readable: boolean
+                tool: string
+              }[]
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/v1/m/sessions/workspaces': {
     parameters: {
       query?: never
@@ -91018,6 +93253,7 @@ export interface paths {
             read_only_folders?: string[] | null
             /** @description After trimming, must be an absolute, existing directory; the server stores its canonical real path. */
             root_path: string
+            workspace_id?: string | null
           }
         }
       }
@@ -91337,6 +93573,7 @@ export interface paths {
               | null
             dlp_mode?: ('' | 'label' | 'deny' | 'off') | null
             read_only_folders?: string[] | null
+            retention_days?: number | null
           }
         }
       }
@@ -91585,6 +93822,116 @@ export interface paths {
         }
       }
     }
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/sessions/workspaces/{ref}/files/archive': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * sessions module route (requires sessions:workspace:read)
+     * @description Returns the files and folders named by the repeated path query parameter as one zip, each file read under the same jail, size limit and DLP policy as a single read; one refused file refuses the whole archive.
+     */
+    get: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter ref. */
+          ref: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description The named entries as one zip */
+        200: {
+          headers: {
+            /** @description Comma-separated DLP classes found in the files of the zip, as the sensitivity labels of a single read; classes only, never matched values. Absent when none was found. */
+            'X-Olivares-Sensitivity'?: string
+            [name: string]: unknown
+          }
+          content: {
+            'application/zip': string
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description a file is over the workspace size limit, or the archive is over its size or entry ceiling */
+        413: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
     options?: never
     head?: never
     patch?: never
@@ -92519,6 +94866,188 @@ export interface paths {
           }
         }
         /** @description The setup command changed or is empty; review its current text and hash */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/sessions/workspaces/{ref}/sftp': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Tells whether this server serves SFTP and SCP for the folder, and where: the user name, the port and the fingerprint of the host key a client should compare.
+     * @description Tells whether this server serves SFTP and SCP for the folder, and where: the user name, the port and the fingerprint of the host key a client should compare.
+     */
+    get: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter ref. */
+          ref: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    put?: never
+    /**
+     * Issues a short-lived credential to copy files in and out of the folder with sftp or scp, and answers with the private key, shown once and never kept.
+     * @description Issues a short-lived credential to copy files in and out of the folder with sftp or scp, and answers with the private key, shown once and never kept.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter ref. */
+          ref: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
         409: {
           headers: {
             [name: string]: unknown
@@ -98232,6 +100761,8 @@ export interface components {
     AuthSession: {
       /** Format: date-time */
       created_at: string
+      /** @description Client address when the sign-in was issued; absent for a legacy row. */
+      created_ip?: string
       current: boolean
       /** Format: date-time */
       expires_at: string
@@ -98410,6 +100941,11 @@ export interface components {
       timestamp: string
     }
     ConnectorInfo: {
+      /**
+       * @description document for a knowledge document source; absent for an observation source.
+       * @enum {string}
+       */
+      class?: 'document'
       description?: string
       fields?: {
         default?: string
@@ -98449,6 +100985,15 @@ export interface components {
       running?: number
       stopped?: number
       total?: number
+    }
+    ConsoleErrorReport: {
+      /** @description Logged up to its first 64 KiB. */
+      component_stack?: string | null
+      /** @description Logged up to its first 16 KiB. */
+      error: string
+      error_id: string
+      /** @description Logged up to its first 2 KiB. */
+      route_path?: string | null
     }
     CreateOrgInput: {
       /** @description Optional residency region pin */
@@ -98505,6 +101050,11 @@ export interface components {
     DRBackup: {
       /** Format: date-time */
       created_at: string
+      /**
+       * Format: int64
+       * @description How long the backup took to prepare, in milliseconds. Absent for a bundle taken before the manifest recorded it.
+       */
+      duration_ms?: number
       /** @enum {string} */
       engine: 'sqlite' | 'postgres'
       engine_version?: string
@@ -98614,6 +101164,8 @@ export interface components {
       /** Format: date-time */
       last_verify?: string
       last_verify_error?: string
+      /** @description How long the last completed scheduled restore test took, from extracting the bundle to the ledger re-verified. */
+      last_verify_rto_ms?: number
       /** @enum {string} */
       last_verify_status?: 'running' | 'completed' | 'failed'
       /** @description Managed local backup disk mountpoint; absent uses the original backup directory. */
@@ -98632,6 +101184,10 @@ export interface components {
       retain_days: number
       rpo_exceeded?: boolean
       rpo_hours?: number
+      /** @description The last completed restore test took longer than rto_minutes. Absent without a target or a completed test. */
+      rto_exceeded?: boolean
+      /** @description The restore time the operator commits to; the scheduled restore test is measured against it. Absent sets no target. */
+      rto_minutes?: number
       /** @description Linux target filesystem space available to the service; absent when unavailable. */
       target_free_bytes?: number
       /** @description Independent scratch-restore verification cadence in UTC; empty disables verification. */
@@ -98649,6 +101205,8 @@ export interface components {
       require_dual_control_restore?: boolean
       retain_days: number
       rpo_hours?: number
+      /** @description The restore time the operator commits to; 0 clears the target, omitted preserves it. */
+      rto_minutes?: number
       /** @description UTC cron for scratch verification; omitted preserves it, empty disables it. */
       verify_cron?: string
     }
@@ -98684,7 +101242,7 @@ export interface components {
       assurance: number
       /**
        * Format: date-time
-       * @description The oldest update timestamp of the directory group and membership rows used for this subject; absent without directory groups.
+       * @description How old the directory data of the subject is: when the directory last answered for the subject where a directory module holds it, otherwise the oldest update timestamp of the directory group and membership rows used for this subject; absent without directory data.
        */
       membership_as_of?: string
       node: components['schemas']['EffectiveRightsRef']
@@ -98858,6 +101416,99 @@ export interface components {
       /** @description Present and true ONLY when the account census hit its paging budget, making `users` a lower bound rather than a count. */
       users_capped?: boolean
       version: string
+    }
+    HostStatus: {
+      /** Format: date-time */
+      collected_at: string
+      /** @description Average CPU use since the last one-minute sample. */
+      cpu_percent: number
+      filesystems: {
+        device: string
+        mount: string
+        /**
+         * Format: int64
+         * @description Size of the filesystem.
+         */
+        total_bytes: number
+        type: string
+        /**
+         * Format: int64
+         * @description Bytes in use.
+         */
+        used_bytes: number
+      }[]
+      /** @description The last 24 hours at one sample a minute, oldest first. */
+      history: {
+        /** Format: date-time */
+        at: string
+        cpu_percent: number
+        load_1: number
+        /**
+         * Format: int64
+         * @description Memory in use.
+         */
+        memory_used_bytes: number
+        /**
+         * Format: int64
+         * @description Swap in use.
+         */
+        swap_used_bytes: number
+      }[]
+      load: {
+        fifteen: number
+        five: number
+        one: number
+      }
+      memory: {
+        /**
+         * Format: int64
+         * @description Memory available without swapping.
+         */
+        available_bytes: number
+        /**
+         * Format: int64
+         * @description Physical memory.
+         */
+        total_bytes: number
+        /**
+         * Format: int64
+         * @description Total minus available.
+         */
+        used_bytes: number
+      }
+      session_folders: {
+        folders: {
+          /**
+           * Format: int64
+           * @description Allocated bytes of the folder.
+           */
+          bytes: number
+          /** @description The session folder's name under root. */
+          name: string
+        }[]
+        /** Format: date-time */
+        measured_at: string
+        root: string
+        /**
+         * Format: int64
+         * @description Allocated bytes of every session folder.
+         */
+        total_bytes: number
+        /** @description True when the measurement stopped at its entry or time bound, so the sizes are a floor. */
+        truncated: boolean
+      }
+      swap: {
+        /**
+         * Format: int64
+         * @description Zero on a host without swap.
+         */
+        total_bytes: number
+        /**
+         * Format: int64
+         * @description Swap in use.
+         */
+        used_bytes: number
+      }
     }
     Invite: {
       /** Format: date-time */
@@ -101686,6 +104337,10 @@ export interface operations {
         limit?: number
         /** @description Omit events whose action starts with this prefix. Repeatable: give it once per action family to leave out. It uses the SAME prefix rule as `action`, and it filters only what is RETURNED — the ledger still records every event, and a request without this parameter still returns them all. Its use is a caller that must not be shown its own footprint: the console's notification bell passes `exclude_action=audit.read` so that reading the ledger does not itself become the newest activity in it. */
         exclude_action?: string[]
+        /** @description Only entries about sessions run with this AI tool (its provider driver, for example `codex` or `claude`): an entry on such a session, and the approval that session names now. It is matched exactly, given once, and read from each session's current record, so these entries are not matched: those of a session that was deleted, those that name their session only in their metadata (reads of its attach, activity, messages and preview, and denial-budget notices), and those of an approval the session no longer names. It pages by `from` and `next_from` like every other filter. The system ledger refuses it (400). A deployment without the sessions module answers 501 `audit_filter_unavailable`. */
+        tool?: string
+        /** @description Only entries about sessions that work in this folder (the exact working-directory path, not a prefix: a trailing slash is another path), and the approval each session names now, with the same limits as `tool`. Combine it with `tool` to narrow both. It is given once. The system ledger refuses it (400). A deployment without the sessions module answers 501 `audit_filter_unavailable`. */
+        folder?: string
       }
       header?: {
         /** @description Target tenant id; required when the principal can act in more than one tenant. */
@@ -105769,6 +108424,15 @@ export interface operations {
         content: {
           'application/json': {
             message?: string
+            ok?: boolean
+            /** @description For a document source: its first ten documents with the ACL each would be stored with. Nothing is stored. */
+            preview?: {
+              acl: string[]
+              id: string
+              /** @enum {string} */
+              note?: 'skipped' | 'unreadable'
+              title?: string
+            }[]
             success?: boolean
           }
         }
@@ -106785,6 +109449,82 @@ export interface operations {
         content: {
           'application/json': components['schemas']['DRSchedule']
         }
+      }
+      /** @description Bad request */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Unauthenticated */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Conflict / setup required */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Rate limited */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  reportConsoleError: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ConsoleErrorReport']
+      }
+    }
+    responses: {
+      /** @description No content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
       }
       /** @description Bad request */
       400: {
@@ -108419,7 +111159,7 @@ export interface operations {
   listSecrets: {
     parameters: {
       query?: {
-        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
+        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone, and a shared vault's vault/<vault-id>/ items for the people granted it. Writes require the deployment's step-up in either scope. */
         scope?: 'tenant'
       }
       header?: {
@@ -108499,7 +111239,7 @@ export interface operations {
   putSecret: {
     parameters: {
       query?: {
-        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
+        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone, and a shared vault's vault/<vault-id>/ items for the people granted it. Writes require the deployment's step-up in either scope. */
         scope?: 'tenant'
       }
       header?: {
@@ -108586,7 +111326,7 @@ export interface operations {
   deleteSecret: {
     parameters: {
       query?: {
-        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
+        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone, and a shared vault's vault/<vault-id>/ items for the people granted it. Writes require the deployment's step-up in either scope. */
         scope?: 'tenant'
       }
       header?: {
@@ -108664,7 +111404,7 @@ export interface operations {
   generatePassword: {
     parameters: {
       query?: {
-        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
+        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone, and a shared vault's vault/<vault-id>/ items for the people granted it. Writes require the deployment's step-up in either scope. */
         scope?: 'tenant'
       }
       header?: {
@@ -108751,7 +111491,7 @@ export interface operations {
   revealSecret: {
     parameters: {
       query?: {
-        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
+        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone, and a shared vault's vault/<vault-id>/ items for the people granted it. Writes require the deployment's step-up in either scope. */
         scope?: 'tenant'
       }
       header?: {
@@ -108838,7 +111578,7 @@ export interface operations {
   getVaultCode: {
     parameters: {
       query?: {
-        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
+        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone, and a shared vault's vault/<vault-id>/ items for the people granted it. Writes require the deployment's step-up in either scope. */
         scope?: 'tenant'
       }
       header?: {
@@ -112284,6 +115024,89 @@ export interface operations {
       }
       /** @description Rate limited */
       429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  getHostStatus: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HostStatus']
+        }
+      }
+      /** @description Bad request */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Unauthenticated */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Conflict / setup required */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Rate limited */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Host metrics are not available on this platform */
+      501: {
         headers: {
           [name: string]: unknown
         }

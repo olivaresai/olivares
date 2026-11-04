@@ -9,7 +9,9 @@ package confine
 import coreconfine "github.com/olivaresai/olivares/core/runtime/confine"
 
 // Session defaults are policy: no core dumps, files up to 64 GiB and nice +10.
-// No memory ceiling: race/sanitizer runtimes reserve large address spaces.
+// No address-space ceiling here: race/sanitizer runtimes reserve large address
+// spaces. The memory and task ceilings are the session's systemd scope, which counts
+// resident memory (modules/sessions/session_scope_linux.go).
 func sessionLimits() *coreconfine.Limits {
 	return &coreconfine.Limits{CoreSize: 0, FileSize: SessionFileSizeLimit, Nice: SessionNice}
 }

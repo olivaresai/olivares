@@ -38,11 +38,12 @@ const { toastMock } = vi.hoisted(() => ({
     error: vi.fn(),
     warning: vi.fn(),
     info: vi.fn(),
+    dismiss: vi.fn(),
   },
 }))
 vi.mock('@/components/ui/toaster', () => ({ toast: toastMock }))
 
-const { notify, recordingApiMock, searchMock, authState } = vi.hoisted(() => ({
+const { notify, searchMock, authState } = vi.hoisted(() => ({
   notify: {
     listRoutes: vi.fn(),
     getRoute: vi.fn(),
@@ -59,7 +60,6 @@ const { notify, recordingApiMock, searchMock, authState } = vi.hoisted(() => ({
     listOutbox: vi.fn(),
     redeliverOutbox: vi.fn(),
   },
-  recordingApiMock: { notice: vi.fn(), acknowledge: vi.fn() },
   searchMock: vi.fn(),
   authState: {
     can: (_p: string): boolean => false,
@@ -71,10 +71,6 @@ vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 vi.mock('@/features/alerting/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/alerting/api')>()),
   notifyApi: notify,
-}))
-vi.mock('@/features/recordings/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/recordings/api')>()),
-  recordingApi: recordingApiMock,
 }))
 vi.mock('@/lib/api/search', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api/search')>()),
@@ -223,10 +219,6 @@ beforeEach(() => {
   notify.listDeliveries.mockResolvedValue(EMPTY)
   notify.listOutbox.mockResolvedValue(EMPTY)
   notify.routeRevisions.mockResolvedValue(EMPTY)
-  recordingApiMock.notice.mockResolvedValue({
-    recorded_namespaces: [],
-    consent_required: false,
-  })
 })
 
 describe('a palette verb opens its form on the arrival it was selected for', () => {

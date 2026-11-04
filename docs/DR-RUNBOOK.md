@@ -79,7 +79,29 @@ keys/kek.json      KDF parameters to re-derive the KEK (Argon2id salt; no secret
 keys/*.enc         installation custody, AES-256-GCM under the KEK.
 store/<snapshot>.enc   the consistent store snapshot, AES-256-GCM in chunks under the
                    KEK (absent in PITR mode).
+files/<kind>-<name>.tar.enc   one sealed tar per directory of files the database does
+                   not hold, in the same chunked format; the manifest lists every file
+                   by path, size, SHA-256 and mode.
 ```
+
+- **Files:** the bundle also carries the sign-ins and homes of the AI tools under the
+  data dir (`profile-homes`, `tool-logins`, `tools`, `session-skill-homes`,
+  `accounts`, `gitpublish`, `skills`) and every registered folder, read-only, so a
+  restore on another host returns the work and the sign-ins, not only the rows.
+  A folder registered with `backup: false` (a scratch folder) is not copied; it, and
+  the model files that download again (`ollama`, `model-servers`), are listed under
+  `not_included` in the manifest (`olivares dr inspect`). Owner, mode, times and POSIX
+  ACLs are restored as far as the restoring user may set them: run the restore as root
+  to keep owners. A file written to while it was copied is flagged
+  `changed_during_backup`; the copy of a running estate is crash-consistent for files,
+  so for a clean copy pause the sessions first. The PostgreSQL engine does not read the
+  folder registry: copy the registered folders separately (the manifest says so).
+- **Restore of files:** `dr restore` puts each folder back at its registered path and
+  the data subtrees into the data dir, and refuses before writing anything if a
+  destination already holds files; pass `--files-root <dir>` to restore the folders
+  under `<dir>/folder-<ref>` on a new host, or `--force` to replace files of the same
+  name. `--in-place` and the console restore move the live data subtrees aside as
+  `*.pre-restore-*`.
 
 - **Minimal data:** EVERY `*-signing.key` in the data dir (audit, catalog,
   policy, and any future signing-key class — captured by the glob, pinned by the
@@ -131,6 +153,12 @@ store/<snapshot>.enc   the consistent store snapshot, AES-256-GCM in chunks unde
   still restore and verify,** and both commands warn that the snapshot is not encrypted.
   Take a new backup to seal it; the old bundles and their offsite copies stay readable by
   anyone who holds them until you delete them.
+- **What the bundle leaves out is named.** The manifest lists the real path and the
+  reason of each directory it did not copy in `not_included`; `dr backup` and `dr inspect`
+  print the same list on one line on stderr (`not included in this bundle ...`, so the
+  text stdout stays as scripts know it) and the Backups page shows it in the backup's
+  detail. Back those paths up yourself when you need them. A bundle taken before this
+  list existed has no `not_included`: that means "not recorded", not "nothing left out".
 - **The key fingerprint is the public one** (one-way); the private key never appears in
   the manifest, only encrypted in `keys/*.enc`. Non-signing communication keyrings
   have no public-key fingerprint; the bundle authenticates their encrypted bytes.
@@ -835,6 +863,32 @@ olivares dr drill --events 1000 --scratch-dsn env:OLIVARES_SCRATCH_DSN
 # --scratch-dsn the drill prints "postgres: not measured" instead of staying silent.
 ```
 Record the result and the measured RTO (§5). A failed drill is an incident.
+
+**c) Restore test of a real bundle, with a signed report against your targets** (SQLite bundles; no prod, no network):
+```sh
+olivares dr drill --from /backups/olivares-dr-<ts>.drbundle --passphrase-file /run/secrets/dr-pass \
+  --rto-target 30m --rpo-target 24h
+# Restores the bundle into a throwaway directory, re-verifies chain + per-event signatures +
+# checkpoints + tips, and prints one JSON report: the measured RTO (extract + authenticate +
+# decrypt + restore + verify), the RPO the bundle gives at that instant (now − taken_at), both
+# next to your targets, and the bundle's SHA-256. The restore starts no engine, no provider and
+# no connector and opens no network connection ("network": "none"). Afterwards the report is sealed
+# as one `dr.drill` event in the system tenant of the estate that ran it, followed by a signed
+# checkpoint (the off-box signer when OLIVARES_LEDGER_SIGNER is set), so `audit verify` checks it
+# with the rest of the ledger and the audit archive and the Business evidence bundle carry it.
+# Exit 7: the bundle restored but a target was missed (the report is sealed all the same).
+# Exit 1: the restore failed. --no-record is a dry run that seals nothing.
+```
+`--from` drills SQLite bundles. A PostgreSQL bundle is restored into a throwaway database by
+`dr verify --scratch-dsn` (a). Schedule `drill --from` from cron once a quarter or oftener: CIS
+Control 11 asks for a restore test every quarter, and the sealed events are the dated record.
+
+The scheduled restore test of the server (`verify_cron`, §3) measures the same way: set
+`rto_minutes` next to `rpo_hours` in **Backups > Schedule** (or `PUT /v1/console/dr/schedule`).
+Each completed test records `rto_ms`, `rto_target_ms` and `rto_exceeded` in its `dr.verify.*`
+ledger event and shows the measured time in the console. When it exceeds the target the console
+shows the schedule as exceeded (`rto_exceeded`) and a high-severity `dr_rto_exceeded` finding goes
+to each organization's notification routes.
 
 ---
 

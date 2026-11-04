@@ -59,7 +59,8 @@ vi.mock('@/lib/api/endpoints', async (importOriginal) => {
   }
 })
 
-vi.mock('@tanstack/react-router', () => ({
+vi.mock('@tanstack/react-router', async () => ({
+  ...(await import('@/test/fake-router')).fakeRouterModule(),
   useRouterState: () => '',
   Link: ({ children, to }: { children: ReactNode; to: string }) => (
     <a href={to}>{children}</a>

@@ -26,7 +26,6 @@ import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { Button } from '@/components/ui/button'
-import { PathText } from '@/components/ui/path-text'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StatusGlyph, type Status } from '@/components/ui/status-glyph'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
@@ -42,6 +41,7 @@ import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { formatDuration, formatInt, formatPercent } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import '@/features/agentops/i18n'
 import './i18n'
 
 const GLYPH: Record<ActivityState, Status> = {
@@ -107,6 +107,31 @@ function displayPath(path: string, folder?: string | null): string {
   return path
 }
 
+/**
+ * A changed file as a person scans a list of them: its name first and whole as far as
+ * the row allows, then its folder, dimmed and cut from the left so the part nearest the
+ * file stays. The whole path is the row's hover.
+ */
+function FileName({ path }: { path: string }) {
+  const cut = path.lastIndexOf('/')
+  const name = path.slice(cut + 1)
+  const folder = cut > 0 ? path.slice(0, cut) : ''
+  return (
+    <span className="flex min-w-0 flex-1 items-baseline gap-1.5 font-mono">
+      <span className="min-w-0 shrink truncate text-foreground">{name}</span>
+      {folder ? (
+        // rtl puts the ellipsis on the left; bdi keeps the path itself left to right.
+        <span
+          dir="rtl"
+          className="min-w-0 flex-1 truncate text-left text-mono-s text-muted-foreground"
+        >
+          <bdi dir="ltr">{folder}</bdi>
+        </span>
+      ) : null}
+    </span>
+  )
+}
+
 function elapsed(item: {
   duration_ms?: number
   started_at?: string
@@ -118,6 +143,20 @@ function elapsed(item: {
     if (Number.isFinite(ms) && ms >= 0) return formatDuration(ms)
   }
   return null
+}
+
+/** The tool's own end-of-work line ("Background command "X" completed (exit code 0)",
+ * "Agent "X" finished") when it only says again the title the row already shows and
+ * that it ended, which the row's state says: shown only when it adds something. */
+function summaryOf(
+  item: { summary?: string; state: ActivityState },
+  title: string,
+): string | undefined {
+  const summary = item.summary?.trim()
+  if (!summary) return undefined
+  if (item.state === 'completed' && title && summary.includes(title))
+    return undefined
+  return summary
 }
 
 function countLabel(t: TFunction, total: number, running: number): string {
@@ -342,28 +381,33 @@ function ActivityBody({
                   className="size-3.5 shrink-0 text-muted-foreground"
                 />
               )}
-              <PathText
-                value={displayPath(file.path, run.workspace_path)}
-                copy={false}
-                className="flex-1"
-              />
+              <FileName path={displayPath(file.path, run.workspace_path)} />
+              {/* A new file had no lines to remove: it reads "new +N", the lines it now
+                  holds (its later edits included); a changed one "+N −M". */}
               {file.created ? (
-                <span className="text-muted-foreground">
+                <span className="shrink-0 text-muted-foreground">
                   {t('activity.fileNew')}
                 </span>
               ) : null}
               <span className="sr-only">
                 {t('activity.lines', {
-                  added: file.added,
-                  removed: file.removed,
+                  added: file.created
+                    ? Math.max(file.added - file.removed, 0)
+                    : file.added,
+                  removed: file.created ? 0 : file.removed,
                 })}
               </span>
-              <span aria-hidden className="tabular-nums text-success">
-                +{file.added}
+              <span aria-hidden className="shrink-0 tabular-nums text-success">
+                +
+                {file.created
+                  ? Math.max(file.added - file.removed, 0)
+                  : file.added}
               </span>
-              <span aria-hidden className="tabular-nums text-danger">
-                −{file.removed}
-              </span>
+              {file.created ? null : (
+                <span aria-hidden className="shrink-0 tabular-nums text-danger">
+                  −{file.removed}
+                </span>
+              )}
             </button>
           ))}
         </Section>
@@ -374,7 +418,9 @@ function ActivityBody({
           <dt className="text-muted-foreground">{t('activity.model')}</dt>
           <dd className="min-w-0 truncate text-foreground" title={a.model}>
             {a.model ? modelName(a.model) : t('context.notDeclared')}
-            {a.effort ? ` · ${a.effort}` : ''}
+            {a.effort
+              ? ` · ${t(`agentops:effort.${a.effort}`, { defaultValue: a.effort })}`
+              : ''}
           </dd>
           <dt className="text-muted-foreground">{t('activity.tokens')}</dt>
           <dd className="tabular-nums text-foreground">{contextUsage}</dd>
@@ -420,39 +466,51 @@ function TaskRow({ task }: { task: ActivityTaskDTO }) {
   const workflow = task.workflow
   const Icon = TASK_ICON[task.kind] ?? Terminal
   const time = elapsed(task)
+  const summary = summaryOf(task, task.description ?? '')
+  // ONE LINE PER ITEM: its state, its name and its time. A command the tool also
+  // described waits behind the line, as typed.
+  const line = (
+    <>
+      <StateGlyph state={task.state} />
+      <Icon
+        role="img"
+        aria-label={t(`activity.kind.${task.kind}`, {
+          defaultValue: task.kind,
+        })}
+        className="size-3.5 shrink-0 text-muted-foreground"
+      />
+      <span className="min-w-0 flex-1 truncate text-foreground">
+        {task.description || task.command || task.kind}
+      </span>
+      {task.state === 'scheduled' && task.due_at ? (
+        <span className="text-muted-foreground">
+          {t('activity.due', {
+            time: new Date(task.due_at).toLocaleTimeString(),
+          })}
+        </span>
+      ) : time ? (
+        <span className="tabular-nums text-muted-foreground">{time}</span>
+      ) : null}
+    </>
+  )
   return (
     <div className="flex flex-col gap-0.5 py-0.5" data-testid="activity-task">
-      <div className="flex min-w-0 items-center gap-1.5 text-caption">
-        <StateGlyph state={task.state} />
-        <Icon
-          role="img"
-          aria-label={t(`activity.kind.${task.kind}`, {
-            defaultValue: task.kind,
-          })}
-          className="size-3.5 shrink-0 text-muted-foreground"
-        />
-        <span className="min-w-0 flex-1 truncate text-foreground">
-          {task.description || task.command || task.kind}
-        </span>
-        {task.state === 'scheduled' && task.due_at ? (
-          <span className="text-muted-foreground">
-            {t('activity.due', {
-              time: new Date(task.due_at).toLocaleTimeString(),
-            })}
-          </span>
-        ) : time ? (
-          <span className="tabular-nums text-muted-foreground">{time}</span>
-        ) : null}
-      </div>
       {task.command && task.description ? (
-        <code className="truncate pl-9 font-mono text-caption text-muted-foreground">
-          {task.command}
-        </code>
-      ) : null}
-      {task.summary ? (
-        <p className="pl-9 text-caption text-muted-foreground">
-          {task.summary}
-        </p>
+        <details>
+          <summary className="flex min-w-0 cursor-pointer list-none items-center gap-1.5 rounded-sm text-caption hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+            {line}
+          </summary>
+          <code className="block pl-9 font-mono text-caption break-all whitespace-pre-wrap text-muted-foreground">
+            {task.command}
+          </code>
+        </details>
+      ) : (
+        <div className="flex min-w-0 items-center gap-1.5 text-caption">
+          {line}
+        </div>
+      )}
+      {summary ? (
+        <p className="pl-9 text-caption text-muted-foreground">{summary}</p>
       ) : null}
       {workflow ? (
         <div className="pl-9 text-caption">
@@ -509,6 +567,7 @@ function AgentRow({ run, agent }: { run: RunDTO; agent: ActivityAgentDTO }) {
   const { t } = useTranslation('sessions')
   const [open, setOpen] = useState(false)
   const time = elapsed(agent)
+  const summary = summaryOf(agent, agent.description ?? '')
   // Codex reports the child state in its root rollout; child transcript reads
   // are currently offered only for Claude's per-session subagents directory.
   const agentId = run.provider_driver === 'claude' ? agent.agent_id : undefined
@@ -523,19 +582,27 @@ function AgentRow({ run, agent }: { run: RunDTO; agent: ActivityAgentDTO }) {
       >
         <StateGlyph state={agent.state} />
         <Bot aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+        {/* The name takes the line beside its time; the type is a small chip under it, so
+            two agents of one type are told apart by name in a narrow pane. */}
         <span className="min-w-0 flex-1 truncate text-foreground">
           {agent.description || agent.type || t('activity.agent')}
         </span>
-        {agent.type ? (
-          <span className="truncate text-muted-foreground">{agent.type}</span>
-        ) : null}
         {time ? (
-          <span className="tabular-nums text-muted-foreground">{time}</span>
+          <span className="shrink-0 tabular-nums text-muted-foreground">
+            {time}
+          </span>
         ) : null}
       </button>
-      {agent.summary && !open ? (
-        <p className="truncate pl-9 text-caption text-muted-foreground">
-          {agent.summary}
+      {(agent.type && agent.description) || (summary && !open) ? (
+        <p className="flex min-w-0 items-center gap-1.5 pl-9 text-caption text-muted-foreground">
+          {agent.type && agent.description ? (
+            <span className="shrink-0 rounded-sm bg-muted px-1 text-[11px]">
+              {agent.type}
+            </span>
+          ) : null}
+          {summary && !open ? (
+            <span className="min-w-0 truncate">{summary}</span>
+          ) : null}
         </p>
       ) : null}
       {open && agentId ? (

@@ -6,10 +6,12 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,6 +19,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/core/license"
 	"github.com/olivaresai/olivares/core/license/aptrefresh"
 	"github.com/olivaresai/olivares/core/release"
@@ -349,16 +352,26 @@ func licenseUninstallCmd() *cobra.Command {
 	return cmd
 }
 
-// licenseStatusCmd shows the at-rest license and its status OFFLINE, resolving it by
-// the same precedence the engine uses. The LIVE status (with active-user usage) is GET
-// /v1/console/license or the console — this is the no-database, on-disk view.
+// licenseStatusCmd shows the license and its status. Signed in to an engine (a saved sign-in,
+// --server or $OLIVARES_SERVER_URL), it asks that engine, as the console does. Otherwise, or
+// when a data-dir/license/manifest flag names the files, it reads the at-rest license OFFLINE,
+// resolving it by the same precedence the engine uses.
 func licenseStatusCmd() *cobra.Command {
 	var dataDir, licPath, pubB64, manifestPath, manifestSig, otaPub string
+	// signIn: only a sign-in the caller named counts; the engine host's own credential file
+	// must not turn the data-dir view into an engine call.
+	engine := authClientFlags{signIn: true}
 	cmd := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "read"},
 		Use:         "status",
-		Short:       "Show the installed license and its status (offline; resolves --license > env > data-dir)",
-		Long: "status resolves the at-rest license by the same precedence the engine uses (explicit --license >\n" +
+		Aliases:     []string{"show"},
+		Short:       "Show the license and its status (the signed-in engine's, else offline from --license > env > data-dir)",
+		Long: "Signed in to an engine on another host (olivares login, --server or $OLIVARES_SERVER_URL), status\n" +
+			"asks that engine (GET /v1/console/license) and prints its edition and license state; only a\n" +
+			"superadmin may read it, and a server without a credential is \"Not signed in\". On the host of the\n" +
+			"engine you are signed in to, with --data-dir, --license, --pubkey or --manifest, or with no sign-in,\n" +
+			"it reads the license on this host instead:\n\n" +
+			"status resolves the at-rest license by the same precedence the engine uses (explicit --license >\n" +
 			"OLIVARES_LICENSE_PATH > OLIVARES_LICENSE > <data-dir>/" + licenseFileName + "), verifies it offline\n" +
 			"against this deployment's license trust (see `license trust`) and prints its source, profile, grace,\n" +
 			"status and the trusted key that verified it as JSON. With\n" +
@@ -369,6 +382,11 @@ func licenseStatusCmd() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if !licenseFilesNamed(cmd) {
+				if done, err := engineLicenseStatus(cmd, &engine); done {
+					return err
+				}
+			}
 			dir := dataDir
 			if dir == "" {
 				resolved, derr := defaultDataDir()
@@ -438,7 +456,63 @@ func licenseStatusCmd() *cobra.Command {
 	cmd.Flags().StringVar(&manifestPath, "manifest", "", "OTA channel manifest to read the license CRL from (its signature must verify)")
 	cmd.Flags().StringVar(&manifestSig, "manifest-sig", "", "detached manifest signature (default <manifest>.sig)")
 	cmd.Flags().StringVar(&otaPub, "ota-pubkey", "", "base64 or @file Ed25519 OTA key for the manifest (default: the key embedded in this build)")
+	engine.add(cmd)
 	return cmd
+}
+
+// licenseFilesNamed reports whether the caller pointed `license status` at license files on this host.
+func licenseFilesNamed(cmd *cobra.Command) bool {
+	for _, name := range []string{"data-dir", "license", "pubkey", "manifest", "manifest-sig", "ota-pubkey"} {
+		if cmd.Flags().Changed(name) {
+			return true
+		}
+	}
+	return false
+}
+
+// engineLicenseStatus prints the license state of the engine the caller is signed in to. done is
+// false when there is no sign-in, or when the sign-in is the engine this host runs, so the caller
+// falls back to the offline view.
+func engineLicenseStatus(cmd *cobra.Command, flags *authClientFlags) (done bool, err error) {
+	opts, err := flags.resolutionOptions(cmd)
+	if err != nil {
+		return true, redactCoded(err, flags.effectiveToken())
+	}
+	resolved, err := resolveCLIConfig(opts)
+	if err != nil {
+		return true, redactCoded(err, flags.effectiveToken())
+	}
+	if resolved.Server == "" {
+		return false, nil
+	}
+	// The engine this host runs keeps the offline document: its claims, trust report and
+	// edition switch live in this host's data directory, and the console answer has none of them.
+	if origin, _ := localEngineFor(); origin == resolved.Server {
+		return false, nil
+	}
+	// A server the caller named, or a saved sign-in that was signed out, has no credential: say so
+	// instead of answering `none` from a data directory that belongs to some other engine.
+	if resolved.Token == "" {
+		return true, notSignedIn("--token-file", "OLIVARES_TOKEN")
+	}
+	raw, status, _, err := bootstrapClient{flags: flags, surface: "license"}.do(cmd, http.MethodGet, "/v1/console/license", nil, http.StatusOK, http.StatusForbidden)
+	if err != nil {
+		return true, err
+	}
+	server := safeCLIValue(resolved.Server, resolved.Token)
+	if status == http.StatusForbidden {
+		return true, sentence(exitcode.Auth, "Only a superadmin can view the license of %s. Sign in as one with olivares login.", server)
+	}
+	var result map[string]any
+	err = json.Unmarshal(raw, &result)
+	if err == nil && result == nil {
+		err = errors.New("the engine sent no license document")
+	}
+	if err != nil {
+		return true, exitcode.New(exitcode.Server, fmt.Errorf("decode license response: %w", err))
+	}
+	result["engine"] = server
+	return true, renderReportOut(cmd, result)
 }
 
 // readLicenseArg reads a license blob from a file path, or from stdin when arg is "-".

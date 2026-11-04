@@ -26,12 +26,32 @@ export const ATTACH_TYPES = [
 /** The picker's accept list. */
 export const ATTACH_ACCEPT = ATTACH_TYPES.join(',')
 
-/** The most images one message carries (maxTurnAttachments). */
-export const MAX_ATTACHMENTS = 4
+/** The most images one message carries (maxTurnAttachments): what one request to the
+ * model takes. */
+export const MAX_ATTACHMENTS = 100
 
 /** The largest image the tools take (maxAttachmentBytes). The engine decides; this only
  * spares a person the upload of a file it will refuse. */
 export const MAX_ATTACHMENT_BYTES = 3_932_160
+
+/** Stores one image. A node stores a few images at a time and answers the rest 429 with
+ * Retry-After, so an image of a message with many waits its turn instead of being lost. */
+async function uploadWhenFree(
+  runRef: string,
+  body: { media_type: string; data: string },
+) {
+  for (;;) {
+    try {
+      return await agentOpsApi.uploadAttachment(runRef, body)
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 429) throw error
+      const seconds = Number(error.retryAfter ?? 1)
+      await new Promise((resolve) =>
+        setTimeout(resolve, Number.isFinite(seconds) ? seconds * 1000 : 1000),
+      )
+    }
+  }
+}
 
 export interface DraftImage {
   /** Local, for the list. */
@@ -139,7 +159,7 @@ export function useImageDraft(runRef: string) {
           try {
             // One read gives both the thumbnail address and the bytes to upload.
             const preview = await dataUrlOf(file)
-            const stored = await agentOpsApi.uploadAttachment(runRef, {
+            const stored = await uploadWhenFree(runRef, {
               media_type: file.type,
               data: preview.slice(preview.indexOf(',') + 1),
             })

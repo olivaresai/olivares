@@ -62,7 +62,20 @@
     "waiting": "Wartet auf Genehmigung",
     "needsYou": "Braucht Sie",
     "idle": "Untätig",
-    "approvalsUnread": "Die Genehmigungen konnten nicht gelesen werden, daher werden Wartezeiten auf Genehmigungen nicht gezeichnet."
+    "approvalsUnread": "Die Genehmigungen sind noch nicht gelesen oder konnten nicht gelesen werden, daher werden Wartezeiten auf Genehmigungen nicht gezeichnet.",
+    "approvalsPartial": "Nur ein Teil der Genehmigungen ist gelesen, daher werden manche Wartezeiten auf Genehmigungen möglicherweise nicht gezeichnet.",
+    "step": {
+      "Bash": "Führt {{what}} aus",
+      "Read": "Liest {{what}}",
+      "Edit": "Bearbeitet {{what}}",
+      "Write": "Schreibt {{what}}",
+      "Grep": "Sucht {{what}}",
+      "Glob": "Sucht Dateien {{what}}",
+      "WebFetch": "Liest {{what}}",
+      "WebSearch": "Sucht im Web nach {{what}}",
+      "Task": "Arbeitet mit einem Agenten",
+      "Agent": "Arbeitet mit einem Agenten"
+    }
   },
   "summary": {
     "heading": "Zusammenfassung",
@@ -89,11 +102,5 @@
   "state": {
     "pendingIdle": "Abfrage nicht gestartet — öffnen, um zu laden",
     "pendingPaused": "Abfrage pausiert — wartet auf Fortsetzung"
-  },
-  "proof": {
-    "verified": "Kette geprüft um {{time}}",
-    "entries_one": "{{n}} Eintrag",
-    "entries_other": "{{n}} Einträge",
-    "broken": "Kette gebrochen: Ledger öffnen"
   }
 }

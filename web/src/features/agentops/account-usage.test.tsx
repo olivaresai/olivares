@@ -5,11 +5,16 @@
 // What an account's usage says where the console shows the account: the 5-hour and
 // weekly windows the tool reported, nothing at all (never 0 %) when it reported none,
 // and a window at 100 % marked with when it resets.
-import { render, screen } from '@testing-library/react'
+import { render, renderHook, screen } from '@testing-library/react'
 import axe from 'axe-core'
 import { describe, expect, it } from 'vitest'
 import { findRawI18nKeys } from '@/test/i18n-keys'
-import { AccountUsage, AtLimit, limitReached } from './account-usage'
+import {
+  AccountUsage,
+  AtLimit,
+  limitReached,
+  useWindowName,
+} from './account-usage'
 import type { ProviderAccountUsage } from './types'
 
 const win = (
@@ -63,6 +68,24 @@ describe('AccountUsage', () => {
     )
     expect(container.textContent).toBe('5-hour 3% · seven_day:opus 55%')
   })
+  it("names a model's weekly cap in the console's words, never the engine's English label", () => {
+    const { container } = render(
+      <AccountUsage
+        usage={[
+          win('seven_day', 75),
+          win('seven_day:fable', 0, { label: 'Weekly (Fable)' }),
+        ]}
+      />,
+    )
+    expect(container.textContent).toBe('Weekly 75% · Fable only 0%')
+    // The provider snapshot carries the engine's label alone: the same words.
+    const name = renderHook(() => useWindowName()).result.current
+    expect(name({ label: '5-hour' })).toBe('5-hour')
+    expect(name({ label: 'Weekly' })).toBe('Weekly')
+    expect(name({ label: 'Weekly (Fable)' })).toBe('Fable only')
+    expect(name({ label: 'Monthly spend' })).toBe('Monthly spend')
+  })
+
   it('shows a monthly cap and credit balance without inventing a percent', () => {
     const { container } = render(
       <AccountUsage

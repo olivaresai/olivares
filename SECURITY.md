@@ -132,7 +132,14 @@ namespaces.
 - The systemd units shipped in the packages allow exactly those two namespace types and a
   mount namespace, with the `mount` system call. The session helper uses it only inside
   its own user and mount namespace, to keep a folder's Git hooks and configuration
-  read-only; the engine itself holds no capability, so a mount outside that namespace fails.
+  read-only and to cover the runtime directory of the engine's user, where its user
+  manager listens (its D-Bus bus, when the host has one, and its own private socket,
+  `systemd/private`), with an empty read-only filesystem (Landlock does not govern a
+  connection to a socket at a path, and a unit started through either socket would run
+  outside the child's confinement); every confined child gets that, and a child that must
+  be confined is not started on a host that cannot give it (`olivares doctor` reports it
+  under `session-confinement`). The engine itself holds no
+  capability, so a mount outside that namespace fails.
 - On kernels with AppArmor's unprivileged user namespace restriction, the deb also
   installs and loads `/etc/apparmor.d/usr.bin.olivares` for `/usr/bin/olivares`.
   It permits `userns` with an otherwise unconfined profile, without changing the
@@ -142,7 +149,8 @@ namespaces.
   profile plus those two namespace types, a mount namespace and the `mount` system call
   with the bind or private-propagation flag only, so a mount that creates a filesystem
   stays denied (the container drops every capability, so a mount outside the session
-  helper's own namespace still fails).
+  helper's own namespace still fails). A container has no user manager, so there is no
+  bus to cover there.
   AppArmor hosts that mediate user namespace creation also need the shipped
   `deploy/apparmor/olivares-sessions.conf` profile loaded and selected, as the
   [README install](README.md#install) shows. It retains Docker default restrictions

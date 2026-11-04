@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import type { RunCommandDTO } from '@/features/agentops/types'
+import type { FileEntry, RunCommandDTO } from '@/features/agentops/types'
 
 /** Why the menu has no entries to show: read in progress, not readable, nothing reported, or nothing matches. */
 export type SlashMenuEmpty = 'loading' | 'failed' | 'unreported' | 'nomatch'
@@ -14,6 +14,72 @@ export type SlashMenuEmpty = 'loading' | 'failed' | 'unreported' | 'nomatch'
 export function slashQuery(draft: string): string | null {
   const match = /^\/([^\s/]*)$/.exec(draft)
   return match ? match[1] : null
+}
+
+/** The skill being typed after a leading "$" (a tool such as Codex invokes its skills as $name), or null. */
+export function skillQuery(draft: string): string | null {
+  const match = /^\$([^\s$]*)$/.exec(draft)
+  return match ? match[1] : null
+}
+
+/** An entry the tool invokes with "$" rather than "/". */
+export function isDollarSkill(command: RunCommandDTO): boolean {
+  return command.insert_text?.startsWith('$') ?? false
+}
+
+/** The path being typed after an "@" at the end of the draft, or null: a file or folder can be
+ * mentioned anywhere in the message, and the mention ends at a space. */
+export function mentionQuery(draft: string): string | null {
+  const match = /(?:^|\s)@([^\s@]*)$/.exec(draft)
+  return match ? match[1] : null
+}
+
+/** What the menu is for, as typed: "/word", "$word" or "@path", or null when no menu is. Escape
+ * closes the menu for this exact text; the next character brings it back. */
+export function menuKeyOf(draft: string): string | null {
+  const slash = slashQuery(draft)
+  if (slash !== null) return `/${slash}`
+  const skill = skillQuery(draft)
+  if (skill !== null) return `$${skill}`
+  const mention = mentionQuery(draft)
+  return mention === null ? null : `@${mention}`
+}
+
+/** The folder a mention lists and the start of the name typed in it: "src/ap" lists src/ for "ap". */
+export function mentionFolder(query: string): { folder: string; name: string } {
+  const cut = query.lastIndexOf('/')
+  return { folder: query.slice(0, cut + 1), name: query.slice(cut + 1) }
+}
+
+/** A folder's entries as menu entries, folders first, those whose name starts with what is typed;
+ * a hidden one only once its dot is typed. A folder ends in "/": choosing it lists its own. */
+export function mentionEntries(
+  entries: readonly FileEntry[],
+  query: string,
+): RunCommandDTO[] {
+  const { folder, name } = mentionFolder(query)
+  const typed = name.toLowerCase()
+  return entries
+    .filter(
+      (e) =>
+        e.name.toLowerCase().startsWith(typed) &&
+        (typed.startsWith('.') || !e.name.startsWith('.')),
+    )
+    .sort(
+      (a, b) =>
+        Number(b.type === 'dir') - Number(a.type === 'dir') ||
+        a.name.localeCompare(b.name),
+    )
+    .map((e) => {
+      const path = `${folder}${e.name}${e.type === 'dir' ? '/' : ''}`
+      return {
+        name: path,
+        description: '',
+        source: '',
+        kind: 'command',
+        insert_text: `@${path}`,
+      }
+    })
 }
 
 /** 0 = the command's name is what was typed (an agent is typed as @agent-name, so it never is), 1 = it starts with it (a plugin's name counts after its "plugin:" prefix), 2 = it contains it, 3 = only the description does. */

@@ -123,7 +123,7 @@
     "add": "Aggiungi {{token}} alla query",
     "commands": "Cerca e comandi",
     "problem": {
-      "key": "{{token}} non è un filtro del registro. Usa person:, action:, kind:, target:, since:, until: o parole.",
+      "key": "{{token}} non è un filtro del registro. Usa person:, action:, kind:, target:, tool:, folder:, since:, until: o parole.",
       "time": "{{token}} non è un tempo. Usa 90m, 24h, 7d, 2w o una data come 2026-10-20.",
       "person": "Nessuno corrisponde a {{token}}. Usa un nome, un'email o user:<id>.",
       "several": "{{token}} corrisponde a più persone. Usa il nome completo, un'email o user:<id>.",

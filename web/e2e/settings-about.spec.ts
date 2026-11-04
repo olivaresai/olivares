@@ -18,7 +18,7 @@ test('fresh Community About identifies the person and keeps the principal ID sel
   await page.locator('#setup-email').fill(email)
   await page.locator('#setup-password').fill(password)
   await page.getByRole('button', { name: /create administrator/i }).click()
-  await page.waitForURL('**/onboarding')
+  await page.waitForURL('**/sessions')
   await page.goto('/settings')
   await page.getByRole('button', { name: 'About', exact: true }).click()
   await expect(

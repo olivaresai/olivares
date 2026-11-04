@@ -205,9 +205,17 @@ const SIN_TECHO_CONOCIDAS: Record<string, Record<string, string>> = {
         },
       }
     : {}),
-  recordings: {
-    listSessions: 'linea base 2026-08-28; sin clasificar drena/recorta',
+  providers: {
+    presets:
+      'modules/sessions/provider_record_api.go: handleListProviderPresets ignores the request, answers the whole fixed Presets table of connectors/modelprovider/presets.go in one response and never sets has_more',
   },
+  ...(existsSync(join(RAIZ, 'recordings/api.ts'))
+    ? {
+        recordings: {
+          listSessions: 'linea base 2026-08-28; sin clasificar drena/recorta',
+        },
+      }
+    : {}),
   redteam: {
     results: 'linea base 2026-08-28; sin clasificar drena/recorta',
   },
@@ -247,6 +255,10 @@ const SIN_TECHO_CONOCIDAS: Record<string, Record<string, string>> = {
     sessions: 'linea base 2026-08-28; sin clasificar drena/recorta',
   },
 }
+
+/** Features de pago (docs/editions.md): Community no lleva su fuente, así que sus exenciones sólo
+ * se comprueban donde la feature existe. */
+const SOLO_EN_OVERLAY_DE_PAGO = new Set(['deploy'])
 
 describe('registro · toda ruta de lista pide su techo, en TODAS las features con api.ts', () => {
   it('el universo se deriva del árbol y no está vacío', () => {
@@ -323,7 +335,9 @@ describe('registro · toda ruta de lista pide su techo, en TODAS las features co
     for (const [f, rutas] of Object.entries(SIN_TECHO_CONOCIDAS)) {
       const api = join(RAIZ, f, 'api.ts')
       if (!existsSync(api)) {
-        sobran.push(`${f} (la feature ya no tiene api.ts)`)
+        // Su fuente llega sólo con el overlay de pago: se comprueba en la build que la lleva.
+        if (!SOLO_EN_OVERLAY_DE_PAGO.has(f))
+          sobran.push(`${f} (la feature ya no tiene api.ts)`)
         continue
       }
       const src = readFileSync(api, 'utf8')

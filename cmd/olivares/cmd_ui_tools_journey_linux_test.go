@@ -67,11 +67,14 @@ func startUIJourney(t *testing.T, e *uiEngine) (*uiJourney, func() int) {
 }
 
 // startUIJourneyAt is startUIJourney against any engine: the fake one, or a real
-// one the test booted.
-func startUIJourneyAt(t *testing.T, serverURL, token, tenant string) (*uiJourney, func() int) {
+// one the test booted. extra are more environment entries, after the engine's
+// own (a data dir the Verify now screen reads, for instance).
+func startUIJourneyAt(t *testing.T, serverURL, token, tenant string, extra ...string) (*uiJourney, func() int) {
 	t.Helper()
 	master, slave := openPTY(t, tui.MinWidth, tui.MinHeight)
-	env := cliProcessEnv(t, "OLIVARES_SERVER_URL="+serverURL, "OLIVARES_TOKEN="+token, "OLIVARES_TENANT="+tenant, "NO_COLOR=1")
+	env := cliProcessEnv(t, append([]string{
+		"OLIVARES_SERVER_URL=" + serverURL, "OLIVARES_TOKEN=" + token, "OLIVARES_TENANT=" + tenant, "NO_COLOR=1",
+	}, extra...)...)
 	home := ""
 	for _, kv := range env {
 		if v, ok := strings.CutPrefix(kv, "HOME="); ok {

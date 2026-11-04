@@ -673,6 +673,7 @@ func TestPagingFlagsExistOnlyWhereTheEngineReadsThem(t *testing.T) {
 		{"olivares observability traces get", false, false},
 		{"olivares observability traces ls", true, true},
 		{"olivares consoleviews create", false, false},
+		{"olivares capabilities ls", true, true},
 		{"olivares capabilities servers get", false, false},
 		{"olivares capabilities servers ls", true, true},
 		{"olivares capabilities skills", true, true},

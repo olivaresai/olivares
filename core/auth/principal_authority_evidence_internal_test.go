@@ -1316,7 +1316,9 @@ func TestPrincipalAuthoritySealProtocolInventoryAndSemanticCanonicalization(t *t
 		"AgentIdentity", "SessionIdentity", "SessionWorkspaceID", "SessionRunRef", "SessionFence",
 		"grants", "groups", "audiences", "actAs", "confined", "restricted",
 		"localVia", "localSubject", "localMeta", "localSystem", "credentialRef", "sessionOrigin", "evidence",
-		"excluded", "sessionScope", "floors",
+		// rightsStale is a per-request freshness mark (freshness.go), deliberately
+		// outside the seal preimage: it is derived each request, not standing authority.
+		"rightsStale", "excluded", "sessionScope", "floors",
 	}
 	principalType := reflect.TypeOf(Principal{})
 	if principalType.NumField() != len(wantPrincipalFields) {

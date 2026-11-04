@@ -97,7 +97,8 @@ type providerProfileDTO struct {
 	LocalEnvironment bool `json:"local_environment"`
 	// ServerUserLogin marks an own-login profile that points at this server's user
 	// login (the engine user's own ~/.claude and the like, the homes profiles were
-	// given before first-hour check). It is not launched; sign in again to use a product login.
+	// given before first-hour check) and may not run there. It is not launched; sign in again to
+	// use a product login.
 	ServerUserLogin bool `json:"server_user_login,omitempty"`
 	// Operable is the LEGACY enablement flag, preserved with its exact meaning and
 	// its exact computation: local, active, a driver this runtime has REGISTERED,
@@ -253,7 +254,7 @@ func (m *Module) toProfileDTO(p ProviderProfile) providerProfileDTO {
 		SessionRegistries:     p.SessionRegistries,
 		SessionEgressHosts:    p.SessionEgressHosts,
 		LocalEnvironment:      local,
-		ServerUserLogin:       usesServerUserLogin(p.Driver, p.AuthSource, p.ConfigHome, p.UserHome),
+		ServerUserLogin:       usesServerUserLogin(p.Driver, p.AuthSource, p.ConfigHome, p.UserHome) && !m.serverLoginUsable(p.Tenant, p),
 		Operable: local && p.State == ProfileActive && m.driverOperable(p.Driver) &&
 			requireAuthSourceForDriver(p.Driver, p.AuthSource) == nil,
 		CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt, RetiredAt: p.RetiredAt,

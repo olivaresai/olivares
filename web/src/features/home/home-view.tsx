@@ -12,8 +12,8 @@
 //  3. Needs you: the flagged request with what will run and the rule that asked, decided
 //     here in one click, then the others as quiet rows.
 //
-// The start line and the proof line ("Chain verified at 16:40 · 12,408 entries") share one
-// row under the title, reserved from the first paint. The figure tiles left the home: inventory, security, compliance, health,
+// The start line takes one row under the title, reserved from the first paint; the
+// ledger's chain proof is Activity & audit's. The figure tiles left the home: inventory, security, compliance, health,
 // budgets and the kill switch each have their place, Stop all is in the status bar while
 // a session runs, and spend by tool belongs to the Ledger. The home asks nothing of those modules.
 //
@@ -22,21 +22,21 @@
 // head and the monthly budget. A read the role may not make is not made, and a source
 // with no answer leaves its clause out: nothing here is a made-up zero.
 import { lazy, Suspense, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { LayoutDashboard } from 'lucide-react'
+import { useSessionRail } from '@/components/layout/use-session-rail'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/lib/auth/context'
-import { auditApi } from '@/lib/api/endpoints'
 import { EmptyState } from '@/components/ui/empty-state'
 import { IntelPage } from '@/features/_intel'
 import { currentAnswer } from '@/features/executive/derive'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { usePendingApprovals } from '@/features/governance/use-pending-approvals'
 import { EstateLanes } from './estate-lanes'
 import {
   decodeSessionAddress,
   SESSION_PARAM,
 } from '@/features/sessions/session-address'
-import { UrlStateNotice } from '@/features/shared'
+import { useUrlStateNotice } from '@/features/shared'
 import { useValidatedUrlState } from '@/lib/hooks/use-url-state'
 import { EstateSummary } from './estate-summary'
 import { LiveCards } from './live-cards'
@@ -44,7 +44,6 @@ import { useMonthBudget } from './month-budget'
 import { actsForPeople, dayCost, isLiveSession } from './now-sessions'
 import { NowQueue, useFlaggedRequest, useNeedsYouRows } from './now-queue'
 import { NowStart } from './now-start'
-import { ProofLine } from './proof-line'
 import { RecentWork } from './recent-work'
 import { pendingReason, tileState } from './view-state'
 import { useRecentSessions } from './use-recent-sessions'
@@ -58,9 +57,16 @@ const SessionSheet = lazy(() =>
   })),
 )
 
+/** Community adds no budget clause: the edition that has departments and groups does. */
+const useNoBudgetClause = (): string | null => null
+
 export function HomeView() {
   const { t } = useTranslation(['home', 'nav'])
-  const { activeTenant, can } = useAuth()
+  const { can } = useAuth()
+  const rail = useSessionRail()
+  // The rail reads every page; while it has not, or could not, this page's own read is a
+  // floor and says so.
+  const railExact = rail.visible && !rail.status.loading && !rail.status.error
   // THE SESSION OPEN OVER THE ESTATE (#2549): a place, so opening one is a history entry
   // and Back closes it; closing replaces it, so Back does not reopen it. The address is
   // untrusted: one that names no session is cleared and said, as on Sessions.
@@ -69,6 +75,7 @@ export function HomeView() {
     decodeSessionAddress,
     { history: 'push' },
   )
+  useUrlStateNotice(sheetIssues)
   const openSession = (address: string) =>
     setSheet({ [SESSION_PARAM]: address })
   // Mounted from the first open on, so it can slide out when it closes.
@@ -90,6 +97,10 @@ export function HomeView() {
   // Pending requests for Needs you: the approval queue's own read (shared cache).
   const pendingApprovals = usePendingApprovals()
   const month = useMonthBudget()
+  // Resolved at render, as the other edition hooks are (tenant-label.ts).
+  const useBudgetClause =
+    PANEL_EXTENSIONS.useEstateBudgetClause ?? useNoBudgetClause
+  const budgetClause = useBudgetClause()
 
   // Each session once: a live one is a card, an ended one a Recent work row.
   const liveSessions = useMemo(
@@ -109,7 +120,11 @@ export function HomeView() {
   // A cut page leaves yesterday unknown: no figure rather than part of one.
   const yesterday =
     recentSessions && !floor(1) ? dayCost(recentSessions, now, 1) : null
-  // Recent work steps aside only when it has answered and every session is a card.
+  // THE ONE LIVE LIST (#4021): where the last-hour lanes draw every live session, they are
+  // the list; the cards would show the same sessions a second time. The cards stay for a
+  // role that cannot read the lanes.
+  const lanesShown = canSessions && !!recentSessions
+  // Recent work steps aside only when it has answered and every session is live.
   const showRecent = !(
     recentState === 'ready' &&
     liveSessions.length > 0 &&
@@ -137,18 +152,6 @@ export function HomeView() {
   // start line steps back.
   const approveShown = !!flag.approval && !flag.gone
 
-  // THE PROOF: the chain verdict the run read carries, and the ledger's head for whoever
-  // may read the ledger. Read once a verdict is there to qualify.
-  const proof = runsAnswer?.items.find(
-    (r) => r.proof?.chain_verified != null,
-  )?.proof
-  const canAudit = can('audit:read')
-  const headQ = useQuery({
-    queryKey: ['audit', activeTenant, 'tenant', 'head'],
-    queryFn: async () => (await auditApi.recent({ limit: 1 })).head_seq ?? null,
-    enabled: canAudit && !!proof,
-  })
-
   if (!readsSessions && !pendingApprovals.permitted) {
     return (
       <IntelPage
@@ -168,32 +171,22 @@ export function HomeView() {
     <IntelPage
       icon={LayoutDashboard}
       title={t('nav:places.now')}
+      // The top bar names the page; the first screen does not say it twice.
+      titleHidden
       className="gap-0"
-      // THE START LINE (#3121): the verb first, then what it runs on, and the proof at the
-      // right, in one row under the title that is there from the first paint. Nothing
-      // arrives above the page late, so nothing below it moves.
-      // A role that cannot start sessions gets the row only when there is a proof to show.
+      // THE START LINE (#3121): the verb first, then what it runs on. The ledger's chain
+      // proof is Activity & audit's, not the first screen's.
       notices={
-        can('sessions:run:write') || proof ? (
+        can('sessions:run:write') ? (
           <div
             data-testid="now-header-line"
             className="flex min-h-9 flex-wrap items-center gap-x-3 gap-y-2"
           >
             <NowStart quiet={approveShown} />
-            {proof ? (
-              <span className="ml-auto">
-                <ProofLine
-                  verified={proof.chain_verified}
-                  at={runsQ.dataUpdatedAt}
-                  entries={canAudit && headQ.isSuccess ? headQ.data : null}
-                />
-              </span>
-            ) : null}
           </div>
         ) : null
       }
     >
-      <UrlStateNotice issues={sheetIssues} />
       <div className="flex flex-col gap-6">
         {readsSessions ? (
           <EstateSummary
@@ -209,9 +202,16 @@ export function HomeView() {
                 ? null
                 : (sessionReads.map(pendingReason).find(Boolean) ?? null)
             }
-            running={recentSessions ? liveSessions.length : null}
-            // The live read is one page: more behind it makes the count a floor.
-            runningMore={!!liveAnswer?.has_more}
+            // The open sessions the Sessions badge and the status bar count, read over
+            // every page: one exact figure on the screen, never "16+" beside a 16.
+            running={
+              !recentSessions
+                ? null
+                : railExact
+                  ? rail.sessionCounts.open
+                  : liveSessions.length
+            }
+            runningMore={!railExact && !!liveAnswer?.has_more}
             people={actsForPeople(liveSessions)}
             today={recentSessions ? dayCost(recentSessions, now) : null}
             todayFloor={floor(0)}
@@ -225,6 +225,7 @@ export function HomeView() {
                 : null
             }
             month={month}
+            budgetClause={budgetClause}
           />
         ) : null}
         {/* Needs you comes first in reading order: at 1024 it is a full-width strip above
@@ -256,19 +257,19 @@ export function HomeView() {
                   sessions above and each one's own timeline (which needs the live read).
                   Past FLEET_SESSIONS live sessions a Business build draws its fleet grid
                   instead (#2565). */}
-              {canSessions && recentSessions ? (
+              {lanesShown && recentSessions ? (
                 <EstateLanes
                   sessions={recentSessions}
                   approvals={approvals?.items ?? []}
-                  approvalsRead={
-                    pendingApprovals.permitted &&
-                    !pendingApprovals.query.isError
-                  }
+                  approvalsRead={!!approvals}
+                  approvalsMore={!!approvals?.has_more}
                   now={now}
                   onOpen={openSession}
+                  // Recent work carries the link only once it lists rows.
+                  showAll={!showRecent || recentState !== 'ready'}
                 />
               ) : null}
-              {liveSessions.length > 0 ? (
+              {liveSessions.length > 0 && !lanesShown ? (
                 <LiveCards
                   sessions={liveSessions}
                   onOpen={openSession}

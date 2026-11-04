@@ -69,6 +69,24 @@ class CommunitySourceTests(unittest.TestCase):
                 leaks.append(str(path.relative_to(ROOT)))
         self.assertEqual(leaks, [], 'the inbound SCIM server belongs in the private overlay')
 
+    def test_no_inbound_scim_account_engine(self):
+        # The account engine the inbound SCIM server drives (provision, update and deprovision a
+        # user, create, replace and delete a group, nest a group, place it in a workspace, and the
+        # SET event receiver with its configuration) is Business. Community keeps the reads and
+        # the group-to-role mapping its own console and sign-in use, and the SET signature checks
+        # the publisher registry shares.
+        forbidden = re.compile(
+            r'func \(a \*Authenticator\) (?:SCIMProvisionUser|SCIMUpdateUser|SCIMDeprovisionUser|'
+            r'SCIMListMembers|SCIMFindMember|SCIMCreateGroup|SCIMGetGroup|SCIMReplaceGroup|'
+            r'SCIMDeleteGroup|ConfigureGroupParent|ConfigureGroupWorkspace|SCIMSetConfigFor|'
+            r'ConfigureSCIMSet|SCIMReceiveEvent|SCIMSetMemberActive)\('
+        )
+        leaks = []
+        for path in (ROOT / 'core' / 'auth').glob('*.go'):
+            if not path.name.endswith('_test.go') and forbidden.search(path.read_text()):
+                leaks.append(str(path.relative_to(ROOT)))
+        self.assertEqual(leaks, [], 'the inbound SCIM account engine belongs in the private overlay')
+
 
 if __name__ == '__main__':
     unittest.main()

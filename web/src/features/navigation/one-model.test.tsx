@@ -9,7 +9,7 @@
 // place's row, or Settings and its row.
 import { cleanup } from '@testing-library/react'
 import type { ComponentProps } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
 
 const routerState = vi.hoisted(() => ({
@@ -91,7 +91,10 @@ import { JOURNEYS, stepHref } from './journeys'
 import { placeOfView } from './places'
 import { DestinationSections } from '@/components/layout/destination-sections'
 import { Sidebar } from '@/components/layout/sidebar'
+import { usePreferencesStore } from '@/stores/preferences'
 
+// What the first screen offers with More open: a new person's fold is sidebar.test.tsx's.
+beforeEach(() => usePreferencesStore.setState({ navAll: true }))
 afterEach(() => {
   cleanup()
   routerState.pathname = '/'
@@ -181,7 +184,7 @@ describe('the first screen', () => {
       '/access-map',
       '/identity',
       '/security',
-      '/estate',
+      '/health',
       '/settings?section=edition',
       '/settings',
     ])
@@ -235,7 +238,8 @@ describe('every page sits in one place', () => {
         `${v.path} (${placeOf(v)}) marks ${marked.join(', ') || 'nothing'}`,
       ]
     })
-    expect(listed.length).toBeGreaterThan(50)
+    // A floor, not a count: doors folded into their room (`doorTo`) are not listed.
+    expect(listed.length).toBeGreaterThan(40)
     expect(wrong).toEqual([])
   })
 })

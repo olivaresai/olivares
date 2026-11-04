@@ -25,7 +25,8 @@ vi.mock('@/lib/auth/context', () => ({
 // this bench renders that empty state on purpose (it drives the three lists with no
 // rows). Without a RouterProvider the link throws `Cannot read properties of null
 // (reading 'isServer')` — the same anchor mock the home and executive benches use.
-vi.mock('@tanstack/react-router', () => ({
+vi.mock('@tanstack/react-router', async () => ({
+  ...(await import('@/test/fake-router')).fakeRouterModule(),
   useRouterState: () => '',
   // `useRouter: () => undefined` is the real no-provider answer, and the tree's
   // partial mocks must declare every export a shared component reaches (the

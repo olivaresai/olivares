@@ -327,9 +327,7 @@ describe('CommunicationsView — three doors, each on its own permission', () =>
     // The sheet is on screen because the url named a channel; it is EMPTY because the
     // engine refused this exact operation, and the read never left.
     expect(
-      within(sheet).getByText(
-        'The engine refused this for the current principal.',
-      ),
+      within(sheet).getByText('The engine refused this for you.'),
     ).toBeInTheDocument()
     expect(api.listChannelGrants).not.toHaveBeenCalled()
     expect(api.listAdministrableChannels).not.toHaveBeenCalled()
@@ -703,6 +701,34 @@ describe('CommunicationsView — the handoffs door', () => {
     // …and it is the ORDINARY inbox that was read, not the handoff page.
     await waitFor(() => expect(api.listInbox).toHaveBeenCalledTimes(1))
     expect(api.listHandoffInbox).not.toHaveBeenCalled()
+  })
+
+  it('an EMPTY inbox says what puts a message there and takes a person who can read channels to Channels, where one is sent', async () => {
+    auth.perms = new Set([DR, CR])
+    renderWithQuery(() => <CommunicationsView entrance="inbox" />)
+    expect(await screen.findByText('Your inbox is empty')).toBeInTheDocument()
+    expect(
+      screen.getByText(/send you through a channel appear here/),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/choose Send notice/)).toBeInTheDocument()
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Go to Channels' }),
+    )
+    expect(screen.getByRole('tab', { name: 'Channels' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    await waitFor(() => expect(api.listChannels).toHaveBeenCalledTimes(1))
+  })
+
+  it('an empty inbox offers no way to Channels to a person who cannot read them, and still says what puts a message there', async () => {
+    auth.perms = new Set([DR])
+    renderWithQuery(() => <CommunicationsView entrance="inbox" />)
+    expect(await screen.findByText('Your inbox is empty')).toBeInTheDocument()
+    expect(
+      screen.getByText(/send you through a channel appear here/),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Go to Channels' })).toBeNull()
   })
 
   it('a deep link handoff=<carrier delivery> opens the protected detail on mount, through the Delivery-bound route', async () => {

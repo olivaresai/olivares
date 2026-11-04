@@ -46,7 +46,7 @@ test('two browsers list and end other sign-ins accessibly', async ({
     await firstPage
       .getByRole('button', { name: /create administrator/i })
       .click()
-    await firstPage.waitForURL('**/onboarding')
+    await firstPage.waitForURL('**/sessions')
 
     await secondPage.goto('/login')
     await capturePublic(secondPage, 'login')

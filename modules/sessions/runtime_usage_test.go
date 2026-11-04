@@ -373,3 +373,74 @@ func TestTokensWithoutMoneyLeaveTheCostUnknown(t *testing.T) {
 		t.Fatalf("cost_micro_usd = %d, want 500000", *priced.CostMicroUSD)
 	}
 }
+
+// TestARunningTurnShowsItsUsageSoFar: Claude Code sends the usage of every assistant
+// message while a turn runs, and the result frame restates the whole turn at its end.
+// Until the result, the session read carried no tokens and no cost. The read now adds
+// what the assistant messages used, and the result replaces it rather than adding to it.
+func TestARunningTurnShowsItsUsageSoFar(t *testing.T) {
+	t.Parallel()
+
+	var priced []string
+	pricer := func(provider, modelRef string, tk TurnTokens) (int64, bool) {
+		priced = append(priced, provider+"/"+modelRef)
+		return tk.UncachedInput + tk.CacheRead + tk.CacheWrite + tk.Output, true
+	}
+	fr := &fakeRunner{initSID: "sess-running"}
+	m, _, tenant, _ := newRuntimeHarness(t,
+		WithRunner(fr), WithCredentialSource(staticCred()), WithListPricer(pricer))
+	ctx := context.Background()
+
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
+		Transport: TransportStreamJSON, Isolation: IsolationNative,
+		Actor: "user:u1", ActorKind: "user",
+	})
+	if err != nil {
+		t.Fatalf("createRun: %v", err)
+	}
+	waitFor(t, "session id capture", func() bool {
+		d, _ := m.getRun(ctx, tenant, dto.RunRef)
+		return d.ClaudeSessionID == "sess-running"
+	})
+
+	send := func(frame string) {
+		fr.lastProc().out <- OutputFrame{Stream: streamStdout, Data: []byte(frame)}
+	}
+	// One message arrives in two frames (one per content block); the second restates
+	// the first message's usage with its final output count.
+	send(`{"type":"assistant","message":{"id":"msg_1","model":"claude-opus-5",` +
+		`"usage":{"input_tokens":3,"output_tokens":10,"cache_read_input_tokens":1000}}}`)
+	send(`{"type":"assistant","message":{"id":"msg_1","model":"claude-opus-5",` +
+		`"usage":{"input_tokens":3,"output_tokens":50,"cache_read_input_tokens":1000}}}`)
+	send(`{"type":"assistant","message":{"id":"msg_2","model":"claude-opus-5",` +
+		`"usage":{"input_tokens":2,"output_tokens":20,"cache_read_input_tokens":1500}}}`)
+
+	// 3+1000 and 2+1500 in, 50+20 out, and the list price of those tokens.
+	waitFor(t, "the usage of the running turn", func() bool {
+		d, _ := m.getRun(ctx, tenant, dto.RunRef)
+		return d.OutputTokens != nil && *d.OutputTokens == 70
+	})
+	got, _ := m.getRun(ctx, tenant, dto.RunRef)
+	if got.InputTokens == nil || *got.InputTokens != 2505 {
+		t.Fatalf("input_tokens = %v, want 2505", got.InputTokens)
+	}
+	if got.CostMicroUSD == nil || *got.CostMicroUSD != 2575 {
+		t.Fatalf("cost_micro_usd = %v, want the list price 2575", got.CostMicroUSD)
+	}
+	if priced[0] != "anthropic/claude-opus-5" {
+		t.Fatalf("priced as %q", priced[0])
+	}
+
+	// The turn ends: the result is the whole turn, and the read shows it alone.
+	send(`{"type":"result","subtype":"success","session_id":"sess-running","total_cost_usd":0.01,` +
+		`"modelUsage":{"claude-opus-5":{"inputTokens":5,"outputTokens":80,` +
+		`"cacheReadInputTokens":2500,"costUSD":0.01}}}`)
+	waitFor(t, "the result replacing the running figure", func() bool {
+		d, _ := m.getRun(ctx, tenant, dto.RunRef)
+		return d.CostMicroUSD != nil && *d.CostMicroUSD == 10_000
+	})
+	done, _ := m.getRun(ctx, tenant, dto.RunRef)
+	if *done.InputTokens != 2505 || *done.OutputTokens != 80 {
+		t.Fatalf("after the result: %d in, %d out; want 2505 in, 80 out", *done.InputTokens, *done.OutputTokens)
+	}
+}

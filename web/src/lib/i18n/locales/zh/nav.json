@@ -16,10 +16,10 @@
     "infrastructure": "基础设施"
   },
   "items": {
-    "estate": "资产",
+    "estate": "已配置的资源",
     "home": "主页",
     "onboarding": "配置向导",
-    "inventory": "清单",
+    "inventory": "已发现的资源",
     "sessions": "会话",
     "accessMap": "访问映射",
     "reach": "覆盖范围",
@@ -38,7 +38,6 @@
     "vault": "保险库",
     "claudePolicy": "托管策略",
     "routinePolicies": "例行任务策略",
-    "deploy": "部署",
     "gitPublication": "Git 发布",
     "knowledge": "知识库",
     "catalog": "目录",
@@ -51,7 +50,6 @@
     "adoption": "采用情况",
     "evals": "评估",
     "security": "安全",
-    "recordings": "录制",
     "compliance": "合规",
     "voice": "语音",
     "sandbox": "沙箱",
@@ -67,7 +65,6 @@
     "settings": "设置",
     "workspace-templates": "工作区模板",
     "eventing": "Webhook 与事件",
-    "session-viewer": "会话查看器",
     "backups": "备份",
     "updates": "更新",
     "logs": "日志",
@@ -93,10 +90,10 @@
     "truncated": "列表不完整——存在多于已加载数量的工作区"
   },
   "descriptions": {
-    "estate": "查看已配置的资源及其关系，包括工作项的依赖关系。",
+    "estate": "您已配置的内容，以及各部分（包括工作项）之间的依赖关系。",
     "home": "一览资产域概况与健康状况",
     "onboarding": "逐步部署配置",
-    "inventory": "发现并编目连接器观察到的智能体、MCP 服务器与模型。",
+    "inventory": "连接器观察到的智能体、MCP 服务器和模型，以及各自最后一次出现的时间。",
     "sessions": "启动会话并跟踪每个会话的工作，包括 Olivares 发现的会话",
     "accessMap": "每个智能体的读取与写入内容（R/RW）",
     "reach": "查看每个工具可以访问哪些目标，以及哪些正在等待批准。",
@@ -113,7 +110,6 @@
     "identity": "SSO、SCIM 以及智能体使用的身份",
     "vault": "您的密码、笔记和验证码",
     "claudePolicy": "托管策略、钩子、MCP、沙箱与策略即代码",
-    "deploy": "为智能体配置并连接到基础设施",
     "gitPublication": "通过已批准的 Git 目标推送提交、创建拉取请求并合并",
     "knowledge": "知识库、RAG 与数据血缘",
     "catalog": "经审核批准的智能体与能力",
@@ -127,7 +123,6 @@
     "adoption": "生产力、采纳率与模型分布",
     "evals": "质量、评估与回归",
     "security": "护栏、取证与异常",
-    "recordings": "特权会话录制与回放",
     "compliance": "框架、控制项与证据",
     "voice": "语音与实时会话",
     "sandbox": "隔离的智能体测试与回放",
@@ -186,13 +181,15 @@
     "agentcoreExport": "AgentCore 导出 · AgentCore",
     "sessions": "会话 · 观测会话 · 运营会话 · Claude Code · agentops",
     "agentops": "运营会话 · Claude Code · agentops",
-    "console": "控制台 · 租户管理"
+    "console": "控制台 · 租户管理",
+    "estate": "资产",
+    "inventory": "清单"
   },
   "areas": {
     "infrastructure": {
       "label": "基础设施",
       "sections": {
-        "estate": "清单与工作区"
+        "estate": "资源与工作区"
       }
     },
     "ai": {
@@ -298,6 +295,13 @@
     "draftSaveFailed": "无法在此标签页中保存草稿。请保持此页面打开，或在离开前复制您的消息。",
     "sendBackgroundHint": "Ctrl+Enter 发送并保留草稿以写下一句。",
     "slashLabel": "命令与技能",
+    "mentionLabel": "文件和文件夹",
+    "skillLabel": "技能",
+    "mention": {
+      "loading": "正在读取会话文件夹…",
+      "failed": "无法读取会话文件夹。",
+      "nomatch": "没有以“{{query}}”开头的文件或文件夹。"
+    },
     "slashOption": "{{name}}，第 {{i}} 项，共 {{n}} 项",
     "slashNoMatch": "没有与“{{query}}”匹配的命令。",
     "slash": {
@@ -315,7 +319,8 @@
     },
     "sessionKeeps": "此会话保持 {{value}}。更改选择将启动新会话。",
     "startWithChoice": "用此选择启动新会话",
-    "askPlaceholder": "随便问，输入 / 使用命令和技能",
+    "newWithOtherAccess": "用其他访问权限新建会话…",
+    "askPlaceholder": "随便问，输入 @ 选择文件和文件夹，输入 / 使用命令和技能",
     "modelPicker": "模型：{{value}}",
     "effortPicker": "推理强度：{{value}}",
     "accessPicker": "访问权限：{{value}}",
@@ -346,6 +351,7 @@
     }
   },
   "shell": {
+    "more": "更多",
     "searchCommands": "搜索和命令",
     "search": "搜索",
     "stopAll": "全部停止",
@@ -446,6 +452,8 @@
     "work": "工作",
     "tools": "工具",
     "control": "控制",
-    "admin": "管理"
-  }
+    "admin": "管理",
+    "organization": "组织"
+  },
+  "readOnlyNotice": "你可以查看此页面，但不能更改。组织管理员可以更改。"
 }

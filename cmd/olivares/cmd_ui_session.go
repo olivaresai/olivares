@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -72,33 +73,40 @@ func newUISessionCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			// The TLS warning of --insecure would be written over the screen the
-			// shell draws; the heading says it instead.
-			transportWarnings = io.Discard
-			ctx, cancel := context.WithCancel(cmd.Context())
-			defer cancel()
-			u := newUISession(ctx, &cfg, forwardedFlags(cmd.Flags()))
-			if strings.TrimSpace(args[0]) == uiSessionNew {
-				err = u.start()
-			} else {
-				err = u.open(args[0])
-			}
-			if err != nil {
-				return err
-			}
-			go u.watch()
-			code, err := tui.RunShell(in, out, u.sh)
-			u.waitIdle(uiLeaveWait)
-			cancel()
-			if err == nil {
-				name := shellWord(sessionLabel(u.current()))
-				_, _ = fmt.Fprintf(out, "Left %s. Open it again: olivares ui session %s\n", name, name)
-			}
-			return uiExit(code, err)
+			return runSessionShell(cmd.Context(), in, out, &cfg, forwardedFlags(cmd.Flags()), args[0])
 		},
 	}
 	cfg.addFlags(cmd)
 	return cmd
+}
+
+// runSessionShell opens the shell on the session named, or starts one for "new",
+// and returns when the person leaves it.
+func runSessionShell(ctx context.Context, in, out *os.File, cfg *agentClientConfig, flags []string, name string) error {
+	// The TLS warning of --insecure would be written over the screen the
+	// shell draws; the heading says it instead.
+	transportWarnings = io.Discard
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	u := newUISession(ctx, cfg, flags)
+	var err error
+	if strings.TrimSpace(name) == uiSessionNew {
+		err = u.start()
+	} else {
+		err = u.open(name)
+	}
+	if err != nil {
+		return err
+	}
+	go u.watch()
+	code, err := tui.RunShell(in, out, u.sh)
+	u.waitIdle(uiLeaveWait)
+	cancel()
+	if err == nil {
+		label := shellWord(sessionLabel(u.current()))
+		_, _ = fmt.Fprintf(out, "Left %s. Open it again: olivares ui session %s\n", label, label)
+	}
+	return uiExit(code, err)
 }
 
 // uiSession is one open session shell.

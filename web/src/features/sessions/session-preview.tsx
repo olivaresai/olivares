@@ -7,13 +7,19 @@
 // is never exposed: the frame loads a short-lived same-origin URL whose token is its only
 // credential, and the page runs sandboxed in an opaque origin, so it cannot read or use
 // the console's session. `sandbox` here and the engine's CSP say the same thing.
+//
+// ANNOTATE: the console cannot read the page's elements, so the engine adds a picker
+// script to the page (modules/sessions/preview_pick.go). Annotate asks it to pick; the
+// element it reports, accepted only from this frame, opens a note in the same notes
+// the Markdown viewer uses, and the notes go to this session as one turn.
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { ExternalLink, RotateCw } from 'lucide-react'
-import { useState } from 'react'
+import { ExternalLink, MousePointerClick, RotateCw } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
+import { PassageNotes } from '@/features/agentops/passage-notes'
 import type { RunDTO } from '@/features/agentops/types'
 import { useAuth } from '@/lib/auth/context'
 import './i18n'
@@ -27,12 +33,50 @@ const SANDBOX =
 const selectClass =
   'h-8 min-w-0 rounded-md border border-ctl-border bg-background px-2 text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
+/** Ask the page's picker to start or stop. The page's origin is opaque, so no target origin can name it. */
+function tellPage(frame: HTMLIFrameElement | null, on: boolean) {
+  frame?.contentWindow?.postMessage({ type: 'olivares-annotate', on }, '*')
+}
+
+/**
+ * The element a page reported, as one line to quote: its selector, text and page. The
+ * page is the app's, so what it says is data to show and quote, never to act on.
+ * `shown` is the preview the frame loaded: the page reports the engine's address, whose
+ * token is the preview's credential, so only what follows `shown.url` leaves the console.
+ */
+function pickedElement(
+  data: unknown,
+  shown: { url: string; port: number } | undefined,
+): string | null {
+  const d = data as {
+    type?: unknown
+    selector?: unknown
+    text?: unknown
+    path?: unknown
+  } | null
+  if (d?.type !== 'olivares-element') return null
+  const line = (v: unknown, max: number) =>
+    (typeof v === 'string' ? v : '').replace(/\s+/g, ' ').trim().slice(0, max)
+  const selector = line(d.selector, 200)
+  const text = line(d.text, 80)
+  const path = line(d.path, 200)
+  const where =
+    shown && path.startsWith(shown.url)
+      ? ` at localhost:${shown.port}/${path.slice(shown.url.length)}`
+      : ''
+  // Single quotes: the notes list wraps the whole line in double ones.
+  return selector ? selector + (text ? ` ‘${text}’` : '') + where : null
+}
+
 export function SessionPreview({ run }: { run: RunDTO }) {
   const { t } = useTranslation('sessions')
   const { activeTenant, can } = useAuth()
   const [port, setPort] = useState<number | null>(null)
   const [path, setPath] = useState('/')
   const [src, setSrc] = useState<string | null>(null)
+  const frame = useRef<HTMLIFrameElement>(null)
+  const [annotating, setAnnotating] = useState(false)
+  const [picked, setPicked] = useState<string | null>(null)
   // Only a running process listens; a stopped session has nothing to show.
   const live = run.state === 'running' || run.state === 'idle'
   const ports = useQuery({
@@ -50,10 +94,25 @@ export function SessionPreview({ run }: { run: RunDTO }) {
   const show = () => {
     if (selected !== undefined) open.mutate(selected)
   }
+  const shown = open.data
+  useEffect(() => tellPage(frame.current, annotating), [annotating])
+  useEffect(() => {
+    if (!annotating) return
+    const onMessage = (e: MessageEvent) => {
+      if (e.source !== frame.current?.contentWindow) return
+      const element = pickedElement(e.data, shown)
+      if (element === null) return
+      setPicked(element)
+      setAnnotating(false)
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [annotating, shown])
 
   return (
+    // AN EMPTY TAB IS ONE LINE: what the preview is (isolated, outside the session's
+    // network limits) is the Open action's hover, once there is a port to open.
     <section data-testid="session-preview" className="flex flex-col gap-2">
-      <p className="text-caption text-muted-foreground">{t('preview.hint')}</p>
       {!live ? (
         <p className="text-caption text-muted-foreground">
           {t('preview.notRunning')}
@@ -87,6 +146,7 @@ export function SessionPreview({ run }: { run: RunDTO }) {
               onChange={(e) => {
                 setPort(Number(e.target.value))
                 setSrc(null)
+                setAnnotating(false)
               }}
             >
               {listed.map((p) => (
@@ -107,6 +167,7 @@ export function SessionPreview({ run }: { run: RunDTO }) {
               size="sm"
               disabled={open.isPending}
               aria-label={src ? t('preview.reload') : undefined}
+              title={t('preview.hint')}
             >
               {src ? <RotateCw className="size-3.5" /> : t('preview.open')}
             </Button>
@@ -129,17 +190,48 @@ export function SessionPreview({ run }: { run: RunDTO }) {
             </p>
           ) : null}
           {src ? (
+            // Its own row: the address row has no room for it in a narrow side panel.
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant={annotating ? 'secondary' : 'outline'}
+                size="sm"
+                aria-pressed={annotating}
+                // One element at a time: a second pick would swap the quote under a note.
+                disabled={picked !== null}
+                onClick={() => setAnnotating((on) => !on)}
+              >
+                <MousePointerClick aria-hidden className="size-3.5" />
+                {t('preview.annotate')}
+              </Button>
+              {annotating ? (
+                <p role="status" className="text-caption text-muted-foreground">
+                  {t('preview.annotating')}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          {src ? (
             <iframe
               // Each open or reload is a new URL, so the frame loads again.
               key={src}
+              ref={frame}
               data-testid="session-preview-frame"
               title={t('preview.frameTitle', { port: open.data?.port })}
               src={src}
               sandbox={SANDBOX}
               referrerPolicy="no-referrer"
+              // A page that loads while annotating (a reload) is told again.
+              onLoad={() => tellPage(frame.current, annotating)}
               className="h-96 w-full rounded-md border border-border bg-background"
             />
           ) : null}
+          <PassageNotes
+            to={run}
+            path="the preview of this session"
+            picked={picked}
+            onPicked={() => setPicked(null)}
+          />
         </>
       )}
     </section>

@@ -8,7 +8,8 @@
     "managedMcp": "MCP et plugins",
     "sandbox": "Bac à sable et sortie",
     "policyAsCode": "Politique-as-code",
-    "hitl": "HITL agent géré"
+    "hitl": "HITL agent géré",
+    "departmentInstructions": "Instructions de département"
   },
   "seam": {
     "badge": "Backend en attente",
@@ -296,5 +297,20 @@
     "openFindings_one": "Constat ouvert : {{count}}",
     "openFindings_many": "Constats ouverts : {{count}}",
     "openFindings_other": "Constats ouverts : {{count}}"
+  },
+  "department": {
+    "title": "Fichier d'instructions du département",
+    "hint": "Le fichier d'instructions d'un département, produit à partir de ce que le département porte : le même texte que reçoivent ses sessions. Prévisualisez-le, puis publiez-le pour les postes du département. Un département sans instructions retire son fichier publié.",
+    "select": "Département",
+    "selectPlaceholder": "Choisir un département",
+    "preview": "Prévisualiser",
+    "publish": "Publier",
+    "published": "Fichier d'instructions publié.",
+    "previewFailed": "Impossible de prévisualiser le fichier du département",
+    "fileLabel": "Fichier d'instructions du département",
+    "digest": "SHA-256 {{sha}}",
+    "revisions_one": "{{count}} révision publiée",
+    "revisions_many": "{{count}} révisions publiées",
+    "revisions_other": "{{count}} révisions publiées"
   }
 }

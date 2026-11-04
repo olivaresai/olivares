@@ -133,6 +133,58 @@ Lauf-Metadaten und Lebenszyklus-Events versprechen kein persistiertes Gesprächs
 Aufzeichnungsrichtlinie und die eigene Resume-Unterstützung des Tools bleiben getrennte
 Anforderungen.
 
+## Session-Ordner auf NFS- oder SMB-Freigaben
+
+Ein Session-Ordner ist ein Pfad auf dem Engine-Host, daher wird eine Netzwerkfreigabe zu einem Ordner, sobald der Host sie eingebunden hat. `olivares netfolder add` erledigt das mit den eigenen Mount-Units von systemd und registriert den Mount-Punkt als Ordner; das Einbinden bleibt Sache von systemd, und die Units sind einfache Dateien, die Sie lesen und bearbeiten können. Führen Sie den Befehl als root auf dem Engine-Host aus:
+
+```sh
+printf '%s\n' "$SMB_PASSWORD" | sudo olivares netfolder add files //fileserver/projects --user svc --password-stdin
+sudo olivares netfolder add data fileserver:/export --mode write_no_delete
+olivares netfolder ls
+```
+
+Die Quelle ist `//server/share` für SMB oder `server:/export` für NFS, so wie `mount(8)` sie schreibt. Der Name besteht aus Kleinbuchstaben und Ziffern und benennt den Mount-Punkt `/srv/olivares/mnt/<name>`. `--mode` ist der Zugriffsmodus des Ordners (standardmäßig `rw`). Die Units nennen das Konto `olivares` als Eigentümer jeder Datei, die ein SMB-Ordner anzeigt; daher muss die Engine unter diesem Konto laufen. `ls` zeigt jeden Ordner als `mounted`, `unmounted` (er wird beim ersten Zugriff eingebunden; `ls` löst das nicht aus) oder `not responding`. Ein vorhandener Ordner wird nie überschrieben.
+
+Für das SMB-Beispiel schreibt der Befehl diese Units, gemessen auf Debian 13 (Linux 6.12) gegen einen NFSv4.2-Export und eine Samba-4.22-Freigabe (SMB 3.1.1). Die Dateinamen sind das, was `systemd-escape -p /srv/olivares/mnt/files` ausgibt, mit angehängtem `.mount` und `.automount`.
+
+```ini
+# /etc/systemd/system/srv-olivares-mnt-files.mount
+[Unit]
+Description=Olivares network folder files
+After=network-online.target
+Wants=network-online.target
+
+[Mount]
+What=//fileserver/projects
+Where=/srv/olivares/mnt/files
+Type=cifs
+Options=credentials=/etc/olivares/netfolders/files.cred,uid=olivares,gid=olivares,vers=3.1.1,nodev,nosuid,soft,echo_interval=5
+TimeoutSec=30
+```
+
+```ini
+# /etc/systemd/system/srv-olivares-mnt-files.automount
+[Unit]
+Description=Olivares network folder files (mounted on first use)
+
+[Automount]
+Where=/srv/olivares/mnt/files
+TimeoutIdleSec=0
+
+[Install]
+WantedBy=remote-fs.target
+```
+
+Für NFS schreibt er `Type=nfs4`, `What=fileserver:/export` und `Options=nodev,nosuid,vers=4.2,soft,timeo=50,retrans=2` und keine Zugangsdatei. Auf einem Host, der SELinux mit der Richtlinie der Appliance erzwingt, ergänzt er die Optionen um `context=system_u:object_r:olivares_workspace_t:s0`, das Label, das die Engine und ihre Session-Werkzeuge für einen Ordner bereits verwenden. Um einen Ordner zu entfernen, führen Sie `systemctl disable --now` für seine beiden Units aus, löschen diese und seine Zugangsdatei und melden den Ordner ab.
+
+- **Alle, die den Ordner haben, handeln als ein Konto.** Dateien werden als das Konto gelesen und geschrieben, das der Mount vorlegt: `uid=` und `gid=` bei SMB, die Benutzerzuordnung des Exports bei NFS. Die Freigabe unterscheidet Personen nicht. Olivares entscheidet, wer den Ordner erhält.
+- **Die Zugangsdaten bleiben in einer Datei.** Der Befehl schreibt `username=` und `password=` in die Datei `credentials=`, im Besitz von root mit Modus 0600, aus dem Passwort auf der Standardeingabe. Das Passwort erscheint in keiner Unit, keiner Mount-Option, keinem Prozessargument und keiner Journal-Zeile: `mount.cifs` erhält nur den Pfad. NFS mit `sec=sys` braucht kein Zugangsdatum.
+- **Die Automount-Unit hält den Start unabhängig vom Dateiserver.** Beim Booten wartet nichts auf die Freigabe. Die erste Verwendung bindet sie ein; ist der Server in diesem Moment nicht erreichbar, scheitert die Verwendung, nicht der Start.
+- **Verwenden Sie `soft`.** Ein `hard`-NFS-Mount, der Standard, lässt einen Prozess, der einen toten Server berührt, an einer Stelle hängen, an der er sich nicht beenden lässt. Mit den oben genannten Optionen schlägt ein Lesen oder Schreiben auf einer eingebundenen Freigabe nach 20 bis 30 Sekunden mit einem Ein-/Ausgabefehler oder „Host is down“ fehl, und die Freigabe funktioniert wieder, sobald der Server antwortet.
+- **Ein Ordner, der nicht antwortet, wird gemeldet.** Das Registrieren, Öffnen, Auflisten und Starten einer Sitzung darin wartet jeweils 10 Sekunden auf die Freigabe und lehnt dann mit „The folder ... is not responding. If it is on a network share, check that its file server is up and reachable.“ und dem Status 424 ab. Die Sitzung startet nicht.
+- **`write_no_delete` gilt.** Landlock erzwingt sie in der Dateisystemschicht des Kernels, oberhalb des Netzwerkdateisystems. Bei einem echten Sitzungsstart auf beiden Freigaben hat eine Sitzung Dateien angelegt und geändert und wurde beim Umbenennen, Entfernen (unlink) und rmdir abgewiesen, genau wie auf einer lokalen Platte; `rw` hat sie erlaubt. Ein Host, der sich nicht einschränken kann, verweigert den Start weiterhin.
+- **Der Ordner ist die Grenze.** Bei denselben Starts wurde in beiden Modi ein Schreibzugriff auf das übergeordnete Verzeichnis des Ordners, das auf derselben Freigabe liegt, abgewiesen und hinterließ keine Datei. Die Sitzung schreibt nur innerhalb ihres Ordners.
+
 ## Was es konsumiert (und was es ableitet)
 
 Modul II konsumiert denselben Minimal-Data-Beobachtungsstrom wie das Inventar —

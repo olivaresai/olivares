@@ -36,6 +36,8 @@ export interface SignInStatus {
   method?: string
   account?: string
   account_ref?: string
+  /** Why a tool that is logged in some other way cannot run a session here. */
+  reason?: string
   /** The tool's official login methods, in the order to offer them, when it has several. */
   methods?: SignInMethod[]
   /** The login still in progress on the server for this tool and organization, so a reload

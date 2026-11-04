@@ -163,7 +163,7 @@ func newRootCmd() *cobra.Command {
 	root.PersistentFlags().VarP(&outputFlagValue{value: "text"}, "output", "o",
 		"global output format: text or json (report commands keep json unless -o is given)")
 	_ = root.RegisterFlagCompletionFunc("output", completeOutput)
-	root.AddCommand(newUICmd(), newQuickstartCmd(), newFirstBootCmd(), newSetupCmd(), newConfigCmd(), newAuthCmd(), newDBCmd(), newMigrateCmd(), newVersionCmd(), newStatusCmd(), newReadyzCmd(), newDoctorCmd(), newWebUIFilesCmd(), newServeCmd(), newCollectorCmd(), newLicenseCmd(), newUpgradeCmd(), newUninstallCmd(), newReleaseCmd(), newAuditCmd(), newDDILCmd(), newDRCmd(), newOpenAPICmd(), newClaudeHookCmd(), newCodexHookCmd(), newGrokHookCmd(), newHookPEPCmd(), newKeysCmd(), newEvalsCmd(), newAgentCmd(), newSessionCmd(), newToolCmd(), newAuthLoginCmd(), newAuthLogoutCmd(), newProviderCmd(), newWorkCmd(), newMessageCmd(), newCodexCmd(), newGrokCmd(), newMCPCmd(), newThreatIntelCmd(), newHooksCmd(), newSecretsCmd(), newVaultCmd(), newSourcesCmd(), newConnectorCmd(), newSuperadminCmd(), newAdminCmd(), newEventingCmd(), newSecurityCmd(), newFindingsCmd(), newComplianceCmd(), newSupportCmd(), newCompletionCmd(root), newCommandsCmd(), newFirstPartyBinsCmd(), newExtractCmd(), newPlaceInstallManifestCmd(), newTokensCmd(), newUsersCmd(), newMembersCmd(), newTenantsCmd(), newWorkspacesCmd(), newGovernanceCmd(), newPolicyCmd(), newCapabilitiesCmd())
+	root.AddCommand(newUICmd(), newQuickstartCmd(), newFirstBootCmd(), newSetupCmd(), newConfigCmd(), newHostCmd(), newAuthCmd(), newDBCmd(), newMigrateCmd(), newVersionCmd(), newStatusCmd(), newReadyzCmd(), newDoctorCmd(), newWebUIFilesCmd(), newServeCmd(), newCollectorCmd(), newLicenseCmd(), newUpgradeCmd(), newUninstallCmd(), newReleaseCmd(), newAuditCmd(), newDDILCmd(), newDRCmd(), newOpenAPICmd(), newClaudeHookCmd(), newCodexHookCmd(), newGrokHookCmd(), newHookPEPCmd(), newKeysCmd(), newEvalsCmd(), newAgentCmd(), newSessionCmd(), newToolCmd(), newAuthLoginCmd(), newAuthLogoutCmd(), newProviderCmd(), newWorkCmd(), newMessageCmd(), newCodexCmd(), newGrokCmd(), newMCPCmd(), newThreatIntelCmd(), newHooksCmd(), newSecretsCmd(), newVaultCmd(), newSourcesCmd(), newConnectorCmd(), newSuperadminCmd(), newAdminCmd(), newEventingCmd(), newSecurityCmd(), newFindingsCmd(), newComplianceCmd(), newSupportCmd(), newCompletionCmd(root), newCommandsCmd(), newFirstPartyBinsCmd(), newExtractCmd(), newPlaceInstallManifestCmd(), newTokensCmd(), newUsersCmd(), newMembersCmd(), newTenantsCmd(), newWorkspacesCmd(), newNetfolderCmd(), newGovernanceCmd(), newPolicyCmd(), newCapabilitiesCmd())
 	root.AddCommand(newAccountCmd(), newModulesCmd())
 	// The observe-and-report lane: one top-level command per module namespace it
 	// covers, named after the namespace so `olivares <ns>` and /v1/m/<ns>/ are the
@@ -227,7 +227,7 @@ var commandGroups = map[string]string{
 	"wiki":    "start",
 	"ui":      "start", "quickstart": "start", "login": "start", "tool": "start", "session": "start", "status": "start", "doctor": "start",
 	"auth": "manage", "logout": "manage", "users": "manage", "members": "manage", "tenants": "manage", "workspaces": "manage", "tokens": "manage", "provider": "manage", "mcp": "manage", "audit": "manage", "license": "manage", "agent": "manage",
-	"serve": "engine", "setup": "engine", "config": "engine", "db": "engine", "migrate": "engine", "first-boot": "engine", "readyz": "engine", "keys": "engine", "dr": "engine", "support": "engine", "upgrade": "engine", "uninstall": "engine", "version": "engine", "completion": "engine", "superadmin": "engine", "admin": "engine", "openapi": "engine",
+	"serve": "engine", "setup": "engine", "config": "engine", "db": "engine", "migrate": "engine", "first-boot": "engine", "readyz": "engine", "keys": "engine", "dr": "engine", "support": "engine", "upgrade": "engine", "uninstall": "engine", "version": "engine", "completion": "engine", "superadmin": "engine", "admin": "engine", "openapi": "engine", "netfolder": "engine",
 	"connector": "beta", "collector": "beta", "codex": "beta", "grok": "beta", "eventing": "beta", "sources": "beta",
 	"secrets": "beta", "work": "beta", "message": "beta", "hookpep": "beta", "claude-hook": "beta", "codex-hook": "beta",
 	"grok-hook": "beta", "hooks": "beta", "evals": "beta", "ddil": "beta", "compliance": "beta", "models": "beta",
@@ -349,7 +349,11 @@ func newExitCodesTopic() *cobra.Command {
 			" 11  session --wait: waiting for approval\n" +
 			" 12  session --wait: run timed out\n" +
 			" 13  session --wait: run cost cap reached\n" +
-			" 14  session --wait: another limit or stop ended the run",
+			" 14  session --wait: another limit or stop ended the run\n" +
+			" 15  the engine refused to boot on a configuration or store only an\n" +
+			"     operator can change (a store a newer release migrated; a\n" +
+			"     PostgreSQL package upgrade without --admin-dsn); systemd does not\n" +
+			"     restart it",
 	}
 }
 

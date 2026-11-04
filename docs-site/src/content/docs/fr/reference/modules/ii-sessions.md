@@ -102,6 +102,58 @@ le message en le nommant avant que rien ne soit envoyé. L'API est
 `GET .../attachments/{id}` et `attachments` sur `.../input`. Les images résident sous le
 répertoire de données, par tenant et par session, et sont supprimées avec la session.
 
+## Dossiers de session sur des partages NFS ou SMB
+
+Un dossier de session est un chemin sur l'hôte du moteur : un partage réseau devient donc un dossier une fois que l'hôte l'a monté. `olivares netfolder add` le fait avec les unités de montage systemd elles-mêmes ; le montage reste celui de systemd, et les unités sont des fichiers ordinaires que vous pouvez lire et modifier. Exécutez-le en root sur l'hôte du moteur :
+
+```sh
+printf '%s\n' "$SMB_PASSWORD" | sudo olivares netfolder add files //fileserver/projects --user svc --password-stdin
+sudo olivares netfolder add data fileserver:/export --mode write_no_delete
+olivares netfolder ls
+```
+
+La source est `//server/share` pour SMB ou `server:/export` pour NFS, tels que `mount(8)` les écrit. Le nom est en minuscules et chiffres, et désigne le point de montage `/srv/olivares/mnt/<name>`. `--mode` est le mode d'accès du dossier (`rw` par défaut). Les unités désignent le compte `olivares` comme propriétaire de chaque fichier qu'un dossier SMB affiche, donc le moteur doit tourner sous ce compte. `ls` affiche chaque dossier comme `mounted`, `unmounted` (il se monte au premier usage, et `ls` ne le déclenche pas) ou `not responding`. Un dossier existant n'est jamais écrasé.
+
+Pour l'exemple SMB, la commande écrit ces unités, mesurées sur Debian 13 (Linux 6.12) face à un export NFSv4.2 et à un partage Samba 4.22 (SMB 3.1.1). Les noms de fichiers sont ceux qu'affiche `systemd-escape -p /srv/olivares/mnt/files`, auxquels on ajoute `.mount` et `.automount`.
+
+```ini
+# /etc/systemd/system/srv-olivares-mnt-files.mount
+[Unit]
+Description=Olivares network folder files
+After=network-online.target
+Wants=network-online.target
+
+[Mount]
+What=//fileserver/projects
+Where=/srv/olivares/mnt/files
+Type=cifs
+Options=credentials=/etc/olivares/netfolders/files.cred,uid=olivares,gid=olivares,vers=3.1.1,nodev,nosuid,soft,echo_interval=5
+TimeoutSec=30
+```
+
+```ini
+# /etc/systemd/system/srv-olivares-mnt-files.automount
+[Unit]
+Description=Olivares network folder files (mounted on first use)
+
+[Automount]
+Where=/srv/olivares/mnt/files
+TimeoutIdleSec=0
+
+[Install]
+WantedBy=remote-fs.target
+```
+
+Pour NFS, elle écrit `Type=nfs4`, `What=fileserver:/export` et `Options=nodev,nosuid,vers=4.2,soft,timeo=50,retrans=2`, et aucun fichier d'identifiants. Sur un hôte qui applique SELinux avec la politique de l'appliance, elle ajoute `context=system_u:object_r:olivares_workspace_t:s0` aux options, l'étiquette que le moteur et ses outils de session utilisent déjà pour un dossier. Pour retirer un dossier, exécutez `systemctl disable --now` sur ses deux unités, supprimez-les ainsi que son fichier d'identifiants, puis désenregistrez le dossier.
+
+- **Toutes les personnes qui ont le dossier agissent comme un seul compte.** Les fichiers sont lus et écrits sous le compte que le montage présente : `uid=` et `gid=` pour SMB, la correspondance d'utilisateurs de l'export pour NFS. Le partage ne distingue pas les personnes. Olivares décide qui reçoit le dossier.
+- **L'identifiant reste dans un fichier.** La commande écrit `username=` et `password=` dans le fichier `credentials=`, propriété de root avec le mode 0600, à partir du mot de passe lu sur l'entrée standard. Le mot de passe n'apparaît dans aucune unité, option de montage, argument de processus ni ligne du journal : `mount.cifs` ne reçoit que le chemin. NFS avec `sec=sys` n'a besoin d'aucun identifiant.
+- **L'unité automount rend le démarrage indépendant du serveur de fichiers.** Rien n'attend le partage au démarrage. Le premier usage le monte, et un serveur indisponible à ce moment fait échouer cet usage, pas le démarrage.
+- **Utilisez `soft`.** Un montage NFS `hard`, la valeur par défaut, laisse un processus qui touche un serveur mort bloqué sans pouvoir être arrêté. Avec les options ci-dessus, une lecture ou une écriture sur un partage monté échoue avec une erreur d'entrée/sortie ou « Host is down » après 20 à 30 secondes, et le partage refonctionne dès que le serveur répond.
+- **Un dossier qui ne répond pas est signalé.** L'enregistrement du dossier, son ouverture, sa liste et le démarrage d'une session dedans attendent chacun 10 secondes le partage, puis refusent avec "The folder ... is not responding. If it is on a network share, check that its file server is up and reachable." et un statut 424. La session ne démarre pas.
+- **`write_no_delete` tient.** Landlock l'applique dans la couche système de fichiers du noyau, au-dessus du système de fichiers réseau. Lors d'un lancement réel de session sur les deux partages, une session a créé et modifié des fichiers, et s'est vu refuser renommage, suppression et rmdir, exactement comme sur un disque local, tandis que `rw` les autorisait. Un hôte qui ne peut pas confiner refuse toujours le lancement.
+- **Le dossier est la frontière.** Lors des mêmes lancements, dans les deux modes, une écriture dans le parent du dossier, qui se trouve sur le même partage, a été refusée et n'a laissé aucun fichier. La session n'écrit qu'à l'intérieur de son dossier.
+
 ## Ce qu'il consomme (et ce qu'il dérive)
 
 Le module II consomme le même flux d'observations à donnée minimale que l'inventaire —

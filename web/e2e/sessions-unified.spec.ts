@@ -34,7 +34,7 @@ test('Claude Code portal: setup → login → navigate → create form → works
   await page.getByRole('button', { name: /create administrator/i }).click()
 
   // Setup signs the new administrator in and opens the setup wizard (pages/setup.tsx).
-  await page.waitForURL('**/onboarding')
+  await page.waitForURL('**/sessions')
 
   // THE ENTRY IS INSIDE A NAV AREA, AND SIGN-IN LANDS ON THE ROOT. The sidebar
   // renders a closed area's panel hidden, and the root belongs to no area, so this

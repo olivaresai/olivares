@@ -49,6 +49,12 @@ afterEach(() => {
   navigateMock.mockReset()
   canMock.mockReset()
   canMock.mockReturnValue(true)
+  // Raw DOM fixtures live outside React, so RTL cleanup never touches them — and a
+  // failing assertion would skip their manual remove(), leaking open dialogs into the
+  // next test. The sweep runs regardless of where a test threw.
+  document.body
+    .querySelectorAll('[data-test-fixture]')
+    .forEach((node) => node.remove())
 })
 
 describe('GlobalShortcuts', () => {
@@ -452,5 +458,90 @@ describe('previous opened session', () => {
         ).toBeInTheDocument()
       expect(row.textContent).not.toMatch(/keys\.command|keys\.when/)
     }
+  })
+})
+
+describe('GlobalShortcuts — list movement', () => {
+  function gridFixture(): { keys: () => string[]; remove: () => void } {
+    const grid = document.createElement('table')
+    grid.setAttribute('data-test-fixture', '')
+    grid.setAttribute('role', 'grid')
+    grid.tabIndex = 0
+    document.body.appendChild(grid)
+    const seen: string[] = []
+    grid.addEventListener('keydown', (e) => seen.push((e as KeyboardEvent).key))
+    return { keys: () => seen, remove: () => grid.remove() }
+  }
+
+  it('moves the first grid on j and k, from anywhere outside a list', () => {
+    const fixture = gridFixture()
+    renderIntel(<GlobalShortcuts />)
+    fireEvent.keyDown(window, { key: 'j' })
+    expect(fixture.keys()).toEqual(['ArrowDown'])
+    fireEvent.keyDown(window, { key: 'k' })
+    expect(fixture.keys()).toEqual(['ArrowDown', 'ArrowUp'])
+    fixture.remove()
+  })
+
+  it('leaves j and k alone while typing', () => {
+    const fixture = gridFixture()
+    renderIntel(
+      <>
+        <input aria-label="field" />
+        <GlobalShortcuts />
+      </>,
+    )
+    const field = screen.getByLabelText('field')
+    field.focus()
+    fireEvent.keyDown(field, { key: 'j' })
+    expect(fixture.keys()).toEqual([])
+    fixture.remove()
+  })
+
+  it('still honours an armed sequence: g k opens knowledge, never a list', () => {
+    renderIntel(<GlobalShortcuts />)
+    // One unarmed letter first (proven inert): it flushes the mount so the
+    // shell listener is live, exactly like the g+letter test above.
+    fireEvent.keyDown(window, { key: 'e' })
+    expect(navigateMock).not.toHaveBeenCalled()
+    // `k` is BOTH a nav sequence letter (knowledge) and, once lists move on
+    // j/k, a list key. The armed sequence must take it first.
+    const fixture = gridFixture()
+    fireEvent.keyDown(window, { key: 'g' })
+    fireEvent.keyDown(window, { key: 'k' })
+    expect(navigateMock).toHaveBeenCalledWith({ to: '/knowledge' })
+    expect(navigateMock).toHaveBeenCalledTimes(1)
+    expect(fixture.keys()).toEqual([])
+    fixture.remove()
+  })
+
+  it('leaves a dead j to the page: no grid, no swallow', () => {
+    renderIntel(<GlobalShortcuts />)
+    const notPrevented = fireEvent.keyDown(window, { key: 'j' })
+    expect(notPrevented).toBe(true)
+  })
+
+  it('does not move a list behind an open menu', () => {
+    const fixture = gridFixture()
+    const menu = document.createElement('div')
+    menu.setAttribute('data-test-fixture', '')
+    menu.setAttribute('role', 'menu')
+    document.body.appendChild(menu)
+    renderIntel(<GlobalShortcuts />)
+    const notPrevented = fireEvent.keyDown(window, { key: 'j' })
+    expect(fixture.keys()).toEqual([])
+    expect(notPrevented).toBe(true)
+    fixture.remove()
+    menu.remove()
+  })
+})
+
+describe('GlobalShortcuts — the page grows with the table', () => {
+  it('prints the list rows with their keys and context', () => {
+    renderIntel(<GlobalShortcuts />)
+    fireEvent.keyDown(window, { key: '?' })
+    expect(screen.getByTestId('keybinding-list.next')).toHaveTextContent(
+      'outside a list',
+    )
   })
 })

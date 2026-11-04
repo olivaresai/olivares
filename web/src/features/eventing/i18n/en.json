@@ -106,7 +106,7 @@
   },
   "events": {
     "title": "Captured events",
-    "description": "The event log with sequence cursor. Filter by event type to narrow results.",
+    "description": "The event log. Filter by event type to narrow results.",
     "empty": "No events captured",
     "emptyHint": "Every event the bus captured is listed here, newest first. Nothing has been published in this range.",
     "typeFilter": "Filter by type",

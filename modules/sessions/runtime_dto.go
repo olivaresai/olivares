@@ -7,6 +7,8 @@ package sessions
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/olivaresai/olivares/core/api"
@@ -98,10 +100,12 @@ type runDTO struct {
 	// pinned it — the order pinned rows hold at the top of their list.
 	Pinned   *bool  `json:"pinned,omitempty"`
 	PinnedAt string `json:"pinned_at,omitempty"`
-	// Done and SnoozedUntil are THE CALLER'S OWN marks on this run (run_mark.go),
-	// on the same reads as Pinned and for the same reason. SnoozedUntil is present
-	// only while the snooze is still to end.
+	// Done, Unread and SnoozedUntil are THE CALLER'S OWN marks on this run
+	// (run_mark.go), on the same reads as Pinned and for the same reason. SnoozedUntil
+	// is present only while the snooze is still to end; Unread says the run did
+	// something after the caller last saw it.
 	Done         *bool  `json:"done,omitempty"`
+	Unread       *bool  `json:"unread,omitempty"`
 	SnoozedUntil string `json:"snoozed_until,omitempty"`
 	// DiscardedQueue is what a release of the session threw away: the messages that
 	// were still waiting in its queue (run_queue.go), so the person can copy them.
@@ -292,6 +296,9 @@ func (m *Module) toRunDTO(rec model.Record) runDTO {
 	out.CoreSessionID = rec.String(colRunCoreSessionID)
 	if m.usesOwnToolLogin(model.TenantID(rec.String(model.ColTenantID)), out.ProviderDriver, out.ProviderAuthSource, rec.String(colRunProfileConfigHome)) {
 		out.ProviderInstance = driverfacts.OlivaresLoginInstance(out.ProviderDriver)
+	}
+	if lr, ok := m.rt.getLive(model.TenantID(rec.String(model.ColTenantID)), out.RunRef); ok {
+		m.addInflightUsage(lr, &out)
 	}
 	if runHasWorkBinding(rec) {
 		out.WorkLeaseState = "unknown"
@@ -542,6 +549,33 @@ func decodeOptionalJSONBody(w http.ResponseWriter, r *http.Request, v any) bool 
 	}
 	return true
 }
+
+// toolRequestMaxBytes is the largest request the tools' model API takes: 128 MB on the
+// first-party Claude API (https://platform.claude.com/docs/en/api/overview#request-size-limits;
+// the cloud platforms take less and answer the tool with their own 413). One message,
+// its images included, reaches the model in one request, so no message is larger; the
+// engine takes and carries every message up to it.
+const toolRequestMaxBytes = 128_000_000
+
+// decodeMessageBody decodes the body of a message to a session: the message, its text
+// included, may be as large as one model request (toolRequestMaxBytes). Over it the
+// refusal is a 413 that names the limit, not an invalid body.
+func decodeMessageBody(w http.ResponseWriter, r *http.Request, v any) bool {
+	err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: toolRequestMaxBytes})
+	var tooBig *http.MaxBytesError
+	switch {
+	case err == nil:
+		return true
+	case errors.As(err, &tooBig):
+		writeJSON(w, http.StatusRequestEntityTooLarge, errorBody(messageOverRequest))
+	default:
+		writeJSON(w, http.StatusBadRequest, errorBody(api.RequestBodyErrorMessage(err, "invalid request body")))
+	}
+	return false
+}
+
+// messageOverRequest is the refusal of a message larger than one model request.
+var messageOverRequest = fmt.Sprintf("the message is over the %d MB one request to the model takes", toolRequestMaxBytes/1_000_000)
 
 // decodeJSONBody decodes a bounded JSON request body with unknown-field rejection.
 // It writes a 400 and returns false on any decode error.

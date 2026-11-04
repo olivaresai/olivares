@@ -34,7 +34,7 @@ const (
 )
 
 // What a read can fail with. The text is fixed: it never carries the broker address, a
-// credential, a path or anything a device published. A refused CONNACK adds its reason byte.
+// credential, a path or anything a device published. A refused CONNACK or SUBACK adds its reason byte.
 var (
 	ErrBrokerUnavailable = errors.New("mqtt: broker unavailable")
 	ErrTLSHandshake      = errors.New("mqtt: TLS handshake with the broker failed")
@@ -283,6 +283,10 @@ func (r *PublishReader) connect(ctx context.Context) (*conn, *Publish, error) {
 			if valid {
 				length, consumed, e := decodeVBI(body, 2)
 				at := 2 + consumed + length
+				if e == nil && at == len(body)-1 && body[at] > 2 { // a refused subscription names its class
+					_ = nc.Close()
+					return nil, nil, connackError(body[at])
+				}
 				valid = e == nil && at == len(body)-1 && body[at] <= 2
 			}
 		}

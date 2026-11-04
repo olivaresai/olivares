@@ -13,7 +13,6 @@
   },
   "apply": {
     "planning": "변경을 계획 중입니다. 이 단계에서는 아무것도 기록되지 않습니다.",
-    "planTitle": "계획",
     "command": "명령",
     "permission": "권한",
     "eventType": "이벤트",
@@ -29,14 +28,14 @@
     "close": "닫기",
     "appliedTitle": "적용됨",
     "replayedTitle": "이미 적용됨",
-    "replayedBody": "엔진이 이 멱등성 키를 인식하고 원래 결과를 재생했습니다. 아무것도 두 번째로 기록되지 않았습니다.",
+    "replayedBody": "이미 적용된 변경입니다. 중복으로 적용되지 않았습니다.",
     "commandId": "명령 id",
     "resultId": "결과 id",
     "status": "새 상태",
     "etag": "새 버전 태그",
     "auditSeq": "감사 시퀀스",
     "reread": "다시 읽고 비교",
-    "retrySameKey": "같은 키로 재시도",
+    "retrySameKey": "다시 시도",
     "failure": {
       "conflict-version": "다른 사람이 이 항목을 변경했습니다",
       "version-required": "버전 사전 조건 누락",
@@ -272,7 +271,7 @@
   "unavailable": {
     "title": "조회할 수 없음",
     "body": "엔진이 이 관측을 완료할 수 없어 결과 대신 알 수 없는 결과를 보고합니다. 이 패널의 어떤 것도 확인된 것으로 취급하지 마십시오.",
-    "retryHint": "변경이 기록되었는지 여부는 결정되지 않았습니다. 같은 멱등성 키로 재시도하십시오 — 엔진이 이를 두 번째 의도가 아닌 같은 의도로 인식하므로 재시도가 안전해집니다.",
+    "retryHint": "결과를 확인할 수 없습니다. 여기서 다시 시도하면 변경을 중복 적용하지 않고 안전하게 확인할 수 있습니다.",
     "code": "엔진 코드: {{code}}"
   },
   "verdict": {

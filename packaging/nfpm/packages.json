@@ -155,6 +155,13 @@
         "postremove": "packaging/nfpm/postremove.sh",
         "preremove": "packaging/nfpm/preremove.sh"
       },
+      "overrides": {
+        "rpm": {
+          "depends": [
+            "/bin/sh"
+          ]
+        }
+      },
       "section": "utils",
       "vendor": "Olivares.AI",
       "version_schema": "none"

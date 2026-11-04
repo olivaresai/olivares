@@ -21,7 +21,7 @@ import { queryKeys } from '@/lib/api/query'
 import type { AuditEventDTO } from '@/lib/api/types'
 import { useAuth } from '@/lib/auth/context'
 import { eventLabel } from './event-label'
-import type { Token } from './query'
+import type { QueryParams, Token } from './query'
 
 /** A token as a person reads it: `person:Marc Vidal`, `since:7d`, or the bare words. */
 export function tokenText(
@@ -36,7 +36,26 @@ export function tokenText(
 }
 
 export const SESSION_KIND = 'sessions.run'
+const SESSION_ACTOR = 'session:'
+const CANONICAL_SID = 'osn_'
 const APPROVAL_KIND = 'governance.approval'
+
+/** The session an entry belongs to: the run it acts on, or the session that acted
+ *  (a tool call is written `session:<osn_…>`). `undefined` for an entry of no session. */
+export function sessionOf(e: AuditEventDTO): string | undefined {
+  if (e.target_kind === SESSION_KIND && e.target_id) return e.target_id
+  return e.actor.startsWith(SESSION_ACTOR)
+    ? e.actor.slice(SESSION_ACTOR.length)
+    : undefined
+}
+
+/** The filter that narrows the ledger to one session: its own tool calls (`osn_…` is the
+ *  canonical session id the ledger writes as the actor), or the entries on its run. */
+export function sessionFilter(session: string): QueryParams {
+  return session.startsWith(CANONICAL_SID)
+    ? { actor: SESSION_ACTOR + session }
+    : { target_kind: SESSION_KIND, target_id: session }
+}
 
 /** The request entry that still waits for a person: the approval it opened is pending. */
 export function needsPerson(
@@ -70,7 +89,13 @@ export function useEntryNames(entries: readonly AuditEventDTO[]) {
   })
   const person = (actor: string) =>
     mayReadMembers ? members.nameOf(actor) : null
+  const session = (ref: string) =>
+    sessions.nameOf(ref) ??
+    t('ledger.session', { ref: shortRef(ref.replace(CANONICAL_SID, '')) })
   const who = (e: AuditEventDTO) =>
+    (e.actor.startsWith(SESSION_ACTOR)
+      ? session(e.actor.slice(SESSION_ACTOR.length))
+      : null) ??
     (e.actor_kind === 'user' ? person(e.actor) : null) ??
     (e.actor_kind === 'user'
       ? t('detail.actorMember')
@@ -102,6 +127,7 @@ export function useEntryNames(entries: readonly AuditEventDTO[]) {
   return {
     person,
     resolvePerson: mayReadMembers ? members.idOf : () => null,
+    session,
     who,
     target,
     sentence: (e: AuditEventDTO) =>
@@ -124,13 +150,13 @@ export function groupEntries(
   entries: readonly AuditEventDTO[],
   pending: ReadonlySet<string>,
   bySession: boolean,
-  heading: (key: string, e: AuditEventDTO) => string,
+  heading: (key: string, session: string | undefined) => string,
 ): Group[] {
   const groups = new Map<string, Group>()
   const add = (key: string, e: AuditEventDTO, session?: string) => {
     const g = groups.get(key) ?? {
       key,
-      heading: heading(key, e),
+      heading: heading(key, session),
       session,
       entries: [],
     }
@@ -140,9 +166,9 @@ export function groupEntries(
   for (const e of entries) if (needsPerson(e, pending)) add('needs', e)
   for (const e of entries) {
     if (needsPerson(e, pending)) continue
+    const session = sessionOf(e)
     if (!bySession) add('all', e)
-    else if (e.target_kind === SESSION_KIND && e.target_id)
-      add(`run:${e.target_id}`, e, e.target_id)
+    else if (session) add(`run:${session}`, e, session)
     else add('other', e)
   }
   return [...groups.values()]

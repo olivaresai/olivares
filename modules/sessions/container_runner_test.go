@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -805,30 +806,55 @@ func TestContainerRunner_ARemovalThatFailsIsReportedAndATidyOneIsNot(t *testing.
 	}
 }
 
-func TestContainerRunner_ShareTheHostNetworkOnlyToReachTheEngineOnLoopback(t *testing.T) {
+func TestContainerRunner_ReachTheEngineOnLoopbackThroughARelayNotTheHostNetwork(t *testing.T) {
 	for name, tc := range map[string]struct {
-		env  []EnvVar
-		mcp  string
-		host bool
+		env       []EnvVar
+		mcp       string
+		extra     []string // LaunchSpec.EngineControls: the MCP URL a config file or argument carries
+		controls  []string
+		providers []string
 	}{
-		"nothing names the engine":                {nil, "", false},
-		"the engine's hook endpoint on 127.0.0.1": {[]EnvVar{{Name: "OLIVARES_HOOK_PEP_URL", Value: "https://127.0.0.1:7/v1/hooks"}}, "", true},
-		"the inference gateway on localhost":      {[]EnvVar{{Name: "ANTHROPIC_BASE_URL", Value: "http://localhost:8080"}}, "", true},
-		"the inference gateway on ::1":            {[]EnvVar{{Name: "ANTHROPIC_BASE_URL", Value: "http://[::1]:8080/x"}}, "", true},
-		"the session's MCP server on loopback":    {nil, "http://127.0.0.1:9/mcp", true},
-		"a provider on the internet":              {[]EnvVar{{Name: "ANTHROPIC_BASE_URL", Value: "https://api.example.com"}}, "", false},
-		"a value that is not a URL":               {[]EnvVar{{Name: "OLIVARES_NOTE", Value: "127.0.0.1"}}, "", false},
-		"a secret whose value is a loopback URL":  {[]EnvVar{{Name: "MY_VAULT_SECRET", Value: "http://127.0.0.1:1/"}}, "", false},
+		"nothing names the engine":                {},
+		"the engine's hook endpoint on 127.0.0.1": {env: []EnvVar{{Name: "OLIVARES_HOOK_PEP_URL", Value: "http://127.0.0.1:7/"}}, controls: []string{"http://127.0.0.1:7/"}},
+		"the inference gateway on localhost":      {env: []EnvVar{{Name: "ANTHROPIC_BASE_URL", Value: "http://localhost:8080"}}, providers: []string{"http://localhost:8080"}},
+		"the inference gateway on ::1":            {env: []EnvVar{{Name: "ANTHROPIC_BASE_URL", Value: "http://[::1]:8080/x"}}, providers: []string{"http://[::1]:8080/x"}},
+		"the session's MCP server on loopback":    {mcp: "http://127.0.0.1:9/session/mcp", controls: []string{"http://127.0.0.1:9/session/mcp"}},
+		"the hook and the MCP server a Claude or Codex launch carries": {
+			env:      []EnvVar{{Name: "OLIVARES_HOOK_PEP_URL", Value: "http://127.0.0.1:7/"}},
+			extra:    []string{"http://127.0.0.1:7/session/mcp"},
+			controls: []string{"http://127.0.0.1:7/", "http://127.0.0.1:7/session/mcp"},
+		},
+		"a provider on the internet":             {env: []EnvVar{{Name: "ANTHROPIC_BASE_URL", Value: "https://api.example.com"}}},
+		"a value that is not a URL":              {env: []EnvVar{{Name: "OLIVARES_NOTE", Value: "127.0.0.1"}}},
+		"a secret whose value is a loopback URL": {env: []EnvVar{{Name: "MY_VAULT_SECRET", Value: "http://127.0.0.1:1/"}}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newFakeRuntime(t, "podman")
+			var got *egress.Policy
+			restore := prepareContainer
+			prepareContainer = func(_ context.Context, p egress.Policy, argv []string) ([]string, string, func() error, func(), error) {
+				got = &p
+				return argv, t.TempDir(), func() error { return nil }, func() {}, nil
+			}
+			t.Cleanup(func() { prepareContainer = restore })
 			spec := containerSpec(t)
 			spec.Env = append(spec.Env, tc.env...)
 			spec.SessionMCPURL = tc.mcp
+			spec.EngineControls = tc.extra
 			p := launchContainer(t, f, spec)
 			_ = containerFrame(t, p)
-			if got := indexOf(f.argv(t), "--network=host") >= 0; got != tc.host {
-				t.Errorf("--network=host = %v, want %v (argv %q)", got, tc.host, f.argv(t))
+			argv := f.argv(t)
+			if indexOf(argv, "--network=host") >= 0 || indexOf(argv, "--network=none") >= 0 {
+				t.Errorf("the container must keep the runtime's own network (argv %q)", argv)
+			}
+			if len(tc.controls)+len(tc.providers) == 0 {
+				if got != nil {
+					t.Errorf("a launch that names no engine endpoint got a relay: %+v", *got)
+				}
+				return
+			}
+			if got == nil || !got.OwnNetwork || !slices.Equal(slices.Sorted(slices.Values(got.Controls)), tc.controls) || !slices.Equal(got.Providers, tc.providers) {
+				t.Errorf("relay policy = %+v, want OwnNetwork with controls %q and providers %q", got, tc.controls, tc.providers)
 			}
 		})
 	}

@@ -22,6 +22,7 @@
 import { ShieldCheck } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { useTabParam } from '@/lib/hooks/use-tab-param'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/lib/auth/context'
 import {
@@ -58,8 +59,18 @@ import {
 } from './components'
 import './i18n'
 
+const ATTESTATION_TABS = [
+  'artifacts',
+  'provenance',
+  'sbom',
+  'scorecard',
+  'remediation',
+  'airgap',
+] as const
+
 export function AttestationView() {
   const { t } = useTranslation(['attestation', 'common'])
+  const [tab, setTab] = useTabParam(ATTESTATION_TABS)
   const { activeTenant, can } = useAuth()
 
   // Privileged, detective read — gate on compliance:read (the lead wires the registry
@@ -153,7 +164,7 @@ export function AttestationView() {
         {t('disclaimer.declaredRef', { date: ATTESTATION_AS_OF })}
       </CaveatNotice>
 
-      <Tabs defaultValue="artifacts">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="artifacts">{t('tabs.artifacts')}</TabsTrigger>
           <TabsTrigger value="provenance">{t('tabs.provenance')}</TabsTrigger>

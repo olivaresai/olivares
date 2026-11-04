@@ -60,7 +60,20 @@
     "waiting": "승인 대기 중",
     "needsYou": "내 조치 필요",
     "idle": "유휴",
-    "approvalsUnread": "승인을 읽지 못해 승인 대기는 표시하지 않습니다."
+    "approvalsUnread": "승인을 아직 읽지 못했거나 읽는 데 실패해 승인 대기는 표시하지 않습니다.",
+    "approvalsPartial": "승인의 일부만 읽었으므로 일부 승인 대기는 표시되지 않을 수 있습니다.",
+    "step": {
+      "Bash": "{{what}} 실행 중",
+      "Read": "{{what}} 읽는 중",
+      "Edit": "{{what}} 편집 중",
+      "Write": "{{what}} 쓰는 중",
+      "Grep": "{{what}} 검색 중",
+      "Glob": "파일 찾는 중 {{what}}",
+      "WebFetch": "{{what}} 읽는 중",
+      "WebSearch": "웹 검색 중 {{what}}",
+      "Task": "에이전트와 작업 중",
+      "Agent": "에이전트와 작업 중"
+    }
   },
   "summary": {
     "heading": "요약",
@@ -82,10 +95,5 @@
   "state": {
     "pendingIdle": "쿼리가 시작되지 않았습니다. 열어서 불러오십시오",
     "pendingPaused": "쿼리가 일시 중지되었습니다. 재개를 기다리는 중입니다"
-  },
-  "proof": {
-    "verified": "{{time}}에 체인 검증됨",
-    "entries_other": "항목 {{n}}개",
-    "broken": "체인이 끊어짐: 원장 열기"
   }
 }

@@ -8,7 +8,7 @@
   "selectTitle": "未选择工作区",
   "selectPrompt": "在导航栏中选择一个工作区以打开此概览，或前往租户范围的清单。",
   "selectPromptWorkspaceOnly": "在导航栏中选择一个工作区以打开此概览。",
-  "viewInventory": "打开清单",
+  "viewInventory": "打开已发现的资源",
   "agents": "智能体",
   "sessions": "会话",
   "resources": "资源",
@@ -46,5 +46,24 @@
     "truncationHint": "打开“会话”查看所有文件夹。",
     "filter": "查找文件夹",
     "noMatch": "没有与“{{query}}”匹配的文件夹。"
+  },
+  "connect": {
+    "title": "用 SFTP 或 SCP 复制文件",
+    "intro": "获取一把几分钟内有效的密钥，然后使用任意 sftp 或 scp 客户端。它只能访问这个文件夹。",
+    "button": "连接",
+    "connecting": "正在连接…",
+    "privateKey": "私钥",
+    "copyKey": "复制私钥",
+    "copied": "私钥已复制",
+    "copyFailed": "无法复制。请选中私钥并手动复制。",
+    "keyHint": "仅显示一次。将其保存为 {{file}}，然后运行 chmod 600 {{file}}。",
+    "sftp": "用 sftp 浏览并复制",
+    "scp": "用 scp 复制单个文件",
+    "hostKey": "客户端询问时请核对的主机密钥：",
+    "expires": "请在 {{time}} 之前连接。此后该密钥无法再建立新连接。",
+    "readOnly": "此密钥只能读取文件：你没有该文件夹的写入权限。",
+    "stepUp": "请完成此服务器要求的登录验证步骤，然后重试。",
+    "failed": "无法获取密钥，请重试。",
+    "statusFailed": "无法确认此文件夹是否可通过 SFTP 访问。"
   }
 }

@@ -8,17 +8,25 @@
 import type { ComponentProps } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProviderSnapshot } from '@/features/agent-tools/api'
+import type { ProviderAccountDTO } from '@/features/agentops/types'
 import type { TodaysCost } from '@/features/home/now-sessions'
 import { renderIntel, screen, within } from '@/test/intel'
 import { UsageView } from './usage-view'
 
 const state = vi.hoisted(() => ({
-  superadmin: true,
+  // An organization admin: may read the accounts, is no system administrator.
+  canAccounts: true,
   hidden: [] as string[],
-  providers: {
+  profiles: {
     isPending: false,
     isError: false,
-    data: { providers: [] as ProviderSnapshot[] },
+    data: { accounts: [] as ProviderAccountDTO[] },
+  },
+  // The providers snapshot: a system read, so only a system administrator has data here.
+  providers: {
+    isError: false,
+    data: { providers: [] as ProviderSnapshot[] } as
+      { providers: ProviderSnapshot[] } | undefined,
   },
   recent: {
     canSessions: true,
@@ -40,20 +48,23 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }))
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ isSuperadmin: state.superadmin }),
+  useAuth: () => ({
+    isSuperadmin: false,
+    can: (permission: string) =>
+      permission === 'sessions:account:read' && state.canAccounts,
+  }),
 }))
 vi.mock('@/features/navigation/authorization', () => ({
   useViewAccess: () => ({
     listed: (v: { id: string }) => !state.hidden.includes(v.id),
   }),
 }))
-vi.mock(
-  '@/features/agent-tools/use-background-providers',
-  async (importActual) => ({
-    ...(await importActual<object>()),
-    useBackgroundProviders: () => state.providers,
-  }),
-)
+vi.mock('@/features/agent-tools/use-profiles', () => ({
+  useProfileList: () => state.profiles,
+}))
+vi.mock('@/features/agent-tools/use-background-providers', () => ({
+  useBackgroundProviders: () => state.providers,
+}))
 vi.mock('@/features/home/use-recent-sessions', () => ({
   useRecentSessions: () => state.recent,
 }))
@@ -61,30 +72,47 @@ vi.mock('@/features/home/now-sessions', () => ({
   dayCost: () => state.today,
 }))
 
-function snap(over: Partial<ProviderSnapshot>): ProviderSnapshot {
+function account(over: Partial<ProviderAccountDTO>): ProviderAccountDTO {
   return {
-    instance: 'claude/default',
+    account_ref: 'acc-1',
+    name: 'claude-a',
     driver: 'claude',
-    default: true,
-    config_dir: '',
-    state: 'ready',
-    installed: true,
-    limits: [],
-    models: [],
-    checked_at: '2026-10-28T08:00:00Z',
-    source: 'claude /status',
+    environment_ref: 'env-1',
+    state: 'active',
+    home_mode: 'managed',
+    home_generation: 1,
+    home_relative: 'claude-a',
+    isolation_level: 'dedicated',
+    auth_source: 'native',
+    identity: '',
+    identity_source: 'none',
+    created_at: '2026-10-28T08:00:00Z',
+    updated_at: '2026-10-28T08:00:00Z',
     ...over,
   }
 }
 
+function window(
+  name: 'five_hour' | 'seven_day',
+  utilization: number,
+): NonNullable<ProviderAccountDTO['usage']>[number] {
+  return {
+    window: name,
+    label: name === 'five_hour' ? '5-hour' : 'Weekly',
+    utilization,
+    observed_at: '2026-10-28T08:00:00Z',
+  }
+}
+
 afterEach(() => {
-  state.superadmin = true
+  state.canAccounts = true
   state.hidden = []
-  state.providers = {
+  state.profiles = {
     isPending: false,
     isError: false,
-    data: { providers: [] },
+    data: { accounts: [] },
   }
+  state.providers = { isError: false, data: { providers: [] } }
   state.recent.canSessions = true
   state.recent.canRuns = true
   state.recent.recentSessions = []
@@ -95,56 +123,110 @@ afterEach(() => {
 })
 
 describe('UsageView', () => {
-  it('leads with the account nearest its limit and says its windows in words', () => {
-    state.providers.data.providers = [
-      snap({
-        instance: 'claude/default',
-        plan: 'Max',
-        limits: [
-          { label: '5-hour', percent: 42 },
-          { label: 'Weekly', percent: 31 },
-        ],
+  it("shows an organization admin the accounts' limits, the account nearest its limit first", () => {
+    state.profiles.data.accounts = [
+      account({
+        account_ref: 'acc-a',
+        name: 'claude-a',
+        usage: [window('seven_day', 34)],
       }),
-      snap({
-        instance: 'codex/default',
+      account({
+        account_ref: 'acc-team',
+        name: 'team',
         driver: 'codex',
-        default: false,
-        plan: 'Team',
-        limits: [
-          { label: '5-hour', percent: 58 },
-          { label: 'Weekly', percent: 37 },
-        ],
+        usage: [window('five_hour', 22), window('seven_day', 98)],
       }),
+      account({ account_ref: 'acc-none', name: 'unread' }),
     ]
     renderIntel(<UsageView />)
     const accounts = screen.getByRole('region', { name: 'Accounts' })
     const rows = within(accounts).getAllByRole('listitem')
+    // An account whose tool reported no window is left out, never shown as 0 %.
     expect(rows.map((r) => r.getAttribute('data-account'))).toEqual([
-      'codex/default',
-      'claude/default',
+      'acc-team',
+      'acc-a',
     ])
-    expect(rows[0]).toHaveTextContent('58% 5-hour · 37% weekly')
-    // Whose login it is comes from the tool's own flag, not from the instance's name.
-    expect(rows[0]).toHaveTextContent("This organization's login")
-    expect(rows[1]).toHaveTextContent("Server user's login")
+    expect(rows[0]).toHaveTextContent('team')
+    expect(rows[0]).toHaveTextContent('5-hour 22% · Weekly 98%')
+    expect(rows[1]).toHaveTextContent('Weekly 34%')
     expect(
-      within(rows[0]!).getByRole('link', { name: /Details of Codex · Team/ }),
+      within(rows[0]!).getByRole('link', { name: 'Details of team' }),
     ).toHaveAttribute('href', '/agent-tools')
   })
 
-  it('shows no account section to a principal who may not read the tools', () => {
-    state.superadmin = false
+  it("keeps the server user's own login for a system administrator, beside the accounts", () => {
+    state.providers.data = {
+      providers: [
+        {
+          instance: 'codex/default',
+          driver: 'codex',
+          default: true,
+          config_dir: '',
+          state: 'ready',
+          installed: true,
+          plan: 'Team',
+          email: 'ops@example.com',
+          limits: [
+            { label: '5-hour', percent: 58 },
+            { label: 'Weekly', percent: 37 },
+          ],
+          models: [],
+          checked_at: '2026-10-28T08:00:00Z',
+          source: 'codex',
+        },
+        // A login this organization made is an account: the account list says it, once.
+        {
+          instance: 'claude/olivares',
+          driver: 'claude',
+          default: false,
+          config_dir: '',
+          state: 'ready',
+          installed: true,
+          limits: [{ label: 'Weekly', percent: 99 }],
+          models: [],
+          checked_at: '2026-10-28T08:00:00Z',
+          source: 'claude',
+        },
+      ],
+    }
+    state.profiles.data.accounts = [
+      account({
+        account_ref: 'acc-a',
+        name: 'claude-a',
+        usage: [window('seven_day', 34)],
+      }),
+    ]
+    renderIntel(<UsageView />)
+    const rows = within(
+      screen.getByRole('region', { name: 'Accounts' }),
+    ).getAllByRole('listitem')
+    expect(rows.map((r) => r.getAttribute('data-account'))).toEqual([
+      'codex/default',
+      'acc-a',
+    ])
+    expect(rows[0]).toHaveTextContent('5-hour 58% · Weekly 37%')
+    expect(rows[0]).toHaveTextContent('Codex · Team')
+  })
+
+  it('says the accounts were not read when the system providers read fails', () => {
+    state.providers = { isError: true, data: undefined }
+    renderIntel(<UsageView />)
+    expect(
+      within(screen.getByRole('region', { name: 'Accounts' })).getByRole(
+        'alert',
+      ),
+    ).toHaveTextContent("The accounts' limits could not be read.")
+  })
+
+  it('shows no account section to a principal who may not read the accounts', () => {
+    state.canAccounts = false
     renderIntel(<UsageView />)
     expect(screen.queryByRole('region', { name: 'Accounts' })).toBeNull()
-    // The subtitle promises the limits, so the page says why they are not here.
-    expect(
-      screen.getByText('Account limits are shown to a system administrator.'),
-    ).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Today' })).toBeInTheDocument()
   })
 
-  it('says the accounts were not read when the providers read fails', () => {
-    state.providers = {
+  it('says the accounts were not read when the accounts read fails', () => {
+    state.profiles = {
       isPending: false,
       isError: true,
       data: undefined as never,

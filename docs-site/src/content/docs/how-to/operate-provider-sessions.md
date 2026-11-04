@@ -35,7 +35,7 @@ uses its authorized tool login and needs neither variable. See
 ## Start and talk
 
 Open **Sessions → New session** and choose a ready tool. The engine fills the
-profile and folder. For the README Compose installation, choose **Change folder**
+profile and folder. For the README Compose installation, choose **Folder → Another folder…**
 and enter `/project` to work on your mounted host project. Leaving the default
 folder needs no typed path. Leave First message empty to start, then type in
 the conversation, or enter it before pressing **Start**.
@@ -80,11 +80,19 @@ docker compose exec olivares olivares session follow first-hour
 
 ## Approve, interrupt, stop and resume
 
-Under **More options**, **Supervised** makes the tool ask before
+Under **What the agent may do**, **Supervised** makes the tool ask before
 acting. In **Rules**, the request waiting for you is open beside the queue with
 its command, what it reaches and the rule that asked. Choose **Approve once**
 (`A`), or **Deny** (`D`) and add a note. A launch that requires an organization
 approval waits there too; send your message once the launch is approved.
+
+From a terminal, `olivares session start`, `send` and `follow` show the same request
+while a turn runs, with the command or path the tool will run. At a terminal they ask
+`Allow? [y/N]` (Enter denies). Without one they print the request and the commands that
+answer it, with its id filled in: `olivares session approve <session> <request>` or
+`olivares session deny <session> <request> --note "why"`. Each answers exactly that
+request and refuses one the session no longer waits on. The engine denies the tool call
+if nobody answers before its deadline.
 
 Use **Interrupt** to end the current turn while leaving the conversation open.
 Use **Stop** to end the process, confirming if asked. **Resume** restarts that

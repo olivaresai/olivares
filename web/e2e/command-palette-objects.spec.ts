@@ -45,7 +45,7 @@ test('palette opens known sessions, installed tools and settings at both widths'
   await page.locator('#setup-email').fill('palette@example.com')
   await page.locator('#setup-password').fill('palette-first-hour-1273-password')
   await page.getByRole('button', { name: /create administrator/i }).click()
-  await page.waitForURL('**/onboarding')
+  await page.waitForURL('**/sessions')
   // Recording begins after credential entry; authenticated state stays in memory.
   recording = await page
     .context()

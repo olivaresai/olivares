@@ -8,8 +8,10 @@ import de from './de.json'
 import fr from './fr.json'
 import it from './it.json'
 import ko from './ko.json'
+import uk from './uk.json'
+import pt from './pt.json'
 import ja from './ja.json'
 import zh from './zh.json'
 import ru from './ru.json'
 
-registerTranslations('estate', { en, es, de, fr, ja, zh, ru, it, ko })
+registerTranslations('estate', { en, es, de, fr, ja, zh, ru, it, ko, uk, pt })

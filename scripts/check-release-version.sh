@@ -676,7 +676,7 @@ DEPENDENCY_WORDS = (
     "TLS", "OAuth", "OCSF", "CycloneDX", "SLSA", "AuthZEN", "OpenGitOps", "jq", "Graph", "SCIM",
     "SAML", "OpenAPI", "AsyncAPI", "WCAG", "SPDX", "SARIF", r"Compose(?=[ \t]*(?:>=|≥))", "Python", "PostgreSQL",
     "SQLite", "modernc", "Ubuntu", "Alpine", "NIST", "CNSA", "AICM", "AI Controls Matrix", "AI-CAIQ", "RMF",
-    "CVSS", "VCDM", "LEEF", "ECS", "CFTC", "grpc", "axe-core", "Grok Build", "OpenCode", "Google ADK",
+    "CVSS", "VCDM", "LEEF", "ECS", "CFTC", "grpc", "axe-core", "Grok Build", "OpenCode", "OpenSSH", "Samba", "Google ADK",
     "pgx", "cosign", "nFPM", "cloudflare/circl", "PCI DSS", "Google-ADK", "Keep a Changelog",
     "DoD Zero Trust Strategy",
 )
@@ -722,6 +722,7 @@ NOT_RELEASES = (
      r"^\|[ \t]*" + DEPENDENCY + r"[ \t]*\|(?:(?![^|\n]*(?i:olivares|release|version|community|business|enterprise|edition))[^|\n]*\|)?[ \t]*"
      r"\x00(?:2\.0|9\.4\.0|2\.1\.0|1\.8\.0)\x01"),
     ("a Linux kernel release", None, r"\bLinux[ \t]+\x00[3-9]\.[0-9]+\.[0-9]+-[a-z][0-9a-z.-]*\x01"),
+    ("an SMB protocol version", None, r"(?:\bSMB[ \t]+|\bvers=)\x00[0-9]+\.[0-9]+(?:\.[0-9]+)?\x01"),
     ("a document's own revision", None,
      r"\b(?:Rev(?:ision)?\.?|" + word("revision") + r")(?:\*\*)?[ \t]*(?:[0-9]+\.[0-9]+/)?\x00"),
     # Any dotted quad with its port or prefix length, and without one only the reserved ranges a
@@ -2503,6 +2504,20 @@ def selftest():
     tree = {portal: '"depends": ["olivares-appliance-base >= 26.700"]'}
     expect("a floor on a package that carries the release is still a stale coordinate",
            judge_artifacts("26.800", scan(tree, rd(tree))) == [(portal, 1, "26.700")])
+    tree = {"d.md": "measured on a Samba 4.22 share (SMB 3.1.1), mounted with vers=3.1.1,nodev"}
+    expect("an SMB protocol version is no release", judge("0.6", scan(tree, rd(tree)))[0] == [])
+    tree = {"d.md": "the release 3.1.1 ships"}
+    expect("a bare three-number release outside an SMB word stays red",
+           judge("0.6", scan(tree, rd(tree)))[0] == [("d.md", 1, "3.1.1")])
+    tree = {"docs/design/workspace-sftp-v1.md": "measured with OpenSSH 9.2p1"}
+    expect("an OpenSSH dependency version is no Olivares release",
+           judge("0.7", scan(tree, rd(tree)))[0] == [])
+    tree = {"docs-site/src/content/docs/de/reference/modules/ii-sessions.md": "eine Samba-4.22-Freigabe (SMB 3.1.1)"}
+    expect("a localized Samba dependency version is no Olivares release",
+           judge("0.7", scan(tree, rd(tree)))[0] == [])
+    tree = {"d.md": "Olivares 9.2p1 is the current release"}
+    expect("the same version shape after the product name stays red",
+           judge("0.7", scan(tree, rd(tree)))[0] == [("d.md", 1, "9.2p1")])
     references = {"d.md": "target 99.900% uptime; see SPEC §47.100 and ORD-47.100"}
     expect("percentage and specification section are not monthly releases", scan(references, rd(references)) == [])
     tree = {"e.md": "since 26.9 things"}

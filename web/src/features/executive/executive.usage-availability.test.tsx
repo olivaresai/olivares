@@ -234,7 +234,7 @@ describe('ExecutiveView usage pillar — Inventory valid, Sessions not establish
     expect(screen.queryByTestId('executive-usage-inventory-gap')).toBeNull()
     // The scope note still describes what the reads cover; the role may make both.
     expect(screen.getByTestId('executive-usage-scope-note')).toHaveTextContent(
-      'Sessions · Inventory · All workspaces',
+      'Sessions · Discovered resources · All workspaces',
     )
   })
 
@@ -267,7 +267,7 @@ describe('ExecutiveView usage pillar — Inventory valid, Sessions not establish
     )
     // The note describes only the read the role makes: Inventory, not Sessions.
     const note = screen.getByTestId('executive-usage-scope-note')
-    expect(note).toHaveTextContent('Inventory · All workspaces')
+    expect(note).toHaveTextContent('Discovered resources · All workspaces')
     expect(note).not.toHaveTextContent('Sessions')
   })
 
@@ -302,7 +302,7 @@ describe('ExecutiveView usage pillar — Sessions valid, Inventory not establish
     expect(within(tile).queryByText(/\b0\b/)).toBeNull()
     expect(
       screen.getByTestId('executive-usage-inventory-gap'),
-    ).toHaveTextContent("Inventory — couldn't load")
+    ).toHaveTextContent("Discovered resources — couldn't load")
     expect(screen.queryByTestId('executive-usage-live-gap')).toBeNull()
   })
 
@@ -317,7 +317,7 @@ describe('ExecutiveView usage pillar — Sessions valid, Inventory not establish
     expect(within(tile).getByText('3 live · — tracked')).toBeInTheDocument()
     expect(
       screen.getByTestId('executive-usage-inventory-gap'),
-    ).toHaveTextContent('Inventory — restricted to your role')
+    ).toHaveTextContent('Discovered resources — restricted to your role')
   })
 })
 
@@ -335,7 +335,7 @@ describe('ExecutiveView usage pillar — both halves', () => {
     )
     expect(
       screen.getByTestId('executive-usage-inventory-gap'),
-    ).toHaveTextContent('Inventory — restricted to your role')
+    ).toHaveTextContent('Discovered resources — restricted to your role')
     expect(within(tile).queryByText(/\b0\b/)).toBeNull()
   })
 
@@ -435,7 +435,7 @@ describe('ExecutiveView usage pillar — leaving a successful state', () => {
     )
     // The note stops naming Sessions the moment the role can no longer read it.
     const note = screen.getByTestId('executive-usage-scope-note')
-    expect(note).toHaveTextContent('Inventory · All workspaces')
+    expect(note).toHaveTextContent('Discovered resources · All workspaces')
     expect(note).not.toHaveTextContent('Sessions')
   })
 
@@ -507,7 +507,7 @@ describe('ExecutiveView usage pillar — a truncated inventory summary', () => {
     expect(within(tile).getByText('3 live · 25 tracked')).toBeInTheDocument()
 
     const partial = screen.getByTestId('executive-usage-inventory-partial')
-    expect(partial).toHaveTextContent('Inventory')
+    expect(partial).toHaveTextContent('Discovered resources')
     expect(partial).toHaveTextContent('Partial data')
     // The "live" figure is from Sessions; this Inventory marker does not describe it.
     expect(partial).not.toHaveTextContent('Sessions')
@@ -527,7 +527,7 @@ describe('ExecutiveView usage pillar — a truncated inventory summary', () => {
         'executive-usage-inventory-partial-explanation',
       ),
     ).toHaveTextContent(
-      'Inventory — Partial data This aggregate reached the scan ceiling — it is partial, not an exact total.',
+      'Discovered resources — Partial data This aggregate reached the scan ceiling — it is partial, not an exact total.',
     )
     expect(
       screen.queryByTestId('executive-usage-sessions-partial-explanation'),
@@ -543,7 +543,7 @@ describe('ExecutiveView usage pillar — a truncated inventory summary', () => {
         'executive-usage-inventory-partial-print-explanation',
       ),
     ).toHaveTextContent(
-      'Inventory — Partial data This aggregate reached the scan ceiling — it is partial, not an exact total.',
+      'Discovered resources — Partial data This aggregate reached the scan ceiling — it is partial, not an exact total.',
     )
     expect(
       screen.queryByTestId(
@@ -555,7 +555,7 @@ describe('ExecutiveView usage pillar — a truncated inventory summary', () => {
     expect(screen.queryByTestId('executive-usage-live-gap')).toBeNull()
     expect(screen.queryByTestId('executive-usage-inventory-gap')).toBeNull()
     expect(screen.getByTestId('executive-usage-scope-note')).toHaveTextContent(
-      'Sessions · Inventory · All workspaces',
+      'Sessions · Discovered resources · All workspaces',
     )
   })
 
@@ -591,10 +591,10 @@ describe('ExecutiveView usage pillar — a truncated inventory summary', () => {
     // The half it cannot read is named as restricted, not as partial.
     expect(
       screen.getByTestId('executive-usage-inventory-gap'),
-    ).toHaveTextContent('Inventory — restricted to your role')
+    ).toHaveTextContent('Discovered resources — restricted to your role')
     expect(
       screen.getByTestId('executive-usage-scope-note'),
-    ).not.toHaveTextContent('Inventory')
+    ).not.toHaveTextContent('Discovered resources')
   })
 
   it('pending → truncated → failed refetch: the marker lives exactly as long as the figure it qualifies', async () => {
@@ -634,7 +634,7 @@ describe('ExecutiveView usage pillar — a truncated inventory summary', () => {
     expect(screen.queryByText(/not an exact total/i)).toBeNull()
     expect(
       screen.getByTestId('executive-usage-inventory-gap'),
-    ).toHaveTextContent("Inventory — couldn't load")
+    ).toHaveTextContent("Discovered resources — couldn't load")
   })
 
   it('success → the Inventory read is withdrawn: the cached truncated summary is not reused', async () => {
@@ -693,7 +693,7 @@ describe('ExecutiveView usage pillar — a live page with more rows', () => {
     const partial = screen.getByTestId('executive-usage-sessions-partial')
     expect(partial).toHaveTextContent('Sessions')
     expect(partial).toHaveTextContent('Partial data')
-    expect(partial).not.toHaveTextContent('Inventory')
+    expect(partial).not.toHaveTextContent('Discovered resources')
     // The mechanism is a bounded PAGE, not an aggregate's scan ceiling: the compact
     // line names it in a few words, and the complete sentence is in the disclosure
     // OUTSIDE the tile link, beside it.
@@ -738,7 +738,7 @@ describe('ExecutiveView usage pillar — a live page with more rows', () => {
     expect(screen.queryByTestId('executive-usage-live-gap')).toBeNull()
     expect(screen.queryByTestId('executive-usage-inventory-gap')).toBeNull()
     expect(screen.getByTestId('executive-usage-scope-note')).toHaveTextContent(
-      'Sessions · Inventory · All workspaces',
+      'Sessions · Discovered resources · All workspaces',
     )
   })
 
@@ -773,8 +773,8 @@ describe('ExecutiveView usage pillar — a live page with more rows', () => {
       'executive-usage-inventory-partial',
     )
     expect(sessionsNote).toHaveTextContent('Sessions')
-    expect(sessionsNote).not.toHaveTextContent('Inventory')
-    expect(inventoryNote).toHaveTextContent('Inventory')
+    expect(sessionsNote).not.toHaveTextContent('Discovered resources')
+    expect(inventoryNote).toHaveTextContent('Discovered resources')
     expect(inventoryNote).not.toHaveTextContent('Sessions')
     expect(sessionsNote).toHaveTextContent(/one page/i)
     expect(inventoryNote).toHaveTextContent(/scan ceiling/i)
@@ -938,7 +938,7 @@ describe('ExecutiveView usage pillar — a live page with more rows', () => {
 // figure and its markers; a SUCCESSFUL answer whose refetch is paused keeps
 // everything; and the region says which half changed to what, never how many.
 const INITIAL_ANNOUNCEMENT =
-  'Sessions: figures available. Inventory: figures available.'
+  'Sessions: figures available. Discovered resources: figures available.'
 
 describe('ExecutiveView usage pillar — pending reasons (pure flag fixture)', () => {
   it('flags alone say idle: no skeleton, "— live · 25 tracked", a "not started" line, not "couldn\'t load", not "restricted"', async () => {
@@ -960,10 +960,10 @@ describe('ExecutiveView usage pillar — pending reasons (pure flag fixture)', (
     expect(screen.queryByTestId('executive-usage-inventory-gap')).toBeNull()
     expect(screen.queryByTestId('executive-usage-sessions-partial')).toBeNull()
     expect(screen.getByTestId('executive-usage-scope-note')).toHaveTextContent(
-      'Sessions · Inventory · All workspaces',
+      'Sessions · Discovered resources · All workspaces',
     )
     expect(liveRegion()).toHaveTextContent(
-      'Sessions: query not started. Inventory: figures available.',
+      'Sessions: query not started. Discovered resources: figures available.',
     )
   })
 
@@ -978,14 +978,16 @@ describe('ExecutiveView usage pillar — pending reasons (pure flag fixture)', (
     expect(within(tile).queryByText(/\b0\b/)).toBeNull()
     expect(
       screen.getByTestId('executive-usage-inventory-gap'),
-    ).toHaveTextContent('Inventory — query paused, waiting to resume')
+    ).toHaveTextContent(
+      'Discovered resources — query paused, waiting to resume',
+    )
     expect(within(tile).queryByText(/couldn't load/i)).toBeNull()
     expect(within(tile).queryByText(/offline/i)).toBeNull()
     expect(within(tile).queryByText(/restricted/i)).toBeNull()
     expect(screen.queryByTestId('executive-usage-live-gap')).toBeNull()
     expect(screen.queryByTestId('executive-usage-inventory-partial')).toBeNull()
     expect(liveRegion()).toHaveTextContent(
-      'Sessions: figures available. Inventory: query paused, waiting to resume.',
+      'Sessions: figures available. Discovered resources: query paused, waiting to resume.',
     )
   })
 })
@@ -1029,7 +1031,7 @@ describe('ExecutiveView usage pillar — a real pause and resume (QueryClient on
     ).toHaveTextContent(/scan ceiling reached/i)
     expect(screen.queryByTestId('executive-usage-inventory-gap')).toBeNull()
     expect(liveRegion()).toHaveTextContent(
-      'Sessions: query paused, waiting to resume. Inventory: figures available, partial data.',
+      'Sessions: query paused, waiting to resume. Discovered resources: figures available, partial data.',
     )
 
     act(() => onlineManager.setOnline(true))
@@ -1045,7 +1047,7 @@ describe('ExecutiveView usage pillar — a real pause and resume (QueryClient on
       screen.getByTestId('executive-usage-inventory-partial'),
     ).toBeInTheDocument()
     expect(liveRegion()).toHaveTextContent(
-      'Sessions: figures available. Inventory: figures available, partial data.',
+      'Sessions: figures available. Discovered resources: figures available, partial data.',
     )
   })
 
@@ -1104,7 +1106,7 @@ describe('ExecutiveView usage pillar — a real pause and resume (QueryClient on
     ).toHaveTextContent(/one page loaded; there are more/i)
     expect(screen.queryByTestId('executive-usage-live-gap')).toBeNull()
     expect(liveRegion()).toHaveTextContent(
-      'Sessions: figures available, partial data. Inventory: figures available.',
+      'Sessions: figures available, partial data. Discovered resources: figures available.',
     )
   })
 
@@ -1120,7 +1122,7 @@ describe('ExecutiveView usage pillar — a real pause and resume (QueryClient on
     )
     const region = liveRegion()
     expect(region).toHaveTextContent(
-      'Sessions: figures available, partial data. Inventory: figures available.',
+      'Sessions: figures available, partial data. Discovered resources: figures available.',
     )
     const watched = observeRegion(region)
 
@@ -1166,7 +1168,7 @@ describe('ExecutiveView usage pillar — a real idle (QueryClient cancel)', () =
     // In flight: the headline block is skeletons, as before.
     expect(headlineIsSkeleton()).toBe(true)
     expect(liveRegion()).toHaveTextContent(
-      'Sessions: loading. Inventory: figures available.',
+      'Sessions: loading. Discovered resources: figures available.',
     )
 
     await queryClient.cancelQueries({ queryKey: LIVE_KEY })
@@ -1181,7 +1183,7 @@ describe('ExecutiveView usage pillar — a real idle (QueryClient cancel)', () =
     expect(within(tile).queryByText(/couldn't load/i)).toBeNull()
     expect(within(tile).queryByText(/\b0 live/)).toBeNull()
     expect(liveRegion()).toHaveTextContent(
-      'Sessions: query not started. Inventory: figures available.',
+      'Sessions: query not started. Discovered resources: figures available.',
     )
 
     live.mockResolvedValue(LIVE_PAGE)
@@ -1245,7 +1247,7 @@ describe('ExecutiveView availability region — restriction, recovery, coverage,
       'Sessions — restricted to your role',
     )
     expect(region).toHaveTextContent(
-      'Sessions: restricted to your role. Inventory: figures available.',
+      'Sessions: restricted to your role. Discovered resources: figures available.',
     )
     expect(region).not.toHaveTextContent('4')
     const afterRefusal = watched.mutations()
@@ -1264,7 +1266,7 @@ describe('ExecutiveView availability region — restriction, recovery, coverage,
       ),
     )
     expect(region).toHaveTextContent(
-      'Sessions: could not be loaded. Inventory: figures available.',
+      'Sessions: could not be loaded. Discovered resources: figures available.',
     )
 
     // Recovery into a page with more rows: the figure returns WITH its marker, and the
@@ -1281,7 +1283,7 @@ describe('ExecutiveView availability region — restriction, recovery, coverage,
     ).toBeInTheDocument()
     expect(screen.queryByTestId('executive-usage-live-gap')).toBeNull()
     expect(region).toHaveTextContent(
-      'Sessions: figures available, partial data. Inventory: figures available.',
+      'Sessions: figures available, partial data. Discovered resources: figures available.',
     )
 
     // Coverage back to a complete page: the marker leaves and the region says so.
@@ -1339,10 +1341,10 @@ describe('ExecutiveView usage pillar — tenant and permission transitions while
       within(usageTile()).getByText('— live · 25 tracked'),
     ).toBeInTheDocument()
     const note = screen.getByTestId('executive-usage-scope-note')
-    expect(note).toHaveTextContent('Inventory · All workspaces')
+    expect(note).toHaveTextContent('Discovered resources · All workspaces')
     expect(note).not.toHaveTextContent('Sessions')
     expect(liveRegion()).toHaveTextContent(
-      'Sessions: restricted to your role. Inventory: figures available.',
+      'Sessions: restricted to your role. Discovered resources: figures available.',
     )
     // The paused dispatch was cancelled and reverted, not left waiting for the network.
     await waitFor(() =>
@@ -1387,7 +1389,9 @@ describe('ExecutiveView usage pillar — tenant and permission transitions while
     await waitFor(() =>
       expect(
         screen.getByTestId('executive-usage-inventory-gap'),
-      ).toHaveTextContent('Inventory — query paused, waiting to resume'),
+      ).toHaveTextContent(
+        'Discovered resources — query paused, waiting to resume',
+      ),
     )
     const tile = usageTile()
     expect(within(tile).getByText('—')).toBeInTheDocument()
@@ -1398,7 +1402,7 @@ describe('ExecutiveView usage pillar — tenant and permission transitions while
       'Sessions — query paused, waiting to resume',
     )
     expect(liveRegion()).toHaveTextContent(
-      'Sessions: query paused, waiting to resume. Inventory: query paused, waiting to resume.',
+      'Sessions: query paused, waiting to resume. Discovered resources: query paused, waiting to resume.',
     )
     expect(live).not.toHaveBeenCalled()
     expect(summary).not.toHaveBeenCalled()

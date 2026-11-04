@@ -2265,11 +2265,23 @@
                     "message": {
                       "type": "string"
                     },
+                    "model_sizes": {
+                      "additionalProperties": {
+                        "format": "int64",
+                        "type": "integer"
+                      },
+                      "description": "Bytes each model in models takes on disk, as Ollama reports it, keyed by model name.",
+                      "type": "object"
+                    },
                     "models": {
                       "items": {
                         "type": "string"
                       },
                       "type": "array"
+                    },
+                    "models_error": {
+                      "description": "Present when Ollama's model list could not be read; models is then not an authoritative empty list.",
+                      "type": "string"
                     },
                     "runtime": {
                       "description": "Which flavour serves the row: the installed program or a container.",
@@ -2370,6 +2382,168 @@
           }
         ],
         "summary": "Reports whether Ollama is installed, whether this engine runs it, its endpoint and the models it holds.",
+        "x-olivares-scope": "system",
+        "x-required-permission": "system:admin",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/agenttools/ollama/models": {
+      "delete": {
+        "description": "Deletes one installed model from the running Ollama. The models directory belongs to the engine, so a terminal's remove command would not reach it.",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "model": {
+                    "maxLength": 128,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "model"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "endpoint": {
+                      "type": "string"
+                    },
+                    "installed": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "model_sizes": {
+                      "additionalProperties": {
+                        "format": "int64",
+                        "type": "integer"
+                      },
+                      "description": "Bytes each model in models takes on disk, as Ollama reports it, keyed by model name.",
+                      "type": "object"
+                    },
+                    "models": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "models_error": {
+                      "description": "Present when Ollama's model list could not be read; models is then not an authoritative empty list.",
+                      "type": "string"
+                    },
+                    "runtime": {
+                      "description": "Which flavour serves the row: the installed program or a container.",
+                      "enum": [
+                        "process",
+                        "container"
+                      ],
+                      "type": "string"
+                    },
+                    "state": {
+                      "enum": [
+                        "stopped",
+                        "starting",
+                        "running",
+                        "failed"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "installed",
+                    "state",
+                    "models"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The model was deleted from the Ollama this engine runs; the status lists what is left"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden / step-up required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "required evidence or store unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Deletes one installed model from the running Ollama.",
+        "x-olivares-request-body-disposition": "schema-published",
         "x-olivares-scope": "system",
         "x-required-permission": "system:admin",
         "x-stability": "beta"
@@ -2525,6 +2699,143 @@
       }
     },
     "/v1/m/agenttools/ollama/pulls/{id}": {
+      "delete": {
+        "description": "Ends a running download: the request to Ollama is closed, which stops its pull (what it fetched stays for the next try).",
+        "parameters": [
+          {
+            "description": "Path parameter id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "completed": {
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "enum": [
+                        "running",
+                        "succeeded",
+                        "failed"
+                      ],
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "total": {
+                      "format": "int64",
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "model",
+                    "state",
+                    "completed",
+                    "total"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The model download was cancelled (failed, with the error \"Download cancelled.\"); one that already ended is returned unchanged"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden / step-up required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "required evidence or store unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Ends a running download: the request to Ollama is closed, which stops its pull (what it fetched stays for the next try).",
+        "x-olivares-request-body-disposition": "bodyless",
+        "x-olivares-scope": "system",
+        "x-required-permission": "system:admin",
+        "x-stability": "beta"
+      },
       "get": {
         "description": "Reads one model download: its state and Ollama's progress.",
         "parameters": [
@@ -2704,11 +3015,23 @@
                     "message": {
                       "type": "string"
                     },
+                    "model_sizes": {
+                      "additionalProperties": {
+                        "format": "int64",
+                        "type": "integer"
+                      },
+                      "description": "Bytes each model in models takes on disk, as Ollama reports it, keyed by model name.",
+                      "type": "object"
+                    },
                     "models": {
                       "items": {
                         "type": "string"
                       },
                       "type": "array"
+                    },
+                    "models_error": {
+                      "description": "Present when Ollama's model list could not be read; models is then not an authoritative empty list.",
+                      "type": "string"
                     },
                     "runtime": {
                       "description": "Which flavour serves the row: the installed program or a container.",
@@ -2834,11 +3157,23 @@
                     "message": {
                       "type": "string"
                     },
+                    "model_sizes": {
+                      "additionalProperties": {
+                        "format": "int64",
+                        "type": "integer"
+                      },
+                      "description": "Bytes each model in models takes on disk, as Ollama reports it, keyed by model name.",
+                      "type": "object"
+                    },
                     "models": {
                       "items": {
                         "type": "string"
                       },
                       "type": "array"
+                    },
+                    "models_error": {
+                      "description": "Present when Ollama's model list could not be read; models is then not an authoritative empty list.",
+                      "type": "string"
                     },
                     "runtime": {
                       "description": "Which flavour serves the row: the installed program or a container.",
@@ -3915,6 +4250,10 @@
                       "type": "object"
                     },
                     "plan": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "description": "Why a tool that is logged in some other way cannot run a session here; absent otherwise.",
                       "type": "string"
                     },
                     "signed_in": {
@@ -51504,6 +51843,623 @@
         "summary": "Updates a routine policy's mutable fields.",
         "x-olivares-request-body-disposition": "schema-published",
         "x-required-permission": "governance:routine:admin",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/governance/vaults": {
+      "get": {
+        "description": "Returns HTTP 501 with business_required because shared vaults require Business; no vault or share is read or changed.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "governance module route (requires governance:vault:read)",
+        "x-required-permission": "governance:vault:read",
+        "x-stability": "beta"
+      },
+      "post": {
+        "description": "Returns HTTP 501 with business_required because shared vaults require Business; no vault or share is read or changed.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "share_by": {
+                    "enum": [
+                      "owner",
+                      "editor"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "governance module route (requires governance:vault:write)",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "governance:vault:write",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/governance/vaults/{id}/shares": {
+      "delete": {
+        "description": "Returns HTTP 501 with business_required because shared vaults require Business; no vault or share is read or changed.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "subject_kind": {
+                    "enum": [
+                      "user",
+                      "group"
+                    ],
+                    "type": "string"
+                  },
+                  "subject_ref": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "subject_kind",
+                  "subject_ref"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "governance module route (requires governance:vault:write)",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "governance:vault:write",
+        "x-stability": "beta"
+      },
+      "get": {
+        "description": "Returns HTTP 501 with business_required because shared vaults require Business; no vault or share is read or changed.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "governance module route (requires governance:vault:read)",
+        "x-required-permission": "governance:vault:read",
+        "x-stability": "beta"
+      },
+      "put": {
+        "description": "Returns HTTP 501 with business_required because shared vaults require Business; no vault or share is read or changed.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "role": {
+                    "enum": [
+                      "viewer",
+                      "editor",
+                      "owner"
+                    ],
+                    "type": "string"
+                  },
+                  "subject_kind": {
+                    "enum": [
+                      "user",
+                      "group"
+                    ],
+                    "type": "string"
+                  },
+                  "subject_ref": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "subject_kind",
+                  "subject_ref",
+                  "role"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "governance module route (requires governance:vault:write)",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "governance:vault:write",
         "x-stability": "beta"
       }
     },
@@ -99413,6 +100369,262 @@
         "x-stability": "beta"
       }
     },
+    "/v1/m/sessions/live/by-id/{live_ref}/pin": {
+      "delete": {
+        "description": "Removes the caller's pin on an observed session, idempotently.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter live_ref.",
+            "in": "path",
+            "name": "live_ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "live_ref": {
+                      "description": "The observed session row's own reference.",
+                      "type": "string"
+                    },
+                    "pinned": {
+                      "description": "Whether THIS caller has the session pinned; both directions are idempotent.",
+                      "type": "boolean"
+                    },
+                    "pinned_at": {
+                      "description": "When this caller pinned it; present when pinned is true. Live list and get reads carry the same per-caller fields.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "live_ref",
+                    "pinned"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "the observed session's pin state for the caller"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The session was launched through Olivares: pin its run"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Removes the caller's pin on an observed session, idempotently.",
+        "x-olivares-request-body-disposition": "bodyless",
+        "x-required-permission": "sessions:live:read",
+        "x-stability": "beta"
+      },
+      "post": {
+        "description": "Pins an observed session for the caller, idempotently. A session the plane launched has a run: its pin is the run's, so this refuses with a 409 that says so.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter live_ref.",
+            "in": "path",
+            "name": "live_ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "live_ref": {
+                      "description": "The observed session row's own reference.",
+                      "type": "string"
+                    },
+                    "pinned": {
+                      "description": "Whether THIS caller has the session pinned; both directions are idempotent.",
+                      "type": "boolean"
+                    },
+                    "pinned_at": {
+                      "description": "When this caller pinned it; present when pinned is true. Live list and get reads carry the same per-caller fields.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "live_ref",
+                    "pinned"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "the observed session's pin state for the caller"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The session was launched through Olivares: pin its run"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Pins an observed session for the caller, idempotently.",
+        "x-olivares-request-body-disposition": "bodyless",
+        "x-required-permission": "sessions:live:read",
+        "x-stability": "beta"
+      }
+    },
     "/v1/m/sessions/live/by-id/{live_ref}/timeline": {
       "get": {
         "description": "Returns the timeline of exactly one session row by its live_ref: a scoped row by the events written with that reference, a legacy row by its legacy events.",
@@ -100718,6 +101930,242 @@
         "summary": "Opens one authorized user Message after its exact carrier checks.",
         "x-olivares-sdk-family": "sessions-communication-v1",
         "x-required-permission": "sessions:message:read",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/personal-folders-settings": {
+      "get": {
+        "description": "Reads or changes whether this organization gives each person a personal folder, My files; changing it takes folder administration and is audited.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "enabled"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Whether this organization gives each person a personal folder"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Reads or changes whether this organization gives each person a personal folder, My files; changing it takes folder administration and is audited.",
+        "x-required-permission": "sessions:workspace:read",
+        "x-stability": "beta"
+      },
+      "put": {
+        "description": "Reads or changes whether this organization gives each person a personal folder, My files; changing it takes folder administration and is audited.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "enabled"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "enabled"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Whether this organization gives each person a personal folder"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Reads or changes whether this organization gives each person a personal folder, My files; changing it takes folder administration and is audited.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "sessions:workspace:admin",
         "x-stability": "beta"
       }
     },
@@ -103142,8 +104590,16 @@
                           "base_url": {
                             "type": "string"
                           },
+                          "color": {
+                            "pattern": "^#[0-9A-F]{6}$",
+                            "type": "string"
+                          },
                           "docs_url": {
                             "type": "string"
+                          },
+                          "governed": {
+                            "description": "The row registers the governed inference service, which no tool session uses.",
+                            "type": "boolean"
                           },
                           "key_url": {
                             "type": "string"
@@ -103167,6 +104623,10 @@
                           "models_url": {
                             "type": "string"
                           },
+                          "monogram": {
+                            "pattern": "^[A-Z]{1,2}$",
+                            "type": "string"
+                          },
                           "ref": {
                             "type": "string"
                           },
@@ -103177,6 +104637,8 @@
                         "required": [
                           "ref",
                           "title",
+                          "monogram",
+                          "color",
                           "kind",
                           "base_url",
                           "auth",
@@ -105304,7 +106766,7 @@
     },
     "/v1/m/sessions/provider-profiles/{ref}/models": {
       "get": {
-        "description": "Lists the models and effort levels that the installed tool or bound provider of one provider profile reports now, cached for two minutes; it sends no prompt, starts no conversation and returns no credential.",
+        "description": "Lists the models and effort levels that the installed tool or bound provider of one provider profile reports now, cached for two minutes, then answered from the last read while it is read again; it sends no prompt, starts no conversation and returns no credential.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -105385,6 +106847,10 @@
                           },
                           "is_new": {
                             "type": "boolean"
+                          },
+                          "launch_model": {
+                            "description": "The exact model id a Claude Code selector launches on and a session records. Present only for a Claude Code selector on the tool's own sign-in.",
+                            "type": "string"
                           },
                           "service_tiers": {
                             "items": {
@@ -105535,7 +107001,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Lists the models and effort levels that the installed tool or bound provider of one provider profile reports now, cached for two minutes; it sends no prompt, starts no conversation and returns no credential.",
+        "summary": "Lists the models and effort levels that the installed tool or bound provider of one provider profile reports now, cached for two minutes, then answered from the last read while it is read again; it sends no prompt, starts no conversation and returns no credential.",
         "x-required-permission": "sessions:profile:read",
         "x-stability": "beta"
       }
@@ -109311,16 +110777,6 @@
               }
             },
             "description": "attaching images is not available on this node"
-          },
-          "507": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            },
-            "description": "the session already holds as many images as it keeps"
           }
         },
         "security": [
@@ -109699,6 +111155,401 @@
         ],
         "summary": "Returns the current text of one file in the run's folder, or with rev=HEAD the text git HEAD holds for it (?path=, relative to the folder; at most 256 KiB; 404 when the folder has no readable git history or HEAD has no such file).",
         "x-required-permission": "sessions:output:read",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/runs/{ref}/checkpoints": {
+      "get": {
+        "description": "Lists the session's turns, oldest first: the prompt of each and the files it changed, read from snapshots the engine took (nothing is executed in the folder).",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "available": {
+                      "description": "False when this session's folder cannot be checkpointed; reason says why.",
+                      "type": "boolean"
+                    },
+                    "reason": {
+                      "description": "Why the folder cannot be checkpointed. Absent when it can.",
+                      "type": "string"
+                    },
+                    "turns": {
+                      "description": "The session's turns, oldest first.",
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "at": {
+                            "description": "When the turn started.",
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "clipped": {
+                            "description": "True when prompt is only the start of a longer message.",
+                            "type": "boolean"
+                          },
+                          "files": {
+                            "description": "The files the turn changed.",
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "path": {
+                                  "description": "The file's path, relative to the session's folder.",
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "description": "What the turn did to the file.",
+                                  "enum": [
+                                    "added",
+                                    "modified",
+                                    "deleted"
+                                  ],
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "path",
+                                "status"
+                              ],
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "open": {
+                            "description": "True for the newest turn until the next one starts: its files are the folder's changes so far.",
+                            "type": "boolean"
+                          },
+                          "prompt": {
+                            "description": "The message that started the turn.",
+                            "type": "string"
+                          },
+                          "seq": {
+                            "description": "The turn's number in this session, from 1.",
+                            "minimum": 1,
+                            "type": "integer"
+                          },
+                          "truncated": {
+                            "description": "True when the turn changed more files than are listed.",
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "seq",
+                          "prompt",
+                          "clipped",
+                          "at",
+                          "open",
+                          "files",
+                          "truncated"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "available",
+                    "turns"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The session's turns, oldest first, each with the files it changed"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Lists the session's turns, oldest first: the prompt of each and the files it changed, read from snapshots the engine took (nothing is executed in the folder).",
+        "x-required-permission": "sessions:output:read",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/runs/{ref}/checkpoints/{seq}/rewind": {
+      "post": {
+        "description": "Puts the session's folder back as it was before a turn (to start), or as it was when the turn ended (to end, which undoes a rewind).",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter seq.",
+            "in": "path",
+            "name": "seq",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "to": {
+                    "description": "start puts the folder back as it was before the turn; end as it was when the turn ended, which undoes a rewind made after it.",
+                    "enum": [
+                      "start",
+                      "end"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "to"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "files": {
+                      "description": "Every file that was put back or removed.",
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "action": {
+                            "description": "restored: the file is back as it was. removed: it did not exist then.",
+                            "enum": [
+                              "restored",
+                              "removed"
+                            ],
+                            "type": "string"
+                          },
+                          "path": {
+                            "description": "The file's path, relative to the session's folder.",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "action"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "seq": {
+                      "description": "The turn the folder was rewound to.",
+                      "type": "integer"
+                    },
+                    "to": {
+                      "description": "Whether the folder was put back as before the turn or as when it ended.",
+                      "enum": [
+                        "start",
+                        "end"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "seq",
+                    "to",
+                    "files"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The files that were put back or removed"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The session is working on a turn; interrupt it or wait for it to end"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Too many files differ to rewind here"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Puts the session's folder back as it was before a turn (to start), or as it was when the turn ended (to end, which undoes a rewind).",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "sessions:run:write",
         "x-stability": "beta"
       }
     },
@@ -110296,17 +112147,22 @@
                       "description": "When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields.",
                       "format": "date-time",
                       "type": "string"
+                    },
+                    "unread": {
+                      "description": "Whether the session did something after THIS caller last saw it; a session they never opened or marked reads as read.",
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "run_ref",
-                    "done"
+                    "done",
+                    "unread"
                   ],
                   "type": "object"
                 }
               }
             },
-            "description": "the caller's snooze and done marks on the run"
+            "description": "the caller's snooze, done and unread marks on the run"
           },
           "400": {
             "content": {
@@ -110424,17 +112280,22 @@
                       "description": "When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields.",
                       "format": "date-time",
                       "type": "string"
+                    },
+                    "unread": {
+                      "description": "Whether the session did something after THIS caller last saw it; a session they never opened or marked reads as read.",
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "run_ref",
-                    "done"
+                    "done",
+                    "unread"
                   ],
                   "type": "object"
                 }
               }
             },
-            "description": "the caller's snooze and done marks on the run"
+            "description": "the caller's snooze, done and unread marks on the run"
           },
           "400": {
             "content": {
@@ -111188,6 +113049,333 @@
         "x-stability": "beta"
       }
     },
+    "/v1/m/sessions/runs/{ref}/git/init": {
+      "post": {
+        "description": "Makes the session's folder a Git repository on branch main when it is not one yet.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "work_lease_fence": {
+                    "format": "int64",
+                    "minimum": 1,
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Local Git operation completed"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Git refused the operation, the workspace changed, or the work lease is stale"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unsupported isolation or Git output limit exceeded"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "session OS boundary could not be established; no unconfined fallback"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "session confinement, Git, policy or store is unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "sessions module route (requires sessions:run:write)",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "sessions:run:write",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/runs/{ref}/git/merge": {
+      "post": {
+        "description": "Fast-forwards the workspace's current branch to the stopped session's owned branch.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "description": "Fast-forward the workspace branch to the stopped session's owned worktree branch. Both folders must be clean and the target must be on a branch. A diverged target is refused; no worktree is removed.",
+                "properties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Local Git operation completed"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Git refused the operation, the workspace changed, or the work lease is stale"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unsupported isolation or Git output limit exceeded"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "session OS boundary could not be established; no unconfined fallback"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "session confinement, Git, policy or store is unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Fast-forwards the workspace's current branch to the stopped session's owned branch.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "sessions:run:write",
+        "x-stability": "beta"
+      }
+    },
     "/v1/m/sessions/runs/{ref}/git/stage": {
       "post": {
         "description": "Stages the selected paths in the session's folder for the next commit.",
@@ -111850,7 +114038,7 @@
                     "items": {
                       "type": "string"
                     },
-                    "maxItems": 4,
+                    "maxItems": 100,
                     "type": "array"
                   },
                   "line": {
@@ -111977,6 +114165,16 @@
               }
             },
             "description": "conflict / setup required"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "the message is over the 128 MB one request to the model takes"
           },
           "429": {
             "content": {
@@ -112345,7 +114543,7 @@
             }
           },
           {
-            "description": "1: every item of the page carries its whole text, bounded at 64 KiB per message as a read by id is, and the page holds at most 50 messages; later_same is not added.",
+            "description": "1: every item of the page carries its text, cut at 64 KiB and marked clipped (read the message by id for the whole of it), and the page holds at most 50 messages; later_same is not added.",
             "in": "query",
             "name": "text",
             "required": false,
@@ -114577,17 +116775,22 @@
                       "description": "When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields.",
                       "format": "date-time",
                       "type": "string"
+                    },
+                    "unread": {
+                      "description": "Whether the session did something after THIS caller last saw it; a session they never opened or marked reads as read.",
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "run_ref",
-                    "done"
+                    "done",
+                    "unread"
                   ],
                   "type": "object"
                 }
               }
             },
-            "description": "the caller's snooze and done marks on the run"
+            "description": "the caller's snooze, done and unread marks on the run"
           },
           "400": {
             "content": {
@@ -114726,17 +116929,22 @@
                       "description": "When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields.",
                       "format": "date-time",
                       "type": "string"
+                    },
+                    "unread": {
+                      "description": "Whether the session did something after THIS caller last saw it; a session they never opened or marked reads as read.",
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "run_ref",
-                    "done"
+                    "done",
+                    "unread"
                   ],
                   "type": "object"
                 }
               }
             },
-            "description": "the caller's snooze and done marks on the run"
+            "description": "the caller's snooze, done and unread marks on the run"
           },
           "400": {
             "content": {
@@ -115011,6 +117219,125 @@
         "x-stability": "beta"
       }
     },
+    "/v1/m/sessions/runs/{ref}/tasks/{task}/stop": {
+      "post": {
+        "description": "Stops one background task of a live session and answers with the session, which stays running (stopRunTask).",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter task.",
+            "in": "path",
+            "name": "task",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Stops one background task of a live session and answers with the session, which stays running (stopRunTask).",
+        "x-olivares-request-body-disposition": "bodyless",
+        "x-required-permission": "sessions:run:write",
+        "x-stability": "beta"
+      }
+    },
     "/v1/m/sessions/runs/{ref}/title": {
       "post": {
         "description": "Cuts the run's title from its first message. The route supplies run-write authorization in the run's workspace; the title is made from the conversation, so the caller must also be allowed to read its output.",
@@ -115159,6 +117486,274 @@
         "summary": "Cuts the run's title from its first message.",
         "x-olivares-request-body-disposition": "schema-published",
         "x-required-permission": "sessions:run:write",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/runs/{ref}/unread": {
+      "delete": {
+        "description": "Marks the run read for the caller, idempotently: they have seen all it did up to now.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "done": {
+                      "description": "Whether THIS caller has marked the session done; every direction is idempotent.",
+                      "type": "boolean"
+                    },
+                    "run_ref": {
+                      "description": "The operated session's stable reference.",
+                      "type": "string"
+                    },
+                    "snoozed_until": {
+                      "description": "When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields.",
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "unread": {
+                      "description": "Whether the session did something after THIS caller last saw it; a session they never opened or marked reads as read.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "run_ref",
+                    "done",
+                    "unread"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "the caller's snooze, done and unread marks on the run"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Marks the run read for the caller, idempotently: they have seen all it did up to now.",
+        "x-olivares-request-body-disposition": "bodyless",
+        "x-required-permission": "sessions:run:read",
+        "x-stability": "beta"
+      },
+      "post": {
+        "description": "Marks the run unread for the caller, idempotently: the moment they last saw it goes back before anything it ever did.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "done": {
+                      "description": "Whether THIS caller has marked the session done; every direction is idempotent.",
+                      "type": "boolean"
+                    },
+                    "run_ref": {
+                      "description": "The operated session's stable reference.",
+                      "type": "string"
+                    },
+                    "snoozed_until": {
+                      "description": "When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields.",
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "unread": {
+                      "description": "Whether the session did something after THIS caller last saw it; a session they never opened or marked reads as read.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "run_ref",
+                    "done",
+                    "unread"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "the caller's snooze, done and unread marks on the run"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Marks the run unread for the caller, idempotently: the moment they last saw it goes back before anything it ever did.",
+        "x-olivares-request-body-disposition": "bodyless",
+        "x-required-permission": "sessions:run:read",
         "x-stability": "beta"
       }
     },
@@ -117664,6 +120259,259 @@
           }
         ],
         "summary": "Lists the tools this engine knows, in its own order: each tool's key, product name, the word its account names start from, whether a session runs on it, and the provider kinds it runs on with the endpoint rule for each.",
+        "x-required-permission": "sessions:run:read",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/usage": {
+      "get": {
+        "description": "Totals the runs the caller may read, one row per model, account, provider or tool, over an optional time range.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "What to total by: the model a run used, its provider account, the provider kind it ran on, or its tool.",
+            "in": "query",
+            "name": "group_by",
+            "required": true,
+            "schema": {
+              "enum": [
+                "model",
+                "account",
+                "provider",
+                "tool"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only runs created at or after this time.",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only runs created before this time; it must be after since.",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "description": "day splits every row by the day (UTC) its runs were created.",
+            "in": "query",
+            "name": "bucket",
+            "required": false,
+            "schema": {
+              "enum": [
+                "day"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "bucket": {
+                      "enum": [
+                        "day"
+                      ],
+                      "type": "string"
+                    },
+                    "group_by": {
+                      "enum": [
+                        "model",
+                        "account",
+                        "provider",
+                        "tool"
+                      ],
+                      "type": "string"
+                    },
+                    "items": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "cost_micro_usd": {
+                            "anyOf": [
+                              {
+                                "description": "Cost the tools reported, in millionths of a US dollar, summed. Null, never 0, when no run reported one.",
+                                "format": "int64",
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "day": {
+                            "description": "The day (UTC, YYYY-MM-DD) the runs were created. Present only with bucket=day.",
+                            "type": "string"
+                          },
+                          "input_tokens": {
+                            "anyOf": [
+                              {
+                                "description": "Input tokens the runs reported, summed. Null when no run reported any.",
+                                "format": "int64",
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "key": {
+                            "description": "The model, account reference, provider kind or tool of the runs in this row. Absent when those runs recorded none.",
+                            "type": "string"
+                          },
+                          "output_tokens": {
+                            "anyOf": [
+                              {
+                                "description": "Output tokens the runs reported, summed. Null when no run reported any.",
+                                "format": "int64",
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "runs": {
+                            "description": "Runs in this row.",
+                            "format": "int64",
+                            "type": "integer"
+                          },
+                          "runs_without_cost": {
+                            "description": "Runs that reported no cost.",
+                            "format": "int64",
+                            "type": "integer"
+                          },
+                          "runs_without_tokens": {
+                            "description": "Runs that reported neither input nor output tokens.",
+                            "format": "int64",
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "runs",
+                          "input_tokens",
+                          "output_tokens",
+                          "cost_micro_usd",
+                          "runs_without_tokens",
+                          "runs_without_cost"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "since": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "until": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "group_by",
+                    "items"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "What the runs the caller may read used, totalled by the requested dimension"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Totals the runs the caller may read, one row per model, account, provider or tool, over an optional time range.",
         "x-required-permission": "sessions:run:read",
         "x-stability": "beta"
       }
@@ -122233,6 +125081,181 @@
         "x-stability": "beta"
       }
     },
+    "/v1/m/sessions/workspace-candidates": {
+      "get": {
+        "description": "Lists the folders the tools of the engine's own account already worked in, read from the tools' own records of project paths and dates (never a credential or conversation text), each with the tool, the last use, the number of conversations, whether it is preselected (used in the last 30 days in at least 3 conversations) and the reason it cannot be registered.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "folders": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "conversations": {
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "last_used": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "preselected": {
+                            "description": "Used in the last 30 days in at least 3 conversations, and not skipped.",
+                            "type": "boolean"
+                          },
+                          "skip": {
+                            "description": "Why the folder cannot be registered now; absent when it can.",
+                            "enum": [
+                              "missing",
+                              "unreadable",
+                              "outside_allowed_roots",
+                              "already_registered"
+                            ],
+                            "type": "string"
+                          },
+                          "tool": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "tool",
+                          "last_used",
+                          "conversations",
+                          "preselected"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "tools": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "readable": {
+                            "description": "False when the tool's records exist but could not be read.",
+                            "type": "boolean"
+                          },
+                          "tool": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "tool",
+                          "name",
+                          "readable"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "tools",
+                    "folders"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The folders the tools already worked in, and which tools' records could be read"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Lists the folders the tools of the engine's own account already worked in, read from the tools' own records of project paths and dates (never a credential or conversation text), each with the tool, the last use, the number of conversations, whether it is preselected (used in the last 30 days in at least 3 conversations) and the reason it cannot be registered.",
+        "x-required-permission": "sessions:workspace:admin",
+        "x-stability": "beta"
+      }
+    },
     "/v1/m/sessions/workspaces": {
       "get": {
         "description": "Lists the session workspaces of the tenant.",
@@ -122490,6 +125513,17 @@
                   "root_path": {
                     "description": "After trimming, must be an absolute, existing directory; the server stores its canonical real path.",
                     "type": "string"
+                  },
+                  "workspace_id": {
+                    "anyOf": [
+                      {
+                        "description": "The department (workspace id) the folder belongs to. Empty or absent registers it for the tenant, which needs the tenant-wide permission; the administrator of a department names that department.",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -122959,6 +125993,20 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "retention_days": {
+                    "anyOf": [
+                      {
+                        "description": "Days the folder keeps its files after their last change. Within that period the file API refuses to overwrite, move or delete an entry (423 retention_period); creating a file is allowed. Zero takes the period away. A legal hold on the folder (subject workspace, its workspace_ref) refuses the same edits until it is released (423 legal_hold).",
+                        "format": "int64",
+                        "maximum": 36500,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "type": "object"
@@ -123245,6 +126293,134 @@
               }
             },
             "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "sessions module route (requires sessions:workspace:read)",
+        "x-required-permission": "sessions:workspace:read",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/workspaces/{ref}/files/archive": {
+      "get": {
+        "description": "Returns the files and folders named by the repeated path query parameter as one zip, each file read under the same jail, size limit and DLP policy as a single read; one refused file refuses the whole archive.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The named entries as one zip",
+            "headers": {
+              "X-Olivares-Sensitivity": {
+                "description": "Comma-separated DLP classes found in the files of the zip, as the sensitivity labels of a single read; classes only, never matched values. Absent when none was found.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "a file is over the workspace size limit, or the archive is over its size or entry ceiling"
           },
           "429": {
             "content": {
@@ -124495,6 +127671,223 @@
         "summary": "Records a person's approval of the setup command text whose SHA-256 is posted, and refuses with 409 when the stored text no longer has that hash.",
         "x-olivares-request-body-disposition": "schema-published",
         "x-required-permission": "sessions:workspace:admin",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/workspaces/{ref}/sftp": {
+      "get": {
+        "description": "Tells whether this server serves SFTP and SCP for the folder, and where: the user name, the port and the fingerprint of the host key a client should compare.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Tells whether this server serves SFTP and SCP for the folder, and where: the user name, the port and the fingerprint of the host key a client should compare.",
+        "x-required-permission": "sessions:workspace:read",
+        "x-stability": "beta"
+      },
+      "post": {
+        "description": "Issues a short-lived credential to copy files in and out of the folder with sftp or scp, and answers with the private key, shown once and never kept.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Issues a short-lived credential to copy files in and out of the folder with sftp or scp, and answers with the private key, shown once and never kept.",
+        "x-olivares-request-body-disposition": "bodyless",
+        "x-required-permission": "sessions:workspace:read",
         "x-stability": "beta"
       }
     },
@@ -128262,7 +131655,7 @@
                   "effect": {
                     "anyOf": [
                       {
-                        "description": "Case-insensitive after trimming. Empty defaults to allow; otherwise allow or forbid.",
+                        "description": "Case-insensitive after trimming. Empty defaults to allow; otherwise allow or forbid, require for a source_type template (a mandatory session template), or decline for a source_type instructions or template on a workspace (stops that standard reaching a department from the departments above).",
                         "type": "string"
                       },
                       {
@@ -128737,7 +132130,7 @@
                   "effect": {
                     "anyOf": [
                       {
-                        "description": "Case-insensitive after trimming. Empty defaults to allow; otherwise allow or forbid.",
+                        "description": "Case-insensitive after trimming. Empty defaults to allow; otherwise allow or forbid, require for a source_type template (a mandatory session template), or decline for a source_type instructions or template on a workspace (stops that standard reaching a department from the departments above).",
                         "type": "string"
                       },
                       {

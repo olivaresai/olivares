@@ -10,7 +10,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
-import type { RunDTO } from '@/features/agentops/types'
+import type { RunActivityDTO, RunDTO } from '@/features/agentops/types'
 import { gitpublishApi } from '@/features/gitpublish/api'
 import { mergeSessions } from './provenance'
 import type { LiveDTO, TimelineDTO } from './types'
@@ -39,6 +39,7 @@ const ops = vi.hoisted(() => ({
   listWorkspaces: vi.fn(),
   getWorkspace: vi.fn(),
   getProfile: vi.fn(),
+  activity: vi.fn(),
 }))
 vi.mock('@/features/agentops/api', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/features/agentops/api')>()
@@ -601,6 +602,107 @@ function paintedIds(root: HTMLElement): string[] {
   }
   return out
 }
+
+// What the engine folded from a real Claude Code 2.1.316 session (claude -p, Haiku) that
+// spawned two background subagents, ran a background shell command and wrote a file.
+const realActivity: RunActivityDTO = {
+  driver: 'claude',
+  transcript: 'read',
+  model: 'claude-haiku-5-5',
+  context_tokens: 21_000,
+  compactions: [],
+  agents: [
+    {
+      tool_use_id: 'toolu_01RDg5E3vFjbDi6W1msyNogY',
+      agent_id: 'a6fefde1a513064b5',
+      type: 'general-purpose',
+      description: 'Write alpha to a.txt',
+      state: 'completed',
+      background: true,
+      started_at: '2026-11-01T15:01:04.323Z',
+      ended_at: '2026-11-01T15:01:09.979Z',
+      model: 'claude-haiku-5-5',
+      summary: 'Agent "Write alpha to a.txt" finished',
+    },
+    {
+      tool_use_id: 'toolu_01JZpXJf9zTAJfcn6KepRbGH',
+      agent_id: 'adcb61667065d3496',
+      type: 'general-purpose',
+      description: 'Write beta to b.txt',
+      state: 'running',
+      background: true,
+      started_at: '2026-11-01T15:01:04.939Z',
+      model: 'claude-haiku-5-5',
+    },
+  ],
+  tasks: [
+    {
+      tool_use_id: 'toolu_01D9AjyvC2zjPPMUXiCquZxP',
+      task_id: 'bn0yia2lg',
+      kind: 'shell',
+      description: 'Run sleep 20 then echo done in background',
+      command: 'sleep 20; echo done',
+      state: 'running',
+      started_at: '2026-11-01T15:01:09.686Z',
+    },
+  ],
+  files: [
+    {
+      path: '/work/c.txt',
+      added: 1,
+      removed: 0,
+      created: true,
+      edits: 1,
+      last_at: '2026-11-01T15:01:10.234Z',
+    },
+  ],
+  todos: [],
+  skills: [],
+  mcp_servers: [],
+}
+
+describe('SessionContextPane — what the tool is doing comes first', () => {
+  it('opens a Claude Code session on its agents and background work', async () => {
+    ops.activity.mockResolvedValue(realActivity)
+    renderIntel(
+      <SessionContextPane
+        resolution={resolution({ runs: [run({ provider_driver: 'claude' })] })}
+      />,
+    )
+    const agents = await screen.findByTestId('activity-agents')
+    expect(within(agents).getByText('Write alpha to a.txt')).toBeInTheDocument()
+    expect(within(agents).getByText('Write beta to b.txt')).toBeInTheDocument()
+    expect(
+      within(screen.getByTestId('activity-tasks')).getByText(
+        'Run sleep 20 then echo done in background',
+      ),
+    ).toBeInTheDocument()
+    expect(ops.activity).toHaveBeenCalledWith('run-1', expect.anything())
+  })
+
+  it('keeps the tab a person chose, Context included', async () => {
+    ops.activity.mockResolvedValue(realActivity)
+    renderIntel(
+      <SessionContextPane
+        resolution={resolution({ runs: [run({ provider_driver: 'claude' })] })}
+        panel="context"
+        onPanel={vi.fn()}
+      />,
+    )
+    expect(await screen.findByTestId('context-scope')).toBeInTheDocument()
+    expect(screen.queryByTestId('activity-agents')).toBeNull()
+  })
+
+  it('opens on Context when the tool keeps no record the engine reads', async () => {
+    renderIntel(
+      <SessionContextPane
+        resolution={resolution({ runs: [run({ provider_driver: 'gemini' })] })}
+      />,
+    )
+    expect(await screen.findByTestId('context-scope')).toBeInTheDocument()
+    expect(ops.activity).not.toHaveBeenCalled()
+  })
+})
 
 describe('the session panes paint names, never raw identifiers', () => {
   it('heads the narrative with the tail of the reference, not the reference', async () => {

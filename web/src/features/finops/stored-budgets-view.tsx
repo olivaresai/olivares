@@ -10,7 +10,7 @@ import {
 } from '@tanstack/react-query'
 import { Trash2, Wallet } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/toaster'
 import { useAuth } from '@/lib/auth/context'
 import { ApiError } from '@/lib/api/errors'
 import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'

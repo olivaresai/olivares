@@ -95,7 +95,11 @@ export interface ConversationItem {
   subagent?: boolean
   inputTokens?: number
   outputTokens?: number
+  /** What this turn cost; absent when it cannot be known. */
   costUsd?: number
+  /** Claude Code's `total_cost_usd`: the running total of its process, which a turn's
+   * cost is read from (what it added to the total before it). */
+  costTotalUsd?: number
   durationMs?: number
   /** Init frame's working directory, when the driver reported one. */
   cwd?: string
@@ -115,12 +119,19 @@ export interface ConversationItem {
   /** A result the tool marked as an error (Claude Code `is_error`, an `error_*`
    * subtype): its text is the failure, and it is shown (F1C). */
   resultFailed?: boolean
+  /** The person pressed interrupt (Claude Code's "[Request interrupted by user]"): the turn
+   * ended as asked, which the row says quietly; it is no failure and no message. */
+  interrupted?: boolean
   /** The images the person attached to this message, by the id the engine keeps them
    * under (operator rows only). */
   attachments?: { id: string; mediaType: string }[]
   /** Every source line that built this item, in order. Never empty. */
   raw: string[]
 }
+
+/** What Claude Code writes, as a user frame, when the person interrupts a turn (and, after
+ * "for tool use", when the interrupt lands on a tool call). */
+const INTERRUPT_MARKER = '[Request interrupted by user'
 
 const SUMMARY_CAP = 96
 
@@ -192,7 +203,7 @@ function insideFolder(path: string, cwd: string | undefined): string {
  * A TOOL CALL IN THE TOOL'S OWN SHORT FORM: what it acts on, never its JSON
  * (0.3 read `Write {"file_path":"/home/…`). A command is the command, a file tool its
  * path inside the working folder, a search its pattern, a subagent its description; any
- * other tool its plain fields.
+ * other tool its first words (its fields stay for the expanded row).
  */
 function toolTarget(
   input: unknown,
@@ -224,17 +235,9 @@ function toolTarget(
   }
   const where = path('path')
   if (where) return { summary: where, path: where }
-  return {
-    summary: truncateSummary(
-      Object.entries(rec)
-        .flatMap(([key, value]) =>
-          ['string', 'number', 'boolean'].includes(typeof value)
-            ? [`${key} ${String(value)}`]
-            : [],
-        )
-        .join(' · '),
-    ),
-  }
+  // Any other tool reads by its first words; its fields stay for the expanded row.
+  const first = Object.values(rec).map(asString).find(Boolean)
+  return { summary: first ? truncateSummary(first) : '' }
 }
 
 /** The lines of a diff excerpt: an edit is shown by its first few changed lines. */
@@ -400,6 +403,25 @@ function nextId(kind: ConversationKind, index: number, hint?: string): string {
   return hint && hint.trim() ? `${kind}-${hint}` : `${kind}-${index}`
 }
 
+/**
+ * What a hook frame tells the person: `undefined` for a frame that is no hook, `''` for a hook
+ * that started or passed (nothing to tell), and for one that failed, the reason in the
+ * hook's own words (its stderr or output, else its name).
+ */
+function hookNotice(frame: Record<string, unknown>): string | undefined {
+  const subtype = asString(frame.subtype)
+  if (subtype === 'hook_started') return ''
+  if (subtype !== 'hook_response') return undefined
+  const exit = asNumber(frame.exit_code)
+  const outcome = asString(frame.outcome)
+  if (outcome !== 'error' && outcome !== 'cancelled' && !exit) return ''
+  return (
+    [frame.stderr, frame.output, frame.stdout, frame.hook_name]
+      .map((v) => asString(v)?.trim())
+      .find((v) => v) ?? 'hook'
+  )
+}
+
 function systemSummary(frame: Record<string, unknown>): {
   summary: string
   systemKind: string
@@ -423,17 +445,6 @@ function systemSummary(frame: Record<string, unknown>): {
       cwd,
       model,
       toolCount: tools,
-    }
-  }
-  if (subtype === 'hook_started' || subtype === 'hook_response') {
-    const hook =
-      asString(frame.hook_name) ?? asString(frame.hook_event) ?? 'hook'
-    return {
-      summary:
-        subtype === 'hook_started'
-          ? `Hook started · ${hook}`
-          : `Hook · ${hook}`,
-      systemKind: subtype,
     }
   }
   if (subtype === 'permission' || subtype === 'permission_prompt') {
@@ -548,6 +559,7 @@ function resultFields(
   | 'inputTokens'
   | 'outputTokens'
   | 'costUsd'
+  | 'costTotalUsd'
   | 'durationMs'
   | 'text'
   | 'summary'
@@ -558,10 +570,8 @@ function resultFields(
     asNumber(usage?.input_tokens) ?? asNumber(usage?.inputTokens)
   const outputTokens =
     asNumber(usage?.output_tokens) ?? asNumber(usage?.outputTokens)
-  const costUsd =
-    asNumber(frame.total_cost_usd) ??
-    asNumber(frame.costUSD) ??
-    asNumber(frame.cost_usd)
+  const costTotalUsd = asNumber(frame.total_cost_usd)
+  const costUsd = asNumber(frame.costUSD) ?? asNumber(frame.cost_usd)
   const durationMs =
     asNumber(frame.duration_ms) ?? asNumber(frame.duration_api_ms)
   const modelUsage = asRecord(frame.modelUsage)
@@ -586,12 +596,31 @@ function resultFields(
     model,
     inputTokens,
     outputTokens,
-    costUsd,
+    ...(costUsd === undefined ? {} : { costUsd }),
+    ...(costTotalUsd === undefined ? {} : { costTotalUsd }),
     durationMs,
     text: text || undefined,
     summary: parts.join(' · '),
     ...(failed ? { resultFailed: true } : {}),
   }
+}
+
+/** What a turn added to Claude Code's running total: the total less the one before it. A
+ * total below it is a new process (a resume), whose total is this turn's alone; so is the
+ * first total of a history read from its start. Read past a history's start, the turn
+ * before is not known, and neither is this one's cost. */
+function turnCost(
+  items: readonly ConversationItem[],
+  total: number | undefined,
+  seq: number | undefined,
+): number | undefined {
+  if (total === undefined) return undefined
+  let before: number | undefined
+  for (let i = items.length - 1; i >= 0 && before === undefined; i--)
+    if (items[i]!.kind === 'result') before = items[i]!.costTotalUsd
+  if (before !== undefined) return total >= before ? total - before : total
+  const first = items[0]?.seq ?? seq
+  return first === undefined || first <= 1 ? total : undefined
 }
 
 function streamDeltaText(frame: Record<string, unknown>): string {
@@ -906,12 +935,15 @@ function foldAcp(
   ) {
     const fields = resultFields(result)
     const stop = result.stopReason
+    const costUsd =
+      turnCost(items, fields.costTotalUsd, undefined) ?? fields.costUsd
     return [
       ...items,
       {
         kind: 'result',
         id: nextId('result', items.length),
         ...fields,
+        ...(costUsd === undefined ? {} : { costUsd }),
         summary:
           stop === 'end_turn' ? fields.summary : `${fields.summary} · ${stop}`,
         // The footer says how the turn stopped when it did not just finish (review).
@@ -1320,6 +1352,23 @@ function foldLine(
   }
 
   if (type === 'system') {
+    // A tool's own hooks are its bookkeeping: one that ran and passed is no row, it
+    // joins the item before it for the inspector. A failed one is told in its own words.
+    const hook = hookNotice(frame)
+    if (hook !== undefined) {
+      return hook
+        ? [
+            ...items,
+            {
+              kind: 'system',
+              id: nextId('system', items.length, asString(frame.uuid)),
+              summary: hook,
+              systemKind: 'notice',
+              raw: [trimmed],
+            },
+          ]
+        : foldQuiet(items, trimmed, 'hook')
+    }
     const sys = systemSummary(frame)
     if (sys.systemKind === 'init')
       items = withModelChange(items, frame, sys.model, trimmed, at)
@@ -1348,12 +1397,38 @@ function foldLine(
     // turn can be a subagent's.
     const model =
       asString(frame.model) ?? conversationModel(items) ?? fields.model
+    const costUsd = turnCost(items, fields.costTotalUsd, seq) ?? fields.costUsd
+    // After an interrupt the tool ends the turn with an error result: it is the same
+    // ending, so it joins the interrupted row and is not a failure.
+    const last = items[items.length - 1]
+    if (
+      last?.kind === 'result' &&
+      last.interrupted &&
+      last.durationMs === undefined &&
+      frame.is_error === true
+    ) {
+      const { inputTokens, outputTokens, costTotalUsd, durationMs } = fields
+      return [
+        ...items.slice(0, -1),
+        {
+          ...last,
+          inputTokens,
+          outputTokens,
+          ...(costUsd === undefined ? {} : { costUsd }),
+          ...(costTotalUsd === undefined ? {} : { costTotalUsd }),
+          durationMs,
+          ...(model ? { model } : {}),
+          raw: [...last.raw, trimmed],
+        },
+      ]
+    }
     return [
       ...items,
       {
         kind: 'result',
         id: nextId('result', items.length, asString(frame.uuid)),
         ...fields,
+        ...(costUsd === undefined ? {} : { costUsd }),
         ...(model ? { model } : {}),
         raw: [trimmed],
       },
@@ -1609,6 +1684,20 @@ function foldLine(
         trimmed,
       )
     }
+    // THE INTERRUPT BUTTON'S ANSWER IS NOT THE PERSON'S WORDS: Claude Code writes
+    // "[Request interrupted by user]" as a user frame. It is the turn's ending, told as
+    // the result row; the `result` frame that follows joins it (below).
+    if (text.trimStart().startsWith(INTERRUPT_MARKER))
+      return [
+        ...items,
+        {
+          kind: 'result',
+          id: nextId('result', items.length, asString(frame.uuid)),
+          summary: 'Interrupted',
+          interrupted: true,
+          raw: [trimmed],
+        },
+      ]
     const attachments = attachmentsOf(frame)
     return [
       ...items,
@@ -1658,6 +1747,13 @@ function foldLine(
       },
     ]
   }
+
+  // THE QUEUE'S BOOKKEEPING IS NOT A TURN. Claude Code reports a command it queued (a
+  // message that arrived while a turn ran, or a turn it starts itself, such as a scheduled
+  // wakeup) by a uuid as queued, started, completed or cancelled: no words, only a state.
+  // A person's message still arrives as its own user frame; these lines stay for the inspector.
+  if (type === 'command_lifecycle')
+    return foldQuiet(items, trimmed, 'command lifecycle')
 
   return [
     ...items,

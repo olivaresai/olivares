@@ -105,7 +105,7 @@ func (c *agentClientConfig) waitPipeline(cmd *cobra.Command, run map[string]any,
 	var lastSeq int64
 	if strings.TrimSpace(prompt) != "" {
 		var err error
-		lastSeq, err = settleReplay(frames, errs)
+		lastSeq, err = settleReplay(frames, errs, nil)
 		if err != nil {
 			now, readErr := read()
 			if readErr != nil {

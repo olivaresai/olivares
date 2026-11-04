@@ -102,10 +102,10 @@ pregunta importante.
 olivares license status --data-dir /var/lib/olivares
 ```
 
-`status` funciona offline y resuelve la licencia con la misma precedencia que usa el motor,
+En el host del motor y con `--data-dir`, `status` funciona offline y resuelve la licencia con la misma precedencia que usa el motor,
 por lo que responde a la pregunta importante —*qué licencia está realmente en vigor*— en vez
 de limitarse a decir «hay un fichero». Informa de la fuente resuelta, el titular, el plan y la
-fecha de caducidad.
+fecha de caducidad. Con la sesión iniciada en un motor de otro host, consulta ese motor.
 
 Ejecútalo después de cada instalación y después de retirar un override.
 

@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { MonoMark } from '@/components/ui/mono-mark'
+import { ToolMark } from '@/features/agentops/tool-mark'
 
 export function ToolBox({
   driver,
@@ -51,7 +51,7 @@ export function ToolBox({
       className="overflow-hidden rounded-card border border-line bg-surface"
     >
       <div className="flex items-center gap-3 px-4 py-3">
-        <MonoMark name={name} className="size-6" />
+        <ToolMark driver={driver} />
         <h2 id={id} className="text-body-l font-semibold text-text">
           {name}
         </h2>

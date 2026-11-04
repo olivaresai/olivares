@@ -271,15 +271,16 @@
     "submit": "Consegna",
     "message": "Messaggio del commit",
     "messageHint": "Usato solo se la cartella della sessione ha modifiche. Per impostazione predefinita, il titolo.",
-    "shipped": "Consegnato: {{branch}} è stato inviato.",
+    "shipped": "Consegnato: <branch /> è stato inviato.",
+    "shippedToast": "Consegnato.",
     "pullRequest": "Pull request n. {{number}}",
     "pullRequestOpen": "Apri la pull request",
     "awaitingTitle": "In attesa dell'approvazione di un'altra persona",
     "awaitingBody": "Le tue modifiche sono nel commit. Un'altra persona deve approvare il push (approvazione {{id}}) prima che parta. Quando lo avrà fatto, consegna di nuovo.",
     "again": "Consegna di nuovo",
     "incompleteTitle": "La consegna non è terminata",
-    "incompletePush": "Il push di {{branch}} non è stato applicato ({{state}}). Controlla gli intent di questa destinazione, poi consegna di nuovo.",
-    "incompletePullRequest": "{{branch}} è stato inviato, ma la pull request non è stata aperta ({{code}}). Consegna di nuovo per riprovare.",
+    "incompletePush": "Il push di <branch /> non è stato applicato ({{state}}). Controlla gli intent di questa destinazione, poi consegna di nuovo.",
+    "incompletePullRequest": "<branch /> è stato inviato, ma la pull request non è stata aperta ({{code}}). Consegna di nuovo per riprovare.",
     "pullRequests": "Pull request"
   }
 }

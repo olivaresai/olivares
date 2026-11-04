@@ -22,7 +22,8 @@ const authz = vi.hoisted(() => ({ can: (_p: string): boolean => true }))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1', can: authz.can }),
 }))
-vi.mock('@tanstack/react-router', () => ({
+vi.mock('@tanstack/react-router', async () => ({
+  ...(await import('@/test/fake-router')).fakeRouterModule(),
   useRouterState: () => '',
   Link: ({ children, to }: { children: ReactNode; to: string }) => (
     <a href={to}>{children}</a>
@@ -97,9 +98,15 @@ beforeEach(() => {
   api.anomalies.mockResolvedValue({ items: [] })
 })
 
+async function abrirHallazgos() {
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('tab', { name: 'Findings' }))
+}
+
 describe('Hallazgos — la lista dice cuánto NO se está viendo', () => {
   it('pide el techo real del motor, no el de por defecto', async () => {
     pinta(<SecurityView />)
+    await abrirHallazgos()
     await waitFor(() => expect(api.findings).toHaveBeenCalled())
     // FIRES IF: alguien quita el `limit` — el motor pagina a 100 en silencio.
     expect(api.findings).toHaveBeenCalledWith({ limit: 1000 })
@@ -108,6 +115,7 @@ describe('Hallazgos — la lista dice cuánto NO se está viendo', () => {
   it('DECLARA el recorte con la cifra, y dice que el resto NO prueba nada', async () => {
     api.findings.mockResolvedValue({ items: [hallazgo], has_more: true })
     pinta(<SecurityView />)
+    await abrirHallazgos()
     const aviso = await screen.findByText(/Showing the first/i)
     expect(aviso.textContent).toMatch(/1000/)
     expect(aviso.textContent).not.toMatch(/\b100\b/)
@@ -122,6 +130,7 @@ describe('Hallazgos — la lista dice cuánto NO se está viendo', () => {
 
   it('y NO lo declara cuando no lo hay — el contrafactual en la otra dirección', async () => {
     pinta(<SecurityView />)
+    await abrirHallazgos()
     await waitFor(() => expect(api.findings).toHaveBeenCalled())
     expect(screen.queryByText(/Showing the first/i)).not.toBeInTheDocument()
   })
@@ -129,6 +138,7 @@ describe('Hallazgos — la lista dice cuánto NO se está viendo', () => {
   it('el aviso no sobrevive a un error posterior', async () => {
     api.findings.mockResolvedValue({ items: [hallazgo], has_more: true })
     const { qc } = pinta(<SecurityView />)
+    await abrirHallazgos()
     expect(await screen.findByText(/Showing the first/i)).toBeInTheDocument()
     api.findings.mockRejectedValue(new Error('boom'))
     await qc.refetchQueries()
@@ -217,6 +227,7 @@ describe('P3 — la celda FINDING puede truncar de verdad', () => {
    */
   it('la cabecera FINDING declara una anchura que permite truncar', async () => {
     pinta(<SecurityView />)
+    await abrirHallazgos()
     const th = await screen.findByRole('columnheader', { name: /finding/i })
     const ancho = Number.parseFloat((th as HTMLElement).style.width)
     expect(

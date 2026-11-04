@@ -148,6 +148,18 @@ async function runIsVisible(page: Page, runRef: string, name: string) {
     const context = page.locator('#work-pane-context')
     if (!(await context.isVisible()))
       await page.getByTestId('context-toggle').click()
+    // A Claude Code session's pane opens on what its tool is doing; the identifiers
+    // are on the Details tab.
+    const detailsTab = context.getByRole('radio', {
+      name: 'Details',
+      exact: true,
+    })
+    if (
+      (await detailsTab.isVisible()) &&
+      (await detailsTab.getAttribute('aria-checked')) !== 'true'
+    ) {
+      await detailsTab.click()
+    }
     const details = page.getByTestId('context-details')
     if (
       (await details.isVisible()) &&
@@ -524,7 +536,7 @@ test.describe('the golden path, in the console', () => {
       )
     } else {
       await expect(page.getByTestId('context-scope')).toContainText(
-        'Temporary folder for this session',
+        'Default (My files)',
       )
       await expect(page.getByTestId('narrative-folder')).toHaveCount(0)
     }

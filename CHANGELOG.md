@@ -28,23 +28,28 @@ See [versioning](INSTALL.md#versioning) for the release policy.
 
 ## [Unreleased]
 
-## [0.7] - 2026-11-02
+## [0.7] - 2026-11-04
 
 ### Added
 
-- Docker run and Compose start sessions with the image's seccomp and AppArmor profiles, and name the Docker options when that boundary cannot start. OpenCode sessions whose provider is bound by record keep npm online.
-- The documentation site permanently redirects the old picker URLs and locale roots, and the portal sends `X-Robots-Tag: noindex` on every response.
+- The workspace file browser uploads files into the displayed folder and downloads selected files and folders as one zip, with the same jail, size limit and DLP policy as a single read. `olivares agent workspace archive` provides the same download from the command line.
+- `olivares session usage` and `GET /v1/m/sessions/usage` total sessions, tokens and cost by model, account, provider or tool over a chosen time range. Missing reports stay null rather than becoming zero.
+- `olivares dr drill --from <bundle>` restores a real SQLite bundle into a throwaway directory, measures RTO and RPO, and records a signed audit event when a target is missed. Scheduled restore tests report the measured result in Backups.
+- Session rows offer unread, snooze, done and pin actions, including observed sessions. Undo reverses list actions without asking for confirmation; `olivares session unread`, `pin` and `unpin` provide the same operations from a terminal.
+- Runaway sessions can be isolated in individual systemd scopes with memory and task ceilings. Provider-account usage and capacity are visible when choosing where a session starts.
 
 ### Changed
 
-- Console tool installation sends only one install at a time. An idle-policy read warns only while it stays unreadable, and the CLI names an unreadable data volume instead of running the image binary. `olivares` and `olivares ui` say why the engine does not answer.
-- Sign-in links and codes arrive without tool-job audit and journal fsync work held inside the module lock, and slow first module-selection reads wait for the engine.
+- Sessions uses one clearer work list, with workspace grouping, persistent navigation and readable thread headers, details and side panels. Message actions, Markdown code, long transcripts, turn duration and cost, and empty or interrupted states use one consistent presentation on desktop and mobile.
+- Provider and model setup brings tools, accounts, sign-ins, presets, usage and capacity into a consistent flow. New session defaults to your own sessions, an account with capacity, and simple provider, model and folder pickers.
+- Installation, upgrade and licence prompts share a consistent interactive flow. Documentation redirects, localized pages, generated CLI references and provider guidance have been refreshed.
 
 ### Fixed
 
-- After one turn's `auth_required`, the next message can start instead of being refused. Interrupting or closing a provider approval ends its wait instead of leaving an approval card that cannot be answered.
-- An OpenCode session shows its stored conversation after a restart, including long or ended conversations whose earlier turns were missing.
-- The public tree can be synchronized from development between releases while preserving its export base and reviewed removals.
+- Session turns no longer fail on command-lifecycle frames, oversized single-line output, interrupted input, stop/resume transitions or long scrollback. Start refusals name the cause, and a full account or queue does not create a partial session.
+- Sign-in, passkey, approval and session-recovery flows handle existing credentials and cancellation correctly. Upgrade comparisons distinguish engine-maintained observed-use metadata from stored user data.
+- Docker and native packages apply the intended container identity, seccomp and AppArmor confinement, systemd limits and RPM installation roots. OpenCode retains history and provider-bound network access.
+- SQLite and PostgreSQL upgrades, backup restores, disaster-recovery drills and schema checks preserve stored data and report incomplete or refused operations explicitly.
 
 ## [0.6] - 2026-11-01
 

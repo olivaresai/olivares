@@ -6,6 +6,7 @@ import { KeyRound, ShieldAlert, Trash2 } from 'lucide-react'
 import { useState, type ComponentType, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { QueryErrorState } from '@/components/layout/query-error-state'
+import { SystemAdminOnly } from '@/components/layout/system-admin-only'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -58,18 +59,9 @@ import {
 /** Console › SSO: the deployment-wide identity provider, for a superadmin. A Business
  * build replaces the tab with its own (PANEL_EXTENSIONS.ssoTab). */
 export function SSOTab() {
-  const { t } = useTranslation(['console'])
   const { isSuperadmin } = useAuth()
   if (!isSuperadmin) {
-    return (
-      <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-body text-muted-foreground">
-        <ShieldAlert
-          className="mt-0.5 size-4 shrink-0 text-warning"
-          aria-hidden
-        />
-        {t('console:sso.superadminOnly')}
-      </div>
-    )
+    return <SystemAdminOnly />
   }
   const Replacement = PANEL_EXTENSIONS.ssoTab
   return Replacement ? <Replacement /> : <SingleProviderTab />

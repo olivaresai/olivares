@@ -46,6 +46,10 @@ import CapabilitiesView from './capabilities-view'
 import { RevisionsSheet } from './revisions'
 import { ServerDetailSheet } from './server-detail'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 const stepUp = () =>
   new ApiError(403, 'step_up_required', 'assurance level too low')
 

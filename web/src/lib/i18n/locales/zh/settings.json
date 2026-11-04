@@ -36,7 +36,7 @@
     "density": "密度",
     "densityHint": "紧凑显示更多行；舒适更易阅读。",
     "language": "语言",
-    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어.",
+    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어, Українська, Português.",
     "time": "时间",
     "timeHint": "时间按你的时区显示（{{zone}}）。记录和导出会保持 UTC。",
     "clock24": "24 小时",

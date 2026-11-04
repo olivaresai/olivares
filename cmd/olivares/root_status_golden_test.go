@@ -34,7 +34,8 @@ func TestBareOlivaresJSONOutputIsUnchanged(t *testing.T) {
 // TestBareOlivaresTextOnAPipeIsUnchanged is the other half of the same
 // contract: a pipe gets the same bytes it got before, captured from origin/main
 // f0418750b in testdata/root_status.golden.txt, with neither the terminal hint
-// line nor a second mention of the ui command.
+// line nor a second mention of the ui command. The one line added since is
+// the `olivares login --server <url>` offer when no engine is recorded.
 func TestBareOlivaresTextOnAPipeIsUnchanged(t *testing.T) {
 	t.Setenv(cliConfigOverrideEnv, filepath.Join(t.TempDir(), "config.yaml"))
 	t.Setenv("OLIVARES_DATA_DIR", t.TempDir())

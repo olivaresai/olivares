@@ -5,7 +5,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { useQueries } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Check, KeyRound, RefreshCcw, ShieldAlert } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -412,11 +411,10 @@ function PlanPanel({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border p-4">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-body font-medium">{t('apply.planTitle')}</span>
+    <div className="flex min-w-0 flex-col gap-3">
+      {plan.verdict !== 'LIMPIO' ? (
         <VerdictBadge verdict={plan.verdict} />
-      </div>
+      ) : null}
 
       {dependencyReason}
 
@@ -569,36 +567,39 @@ function ResultPanel({ outcome }: { outcome: ApplyOutcome }) {
         </p>
       ) : null}
 
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-body">
-        <dt className="text-muted-foreground">{t('apply.commandId')}</dt>
-        <dd className="font-mono text-caption break-all">
-          {result.command_id}
-        </dd>
-        {result.result_id ? (
-          <>
-            <dt className="text-muted-foreground">{t('apply.resultId')}</dt>
-            <dd className="font-mono text-caption break-all">
-              {result.result_id}
-            </dd>
-          </>
-        ) : null}
-        {result.status ? (
-          <>
-            <dt className="text-muted-foreground">{t('apply.status')}</dt>
-            <dd>
-              <Badge variant="outline">{result.status}</Badge>
-            </dd>
-          </>
-        ) : null}
-        {etag ? (
-          <>
-            <dt className="text-muted-foreground">{t('apply.etag')}</dt>
-            <dd className="font-mono text-caption">{etag}</dd>
-          </>
-        ) : null}
-        <dt className="text-muted-foreground">{t('apply.auditSeq')}</dt>
-        <dd className="font-mono text-caption">{result.audit_seq}</dd>
-      </dl>
+      {result.status ? (
+        <p className="text-body">
+          {t('apply.status')}:{' '}
+          {t(`status.${result.status}`, { defaultValue: result.status })}
+        </p>
+      ) : null}
+      <details className="min-w-0">
+        <summary className="cursor-pointer text-caption text-muted-foreground">
+          {t('apply.details')}
+        </summary>
+        <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-body">
+          <dt className="text-muted-foreground">{t('apply.commandId')}</dt>
+          <dd className="font-mono text-caption break-all">
+            {result.command_id}
+          </dd>
+          {result.result_id ? (
+            <>
+              <dt className="text-muted-foreground">{t('apply.resultId')}</dt>
+              <dd className="font-mono text-caption break-all">
+                {result.result_id}
+              </dd>
+            </>
+          ) : null}
+          {etag ? (
+            <>
+              <dt className="text-muted-foreground">{t('apply.etag')}</dt>
+              <dd className="font-mono text-caption break-all">{etag}</dd>
+            </>
+          ) : null}
+          <dt className="text-muted-foreground">{t('apply.auditSeq')}</dt>
+          <dd className="font-mono text-caption">{result.audit_seq}</dd>
+        </dl>
+      </details>
     </div>
   )
 }

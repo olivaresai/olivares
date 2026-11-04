@@ -36,7 +36,7 @@
     "density": "Densità",
     "densityHint": "Compatta mostra più righe; comoda è più facile da leggere.",
     "language": "Lingua",
-    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어.",
+    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어, Українська, Português.",
     "time": "Ora",
     "timeHint": "Gli orari sono mostrati nel tuo fuso orario ({{zone}}). I record e le esportazioni restano in UTC.",
     "clock24": "24 ore",

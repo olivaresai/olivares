@@ -328,6 +328,17 @@ export interface ConnectorInfo {
   /** Optional so an OLDER engine (which omits it) reads as unknown, not as a lie. */
   hosting?: ConnectorHosting
   fields?: ConnectorField[]
+  /** "document" for a knowledge document source; absent for an observation source. */
+  class?: string
+}
+
+/** One document a document source's test previews, with the ACL it would be
+ *  stored with. Nothing is stored. */
+export interface PreviewDocument {
+  id: string
+  title?: string
+  acl: string[]
+  note?: 'skipped' | 'unreadable' | (string & {})
 }
 
 /** A configured source as the live roster surfaces it. Config carries secret
@@ -434,7 +445,15 @@ export interface WorkspaceConnectorDTO {
 // Shapes mirror modules/sourcescope/binding.go, posture.go and resources.go.
 
 export type SourceScopeSourceType =
-  'mcp' | 'model' | 'provider' | 'knowledge' | 'data' | 'profile' | 'tool'
+  | 'mcp'
+  | 'model'
+  | 'provider'
+  | 'knowledge'
+  | 'data'
+  | 'profile'
+  | 'tool'
+  | 'instructions'
+  | 'template'
 
 export type SourceScopeTree =
   | 'workspace'
@@ -471,7 +490,12 @@ export interface SourceScopeResolvePreview {
   cred_hint?: string
 }
 
-export type BindingEffect = 'allow' | 'forbid'
+/**
+ * `require` makes a department's session template mandatory (source type `template` only);
+ * `decline` stops one standard (source type `instructions` or `template`) reaching a department
+ * from the departments above it, without forbidding what it or a department below assigns.
+ */
+export type BindingEffect = 'allow' | 'forbid' | 'require' | 'decline'
 export type CredentialRefKind =
   'env' | 'vault' | 'secret_manager' | 'file' | 'other'
 
@@ -1393,7 +1417,10 @@ export const consoleApi = {
       },
     ),
   testConnector: (input: ConnectorOnboardInput) =>
-    http.post<{ ok: boolean }>('/v1/console/connectors/test', input),
+    http.post<{ ok: boolean; preview?: PreviewDocument[] }>(
+      '/v1/console/connectors/test',
+      input,
+    ),
   deleteConnector: (name: string) =>
     http.delete<SourceApplyResult>('/v1/console/connectors', { name }),
   // Reconcile the LIVE source roster against the durable store (and best-effort
@@ -1636,11 +1663,6 @@ export const consoleApi = {
     http.put<{ id: string; display_name: string; mapped_role: string }>(
       `/v1/groups/${encodeURIComponent(id)}/role`,
       { role },
-    ),
-  setGroupParent: (id: string, parentId: string) =>
-    http.put<{ id: string; display_name: string; parent_group_id: string }>(
-      `/v1/groups/${encodeURIComponent(id)}/parent`,
-      { parent_id: parentId },
     ),
 
   // Agent-axis picker: read-only roster for binding authoring.

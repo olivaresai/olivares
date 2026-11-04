@@ -23,7 +23,7 @@ import type { LoginResponse, Whoami } from '@/lib/api/types'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 
-const toasts = vi.hoisted(() => ({ error: vi.fn() }))
+const toasts = vi.hoisted(() => ({ error: vi.fn(), dismiss: vi.fn() }))
 vi.mock('sonner', () => ({ toast: toasts }))
 
 const expires = () => new Date(Date.now() + 3_600_000).toISOString()
@@ -192,6 +192,19 @@ describe('session adoption credential ownership', () => {
     ).toBe('Draft A')
   })
 
+  it('takes every toast down at sign-out: the next person is not shown the first one’s notices', async () => {
+    await startA()
+    await act(async () => {
+      releaseA(new Response(JSON.stringify(identity('A'))))
+      await adoption
+    })
+    toasts.dismiss.mockClear()
+    await act(async () => {
+      await auth.logout()
+    })
+    expect(toasts.dismiss).toHaveBeenCalled()
+  })
+
   // olivares#2781: the sign-out toast words a transport failure by how the page was opened and
   // leaves an answered failure (a 503) as it was.
   describe('the toast when sign-out revocation fails', () => {
@@ -227,6 +240,7 @@ describe('session adoption credential ownership', () => {
         'http://localhost:8080/',
       )
       expect(toasts.error).toHaveBeenCalledWith('Control plane unreachable', {
+        duration: Infinity,
         description: expect.stringMatching(/engine is running/i),
       })
     })
@@ -237,6 +251,7 @@ describe('session adoption credential ownership', () => {
         'https://192.168.8.17:8443/',
       )
       expect(toasts.error).toHaveBeenCalledWith('Secure connection failed', {
+        duration: Infinity,
         description: expect.stringContaining('tls.crt.ca'),
       })
     })
@@ -247,7 +262,9 @@ describe('session adoption credential ownership', () => {
         'https://192.168.8.17:8443/',
       )
       expect(toasts.error).toHaveBeenCalledTimes(1)
-      expect(toasts.error).toHaveBeenCalledWith('Control plane unreachable')
+      expect(toasts.error).toHaveBeenCalledWith('Control plane unreachable', {
+        duration: Infinity,
+      })
     })
   })
 

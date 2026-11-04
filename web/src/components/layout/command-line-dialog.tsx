@@ -25,11 +25,7 @@ export const INSTALL_COMMAND =
 /** The three commands for an engine at `origin` (scheme, host and port, no path). The CLI
  * trusts the engine by the pin the engine publishes (server-info `tls_pin_sha256`, CLX), or,
  * when it publishes none, by a copy of its certificate. */
-export function commandLineSteps(
-  origin: string,
-  firstTask: string,
-  pin?: string,
-) {
+export function commandLineSteps(origin: string, pin?: string) {
   return [
     { id: 'install', hint: 'install.hint', command: INSTALL_COMMAND },
     pin
@@ -46,7 +42,7 @@ export function commandLineSteps(
     {
       id: 'start',
       hint: 'start.hint',
-      command: `olivares session start . "<${firstTask}>"`,
+      command: 'olivares session start .',
     },
   ] as const
 }
@@ -62,7 +58,6 @@ export function CommandLineDialog({
   const info = useServerInfo()
   const steps = commandLineSteps(
     window.location.origin,
-    t('commandLine.start.task'),
     info.data?.tls_pin_sha256 || undefined,
   )
   return (

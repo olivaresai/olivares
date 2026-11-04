@@ -289,8 +289,8 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
     await page.locator('#setup-password').fill(PASSWORD)
     await page.getByRole('button', { name: /create administrator/i }).click()
 
-    // Setup signs the new administrator in and opens the setup wizard (pages/setup.tsx).
-    await page.waitForURL('**/onboarding')
+    // Setup signs the new administrator in and opens the work surface (pages/setup.tsx).
+    await page.waitForURL('**/sessions')
     await expect(
       page
         .getByRole('navigation', { name: 'Main navigation', exact: true })
@@ -316,10 +316,12 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
         .getByRole('button', { name: 'Turn on', exact: true })
         .or(off.getByRole('link', { name: 'Open Edition & modules' })),
     ).toBeVisible()
-    await page
-      .getByRole('navigation', { name: 'Main navigation', exact: true })
-      .getByRole('link', { name: 'License', exact: true })
-      .click()
+    const nav = page.getByRole('navigation', {
+      name: 'Main navigation',
+      exact: true,
+    })
+    await nav.getByRole('button', { name: 'More', exact: true }).click()
+    await nav.getByRole('link', { name: 'License', exact: true }).click()
     const settings = page.locator('[data-slot="modules-settings"]')
     await expect(settings).toBeVisible()
     for (const name of SURFACE_MODULES) {

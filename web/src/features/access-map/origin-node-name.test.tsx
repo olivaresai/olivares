@@ -32,7 +32,7 @@ type NodeArgs = Parameters<typeof OriginNode>[0]
 
 const node = (kind: string, label: string) =>
   ({
-    data: { kind, label, dimmed: false },
+    data: { kind, label, ref: label, dimmed: false },
     selected: false,
   }) as unknown as NodeArgs
 
@@ -49,9 +49,11 @@ describe('OriginNode', () => {
     names.nameOf.mockReturnValue('create_issue · github/create_issue')
     paint(<OriginNode {...node('session', 'sess-coder-7a3f')} />)
     const label = screen.getByText('create_issue · github/create_issue')
-    // The reference stays on the tooltip: it is what the filters and the detail pane
-    // take.
-    expect(label.getAttribute('title')).toBe('sess-coder-7a3f')
+    // The reference stays on the node's tooltip: it is what the filters and the detail
+    // pane take.
+    expect(label.closest('[title]')?.getAttribute('title')).toBe(
+      'sess-coder-7a3f',
+    )
     expect(label.className).not.toContain('font-mono')
   })
 

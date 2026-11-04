@@ -86,7 +86,6 @@
     "folderHint": "A folder on this server. Leave it empty to start in a new folder.",
     "folderNew": "A new folder for this session",
     "folderTyped": "Another folder…",
-    "folderChange": "Change folder",
     "readingFolder": "Reading the last session's folder…",
     "prompt": "First message (optional)",
     "promptPlaceholder": "What should it do first?",
@@ -126,8 +125,6 @@
     "autoAsks": "{{tool}} has no automatic mode: it will ask before each action."
   },
   "lists": {
-    "runsTruncated": "Recent sessions: {{count}} loaded; there are more.",
-    "runsHint": "Older sessions are outside this list.",
     "foldersTruncated": "Registered folders: {{count}} loaded; there are more.",
     "foldersHint": "Some registered folders are outside this list."
   },
@@ -147,9 +144,7 @@
     "mcp": "Add MCP servers",
     "budgets": "Set budgets",
     "cli": "Use the olivares command line",
-    "cliHint": "On this server, the olivares command is already installed. From another computer, install it with:",
-    "copy": "Copy",
-    "copied": "Copied"
+    "cliHint": "On this server, the olivares command is already installed. From another computer, install it with:"
   },
   "permissionSummary": {
     "readOnly": "Reads and plans. Every change is refused.",
@@ -158,5 +153,29 @@
     "editsAndCommands": "Reads, edits files and runs commands without asking. Other tools are refused.",
     "auto": "The tool's own reviewed automatic mode decides. A tool without one asks, as in Supervised. Needs run administration.",
     "full": "Nothing asks. Olivares still confines the session and records every action. Needs run administration."
+  },
+  "bring": {
+    "title": "Bring your folders",
+    "body": "Folders your tools already worked in, read from the tools' own records of project paths and dates. Nothing is registered until you confirm.",
+    "error": "Could not look for your tools' folders.",
+    "unreadable": "{{tool}}'s records could not be read. Add folders by hand instead.",
+    "cols": {
+      "folder": "Folder",
+      "tool": "Tool",
+      "lastUsed": "Last used",
+      "conversations": "Conversations"
+    },
+    "pick": "Register {{folder}}",
+    "confirm": "Register selected ({{n}})",
+    "skipStep": "Not now",
+    "skip": {
+      "missing": "The folder no longer exists",
+      "unreadable": "The folder cannot be read",
+      "outside_allowed_roots": "Outside the allowed folders: it overlaps a protected one",
+      "already_registered": "Already registered"
+    },
+    "failed": "It could not be registered.",
+    "toast": "Registered: {{n}}",
+    "result": "Registered: {{imported}}. Skipped: {{skipped}}."
   }
 }

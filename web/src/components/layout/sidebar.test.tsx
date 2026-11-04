@@ -8,7 +8,7 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ComponentProps } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
 
 const state = vi.hoisted(() => ({
@@ -72,6 +72,7 @@ vi.mock('@/features/governance/use-pending-approvals', async (actual) => ({
 import { usePreferencesStore } from '@/stores/preferences'
 import { NavigationDrawer, Sidebar } from './sidebar'
 
+beforeEach(() => usePreferencesStore.setState({ navAll: true }))
 afterEach(() => {
   state.pathname = '/'
   state.search = {}
@@ -111,6 +112,41 @@ const names = (root: HTMLElement) =>
     .map((a) => a.textContent)
 
 describe('the left navigation', () => {
+  it('a new person sees the first places; More opens every other, and what needs them stays', async () => {
+    const user = userEvent.setup()
+    usePreferencesStore.setState({ navAll: false })
+    state.approvals = { items: [{}] }
+    const { unmount } = renderIntel(<Sidebar />)
+    const first = [
+      'Now',
+      'Sessions',
+      'Files & workspaces',
+      'AI tools',
+      'Rules & approvals',
+      'Settings',
+    ]
+    expect(names(column()).map((n) => n?.replace(/\s*,.*$|\d+$/, ''))).toEqual(
+      first,
+    )
+    const more = within(column()).getByRole('button', { name: 'More' })
+    expect(more).toHaveAttribute('aria-expanded', 'false')
+    await user.click(more)
+    expect(more).toHaveAttribute('aria-expanded', 'true')
+    expect(usePreferencesStore.getState().navAll).toBe(true)
+    expect(
+      within(column()).getByRole('link', { name: 'Usage & cost' }),
+    ).toBeVisible()
+    unmount()
+    // A place opened by its address is marked, not hidden.
+    usePreferencesStore.setState({ navAll: false })
+    state.approvals = undefined
+    state.pathname = '/audit'
+    renderIntel(<Sidebar />)
+    expect(
+      within(column()).getByRole('link', { current: 'page' }),
+    ).toHaveTextContent('Activity & audit')
+  })
+
   it('lists the four groups and every place once, in order, with Settings last', () => {
     renderIntel(<Sidebar />)
     const nav = column()

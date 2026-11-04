@@ -177,6 +177,10 @@ type Principal struct {
 	// positive core decision, but product routes and readiness remain OFF until
 	// the later K3 composition cut.
 	evidence principalEvidenceProvenance
+	// rightsStale is set only by the Authenticator when the freshness port says
+	// the data granting this session's rights is past its instant (freshness.go).
+	// It refuses the administrative step-up and changes nothing else.
+	rightsStale bool
 
 	// excluded holds every tenant the account, or this one session, was removed
 	// from and has not been re-admitted to. The builders drop the grant, groups,

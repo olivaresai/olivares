@@ -14,7 +14,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ApprovalDTO } from './types'
 
 vi.mock('@/components/ui/toaster', () => ({
-  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+    warning: vi.fn(),
+    dismiss: vi.fn(),
+  },
   Toaster: () => null,
 }))
 const auth = vi.hoisted(() => ({
@@ -50,6 +55,10 @@ import {
 } from './approval-preview'
 import { ApprovalPreview, AskedByName } from './approval-preview'
 import { consoleApi } from '@/features/console/api'
+
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 
 function wrap(ui: ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })

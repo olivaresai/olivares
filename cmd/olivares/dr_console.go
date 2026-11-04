@@ -9,10 +9,15 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/dr"
+	"github.com/olivaresai/olivares/core/eventbus"
+	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/sdk/event"
+	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
 // The recipe declaration is independent of the optional service-account split.
@@ -32,11 +37,23 @@ func isApplianceImage(path string) bool {
 
 // registerSchema is the register func the live store opened with: the restore's scratch
 // verification opens the snapshot with it (api.DRConfig.RegisterSchema).
-func consoleDRConfig(cfg bootConfig, engine store.Engine, registerSchema func(store.ExtensionRegistry) error, quiesce func(context.Context) error) *api.DRConfig {
+func consoleDRConfig(cfg bootConfig, engine store.Engine, registerSchema func(store.ExtensionRegistry) error, quiesce func(context.Context) error, bus eventbus.Bus) *api.DRConfig {
 	config := &api.DRConfig{DataDir: cfg.DataDir, EngineKind: string(engine), PassphraseFile: osGetenv("OLIVARES_DR_PASSPHRASE_FILE"), RegisterSchema: registerSchema, QuiesceStore: quiesce, Getenv: osGetenv}
+	if bus != nil {
+		config.Alert = func(ctx context.Context, tenant model.TenantID, title string) error {
+			finding := sdkmodel.FindingReport{
+				Kind: "dr_rto_exceeded", Severity: sdkmodel.SeverityHigh, SubjectKind: "dr.restore_test", SubjectRef: "scheduled",
+				Title: title, OccurredAt: time.Now().UTC(),
+			}
+			return bus.Publish(ctx, event.FromObservation(tenant.String(), "dr", finding))
+		}
+	}
 	config.Appliance = readApplianceImage("/etc/olivares-appliance/image")
 	config.SealKeys = func(cipher *dr.KeyCipher) (map[string][]byte, []dr.KeyRef, []dr.SealerProbe, error) {
 		return sealSigningKeys(cfg.DataDir, cipher)
+	}
+	config.TreeSources = func(ctx context.Context, snapshot string) ([]dr.TreeSource, []dr.NotIncluded, error) {
+		return drTreeSources(ctx, cfg.DataDir, snapshot, engine != store.EnginePostgres)
 	}
 	if engine != store.EnginePostgres {
 		return config

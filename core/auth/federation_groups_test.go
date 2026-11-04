@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/auth/authtest"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -76,10 +77,7 @@ func TestSSOGroupReconciliation_FlipsDecision(t *testing.T) {
 	uid, _ := mustMember(t, ctx, a, super, tenant, "eng@acme.com", auth.RoleViewer)
 
 	// An "engineering" group mapped to editor, with NO members yet.
-	g, err := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{DisplayName: "Engineering", ExternalID: "grp-eng"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	g := authtest.Group(t, st, tenant, "Engineering", "grp-eng")
 	if _, err := a.ConfigureGroupRole(ctx, super, tenant, g.Group.ID, auth.RoleEditor); err != nil {
 		t.Fatal(err)
 	}
@@ -121,10 +119,7 @@ func TestSSOGroupReconciliation_NoMapperIsNoOp(t *testing.T) {
 	tenant := provisionTenant(t, st, "acme")
 	seedConfig(t, st, tenant, "default", "https://idp.acme.test", "acme.com")
 	mustMember(t, ctx, a, super, tenant, "eng@acme.com", auth.RoleViewer)
-	g, err := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{DisplayName: "Engineering", ExternalID: "grp-eng"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	g := authtest.Group(t, st, tenant, "Engineering", "grp-eng")
 	if _, err := a.ConfigureGroupRole(ctx, super, tenant, g.Group.ID, auth.RoleEditor); err != nil {
 		t.Fatal(err)
 	}
@@ -164,10 +159,7 @@ func TestSSOScimAuthoritative_RefusesJITAndReconcile(t *testing.T) {
 	// An EXISTING member authenticates, but their groups are NOT reconciled from the
 	// login (SCIM owns the roster).
 	mustMember(t, ctx, a, super, tenant, "eng@acme.com", auth.RoleViewer)
-	g, err := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{DisplayName: "Engineering", ExternalID: "grp-eng"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	g := authtest.Group(t, st, tenant, "Engineering", "grp-eng")
 	if _, err := a.ConfigureGroupRole(ctx, super, tenant, g.Group.ID, auth.RoleEditor); err != nil {
 		t.Fatal(err)
 	}

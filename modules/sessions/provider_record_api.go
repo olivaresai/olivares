@@ -5,6 +5,7 @@
 package sessions
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -261,5 +262,9 @@ func providerStepUp(r *http.Request, p auth.Principal) error {
 	if p.Kind != auth.KindUser || auth.StepUpSatisfied(r.Context(), p) {
 		return nil
 	}
-	return &codedRunErr{&runErr{http.StatusForbidden, auth.StepUpRequiredFor(auth.StepUpPolicyFrom(r.Context())).Error()}, "step_up_required"}
+	refusal := auth.StepUpRefusal(r.Context(), p)
+	if errors.Is(refusal, auth.ErrRightsDataStale) {
+		return &codedRunErr{&runErr{http.StatusForbidden, refusal.Error()}, "rights_data_stale"}
+	}
+	return &codedRunErr{&runErr{http.StatusForbidden, refusal.Error()}, "step_up_required"}
 }

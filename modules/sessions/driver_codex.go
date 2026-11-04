@@ -529,6 +529,14 @@ func (s *codexSession) projectProfileModelResponse(data []byte) []byte {
 	if decodeErr == nil && ((len(frame.Method) != 0 && string(frame.Method) != "null" && string(frame.Method) != `""`) || string(frame.ID) != id) {
 		return data
 	}
+	if decodeErr == nil {
+		// This is the one reply; later stdout is no longer config/read's.
+		s.mu.Lock()
+		if s.configReadID == id {
+			s.configReadID = ""
+		}
+		s.mu.Unlock()
+	}
 	var model codexConfigReadResponse
 	var reply any = responseOut{ID: frame.ID, Result: &model}
 	if decodeErr != nil || (len(frame.Error) != 0 && string(frame.Error) != "null") || json.Unmarshal(frame.Result, &model) != nil {

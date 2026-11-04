@@ -89,8 +89,8 @@ Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen un
 
 | Bildschirm | Pfad | Funktion | Erforderlich | Referenz |
 |---|---|---|---|---|
-| Umgebung | `/estate` | Prüfen Sie konfigurierte Ressourcen und ihre Beziehungen, einschließlich der Abhängigkeiten von Arbeitseinheiten. | `sessions:run:read` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
-| Inventar | `/inventory` | Agenten, MCP-Server und Modelle, die Konnektoren beobachtet haben, erkennen und katalogisieren. | `inventory:catalog:read` | [reference/modules/i-inventory](/de/reference/modules/i-inventory/) |
+| Konfigurierte Ressourcen | `/estate` | Was Sie eingerichtet haben und wie die Teile voneinander abhängen, einschließlich Arbeitseinheiten. | `sessions:run:read` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
+| Erkannte Ressourcen | `/inventory` | Agenten, MCP-Server und Modelle, die Konnektoren beobachtet haben, und wann sie zuletzt gesehen wurden. | `inventory:catalog:read` | [reference/modules/i-inventory](/de/reference/modules/i-inventory/) |
 | Workspace | `/workspace` | Agenten, Sessions, Ressourcen und Aktivität im Scope eines Workspace | `tenant:read` | [reference/modules/xx-multi-tenancy](/de/reference/modules/xx-multi-tenancy/) |
 
 ### KI

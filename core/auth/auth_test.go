@@ -727,3 +727,20 @@ func TestRevokedAndExpiredCredentials(t *testing.T) {
 		t.Fatal("superadmin token should authorize in any tenant")
 	}
 }
+
+// auditHead returns the current tip of the evidence chain, or 0 for an empty one.
+func auditHead(t *testing.T, ctx context.Context, st store.Store) int64 {
+	t.Helper()
+	var seq int64
+	if err := st.AuthView(ctx, func(as store.AuthScope) error {
+		head, ok, err := as.Audit().Head(ctx)
+		if err != nil || !ok {
+			return err
+		}
+		seq = head.Seq
+		return nil
+	}); err != nil {
+		t.Fatalf("audit head: %v", err)
+	}
+	return seq
+}

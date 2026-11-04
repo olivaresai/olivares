@@ -43,9 +43,11 @@ const auth = vi.hoisted(() => ({
 }))
 const location = vi.hoisted(() => ({ search: undefined as string | undefined }))
 const router = vi.hoisted(() => ({ navigate: vi.fn() }))
-vi.mock('@tanstack/react-router', () => ({
+vi.mock('@tanstack/react-router', async () => ({
   useNavigate: () => router.navigate,
+  useRouter: () => undefined,
   useRouterState: () => location.search,
+  Link: (await import('@/test/fake-router')).fakeRouterModule().Link,
 }))
 
 // Setup is a room with its own tests; here it only has to open INSIDE Settings (#2905).
@@ -193,7 +195,7 @@ describe('Settings', () => {
     location.search = '?section=edition'
     render(<SettingsPage />)
     expect(
-      screen.getByText('Only a superadmin can view or change the license.'),
+      screen.getByText(/ask a system administrator to view or change it/i),
     ).toBeInTheDocument()
     expect(consoleApi.getLicense).not.toHaveBeenCalled()
     expect(screen.getByText('Community')).toBeInTheDocument()
@@ -363,6 +365,8 @@ describe('Settings', () => {
       'Français',
       'Italiano',
       '한국어',
+      'Українська',
+      'Português',
     ])
     // prettier-ignore
     const spanishName = 'Español' // language-data: native language name
@@ -405,6 +409,26 @@ describe('Settings', () => {
     await waitFor(() => expect(i18n.resolvedLanguage).toBe('ko'))
     expect(document.documentElement.lang).toBe('ko')
     expect(preferenceStorage.getItem('olivares.lang')).toBe('ko')
+
+    await user.click(trigger)
+    await user.click(
+      within(await screen.findByRole('listbox')).getByRole('option', {
+        name: 'Українська',
+      }),
+    )
+    await waitFor(() => expect(i18n.resolvedLanguage).toBe('uk'))
+    expect(document.documentElement.lang).toBe('uk')
+    expect(preferenceStorage.getItem('olivares.lang')).toBe('uk')
+
+    await user.click(trigger)
+    await user.click(
+      within(await screen.findByRole('listbox')).getByRole('option', {
+        name: 'Português',
+      }),
+    )
+    await waitFor(() => expect(i18n.resolvedLanguage).toBe('pt'))
+    expect(document.documentElement.lang).toBe('pt')
+    expect(preferenceStorage.getItem('olivares.lang')).toBe('pt')
   })
 
   it('focuses search on / and filters to Reduce motion', async () => {
@@ -624,13 +648,21 @@ describe('Settings', () => {
     )
   })
 
-  it('offers Setup only where its page opens, and an address to it otherwise falls back to General (#474, #2905)', () => {
+  it('offers Setup only where its page opens, and an address to it otherwise says it is for a system administrator, not General (#474, #2905)', () => {
     auth.denied.add('system:admin')
     location.search = '?section=setup'
     render(<SettingsPage />)
     expect(screen.queryByRole('button', { name: 'Setup' })).toBeNull()
     expect(screen.queryByRole('region', { name: 'Setup wizard' })).toBeNull()
-    expect(screen.getByRole('radiogroup', { name: 'Theme' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Setup' })).toBeInTheDocument()
+    expect(
+      screen.getByText(/ask a system administrator to view or change it/i),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('radiogroup', { name: 'Theme' })).toBeNull()
+    // The list does not say General is the page while another page's notice shows.
+    expect(screen.getByRole('button', { name: 'General' })).not.toHaveAttribute(
+      'aria-current',
+    )
     // the regression: Permissions is open to everyone, so the group keeps its heading for it.
     expect(
       screen.getByRole('button', { name: 'Permissions' }),
@@ -749,21 +781,23 @@ describe('Settings > section list', () => {
   })
 
   it.each(SETTINGS_SECTIONS.filter((s) => s.adminOnly).map((s) => s.id))(
-    'opens General, not an empty page, for the address of %s when the person is not an administrator',
+    'says the address of %s is for a system administrator, not General, when the person is not one',
     (id) => {
       auth.isSuperadmin = false
       location.search = `?section=${id}`
       render(<SettingsPage />)
       expect(
         screen.getByRole('heading', {
-          name: i18n.t('general.title', { ns: 'settings' }),
+          name: i18n.t(`nav.${id}`, { ns: 'settings' }),
         }),
       ).toBeInTheDocument()
       expect(
-        screen.getByRole('button', { name: label('general') }),
-      ).toHaveAttribute('aria-current', 'page')
+        screen.getByText(/ask a system administrator to view or change it/i),
+      ).toBeInTheDocument()
       expect(
-        screen.queryByRole('region', { name: 'Session idle panel' }),
+        screen.queryByRole('heading', {
+          name: i18n.t('general.title', { ns: 'settings' }),
+        }),
       ).toBeNull()
     },
   )

@@ -95,7 +95,11 @@
     "localNameHint": "선택 사항. 비워 두면 프로바이더 이름을 사용합니다.",
     "advanced": "고급: 사용자 지정 엔드포인트",
     "missingFields": "누락된 필드를 입력하십시오: {{fields}}.",
-    "requiredEndpointHint": "서비스 엔드포인트를 입력하십시오: https 또는 루프백이나 사설 네트워크 주소의 일반 http."
+    "requiredEndpointHint": "서비스 엔드포인트를 입력하십시오: https 또는 루프백이나 사설 네트워크 주소의 일반 http.",
+    "worksWith": "{{tools}}에서 사용 가능",
+    "otherKinds": "기타 (사용자 지정 엔드포인트)",
+    "keyLink": "{{vendor}}에서 API 키 받기",
+    "docsLink": "{{vendor}} 설정 가이드"
   },
   "rotate": {
     "title": "이 프로바이더의 키 교체",

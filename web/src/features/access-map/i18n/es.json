@@ -15,8 +15,10 @@
   },
   "webgl": {
     "badge": "Vista de alta densidad",
-    "hint": "Mostrando {{n}} nodos — se cambió al renderizador WebGL acelerado por escala.",
-    "clustered": "A esta escala los recursos se agrupan por host; un grupo se lee como «host (N)». No se oculta ningún hallazgo: todo grupo con acceso inesperado queda marcado."
+    "hint": "Mostrando {{n}} nodos — se cambió al renderizador WebGL acelerado por escala."
+  },
+  "lod": {
+    "grouped": "Grupos: haz clic en uno para abrirlo."
   },
   "filters": {
     "search": "Buscar origen, recurso, herramienta…",
@@ -167,8 +169,13 @@
     "description": "Tu rol no incluye permiso para ver el grafo de acceso."
   },
   "mobile": {
-    "title": "El mapa necesita más ancho",
-    "hint": "Abre esta vista en una pantalla mayor para el grafo R/RW interactivo."
+    "title": "El mapa se abre a pantalla completa",
+    "hint": "Desplaza con un dedo y pellizca para acercar. La lista de abajo también sirve.",
+    "open": "Abrir el mapa a pantalla completa"
+  },
+  "fullscreen": {
+    "enter": "Pantalla completa",
+    "exit": "Salir de pantalla completa"
   },
   "attackPaths": {
     "chooseAgent": "Elige un agente en el grafo para ver sus caminos de ataque.",
@@ -203,5 +210,18 @@
   },
   "graph": {
     "keyboardHint": "Enfoca un nodo, usa las flechas para pasar a un nodo conectado e Intro para abrirlo. La lista bajo el grafo hace lo mismo sin el lienzo."
+  },
+  "groupKinds": {
+    "session": "Sesiones",
+    "agent": "Agentes",
+    "identity": "Identidades"
+  },
+  "group": {
+    "items_one": "{{count}} elemento",
+    "items_many": "{{count}} de elementos",
+    "items_other": "{{count}} elementos",
+    "more": "+{{count}} más",
+    "close": "Cerrar {{name}}",
+    "members": "Miembros"
   }
 }

@@ -281,9 +281,9 @@ func TestIdlePolicyBlockRules(t *testing.T) {
 					setPeerColumn(t, f, peerRef, colRunPeers, `["`+own.String(colRunClaimSID)+`"]`)
 				}
 			case "new message":
-				// A raw provider message is accepted without opening a user turn. Its
+				// Plain-text input is accepted without opening a user turn. Its
 				// bytes alone must reset reclamation even when the tool stays silent.
-				if r := f.post(t, "input", map[string]any{"message": map[string]any{"type": "control_response", "response": map[string]any{"request_id": "idle-policy-probe", "subtype": "success"}}}); r.code != http.StatusAccepted {
+				if r := f.post(t, "input", map[string]any{"line": "idle-policy-probe"}); r.code != http.StatusAccepted {
 					t.Fatal(r.raw)
 				}
 				if f.fr.lastProc().sentCount() != 1 {
@@ -722,7 +722,7 @@ func TestIdlePolicyAuditRefusalPreservesTheLiveSessionAndAllowsRetry(t *testing.
 			lr.mu.Lock()
 			lr.workCredentialID = model.ID("")
 			lr.mu.Unlock()
-			if r := f.post(t, "input", map[string]any{"message": map[string]any{"type": "control_response", "response": map[string]any{"request_id": "retry-probe", "subtype": "success"}}}); r.code != http.StatusAccepted {
+			if r := f.post(t, "input", map[string]any{"line": "retry-probe"}); r.code != http.StatusAccepted {
 				t.Fatalf("input after refusal: %d %s", r.code, r.raw)
 			}
 			for range 3 {

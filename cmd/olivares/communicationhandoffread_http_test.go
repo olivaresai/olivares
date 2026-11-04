@@ -145,7 +145,7 @@ func createIncomingHandoffHTTPAgent(
 	// registered sponsor, so the owner's own external identity is set through the
 	// account engine before the roster row names it.
 	sponsorRef := "human:k3-handoff-read-owner:" + estate.owner.id.String()
-	setDirectoryUser(t, eng, estate.owner.token, estate.tenant, estate.owner.id, auth.SCIMUserInput{
+	setDirectoryUser(t, eng, estate.owner.token, estate.tenant, estate.owner.id, directoryAttrs{
 		UserName: "owner@k3-handoff-read.test", DisplayName: "K3 handoff read owner", ExternalID: sponsorRef, Active: true,
 	})
 	if err := eng.store.Mutate(

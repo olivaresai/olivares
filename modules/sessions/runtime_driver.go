@@ -915,6 +915,14 @@ const defaultDriverCallTimeout = 30 * time.Second
 // turn forever; a bounded refusal is the honest outcome.
 const defaultDriverApprovalDeadline = 30 * time.Second
 
+// ApprovalWait is how long one governed tool call of any driver waits for a
+// person to answer its review: the owned drivers' server→client approval and
+// the Claude Code PreToolUse hook (ClaudeHookPEPCommandTimeout derives from it).
+// Past it the call is refused with a retry reason and the session continues.
+// Claude Code documents its hook timeout per hook, in seconds, with no maximum
+// (https://code.claude.com/docs/en/hooks), so no vendor limit shortens it.
+const ApprovalWait = 15 * time.Minute
+
 // ---------------------------------------------------------------------------
 // Runtime glue.
 // ---------------------------------------------------------------------------

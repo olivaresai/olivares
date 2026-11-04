@@ -21,6 +21,7 @@ import { createQueryClient } from '@/lib/api/query'
 import { createTestQueryClient, renderIntel } from '@/test/intel'
 
 const perm = { approvals: true, sessions: true }
+vi.mock('@/lib/notify', () => ({ notify: vi.fn(), resolveNotice: vi.fn() }))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     activeTenant: 't1',
@@ -71,6 +72,7 @@ vi.mock('./api', () => ({
   },
 }))
 
+import { notify } from '@/lib/notify'
 import ReachView from './reach-view'
 
 const GRAPH = {
@@ -555,11 +557,16 @@ describe('ReachView table alternative', () => {
       await screen.findByRole('img', { name: /Reach graph/ }),
     ).toBeInTheDocument()
     expect(screen.queryByRole('table')).toBeNull()
-    expect(
-      await screen.findByText(
-        /1 value in this link could not be used \(view\)/,
+    // A refused link value is told in a toast, not in a strip above the page.
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringMatching(
+            /1 value in this link could not be used \(view\)/,
+          ),
+        }),
       ),
-    ).toBeInTheDocument()
+    )
   })
 })
 

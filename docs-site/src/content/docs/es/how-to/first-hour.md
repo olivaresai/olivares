@@ -22,7 +22,8 @@ Abre la dirección impresa. La primera instalación usa un certificado
 autofirmado; comprueba que estás abriendo tu propio servidor antes de aceptar la
 advertencia del navegador. Introduce el token de configuración, tu correo y una
 contraseña para crear el primer administrador. Mantén el token y la contraseña
-en privado. La consola inicia tu sesión y abre el asistente de configuración.
+en privado. La consola inicia tu sesión y abre Sesiones, con el cuadro de tu primer
+mensaje en pantalla.
 
 El contenedor ejecuta las herramientas en el servidor. Una herramienta con
 sesión iniciada en tu portátil es otra instalación; su inicio de sesión no se
@@ -30,7 +31,7 @@ copia al contenedor.
 
 ## 2. Elige una herramienta y su inicio de sesión
 
-Usa el asistente o abre **Herramientas de IA** (`/agent-tools`). Cada herramienta
+Usa las tarjetas de Sesiones o abre **Herramientas de IA** (`/agent-tools`). Cada herramienta
 muestra si está instalada y si tiene la sesión iniciada. Si falta, revisa y
 aprueba su instalación. Usa el control de inicio de sesión de la herramienta y
 completa su propio flujo de inicio de sesión. En Claude Code o Codex, aprueba el
@@ -73,7 +74,7 @@ Sigue esa indicación en **Herramientas** y vuelve después a la sesión.
 
 ## 4. Aprueba una acción
 
-Para probar una aprobación, elige **Más opciones → Pedir confirmación antes de
+Para probar una aprobación, elige **Qué puede hacer el agente → Pedir confirmación antes de
 cada acción** al iniciar la sesión. Pide a la herramienta que ejecute en el
 proyecto un comando inofensivo. Cuando solicite permiso, abre **Reglas**. La
 solicitud que espera tu respuesta aparece marcada en naranja y abierta junto a

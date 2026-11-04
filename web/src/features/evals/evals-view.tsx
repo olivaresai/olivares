@@ -11,6 +11,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ClipboardCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useTabParam } from '@/lib/hooks/use-tab-param'
 import { formatFraction } from '@/lib/format'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -67,8 +68,18 @@ const GROUP_BY: ScorecardGroupBy[] = [
   'prompt_variant',
 ]
 
+const EVAL_TABS = [
+  'scorecards',
+  'runs',
+  'ab',
+  'drift',
+  'gate',
+  'calibration',
+] as const
+
 export function EvalsView() {
   const { t } = useTranslation('evals')
+  const [tab, setTab] = useTabParam(EVAL_TABS)
   const { activeTenant, can } = useAuth()
 
   // Read permission to enter the view (verbs collapse to a single read grant).
@@ -95,7 +106,7 @@ export function EvalsView() {
       title={t('title')}
       description={t('description')}
     >
-      <Tabs defaultValue="scorecards">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="scorecards">{t('tabs.scorecards')}</TabsTrigger>
           <TabsTrigger value="runs">{t('tabs.runs')}</TabsTrigger>

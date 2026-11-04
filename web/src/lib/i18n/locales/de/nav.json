@@ -16,10 +16,10 @@
     "infrastructure": "Infrastruktur"
   },
   "items": {
-    "estate": "Bestand",
+    "estate": "Konfigurierte Ressourcen",
     "home": "Start",
     "onboarding": "Einrichtungsassistent",
-    "inventory": "Inventar",
+    "inventory": "Erkannte Ressourcen",
     "sessions": "Sitzungen",
     "accessMap": "Zugriffskarte",
     "reach": "Reichweite",
@@ -38,7 +38,6 @@
     "vault": "Tresor",
     "claudePolicy": "Verwaltete Richtlinie",
     "routinePolicies": "Routine-Richtlinien",
-    "deploy": "Bereitstellung",
     "gitPublication": "Git-Veröffentlichung",
     "knowledge": "Wissen",
     "catalog": "Katalog",
@@ -51,7 +50,6 @@
     "adoption": "Adoption",
     "evals": "Bewertungen",
     "security": "Sicherheit",
-    "recordings": "Aufzeichnungen",
     "compliance": "Compliance",
     "voice": "Sprache",
     "sandbox": "Sandbox",
@@ -67,7 +65,6 @@
     "settings": "Einstellungen",
     "workspace-templates": "Arbeitsbereich-Vorlagen",
     "eventing": "Webhooks & Ereignisse",
-    "session-viewer": "Sitzungsviewer",
     "backups": "Backups",
     "updates": "Updates",
     "logs": "Protokolle",
@@ -93,10 +90,10 @@
     "truncated": "Die Liste ist unvollständig — es gibt mehr Arbeitsbereiche als geladen"
   },
   "descriptions": {
-    "estate": "Prüfen Sie konfigurierte Ressourcen und ihre Beziehungen, einschließlich der Abhängigkeiten von Arbeitseinheiten.",
+    "estate": "Was Sie eingerichtet haben und wie die Teile voneinander abhängen, einschließlich Arbeitseinheiten.",
     "home": "Bestandsübersicht und Zustand auf einen Blick",
     "onboarding": "Schrittweise Installationskonfiguration",
-    "inventory": "Agenten, MCP-Server und Modelle, die Konnektoren beobachtet haben, erkennen und katalogisieren.",
+    "inventory": "Agenten, MCP-Server und Modelle, die Konnektoren beobachtet haben, und wann sie zuletzt gesehen wurden.",
     "sessions": "Sitzungen starten und verfolgen, was jede tut, auch die, die Olivares findet",
     "accessMap": "Was jeder Agent liest und schreibt (R/RW)",
     "reach": "Sehen Sie, welche Ziele jedes Werkzeug erreichen kann und welche auf Genehmigung warten.",
@@ -113,7 +110,6 @@
     "identity": "SSO, SCIM und die Identitäten, die Ihre Agenten verwenden",
     "vault": "Ihre Passwörter, Notizen und Authenticator-Codes",
     "claudePolicy": "Verwaltete Richtlinie, Hooks, MCP, Sandbox und Policy-as-Code",
-    "deploy": "Agenten bereitstellen und mit der Infrastruktur verbinden",
     "gitPublication": "Commits pushen, Pull Requests öffnen und über genehmigte Git-Ziele mergen",
     "knowledge": "Wissensdatenbanken, RAG und Datenherkunft",
     "catalog": "Kuratierte, genehmigte Agenten und Fähigkeiten",
@@ -127,7 +123,6 @@
     "adoption": "Produktivität, Akzeptanz und Modellmix",
     "evals": "Qualität, Bewertungen und Regression",
     "security": "Schutzleitplanken, Forensik und Anomalien",
-    "recordings": "Aufzeichnung und Wiedergabe privilegierter Sitzungen",
     "compliance": "Rahmenwerke, Kontrollen und Nachweise",
     "voice": "Sprach- und Echtzeit-Sitzungen",
     "sandbox": "Isolierte Agententests und Wiedergabe",
@@ -186,13 +181,15 @@
     "agentcoreExport": "AgentCore-Export · AgentCore",
     "sessions": "Sitzungen · Sitzungen beobachten · Sitzungen betreiben · Claude Code · agentops",
     "agentops": "Sitzungen betreiben · Claude Code · agentops",
-    "console": "Steuerungskonsole · Mandantenverwaltung"
+    "console": "Steuerungskonsole · Mandantenverwaltung",
+    "estate": "Bestand",
+    "inventory": "Inventar"
   },
   "areas": {
     "infrastructure": {
       "label": "Infrastruktur",
       "sections": {
-        "estate": "Inventar und Arbeitsbereiche"
+        "estate": "Ressourcen und Arbeitsbereiche"
       }
     },
     "ai": {
@@ -298,6 +295,13 @@
     "draftSaveFailed": "Der Entwurf konnte in diesem Tab nicht gespeichert werden. Lassen Sie diese Seite geöffnet oder kopieren Sie Ihre Nachricht, bevor Sie sie verlassen.",
     "sendBackgroundHint": "Strg+Eingabe sendet und lässt den Entwurf für den nächsten Satz bereit.",
     "slashLabel": "Befehle und Skills",
+    "mentionLabel": "Dateien und Ordner",
+    "skillLabel": "Skills",
+    "mention": {
+      "loading": "Der Ordner der Sitzung wird gelesen…",
+      "failed": "Der Ordner der Sitzung konnte nicht gelesen werden.",
+      "nomatch": "Keine Datei und kein Ordner beginnt mit „{{query}}“."
+    },
     "slashOption": "{{name}}, {{i}} von {{n}}",
     "slashNoMatch": "Kein Befehl passt zu „{{query}}“.",
     "slash": {
@@ -315,7 +319,8 @@
     },
     "sessionKeeps": "Diese Sitzung bleibt bei {{value}}. Eine andere Auswahl startet eine neue Sitzung.",
     "startWithChoice": "Neue Sitzung mit dieser Auswahl starten",
-    "askPlaceholder": "Frag etwas, / für Befehle und Skills",
+    "newWithOtherAccess": "Neue Sitzung mit anderem Zugriff…",
+    "askPlaceholder": "Frag etwas, @ für Dateien und Ordner, / für Befehle und Skills",
     "modelPicker": "Modell: {{value}}",
     "effortPicker": "Aufwand: {{value}}",
     "accessPicker": "Zugriff: {{value}}",
@@ -346,6 +351,7 @@
     }
   },
   "shell": {
+    "more": "Mehr",
     "searchCommands": "Suche und Befehle",
     "search": "Suche",
     "stopAll": "Alle stoppen",
@@ -448,6 +454,8 @@
     "work": "Arbeit",
     "tools": "Werkzeuge",
     "control": "Kontrolle",
-    "admin": "Verwaltung"
-  }
+    "admin": "Verwaltung",
+    "organization": "Organisation"
+  },
+  "readOnlyNotice": "Sie können diese Seite lesen, aber nicht ändern. Das kann ein Administrator der Organisation."
 }

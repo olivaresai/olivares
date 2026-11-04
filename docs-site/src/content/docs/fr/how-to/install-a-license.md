@@ -104,10 +104,10 @@ question qui compte.
 olivares license status --data-dir /var/lib/olivares
 ```
 
-`status` fonctionne hors ligne et résout la licence selon la même priorité que le moteur. Il
+Sur l'hôte du moteur et avec `--data-dir`, `status` fonctionne hors ligne et résout la licence selon la même priorité que le moteur. Il
 répond donc à la question qui compte — *quelle licence est réellement en vigueur* — plutôt
 qu'à « existe-t-il un fichier ? ». Il indique la source résolue, le titulaire, l'offre et la
-date d'expiration.
+date d'expiration. Connecté à un moteur situé sur un autre hôte, il interroge ce moteur.
 
 Exécutez-le après chaque installation et après le retrait d'un override.
 

@@ -106,10 +106,10 @@ ist — und genau das ist die entscheidende Frage.
 olivares license status --data-dir /var/lib/olivares
 ```
 
-`status` arbeitet offline und löst die Lizenz mit derselben Rangfolge wie die Engine auf. Der
+Auf dem Host der Engine und mit `--data-dir` arbeitet `status` offline und löst die Lizenz mit derselben Rangfolge wie die Engine auf. Der
 Befehl beantwortet damit die entscheidende Frage — *welche Lizenz tatsächlich wirksam ist* —
 statt nur „existiert eine Datei?“. Er meldet die aufgelöste Quelle, den Inhaber, den Plan und
-das Ablaufdatum.
+das Ablaufdatum. Ist die CLI an einer Engine auf einem anderen Host angemeldet, fragt der Befehl stattdessen diese Engine.
 
 Führen Sie ihn nach jeder Installation und nach dem Entfernen eines Overrides aus.
 

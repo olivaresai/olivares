@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { PanelSlot } from '@/components/ui/trust-chrome'
 import { queryKeys } from '@/lib/api'
 import { authApi } from '@/lib/api/endpoints'
 import { ApiError } from '@/lib/api/errors'
@@ -159,7 +160,10 @@ function CodeSignInPanel({
   const { t } = useTranslation(['identity', 'common'])
   const { logout } = useAuth()
   return (
-    <Card className={cn('border-warning/40', className)}>
+    <Card
+      data-trust-chrome=""
+      className={cn('border-warning/40 text-foreground', className)}
+    >
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <ShieldAlert className="size-4 text-warning" />
@@ -407,7 +411,11 @@ function CeremonyPanel({
   }
 
   return (
-    <Card className={cn('border-warning/40', className)} aria-busy={busy}>
+    <Card
+      data-trust-chrome=""
+      className={cn('border-warning/40 text-foreground', className)}
+      aria-busy={busy}
+    >
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <ShieldAlert className="size-4 text-warning" aria-hidden />
@@ -452,7 +460,9 @@ function CeremonyPanel({
           </Button>
         </div>
         {additionalMethods.map(({ id, Component }) => (
-          <Component key={id} disabled={busy || terminal} run={run} />
+          <PanelSlot key={id}>
+            <Component disabled={busy || terminal} run={run} />
+          </PanelSlot>
         ))}
         {allowEnrollment && enrollmentAvailable && (
           <div className="flex flex-col gap-3 rounded-md border p-3">

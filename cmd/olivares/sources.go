@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -531,8 +532,9 @@ type contentSourceMode interface {
 
 type modeContentSource struct {
 	contentsource.Source
-	mode   string
-	public bool
+	mode      string
+	public    bool
+	maxDelete int
 }
 
 func (s modeContentSource) Mode() string { return normalizeContentSourceMode(s.mode) }
@@ -556,14 +558,31 @@ func (s modeContentSource) ListPage(ctx context.Context, cursor string, maxItems
 
 type modeLiveContentSource struct {
 	contentsource.LiveSource
-	mode   string
-	public bool
+	mode      string
+	public    bool
+	maxDelete int
+	// onlyACL, when set, replaces the ACL the source reports for every document: what
+	// was read with one person's credential is stored for that person alone.
+	onlyACL string
+}
+
+func (s modeLiveContentSource) Fetch(ctx context.Context, docID string) (contentsource.Document, error) {
+	doc, err := s.LiveSource.Fetch(ctx, docID)
+	if err == nil && s.onlyACL != "" {
+		doc.ACL = []string{s.onlyACL}
+	}
+	return doc, err
 }
 
 func (s modeLiveContentSource) Mode() string { return normalizeContentSourceMode(s.mode) }
 
 // Public: see modeContentSource.Public.
 func (s modeLiveContentSource) Public() bool { return s.public }
+
+// MaxDeletePercent is the operator's deletion safeguard (max_delete_percent): a sync
+// that would delete a larger share of the source's documents deletes none. 0 = none.
+func (s modeContentSource) MaxDeletePercent() int     { return s.maxDelete }
+func (s modeLiveContentSource) MaxDeletePercent() int { return s.maxDelete }
 
 func (s modeLiveContentSource) ListingComplete() bool { return wrappedListingComplete(s.LiveSource) }
 
@@ -603,22 +622,23 @@ func wrapContentSourceMode(src contentsource.Source, mode string) contentsource.
 	return modeContentSource{Source: src, mode: mode}
 }
 
-// wrapContentSourceConfig wraps a configured document source with its mode and its
-// operator-declared "public" setting. Only the literal "true" makes the source
-// public: a document it reports without an ACL is then stored as "anyone", and
-// every ingest or sync that does so leaves a knowledge.source.public ledger entry.
-// Any other value, or none, leaves such documents denied.
+// wrapContentSourceConfig wraps a configured document source with its mode, its
+// operator-declared "public" setting and its deletion safeguard. Only the literal
+// "true" makes the source public: a document it reports without an ACL is then
+// stored as "anyone", and every ingest or sync that does so leaves a
+// knowledge.source.public ledger entry. Any other value, or none, leaves such
+// documents denied. max_delete_percent (1-100; 0 or unset = off) caps the share of the source's
+// documents one sync may delete; above it the sync deletes none and says why.
 func wrapContentSourceConfig(src contentsource.Source, settings map[string]string) contentsource.Source {
 	wrapped := wrapContentSourceMode(src, settings["mode"])
-	if strings.TrimSpace(settings["public"]) != "true" {
-		return wrapped
-	}
+	public := strings.TrimSpace(settings["public"]) == "true"
+	maxDelete, _ := strconv.Atoi(strings.TrimSpace(settings["max_delete_percent"]))
 	switch w := wrapped.(type) {
 	case modeLiveContentSource:
-		w.public = true
+		w.public, w.maxDelete = public, maxDelete
 		return w
 	case modeContentSource:
-		w.public = true
+		w.public, w.maxDelete = public, maxDelete
 		return w
 	}
 	return wrapped

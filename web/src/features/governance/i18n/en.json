@@ -475,7 +475,7 @@
     "subtitle": "Cadence floors, concurrency caps, approval requirements, cron allowlists and blocked environments for Claude Code Routines. Overlapping policies compose most-restrictive-wins.",
     "search": "Search routine policies…",
     "newPolicy": "New policy",
-    "enforcementCaption": "These controls are enforced when a routine is declared and again at every fire. A disabled policy is stored but composes into nothing.",
+    "enforcementCaption": "These controls are enforced when a routine is declared and again at every fire. A disabled policy is stored but applies to nothing.",
     "enabledYes": "Enabled",
     "enabledNo": "Disabled",
     "approvalYes": "Required",
@@ -494,7 +494,7 @@
       "envs": "Blocked environments"
     },
     "scope": {
-      "tenant": "Tenant",
+      "tenant": "Organization",
       "workspace": "Workspace",
       "user": "User"
     },
@@ -512,12 +512,12 @@
       "unreadableCaveat": "The engine could not parse this stored column. Enforcement refuses such a policy outright, so it denies closed rather than allowing anything."
     },
     "posture": {
-      "title": "Effective posture",
+      "title": "Rules in effect",
       "counts": "{{enabled}} enabled of {{total}} policies",
       "workspaceRef": "Workspace",
       "userRef": "User",
-      "defaultWorkspace": "Tenant default",
-      "noUser": "No owning user",
+      "defaultWorkspace": "Organization default",
+      "noUser": "No owner",
       "resolve": "Resolve",
       "indeterminate": "This resolution is indeterminate on the {{axis}} axis. Enforcement denies closed here — it is a refusal, not an absence of controls.",
       "floor": "Cadence floor",
@@ -527,17 +527,17 @@
       "cap": "{{scope}} · max {{max}}",
       "origin": "Composed from:",
       "none": "No enabled policy governs this scope.",
-      "failed": "Posture could not be read",
+      "failed": "The rules in effect could not be read",
       "resolvedFor": "Resolved for workspace {{workspace}} · user {{user}}",
       "stale": "the scope above changed; resolve again",
-      "unknownUser": "unanswerable user axis",
-      "unknownUserAxis": "User axis unanswerable",
+      "unknownUser": "owner unknown",
+      "unknownUserAxis": "Owner unknown",
       "supersededByIndeterminate": "The values below are what composed so far. They are NOT the outcome: an indeterminate resolution is refused outright, whatever they say.",
-      "noneIndeterminate": "No policy was composed for this scope, and the resolution was REFUSED on an unanswerable axis — that is not the same as no controls applying here."
+      "noneIndeterminate": "Olivares could not tell which policies apply to this scope, so the lookup was REFUSED — that is not the same as no controls applying here."
     },
     "remove": {
       "title": "Delete routine policy",
-      "body": "“{{name}}” will stop composing into the effective posture. Routines it constrained become subject only to the remaining policies.",
+      "body": "“{{name}}” will stop applying. Routines it constrained become subject only to the remaining policies.",
       "confirm": "Delete policy",
       "done": "Routine policy deleted"
     },
@@ -553,7 +553,7 @@
       "scopeImmutable": "Immutable after creation.",
       "scopeRef": "Scope reference",
       "scopeRefRequired": "A workspace- or user-scoped policy needs its reference.",
-      "tenantScopeRef": "A tenant-scoped policy must not carry a reference.",
+      "tenantScopeRef": "An organization-wide policy must not carry a reference.",
       "enabled": "Policy enabled",
       "floorToggle": "Enforce a cadence floor",
       "floor": "Minimum interval (seconds)",

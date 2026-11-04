@@ -4,7 +4,7 @@
 import { act } from 'react'
 import { useEffect as reactUseEffect, useState as reactUseState } from 'react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, renderIntel, screen, waitFor, within } from '@/test/intel'
 import '@/features/_intel' // register the shared `intel` namespace for badges/notices
 import {
@@ -348,7 +348,13 @@ vi.mock('./api', async (importOriginal) => {
   return { ...actual, observabilityApi: api }
 })
 
+vi.mock('@/lib/notify', () => ({ notify: vi.fn(), resolveNotice: vi.fn() }))
+import { notify } from '@/lib/notify'
 import { ObservabilityView } from './observability-view'
+
+// What the page has told: a refused link value is a toast now, not a strip.
+const told = () => vi.mocked(notify).mock.calls.map(([n]) => n.message)
+beforeEach(() => vi.mocked(notify).mockClear())
 
 function resetLive() {
   vi.clearAllMocks()
@@ -697,9 +703,7 @@ describe('ObservabilityView outer tab', () => {
     expect(
       await screen.findByRole('tab', { name: /trace/i, selected: true }),
     ).toBeInTheDocument()
-    expect(await screen.findByTestId('url-state-notice')).toHaveTextContent(
-      /status/,
-    )
+    await waitFor(() => expect(told().join('\n')).toMatch(/status/))
 
     // The hook cleans the refused key and the view canonicalises the inferred
     // tab. Both go through navigate; assert the INSTRUCTIONS rather than
@@ -723,7 +727,7 @@ describe('ObservabilityView outer tab', () => {
     expect(
       screen.getByRole('tab', { name: /trace/i, selected: true }),
     ).toBeInTheDocument()
-    expect(screen.getByTestId('url-state-notice')).toBeInTheDocument()
+    expect(told()).toHaveLength(1)
   })
 
   it('lets the operator leave an inferred Traces for Ingestion', async () => {
@@ -784,7 +788,7 @@ describe('ObservabilityView outer tab', () => {
     ).toBeInTheDocument()
     // Falling back silently is what made a bad link indistinguishable from a
     // good one.
-    expect(screen.getByTestId('url-state-notice')).toBeInTheDocument()
+    expect(told()).toHaveLength(1)
   })
 
   it('says nothing when no tab is named at all', async () => {
@@ -792,7 +796,7 @@ describe('ObservabilityView outer tab', () => {
     window.history.replaceState(null, '', '/observability')
     renderIntel(<ObservabilityView />)
     await screen.findByRole('tab', { name: /ingestion/i, selected: true })
-    expect(screen.queryByTestId('url-state-notice')).not.toBeInTheDocument()
+    expect(told()).toEqual([])
   })
 })
 
@@ -813,8 +817,6 @@ describe('ObservabilityView refuses an impossible trace bound', () => {
 
     await waitFor(() => expect(api.traces).toHaveBeenCalled())
     expect(api.traces.mock.calls.at(-1)?.[0].from).toBeUndefined()
-    expect(await screen.findByTestId('url-state-notice')).toHaveTextContent(
-      /from/,
-    )
+    await waitFor(() => expect(told().join('\n')).toMatch(/from/))
   })
 })

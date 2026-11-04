@@ -71,6 +71,7 @@ func TestSessionsClosureRequestBodyCensus(t *testing.T) {
 		{http.MethodPost, "/runs/{ref}/cleanup", sessionsClosureBodyful, false},
 		{http.MethodPost, "/runs/{ref}/resume", sessionsClosureBodyful, false},
 		{http.MethodPut, "/limit-resume-settings", sessionsClosureBodyful, true},
+		{http.MethodPut, "/personal-folders-settings", sessionsClosureBodyful, true},
 		{http.MethodPost, "/runs/{ref}/move", sessionsClosureBodyful, true},
 		{http.MethodPost, "/runs/{ref}/handoff", sessionsClosureBodyful, true},
 		{http.MethodPut, "/runs/{ref}/peers", sessionsClosureBodyful, true},
@@ -113,7 +114,7 @@ func TestSessionsClosureRequestBodyCensus(t *testing.T) {
 		}
 		counts[test.kind]++
 	}
-	want := map[sessionsClosureRequestBodyKind]int{sessionsClosureBodyful: 20, sessionsClosureBodyless: 10}
+	want := map[sessionsClosureRequestBodyKind]int{sessionsClosureBodyful: 21, sessionsClosureBodyless: 10}
 	if !reflect.DeepEqual(counts, want) {
 		t.Fatalf("census = %#v, want %#v", counts, want)
 	}

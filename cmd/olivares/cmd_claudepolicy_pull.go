@@ -11,7 +11,9 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
@@ -40,6 +42,9 @@ import (
 // policyArtifactPreimagePrefix pins a signature to the policy-artifact domain; it is the
 // plane's artifactPreimagePrefix (modules-overlay/governance/claudepolicy_truth_enterprise.go).
 const policyArtifactPreimagePrefix = "olivares.policy.artifact.v1"
+
+// readPulledFile reads back what the write left on disk; a test replaces it to simulate a disk that changed the bytes.
+var readPulledFile = os.ReadFile
 
 type policyArtifact struct {
 	Surface        string `json:"surface"`
@@ -77,11 +82,17 @@ func verifyPolicyArtifact(a policyArtifact, surface string, wantRevision int64, 
 		return fmt.Errorf("artifact signature is not base64")
 	}
 	keySum := sha256.Sum256(pub)
-	fingerprint := hex.EncodeToString(keySum[:])[:16]
+	keyDigest := hex.EncodeToString(keySum[:])
+	fingerprint := keyDigest[:16]
 	if subtle.ConstantTimeCompare([]byte(fingerprint), []byte(a.KeyFingerprint)) != 1 {
 		return fmt.Errorf("artifact key_fingerprint %q is not the fingerprint of the public key it carries", a.KeyFingerprint)
 	}
-	if subtle.ConstantTimeCompare([]byte(fingerprint), []byte(pin)) != 1 {
+	// The short form is 64 bits of the digest; a pin as long as the whole digest is compared whole.
+	pinned := fingerprint
+	if len(pin) == len(keyDigest) {
+		pinned = keyDigest
+	}
+	if subtle.ConstantTimeCompare([]byte(pinned), []byte(pin)) != 1 {
 		return fmt.Errorf("the artifact is signed by key %s, which does not match the pinned key fingerprint", fingerprint)
 	}
 	contentSum := sha256.Sum256([]byte(a.Content))
@@ -93,7 +104,41 @@ func verifyPolicyArtifact(a policyArtifact, surface string, wantRevision int64, 
 	if !ed25519.Verify(pub, digest[:], sig) {
 		return fmt.Errorf("the artifact signature does not verify for tenant %s, surface %s, revision %d", tenant, surface, a.Revision)
 	}
+	// The file is written world-readable (0644): a signed document that carries a credential
+	// would hand it to every user of the host. The detector is the one the operator config uses.
+	if configHasInlineSecret([]byte(a.Content)) {
+		return fmt.Errorf("the artifact carries an inline credential, which would be written world-readable; the policy must reference a secret instead")
+	}
 	return nil
+}
+
+// policyHighWaterPath is the record, beside --out, of the highest revision this host has applied
+// per tenant and surface. It is written by whoever runs pull (root for /etc/...), which is how
+// it stays out of reach of the users the managed file governs.
+func policyHighWaterPath(out string) string {
+	return filepath.Join(filepath.Dir(out), "."+filepath.Base(out)+".olivares-revision")
+}
+
+// readPolicyHighWater returns the record, empty when this host has never applied a revision. A
+// record that cannot be read or parsed is an error, never a reset to zero: that would let a
+// damaged file reopen the rollback it exists to close.
+func readPolicyHighWater(path string) (map[string]int64, error) {
+	raw, err := os.ReadFile(path) //nolint:gosec // beside the path the operator named
+	if errors.Is(err, fs.ErrNotExist) {
+		return map[string]int64{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var marks map[string]int64
+	err = json.Unmarshal(raw, &marks)
+	if err == nil && marks == nil { // JSON null decodes without an error
+		err = errors.New("it holds null")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%s is not a revision record (remove it to start over): %w", path, err)
+	}
+	return marks, nil
 }
 
 // writeFileAtomic replaces path with data: a host never sees a half-written policy file.
@@ -102,30 +147,53 @@ func writeFileAtomic(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec // managed policy directories are world-readable by design
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".olivares-pull-*")
+	return writeAtomicMode(path, data, 0o644) //nolint:gosec // managed policy files are world-readable by design
+}
+
+// applyPulledArtifact is the part of a pull that must not interleave with another pull of the
+// same file: under the lock on out it refuses a rollback against this host's record, records the
+// revision, replaces the file and reads back what the disk holds. Without the lock two pulls can
+// both read revision 5, revision 6 updates the record, and the stale revision 4 admitted from
+// the stale read then replaces the policy, leaving a record that claims 6 over a file that holds 4.
+//
+// The plane is trusted for the signature, not for the order: a replayed older signed revision
+// passes every check in verifyPolicyArtifact. This host's own record is what refuses it.
+func applyPulledArtifact(out, markKey string, artifact policyArtifact, rollback bool) ([]byte, error) {
+	unlock, err := lockPolicyOut(out)
 	if err != nil {
-		return err
+		return nil, exitcode.New(exitcode.Degraded, fmt.Errorf("NOT APPLIED: %w; %s is unchanged", err, out))
 	}
-	defer func() { _ = os.Remove(tmp.Name()) }() // no-op once renamed
-	// Chmod on the descriptor, not the name: the name is in a directory the caller may share.
-	if err := tmp.Chmod(0o644); err != nil { //nolint:gosec // managed policy files are world-readable by design
-		_ = tmp.Close()
-		return err
+	defer unlock()
+	highWater := policyHighWaterPath(out)
+	marks, err := readPolicyHighWater(highWater)
+	if err != nil {
+		return nil, exitcode.New(exitcode.Degraded, fmt.Errorf("NOT APPLIED: %w; %s is unchanged", err, out))
 	}
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return err
+	if applied := marks[markKey]; artifact.Revision < applied && !rollback {
+		return nil, exitcode.New(exitcode.Degraded, fmt.Errorf(
+			"NOT APPLIED: the plane served revision %d but this host already applied revision %d (recorded in %s), so this is a rollback; to go back on purpose pull it with --revision %d --allow-rollback; %s is unchanged",
+			artifact.Revision, applied, highWater, artifact.Revision, out))
 	}
-	// Sync before the rename: a crash must leave the old file or the whole new one, never an
-	// empty policy file, which is an ungoverned host.
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return err
+	// Recorded before the write: a crash between the two leaves the record ahead of the
+	// file, which refuses an older pull, and never behind it.
+	if artifact.Revision > marks[markKey] {
+		marks[markKey] = artifact.Revision
+		record, merr := json.Marshal(marks)
+		if merr == nil {
+			merr = writeFileAtomic(highWater, record)
+		}
+		if merr != nil {
+			return nil, fmt.Errorf("record revision %d in %s: %w; %s is unchanged", artifact.Revision, highWater, merr, out)
+		}
 	}
-	if err := tmp.Close(); err != nil {
-		return err
+	if err := writeFileAtomic(out, []byte(artifact.Content)); err != nil {
+		return nil, fmt.Errorf("write %s: %w", out, err)
 	}
-	return os.Rename(tmp.Name(), path)
+	onDisk, err := readPulledFile(out) //nolint:gosec // the path the operator named
+	if err != nil {
+		return nil, fmt.Errorf("read back %s: %w", out, err)
+	}
+	return onDisk, nil
 }
 
 func newClaudePolicyPullCmd(flags *authClientFlags) *cobra.Command {
@@ -134,6 +202,7 @@ func newClaudePolicyPullCmd(flags *authClientFlags) *cobra.Command {
 		scope    string
 		pin      string
 		revision int64
+		rollback bool
 	)
 	cmd := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "write"},
@@ -143,10 +212,16 @@ func newClaudePolicyPullCmd(flags *authClientFlags) *cobra.Command {
 			"(or --revision), verifies it against the key you pinned with --pin-key-fingerprint,\n" +
 			"writes the document to --out and reports back through `checkin` with the hash it\n" +
 			"verified and the bytes it finds on disk, so the plane can show drift.\n\n" +
-			"The pin is the fingerprint `publish` printed, handed to the host out of band. An\n" +
-			"artifact that is not signed by that key for this tenant, surface and revision, or\n" +
-			"whose content does not match its hash, exits 7: the file on the host is left as it\n" +
-			"was and nothing is attested.\n\n" +
+			"The pin is the fingerprint `publish` printed (16 hex characters, 64 bits), handed to\n" +
+			"the host out of band. Prefer the whole SHA-256 of the signing public key (64 hex\n" +
+			"characters): both forms are accepted. An artifact that is not signed by that key for\n" +
+			"this tenant, surface and revision, whose content does not match its hash, or that\n" +
+			"carries an inline credential (the file is world-readable), exits 7: the file on the\n" +
+			"host is left as it was and nothing is attested.\n\n" +
+			"The host keeps the highest revision it applied per tenant and surface in a record\n" +
+			"beside --out (.<name>.olivares-revision, written by whoever runs pull). A signed\n" +
+			"artifact of a lower revision, such as one replayed by the plane, exits 7 before\n" +
+			"anything is written; going back on purpose takes --revision N --allow-rollback.\n\n" +
 			"Run it as the user that owns --out (root for /etc/...). Placement per tool:\n" +
 			"  managed-settings          /etc/claude-code/managed-settings.json\n" +
 			"  codex-requirements        /etc/codex/requirements.toml\n" +
@@ -168,6 +243,9 @@ func newClaudePolicyPullCmd(flags *authClientFlags) *cobra.Command {
 			}
 			if revision < 0 {
 				return exitcode.New(exitcode.Usage, fmt.Errorf("--revision must be positive, got %d", revision))
+			}
+			if rollback && revision == 0 {
+				return exitcode.New(exitcode.Usage, fmt.Errorf("--allow-rollback needs the older revision named with --revision"))
 			}
 			opts, err := flags.resolutionOptions(cmd)
 			if err != nil {
@@ -195,26 +273,31 @@ func newClaudePolicyPullCmd(flags *authClientFlags) *cobra.Command {
 			if err := verifyPolicyArtifact(artifact, surface, revision, resolved.Tenant, pin); err != nil {
 				return exitcode.New(exitcode.Degraded, fmt.Errorf("NOT APPLIED: %w; %s is unchanged", err, out))
 			}
-			if err := writeFileAtomic(out, []byte(artifact.Content)); err != nil {
-				return fmt.Errorf("write %s: %w", out, err)
-			}
-			onDisk, err := os.ReadFile(out) //nolint:gosec // the path the operator named
+			onDisk, err := applyPulledArtifact(out, resolved.Tenant+"|"+surface, artifact, rollback)
 			if err != nil {
-				return fmt.Errorf("read back %s: %w", out, err)
+				return err
 			}
-			if sum := sha256.Sum256(onDisk); hex.EncodeToString(sum[:]) != artifact.ArtifactSHA256 {
-				return exitcode.New(exitcode.Degraded, fmt.Errorf(
-					"NOT ATTESTED: %s does not hash to the artifact after the write (the disk changed it)", out))
-			}
+			// What the check-in echoes is what the disk holds. When that is not the artifact, the
+			// plane is told so (it records the drift) before this exits 7.
+			onDiskSum := sha256.Sum256(onDisk)
+			onDiskSHA := hex.EncodeToString(onDiskSum[:])
 			attested, err := agentExecCall{
 				flags: flags, module: claudePolicyModule,
 				method: http.MethodPost, path: "/" + agentExecPathID(surface) + "/checkin",
 				body: map[string]any{
 					"scope": scope, "revision": artifact.Revision,
-					"artifact_sha256": artifact.ArtifactSHA256, "key_fingerprint": artifact.KeyFingerprint,
+					"artifact_sha256": onDiskSHA, "key_fingerprint": artifact.KeyFingerprint,
 					"observed_content": string(onDisk),
 				},
 			}.do(cmd)
+			if onDiskSHA != artifact.ArtifactSHA256 {
+				told := "the plane was told what the disk holds"
+				if err != nil {
+					told = fmt.Sprintf("the plane could not be told: %v", err)
+				}
+				return exitcode.New(exitcode.Degraded, fmt.Errorf(
+					"NOT ATTESTED: %s does not hash to the artifact after the write (the disk changed it); %s", out, told))
+			}
 			if err != nil {
 				return fmt.Errorf("revision %d was written to %s but the check-in failed: %w", artifact.Revision, out, err)
 			}
@@ -243,8 +326,9 @@ func newClaudePolicyPullCmd(flags *authClientFlags) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&out, "out", "", "the file to write (required)")
 	cmd.Flags().StringVar(&scope, "scope", "", "the host id / distribution name this workstation reports as (required)")
-	cmd.Flags().StringVar(&pin, "pin-key-fingerprint", "", "the signing key fingerprint 'publish' printed, pinned out of band (required)")
-	cmd.Flags().Int64Var(&revision, "revision", 0, "a specific revision (0 uses the newest); one older than the plane's latest is written and then exits 7, because the host now drifts from the latest")
+	cmd.Flags().StringVar(&pin, "pin-key-fingerprint", "", "the signing key fingerprint 'publish' printed (16 hex) or the full SHA-256 of the public key (64 hex), pinned out of band (required)")
+	cmd.Flags().Int64Var(&revision, "revision", 0, "a specific revision (0 uses the newest); one older than the plane's latest is written and then exits 7, because the host now drifts from the latest; one older than this host already applied also needs --allow-rollback")
+	cmd.Flags().BoolVar(&rollback, "allow-rollback", false, "apply the --revision even though this host already applied a higher one")
 	for _, name := range []string{"out", "scope", "pin-key-fingerprint"} {
 		_ = cmd.MarkFlagRequired(name)
 	}

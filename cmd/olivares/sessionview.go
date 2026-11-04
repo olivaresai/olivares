@@ -40,6 +40,13 @@ type sessionView struct {
 	// (an API error arrives as both) is not printed twice.
 	lastText  string
 	lastReply string
+	// interrupted: Claude Code confirmed the engine's interrupt of this turn, so its
+	// result ends an interrupted turn, not a failed one; refused says the provider
+	// refused the credential, which the engine also interrupts and which stays a failure.
+	interrupted, refused bool
+	// costSoFar is the last `total_cost_usd` Claude Code reported: the figure is the
+	// whole process's, so a turn costs what it added.
+	costSoFar float64
 	// failed is set when the last turn ended in an error; signedOut when the tool
 	// said it is not signed in.
 	failed, signedOut bool
@@ -47,6 +54,9 @@ type sessionView struct {
 	// readyShown: Claude repeats its init frame at every turn, so the ready line
 	// is shown once (and never by send, whose start line already said it).
 	readyShown bool
+	// showsPrompts: follow reads a conversation it did not type, so the person's own
+	// messages, which Claude Code replays on stdout (--replay-user-messages), are shown.
+	showsPrompts bool
 	// tools are the tool calls already on screen, so their progress stays quiet.
 	tools map[string]bool
 	// acpText gathers an ACP message's chunks (acpKind, acpMessage) until it ends.
@@ -54,6 +64,8 @@ type sessionView struct {
 	acpKind, acpMessage string
 	// retries are the API retry causes already on screen, so a cause is said once.
 	retries map[string]bool
+	// lastStatus is the system status of the line just shown, so a repeat of it is said once.
+	lastStatus string
 }
 
 func newSessionView(w io.Writer) *sessionView {
@@ -62,7 +74,10 @@ func newSessionView(w io.Writer) *sessionView {
 
 // say writes one line of untrusted session text: control sequences are removed
 // first (termSafe), then this CLI's own colour is applied.
-func (v *sessionView) say(s string, role termrender.Role) { v.r.Line(v.r.Paint(termSafe(s), role)) }
+func (v *sessionView) say(s string, role termrender.Role) {
+	v.r.Line(v.r.Paint(termSafe(s), role))
+	v.lastStatus = ""
+}
 
 func (v *sessionView) quiet(s string) { v.say(s, termrender.RoleMuted) }
 
@@ -86,6 +101,7 @@ func (v *sessionView) render(line string) bool {
 	case "assistant":
 		v.assistant(frame)
 	case "user":
+		v.prompt(frame)
 		v.toolErrors(frame)
 	case "result":
 		v.result(frame)
@@ -95,8 +111,12 @@ func (v *sessionView) render(line string) bool {
 	case "tool_progress":
 		v.toolProgress(frame)
 	case "control_response":
-		// The answer to a control request the engine sent (an interrupt); the turn's
-		// own frames say what happened.
+		// The answer to a control request the engine sent; the turn's own frames say
+		// what happened. A confirmed interrupt makes its result an interrupted turn.
+		if resp, _ := frame["response"].(map[string]any); str(resp, "subtype") == "success" &&
+			strings.HasPrefix(str(resp, "request_id"), claudeInterruptRequest) {
+			v.interrupted = true
+		}
 	case "rate_limit_event":
 		if info, _ := frame["rate_limit_info"].(map[string]any); str(info, "status") != "allowed" {
 			v.quiet("· rate limit: " + strings.ReplaceAll(str(info, "status"), "_", " "))
@@ -412,6 +432,9 @@ func codexProgress(method string) bool {
 func (v *sessionView) system(frame map[string]any) {
 	switch sub := str(frame, "subtype"); {
 	case sub == "init":
+		// Claude Code repeats init when a turn starts: an interrupt confirmed before it
+		// (on an idle session) is not this turn's.
+		v.interrupted = false
 		if v.readyShown {
 			return
 		}
@@ -423,16 +446,19 @@ func (v *sessionView) system(frame map[string]any) {
 			}
 		}
 		v.quiet(strings.Join(parts, " · "))
-	case strings.HasPrefix(sub, "hook_"), sub == "task_started", sub == "task_progress":
-		// Hook and task bookkeeping: the tool call is already on screen.
+	case strings.HasPrefix(sub, "hook_"), sub == "task_started", sub == "task_progress", sub == "thinking_tokens":
+		// Hook, task and thinking-token bookkeeping: the tool call or the answer says it,
+		// as the console leaves it out (conversation-frames.ts foldQuiet).
 	case sub == "task_notification":
 		if status := str(frame, "status"); status != "" {
 			v.quiet("· task " + strings.ReplaceAll(status, "_", " "))
 		}
 	case sub == "api_retry":
 		v.apiRetry(frame)
-	case sub != "":
+	case sub != "" && sub != v.lastStatus:
+		// A status the view cannot name is said once while it repeats, not once per frame.
 		v.quiet("· " + strings.ReplaceAll(sub, "_", " "))
+		v.lastStatus = sub
 	}
 }
 
@@ -456,6 +482,7 @@ func (v *sessionView) apiRetry(frame map[string]any) {
 		name = "The tool"
 	}
 	if cause == "authentication_failed" || status == 401 || status == 403 {
+		v.refused = true
 		v.say(fmt.Sprintf("✗ %s's provider refused its credential (HTTP %.0f). Replace the API key in AI tools › Providers, "+
 			"or sign it in: olivares tool login %s", name, status, v.driver), termrender.RoleFail)
 		return
@@ -524,6 +551,32 @@ func (v *sessionView) seenTool(id string) {
 
 // toolErrors shows a tool result only when it failed: a successful result is the
 // tool's raw output, which the assistant's next message describes.
+// prompt shows a message the person sent, as the console's transcript does: "› " and its
+// text, "[image]" for each image. Only Claude Code's replay of it counts (isReplay), not
+// a subagent's prompt or a notice the tool feeds itself.
+func (v *sessionView) prompt(frame map[string]any) {
+	if !v.showsPrompts || frame["isReplay"] != true || frame["parent_tool_use_id"] != nil {
+		return
+	}
+	var parts []string
+	for _, block := range contentBlocks(frame["message"]) {
+		switch str(block, "type") {
+		case "text":
+			if text := strings.TrimSpace(str(block, "text")); text != "" && !strings.HasPrefix(text, "<task-notification>") {
+				parts = append(parts, text)
+			}
+		case "image":
+			parts = append(parts, "[image]")
+		}
+	}
+	if images, _ := frame["attachments"].([]any); len(images) > 0 {
+		parts = append(parts, strings.TrimSpace(strings.Repeat("[image] ", len(images))))
+	}
+	if len(parts) > 0 {
+		v.say("› "+strings.Join(parts, " "), termrender.RoleNone)
+	}
+}
+
 func (v *sessionView) toolErrors(frame map[string]any) {
 	for _, block := range contentBlocks(frame["message"]) {
 		if str(block, "type") == "tool_result" && block["is_error"] == true {
@@ -533,19 +586,23 @@ func (v *sessionView) toolErrors(frame map[string]any) {
 }
 
 func (v *sessionView) result(frame map[string]any) {
-	v.limited = strings.HasPrefix(str(frame, "subtype"), "error_max_")
+	interrupted := v.interrupted && !v.refused && !v.signedOut
+	v.limited = interrupted || strings.HasPrefix(str(frame, "subtype"), "error_max_")
 	if text := str(frame, "result"); text != "" {
 		v.lastReply = text
 	}
-	failed := frame["is_error"] == true || strings.HasPrefix(str(frame, "subtype"), "error")
+	failed := !interrupted && (frame["is_error"] == true || strings.HasPrefix(str(frame, "subtype"), "error"))
 	if text := strings.TrimSpace(str(frame, "result")); failed && text != "" && text != v.lastText {
 		v.say(text, termrender.RoleFail)
 	}
 	parts := []string{"turn finished"}
-	if failed {
+	switch {
+	case interrupted:
+		parts = []string{"turn interrupted"}
+	case failed:
 		parts = []string{"turn failed"}
 	}
-	if cost, ok := frame["total_cost_usd"].(float64); ok && cost > 0 {
+	if cost := v.turnCost(frame); cost > 0 {
 		parts = append(parts, fmt.Sprintf("$%.4f", cost))
 	}
 	if ms, ok := frame["duration_ms"].(float64); ok && ms >= 1000 {
@@ -568,7 +625,38 @@ func (v *sessionView) result(frame map[string]any) {
 			v.r.Line("The tool is not signed in on the engine's host: sign it in there, then send again.")
 		}
 	}
-	v.failed, v.signedOut, v.lastText = failed, false, ""
+	v.failed, v.signedOut, v.lastText, v.interrupted, v.refused = failed, false, "", false, false
+}
+
+// claudeInterruptRequest prefixes the request id of the engine's interrupt of a Claude
+// Code turn (modules/sessions/runtime_claude_interrupt.go).
+const claudeInterruptRequest = "olv-interrupt-"
+
+// turnCost is what this turn added to the `total_cost_usd` Claude Code reports for its
+// whole process; a smaller figure is a new process, whose report is the turn's.
+// ponytail: the previous result must be in the replay the engine still holds; when its
+// ring has dropped it, the first footer shows the process's total. Upgrade trigger: the
+// engine puts each turn's own cost on the result frame.
+func (v *sessionView) turnCost(frame map[string]any) float64 {
+	total, ok := frame["total_cost_usd"].(float64)
+	if !ok {
+		return 0
+	}
+	turn := total - v.costSoFar
+	if turn < 0 {
+		turn = total
+	}
+	v.costSoFar = total
+	return turn
+}
+
+// replayed takes in a frame written before this view starts showing (send's replay):
+// a turn's result there is the cost reported so far.
+func (v *sessionView) replayed(line string) {
+	var frame map[string]any
+	if json.Unmarshal([]byte(line), &frame) == nil && str(frame, "type") == "result" {
+		v.turnCost(frame)
+	}
 }
 
 // contentBlocks returns a message's content blocks (a string content is one text).

@@ -14,7 +14,7 @@ import { useQueries } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { PageHeader } from '@/components/ui/page-header'
 import { Button } from '@/components/ui/button'
-import { UrlStateNotice } from '@/features/shared'
+import { useUrlStateNotice } from '@/features/shared'
 import { useAuth } from '@/lib/auth/context'
 import {
   type UrlState,
@@ -51,6 +51,7 @@ export default function ReachView() {
     ['view'],
     decodeReachView,
   )
+  useUrlStateNotice(viewIssues)
   const setMode = (next: ReachMode) =>
     setView({ view: next === 'table' ? 'table' : undefined })
   const canReadApprovals = auth.can(APPROVAL_READ)
@@ -147,7 +148,6 @@ export default function ReachView() {
           </div>
         }
       />
-      <UrlStateNotice issues={viewIssues} />
       {!loading && !graphFailed && (
         <p className="text-caption text-text-2">
           {waitingKnown
@@ -166,7 +166,10 @@ export default function ReachView() {
       {!loading && !graphFailed && !canReadApprovals && (
         <p role="status">{t('waitingHidden')}</p>
       )}
-      {empty && <p role="status">{t('empty')}</p>}
+      {empty && !model.hasOtherReach && <p role="status">{t('empty')}</p>}
+      {!loading && !graphFailed && model.hasOtherReach && (
+        <p role="status">{t('otherReach')}</p>
+      )}
       {!loading && !graphFailed && !empty && (
         <>
           {mode === 'graph' ? (

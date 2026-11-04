@@ -9,10 +9,13 @@
 // E2E_MESSAGES_FIXTURE=1 E2E_SPECS=e2e/session-messages.spec.ts.
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { signInFixture } from './fixture-sign-in'
 
 const demoTenant = process.env.DEMO_TENANT ?? ''
 const runRef = process.env.E2E_CAPTURE_RUN_REF ?? ''
+const folder = process.env.E2E_SESSION_FOLDER ?? ''
 const SENT = 'Look up the readme'
 
 async function prefer(page: Page, theme: 'dark' | 'light') {
@@ -124,6 +127,20 @@ test.describe('the message navigator on a long session', () => {
       // Keyboard: a mark takes focus, previews, and Enter reaches the message.
       await marks.first().focus()
       await expect(page.getByTestId('message-preview')).toBeVisible()
+      // Drawn, not only in the page: an overflow on the rail cut the preview to its own
+      // 16 px (toBeVisible does not see a clip).
+      const clipped = await page
+        .getByTestId('message-preview')
+        .evaluate((el) => {
+          const rail = el.closest('nav')!
+          const style = getComputedStyle(rail)
+          if (style.overflowX === 'visible' && style.overflowY === 'visible')
+            return false
+          const a = el.getBoundingClientRect()
+          const b = rail.getBoundingClientRect()
+          return a.left < b.left || a.right > b.right
+        })
+      expect(clipped, 'the preview is cut by the rail').toBe(false)
       await page.keyboard.press('Enter')
       await expect(
         page.getByRole('status').filter({ hasText: /message \d+/i }),
@@ -152,4 +169,43 @@ test.describe('the message navigator on a long session', () => {
       ).toBe(true)
     })
   }
+
+  // A long message sits in the long conversation's virtual list, which measures every row
+  // it shows. The replies around it and a change of width (the navigation collapsing)
+  // measure them again, and the view must survive it: a fold of such a message crashed it
+  // (React #185, the list measuring without end), so the guard stays for the next fold.
+  test('keeps a long session whole through a long message, its replies and a change of width', async ({
+    page,
+  }) => {
+    await prefer(page, 'light')
+    await openSession(page)
+    await page.setViewportSize({ width: 1280, height: 900 })
+    if (folder) writeFileSync(join(folder, '.fixture-echo-user'), '')
+    const turn = page.getByTestId('launcher-input')
+    const conversation = page.getByTestId('session-conversation')
+    // Last in the file and with words of its own: the tests before it count what they send.
+    const replies = conversation.locator('[data-kind="assistant"]', {
+      hasText: 'Two things matter',
+    })
+    const before = await replies.count()
+    await turn.fill('Check the build log')
+    await turn.press('Enter')
+    await expect(replies).toHaveCount(before + 1, { timeout: 30_000 })
+    await turn.fill(
+      Array.from(
+        { length: 20 },
+        (_, i) => `Brief line ${i + 1}: check the step.`,
+      ).join('\n'),
+    )
+    await turn.press('Enter')
+    await expect(replies).toHaveCount(before + 2, { timeout: 30_000 })
+    // The navigation's fold changes the column's width (Sessions starts folded: the
+    // button then reads Expand).
+    await page
+      .getByRole('button', { name: /^(Collapse|Expand) navigation$/ })
+      .click()
+    await page.waitForTimeout(1000)
+    await expect(page.getByText('This view crashed')).toHaveCount(0)
+    await expect(conversation.getByRole('log')).toBeVisible()
+  })
 })

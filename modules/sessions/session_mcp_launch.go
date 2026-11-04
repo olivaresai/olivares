@@ -77,6 +77,8 @@ func ConfigureSessionMCP(spec *LaunchSpec, driver, dataDir, runRef, endpoint, to
 	}
 	if spec.NetworkPolicy != nil {
 		spec.NetworkPolicy.Controls = append(spec.NetworkPolicy.Controls, endpoint)
+	} else {
+		spec.EngineControls = append(spec.EngineControls, endpoint)
 	}
 	if sessionMCPOverACP(driver) {
 		spec.SessionMCPURL, spec.SessionMCPTokenEnv = endpoint, tokenEnv

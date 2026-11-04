@@ -95,7 +95,11 @@
     "localNameHint": "Optional. Leave it empty to use the provider's name.",
     "advanced": "Advanced: custom endpoint",
     "missingFields": "Enter the missing fields: {{fields}}.",
-    "requiredEndpointHint": "Enter the service endpoint: https, or plain http at a loopback or private-network address."
+    "requiredEndpointHint": "Enter the service endpoint: https, or plain http at a loopback or private-network address.",
+    "worksWith": "Works with {{tools}}",
+    "otherKinds": "Other (custom endpoint)",
+    "keyLink": "Get an API key from {{vendor}}",
+    "docsLink": "{{vendor}} setup guide"
   },
   "rotate": {
     "title": "Rotate this provider's key",

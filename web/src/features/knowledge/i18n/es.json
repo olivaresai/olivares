@@ -20,11 +20,11 @@
     "status": "Estado",
     "agentRef": "Agente",
     "acl": "ACL",
-    "aclHint": "Referencias de permiso (identificadores de grupo / rol / principal) — nunca credenciales.",
+    "aclHint": "Referencias de permiso (grupo, rol, persona o herramienta): nunca credenciales.",
     "aclNone": "Sin ACL",
     "addRef": "Añadir referencia",
     "removeRef": "Quitar",
-    "credentialWarning": "Eso parece el valor de una credencial. Introduce una referencia de permiso (un identificador de grupo / rol / principal), nunca un secreto.",
+    "credentialWarning": "Parece un valor de credencial. Introduce una referencia de permiso (un grupo, rol, persona o herramienta), nunca un secreto.",
     "localHashLabel": "Léxica — no semántica",
     "localHashHint": "Este índice usa un embedder léxico local (hash), NO un modelo vectorial semántico. Las coincidencias son por palabra clave, no por significado.",
     "egressNo": "Sin egreso",
@@ -94,12 +94,12 @@
   "kbEditor": {
     "createTitle": "Nueva base de conocimiento",
     "editTitle": "Editar gobernanza",
-    "createBody": "Declara una base de conocimiento y registra el embedder configurado. solo local prohíbe todo egreso; con modelo requiere un embedder semántico. Queda registrado en el registro de auditoría bajo su identidad.",
+    "createBody": "Declara una base de conocimiento y registra el embedder configurado. «Solo local» no envía nada al exterior; «Con modelo» requiere un embedder semántico. Queda registrado en el registro de auditoría bajo su identidad.",
     "editBody": "Actualiza la gobernanza de «{{name}}». Cambiar la clasificación, la residencia o la ACL cambia qué puede recuperar cada identidad. El modelo de embedding y la dimensión se mantienen como se registraron al crear. Auditado bajo su identidad.",
     "name": "Nombre",
     "classificationHint": "Determina qué identidades pueden recuperar de esta base.",
     "residencyHint": "Fija dónde se pueden procesar los datos de esta base.",
-    "embedPolicyHint": "solo local = índice léxico de egreso cero. con modelo = índice vectorial semántico vía el proveedor gobernado. automática = se elige según el embedder configurado. El backend rechaza una combinación inválida de política/embedder (400).",
+    "embedPolicyHint": "Solo local: índice léxico que nunca sale de esta máquina. Con modelo: índice semántico a través del proveedor gobernado. Automática: se elige según el embedder configurado. Una combinación que no encaja se rechaza.",
     "create": "Crear base de conocimiento",
     "save": "Guardar cambios",
     "created": "Base de conocimiento creada",
@@ -291,14 +291,14 @@
     "maxTokens": "Tokens máx.",
     "strategy": "Estrategia",
     "redaction": "Enmascaramiento obligatorio",
-    "newPolicy": "Guardar política",
+    "newPolicy": "Añadir política",
     "caption": "Políticas de contexto / compactación. Las aplica en el momento de la llamada al modelo — esta vista gobierna solo los datos.",
     "empty": "Sin políticas de contexto",
-    "emptyHint": "Guarda una política para gobernar cómo se compone y compacta el contexto de un ámbito.",
+    "emptyHint": "Añade una política para gobernar cómo se compone y compacta el contexto de un ámbito.",
     "scopeKinds": {
       "agent": "Agente",
       "kb": "Base de conocimiento",
-      "tenant": "Tenant"
+      "tenant": "Organización"
     },
     "strategies": {
       "truncate": "Truncar",
@@ -307,7 +307,7 @@
     }
   },
   "contextEditor": {
-    "title": "Guardar política de contexto",
+    "title": "Política de contexto",
     "body": "Establece la política de contexto para {{scopeKind}}:{{scopeRef}}. Gobierna cómo se compone / compacta el contexto de ese ámbito y si el enmascaramiento es obligatoria. Auditado bajo su identidad.",
     "scopeKind": "Tipo de ámbito",
     "scopeRef": "Referencia del ámbito",
@@ -435,7 +435,7 @@
   "empty": {
     "context": {
       "title": "Aún no se han definido políticas de contexto",
-      "description": "Guarda una política para gobernar el tamaño del contexto, la estrategia de compactación y el enmascaramiento de datos sensibles de un agente, una base de conocimiento o un tenant."
+      "description": "Añade una política para gobernar el tamaño del contexto, la estrategia de compactación y el enmascaramiento de datos sensibles de un agente, una base de conocimiento o la organización."
     },
     "dataProduct": {
       "title": "Aún no se han definido productos de datos",
@@ -456,20 +456,20 @@
   },
   "dlp": {
     "enabled": "DLP está activo: una clase etiquetada sin regla exacta cae a la regla «*», y sin regla «*» se DENIEGA.",
-    "inert": "DLP NO está configurado — la puerta está inerte y no se bloquea nada. Esto no es «todo denegado».",
+    "inert": "DLP NO está configurado — no se bloquea nada. Esto no es «todo denegado».",
     "unscannedDenied": "El contenido sin escanear se DENIEGA: no tiene etiqueta, así que su sensibilidad no se puede probar.",
     "unscannedAllowed": "El contenido sin escanear está PERMITIDO por una regla explícita. Puede salir contenido que nadie ha clasificado.",
     "unscannedUndetermined": "No se puede determinar con esta página — la lista de reglas está recortada, así que puede existir más allá una regla que permita contenido sin analizar.",
     "empty": "Sin reglas DLP",
-    "emptyHint": "Sin reglas la puerta no aplica nada. Escribir una regla activa DLP para este tenant.",
+    "emptyHint": "Sin reglas la puerta no aplica nada. Escribir una regla activa DLP para esta organización.",
     "anyScope": "casa cualquier clase ETIQUETADA — NO cubre el contenido sin escanear",
     "newRule": "Nueva regla DLP",
     "newRuleHint": "Una regla ata una clase de contenido a permitir o denegar en el egreso.",
     "class": "Clase",
     "action": "Acción",
     "deleteRule": "Borrar la regla de {{class}}",
-    "willReplace": "⛔ Ya existe una regla para «{{class}}». Guardar la SUSTITUYE: esto es un upsert por clase, no un alta. Cambiar un deny por un allow abre el egreso de esa clase de inmediato.",
-    "mayReplace": "La lista de reglas está recortada: puede que ya exista una regla para «{{class}}» más allá de esta página. Guardar la SUSTITUIRÍA, porque guardar hace upsert por clase.",
+    "willReplace": "⛔ Ya existe una regla para «{{class}}». Guardar la SUSTITUYE: no se añade una segunda. Cambiar un deny por un allow abre el egreso de esa clase de inmediato.",
+    "mayReplace": "La lista de reglas está recortada: puede que ya exista una regla para «{{class}}» más allá de esta página. Guardar la SUSTITUIRÍA, porque hay una sola regla por clase.",
     "truncated": "Se han cargado {{n}} reglas DLP; hay más",
     "truncatedHint": "Esta lista muestra la primera página cargada; existen más reglas DLP."
   },

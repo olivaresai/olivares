@@ -9,6 +9,8 @@
 // соответствие требованиям, Хуки, kill switch. This reads the Russian catalog and the
 // English one it is translated from, so a later edit cannot bring a second word back.
 // Other locales join the clean list when their own issue lands.
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 type Tree = { [key: string]: string | Tree }
@@ -103,7 +105,10 @@ function offenders(test: (e: Entry) => boolean): string[] {
 const SEARCH_ALIASES = new Set(['nav:aliases.sessions'])
 /** Code samples and product names that carry a Latin word the Russian rule would catch. */
 const LATIN_OK = new Set([
-  'recordings:policy.namespaces.placeholder',
+  // Recording is Business: the key exists only where a Business build assembles its catalog.
+  ...(existsSync(join(__dirname, '../../features/recordings/i18n/ru.json'))
+    ? ['recordings:policy.namespaces.placeholder']
+    : []),
   'sandbox:scenarios.create.subjectKindPlaceholder',
   'rate-limits:caveats.managedAgents',
   'nav:items.agentArtifacts',
@@ -242,8 +247,6 @@ describe('ru console glossary', () => {
   )
 
   it('names the sidebar words the same way everywhere', () => {
-    expect(ruText('nav:items.estate')).toBe('Парк')
-    expect(ruText('estate:title')).toBe('Парк')
     expect(ruText('models:tabs.estate')).toBe('Парк')
     expect(ruText('nav:shell.rail.session')).toBe('Сессия')
     for (const key of [

@@ -78,7 +78,7 @@ export const surfacesFixture: Surface[] = [
     hipaa: 'yes',
     hipaa_status: 'confirmed',
     zdr: 'AWS-governed',
-    residency: 'AWS region; HIPAA/FedRAMP/IL4-5 eligible (ANT2-17)',
+    residency: 'AWS region; HIPAA/FedRAMP/IL4-5 eligible',
     deprecated: false,
     as_of: SURFACES_AS_OF,
     notes:
@@ -113,7 +113,7 @@ export const surfacesFixture: Surface[] = [
     deprecated: false,
     as_of: SURFACES_AS_OF,
     notes:
-      'Anthropic-operated, so the full Admin/Compliance/Models APIs apply (unlike Bedrock). HIPAA explicitly NOT supported (ANT2-01). IAM grants 65 actions with documented over-read in Get*.',
+      'Anthropic-operated, so the full Admin/Compliance/Models APIs apply (unlike Bedrock). HIPAA explicitly NOT supported. IAM grants 65 actions with documented over-read in Get*.',
   },
   {
     gateway: 'direct',
@@ -143,7 +143,7 @@ export const surfacesFixture: Surface[] = [
     deprecated: false,
     as_of: SURFACES_AS_OF,
     notes:
-      'The only surface exposing the full API set (Admin/Compliance/Models/Batches) and the Models-API source-of-truth (ANT2-16).',
+      'The only surface exposing the full API set (Admin/Compliance/Models/Batches) and the Models-API source-of-truth.',
   },
   {
     gateway: 'foundry',
@@ -172,7 +172,7 @@ export const surfacesFixture: Surface[] = [
     deprecated: false,
     as_of: SURFACES_AS_OF,
     notes:
-      'NO Admin/Compliance/Models/Batches API (ANT2-01) — Anthropic-side governance ingest is unavailable here; model access is by deployment-name indirection, not model id. MCP connector IS available (mirrors MCPConnectorAvailability). ZDR supported.',
+      'NO Admin/Compliance/Models/Batches API — Anthropic-side governance ingest is unavailable here; model access is by deployment-name indirection, not model id. MCP connector IS available (mirrors MCPConnectorAvailability). ZDR supported.',
   },
   {
     gateway: 'vertex',
@@ -200,7 +200,7 @@ export const surfacesFixture: Surface[] = [
     deprecated: false,
     as_of: SURFACES_AS_OF,
     notes:
-      'Lifecycle dates differ from first-party (ANT2-03): e.g. Sonnet 4 retires 2026-09-14 on Vertex vs 2026-06-15 first-party. No Anthropic Admin/Models API.',
+      'Lifecycle dates differ from first-party: e.g. Sonnet 4 retires 2026-09-14 on Vertex vs 2026-06-15 first-party. No Anthropic Admin/Models API.',
   },
 ]
 

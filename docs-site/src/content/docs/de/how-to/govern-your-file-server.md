@@ -63,6 +63,10 @@ Adversariale Tests belegen die Ablehnung von Symlink-Escapes und Traversals.
 }
 ```
 
+### Über die Konsole
+
+**Konsole → Connectors → Hinzufügen** bietet denselben Connector als `fscontent` an: Namen vergeben und `root` setzen; **Testen** listet die ersten zehn Dateien mit der ACL, mit der jede gespeichert würde. Wählen Sie eine **Wissensbasis**, und die Engine synchronisiert die Quelle beim Speichern und danach in jedem Abfrageintervall dorthin, ohne Neustart. Der **Löschschutz** (`max_delete_percent`, in der Konsole standardmäßig 20 %) stoppt eine Synchronisierung, die einen größeren Anteil der Dokumente der Quelle löschen würde: Sie löscht keines und nennt den Grund. **Exportieren** speichert die Definition ohne Zugangsdaten; **Importieren** auf einem anderen Server legt sie an, markiert als *Zugangsdaten fehlen*, bis sie dort gesetzt werden. Der Abschnitt `documents` der Datei wird einmal in dasselbe Verzeichnis übernommen, beim ersten Start, der dort keine Dokumentquelle findet; danach ist das Verzeichnis maßgeblich.
+
 Jede Datei wird zu einem Dokument: Der Body ist der Dateiinhalt, die DocID ihr
 Root-relativer Pfad, und die Herkunftsattribute enthalten `owner`, `group`,
 `mode`, `size`, `world_readable` und `path`.

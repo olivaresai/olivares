@@ -19,15 +19,15 @@ Open the printed address. The first installation uses a self-signed certificate;
 check that you are opening your own server before accepting the browser warning.
 Enter the setup token, your email and a password to create the first
 administrator. Keep the token and password private. The console signs you in
-and opens the setup wizard.
+and opens Sessions, with the box for your first message on the screen.
 
 The container runs tools on the server. A tool signed in on your laptop is a
 different installation; its login is not copied into the container.
 
 ## 2. Choose a tool and its login
 
-Use the wizard or open **AI tools** (`/agent-tools`). Each tool shows whether it
-is installed and signed in. If it is missing, review and approve its installation.
+Use the cards on Sessions or open **AI tools** (`/agent-tools`). Each tool shows
+whether it is installed and signed in. If it is missing, review and approve its installation.
 Use the tool's sign-in control and complete its own login flow. For Claude Code
 or Codex, approve the sign-in with your Claude or ChatGPT account.
 
@@ -55,7 +55,7 @@ no saved default. Claude Code can use its native default model.
 
 1. Open **Sessions** (`/sessions`) and choose **New session**.
 2. Choose a ready tool. The form shows a folder and fills it for you. Leave it
-   alone for a session in its own folder, or choose **Change folder** and enter
+   alone for a session in its own folder, or choose **Folder → Another folder…** and enter
    `/project` to use the host folder mounted by the README installation.
 3. Leave **First message** empty and press **Start**. You can type your message
    in the conversation after it opens. A profile and home paths are filled by
@@ -72,7 +72,7 @@ instruction in **Tools**, then return to the session.
 
 ## 4. Approve an action
 
-To try an approval, choose **More options → Supervised** when
+To try an approval, choose **What the agent may do → Supervised** when
 starting the session. Ask the tool to run a harmless command in the project.
 When it requests permission, open **Rules**. The request waiting for you is
 marked in orange and open beside the queue, with the command, what it reaches

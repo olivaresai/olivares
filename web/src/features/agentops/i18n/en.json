@@ -73,11 +73,11 @@
     "bypassPermissions": "bypassPermissions"
   },
   "effort": {
-    "low": "low",
-    "medium": "medium",
-    "high": "high",
-    "xhigh": "xhigh",
-    "max": "max"
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "xhigh": "Extra high",
+    "max": "Max"
   },
   "summary": {
     "total": "Total",
@@ -144,7 +144,7 @@
     "effortDefault": "Model default",
     "model": "Model",
     "workspace": "Folder",
-    "workspaceNone": "Temporary folder for this session",
+    "workspaceNone": "Default (My files)",
     "worktree": "Work in a new git worktree",
     "worktreeHint": "Starts a new branch in a worktree of its own, so sessions on one repository don't share files. The folder must be the repository's top folder.",
     "worktreeFrom": "Starts at",
@@ -208,6 +208,7 @@
     "use": "Use “{{model}}”",
     "defaultNamed": "Default ({{model}})",
     "defaultUnnamed": "{{tool}} default",
+    "toolDefault": "Default (recommended)",
     "effortDefaultNamed": "Model default ({{effort}})",
     "effortNeedsModel": "Choose a model first: an effort is a level of a model."
   },
@@ -332,6 +333,8 @@
     "title": "Workspaces",
     "subtitle": "Host directories a session works in — mounted, jailed and DLP-classified.",
     "register": "Register workspace",
+    "personalFolders": "Give each person a personal folder (My files)",
+    "personalFoldersSaved": "Personal folders setting saved.",
     "cols": {
       "name": "Workspace",
       "rootPath": "Root path",
@@ -405,6 +408,21 @@
     }
   },
   "browser": {
+    "notes": {
+      "title": "Notes",
+      "add": "Add a note",
+      "select": "Select a passage of the file first, then add a note.",
+      "note": "Note",
+      "keep": "Add",
+      "cancel": "Cancel",
+      "sendTo": "Send notes to",
+      "send": "Send",
+      "sent": "Notes sent to the session.",
+      "failed": "The notes could not be sent. Try again in a moment.",
+      "noSession": "No live session in this workspace to send them to.",
+      "count_one": "{{count}} note",
+      "count_other": "{{count}} notes"
+    },
     "title": "Files",
     "root": "root",
     "upDir": "Up",
@@ -447,7 +465,20 @@
     "deletedFile": "Deleted",
     "sizeLabel": "Size",
     "modifiedLabel": "Modified",
-    "create": "Create"
+    "create": "Create",
+    "upload": "Upload",
+    "uploadLimit": "Up to {{size}} per file",
+    "uploadReadOnly": "This folder is read-only, so files cannot be added.",
+    "uploadNoAccess": "You do not have write access to this folder.",
+    "uploaded": "Uploaded: {{n}}",
+    "uploadTooLarge": "{{name}} is over the {{size}} limit and was not uploaded.",
+    "uploadExists": "{{name}} already exists and was not replaced.",
+    "uploadFailed": "Upload failed",
+    "downloadSelected": "Download selected ({{n}})",
+    "downloadFolder": "Download folder",
+    "downloadFailed": "Download failed",
+    "labeled": "DLP labels: {{classes}}",
+    "select": "Select {{name}}"
   },
   "empty": {
     "title": "No Claude Code sessions",
@@ -1042,6 +1073,7 @@
   "usage": {
     "fiveHour": "5-hour",
     "week": "Weekly",
+    "weekModel": "{{model}} only",
     "percent": "{{window}} {{percent}}%",
     "unknown": "Usage unknown",
     "limit": {

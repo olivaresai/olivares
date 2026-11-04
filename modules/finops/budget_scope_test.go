@@ -142,3 +142,67 @@ func TestBudgetDepartmentAdmission(t *testing.T) {
 		t.Errorf("tenant create = %d %s; department create = %d", tenantCreate.code, tenantCreate.raw, create.code)
 	}
 }
+
+// A directory places a person in the department of their OU, which confines their
+// membership to it. Budgets are tenant-wide policies the store refuses a confined
+// caller, so the department's administrator is admitted by the route at the
+// department and lists that department's budgets and no other: the sibling's, the
+// model-dimension budget that carries the same key, and the global one stay out.
+func TestBudgetListForAMemberConfinedToItsDepartment(t *testing.T) {
+	gov := governance.New()
+	h := newHarness(t, finops.New(), gov)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "budget-confined")
+	ctx := context.Background()
+	var department, sales model.Workspace
+	var own model.Policy
+	if err := h.st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		for _, slug := range []string{"engineering", "sales"} {
+			ws, err := sc.Workspaces().Create(ctx, model.Workspace{Name: slug, Slug: slug, Status: model.StatusActive})
+			if err != nil {
+				return err
+			}
+			p, err := sc.Policies().Create(ctx, model.Policy{Name: slug, Kind: "budget", Enabled: true, Spec: map[string]any{"dimension": "workspace", "key": slug, "limit_micro_usd": int64(1000)}})
+			if err != nil {
+				return err
+			}
+			if slug == "engineering" {
+				department, own = ws, p
+			} else {
+				sales = ws
+			}
+		}
+		_, err := sc.Policies().Create(ctx, model.Policy{Name: "model", Kind: "budget", Enabled: true, Spec: map[string]any{"dimension": "model", "key": "engineering", "limit_micro_usd": int64(1000)}})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	created := h.do("POST", "/v1/users", admin, map[string]any{"email": "bob@budget.io", "password": "memberpass1", "tenant": tenant.String(), "role": auth.RoleViewer, "workspace_id": department.ID.String()}, nil)
+	if created.code != http.StatusCreated {
+		t.Fatalf("create confined member = %d %s", created.code, created.raw)
+	}
+	login := h.do("POST", "/v1/auth/login", "", map[string]any{"email": "bob@budget.io", "password": "memberpass1"}, nil)
+	if login.code != http.StatusOK {
+		t.Fatalf("confined member login = %d %s", login.code, login.raw)
+	}
+	member := login.body["token"].(string)
+	testsupport.SeedCedar(t, h.st, tenant, `
+ permit(principal in Role::"viewer", action, resource) when { resource in Workspace::"engineering" };
+ forbid(principal in Role::"viewer", action, resource) when { action == Action::"finops:budget:read" || action == Action::"finops:budget:write" } unless { resource in Workspace::"engineering" };
+ `, gov)
+	hdr := tenantHdr(tenant)
+	listed := h.do("GET", "/v1/m/finops/budgets?workspace_id="+department.ID.String(), member, nil, hdr)
+	if listed.code != http.StatusOK {
+		t.Fatalf("confined department list = %d %s, want 200", listed.code, listed.raw)
+	}
+	items := listed.body["items"].([]any)
+	if len(items) != 1 || items[0].(map[string]any)["id"] != own.ID.String() {
+		t.Errorf("confined department list = %s, want only the department's own budget", listed.raw)
+	}
+	if r := h.do("GET", "/v1/m/finops/budgets?workspace_id="+sales.ID.String(), member, nil, hdr); r.code != http.StatusForbidden {
+		t.Errorf("confined sibling list = %d %s, want 403", r.code, r.raw)
+	}
+	if r := h.do("GET", "/v1/m/finops/budgets", member, nil, hdr); r.code != http.StatusForbidden {
+		t.Errorf("confined tenant-wide list = %d %s, want 403", r.code, r.raw)
+	}
+}

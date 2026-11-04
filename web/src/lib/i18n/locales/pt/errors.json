@@ -1,0 +1,79 @@
+{
+  "notFound": {
+    "title": "Página não encontrada",
+    "description": "Esta página não existe ou foi movida."
+  },
+  "businessOnly": {
+    "title": "Parte do Business",
+    "description": "Esta página faz parte do Olivares AI Business. Esta edição não a inclui.",
+    "link": "Sobre o Business"
+  },
+  "forbidden": {
+    "title": "Não autorizado",
+    "description": "Não tem permissão para ver isto. Peça acesso a um administrador.",
+    "accessTo": "Não tem acesso a {{subject}}.",
+    "accessToThis": "Não tem acesso a isto.",
+    "nextStep": "As suas funções ou uma política de grupo não o permitem. Um proprietário ou administrador desta organização pode concedê-lo.",
+    "deniedByPolicy": "A política «{{policy}}» nega-o. Um proprietário ou administrador desta organização pode alterá-la."
+  },
+  "systemAdminOnly": "Isto é definido para toda a instalação. Peça a um administrador do sistema para o ver ou alterar.",
+  "serverError": {
+    "title": "Algo correu mal",
+    "description": "O Olivares encontrou um erro inesperado. Tente novamente.",
+    "back": "Voltar à visão geral"
+  },
+  "evidenceUnavailable": {
+    "title": "Esta informação não pode ser verificada",
+    "description": "Esta informação não pode ser carregada neste momento. Tente novamente ou contacte um administrador se persistir."
+  },
+  "network": {
+    "title": "Plano de controlo inacessível",
+    "description": "Não foi possível contactar o plano de controlo. Verifique a sua ligação e se o motor está em execução."
+  },
+  "engineRetrying": {
+    "title": "Não é possível contactar o motor",
+    "description": "A tentar novamente de forma automática. Esta página abre assim que o motor responder."
+  },
+  "networkSecure": {
+    "title": "A ligação segura falhou",
+    "description": "O seu navegador não conseguiu abrir uma ligação segura a {{origin}}. Se não confiar no certificado do motor, abra esse endereço num novo separador e confie nele, ou instale a CA do motor (tls.crt.ca no respetivo diretório de dados). Caso contrário, verifique a sua ligação e se o motor está em execução."
+  },
+  "boundary": {
+    "title": "Esta vista falhou",
+    "description": "Ocorreu um erro inesperado ao renderizar a vista. Tentar novamente costuma resolver.",
+    "reload": "Recarregar",
+    "errorId": "ID do erro",
+    "copyErrorId": "Copiar ID do erro",
+    "goToNow": "Ir para Agora"
+  },
+  "generic": "Algo correu mal.",
+  "sessionTemplateUnavailable": "O modelo «Edits and commands» não está disponível, pelo que a sessão não foi iniciada. Escolha outra permissão ou peça a um administrador que restaure o modelo.",
+  "requestId": "ID do pedido",
+  "codes": {
+    "unauthenticated": "A sua sessão já não é válida.",
+    "forbidden": "Não está autorizado a fazer isso.",
+    "not_found": "Não encontrado.",
+    "conflict": "Isso entra em conflito com o estado atual.",
+    "bad_request": "O pedido era inválido.",
+    "weak_password": "Escolha uma palavra-passe mais forte.",
+    "locked_out": "Demasiadas tentativas. Tente novamente dentro de instantes.",
+    "setup_required": "O plano de controlo precisa da configuração do primeiro arranque.",
+    "setup_complete": "A configuração já está concluída.",
+    "setup_token_unreadable": "O motor não consegue ler o ficheiro do seu token de configuração. Execute `olivares first-boot --data-dir <data directory> --new-token` como root ou como a conta do motor para o substituir e depois utilize o novo token; o registo do motor indica o ficheiro e o motivo.",
+    "cross_tenant_admin_pool_not_configured": "Esta base de dados não consegue listar todas as organizações. Execute `olivares db init --superuser-dsn <superuser DSN> --data-dir <data directory> --install-directory-inventory` e reinicie o motor. Ou aprovisione uma função NOSUPERUSER BYPASSRLS com `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (consulte deploy/postgres/README.md) e reinicie o servidor com --admin-dsn a apontar para essa função.",
+    "internal": "Ocorreu um erro interno."
+  },
+  "tenantAdmission": {
+    "title": "Admissão de tenant necessária",
+    "description": "Inicie sessão com uma identidade de diretório admitida no tenant. A autoridade global de arranque não pode operar as comunicações do espaço de trabalho."
+  },
+  "moduleNotEnabled": {
+    "description": "Esta parte do Olivares está desativada aqui, pelo que não tem nada para mostrar.",
+    "named": "{{module}} não está ativado nesta instalação.",
+    "unnamed": "Este módulo não está ativado nesta instalação."
+  },
+  "notInEdition": {
+    "subject": "Esta edição não inclui {{subject}}.",
+    "generic": "Esta edição não inclui isto."
+  }
+}

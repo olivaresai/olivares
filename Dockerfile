@@ -61,7 +61,7 @@ RUN VERSION_LDFLAGS="$(sh scripts/build-ldflags.sh "${VERSION}" "${COMMIT}")" &&
 # ---- final stage: non-root agent runtime ----------------------------------
 # Runtime support only; agent CLIs are installed by Olivares into the data volume.
 # Node 24 is LTS; this official image uses Debian 13 (trixie) and includes npm/npx.
-FROM node:24-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea
+FROM node:24-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446
 # gh comes from GitHub's own signed apt repository: Debian 13's gh 2.46.0 is built with
 # go1.23.4 and carries that toolchain's advisories. apt verifies the repository against the
 # keyring (signing key 7F38BBB59D064DBCB3D84D725612B36462313325), whose content is pinned here.
@@ -93,8 +93,9 @@ RUN apt-get update \
     && rm -rf /tmp/olivares-npm-fixes \
     && npm cache clean --force \
     && rm -rf /var/lib/apt/lists/* /usr/local/include/node \
-    && groupadd --gid 65532 nonroot \
-    && useradd --uid 65532 --gid 65532 --home-dir /var/lib/olivares/home --no-create-home nonroot \
+    && userdel --remove node \
+    && groupadd --gid 65532 olivares \
+    && useradd --uid 65532 --gid 65532 --home-dir /var/lib/olivares/home --no-create-home olivares \
     && install -d -o 65532 -g 65532 -m 0700 /var/lib/olivares /var/lib/olivares/home
 # The apt layer above must carry the Debian security updates of its build day. A cached layer
 # from before DSA-6572-1 (2026-10-20, ca-certificates, trixie 20250419+deb13u1) fails here

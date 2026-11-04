@@ -14,6 +14,8 @@ const authState = vi.hoisted(() => ({
   activeTenant: 't1' as string | null,
   perms: new Set<string>(),
 }))
+import { fakeRouter } from '@/test/fake-router'
+
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     activeTenant: authState.activeTenant,
@@ -42,6 +44,10 @@ vi.mock('./api', async (importOriginal) => {
 import { useModulesStore } from '@/stores/modules'
 import CapabilitiesView from './capabilities-view'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 function wrap(ui: ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>)
@@ -52,7 +58,7 @@ beforeEach(() => {
     fn.mockResolvedValue({ items: [], has_more: false })
 })
 afterEach(() => {
-  window.history.replaceState(null, '', '/')
+  fakeRouter.reset('/')
   useModulesStore.setState({ off: new Set<string>() })
 })
 
@@ -62,7 +68,7 @@ describe('skills in MCP & skills', () => {
       'capabilities:catalog:read',
       'skills:catalog:read',
     ])
-    window.history.replaceState(null, '', '/capabilities?tab=skills')
+    fakeRouter.reset('/capabilities?tab=skills')
     wrap(<CapabilitiesView />)
     expect(await screen.findByText('Skill pack catalog')).toBeInTheDocument()
     expect(
@@ -72,7 +78,7 @@ describe('skills in MCP & skills', () => {
 
   it('a catalog reader without skills read sees only what was found', async () => {
     authState.perms = new Set(['capabilities:catalog:read'])
-    window.history.replaceState(null, '', '/capabilities?tab=skills')
+    fakeRouter.reset('/capabilities?tab=skills')
     wrap(<CapabilitiesView />)
     await screen.findByText('No skills discovered yet')
     expect(screen.queryByText('Skill pack catalog')).not.toBeInTheDocument()
@@ -84,7 +90,7 @@ describe('skills in MCP & skills', () => {
       'skills:catalog:read',
     ])
     useModulesStore.setState({ off: new Set(['skills']) })
-    window.history.replaceState(null, '', '/capabilities?tab=skills')
+    fakeRouter.reset('/capabilities?tab=skills')
     wrap(<CapabilitiesView />)
     await screen.findByText('No skills discovered yet')
     expect(screen.queryByText('Skill pack catalog')).not.toBeInTheDocument()

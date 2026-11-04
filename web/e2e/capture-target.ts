@@ -207,10 +207,27 @@ const UNAVAILABLE_SLOTS = [
 const DATE_TAIL =
   '(?:,?\\s*(?:19|20)\\d{2}\\b)?(?:T\\d{2}:\\d{2}(?::\\d{2}(?:\\.\\d+)?)?(?:Z|[+-]\\d{2}:?\\d{2})?|,?\\s*(?:at\\s*)?\\d{1,2}:\\d{2}(?::\\d{2})?(?:\\s?[AaPp]\\.?[Mm]\\.?)?)?'
 
-export async function ocultarFechas(page: Page): Promise<number> {
+// A clock time on its own, the way the console writes the hour of a read ("Last updated: 3:15:42 PM"). The date
+// that dates the image does not reach it, and it changes on every run, so the same estate would never give the same
+// bytes twice. Only the 12-hour form with AM/PM: a duration ("1:30:00") and a timecode are not the hour of the shot.
+// \s, not a space: ICU writes a narrow no-break space before PM.
+const CLOCK = '\\b\\d{1,2}:\\d{2}(?::\\d{2})?\\s?[AaPp]\\.?[Mm]\\.?(?![A-Za-z])'
+
+// The release number, however it is written (V0.1, v0.1, "Released in 0.1."), is masked the same way when the caller
+// names it. A "$0.1" or "10.1" is not it. The shutter check reads the same pattern.
+const releasePattern = (version: string) =>
+  `(?<![\\w.$])[Vv]?${version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?!\\w|\\.\\d|%)`
+
+export async function ocultarFechas(
+  page: Page,
+  { version }: { version?: string } = {},
+): Promise<number> {
   return page.evaluate(
-    ({ date, caps, tail }) => {
-      const re = new RegExp(`(?:${date})${tail}|(?:${caps})${tail}`, 'g')
+    ({ date, caps, tail, clock, release }) => {
+      const re = new RegExp(
+        `(?:${date})${tail}|(?:${caps})${tail}|${clock}${release ? `|${release}` : ''}`,
+        'g',
+      )
       const skip = new Set([
         'SCRIPT',
         'STYLE',
@@ -272,7 +289,13 @@ export async function ocultarFechas(page: Page): Promise<number> {
       }
       return masked
     },
-    { date: DATE.source, caps: DATE_CAPS.source, tail: DATE_TAIL },
+    {
+      date: DATE.source,
+      caps: DATE_CAPS.source,
+      tail: DATE_TAIL,
+      clock: CLOCK,
+      release: version ? releasePattern(version) : '',
+    },
   )
 }
 
@@ -319,27 +342,42 @@ const textoVisible = (page: Page): Promise<string> =>
  * and a leaked placeholder. Run before `ocultarFechas`: a date inside backticks or a list item would otherwise
  * be masked to nothing and the markdown around it would pass. A view that cannot pass is held in
  * scripts/docs-captures-held.txt.
+ *
+ * A view whose subject is a refusal declares the alert it exists to show (`aviso`). That alert is not an error of the
+ * page, and it must be there: a view that never reached its refusal fails here, not on a reader's screen. Any other
+ * alert still fails.
  */
 export async function exigirPantallaTerminada(
   page: Page,
   id: string,
+  { aviso }: { aviso?: RegExp } = {},
 ): Promise<void> {
-  const alerta = await page
+  const avisos = await page
     .locator('[role="alert"]:visible, [role="status"]:visible')
-    .evaluateAll(
-      (els) =>
-        els
-          .map((el) => (el.textContent ?? '').replace(/\s+/g, ' ').trim())
-          .find((text, i) =>
-            els[i].getAttribute('role') === 'alert'
-              ? text !== ''
-              : /^(?:Not authorized|Something went wrong)/.test(text),
-          ) ?? null,
+    .evaluateAll((els) =>
+      els.map((el) => ({
+        alert: el.getAttribute('role') === 'alert',
+        text: (el.textContent ?? '').replace(/\s+/g, ' ').trim(),
+      })),
     )
+  const esperado = (a: { text: string }) => aviso?.test(a.text) === true
+  const alerta =
+    avisos.find(
+      (a) =>
+        !esperado(a) &&
+        (a.alert
+          ? a.text !== ''
+          : /^(?:Not authorized|Something went wrong)/.test(a.text)),
+    )?.text ?? null
   expect(
     alerta,
     `${id}: the page shows an error (${alerta}); fix its cause or hold the capture`,
   ).toBeNull()
+  if (aviso)
+    expect(
+      avisos.some(esperado),
+      `${id}: the alert this view exists to show (${aviso}) is not on the page; the state its id names was not reached`,
+    ).toBe(true)
   const sinServir = await page.locator(UNAVAILABLE_SLOTS).count()
   expect(
     sinServir,
@@ -350,6 +388,48 @@ export async function exigirPantallaTerminada(
     sinTerminar?.found ?? null,
     `${id}: the page shows ${sinTerminar?.kind} (${sinTerminar?.found}); render it or seed the value`,
   ).toBeNull()
+}
+
+// The characters the page prints that no installed font draws. A capture host without a font for the language names
+// photographs a missing-glyph box in their place. The browser is asked, not fontconfig: each distinct character is
+// drawn on a canvas with the page's own font stack and compared with a code point no font has (U+10FFFD). Where that
+// reference itself draws nothing, a box cannot be told from a blank, and nothing is claimed.
+export async function glifosSinFuente(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const texto = [
+      document.body.innerText,
+      ...Array.from(
+        document.querySelectorAll('input,textarea'),
+        (el) => (el as HTMLInputElement).value,
+      ),
+    ].join('\n')
+    // Beyond Latin: spaces, controls, zero-width and variation selectors draw nothing and are not a missing font.
+    const caracteres = new Set<string>()
+    for (const c of texto) {
+      const cp = c.codePointAt(0) ?? 0
+      if (
+        cp > 0x2ff &&
+        !(cp >= 0xfe00 && cp <= 0xfe0f) &&
+        !/[\p{Z}\p{Cc}\p{Cf}]/u.test(c)
+      )
+        caracteres.add(c)
+    }
+    if (caracteres.size === 0) return []
+    const lienzo = document.createElement('canvas')
+    lienzo.width = lienzo.height = 40
+    const ctx = lienzo.getContext('2d', { willReadFrequently: true })
+    if (!ctx) return []
+    ctx.font = `28px ${getComputedStyle(document.body).fontFamily}`
+    ctx.textBaseline = 'top'
+    const pinta = (c: string) => {
+      ctx.clearRect(0, 0, 40, 40)
+      ctx.fillText(c, 4, 4)
+      return ctx.getImageData(0, 0, 40, 40).data.join(',')
+    }
+    const caja = pinta('\u{10FFFD}')
+    if (caja === pinta(' ')) return []
+    return [...caracteres].filter((c) => pinta(c) === caja)
+  })
 }
 
 /**
@@ -401,6 +481,16 @@ export async function exigirInstanteLimpio(
   expect(
     fecha?.[0] ?? null,
     `${id}: the page shows a date that dates the image (${fecha?.[0]}); the capture must stay valid for later releases`,
+  ).toBeNull()
+  const sinGlifo = await glifosSinFuente(page)
+  expect(
+    sinGlifo.join(' '),
+    `${id}: the page prints characters that no installed font draws; the capture would show missing-glyph boxes. Install a font that covers them (Debian: fonts-noto-cjk) or hold the capture`,
+  ).toBe('')
+  const hora = new RegExp(CLOCK).exec(visible)
+  expect(
+    hora?.[0] ?? null,
+    `${id}: the page shows the clock time of the capture (${hora?.[0]}); hide it before the shot`,
   ).toBeNull()
   const interno =
     HARNESS_NAME.exec(visible.toLowerCase()) ?? DEMO_FOLDER.exec(visible)
@@ -493,9 +583,10 @@ async function exigirEstateCoherente(
     `${id}: the summary sentence is absent or unreadable`,
   ).toBe(true)
   const vivas = Number((open?.[1] ?? '0').replace(/,/g, ''))
-  // A row starts with its state word; a card names its tool first and carries the state in its own cell.
+  // A row starts with its state word; a lane (or a card) carries the state in its own cell.
   const filas = [
     ...(await page.getByTestId('home-recent-row').allInnerTexts()),
+    ...(await page.getByTestId('swimlane-lane-state').allInnerTexts()),
     ...(await page.getByTestId('now-live-card-state').allInnerTexts()),
   ]
   expect(

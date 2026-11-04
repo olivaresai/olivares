@@ -70,7 +70,12 @@ export function ProviderBindDialog({
   ).filter(
     (profile) =>
       profile.state === 'active' &&
-      recordServesDriver(record.kind, record.base_url, profile.driver),
+      recordServesDriver(
+        record.kind,
+        record.base_url,
+        profile.driver,
+        record.service,
+      ),
   )
   const bind = usePrivilegedMutation<void, ProviderProfileDTO>({
     mutationFn: async (_vars, authority) => {
@@ -85,7 +90,12 @@ export function ProviderBindDialog({
       })
       if (
         profile.state !== 'active' ||
-        !recordServesDriver(record.kind, record.base_url, profile.driver)
+        !recordServesDriver(
+          record.kind,
+          record.base_url,
+          profile.driver,
+          record.service,
+        )
       )
         throw Error(t('bind.unavailable'))
       authority.dispatchGuard()

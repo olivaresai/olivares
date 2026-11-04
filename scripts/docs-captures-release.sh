@@ -20,6 +20,9 @@
 # A capture whose visible text shows a path of this host fails the run; pass a TMPDIR outside /workspace and /home
 # when a view needs one. The run boots an engine and a browser: on a shared host start it under that host's job
 # wrapper so that two heavy runs do not overlap.
+# The Settings view prints the language names in their own scripts: the host needs a font that covers Chinese, Japanese
+# and Korean (Debian: fonts-noto-cjk). Without one the run stops on that view, because a capture of missing-glyph boxes
+# is not published.
 # DOCS_CAPTURE_ALLOW_PAID_CAPABILITIES=1 photographs the other views of a Community binary that serves the paid
 # access graph or identity inventory (the harness refuses such a binary otherwise).
 # scripts/docs-captures-held.txt lists the views every run leaves out (id, the open issue that owns the retake, why), so

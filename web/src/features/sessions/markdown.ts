@@ -61,6 +61,20 @@ const indentOf = (line: string) => /^ */.exec(line)![0].length
 const spaced = (line: string) =>
   line.replace(/^\t+/, (tabs) => '    '.repeat(tabs.length))
 
+/** A paragraph's lines as CommonMark reads them: a line that ends in two spaces or a
+ * backslash is a hard break (a newline); any other line end is a space, and the next
+ * line's indentation is not part of the text. */
+function joinLines(lines: readonly string[]): string {
+  let out = lines[0]!
+  for (const line of lines.slice(1)) {
+    const hard = / {2,}$|\\$/.exec(out)
+    out =
+      (hard ? `${out.slice(0, hard.index)}\n` : `${out.trimEnd()} `) +
+      line.trimStart()
+  }
+  return out
+}
+
 /** The line without `n` columns of indentation. A leading tab wider than what is left to
  * drop stays: it belongs to the text, a code line's tab most of all. */
 function dropIndent(line: string, n: number): string {
@@ -459,7 +473,6 @@ function parseBlocks(
   raw: string[],
   depth: number,
   resolveHref: HrefResolver,
-  onBlock?: (block: Block, source: string) => void,
 ): Block[] {
   const lines = raw.map(spaced)
   if (depth > MAX_DEPTH)
@@ -472,11 +485,6 @@ function parseBlocks(
       i++
       continue
     }
-    const start = i
-    const append = (block: Block, end: number) => {
-      blocks.push(block)
-      onBlock?.(block, raw.slice(start, end).join('\n'))
-    }
     const fence = fenceOf(line)
     if (fence) {
       const body: string[] = []
@@ -484,24 +492,21 @@ function parseBlocks(
       while (i < lines.length && !closesFence(lines[i]!, fence[1]!))
         body.push(raw[i++]!)
       i++ // the closing fence; a block still streaming runs to the end
-      append({ kind: 'code', text: body.join('\n') }, i)
+      blocks.push({ kind: 'code', text: body.join('\n') })
       continue
     }
     const heading = HEADING.exec(line)
     if (heading) {
-      append(
-        {
-          kind: 'heading',
-          level: heading[1]!.length,
-          inline: parseInline(headingText(heading[2]!), 0, false, resolveHref),
-        },
-        i + 1,
-      )
+      blocks.push({
+        kind: 'heading',
+        level: heading[1]!.length,
+        inline: parseInline(headingText(heading[2]!), 0, false, resolveHref),
+      })
       i++
       continue
     }
     if (RULE.test(line)) {
-      append({ kind: 'rule' }, i + 1)
+      blocks.push({ kind: 'rule' })
       i++
       continue
     }
@@ -509,18 +514,15 @@ function parseBlocks(
       const inner: string[] = []
       while (i < lines.length && QUOTE.test(lines[i]!))
         inner.push(lines[i++]!.replace(QUOTE, ''))
-      append(
-        {
-          kind: 'quote',
-          blocks: parseBlocks(inner, depth + 1, resolveHref),
-        },
-        i,
-      )
+      blocks.push({
+        kind: 'quote',
+        blocks: parseBlocks(inner, depth + 1, resolveHref),
+      })
       continue
     }
     if (ITEM.test(line)) {
       const list = parseList(raw, lines, i, depth, resolveHref)
-      append(list.block, list.end)
+      blocks.push(list.block)
       i = list.end
       continue
     }
@@ -536,18 +538,16 @@ function parseBlocks(
             parseInline(c, 0, false, resolveHref),
           ),
         )
-      append(
-        {
-          kind: 'table',
-          head: head.map((c) => parseInline(c, 0, false, resolveHref)),
-          rows,
-        },
-        i,
-      )
+      blocks.push({
+        kind: 'table',
+        head: head.map((c) => parseInline(c, 0, false, resolveHref)),
+        rows,
+      })
       continue
     }
-    // The lines stay as they were written (the painter keeps line breaks and indentation),
-    // so a pasted log or an aligned block reads as it was sent.
+    // The lines join as CommonMark joins them: a soft break is a space; a line that ends
+    // in two spaces or a backslash breaks (the painter shows that newline). A log keeps
+    // its lines in a fence.
     const text: string[] = [line]
     i++
     while (
@@ -560,30 +560,20 @@ function parseBlocks(
       )
     )
       text.push(lines[i++]!)
-    append(
-      {
-        kind: 'paragraph',
-        inline: parseInline(text.join('\n'), 0, false, resolveHref),
-      },
-      i,
-    )
+    blocks.push({
+      kind: 'paragraph',
+      inline: parseInline(joinLines(text), 0, false, resolveHref),
+    })
   }
   return blocks
 }
 
-/** The reply as blocks, ready to paint; never produces markup. The optional visitor
- * receives each top-level block's source with normalized line endings. */
+/** The reply as blocks, ready to paint; never produces markup. */
 export function parseMarkdown(
   text: string,
   resolveHref: HrefResolver = safeHref,
-  onBlock?: (block: Block, source: string) => void,
 ): Block[] {
-  return parseBlocks(
-    text.replace(/\r\n?/g, '\n').split('\n'),
-    0,
-    resolveHref,
-    onBlock,
-  )
+  return parseBlocks(text.replace(/\r\n?/g, '\n').split('\n'), 0, resolveHref)
 }
 
 /** A reply as the person reads it, for a copy: no markers, a list item keeps
@@ -635,4 +625,19 @@ export function plainText(blocks: readonly Block[], gap = '\n\n'): string {
     .map(block)
     .filter((text) => text !== '')
     .join(gap)
+}
+
+/** A path with an optional :line, slash-separated names with no spaces (a home path, ~/…,
+ * names no folder the engine knows, so it stays code); a lone name needs
+ * an extension ("README.md"), so a word or a version ("make", "v1.2.3") is not one. */
+const PATH = /^\/?[\w.@+-]+(\/[\w.@+-]+)*\/?(?::(\d+))?$/
+const EXTENSION = /\.[A-Za-z][A-Za-z0-9]{0,7}$/
+
+export function pathRef(text: string): { path: string; line?: number } | null {
+  const match = PATH.exec(text)
+  if (!match) return null
+  const line = match[2] ? Number(match[2]) : undefined
+  const path = line === undefined ? text : text.slice(0, text.lastIndexOf(':'))
+  if (!path.includes('/') && !EXTENSION.test(path)) return null
+  return line === undefined ? { path } : { path, line }
 }

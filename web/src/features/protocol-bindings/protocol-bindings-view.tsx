@@ -4,6 +4,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { useTabParam } from '@/lib/hooks/use-tab-param'
 import { Cable, Inbox, Plus, RefreshCcw } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -53,8 +54,11 @@ const SPEC_STATES: ProtocolBindingSpecState[] = [
 ]
 const VERDICTS: ProtocolObservationVerdict[] = ['CLEAN', 'BROKEN', 'UNKNOWN']
 
+const BINDING_TABS = ['specs', 'bindings'] as const
+
 export function ProtocolBindingsView() {
   const { t } = useTranslation('protocolBindings')
+  const [tab, setTab] = useTabParam(BINDING_TABS)
   const { activeTenant, can } = useAuth()
   const { activeWorkspace, activeWorkspaceName } = useWorkspaceStore()
   const queryClient = useQueryClient()
@@ -193,7 +197,7 @@ export function ProtocolBindingsView() {
               {activeWorkspaceName || activeWorkspace}
             </Badge>
           </div>
-          <Tabs defaultValue="specs">
+          <Tabs value={tab} onValueChange={setTab}>
             <TabsList>
               <TabsTrigger value="specs">{t('tabs.specs')}</TabsTrigger>
               <TabsTrigger value="bindings">{t('tabs.bindings')}</TabsTrigger>

@@ -534,7 +534,8 @@ func newClaudePolicyCheckinCmd(flags *authClientFlags) *cobra.Command {
 			"--tools reads this workstation's AI tools and their native sign-in state (Business\n" +
 			"inventory). Without it the check-in carries no tool list and the held report stays.\n\n" +
 			"TRUST MODEL, stated because it is easy to over-read this verb: the scope is the\n" +
-			"agent's SELF-ASSERTED host identity, and any principal with write rights may\n" +
+			"agent's SELF-ASSERTED host identity, and any principal with write and read rights\n" +
+			"(Business: the answer compares the host's file with the published policy) may\n" +
 			"report any scope. Every check-in therefore records WHO reported it — forgery is\n" +
 			"attributable, never silent.",
 		Example: "  olivares claude-policy checkin managed-settings --scope host-7 --revision 3 --artifact-sha256 abc123 --observed-file observed.json\n" +

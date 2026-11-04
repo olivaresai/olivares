@@ -1,20 +1,13 @@
 {
   "title": "Uso y coste, por cuenta",
   "subtitle": "Los límites oficiales de 5 horas y semanales junto a los tokens y el coste de hoy.",
-  "windows": {
-    "fiveHour": "5 horas",
-    "week": "semanal"
-  },
   "accounts": {
     "heading": "Cuentas",
     "loading": "Leyendo las cuentas de cada herramienta…",
     "error": "No se pudieron leer los límites de las cuentas.",
     "empty": "Ninguna cuenta ha informado aún de sus límites.",
-    "resets": "se renueva {{when}}",
-    "stale": "leído por última vez {{at}}",
     "details": "Detalles",
-    "detailsFor": "Detalles de {{account}}",
-    "adminOnly": "Los límites de las cuentas los ve un administrador del sistema."
+    "detailsFor": "Detalles de {{account}}"
   },
   "today": {
     "heading": "Hoy",

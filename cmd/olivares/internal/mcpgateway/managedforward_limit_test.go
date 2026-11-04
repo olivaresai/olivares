@@ -6,6 +6,9 @@ package mcpgateway
 import (
 	"context"
 	"errors"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
@@ -49,5 +52,19 @@ func TestManagedMCPForwarderDropsTheLeastRecentlyUsedPrincipalAtTheLimit(t *test
 	handshake(t, f, 1)
 	if res, err := use(1); err != nil || res.State != mcpc.DispatchCompleted {
 		t.Fatalf("client 1 after coming back: state=%s err=%v", res.State, err)
+	}
+}
+
+// A response is read to the bound every MCP client of the engine reads to: a 9 MiB tool
+// result, over the gateway's former 8 MiB, is read whole.
+func TestManagedMCPResponseIsReadToTheConnectorBound(t *testing.T) {
+	body := `{"jsonrpc":"2.0","id":7,"result":{"content":[{"type":"text","text":"` + strings.Repeat("x", 9<<20) + `"}]}}`
+	resp := &http.Response{Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(body))}
+	raw, err := readManagedMCPResponse(resp, 7)
+	if err != nil || len(raw) != len(body) {
+		t.Fatalf("a 9 MiB response = %d bytes, err %v; want it whole", len(raw), err)
+	}
+	if mcpForwardMaxResponse != mcpc.MaxHTTPBody {
+		t.Fatalf("the gateway reads %d bytes, the connector %d: one bound", mcpForwardMaxResponse, mcpc.MaxHTTPBody)
 	}
 }

@@ -30,7 +30,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
-
 	olivaresclient "github.com/olivaresai/olivares/clients/go"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/engine/enginetest"
@@ -2094,7 +2093,7 @@ func exerciseCommunicationHTTPAgent(
 ) {
 	t.Helper()
 	sponsorRef := "human:k3-http-owner:" + owner.id.String()
-	setDirectoryUser(t, eng, owner.token, tenant, owner.id, auth.SCIMUserInput{
+	setDirectoryUser(t, eng, owner.token, tenant, owner.id, directoryAttrs{
 		UserName: "owner@k3-http.test", DisplayName: "K3 owner", ExternalID: sponsorRef, Active: true,
 	})
 	// This is directory-source materialization, not a communication fixture: the

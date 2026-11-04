@@ -38,6 +38,7 @@ import {
 import { cn } from '@/lib/utils'
 import {
   effortAfterModel,
+  isToolDefault,
   modelLabel,
   useModelChoices,
   useModelTriggerText,
@@ -47,6 +48,7 @@ import {
 import { groupModels } from './model-catalog'
 import { useModelFavorites } from './model-favorites'
 import { toolName } from './engine-tools'
+import { ToolMark } from './tool-mark'
 import type { ProfileModelDTO } from './types'
 import './i18n'
 
@@ -98,7 +100,13 @@ export function ModelList({
   const { favorites, toggle } = useModelFavorites(driver)
   const [query, setQuery] = useState('')
   const models = choices.catalog?.models ?? []
-  const groups = groupModels(matching(models, query), favorites)
+  const groups = groupModels(
+    matching(
+      models.filter((m) => !isToolDefault(m)),
+      query,
+    ),
+    favorites,
+  )
   const defaultModel =
     models.find((m) => m.id === choices.catalog?.default_model) ??
     models.find((m) => m.is_default)
@@ -183,17 +191,21 @@ export function ModelList({
           <CommandGroup>
             <CommandItem value={DEFAULT_ITEM} onSelect={() => onPick('')}>
               <span className="min-w-0 flex-1 truncate">
-                {defaultModel
-                  ? t('picker.defaultNamed', {
-                      model: modelLabel(defaultModel),
-                    })
-                  : t('picker.defaultUnnamed', { tool: toolName(driver) })}
+                {!defaultModel
+                  ? t('picker.defaultUnnamed', { tool: toolName(driver) })
+                  : isToolDefault(defaultModel)
+                    ? t('picker.toolDefault')
+                    : t('picker.defaultNamed', {
+                        model: modelLabel(defaultModel),
+                      })}
               </span>
               <Check
                 aria-hidden="true"
                 className={cn(
                   'size-4',
-                  value === '' ? 'opacity-100' : 'opacity-0',
+                  value === '' || isToolDefault({ id: value })
+                    ? 'opacity-100'
+                    : 'opacity-0',
                 )}
               />
             </CommandItem>
@@ -341,7 +353,10 @@ export function ModelEffortFields({
                 title={trigger}
                 className="flex h-8 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-ctl-border bg-surface px-2.5 text-left text-body text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background [&_svg]:size-4 [&_svg]:shrink-0"
               >
-                <span className="min-w-0 truncate">{trigger}</span>
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <ToolMark driver={driver} />
+                  <span className="min-w-0 truncate">{trigger}</span>
+                </span>
                 <ChevronsUpDown
                   aria-hidden="true"
                   className="text-muted-foreground"

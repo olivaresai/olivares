@@ -86,9 +86,12 @@ type Module struct {
 	resolveProgram func(driver string) string
 	// loginHome says where a tenant's own login of a tool lives (SetLoginHome);
 	// nil refuses every sign-in and status read.
-	loginHome   LoginHomeFunc
-	signIns     map[model.ID]*SignIn
-	statusReads map[statusSelection]*statusRead
+	loginHome LoginHomeFunc
+	// serverLoginOpen says the engine user's own login of a tool may serve this
+	// organization (SetServerLoginOpen); nil means it never does.
+	serverLoginOpen func(context.Context, model.TenantID) bool
+	signIns         map[model.ID]*SignIn
+	statusReads     map[statusSelection]*statusRead
 	// providerEntries caches each tool instance's snapshot (providers.go); probeSlots
 	// bounds how many instances are probed at once, however many readers ask.
 	providerEntries map[string]*providerEntry
@@ -210,6 +213,8 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	door.HandleSystem("POST", "/ollama/stop", m.handleOllamaStop)
 	door.HandleSystem("POST", "/ollama/pulls", m.handleOllamaPull)
 	door.HandleSystem("GET", "/ollama/pulls/{id}", m.handleOllamaPullGet)
+	door.HandleSystem("DELETE", "/ollama/pulls/{id}", m.handleOllamaPullCancel)
+	door.HandleSystem("DELETE", "/ollama/models", m.handleOllamaModelRemove)
 	door.HandleSystem("GET", "/model-servers", m.handleModelServers)
 	door.HandleSystem("POST", "/model-servers/{kind}/start", m.handleModelServerStart)
 	door.HandleSystem("POST", "/model-servers/{kind}/stop", m.handleModelServerStop)
@@ -257,7 +262,7 @@ func (m *Module) guard(stepUp bool, h api.ModuleHandler) api.ModuleHandler {
 			return
 		}
 		if stepUp && !auth.StepUpSatisfied(r.Context(), mc.Principal) {
-			fail(w, 403, "step_up_required", "Complete the administrative step-up this deployment requires before installing tools.")
+			stepUpFail(w, r, mc.Principal, "Complete the administrative step-up this deployment requires before installing tools.")
 			return
 		}
 		if _, confined := mc.Principal.ConfinedWorkspaceIn(mc.Tenant); confined {
@@ -341,7 +346,7 @@ func (m *Module) detect(w http.ResponseWriter, r *http.Request, mc api.ModuleCon
 	selected := r.URL.Query().Get("probe_path")
 	if selected != "" {
 		if !auth.StepUpSatisfied(r.Context(), mc.Principal) {
-			fail(w, 403, "step_up_required", "Complete the administrative step-up this deployment requires before probing this host executable.")
+			stepUpFail(w, r, mc.Principal, "Complete the administrative step-up this deployment requires before probing this host executable.")
 			return
 		}
 		if m.readOnly {
@@ -631,6 +636,16 @@ func write(w http.ResponseWriter, code int, v any) {
 }
 func fail(w http.ResponseWriter, status int, code, message string) {
 	write(w, status, map[string]any{"error": map[string]string{"code": code, "message": message}})
+}
+
+// stepUpFail refuses a failed administrative step-up: the stable freshness code
+// when the account's rights data is stale, else the ordinary step-up message.
+func stepUpFail(w http.ResponseWriter, r *http.Request, p auth.Principal, message string) {
+	if err := auth.StepUpRefusal(r.Context(), p); errors.Is(err, auth.ErrRightsDataStale) {
+		fail(w, 403, "rights_data_stale", err.Error())
+		return
+	}
+	fail(w, 403, "step_up_required", message)
 }
 func unavailable(w http.ResponseWriter) {
 	fail(w, 503, "unavailable", "Tool operation storage or audit is unavailable. No new installation was started.")

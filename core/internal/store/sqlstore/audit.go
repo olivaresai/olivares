@@ -73,6 +73,10 @@ type auditLog struct {
 	// CALL: withCustodyOrigin sets and restores it around a custodial append.
 	origin     writeOrigin
 	writeGuard func(scopeWriteOp, writeOrigin, model.Kind, model.ID) error
+	// runFacts is set when the store registers the sessions.run columns the
+	// tool and folder filters read (registry.hasAuditRunFacts). Without it those
+	// filters are refused, never answered from nothing.
+	runFacts bool
 }
 
 // relation pins every audit read/write to the engine schema. SQLite resolves
@@ -781,6 +785,14 @@ func (a *auditLog) WalkFiltered(ctx context.Context, fromSeq int64, f store.Audi
 		where = append(where, "occurred_at <= ?")
 		args = append(args, model.NewTimestamp(*f.Until).String())
 	}
+	if f.Tool != "" || f.Folder != "" {
+		clause, runArgs, err := a.runFactsPredicate(f)
+		if err != nil {
+			return err
+		}
+		where = append(where, clause)
+		args = append(args, runArgs...)
+	}
 	q := a.dia.Rebind("SELECT " + columnList(auditColumns) + " FROM " + a.relation(auditTable) +
 		" WHERE " + strings.Join(where, " AND ") + " ORDER BY seq ASC")
 	rows, err := a.tx.QueryContext(ctx, q, args...)
@@ -808,6 +820,73 @@ func (a *auditLog) WalkFiltered(ctx context.Context, fromSeq int64, f store.Audi
 		}
 	}
 	return rows.Err()
+}
+
+// The facts the tool and folder filters read, and the approval entries they
+// follow. The sessions module owns the columns (modules/sessions/runtime_schema.go:
+// provider_driver, workspace_path, approval_ref) and the governance module the
+// approval kind; the run table and kind are the engine's fixed relation
+// (custodial_relation.go).
+const (
+	auditRunToolColumn     = "provider_driver"
+	auditRunFolderColumn   = "workspace_path"
+	auditRunApprovalColumn = "approval_ref"
+	auditApprovalKind      = model.Kind("governance.approval")
+)
+
+// hasAuditRunFacts reports whether the registered sessions.run entity carries
+// the columns the tool and folder filters read. Nothing else is trusted: a
+// differently shaped table of that name must not turn the filter into an SQL error.
+func (r *registry) hasAuditRunFacts() bool {
+	if r == nil {
+		return false
+	}
+	desc, ok := r.lookup(custodyRunKind)
+	if !ok || desc.Table != custodyRunTable {
+		return false
+	}
+	have := map[string]bool{}
+	for _, field := range desc.Fields {
+		have[field.Name] = true
+	}
+	return have[auditRunToolColumn] && have[auditRunFolderColumn] && have[auditRunApprovalColumn]
+}
+
+// runFactsPredicate renders ?tool and ?folder as one predicate over the ledger
+// row: the entry targets a sessions.run row with those facts, or the approval
+// that such a run names. Both are exact matches on the tenant's own runs. A
+// store that does not register the facts refuses, because an empty page would
+// claim there is nothing and an ignored filter would claim everything.
+//
+// ponytail: provider_driver and workspace_path are not indexed, so a filtered
+// request reads the tenant's runs once and probes that set for each ledger row,
+// the same cost class as the unindexed actor and target_id filters; upgrade
+// trigger: a filtered list that is slow on a real tenant, then index the two
+// columns in the sessions schema.
+func (a *auditLog) runFactsPredicate(f store.AuditFilter) (string, []any, error) {
+	if !a.runFacts {
+		return "", nil, store.ErrAuditFilterUnavailable
+	}
+	conds := []string{"tenant_id = ?"}
+	subArgs := []any{a.tenant.String()}
+	if f.Tool != "" {
+		conds = append(conds, auditRunToolColumn+" = ?")
+		subArgs = append(subArgs, f.Tool)
+	}
+	if f.Folder != "" {
+		conds = append(conds, auditRunFolderColumn+" = ?")
+		subArgs = append(subArgs, f.Folder)
+	}
+	from := " FROM " + a.relation(custodyRunTable) + " WHERE " + strings.Join(conds, " AND ")
+	// An entry without a target id stores "" and must never meet a run whose
+	// approval_ref is "": the approval branch needs a real id on both sides.
+	clause := "((target_kind = ? AND target_id IN (SELECT " + model.ColID + from + "))" +
+		" OR (target_kind = ? AND target_id <> '' AND target_id IN (SELECT " + auditRunApprovalColumn + from + ")))"
+	args := []any{string(custodyRunKind)}
+	args = append(args, subArgs...)
+	args = append(args, string(auditApprovalKind))
+	args = append(args, subArgs...)
+	return clause, args, nil
 }
 
 // auditQMatch is the handler's q rule, verbatim: a case-insensitive substring

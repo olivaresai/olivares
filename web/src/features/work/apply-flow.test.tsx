@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ApiError } from '@/lib/api/errors'
+import { ApiError, NetworkError } from '@/lib/api/errors'
 import type { WorkIntent } from './api'
 import type { Plan } from './types'
 import './i18n'
@@ -109,13 +109,48 @@ describe('ApplyFlow keeps plan and apply as two ordered wire requests', () => {
 
     await user.click(
       await screen.findByRole('button', {
-        name: 'Retry with the same key',
+        name: 'Retry',
       }),
     )
 
     await waitFor(() => expect(wire.planWork).toHaveBeenCalledTimes(2))
     expect(wire.applyWork).not.toHaveBeenCalled()
     expect(await screen.findByRole('button', { name: 'Apply' })).toBeEnabled()
+  })
+
+  it('keeps result metadata in closed Details and available after opening it', async () => {
+    const user = userEvent.setup()
+    show()
+    await user.click(await screen.findByRole('button', { name: 'Apply' }))
+    await screen.findByText('Applied')
+    const commandId = screen.getByText('cmd-1')
+    const details = commandId.closest('details')
+    expect(details).not.toBeNull()
+    expect(details).not.toHaveAttribute('open')
+    await user.click(within(details!).getByText('Details'))
+    expect(details).toHaveAttribute('open')
+    expect(commandId).toBeVisible()
+    expect(within(details!).getByText('Audit sequence')).toBeVisible()
+  })
+
+  it('retries a dropped apply with the original key and hash without key instructions', async () => {
+    wire.applyWork.mockRejectedValueOnce(new NetworkError('Failed to fetch'))
+    const user = userEvent.setup()
+    const workIntent = intent()
+    show(workIntent)
+    await user.click(await screen.findByRole('button', { name: 'Apply' }))
+    const retry = await screen.findByRole('button', { name: 'Retry' })
+    for (const text of screen.queryAllByText(
+      new RegExp(`idempotency|${workIntent.key}`, 'i'),
+    ))
+      expect(text).not.toBeVisible()
+    await user.click(retry)
+    await screen.findByText('Applied')
+    expect(wire.applyWork).toHaveBeenCalledTimes(2)
+    for (const args of wire.applyWork.mock.calls) {
+      expect(args).toEqual([workIntent, 'plan-hash-1'])
+    }
+    expect(wire.planWork).toHaveBeenCalledTimes(1)
   })
 
   it('keeps caller-known lease fields instead of making the operator retype them', async () => {

@@ -130,6 +130,10 @@ func (a *Authenticator) AcceptSessionPairing(ctx context.Context, token, ip stri
 			return "", model.AuthSession{}, err
 		}
 	}
+	// A paired device is a new sign-in: the freshness port may refuse it.
+	if err := a.requireFreshSignIn(ctx, admittedUser.ID, ip); err != nil {
+		return "", model.AuthSession{}, err
+	}
 	var result model.AuthSession
 	var bearer string
 	err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {

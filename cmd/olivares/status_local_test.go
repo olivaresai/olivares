@@ -29,6 +29,10 @@ func TestStatusOnTheEnginesHostNeedsNoSignIn(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	dataDir := t.TempDir()
+	// The engine makes its data directory private; a temp directory follows the umask.
+	if err := os.Chmod(dataDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	u, _ := url.Parse(srv.URL)
 	if err := writeConsoleState(dataDir, consoleState{Version: 1, Listen: u.Host}); err != nil {
 		t.Fatal(err)

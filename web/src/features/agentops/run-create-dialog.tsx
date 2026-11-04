@@ -2,7 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useProfileList } from '@/features/agent-tools/use-profiles'
+import { AppLink } from '@/components/ui/app-link'
 import { AccountUsage, AtLimit } from './account-usage'
+import { QueryErrorState } from '@/components/layout/query-error-state'
+import {
+  usePermissionRestriction,
+  permissionNameForMode,
+} from './permission-restriction'
 import { ProviderAccent } from './provider-accent'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
@@ -442,6 +448,7 @@ export function RunCreateDialog({
   // all for exactly that launch (Codex contrast, 2026-08-11).
   const effectiveMode = (previewData?.merged?.permission_mode ??
     permissionMode) as PermissionMode
+  const restriction = usePermissionRestriction(open)
   const isCriticalMode = CRITICAL_PERMISSION_MODES.includes(effectiveMode)
   const isClassifiedRw =
     !!selectedWs &&
@@ -475,6 +482,20 @@ export function RunCreateDialog({
   // the ONLY gate: the button, Enter and the mutation all read this one answer.
   const blocker = ((): { reason: string; action?: ReactNode } | null => {
     if (!canRunWrite) return { reason: t('readiness.noWrite') }
+    if (!restriction.allows(permissionNameForMode(effectiveMode)))
+      return {
+        reason: restriction.reason ?? '',
+        action: restriction.error ? (
+          <QueryErrorState
+            error={restriction.error}
+            retry={restriction.retry}
+          />
+        ) : restriction.retry ? (
+          <Button type="button" variant="link" onClick={restriction.retry}>
+            {t('common:actions.retry')}
+          </Button>
+        ) : undefined,
+      }
     if (!canReadProfiles)
       return { reason: t('create.blocked.profilesForbidden') }
     if (profilesQuery.isError && !profilesQuery.data)
@@ -496,7 +517,19 @@ export function RunCreateDialog({
     if (profiles.length === 0)
       return {
         reason: t('create.blocked.noProfile'),
-        action: <a href="/providers">{t('create.blocked.openProviders')}</a>,
+        action: (
+          <AppLink
+            href="/providers"
+            // This dialog lives in the shell, so the router leaves it open over the
+            // next page: close it on a plain click; a new-tab click keeps it.
+            onClick={(e) => {
+              if (e.button === 0 && !(e.metaKey || e.ctrlKey || e.shiftKey))
+                onOpenChange(false)
+            }}
+          >
+            {t('create.blocked.openProviders')}
+          </AppLink>
+        ),
       }
     if (profileRef === NONE)
       return { reason: t('create.blocked.chooseProfile') }
@@ -882,7 +915,10 @@ export function RunCreateDialog({
                     </Select>
                   </Field>
 
-                  <Field label={t('create.permissionMode')}>
+                  <Field
+                    label={t('create.permissionMode')}
+                    description={restriction.reason}
+                  >
                     <Select
                       value={permissionMode}
                       onValueChange={(v) =>
@@ -894,7 +930,18 @@ export function RunCreateDialog({
                       </SelectTrigger>
                       <SelectContent>
                         {PERMISSION_MODES.map((m) => (
-                          <SelectItem key={m} value={m}>
+                          <SelectItem
+                            key={m}
+                            value={m}
+                            disabled={
+                              !restriction.allows(permissionNameForMode(m))
+                            }
+                            title={
+                              !restriction.allows(permissionNameForMode(m))
+                                ? restriction.reason
+                                : undefined
+                            }
+                          >
                             {t(`permissionMode.${m}`)}
                           </SelectItem>
                         ))}

@@ -33,7 +33,7 @@ func readLocalFile(path string) ([]byte, error) {
 }
 
 // cmd_agent_workspace.go is the operator CLI for the governed workspace plane:
-// `olivares agent workspace {add|ls|rm-workspace|files|stat|get|put|mkdir|mv|rm}`.
+// `olivares agent workspace {add|ls|rm-workspace|files|stat|get|put|archive|mkdir|mv|rm}`.
 // Every subcommand is a THIN HTTP client against /v1/m/sessions/workspaces* — all jail,
 // RBAC, DLP and audit logic lives server-side (the CLI never touches the filesystem).
 
@@ -104,6 +104,7 @@ func newAgentWorkspaceCmd() *cobra.Command {
 		newWorkspaceStatCmd(),
 		newWorkspaceGetCmd(),
 		newWorkspacePutCmd(),
+		newWorkspaceArchiveCmd(),
 		newWorkspaceMkdirCmd(),
 		newWorkspaceMoveCmd(),
 		newWorkspaceRmCmd(),
@@ -363,6 +364,61 @@ func newWorkspacePutCmd() *cobra.Command {
 	}
 	cfg.addFlags(cmd)
 	cmd.Flags().StringVar(&from, "from", "-", "source: a local file path, or '-' for stdin")
+	return cmd
+}
+
+// maxCLIArchive bounds the zip the CLI keeps in memory: the engine's 64 MiB content ceiling
+// plus the zip's own headers.
+const maxCLIArchive = 80 << 20
+
+func newWorkspaceArchiveCmd() *cobra.Command {
+	var (
+		cfg agentClientConfig
+		out string
+	)
+	cmd := &cobra.Command{
+		Annotations:       map[string]string{"changes_data": "read"},
+		Use:               "archive <ref> <path>...",
+		Short:             "Download files and folders as one zip (DLP-governed)",
+		Long:              "archive reads the named files and folders through the governed workspace API as one zip, written to --out or to stdout. Every file is read under the jail, size limit and DLP posture of a single read; one refused file refuses the whole archive.",
+		Example:           "  olivares agent workspace archive ws-123 reports notes.txt --out files.zip",
+		Args:              cobra.MinimumNArgs(2),
+		ValidArgsFunction: completeWorkspaces,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := cfg.resolve(); err != nil {
+				return err
+			}
+			route := "/v1/m/sessions/workspaces/" + url.PathEscape(args[0]) + "/files/archive?" + url.Values{"path": args[1:]}.Encode()
+			req, err := cfg.newRequest(cmd.Context(), http.MethodGet, route, nil)
+			if err != nil {
+				return err
+			}
+			client, err := cfg.transport(cfg.timeout)
+			if err != nil {
+				return err
+			}
+			resp, err := cliDo(client, req)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = resp.Body.Close() }()
+			zipped, err := readCLIHTTPResponse(resp, req, maxCLIArchive, resp.StatusCode == http.StatusOK, httpErr)
+			if err != nil {
+				return err
+			}
+			if labels := resp.Header.Get("X-Olivares-Sensitivity"); labels != "" {
+				// The zip goes to stdout or a file; the labels a single read shows go to stderr.
+				fmt.Fprintf(cmd.ErrOrStderr(), "sensitivity: %s\n", labels)
+			}
+			if out == "" || out == "-" {
+				_, err = cmd.OutOrStdout().Write(zipped)
+				return err
+			}
+			return os.WriteFile(out, zipped, 0o600)
+		},
+	}
+	cfg.addFlags(cmd)
+	cmd.Flags().StringVar(&out, "out", "-", "destination: a local file path, or '-' for stdout")
 	return cmd
 }
 

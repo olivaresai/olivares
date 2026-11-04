@@ -60,7 +60,6 @@
     "caption": "이 설치의 현재 에디션, 라이선스 상태 및 작업입니다.",
     "helpSummary": "라이선스 적용과 이 빌드",
     "helpBody": "라이선스를 교체하면 재시작 없이 이 프로세스에 적용됩니다. 그것은 바이너리 교체나 데이터 업그레이드가 아닙니다: 그 둘은 자체 절차를 가진 별개의 작업입니다. Community에서는 확인된 라이선스를 적용하면 여기에 세부 정보가 표시될 뿐 이 빌드는 바뀌지 않습니다.",
-    "superadminOnly": "슈퍼관리자만 라이선스를 보고 변경할 수 있습니다.",
     "install": "설치 / 업데이트",
     "remove": "라이선스 제거",
     "edition": "에디션",
@@ -200,7 +199,7 @@
     "mode": "로그인 방식",
     "modePassword": "초기 비밀번호 설정",
     "modeInvite": "이메일 초대 보내기",
-    "inviteUnavailable": "이 서버는 초대를 메일로 보낼 수 없으므로(구성 참조의 OLIVARES_INVITE_MAIL_DESTINATION 참고) 초기 비밀번호를 설정하십시오.",
+    "inviteUnavailable": "이 서버는 초대를 메일로 보낼 수 없으므로 초기 비밀번호를 설정하십시오.",
     "password": "초기 비밀번호",
     "passwordHint": "8자 이상입니다. 사용자는 나중에 변경할 수 있습니다.",
     "submit": "온보딩",
@@ -216,7 +215,6 @@
   "sso": {
     "title": "싱글 사인온",
     "caption": "ID 프로바이더(OIDC 또는 SAML)를 연결합니다. 보안 비밀은 저장 시 암호화되며 다시 표시되지 않습니다. SSO 구성은 배포 전체에 적용되는 슈퍼관리자 전용 작업입니다.",
-    "superadminOnly": "SSO는 배포 전체 설정입니다; 슈퍼관리자만 보고 변경할 수 있습니다.",
     "builderUnavailable": "이 빌드는 SSO 구성을 저장할 수 있지만 활성화할 수는 없습니다: 이 엔진에 OIDC/SAML 프로바이더가 없습니다.",
     "statusConfigured": "구성됨",
     "statusNotConfigured": "구성되지 않음",
@@ -285,7 +283,6 @@
   "secrets": {
     "title": "보안 비밀 저장소",
     "caption": "배포 전체의 봉인 저장소에 있는 이름 있는 보안 비밀입니다. 커넥터 구성에서 store:<name>으로 참조하십시오; 값은 연결 시 해석되므로 재시작 없이 재구성할 수 있습니다. 값은 결코 표시되지 않으며 짧은 지문만이 보안 비밀이 설정되거나 변경되었음을 확인합니다.",
-    "superadminOnly": "보안 비밀 저장소는 배포 전체 설정입니다; 슈퍼관리자만 보고 변경할 수 있습니다.",
     "sealerUnavailable": "이 빌드는 보안 비밀을 나열할 수 있지만 봉인기가 설정되지 않아 값을 저장할 수 없습니다. 저장소를 활성화하려면 봉인기 백엔드를 구성하십시오.",
     "create": "새 보안 비밀",
     "colName": "이름",
@@ -345,7 +342,6 @@
   "connectors": {
     "title": "커넥터",
     "caption": "엔진이 수집하는 소스의 커넥터를 추가하고 구성하며, 자격 증명은 저장 시 봉인됩니다. 변경은 재시작 없이 실행 중인 엔진에 적용됩니다. 배포 전체에 적용되며 슈퍼관리자 전용입니다.",
-    "superadminOnly": "커넥터는 배포 전체 설정입니다; 슈퍼관리자만 보고 변경할 수 있습니다.",
     "unavailable": "이 빌드에는 커넥터 온보딩이 포함되지 않습니다; 커넥터는 부트 파일에서 구성합니다.",
     "sourcesUnavailable": "이 빌드는 소스 명부를 제공하지 않습니다; 실행 중인 커넥터를 여기에 나열할 수 없습니다.",
     "catalogForbidden": "커넥터 카탈로그를 볼 권한이 없습니다",
@@ -365,7 +361,8 @@
       "failed": "실패",
       "stopped": "중지됨",
       "disabled": "비활성화됨",
-      "not_wired": "설정되지 않음"
+      "not_wired": "설정되지 않음",
+      "credential_missing": "자격 증명 없음"
     },
     "edit": "편집",
     "delete": "삭제",
@@ -477,7 +474,24 @@
       "unknownHint": "이 커넥터는 엔드포인트를 선언하지 않아 실행 위치가 결정되지 않았습니다. 공급업체 호스팅이라는 뜻이 아닙니다.",
       "vendor_hosted": "공급업체 클라우드",
       "vendor_hostedHint": "프로바이더가 운영하는 API입니다 — 커넥터가 선언한 엔드포인트는 기본적으로 공급업체의 URL입니다."
-    }
+    },
+    "import": "정의 가져오기",
+    "export": "정의 내보내기",
+    "imported": "소스를 가져왔습니다.",
+    "importInvalid": "이 파일은 내보낸 소스 정의가 아닙니다.",
+    "previewTitle": "미리 보기",
+    "previewEmpty": "이 소스에는 문서가 없습니다.",
+    "previewDocument": "문서",
+    "previewAcl": "액세스 (ACL)",
+    "previewSkipped": "건너뜀: 수집할 수 없음",
+    "previewUnreadable": "읽을 수 없음",
+    "previewNoAcl": "ACL 없음: 소스가 공개가 아니면 거부",
+    "scheduleTitle": "일정",
+    "kb": "지식 베이스",
+    "kbHint": "저장할 때 동기화하고 이후 폴링 간격마다 동기화합니다. 지정하지 않으면 명시적인 수집이나 동기화로만 읽습니다.",
+    "kbNone": "없음 (수동 수집)",
+    "maxDelete": "삭제 보호 장치 (%)",
+    "maxDeleteHint": "한 번의 동기화가 소스 문서를 이보다 많이 삭제하게 되면 아무것도 삭제하지 않고 이유를 알립니다. 0이면 꺼집니다."
   },
   "workspaces": {
     "title": "Workspaces",
@@ -500,7 +514,12 @@
     "renamed": "Workspace 이름이 변경되었습니다.",
     "none": "아직 Workspace가 없습니다.",
     "noneHint": "Workspace는 이 조직 안에서 에이전트, 세션 및 부여의 범위를 지정합니다. 시작하려면 하나를 만드십시오.",
-    "ownerOnly": "조직 소유자만 Workspace를 만들 수 있습니다."
+    "ownerOnly": "조직 소유자만 Workspace를 만들 수 있습니다.",
+    "template": "템플릿으로 시작",
+    "templateNone": "템플릿 없음",
+    "templateHint": "부서의 기본 세션 템플릿입니다. 템플릿을 지정하지 않은 실행은 이것으로 시작합니다.",
+    "templateMandatory": "필수: 실행에서 다른 템플릿을 지정할 수 없습니다",
+    "templateNotAssigned": "워크스페이스를 만들었지만 템플릿은 할당되지 않았습니다: {{reason}}"
   },
   "agents": {
     "readOnlyNotice": "에이전트를 보려면 에이전트 읽기 접근이 필요합니다.",
@@ -609,7 +628,9 @@
       "groupScope": "에이전트 그룹: {{ref}}",
       "classLabel": "{{class}}(으)로 제한됨",
       "loadError": "위임 권한을 불러올 수 없습니다. 다시 시도하십시오.",
-      "folderScope": "폴더: {{ref}}"
+      "folderScope": "폴더: {{ref}}",
+      "levelCount": "{{level}}: {{count}}",
+      "exactPermissions": "정확한 권한"
     },
     "grants": {
       "title": "범위 지정 부여",
@@ -748,7 +769,7 @@
     "groupSubjects": {
       "managedBy": "{{provisioner}}이(가) 관리 · 읽기 전용",
       "title": "그룹 주체 및 계층",
-      "caption": "프로비저닝된 사용자 그룹에 역할을 부여하고 그룹 계층을 설계합니다. 자식 그룹의 구성원은 부모의 부여를 상속합니다.",
+      "caption": "프로비저닝된 사용자 그룹에 역할을 부여합니다. 자식 그룹의 구성원은 부모의 부여를 상속합니다.",
       "noGroups": "아직 그룹이 없습니다. 그룹은 ID 프로바이더에서 옵니다.",
       "noGroupsHint": "콘솔은 그룹을 만들지 않습니다. ID 프로바이더에서 그룹을 추가하면 여기에 나타납니다.",
       "colName": "그룹",
@@ -756,16 +777,7 @@
       "colMembers": "구성원",
       "colRole": "매핑된 역할",
       "noParent": "없음(루트)",
-      "setParent": "부모 설정",
-      "clearParent": "부모 제거",
-      "setParentTitle": "그룹 부모 설정",
-      "setParentBody": "{{child}}의 구성원이 {{parent}}의 부여를 상속합니다. 엔진이 다음 요청에서 다시 평가합니다.",
-      "clearParentTitle": "그룹 부모 제거",
-      "clearParentBody": "{{child}}은(는) 더 이상 부모의 부여를 상속하지 않습니다.",
-      "parentSet": "그룹 부모가 업데이트되었습니다.",
-      "selectParent": "부모 그룹 선택…",
       "selectGroup": "그룹 선택…",
-      "cycleError": "부모를 설정할 수 없습니다: 순환이 생성됩니다.",
       "mapRole": "역할 매핑",
       "changeRole": "역할 변경",
       "role": "테넌트 역할",
@@ -968,7 +980,9 @@
       "knowledge": "지식",
       "data": "데이터",
       "profile": "프로바이더 프로필",
-      "tool": "AI 도구"
+      "tool": "AI 도구",
+      "instructions": "부서 지침",
+      "template": "기본 세션 템플릿"
     },
     "sourceRef": "소스 참조",
     "sourceRefHint": "정확한 소스 참조를 사용하십시오. 모든 소스 종류를 위한 단일 카탈로그는 없습니다.",
@@ -1020,7 +1034,9 @@
     "folderSelectedId": "선택된 리소스 id: {{id}}",
     "effects": {
       "allow": "허용",
-      "forbid": "금지"
+      "forbid": "금지",
+      "require": "필수",
+      "decline": "제외"
     },
     "credName": "자격 증명 이름",
     "credentialHint": "선택 사항. 자격 증명 필드가 하나라도 설정되면 이름, 종류 및 로케이터가 필요합니다.",
@@ -1161,7 +1177,7 @@
   },
   "mcpGateway": {
     "title": "MCP 게이트웨이",
-    "caption": "이 테넌트의 업스트림 서버와 세션 도구를 관리합니다. 연결 테스트가 도구를 검색하며 실행에는 명시적 정책이 필요합니다.",
+    "caption": "이 조직의 업스트림 서버와 세션 도구를 관리합니다. 연결 테스트가 도구를 검색하며 실행에는 명시적 정책이 필요합니다.",
     "add": "서버 추가",
     "configure": "구성",
     "test": "연결 테스트",
@@ -1175,17 +1191,17 @@
     "emptyHint": "Streamable HTTP 서버를 추가하고 연결을 테스트한 뒤, 활성화하기 전에 신뢰와 도구 권한을 구성하십시오.",
     "source": {
       "file": "운영자 파일",
-      "store": "테넌트 구성"
+      "store": "조직 설정"
     },
     "fileOwned": "운영자 파일이 구성된 리스너에서 MCP를 관리합니다. 이 보기는 읽기 전용입니다. 저장된 구성은 비활성으로 남으며 아무것도 병합되거나 재정의되지 않습니다.",
-    "storeOwned": "테넌트 구성이 이 설치의 HTTP 리스너에서 MCP를 관리합니다. 구성 파일이 필요하지 않습니다.",
+    "storeOwned": "조직 설정이 이 설치의 HTTP 리스너에서 MCP를 관리합니다. 구성 파일이 필요하지 않습니다.",
     "sessionTitle": "세션 도구",
     "sessionHint": "세션은 서로 메시지를 보내고 할당된 작업을 사용할 수 있습니다. 세션에 새 권한을 주지는 않습니다.",
     "tools": "도구({{count}})",
     "observationHint": "검색은 아무 권한도 부여하지 않습니다. 각 도구를 명시적 범위로 허용하고 파괴적 작업 승인이 필요한지 분류하십시오.",
     "destructive": "파괴적 작업 승인 필요",
     "credentials": "자격 증명 관리",
-    "credentialCaption": "테넌트 MCP 보안 비밀만 해당합니다(mcp/ 이름). 전체 업스트림 Authorization 헤더 값을 여기에 저장하십시오(예: Bearer와 그 토큰). 값은 봉인된 채로 유지되며 결코 반환되지 않습니다.",
+    "credentialCaption": "조직 MCP 보안 비밀만 해당합니다(mcp/ 이름). 전체 업스트림 Authorization 헤더 값을 여기에 저장하십시오(예: Bearer와 그 토큰). 값은 봉인된 채로 유지되며 결코 반환되지 않습니다.",
     "noCredential": "로그인 없음",
     "name": "이름",
     "url": "서버 주소",
@@ -1210,7 +1226,7 @@
     "formHint": "새 서버는 꺼진 상태로 시작합니다. 저장하고, 연결을 테스트하고, 도구를 검토한 뒤 활성화하십시오.",
     "saveDisabled": "저장",
     "removeTitle": "MCP 서버 제거",
-    "removeHint": "이 테넌트의 게이트웨이에서 {{name}}을(를) 제거하시겠습니까? 새 요청은 거부됩니다; 봉인된 자격 증명은 보안 비밀 관리자에 유지됩니다.",
+    "removeHint": "이 조직의 게이트웨이에서 {{name}}을(를) 제거하시겠습니까? 새 요청은 거부됩니다; 봉인된 자격 증명은 보안 비밀 관리자에 유지됩니다.",
     "conflict": "구성이 변경되었습니다. 다시 제출하기 전에 새로 고치고 현재 버전을 검토하십시오.",
     "enableHint": "활성화하려면 성공한 현재 테스트, 일치하는 리소스 및 발급자 신뢰, 관측된 도구에 대한 명시적 범위가 필요합니다.",
     "governance": "적용된 거버넌스",
@@ -1241,8 +1257,8 @@
       "network_confinement": "네트워크 감금"
     },
     "governanceValues": {
-      "tenant_store": "테넌트 저장소",
-      "tenant_sealed_reference": "자체 테넌트 봉인 참조",
+      "tenant_store": "조직 설정",
+      "tenant_sealed_reference": "자체 조직 봉인 참조",
       "control_plane_http_listener": "설치 HTTP 리스너",
       "declared_inventory_and_consent": "선언된 템플릿 및 동의 게이트",
       "not_configured": "구성되지 않음",

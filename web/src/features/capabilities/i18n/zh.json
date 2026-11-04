@@ -19,8 +19,9 @@
     "managed": "已托管",
     "managedRev": "已托管 · rev {{rev}}",
     "discovered": "已发现",
+    "caption": "连接器观察到的服务器，无论 Olivares 是否连接它们。",
     "empty": "未发现 MCP 服务器",
-    "emptyHint": "当清单与自省平面发现服务器后，将在此处显示。",
+    "emptyHint": "当清单与自省发现服务器后，将在此处显示。",
     "truncated": "已加载 {{n}} 台服务器；还有更多"
   },
   "connection": {
@@ -125,7 +126,7 @@
     "endpoint": "端点",
     "endpointHint": "仅为引用 —— 切勿在端点中嵌入凭据。",
     "scope": "范围",
-    "scopeHint": "可选的部署 / 租户范围标签（例如 team-a）。",
+    "scopeHint": "可选的部署 / 组织范围标签（例如 team-a）。",
     "enabled": "已启用",
     "note": "备注",
     "secretRefs": "密钥引用",
@@ -186,7 +187,7 @@
     },
     "server": {
       "title": "尚未发现 MCP 服务器",
-      "description": "连接器观测到 MCP 服务器并将其纳入租户清单后，服务器才会显示。"
+      "description": "连接器观测到 MCP 服务器并将其纳入组织清单后，服务器才会显示。"
     },
     "skill": {
       "title": "尚未发现技能",
@@ -194,7 +195,7 @@
     },
     "tool": {
       "title": "尚未发现 MCP 工具",
-      "description": "工具通过 MCP 自省或活动观测上报至租户清单后，才会显示。"
+      "description": "工具通过 MCP 自省或活动观测上报至组织清单后，才会显示。"
     }
   },
   "truncatedHint": "行数多于此处所示；本页按行 id（创建时分配）取数，因此更靠后的会缺失。某个服务器、工具、技能或配置未列在此处，并不能证明它不存在。"

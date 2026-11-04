@@ -132,7 +132,7 @@ describe('WorkspaceDashboardView', () => {
   it('offers a next action when no workspace is selected', async () => {
     show()
     expect(
-      await screen.findByRole('link', { name: 'Open inventory' }),
+      await screen.findByRole('link', { name: 'Open discovered resources' }),
     ).toHaveAttribute('href', '/inventory')
     expect(screen.getByText(/or go to the tenant-wide inventory/)).toBeVisible()
   })
@@ -146,25 +146,17 @@ describe('WorkspaceDashboardView', () => {
     expect(await screen.findByText('7')).toBeInTheDocument()
   })
 
-  it('shows the contents read only to principals who hold the route tier', async () => {
+  // The engine's record kinds ("Sessions claim", "Sessions work outbox") are operator detail,
+  // read in the Estate view. This screen is for what a person owns: even an admin never sees them.
+  it('does not list the engine record kinds, even to an admin', async () => {
+    granted.add('tenant:admin')
     useWorkspaceStore.getState().setActiveWorkspace('w1')
-    const viewer = show()
+    show()
     expect(await screen.findByText('7')).toBeInTheDocument()
     expect(
       screen.queryByRole('region', { name: 'Workspace contents' }),
     ).not.toBeInTheDocument()
     expect(contentsMock).not.toHaveBeenCalled()
-    viewer.unmount()
-
-    granted.add('tenant:admin')
-    show()
-    expect(
-      await screen.findByRole('row', { name: 'Agent 7' }),
-    ).toBeInTheDocument()
-    expect(contentsMock).toHaveBeenCalledWith(
-      'w1',
-      expect.objectContaining({ tenant: 't1' }),
-    )
   })
 
   /**
@@ -302,7 +294,7 @@ describe('WorkspaceDashboardView', () => {
     useWorkspaceStore.getState().setActiveWorkspace('w1')
     show()
     expect(
-      await screen.findByRole('link', { name: 'Open inventory' }),
+      await screen.findByRole('link', { name: 'Open discovered resources' }),
     ).toHaveAttribute('href', '/inventory')
     expect(
       screen.getAllByRole('link').map((a) => a.getAttribute('href')),

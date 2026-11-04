@@ -20,11 +20,11 @@
     "status": "Status",
     "agentRef": "Agent",
     "acl": "ACL",
-    "aclHint": "Permission references (group / role / principal handles) — never credentials.",
+    "aclHint": "Permission references (group, role, person or tool) — never credentials.",
     "aclNone": "No ACL",
     "addRef": "Add reference",
     "removeRef": "Remove",
-    "credentialWarning": "That looks like a credential value. Enter a permission reference (a group / role / principal handle), never a secret.",
+    "credentialWarning": "That looks like a credential value. Enter a permission reference (a group, role, person or tool), never a secret.",
     "localHashLabel": "Lexical — not semantic",
     "localHashHint": "This index uses a local lexical (hash) embedder, NOT a semantic vector model. Matches are keyword-based, not meaning-based.",
     "egressNo": "No egress",
@@ -94,12 +94,12 @@
   "kbEditor": {
     "createTitle": "New knowledge base",
     "editTitle": "Edit governance",
-    "createBody": "Declares a knowledge base and records the configured embedder. local_only forbids any egress; model_backed requires a semantic embedder. Recorded in the audit ledger under your identity.",
+    "createBody": "Declares a knowledge base and records the configured embedder. “Local only” sends nothing out; “Model-backed” needs a semantic embedder. Recorded in the audit ledger under your identity.",
     "editBody": "Updates governance for “{{name}}”. Changing classification, residency or ACL changes what each identity can retrieve. embed_model and dimension stay as recorded at create. Audited under your identity.",
     "name": "Name",
     "classificationHint": "Drives which identities may retrieve from this KB.",
     "residencyHint": "Pins where this KB’s data may be processed.",
-    "embedPolicyHint": "local_only = zero-egress lexical index. model_backed = semantic vector index via the governed provider. auto = pick by the configured embedder. The backend rejects an invalid policy/embedder combination (400).",
+    "embedPolicyHint": "Local only: a keyword index that never leaves this machine. Model-backed: a meaning-based index built through the governed provider. Auto: picked by the configured embedder. A combination that does not fit is refused.",
     "create": "Create knowledge base",
     "save": "Save changes",
     "created": "Knowledge base created",
@@ -114,7 +114,7 @@
   },
   "ingest": {
     "title": "Ingest content",
-    "body": "Ingests content into “{{name}}”. Secrets / PII are redacted before indexing. On a model_backed KB, chunk text is embedded via the governed provider (egress is recorded in lineage).",
+    "body": "Ingests content into “{{name}}”. Secrets / PII are redacted before indexing. On a “Model-backed” KB, chunk text is embedded via the governed provider (egress is recorded in lineage).",
     "modeConnector": "Registered connector",
     "modeInline": "Inline documents",
     "source": "Connector name",
@@ -260,7 +260,7 @@
   },
   "memoryEditor": {
     "title": "Write memory",
-    "body": "Upserts a memory entry for the given agent under the given key. Content is redacted before storage; a TTL sets an expiry. Audited under your identity.",
+    "body": "Saves a memory entry for the given agent under the given key. Content is redacted before storage; a TTL sets an expiry. Audited under your identity.",
     "agentRef": "Agent reference",
     "key": "Key",
     "content": "Content",
@@ -291,14 +291,14 @@
     "maxTokens": "Max tokens",
     "strategy": "Strategy",
     "redaction": "Redaction required",
-    "newPolicy": "Upsert policy",
+    "newPolicy": "Add policy",
     "caption": "Context / compaction policies. Applies these at model-call time — this view governs the data only.",
     "empty": "No context policies",
-    "emptyHint": "Upsert a policy to govern how a scope’s context is composed and compacted.",
+    "emptyHint": "Add a policy to govern how a scope’s context is composed and compacted.",
     "scopeKinds": {
       "agent": "Agent",
       "kb": "Knowledge base",
-      "tenant": "Tenant"
+      "tenant": "Organization"
     },
     "strategies": {
       "truncate": "Truncate",
@@ -307,7 +307,7 @@
     }
   },
   "contextEditor": {
-    "title": "Upsert context policy",
+    "title": "Context policy",
     "body": "Sets the context policy for {{scopeKind}}:{{scopeRef}}. This governs how that scope’s context is composed / compacted and whether redaction is required. Audited under your identity.",
     "scopeKind": "Scope kind",
     "scopeRef": "Scope reference",
@@ -435,7 +435,7 @@
   "empty": {
     "context": {
       "title": "No context policies set yet",
-      "description": "Upsert a policy to govern context size, compaction strategy, and redaction for an agent, knowledge base, or tenant."
+      "description": "Add a policy to govern context size, compaction strategy and redaction for an agent, a knowledge base or the organization."
     },
     "dataProduct": {
       "title": "No data products defined yet",
@@ -456,20 +456,20 @@
   },
   "dlp": {
     "enabled": "DLP is enabled: a labelled class with no exact rule falls to the \"*\" rule, and with no \"*\" rule it is DENIED.",
-    "inert": "DLP is NOT configured — the gate is inert and nothing is being blocked. This is not \"everything denied\".",
+    "inert": "DLP is NOT configured — nothing is being blocked. This is not \"everything denied\".",
     "unscannedDenied": "Unscanned content is DENIED: it has no label, so its sensitivity cannot be proved.",
     "unscannedAllowed": "Unscanned content is ALLOWED by an explicit rule. Content nobody classified can leave.",
     "unscannedUndetermined": "Cannot be determined from this page — the rule list is truncated, so a rule allowing unscanned content may exist beyond it.",
     "empty": "No DLP rules",
-    "emptyHint": "With no rules the gate does not enforce. Writing one rule enables DLP for this tenant.",
+    "emptyHint": "With no rules the gate does not enforce. Writing one rule enables DLP for this organization.",
     "anyScope": "matches any LABELLED class — it does NOT cover unscanned content",
     "newRule": "New DLP rule",
     "newRuleHint": "A rule binds one content class to allow or deny on egress.",
     "class": "Class",
     "action": "Action",
     "deleteRule": "Delete the rule for {{class}}",
-    "willReplace": "⛔ A rule for \"{{class}}\" already exists. Saving REPLACES it — this is an upsert by class, not an addition. Replacing a deny with an allow opens egress for that class immediately.",
-    "mayReplace": "The rule list is truncated: a rule for \"{{class}}\" may already exist beyond this page. Saving would REPLACE it, because saving upserts by class.",
+    "willReplace": "⛔ A rule for \"{{class}}\" already exists. Saving REPLACES it — it does not add a second one. Replacing a deny with an allow opens egress for that class immediately.",
+    "mayReplace": "The rule list is truncated: a rule for \"{{class}}\" may already exist beyond this page. Saving would REPLACE it, because there is one rule per class.",
     "truncated": "Loaded {{n}} DLP rules; there are more",
     "truncatedHint": "This list shows the first loaded page; more DLP rules exist."
   },

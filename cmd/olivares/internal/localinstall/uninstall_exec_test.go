@@ -89,14 +89,14 @@ func TestUninstallRunAllowsServiceManagers(t *testing.T) {
 	marker := filepath.Join(ports, "args")
 	t.Setenv("PATH", ports)
 	t.Setenv("OLIVARES_TEST_EXEC_ARGS", marker)
-	names := []string{"systemctl", "launchctl", "rc-service", "rc-update", "userdel", "groupdel", "curl"}
+	names := []string{"systemctl", "launchctl", "rc-service", "rc-update", "loginctl", "userdel", "groupdel", "curl"}
 	for _, name := range names {
 		script := []byte("#!/bin/sh\nprintf '%s\\n' \"$0\" \"$@\" >> \"$OLIVARES_TEST_EXEC_ARGS\"\n")
 		if err := os.WriteFile(filepath.Join(ports, name), script, 0700); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for _, name := range names[:6] {
+	for _, name := range names[:7] {
 		if err := run(nil, name, "argument with spaces", "literal;argument"); err != nil {
 			t.Fatalf("allowed %s refused: %v", name, err)
 		}
@@ -106,7 +106,7 @@ func TestUninstallRunAllowsServiceManagers(t *testing.T) {
 		t.Fatal(err)
 	}
 	var want strings.Builder
-	for _, name := range names[:6] {
+	for _, name := range names[:7] {
 		want.WriteString(filepath.Join(ports, name) + "\nargument with spaces\nliteral;argument\n")
 	}
 	if string(before) != want.String() {

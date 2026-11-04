@@ -33,7 +33,7 @@ async function firstBoot(page: Page) {
   await page.locator('#setup-email').fill(EMAIL)
   await page.locator('#setup-password').fill(PASSWORD)
   await page.getByRole('button', { name: /create administrator/i }).click()
-  // Setup either signs the administrator in (the onboarding wizard) or hands over to /login.
+  // Setup either signs the administrator in (the work surface) or hands over to /login.
   await page.waitForURL((url) => !url.pathname.startsWith('/setup'))
   if (new URL(page.url()).pathname.startsWith('/login')) {
     await page.locator('#email').fill(EMAIL)

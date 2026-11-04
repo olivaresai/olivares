@@ -40,9 +40,10 @@ export interface JourneyStep {
 }
 
 export const JOURNEYS = {
-  /** The setup wizard, a key or a local model, then the first session. */
+  /** The work surface setup opens on, a key or a local model, then the first session.
+   * The setup wizard keeps its address but is no step: nothing sends a new person there. */
   firstHour: [
-    { view: 'onboarding' },
+    { view: 'sessions' },
     { view: 'providers' },
     { view: 'sessions' },
   ],

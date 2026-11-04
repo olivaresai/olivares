@@ -132,3 +132,41 @@ func TestOwnedPluginChildEnforcesFilesystemPolicy(t *testing.T) {
 		t.Fatalf("unprivileged engine changed child UID: %+v", got)
 	}
 }
+
+// The mount layer that hides the engine user's user manager from a plugin sits in front of
+// the helper's arguments. The jail must still be recognized as the jail: the loader checks a
+// pinned digest against the plugin's own path only for a wrapped command (go-plugin would
+// hash the helper), and ConfirmLaunch attests Landlock and no_new_privs from it.
+func TestPluginJailWithTheUserBusHiddenIsStillAJail(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("a root engine's plugin runs as another uid, which root's runtime directory refuses; no layer is added")
+	}
+	if coreconfine.Probe().Mode != coreconfine.ModeLandlock {
+		t.Skip(coreconfine.Probe().Reason)
+	}
+	runtimeDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(runtimeDir, "bus"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(self)
+	att, cleanup, err := Apply(cmd, Default("bus-hidden"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	defer CloseSpawnFD(cmd)
+	if coreconfine.UserBusExposed(cmd) {
+		t.Skipf("this host gives the jail no user and mount namespace to hide the bus in: %q", att.Degraded)
+	}
+	if !coreconfine.IsWrapped(cmd) {
+		t.Fatalf("the jail's command %q is not recognized as wrapped once the user bus is hidden", cmd.Args)
+	}
+	if got := ConfirmLaunch(cmd, att); !got.Landlock || !got.NoNewPrivs {
+		t.Fatalf("attestation after launch: %+v; want Landlock and no_new_privs", got)
+	}
+}

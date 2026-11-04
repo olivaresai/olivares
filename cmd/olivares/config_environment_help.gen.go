@@ -533,6 +533,8 @@ const configEnvironmentHelp = "Environment variables (process values override ac
 	"    Listen address of the agent link, as `host:port`: the mutual-TLS endpoint an edition built on this tree serves for its node agents. Read at startup; empty, the default, means no listener. Read only by the Business edition; a Community binary refuses to serve while it is set.\n" +
 	"  OLIVARES_SESSIONS_MANAGED_STOP_ADMISSION_TIMEOUT\n" +
 	"    Maximum time to admit a managed Stop request, as a positive Go duration with units. Read at startup; invalid or nonpositive values prevent startup. This does not bound process teardown. Default: 10s.\n" +
+	"  OLIVARES_SESSIONS_SFTP_LISTEN\n" +
+	"    Address (`host:port`) on which the engine accepts SFTP and SCP to a folder. Unset, nothing listens and the console shows no Connect card. It needs the operating system's `sftp-server` (the `openssh-sftp-server` package) and Landlock; without them it stays off and says why in the log.\n" +
 	"  OLIVARES_SESSION_BUDGET_AVAILABILITY\n" +
 	"    Whether session budget enforcement is required, and what happens when the budget service cannot answer.\n" +
 	"  OLIVARES_SESSION_CONTAINER_IMAGE\n" +
@@ -543,6 +545,10 @@ const configEnvironmentHelp = "Environment variables (process values override ac
 	"    Whether session context governance is required, and what happens when the context service cannot answer.\n" +
 	"  OLIVARES_SESSION_KILLSWITCH_SWEEP\n" +
 	"    How often an active session is re-checked against the kill switch, as a Go duration. `0` leaves only the check at launch. Default: 15s.\n" +
+	"  OLIVARES_SESSION_MAX_PER_USER\n" +
+	"    Most sessions one person may have running at once; the next launch is refused with a 429 and one sentence. `0` sets no cap. Resuming a session counts as a launch. Default: 0.\n" +
+	"  OLIVARES_SESSION_MEMORY_MAX\n" +
+	"    Memory ceiling of each session, as systemd's `MemoryMax=` takes it: `8G`, `50%` of the host's memory, or `infinity`. A session that passes it, swap included, is killed alone while the engine and the other sessions keep running. It needs a user manager for the engine's user (the deb and rpm packages enable one for `olivares`; elsewhere `loginctl enable-linger <user>`) and a session confined by Landlock with a mount namespace of its own; a host that cannot give either starts the session without the ceiling and says why on the session. Default: 50%.\n" +
 	"  OLIVARES_SESSION_PEP_TOKEN_FILE\n" +
 	"    Path to the file holding the token the session enforcement point requires.\n" +
 	"  OLIVARES_SESSION_PEP_URL\n" +
@@ -571,6 +577,8 @@ const configEnvironmentHelp = "Environment variables (process values override ac
 	"    Whether the session runtime takes its credential from workload identity federation instead of a token file.\n" +
 	"  OLIVARES_SESSION_RUNTIME_WIF_RULE\n" +
 	"    Which federation rule the session runtime exchanges its workload identity under.\n" +
+	"  OLIVARES_SESSION_TASKS_MAX\n" +
+	"    Most processes and threads one session may have, as systemd's `TasksMax=` takes it. Past it the session cannot fork. Applied through the same scope as `OLIVARES_SESSION_MEMORY_MAX`, on the same conditions; too small a value shows as \"Failed to fork\". Default: 16384.\n" +
 	"  OLIVARES_SESSION_WORKTREE_BRANCH_PREFIX\n" +
 	"    Prefix of the branch a session gets when it is started with a new git worktree; git checks the resulting branch name. Default: olivares/.\n" +
 	"  OLIVARES_SESSION_WORKTREE_DIR\n" +

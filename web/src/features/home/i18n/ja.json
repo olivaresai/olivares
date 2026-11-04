@@ -60,7 +60,20 @@
     "waiting": "承認待ち",
     "needsYou": "あなたの対応待ち",
     "idle": "待機中",
-    "approvalsUnread": "承認を読み込めなかったため、承認待ちは表示していません。"
+    "approvalsUnread": "承認をまだ読み込めていないか、読み込めなかったため、承認待ちは表示していません。",
+    "approvalsPartial": "承認の一部しか読めていないため、承認待ちの一部は表示されない場合があります。",
+    "step": {
+      "Bash": "{{what}} を実行中",
+      "Read": "{{what}} を読み込み中",
+      "Edit": "{{what}} を編集中",
+      "Write": "{{what}} を書き込み中",
+      "Grep": "{{what}} を検索中",
+      "Glob": "ファイルを検索中 {{what}}",
+      "WebFetch": "{{what}} を読み込み中",
+      "WebSearch": "Web を検索中 {{what}}",
+      "Task": "エージェントと作業中",
+      "Agent": "エージェントと作業中"
+    }
   },
   "summary": {
     "heading": "概要",
@@ -82,10 +95,5 @@
   "state": {
     "pendingIdle": "クエリ未開始 — 開いて読み込んでください",
     "pendingPaused": "クエリ一時停止中 — 再開を待っています"
-  },
-  "proof": {
-    "verified": "{{time}} にチェーンを検証済み",
-    "entries_other": "{{n}} 件のエントリ",
-    "broken": "チェーンが壊れています: 台帳を開く"
   }
 }

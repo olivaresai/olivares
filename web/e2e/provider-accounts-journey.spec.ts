@@ -245,10 +245,10 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
       await page.locator('#setup-email').fill(ADMIN_EMAIL)
       await page.locator('#setup-password').fill(ADMIN_PASSWORD)
       await page.getByRole('button', { name: /create administrator/i }).click()
-      await expect(page).toHaveURL(/\/onboarding$/)
+      await expect(page).toHaveURL(/\/sessions$/)
       await expect(
         content(page).getByRole('heading', {
-          name: 'Get started',
+          name: 'Start a session',
           exact: true,
         }),
       ).toBeVisible()

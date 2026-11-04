@@ -35,6 +35,8 @@ func (p *previewTestProc) DialPreview(ctx context.Context, address string) (net.
 	return (&net.Dialer{}).DialContext(ctx, "tcp", address)
 }
 
+const previewTestPage = "<html><body><button id=save>Save</button></body></html>"
+
 // The preview reaches a session's port only through a URL its run's writer
 // opened: another user, workspace or tenant cannot open one, a guessed token
 // reaches nothing, and neither side's cookies cross the proxy.
@@ -58,6 +60,12 @@ func TestRunPreviewAuthorizationAndIsolation(t *testing.T) {
 		w.Header().Set("Access-Control-Allow-Origin", "https://evil.example")
 		w.Header().Set("NEL", `{"report_to":"x","max_age":86400}`)
 		w.Header().Set("Referrer-Policy", "unsafe-url")
+		if r.URL.Path == "/doc" {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Content-Length", strconv.Itoa(len(previewTestPage)))
+			_, _ = io.WriteString(w, previewTestPage)
+			return
+		}
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = io.WriteString(w, "APP-BODY "+r.URL.Path)
 	}))
@@ -219,6 +227,20 @@ func TestRunPreviewAuthorizationAndIsolation(t *testing.T) {
 		}
 		if hd.Get("Content-Type") != "text/plain; charset=utf-8" {
 			t.Fatalf("the app's own Content-Type was lost: %q", hd.Get("Content-Type"))
+		}
+	})
+	t.Run("an HTML page carries the element picker the console talks to", func(t *testing.T) {
+		rec := get(url + "doc")
+		body := rec.Body.String()
+		if rec.Code != http.StatusOK || !strings.HasPrefix(body, previewTestPage) {
+			t.Fatalf("page = %d %q", rec.Code, body)
+		}
+		if !strings.Contains(body[len(previewTestPage):], "<script>") || !strings.Contains(body, "olivares-annotate") {
+			t.Fatalf("the page has no picker: %q", body)
+		}
+		// The page grew, so the app's own length would cut the picker off.
+		if cl := rec.Header().Get("Content-Length"); cl != "" && cl != strconv.Itoa(len(body)) {
+			t.Fatalf("Content-Length %s for a %d-byte page", cl, len(body))
 		}
 	})
 	t.Run("a preflight is answered by the engine, not the app", func(t *testing.T) {

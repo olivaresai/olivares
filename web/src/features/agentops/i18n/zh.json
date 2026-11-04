@@ -73,11 +73,11 @@
     "bypassPermissions": "bypassPermissions"
   },
   "effort": {
-    "low": "low",
-    "medium": "medium",
-    "high": "high",
-    "xhigh": "xhigh",
-    "max": "max"
+    "low": "低",
+    "medium": "中",
+    "high": "高",
+    "xhigh": "极高",
+    "max": "最大"
   },
   "summary": {
     "total": "总计",
@@ -144,7 +144,7 @@
     "effortDefault": "模型默认",
     "model": "模型",
     "workspace": "文件夹",
-    "workspaceNone": "此会话的临时文件夹",
+    "workspaceNone": "默认（我的文件）",
     "worktree": "在新的 git worktree 中工作",
     "worktreeHint": "在独立的 worktree 中新建分支，使同一仓库的会话不共享文件。该文件夹必须是仓库的顶层文件夹。",
     "worktreeFrom": "起点",
@@ -207,6 +207,7 @@
     "use": "使用“{{model}}”",
     "defaultNamed": "默认（{{model}}）",
     "defaultUnnamed": "{{tool}} 默认",
+    "toolDefault": "默认（推荐）",
     "effortDefaultNamed": "模型默认（{{effort}}）",
     "effortNeedsModel": "请先选择模型：推理强度是模型的一个级别。"
   },
@@ -330,6 +331,8 @@
     "title": "工作区",
     "subtitle": "会话工作所在的宿主目录——经过挂载、隔离监禁与 DLP 分级。",
     "register": "注册工作区",
+    "personalFolders": "为每个人提供个人文件夹（我的文件）",
+    "personalFoldersSaved": "个人文件夹设置已保存。",
     "cols": {
       "name": "工作区",
       "rootPath": "根路径",
@@ -403,6 +406,20 @@
     }
   },
   "browser": {
+    "notes": {
+      "title": "笔记",
+      "add": "添加笔记",
+      "select": "请先选中文件中的一段文字，再添加笔记。",
+      "note": "笔记",
+      "keep": "添加",
+      "cancel": "取消",
+      "sendTo": "将笔记发送给",
+      "send": "发送",
+      "sent": "笔记已发送给会话。",
+      "failed": "无法发送笔记，请稍后重试。",
+      "noSession": "此工作区中没有可接收的活动会话。",
+      "count_other": "{{count}} 条笔记"
+    },
     "title": "文件",
     "root": "根",
     "upDir": "上一级",
@@ -445,7 +462,20 @@
     "deletedFile": "已删除",
     "sizeLabel": "大小",
     "modifiedLabel": "修改时间",
-    "create": "创建"
+    "create": "创建",
+    "upload": "上传",
+    "uploadLimit": "每个文件最大 {{size}}",
+    "uploadReadOnly": "此文件夹为只读，无法添加文件。",
+    "uploadNoAccess": "您没有此文件夹的写入权限。",
+    "uploaded": "已上传：{{n}}",
+    "uploadTooLarge": "{{name}} 超过 {{size}} 的限制，未上传。",
+    "uploadExists": "{{name}} 已存在，未被替换。",
+    "uploadFailed": "上传失败",
+    "downloadSelected": "下载所选项（{{n}}）",
+    "downloadFolder": "下载文件夹",
+    "downloadFailed": "下载失败",
+    "labeled": "DLP 标签：{{classes}}",
+    "select": "选择 {{name}}"
   },
   "empty": {
     "title": "暂无 Claude Code 会话",
@@ -1040,6 +1070,7 @@
   "usage": {
     "fiveHour": "5 小时",
     "week": "每周",
+    "weekModel": "仅 {{model}}",
     "percent": "{{window}} {{percent}}%",
     "unknown": "用量未知",
     "limit": {

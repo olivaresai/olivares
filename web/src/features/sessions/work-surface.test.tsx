@@ -556,11 +556,18 @@ describe('WorkSurface', () => {
   describe('the side pane remembers its state in this browser', () => {
     const grid = () => document.querySelector('[data-context]') as HTMLElement
 
-    it('is open by default at every desktop width', () => {
-      for (const width of [1120, 1280, 1440, 1920, 2560]) {
+    it('is closed by default on a laptop, so the conversation keeps the main column, and open from 1440 px', () => {
+      for (const [width, state] of [
+        [1120, 'closed'],
+        [1280, 'closed'],
+        [1439, 'closed'],
+        [1440, 'open'],
+        [1920, 'open'],
+        [2560, 'open'],
+      ] as const) {
         stubViewportWidth(width)
         const surface = renderSurface()
-        expect(grid().dataset.context).toBe('open')
+        expect(grid().dataset.context, `${width} px`).toBe(state)
         surface.unmount()
       }
     })
@@ -632,6 +639,8 @@ describe('WorkSurface', () => {
     })
 
     it('sits beside the conversation from 1120 px, and is a sheet below it', () => {
+      // A person who opened it: the default below 1440 px is closed.
+      preferenceStorage.setItem('olivares.sessions.sidePane', 'open')
       stubViewportWidth(1120)
       const wide = renderSurface()
       // 264 px list + 576 px conversation + 280 px Details at 1120 px.
@@ -689,7 +698,7 @@ describe('WorkSurface', () => {
     // The field is addressed to the open session, by the name the header paints.
     expect(screen.getByTestId('launcher-input')).toHaveAttribute(
       'placeholder',
-      'Ask anything, / for commands and skills',
+      'Ask anything, @ for files and folders, / for commands and skills',
     )
     expect(screen.queryByTestId('composer-session-state')).toBeNull()
   })
@@ -718,14 +727,32 @@ describe('WorkSurface', () => {
   // 26.10.1 review, measured again before this fix: an empty estate painted one
   // empty state per pane ("No sessions yet", "Select a session") with a New session in
   // each, under the header's own. Nothing to list is one fact: one empty state, one action.
-  it('an empty estate is one empty state with one action, not one per pane', async () => {
-    const user = userEvent.setup()
-    const onStart = vi.fn()
+  it('an empty estate is the three regions, with what it is given in the work region', async () => {
     renderSurface({
       sessions: [],
       address: { address: '', pane: 'rail', evidence: 'checks' },
       resolution: { ...resolution, target: null, live: undefined },
-      emptyAction: <button onClick={onStart}>New session</button>,
+      emptyAction: <textarea aria-label="First message" />,
+      listHeader: <div data-testid="head">Sessions head</div>,
+    })
+    expect(await screen.findByText('No sessions yet')).toBeInTheDocument()
+    expect(
+      within(pane('narrative') as HTMLElement).getByRole('textbox', {
+        name: 'First message',
+      }),
+    ).toBeInTheDocument()
+    expect(pane('context')).toHaveTextContent(
+      'the files it changes appear here as it works',
+    )
+    expect(screen.getByTestId('head')).toBeInTheDocument()
+    expect(screen.queryByText('Select a session')).toBeNull()
+  })
+
+  it('an empty estate for a person who cannot start one is one empty state, not one per pane', async () => {
+    renderSurface({
+      sessions: [],
+      address: { address: '', pane: 'rail', evidence: 'checks' },
+      resolution: { ...resolution, target: null, live: undefined },
       listHeader: <div data-testid="head">Sessions head</div>,
     })
     expect(await screen.findByText('No sessions yet')).toBeInTheDocument()
@@ -735,10 +762,7 @@ describe('WorkSurface', () => {
     expect(screen.queryByText('No session selected')).toBeNull()
     expect(pane('narrative')).toBeNull()
     expect(pane('context')).toBeNull()
-    const actions = screen.getAllByRole('button', { name: 'New session' })
-    expect(actions).toHaveLength(1)
-    await user.click(actions[0])
-    expect(onStart).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
   })
 
   it('with sessions listed and none open, the work pane offers no second New session', async () => {

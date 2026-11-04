@@ -1,20 +1,13 @@
 {
   "title": "按账户的用量和费用",
   "subtitle": "官方的 5 小时和每周限额，与今天的令牌和费用并列显示。",
-  "windows": {
-    "fiveHour": "5 小时",
-    "week": "每周"
-  },
   "accounts": {
     "heading": "账户",
     "loading": "正在读取每个工具的账户…",
     "error": "无法读取账户的限额。",
     "empty": "还没有账户报告其限额。",
-    "resets": "{{when}}重置",
-    "stale": "上次读取于 {{at}}",
     "details": "详情",
-    "detailsFor": "{{account}} 的详情",
-    "adminOnly": "账户限额仅向系统管理员显示。"
+    "detailsFor": "{{account}} 的详情"
   },
   "today": {
     "heading": "今天",

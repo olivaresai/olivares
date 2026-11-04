@@ -7,8 +7,11 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/olivaresai/olivares/cmd/olivares/internal/agenttoolsapi"
 	"github.com/olivaresai/olivares/core/auth"
@@ -68,7 +71,16 @@ func registerLocalOllama(rt *sessions.Module, st store.Store) func(context.Conte
 		// test the provider in Providers first. A failed read is recorded like a failed
 		// test in Providers: the record keeps the probe's state and reason and its model
 		// list is cleared, so an OpenCode launch on it is refused until a read succeeds.
-		_, _ = rt.TestProviderRecord(ctx, tenant, ref)
+		tested, err := rt.TestProviderRecord(ctx, tenant, ref)
+		if errors.Is(err, sessions.ErrNoProviderProbe) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("the connection test could not run: %w", err)
+		}
+		if tested.ProbeState != sessions.ProbeOK {
+			return fmt.Errorf("the connection test did not succeed (%s): %s", tested.ProbeState, tested.ProbeDetail)
+		}
 		return nil
 	}
 }
@@ -78,11 +90,18 @@ func registerLocalOllama(rt *sessions.Module, st store.Store) func(context.Conte
 // write what the module names, read its program, and never reach the engine's data,
 // configuration or the CLI credentials of the engine's user, and a root engine's
 // child holds no capability. A host that cannot confine runs it unconfined (boot
-// warns).
+// warns), and so does a host that cannot keep the child away from the engine user's
+// user manager (the first such child warns, once).
 func confinedToolCommand(dataDir string) agenttoolsapi.ChildCommand {
 	protect := sessionProtectPaths(dataDir)
+	var warnUserManager sync.Once
 	return func(ctx context.Context, rw, ro []string, program string, args ...string) (*exec.Cmd, error) {
-		cmd, _, err := confine.Command(ctx, confine.Policy{ReadWrite: rw, ReadOnly: ro, Protect: protect}, program, args...)
+		cmd, state, err := confine.Command(ctx, confine.Policy{ReadWrite: rw, ReadOnly: ro, Protect: protect}, program, args...)
+		if err == nil && state.Mode == confine.ModeLandlock && confine.UserBusExposed(cmd) {
+			warnUserManager.Do(func() {
+				slog.Warn("agent tools: a tool's login, status read or probe can reach the engine user's user manager, which could start commands outside its confinement; this host gives it no user and mount namespace to hide it with; run olivares doctor (session-confinement)")
+			})
+		}
 		return cmd, err
 	}
 }

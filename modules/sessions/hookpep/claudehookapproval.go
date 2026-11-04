@@ -19,9 +19,9 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/modules/governance/effectgate"
+	"github.com/olivaresai/olivares/modules/sessions"
 )
 
-const claudeApprovalWait = 90 * time.Second
 const maxClaudeReviewCommandBytes = 16 * 1024
 
 // Only the reviewable command or target path leaves the raw hook input. The
@@ -209,7 +209,7 @@ func (d *Decider) gateViaSessionApproval(ctx context.Context, tenant model.Tenan
 	if err != nil {
 		return deny("effective tool input is unavailable for human review", actor, tier, version)
 	}
-	waitCtx, cancel := context.WithTimeout(ctx, claudeApprovalWait)
+	waitCtx, cancel := context.WithTimeout(ctx, sessions.ApprovalWait)
 	defer cancel()
 	consumer := NewSingleUseConsumerID()
 	var reviewed claude.HookDecisionResult // the reply the recheck settles on
@@ -222,7 +222,7 @@ func (d *Decider) gateViaSessionApproval(ctx context.Context, tenant model.Tenan
 			ReasonMasks:      facts.reasonMasks,
 			Review:           facts.review,
 			ReviewMasks:      facts.reviewMasks,
-			ExpiresInSeconds: int64(claudeApprovalWait / time.Second),
+			ExpiresInSeconds: int64(sessions.ApprovalWait / time.Second),
 		},
 		Consumer: consumer, PolicyVersion: version, Wait: d.ApprovalWait, Log: d.Log,
 		Recheck: func(ctx context.Context) error {

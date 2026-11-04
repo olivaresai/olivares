@@ -3,13 +3,11 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
-import { GitBranch, Trash2 } from 'lucide-react'
+import { GitBranch } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Combobox } from '@/components/ui/combobox'
-import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   Dialog,
   DialogContent,
@@ -28,6 +26,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { AAL, RequireAssurance } from '@/features/identity/assurance'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
@@ -50,16 +49,10 @@ export function GroupHierarchySection({ canAdmin }: { canAdmin: boolean }) {
     queryFn: () => consoleApi.listGroups(),
   })
 
-  const [editing, setEditing] = useState<GroupDTO | null>(null)
-  const [clearing, setClearing] = useState<GroupDTO | null>(null)
   const [mapping, setMapping] = useState<GroupDTO | null>(null)
-
-  const clearMutation = usePrivilegedMutation<string, { id: string }>({
-    mutationFn: (id) => consoleApi.setGroupParent(id, ''),
-    invalidateKeys: () => [consoleKeys.groups(activeTenant)],
-    successMessage: t('console:granular.groupSubjects.parentSet'),
-    onDone: () => setClearing(null),
-  })
+  // Group nesting is Business: the Community engine answers 501 to it, so the
+  // parent is read-only here unless the edition supplies its controls.
+  const GroupParentActions = PANEL_EXTENSIONS.groupParentActions
 
   const roleMutation = usePrivilegedMutation<
     { id: string; role: string },
@@ -153,22 +146,8 @@ export function GroupHierarchySection({ canAdmin }: { canAdmin: boolean }) {
                               ? t('console:granular.groupSubjects.changeRole')
                               : t('console:granular.groupSubjects.mapRole')}
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setEditing(g)}
-                          >
-                            {t('console:granular.groupSubjects.setParent')}
-                          </Button>
-                          {g.parent_group_id && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setClearing(g)}
-                            >
-                              <Trash2 />
-                              {t('console:granular.groupSubjects.clearParent')}
-                            </Button>
+                          {GroupParentActions && (
+                            <GroupParentActions group={g} groups={groups} />
                           )}
                         </div>
                       ) : null}
@@ -180,23 +159,6 @@ export function GroupHierarchySection({ canAdmin }: { canAdmin: boolean }) {
           </StaticTable>
         </div>
       )}
-
-      <Dialog
-        open={editing !== null}
-        onOpenChange={(o) => !o && setEditing(null)}
-      >
-        <DialogContent className="max-w-lg">
-          {editing && (
-            <RequireAssurance minAal={AAL.HARDWARE} action="console">
-              <SetParentForm
-                group={editing}
-                allGroups={groups}
-                onClose={() => setEditing(null)}
-              />
-            </RequireAssurance>
-          )}
-        </DialogContent>
-      </Dialog>
 
       <Dialog
         open={mapping !== null}
@@ -218,100 +180,7 @@ export function GroupHierarchySection({ canAdmin }: { canAdmin: boolean }) {
           )}
         </DialogContent>
       </Dialog>
-
-      <ConfirmDialog
-        open={clearing !== null}
-        onOpenChange={(o) => !o && setClearing(null)}
-        title={t('console:granular.groupSubjects.clearParentTitle')}
-        description={t('console:granular.groupSubjects.clearParentBody', {
-          child: clearing?.display_name ?? '',
-        })}
-        confirmLabel={t('console:granular.groupSubjects.clearParent')}
-        tone="danger"
-        pending={clearMutation.isPending}
-        onConfirm={() => clearing && clearMutation.mutate(clearing.id)}
-      />
     </section>
-  )
-}
-
-function SetParentForm({
-  group,
-  allGroups,
-  onClose,
-}: {
-  group: GroupDTO
-  allGroups: GroupDTO[]
-  onClose: () => void
-}) {
-  const { t } = useTranslation(['console', 'common'])
-  const { activeTenant } = useAuth()
-  const [parentId, setParentId] = useState<string | null>(
-    group.parent_group_id || null,
-  )
-
-  const candidates = allGroups.filter((g) => g.id !== group.id)
-
-  const mutation = usePrivilegedMutation<void, { id: string }>({
-    mutationFn: () => consoleApi.setGroupParent(group.id, parentId ?? ''),
-    invalidateKeys: () => [consoleKeys.groups(activeTenant)],
-    successMessage: t('console:granular.groupSubjects.parentSet'),
-    onDone: onClose,
-  })
-
-  return (
-    <>
-      <DialogHeader>
-        <DialogTitle>
-          {t('console:granular.groupSubjects.setParentTitle')}
-        </DialogTitle>
-        <DialogDescription>
-          {t('console:granular.groupSubjects.setParentBody', {
-            child: group.display_name,
-            parent:
-              candidates.find((g) => g.id === parentId)?.display_name ?? '…',
-          })}
-        </DialogDescription>
-      </DialogHeader>
-      <div className="flex flex-col gap-4">
-        <Field
-          label={t('console:granular.groupSubjects.colParent')}
-          htmlFor="gh-parent"
-        >
-          <Combobox
-            id="gh-parent"
-            options={candidates.map((g) => ({
-              value: g.id,
-              label: g.display_name || g.id,
-              keywords: [g.display_name, g.external_id].filter(
-                Boolean,
-              ) as string[],
-            }))}
-            value={parentId}
-            onChange={setParentId}
-            placeholder={t('console:granular.groupSubjects.selectParent')}
-          />
-        </Field>
-        <FormError error={mutation.error} />
-      </div>
-      <DialogFooter>
-        <Button
-          variant="secondary"
-          onClick={onClose}
-          disabled={mutation.isPending}
-        >
-          {t('common:actions.cancel')}
-        </Button>
-        <Button
-          variant="primary"
-          onClick={() => mutation.mutate()}
-          disabled={!parentId || mutation.isPending}
-        >
-          {mutation.isPending && <Spinner size="sm" aria-hidden />}
-          {t('console:granular.groupSubjects.setParent')}
-        </Button>
-      </DialogFooter>
-    </>
   )
 }
 

@@ -10,7 +10,7 @@ description: >-
 その**改ざん検知可能な台帳が証明可能なほど無傷な状態**で戻ってこなければなりません。
 `olivares dr` はこの要件を中心に構築されています —— すべてのバンドルはテナントごとの
 チェーンの先端を記録し、リストアは**復元された台帳が連続性安全でない場合に非ゼロで失敗**します。
-`dr drill` はスクラッチディレクトリ上の合成台帳で、バックアップからリストアまでの台帳連続性を確認し、測定した RTO を表示します。権限、鍵の保管、リストア時点より後の作用は確認せず、本番のデータディレクトリには触れません。
+`dr drill` はスクラッチディレクトリ上の合成台帳で、バックアップからリストアまでの台帳連続性を確認し、測定した RTO を表示します。`--scratch-dsn` を指定すると、同じ往復を使い捨てのデータベース上の PostgreSQL に対しても実行し、その RTO を SQLite の RTO の隣に表示します。権限、鍵の保管、リストア時点より後の作用は確認せず、本番のデータディレクトリには触れません。
 
 バンドルは**あなたが提供する KEK** —— Argon2id 由来のパスフレーズ（`--passphrase-file`）か、
 KMS からの生の 32 バイト鍵（`--kek-key-file`）—— の下で暗号化されます。ちょうど一つが必須です。
@@ -56,9 +56,9 @@ olivares dr backup \
 Helm チャートは
 [CronJob](/ja/tutorials/getting-started/kubernetes/#4-スケジュールされた暗号化バックアップ)を
 提供します。ベアメタルでは、上記のコマンドを cron で実行します。表の数値は目標です。
-cron のティアでは、RPO の目標は cron の間隔です。`dr drill` は合成台帳で SQLite の RTO
-（リストア、起動、検証）を測定します。RPO は測定せず、Postgres のリストアも測定しません。
-測定された SQLite の RTO は、イベント数とホストとともに `docs/DR-RUNBOOK.md` にあります。
+cron のティアでは、RPO の目標は cron の間隔です。`dr drill` は合成台帳で RTO
+（リストア、起動、検証）を測定します。SQLite では常に、PostgreSQL では `--scratch-dsn` を指定したときに測定します。RPO は測定しません。
+測定された RTO の値は、イベント数と測定を行ったホストとともに `docs/DR-RUNBOOK.md` にあります。
 それらはこの表の目標ではありません。
 
 | ティア | メカニズム | 目標 RPO | 目標 RTO |
@@ -75,13 +75,21 @@ cron のティアでは、RPO の目標は cron の間隔です。`dr drill` は
 
 `dr verify` は、**データディレクトリに触れずに**バンドルを確認します。SQLite では
 スクラッチディレクトリへリストアして台帳の連続性を検証し、その確認に失敗すると非ゼロで
-終了します。Postgres ではバンドルのダイジェストと鍵の復号を確認します。Postgres
-バンドルの完全なチェーン検証には、スクラッチの Postgres へのリストアが必要です。
+終了します。Postgres では `--scratch-dsn` でスクラッチサーバーを指定します。そのサーバー上に、
+独自のロールを持つ使い捨てのデータベースを作成してバンドルをリストアし、台帳を検証したうえで、
+データベースとロールの両方を削除します。確認は次のコマンドで実行します:
 
 ```bash
 olivares dr verify --in /backups/olivares-dr-<ts>.drbundle \
   --passphrase-file <your-dr-passphrase-file>
+
+# Postgres: a maintenance DSN of a server where databases and roles may be created
+olivares dr verify --in /backups/olivares-pg-<ts>.drbundle \
+  --passphrase-file <your-dr-passphrase-file> \
+  --scratch-dsn file:/run/secrets/scratch.dsn
 ```
+
+DSN は `file:` または `env:` の参照で指定し、インラインの認証情報は使いません。`--scratch-dsn` を指定しない場合、Postgres バンドルはダイジェストと鍵の復号のみが確認され、出力には台帳がリストアされていないことが示されます。
 
 `dr inspect --in <bundle>` はマニフェストを表示します（KEK 不要、秘密情報は表示されません）
 —— どのエンジンか、どのテナントか、どのチェーンの先端か。バックアップと同じ頻度でドリルを
@@ -102,6 +110,8 @@ olivares dr restore --in /backups/olivares-dr-<ts>.drbundle \
 ください —— 復元された古いスナップショットは、単純なウォークは通過しても、オフボックスの
 比較では失敗することがあります
 （[トラブルシューティング § 台帳](/ja/how-to/troubleshooting/#ledger-が検証に失敗する)）。
+
+Postgres では、既に estate を持つデータベースへのリストアは、それを宣言しない限り拒否されます。宣言するには `--operator` と `--reason`（復元された台帳に記録されます）と `--force` を指定します。その後、バックアップのオブジェクトが単一のトランザクションでデータベースの既存オブジェクトを置き換えるため、古い estate は全体が置き換えられるか、まったく置き換えられないかのどちらかになります。何かに触れる前に、データベースの `pg_dump` を（ここでは必須の `--admin-dsn` 経由で）保存します。これは以前の署名鍵の隣に置かれ、署名鍵は `*.pre-restore-*` として残ります。確認が済んだら、それらを削除してください。
 
 ## すべてを決める二つの鍵
 

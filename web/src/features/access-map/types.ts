@@ -111,6 +111,9 @@ export interface DiffResponse {
   unexpected_count: number
   unused_count: number
   inventory_count?: number
+  /** False when the tenant has no grant at all: every observed access is then unexpected
+   *  by construction, not a violation of a rule. Absent on an engine that predates it. */
+  grants_declared?: boolean
   truncated?: boolean
 }
 

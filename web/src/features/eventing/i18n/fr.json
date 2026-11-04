@@ -106,7 +106,7 @@
   },
   "events": {
     "title": "Événements capturés",
-    "description": "Journal des événements avec curseur de séquence. Filtrez par type d'événement pour affiner les résultats.",
+    "description": "Journal des événements. Filtrez par type d'événement pour affiner les résultats.",
     "empty": "Aucun événement capturé",
     "emptyHint": "Chaque événement capté par le bus est listé ici, du plus récent au plus ancien. Rien n’a été publié dans cette plage.",
     "typeFilter": "Filtrer par type",

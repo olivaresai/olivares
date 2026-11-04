@@ -24,7 +24,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './i18n'
 
 const navigate = vi.fn()
-vi.mock('@tanstack/react-router', () => ({
+import { fakeRouter } from '@/test/fake-router'
+
+vi.mock('@tanstack/react-router', async () => ({
+  ...(await import('@/test/fake-router')).fakeRouterModule(),
   useNavigate: () => navigate,
   // No RouterProvider in this test: the shared Tabs strip consults useRouter, and the real
   // hook answers undefined here (console-tab-scroll-restoration R2, 2026-09-06).
@@ -32,9 +35,6 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1', can: () => true }),
-}))
-vi.mock('@/features/recordings/recording-notice', () => ({
-  RecordingNotice: () => null,
 }))
 vi.mock('./drift', () => ({ DriftView: () => <div>DriftView mounted</div> }))
 vi.mock('./cedar-opa-view', () => ({
@@ -52,12 +52,12 @@ vi.mock('./managed-agents-hitl', () => ({
 import ClaudePolicyView from './claude-policy-view'
 
 function renderAt(search: string) {
-  window.history.replaceState({}, '', `/claude-policy${search}`)
+  fakeRouter.reset(`/claude-policy${search}`)
   return render(<ClaudePolicyView />)
 }
 
 beforeEach(() => {
-  window.history.replaceState({}, '', '/claude-policy')
+  fakeRouter.reset('/claude-policy')
   navigate.mockClear()
 })
 

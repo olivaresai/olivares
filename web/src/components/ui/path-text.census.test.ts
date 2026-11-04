@@ -721,6 +721,21 @@ const DECLARED_SPLITS: ReadonlyArray<{ file: string; reason: string }> = [
     reason:
       "a vault secret's folder (prod/db of prod/db/password): a name, not a filesystem path, and never shown cut",
   },
+  {
+    file: 'components/layout/slash-menu-model.ts',
+    reason:
+      'the mention query split: the folder to list and the name typed after it, both used for matching, never shown cut',
+  },
+  {
+    file: 'features/sessions/path-chip.tsx',
+    reason:
+      "the chip's label is the file's own name (its basename, a trailing slash for a folder), shown whole; the full path is the title",
+  },
+  {
+    file: 'features/sessions/session-activity.tsx',
+    reason:
+      "a changed file's name shown whole and its folder cut by CSS from the left; the full path is the row's hover, never a string cut",
+  },
 ]
 
 /** The lines where code (not a comment) builds a path around an ellipsis or splits a value

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -22,10 +23,15 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 )
 
+// tlsCertFile is the certificate the engine generated in its data directory.
+const tlsCertFile = "tls.crt"
+
 // localEngine is the engine this host's data directory recorded: the origin
 // `quickstart`/`serve` wrote to console.json (the one `first-boot` and `doctor`
 // read) and, for TLS, the certificate it generated. It returns "" when this host
-// has no recorded engine.
+// has no recorded engine. It reads the files as they are, so it serves only callers
+// that send no credential (readyz, the anonymous status, the local context check);
+// a caller that sends one uses localEngineFor.
 //
 // Measured 2026-10-01 (HU J8): signing in on the engine's own host needed
 // --server and --ca-cert, and the first try failed with a raw x509 error.
@@ -34,18 +40,82 @@ func localEngine() (origin, caCert string) {
 	if err != nil {
 		return "", ""
 	}
-	state, err := readConsoleState(dir)
+	return localEngineAt(dir, nil)
+}
+
+// localEngineFor is the engine a caller about to send a credential (a typed password,
+// a token from the environment) may reach without --server: the one recorded in the
+// account's data directory (accountDataDir: never one under the working directory,
+// which a cloned repository can plant), and only while that directory and its console
+// state and certificate are safe from other accounts (readDataDirFile). The owner may
+// be another account, as when an administrator signs in on the host of an engine that
+// runs as its own user.
+func localEngineFor() (origin, caCert string) {
+	dir, err := accountDataDir()
+	if err != nil {
+		return "", ""
+	}
+	return localEngineAt(dir, func(name string) ([]byte, error) {
+		return readDataDirFile(dir, name, accountFileNotWritable, anyDirOwner)
+	})
+}
+
+// localEngineAt is the engine the data directory dir recorded. A nil read takes the
+// files as they are; otherwise read is the check the caller trusts, and a certificate
+// present but refused by it drops the engine.
+func localEngineAt(dir string, read func(name string) ([]byte, error)) (origin, caCert string) {
+	checked := read != nil
+	if !checked {
+		read = func(name string) ([]byte, error) { return os.ReadFile(filepath.Join(dir, name)) }
+	}
+	body, err := read(consoleStateFile)
+	if err != nil {
+		return "", ""
+	}
+	state, err := parseConsoleState(dir, body)
 	if err != nil {
 		return "", ""
 	}
 	origin = doctorOriginFromConsoleState(state)
 	if strings.HasPrefix(origin, "https://") {
-		crt := filepath.Join(dir, "tls.crt")
-		if info, err := os.Stat(crt); err == nil && info.Mode().IsRegular() {
-			caCert = crt
+		switch _, err := read(tlsCertFile); {
+		case err == nil:
+			caCert = filepath.Join(dir, tlsCertFile)
+		case checked && !errors.Is(err, fs.ErrNotExist):
+			// A certificate the caller cannot vouch for would trust whatever answers.
+			return "", ""
 		}
 	}
 	return origin, caCert
+}
+
+// localOperatorEngine is the engine this account's own data directory recorded, plus
+// the credential the engine left there for the account that owns it
+// (localoperator_token.go). It returns empty values unless the data directory, the
+// credential, the console state and the certificate are all this account's own
+// (readAccountFile), as the engine writes them: another account, a host without the
+// data directory, a directory planted under the working directory (a cloned repository)
+// and a directory other accounts can write are not the local operator and sign in as before.
+func localOperatorEngine() (origin, caCert, token, tenant string) {
+	dir, err := accountDataDir()
+	if err != nil {
+		return "", "", "", ""
+	}
+	raw, err := readAccountFile(dir, localOperatorTokenFile, accountFilePrivate)
+	if err != nil {
+		return "", "", "", ""
+	}
+	token, tenant = splitLocalOperatorFile(string(raw))
+	if token == "" {
+		return "", "", "", ""
+	}
+	origin, caCert = localEngineAt(dir, func(name string) ([]byte, error) {
+		return readAccountFile(dir, name, accountFileNotWritable)
+	})
+	if origin == "" {
+		return "", "", "", ""
+	}
+	return origin, caCert, token, tenant
 }
 
 // localContextTenant is the tenant of the saved client context when that context

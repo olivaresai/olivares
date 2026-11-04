@@ -478,7 +478,7 @@
     "subtitle": "Intervalos mínimos entre ejecuciones, topes de concurrencia, requisitos de aprobación, listas de cron permitidas y entornos bloqueados para las rutinas de Claude Code. Las políticas solapadas se componen quedando siempre la más restrictiva.",
     "search": "Buscar políticas de rutinas…",
     "newPolicy": "Nueva política",
-    "enforcementCaption": "Estos controles se aplican al declarar una rutina y de nuevo en cada disparo. Una política deshabilitada se guarda, pero no aporta nada a la composición.",
+    "enforcementCaption": "Estos controles se aplican al declarar una rutina y de nuevo en cada disparo. Una política deshabilitada se guarda, pero no se aplica a nada.",
     "enabledYes": "Habilitada",
     "enabledNo": "Deshabilitada",
     "approvalYes": "Obligatoria",
@@ -497,7 +497,7 @@
       "envs": "Entornos bloqueados"
     },
     "scope": {
-      "tenant": "Tenant",
+      "tenant": "Organización",
       "workspace": "Espacio de trabajo",
       "user": "Usuario"
     },
@@ -515,12 +515,12 @@
       "unreadableCaveat": "El motor no pudo interpretar esta columna almacenada. La aplicación rehúsa una política así por completo, de modo que deniega por defecto en vez de permitir nada."
     },
     "posture": {
-      "title": "Postura efectiva",
+      "title": "Reglas en vigor",
       "counts": "{{enabled}} habilitadas de {{total}} políticas",
       "workspaceRef": "Espacio de trabajo",
       "userRef": "Usuario",
-      "defaultWorkspace": "Predeterminado del tenant",
-      "noUser": "Sin usuario propietario",
+      "defaultWorkspace": "Predeterminado de la organización",
+      "noUser": "Sin propietario",
       "resolve": "Resolver",
       "indeterminate": "Esta resolución es indeterminada en el eje {{axis}}. Aquí la aplicación deniega por defecto: es un rechazo, no una ausencia de controles.",
       "floor": "Intervalo mínimo entre ejecuciones",
@@ -530,17 +530,17 @@
       "cap": "{{scope}} · máx. {{max}}",
       "origin": "Compuesta a partir de:",
       "none": "Ninguna política habilitada gobierna este ámbito.",
-      "failed": "No se pudo leer la postura",
+      "failed": "No se pudieron leer las reglas en vigor",
       "resolvedFor": "Resuelto para el espacio de trabajo {{workspace}} · usuario {{user}}",
       "stale": "el ámbito de arriba ha cambiado; vuelve a resolver",
-      "unknownUser": "eje de usuario sin respuesta",
-      "unknownUserAxis": "Eje de usuario sin respuesta",
+      "unknownUser": "propietario desconocido",
+      "unknownUserAxis": "Propietario desconocido",
       "supersededByIndeterminate": "Los valores de abajo son lo que se compuso hasta ahí. NO son el resultado: una resolución indeterminada se rechaza por completo, digan lo que digan.",
-      "noneIndeterminate": "No se ha compuesto ninguna política para este ámbito y la resolución se ha RECHAZADO en un eje que no se puede responder: eso no es lo mismo que no haya controles aquí."
+      "noneIndeterminate": "Olivares no pudo determinar qué políticas se aplican a este ámbito, así que la consulta se ha RECHAZADO: eso no es lo mismo que no haya controles aquí."
     },
     "remove": {
       "title": "Eliminar política de rutinas",
-      "body": "«{{name}}» dejará de componer la postura efectiva. Las rutinas que restringía quedarán sujetas solo a las políticas restantes.",
+      "body": "«{{name}}» dejará de aplicarse. Las rutinas que restringía quedarán sujetas solo a las políticas restantes.",
       "confirm": "Eliminar política",
       "done": "Política de rutinas eliminada"
     },
@@ -556,7 +556,7 @@
       "scopeImmutable": "Inmutable tras la creación.",
       "scopeRef": "Referencia del ámbito",
       "scopeRefRequired": "Una política de espacio de trabajo o de usuario necesita su referencia.",
-      "tenantScopeRef": "Una política de ámbito tenant no debe llevar referencia.",
+      "tenantScopeRef": "Una política de ámbito de organización no debe llevar referencia.",
       "enabled": "Política habilitada",
       "floorToggle": "Exigir un intervalo mínimo entre ejecuciones",
       "floor": "Intervalo mínimo (segundos)",

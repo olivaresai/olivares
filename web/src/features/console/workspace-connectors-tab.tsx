@@ -228,13 +228,24 @@ function AssignmentSection({
             {t('console:connectors.assignmentsDesc')}
           </p>
         </div>
-        {canWrite ? (
+        {canWrite && !sources.isError ? (
           <Button size="sm" onClick={() => setCreateOpen(true)}>
             <Plus />
             {t('console:connectors.assignmentAdd')}
           </Button>
         ) : null}
       </div>
+
+      {/* The connector roster behind the picker is a deployment-wide read the engine may
+          refuse (403). Without it nothing can be assigned, so say so and offer no Add. */}
+      {sources.isError ? (
+        <QueryErrorState
+          error={sources.error}
+          subject={t('console:tabs.connectors')}
+          retry={() => void sources.refetch()}
+          className="py-3"
+        />
+      ) : null}
 
       {items.length === 0 ? (
         <EmptyState
@@ -596,6 +607,15 @@ function WsConnectorSection({
       ),
     enabled: canRead && refResuelto,
   })
+  // The Kind list of the create dialog: a deployment-wide read the engine may refuse (403).
+  // Read it here, not in the dialog, so a refusal is said before Create is offered.
+  const connectorCatalog = useQuery({
+    queryKey: consoleKeys.connectors(),
+    queryFn: () => consoleApi.listConnectors(),
+    enabled: canRead && canWrite,
+  })
+  const kinds =
+    connectorCatalog.data?.connectors.map((connector) => connector.kind) ?? []
   const deleteMutation = usePrivilegedMutation<string, void>({
     mutationFn: (id) => consoleApi.deleteWsConnector(id),
     invalidateKeys: () => [consoleKeys.workspaceConnectors(tenant)],
@@ -653,13 +673,22 @@ function WsConnectorSection({
             {t('console:connectors.workspaceConnectorsDesc')}
           </p>
         </div>
-        {canWrite ? (
+        {canWrite && !connectorCatalog.isError ? (
           <Button size="sm" onClick={() => setCreateOpen(true)}>
             <Plus />
             {t('console:connectors.createWsConnector')}
           </Button>
         ) : null}
       </div>
+
+      {connectorCatalog.isError ? (
+        <QueryErrorState
+          error={connectorCatalog.error}
+          subject={t('console:tabs.connectors')}
+          retry={() => void connectorCatalog.refetch()}
+          className="py-3"
+        />
+      ) : null}
 
       {items.length === 0 ? (
         <EmptyState
@@ -742,6 +771,7 @@ function WsConnectorSection({
           open
           tenant={tenant}
           workspaces={workspaces.data?.items ?? []}
+          kinds={kinds}
           onClose={() => setCreateOpen(false)}
         />
       ) : null}
@@ -750,6 +780,7 @@ function WsConnectorSection({
           open
           tenant={tenant}
           workspaces={workspaces.data?.items ?? []}
+          kinds={kinds}
           existing={editing}
           onClose={() => setEditing(null)}
         />
@@ -783,12 +814,14 @@ function WsConnectorDialog({
   open,
   tenant,
   workspaces,
+  kinds,
   existing,
   onClose,
 }: {
   open: boolean
   tenant: string | null
   workspaces: WorkspaceDTO[]
+  kinds: string[]
   existing?: WorkspaceConnectorDTO
   onClose: () => void
 }) {
@@ -820,16 +853,7 @@ function WsConnectorDialog({
     setSecretsText(secretKeysToBlankLines(existing.secrets))
   }
 
-  const connectorCatalog = useQuery({
-    queryKey: consoleKeys.connectors(),
-    queryFn: () => consoleApi.listConnectors(),
-    enabled: open,
-  })
-  const catalogKinds = unique([
-    existing?.kind,
-    ...(connectorCatalog.data?.connectors.map((connector) => connector.kind) ??
-      []),
-  ])
+  const catalogKinds = unique([existing?.kind, ...kinds])
   const mutation = usePrivilegedMutation<
     WorkspaceConnectorDTO,
     WorkspaceConnectorDTO

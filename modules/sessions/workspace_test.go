@@ -8,10 +8,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -199,6 +202,34 @@ func TestWorkspace_DLPLabelAndDeny(t *testing.T) {
 	}
 }
 
+// TestWorkspace_UploadCarriesDLPLabels: a write is labeled like a read. The answer and the
+// audit row carry the classes (never the content), and a deny-mode workspace still takes the
+// write, because refusing it would change the published PUT contract.
+func TestWorkspace_UploadCarriesDLPLabels(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	for _, mode := range []string{dlpLabel, dlpDeny} {
+		m, _, tenant, _ := newRuntimeHarness(t, WithClassifier(fakeClassifier{trigger: "SECRET"}))
+		ws := mkWorkspace(t, m, tenant, CreateWorkspaceParams{DLPMode: mode})
+		wr, err := m.writeFile(ctx, tenant, ws.WorkspaceRef, "c.env", []byte("API_KEY=THIS_IS_SECRET"), actorU, actorKindU)
+		if err != nil {
+			t.Fatalf("%s: write: %v", mode, err)
+		}
+		if len(wr.Sensitivity) != 1 || wr.Sensitivity[0].Class != "secret.credential" {
+			t.Fatalf("%s: the write answer must carry the label, got %+v", mode, wr.Sensitivity)
+		}
+		writes := acctAuditsOf(t, m, tenant, "sessions.workspace.write")
+		if len(writes) != 1 || !strings.Contains(fmt.Sprint(writes[0].meta["sensitivity"]), "secret.credential") || strings.Contains(fmt.Sprint(writes), "THIS_IS_SECRET") {
+			t.Fatalf("%s: write audit = %v, want the class and never the content", mode, writes)
+		}
+		clean, err := m.writeFile(ctx, tenant, ws.WorkspaceRef, "ok.txt", []byte("hello"), actorU, actorKindU)
+		if err != nil || len(clean.Sensitivity) != 0 {
+			t.Fatalf("%s: a clean write must carry no label: %+v %v", mode, clean, err)
+		}
+	}
+}
+
 // TestWorkspace_DenyModeFailsClosedWithoutClassifier confirms deny-mode is fail-closed
 // when no classifier is wired (it cannot prove content safe).
 func TestWorkspace_DenyModeFailsClosedWithoutClassifier(t *testing.T) {
@@ -368,4 +399,45 @@ func TestWorkspace_AllowSubpathConfines(t *testing.T) {
 func isStatus(err error, status int) bool {
 	var re *runErr
 	return errors.As(err, &re) && re.status == status
+}
+
+// A folder on a network share whose file server is down blocks in the kernel. The engine
+// answers "not responding" within the deadline instead of hanging the request, one stuck
+// lookup serves every request meanwhile, and the folder works again once the server does.
+func TestWorkspace_RootNotRespondingIsRefusedAndRecovers(t *testing.T) {
+	// Not parallel: it swaps the package's probe and deadline.
+	m, _, tenant, _ := newRuntimeHarness(t)
+	ctx := context.Background()
+	ws := mkWorkspace(t, m, tenant, CreateWorkspaceParams{})
+
+	realProbe, realTimeout := probeRoot, rootProbeTimeout
+	t.Cleanup(func() { probeRoot, rootProbeTimeout = realProbe, realTimeout })
+	hold, calls := make(chan struct{}), atomic.Int32{}
+	probeRoot = func(root string) (string, os.FileInfo, error) {
+		calls.Add(1)
+		<-hold
+		return realProbe(root)
+	}
+	rootProbeTimeout = 50 * time.Millisecond
+
+	for i := 0; i < 3; i++ {
+		start := time.Now()
+		_, err := m.resolveLaunchWorkspace(ctx, tenant, ws.WorkspaceRef)
+		var re *runErr
+		if !errors.As(err, &re) || re.status != 424 || !strings.Contains(re.Error(), "is not responding") {
+			t.Fatalf("call %d: want 424 not responding, got %v", i, err)
+		}
+		if time.Since(start) > 5*time.Second {
+			t.Fatalf("call %d took %v", i, time.Since(start))
+		}
+	}
+	if n := calls.Load(); n != 1 {
+		t.Fatalf("a stuck lookup is shared: %d lookups started, want 1", n)
+	}
+
+	close(hold)
+	rootProbeTimeout = realTimeout
+	if _, err := m.resolveLaunchWorkspace(ctx, tenant, ws.WorkspaceRef); err != nil {
+		t.Fatalf("server back: %v", err)
+	}
 }

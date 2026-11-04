@@ -103,7 +103,7 @@ func sourceScopeBindingSchema(create bool) map[string]any {
 			"description", "Case-insensitive after trimming: workspace, agent_group, folder, session, agent, user, user_group, or role.",
 		),
 		"scope_ref", sourceScopeOptionalString("Required for every scope_tree except workspace; a blank workspace ref selects the default workspace."),
-		"effect", sourceScopeOptionalString("Case-insensitive after trimming. Empty defaults to allow; otherwise allow or forbid."),
+		"effect", sourceScopeOptionalString("Case-insensitive after trimming. Empty defaults to allow; otherwise allow or forbid, require for a source_type template (a mandatory session template), or decline for a source_type instructions or template on a workspace (stops that standard reaching a department from the departments above)."),
 		"expires_at", sourceScopeOptionalString("Optional RFC3339 expiry; null or omitted preserves a grant that never expires."),
 		"folder_path", sourceScopeOptionalString("Output-only projection accepted by the DTO but ignored; the store resolves it from scope_ref."),
 		"cred_name", sourceScopeOptionalString("Credential-reference tuple. When any tuple field is non-empty, name, ref_kind, and ref are all required."),

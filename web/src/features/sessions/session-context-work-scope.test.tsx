@@ -103,11 +103,16 @@ it('shows the authorized launch role/workspace separately from process and activ
   expect(within(section).getByText('Read work')).toBeInTheDocument()
 })
 it("keeps the tool's own mode words in Details, not in the permission chip", () => {
-  mount({
-    ...run,
-    provider_driver: 'codex',
-    tool_mode: 'untrusted · dangerFullAccess',
-  })
+  // A Codex session's pane opens on Activity; the mode is on its Details tab.
+  mount(
+    {
+      ...run,
+      provider_driver: 'codex',
+      tool_mode: 'untrusted · dangerFullAccess',
+    },
+    undefined,
+    'context',
+  )
   expect(screen.getByTestId('context-tool-mode')).toHaveTextContent(
     'untrusted · dangerFullAccess',
   )

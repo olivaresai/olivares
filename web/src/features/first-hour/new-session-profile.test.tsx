@@ -65,7 +65,7 @@ import { toast } from '@/components/ui/toaster'
 import { useTenantStore } from '@/stores/tenant'
 import { NewSessionDialog, StartSessionForm } from './first-hour'
 import { firstHourKeys } from './api'
-import { readinessOf } from './readiness.fixture'
+import { readinessOf, chooseTool } from './readiness.fixture'
 import { useClientSettings } from '@/features/settings/preferences'
 import { SessionDefaultsSettings } from '@/features/settings/session-defaults-settings'
 
@@ -165,9 +165,9 @@ describe('the profile in the New session dialog', () => {
     })
     wrap(<StartSessionForm />)
     await waitFor(() =>
-      expect(
-        screen.getByRole('radio', { name: 'Claude Code' }),
-      ).toHaveAttribute('aria-checked', 'true'),
+      expect(screen.getByRole('combobox', { name: 'Tool' })).toHaveTextContent(
+        'Claude Code',
+      ),
     )
     expect(
       screen.getByText(/saved default.*no longer available/i),
@@ -272,7 +272,7 @@ describe('the profile in the New session dialog', () => {
       has_more: false,
     })
     wrap(<StartSessionForm />)
-    await screen.findByRole('radio', { name: 'Claude Code' })
+    await screen.findByRole('combobox', { name: 'Tool' })
     // Claude Code has only its default login: no select. (The one account is Codex's.)
     await waitFor(() => expect(agentOpsApi.listAccounts).toHaveBeenCalled())
     expect(screen.queryByRole('combobox', { name: 'Profile' })).toBeNull()
@@ -421,7 +421,7 @@ describe('the profile in the New session dialog', () => {
     const user = userEvent.setup()
     wrap(<StartSessionForm />)
     // Codex is the only tool ready on its own, so the dialog opens on it.
-    await user.click(await screen.findByRole('radio', { name: 'Claude Code' }))
+    await chooseTool(user, 'Claude Code')
     const select = await profileSelect()
     await waitFor(() => expect(select).toHaveTextContent('claude-b'))
     const start = screen.getByRole('button', { name: 'Start' })
@@ -437,13 +437,13 @@ describe('the profile in the New session dialog', () => {
     const user = userEvent.setup()
     wrap(<StartSessionForm />)
     await profileSelect()
-    await user.click(screen.getByRole('radio', { name: 'Codex' }))
+    await chooseTool(user, 'Codex')
     await waitFor(() =>
       expect(screen.queryByRole('combobox', { name: 'Profile' })).toBeNull(),
     )
-    expect(
-      within(document.body).getByRole('radio', { name: 'Codex' }),
-    ).toBeChecked()
+    expect(screen.getByRole('combobox', { name: 'Tool' })).toHaveTextContent(
+      'Codex',
+    )
   })
 
   it('starts on the sole adopted account when only that account is signed in', async () => {
@@ -457,7 +457,7 @@ describe('the profile in the New session dialog', () => {
     })
     const user = userEvent.setup()
     wrap(<StartSessionForm />)
-    await user.click(await screen.findByRole('radio', { name: 'Claude Code' }))
+    await chooseTool(user, 'Claude Code')
     const start = screen.getByRole('button', { name: 'Start' })
     await waitFor(() => expect(start).toBeEnabled())
     expect(screen.queryByRole('combobox', { name: 'Profile' })).toBeNull()
@@ -476,7 +476,7 @@ describe('the profile in the New session dialog', () => {
       has_more: false,
     })
     wrap(<StartSessionForm />)
-    await screen.findByRole('radio', { name: 'Claude Code' })
+    await screen.findByRole('combobox', { name: 'Tool' })
     await waitFor(() => expect(agentOpsApi.listAccounts).toHaveBeenCalled())
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled(),
@@ -509,7 +509,7 @@ describe('the profile in the New session dialog', () => {
     vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(readinessOf({}))
     const user = userEvent.setup()
     wrap(<NewSessionDialog open onOpenChange={() => {}} />)
-    await screen.findByRole('radio', { name: 'Claude Code' })
+    await screen.findByRole('combobox', { name: 'Tool' })
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
     )
@@ -644,7 +644,7 @@ describe('the profile in the New session dialog', () => {
     wrap(<StartSessionForm />, qc)
     await waitFor(() => expect(agentOpsApi.listAccounts).toHaveBeenCalled())
     try {
-      await screen.findByRole('button', { name: 'Change folder' })
+      await screen.findByRole('combobox', { name: 'Folder' })
       expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
     } finally {
       finish({
@@ -704,18 +704,42 @@ describe('the usage of the accounts in the New session dialog', () => {
     expect(screen.getByRole('option', { name: /claude-c/ })).toHaveTextContent(
       '5-hour 100% · Weekly 62%',
     )
-    // The default login is not an account: no figures for it, nothing marked yet.
+    // The default login is not an account: no figures for it.
     expect(
       screen.getByRole('option', { name: 'Default sign-in' }),
     ).not.toHaveTextContent('%')
-    expect(screen.queryByText(/limit reached/)).toBeNull()
 
-    await user.click(screen.getByRole('option', { name: /claude-c/ }))
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      /5-hour limit reached, resets /,
-    )
-    // Marked, not blocked: the person may still start on it.
-    expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
+    // At its limit a first turn fails: the row is last, says when it resets, and cannot
+    // be picked.
+    const options = screen.getAllByRole('option')
+    const atLimit = screen.getByRole('option', { name: /claude-c/ })
+    expect(options.at(-1)).toBe(atLimit)
+    expect(atLimit).toHaveTextContent(/5-hour limit reached, resets /)
+    expect(atLimit).toHaveAttribute('aria-disabled', 'true')
+    expect(
+      screen.getByRole('option', { name: /claude-b/ }),
+    ).not.toHaveAttribute('aria-disabled', 'true')
+  })
+
+  it('never preselects an account at its limit, even the one that ran last', async () => {
+    vi.mocked(agentOpsApi.listAccounts).mockResolvedValue({
+      items: [
+        {
+          ...account('ppf_c', 'claude-c'),
+          usage: windows(10, 100, '2030-01-01T10:00:00Z'),
+        },
+        { ...account('ppf_b', 'claude-b'), usage: windows(40, 10) },
+      ],
+      has_more: false,
+    })
+    vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue({
+      items: [run('r2', 'ppf_c'), run('r1', 'ppf_b')],
+      has_more: false,
+    })
+    wrap(<StartSessionForm />)
+    const select = await profileSelect()
+    await waitFor(() => expect(select).toHaveTextContent('claude-b'))
+    expect(select).not.toHaveTextContent('claude-c')
   })
 
   it('says nothing about usage for an account whose tool reported none', async () => {

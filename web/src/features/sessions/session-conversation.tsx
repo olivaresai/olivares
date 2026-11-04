@@ -108,6 +108,18 @@ function stopText(t: TFunction, reason: string): string {
   }
 }
 
+const CENTS = new Intl.NumberFormat(undefined, {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+
+/** A turn's cost in cents; a turn under a cent is "<$0.01", never $0.00. */
+function turnCostText(usd: number): string {
+  return usd > 0 && usd < 0.005 ? `<${CENTS.format(0.01)}` : CENTS.format(usd)
+}
+
 export function SessionConversation(
   props: Parameters<typeof ConversationBody>[0],
 ) {
@@ -291,10 +303,15 @@ function ConversationBody({
     return () => onModel?.(null)
   }, [frameModel, onModel])
 
+  // Where the console last put or saw the view: a scroll event that finds it there was not
+  // the person's (onScroll).
+  const topRef = useRef(0)
   useEffect(() => {
     if (!autoscroll) return
     const el = scrollRef.current
-    if (el) el.scrollTop = el.scrollHeight
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+    topRef.current = el.scrollTop
   }, [items, autoscroll])
   // WHAT GROWS AFTER A FRAME is followed too: the request card that loads after the
   // transcript, a block opened at the end. Only while the person follows the end.
@@ -306,6 +323,7 @@ function ConversationBody({
       return
     const follow = new ResizeObserver(() => {
       el.scrollTop = el.scrollHeight
+      topRef.current = el.scrollTop
     })
     follow.observe(column)
     return () => follow.disconnect()
@@ -364,7 +382,12 @@ function ConversationBody({
     const el = scrollRef.current
     if (!el) return
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24
-    setAutoscroll(atBottom)
+    // The event of the console's own scroll to the end comes a frame later; a row measured
+    // in that frame puts the end below the view without moving it. Only a view that moved
+    // leaves the end, and the follow then catches the row up.
+    const moved = el.scrollTop !== topRef.current
+    topRef.current = el.scrollTop
+    if (atBottom || moved) setAutoscroll(atBottom)
   }, [])
 
   // The message index is read again when the person has sent another message, not on
@@ -422,6 +445,10 @@ function ConversationBody({
   )
   const live = isLiveRun(run) && !ended
   const last = parts[parts.length - 1]
+  const lastReplyId = parts.findLast(
+    (part): part is Extract<Part, { kind: 'item' }> =>
+      part.kind === 'item' && part.item.kind === 'assistant',
+  )?.item.id
   const runningNow =
     live && last?.kind === 'work' ? last.items.filter(isRunning) : []
   const turn = useTurnInterrupt(run)
@@ -530,7 +557,7 @@ function ConversationBody({
   return (
     <div
       ref={rootRef}
-      className="flex min-h-0 flex-1 flex-col gap-2"
+      className="group/conv relative flex min-h-0 flex-1 flex-col gap-2"
       data-testid="session-conversation"
     >
       {dropped > 0 ? (
@@ -546,19 +573,21 @@ function ConversationBody({
           tabIndex={0}
           role="log"
           aria-label={t('conversation.log')}
-          className="min-h-0 flex-1 overflow-auto focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset"
+          // A virtual list keeps the view in place itself when a row above it changes size;
+          // the browser's scroll anchoring doing it too moved the view back and forth every
+          // frame at some positions (#4128). A short list keeps the browser's.
+          className={cn(
+            'relative min-h-0 flex-1 overflow-auto focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset',
+            virtual && '[overflow-anchor:none]',
+          )}
         >
           {/* ONE CENTERED COLUMN, 760 px: the transcript is read, not scanned, and a line
             longer than that is a line nobody follows. */}
-          {/* While the rail shows, the column keeps clear of it: a message's Copy sits at
-              its right edge on a narrow pane. */}
+          {/* The rail of marks sits in the column's left padding: the column keeps its width. */}
           <div
             ref={columnRef}
             data-slot="conversation-column"
-            className={cn(
-              'mx-auto w-full max-w-[760px] px-4 py-4',
-              messages.available && messages.marks.length > 0 && 'pe-12',
-            )}
+            className="mx-auto w-full max-w-[760px] px-4 py-4"
           >
             {/* A LINK THAT DROPPED OR IS COMING UP SAYS SO, ONCE, QUIETLY, while the turns
               already read stay on the page. Without it a stale transcript reads as a
@@ -642,6 +671,7 @@ function ConversationBody({
                       selected={selectedId === part.item.id}
                       onInspect={onInspect}
                       onQuote={quote}
+                      lastReply={part.item.id === lastReplyId}
                     />
                   )
                 })}
@@ -695,12 +725,15 @@ function ConversationRowView({
   selected,
   onInspect,
   onQuote,
+  lastReply = false,
 }: {
   item: ConversationItem
   runRef: string
   selected: boolean
   onInspect?: (item: ConversationItem) => void
   onQuote?: (text: string) => void
+  /** The reply the thread ends on keeps its actions shown; earlier ones reveal them. */
+  lastReply?: boolean
 }) {
   const { t } = useTranslation('sessions')
   const contentRef = useRef<HTMLDivElement>(null)
@@ -777,28 +810,26 @@ function ConversationRowView({
             output: formatInt(item.outputTokens ?? 0),
           })
         : null,
-      item.costUsd !== undefined
-        ? new Intl.NumberFormat(undefined, {
-            style: 'currency',
-            currency: 'USD',
-            maximumFractionDigits: 4,
-          }).format(item.costUsd)
-        : null,
+      item.costUsd !== undefined ? turnCostText(item.costUsd) : null,
     ].filter(Boolean)
-    // THE END OF A TURN IS A DIVIDER, not a bare "Result" button: "Finished in 8s" when
-    // the tool said how long, "Result" when it did not ("Worked for" is the work row's,
-    // the regression). It opens what the button showed inline: how the turn stopped, the model,
-    // the tokens, the cost and the raw frame. A failed turn keeps its duration:
-    // "Result · 8.0s", never a silent "Finished in". Every turn names the model that
-    // produced it.
+    // THE END OF A TURN IS A DIVIDER, not a bare "Result" button, and the one line that
+    // times the turn: "Worked for 8s" when the tool said how long, "Result" when it did not
+    // (the work row says what was done, not how long). It opens what the button showed
+    // inline: how the turn stopped, the model, the tokens, the cost and the raw frame. A
+    // failed turn keeps its duration: "Result · 8.0s", never a silent "Worked for". Every
+    // turn names the model that produced it.
     const label = [
-      item.durationMs === undefined
-        ? t('conversation.result')
-        : item.resultFailed
-          ? `${t('conversation.result')} · ${formatDuration(item.durationMs)}`
-          : t('conversation.finishedIn', {
-              duration: formatDuration(item.durationMs),
-            }),
+      item.interrupted
+        ? item.durationMs === undefined
+          ? t('conversation.interrupted')
+          : `${t('conversation.interrupted')} · ${formatDuration(item.durationMs)}`
+        : item.durationMs === undefined
+          ? t('conversation.result')
+          : item.resultFailed
+            ? `${t('conversation.result')} · ${formatDuration(item.durationMs)}`
+            : t('conversation.workedFor', {
+                duration: formatDuration(item.durationMs),
+              }),
       item.model && modelName(item.model),
     ]
       .filter(Boolean)
@@ -856,7 +887,7 @@ function ConversationRowView({
   // the assistant is the page itself.
   if (item.kind === 'operator')
     return (
-      <li className="my-2">
+      <li className="group/msg my-2">
         <div
           data-testid="conversation-item"
           data-item-id={item.id}
@@ -878,7 +909,7 @@ function ConversationRowView({
           <MessageImages runRef={runRef} attachments={item.attachments} />
         ) : null}
         {item.text ? (
-          <MessageActions align="end" text={() => item.text ?? ''} />
+          <MessageActions align="end" reveal text={() => item.text ?? ''} />
         ) : null}
       </li>
     )
@@ -910,7 +941,7 @@ function ConversationRowView({
   // THE ASSISTANT'S WORDS ARE MARKDOWN (#1784): lists, code and bold are shown as such. A
   // reply holds blocks and links, which a button cannot, so the row is the reply itself.
   return (
-    <li className="py-1">
+    <li className="group/msg py-1">
       <div
         data-testid="conversation-item"
         data-item-id={item.id}
@@ -922,12 +953,13 @@ function ConversationRowView({
           selected && 'bg-active',
         )}
       >
-        <MarkdownText text={item.text || item.summary} copyBlocks />
+        <MarkdownText text={item.text || item.summary} />
         <KeyboardInspect onInspect={onInspect ? inspect : undefined} />
       </div>
       {item.text ? (
         <MessageActions
           align="start"
+          reveal={!lastReply}
           text={replyText}
           onQuote={
             onQuote && item.kind === 'assistant' ? quoteReply : undefined
@@ -945,7 +977,10 @@ function ConversationRowView({
 function SentTurnRow({ turn, ended }: { turn: SentTurn; ended: boolean }) {
   const { t } = useTranslation('sessions')
   return (
-    <li className="my-2 flex flex-col gap-1" data-testid="conversation-sent">
+    <li
+      className="group/msg my-2 flex flex-col gap-1"
+      data-testid="conversation-sent"
+    >
       <p className="rounded-[12px] bg-muted px-4 py-3 text-body-l text-text">
         <span className="whitespace-pre-wrap break-words">{turn.text}</span>
       </p>
@@ -962,21 +997,24 @@ function SentTurnRow({ turn, ended }: { turn: SentTurn; ended: boolean }) {
           {t(ended ? 'conversation.sentNotTaken' : 'conversation.sentPending')}
         </p>
       )}
-      <MessageActions align="end" text={() => turn.text} />
+      <MessageActions align="end" reveal text={() => turn.text} />
     </li>
   )
 }
 
 /** Copy the words as read; a writable reply can also be quoted into its composer.
- * A message without words has neither action. */
+ * A message without words has neither action. The transcript is text, not a column of
+ * controls: a `reveal` row shows on hover or focus of its message, and always on touch. */
 function MessageActions({
   align,
   text,
   onQuote,
+  reveal = false,
 }: {
   align: 'start' | 'end'
   text: () => string
   onQuote?: () => void
+  reveal?: boolean
 }) {
   const { t } = useTranslation('common')
   return (
@@ -984,6 +1022,8 @@ function MessageActions({
       className={cn(
         'mt-0.5 flex items-center gap-2',
         align === 'end' ? 'justify-end' : 'justify-start',
+        reveal &&
+          'opacity-0 transition-opacity group-focus-within/msg:opacity-100 group-hover/msg:opacity-100 pointer-coarse:opacity-100',
       )}
     >
       <CopyButton
@@ -1017,6 +1057,7 @@ const ConversationRow = memo(
     a.selected === b.selected &&
     a.onInspect === b.onInspect &&
     a.onQuote === b.onQuote &&
+    a.lastReply === b.lastReply &&
     samePlain(a.item, b.item),
 )
 

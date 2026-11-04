@@ -68,6 +68,16 @@ export function useFailedActionReporter(
         })
         return
       }
+      // A lapsed add-on is not a role refusal: the server's sentence names the
+      // add-on and says reads and exports are unaffected.
+      if (
+        err instanceof ApiError &&
+        err.isForbidden &&
+        err.code === 'addon_requires_license'
+      ) {
+        toast.warning(err.message)
+        return
+      }
       if (err instanceof ApiError && err.isForbidden) {
         toast.warning(t('common:privileged.notAuthorizedToast'))
         return

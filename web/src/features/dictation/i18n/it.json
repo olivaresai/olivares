@@ -5,6 +5,7 @@
   "listening": "In ascolto. Premi di nuovo o Esc per fermare.",
   "transcribing": "Trascrizione in corso…",
   "nothing": "Nessuna voce rilevata.",
+  "unavailable": "La dettatura funziona mentre la sessione è in corso.",
   "failed": "Dettatura non riuscita. Riprova.",
   "blocked": "Il browser ha bloccato il microfono."
 }

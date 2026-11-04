@@ -175,7 +175,10 @@ olivares session start /srv/projects/acme "explain this repository"
 Without `--tool` and `--profile` it runs the first tool that is ready, as the console's New
 session does (with `--profile` and no `--tool` the tool is Claude Code). Without `--profile`
 the engine picks how the tool runs (its own login, or a key or local model from Providers),
-and one line says which. Narrow the session when you need to:
+and one line says which. When the tool has provider accounts whose usage shows capacity, the
+session runs on the first of them (`olivares provider account ls`), and when every one is at
+its limit the start is refused before a folder or session is made. Narrow the session when you
+need to:
 
 ```sh
 olivares session start /srv/projects/acme --name acme-1 --tool claude --permission read-only --dlp deny --model opus

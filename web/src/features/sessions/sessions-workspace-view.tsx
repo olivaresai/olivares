@@ -30,6 +30,7 @@ import {
   type AuthBoundary,
 } from '@/features/agentops/auth-boundary'
 import { ProfilesPanel } from '@/features/agentops/profiles-panel'
+import { WorkStart } from '@/features/first-hour/first-hour'
 import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
 import { profileName, type RunState } from '@/features/agentops/types'
 import { WorkspacesPanel } from '@/features/agentops/workspaces-panel'
@@ -39,7 +40,9 @@ import { useAuth } from '@/lib/auth/context'
 import { formatInt, formatMicroUsd, formatTokens } from '@/lib/format'
 import { useIsPhone } from '@/lib/hooks/use-is-phone'
 import { useValidatedUrlState } from '@/lib/hooks/use-url-state'
-import { NamesUnreadNotice, UrlStateNotice } from '@/features/shared'
+import { NamesUnreadNotice, useUrlStateNotice } from '@/features/shared'
+import type { Notice } from '@/lib/notify'
+import { useConditionNotice } from '@/lib/use-condition-notice'
 import { cn } from '@/lib/utils'
 import { sessionsApi, sessionsKeys } from './api'
 import {
@@ -351,7 +354,6 @@ export function SessionsWorkspaceView({
   entrance?: SessionsEntrance
 }) {
   const { activeTenant } = useAuth()
-  const queryClient = useQueryClient()
   /**
    * WHO IS ACTING, IN WHICH TENANT, UNDER WHICH CREDENTIAL — the boundary the provider
    * profile plane already partitions its cache by (agentops/auth-boundary.ts). This
@@ -359,32 +361,10 @@ export function SessionsWorkspaceView({
    * TENANT, and both query keys carried the tenant alone. Two principals of one tenant
    * therefore shared cache entries, and a credential renewal — which keeps the session
    * id (core/auth/authenticator.go RefreshSession) — changed nothing at all, so a new
-   * boundary was handed the rows the previous one had read.
+   * boundary was handed the rows the previous one had read. The hook also retires the
+   * `sessions` and `agentops` scopes of the boundary that left.
    */
   const boundary = useAuthBoundary()
-
-  /**
-   * WHEN THE BOUNDARY MOVES, THIS PLANE'S READS END WITH IT. `useAuthBoundary` already
-   * cancels and removes the `agentops` scope of the boundary that left — which is where
-   * this screen's run half now lives — so only the `sessions` scope is retired here.
-   * The in-flight read is aborted through the signal its query owns, so a late answer
-   * has nowhere to land, and the removal is what makes a return to that boundary have
-   * to ask again instead of finding its old rows waiting.
-   *
-   * It lives in THIS component and not in `Inner` on purpose: `Inner` is remounted by
-   * its key on a tenant switch and would come back with an empty `previous`, i.e. with
-   * nothing to retire, on exactly the switch that most needs it.
-   */
-  const previous = useRef<{ tenant: string | null; epoch: number } | null>(null)
-  useEffect(() => {
-    const prev = previous.current
-    if (prev && prev.epoch !== boundary.epoch) {
-      const scope = sessionsKeys.boundaryScope(prev.tenant, prev.epoch)
-      void queryClient.cancelQueries({ queryKey: scope })
-      queryClient.removeQueries({ queryKey: scope })
-    }
-    previous.current = { tenant: boundary.tenant, epoch: boundary.epoch }
-  }, [boundary, queryClient])
 
   // Remount on a tenant switch so no row, override or open card can outlive it. A
   // principal or credential change does NOT remount — a silent token renewal must not
@@ -399,6 +379,34 @@ export function SessionsWorkspaceView({
   )
 }
 
+/**
+ * A read that failed is still failing while Retry asks again. A query that never answered goes
+ * back to `pending` for the length of a refetch, so `isError` alone says the condition ended
+ * and the notice (and a person's dismissal of it) would go with it.
+ */
+function stillFailing(q: {
+  isError: boolean
+  isFetching: boolean
+  errorUpdatedAt: number
+  dataUpdatedAt: number
+}) {
+  return q.isError || (q.isFetching && q.errorUpdatedAt > q.dataUpdatedAt)
+}
+
+/**
+ * What a half's failed read says: the notice while it is failing, `null` once it is known
+ * clear (the person may not read it, or it answered), `undefined` while it is still pending.
+ */
+function readFailure(
+  canRead: boolean,
+  q: Parameters<typeof stillFailing>[0] & { isSuccess: boolean },
+  notice: Omit<Notice, 'condition'>,
+): Omit<Notice, 'condition'> | null | undefined {
+  if (!canRead) return null
+  if (stillFailing(q)) return notice
+  return q.isSuccess ? null : undefined
+}
+
 function Inner({
   entrance,
   boundary,
@@ -411,7 +419,7 @@ function Inner({
   // panels below register when they load.
   const { t: ta } = useTranslation('agentops')
   const lang = i18n.language
-  const { activeTenant, can } = useAuth()
+  const { activeTenant, can, principal } = useAuth()
 
   const canLiveRead = can('sessions:live:read')
   const canRunRead = can('sessions:run:read')
@@ -648,6 +656,23 @@ function Inner({
     placeholderData: keepPage<ListResponse<LiveDTO>>(liveKeyAt),
   })
 
+  // The workspaces' names, for the rail's workspace rows (the launch dialog's query).
+  const workspacesQuery = useQuery({
+    queryKey: agentOpsKeys.workspaces(activeTenant, { limit: 200 }),
+    queryFn: () => agentOpsApi.listWorkspaces({ limit: 200 }),
+  })
+  const workspaceNames = useMemo(
+    () =>
+      new Map(
+        (workspacesQuery.data?.items ?? []).map((w) => [
+          w.workspace_ref,
+          w.name ||
+            w.root_path.split('/').filter(Boolean).pop() ||
+            w.workspace_ref,
+        ]),
+      ),
+    [workspacesQuery.data],
+  )
   const runsQuery = useQuery<ListResponse<RunDTO>>({
     queryKey: runsKey,
     queryFn: async ({ signal }) => {
@@ -1015,6 +1040,8 @@ function Inner({
     order: railOrdered,
     retiredAddress,
     latched: latchedDefault,
+    // Only the signed-in person's own session is ever opened by default.
+    userId: principal?.user_id ?? null,
   })
   // Adjusted during render, like the address latch below and for the same reason: this
   // is where the change is observable, and the guard makes it converge in one pass.
@@ -1662,10 +1689,9 @@ function Inner({
   const showProfiles = can('sessions:profile:read')
   const loadingCounts = liveQuery.isLoading || runsQuery.isLoading
   /**
-   * NEW SESSION IS OFFERED ONCE PER SCREEN. With sessions listed it is the header's verb;
-   * with none, the list's one empty state carries it instead, and the header does not
-   * repeat it (the 26.10.1 review counted four on one screen, and three remained). The
-   * tabs that list no sessions keep it in the header.
+   * NEW SESSION IS OFFERED ONCE PER SCREEN (the 26.10.1 review counted four on one screen,
+   * and three remained). The list's header carries it, with sessions listed or none, and the
+   * tabs that list no sessions keep it in their own header.
    */
   const newSession = canRunWrite ? (
     <Button variant="primary" size="sm" onClick={openNewSession}>
@@ -1673,33 +1699,61 @@ function Inner({
       {t('launch')}
     </Button>
   ) : undefined
-  // The empty list's one action: a primary pill in open space.
-  const emptyNewSession = canRunWrite ? (
-    <Button
-      variant="primary"
-      size="lg"
-      className="rounded-full"
-      onClick={openNewSession}
-    >
-      <Plus />
-      {t('launch')}
-    </Button>
-  ) : undefined
+  // The empty list's one action: the composer that starts the first session.
+  const emptyStart = canRunWrite ? <WorkStart /> : undefined
   const listTab = tab === 'sessions' || tab === 'table'
   const tableError =
     (!canLiveRead || liveQuery.isError) && (!canRunRead || runsQuery.isError)
       ? (liveQuery.error ?? runsQuery.error)
       : undefined
-  // ONE RETRY PER SCREEN. It re-reads both halves, so it sits on the first notice shown,
-  // and not at all where the table's own error state already carries one.
-  const noticeRetry = !(tab === 'table' && tableError !== undefined)
+  // WHAT THE PAGE COULD NOT DO IS SAID IN A TOAST, NOT IN A STRIP ABOVE THE WORK.
+  // A strip here pushed the list and the thread down for as long as the condition held. A failed
+  // read is an error, so its toast stays until the person closes it: it is the only place that
+  // says why half of the list is missing and offers the way out.
+  //
+  // A HALF THAT FAILED CAN BE ASKED AGAIN. The observed half has no timer and its stream
+  // opens only over an answer, so without the action a failed first read stayed failed until
+  // the page was reloaded. Retry is the same permission-guarded read the table's Retry makes,
+  // and every failed-read toast carries it whichever tab is open: the toast outlives the tab.
+  const retry = { label: t('common:actions.retry'), onClick: refrescarLegibles }
+  useConditionNotice(
+    'sessions.run-lookup-failed',
+    readFailure(canRunRead, runsQuery, {
+      level: 'error',
+      message: t('partial.runLookupFailed'),
+      action: retry,
+    }),
+  )
+  useConditionNotice(
+    'sessions.live-lookup-failed',
+    readFailure(canLiveRead, liveQuery, {
+      level: 'error',
+      message: t('partial.liveLookupFailed'),
+      action: retry,
+    }),
+  )
+  useConditionNotice(
+    'sessions.address-retired',
+    // Per visit: no retired address is "nothing to say here", not "the condition is over",
+    // so a dismissal of this address is kept for the next visit.
+    retiredAddress
+      ? { message: t('address.retired'), signature: retiredAddress }
+      : undefined,
+  )
+  // One array per change, never per render: the notice reads a new array as a new event.
+  const urlIssues = useMemo(
+    () => [...addressIssues, ...viewIssues],
+    [addressIssues, viewIssues],
+  )
+  useUrlStateNotice(urlIssues)
   // A selected session can hide the empty rail on narrow screens. Keep its action
   // in the header; only an unselected surface gives the action to the empty state.
   const emptyActionVisible =
     listTab &&
     sessions.length === 0 &&
     !loadingCounts &&
-    (tab === 'table' ? !tableError : !resolution.target)
+    !tableError &&
+    (tab === 'table' || !resolution.target)
   // Without the run half a launched session's state is not known, so "running" is left
   // out rather than guessed from the observed half; the partial notice says which half.
   // No sessions: the empty state says it; a "0 sessions · 0 running" line above it says
@@ -1722,45 +1776,45 @@ function Inner({
   // THE LIST SAYS ITS OWN LIMITS, AT ITS FOOT: what the role cannot see, and
   // that the page is the most recent part with the way to load more. Nothing of it sits
   // over the rail and the conversation.
+  const recentText = t('list.recent', {
+    count: sessions.length,
+    n: formatInt(sessions.length, lang),
+  })
   const listFooter =
     truncated || !canLiveRead || !canRunRead ? (
       <div
         data-testid="rail-footer"
-        className="flex shrink-0 flex-wrap items-center gap-x-1.5 gap-y-1 border-t border-line px-3 py-2 text-caption text-text-3"
+        className="flex shrink-0 flex-col gap-1 border-t border-line px-3 py-2 text-caption text-text-3"
       >
+        {/* ONE LINE (#4032): the count gives way to the list's width with an ellipsis (its
+            whole text on the hover) and Load more stays whole at the end, so the foot never
+            breaks into a count with a dangling separator and a button below it. */}
         {truncated ? (
-          <>
-            <span>
-              {t('list.recent', {
-                count: sessions.length,
-                n: formatInt(sessions.length, lang),
-              })}
+          <div
+            data-testid="rail-footer-line"
+            className="flex min-w-0 items-center justify-between gap-2"
+          >
+            <span className="min-w-0 truncate" title={recentText}>
+              {recentText}
             </span>
             {loadMore ? (
-              <>
-                <span aria-hidden="true">·</span>
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="h-auto p-0 text-caption"
-                  onClick={loadMore}
-                  // One page at a time: the longer page is read before the next is asked.
-                  disabled={
-                    liveQuery.isPlaceholderData || runsQuery.isPlaceholderData
-                  }
-                >
-                  {t('list.loadMore')}
-                </Button>
-              </>
+              <Button
+                variant="link"
+                size="sm"
+                className="h-auto shrink-0 p-0 text-caption"
+                onClick={loadMore}
+                // One page at a time: the longer page is read before the next is asked.
+                disabled={
+                  liveQuery.isPlaceholderData || runsQuery.isPlaceholderData
+                }
+              >
+                {t('list.loadMore')}
+              </Button>
             ) : null}
-          </>
+          </div>
         ) : null}
-        {!canLiveRead ? (
-          <p className="basis-full">{t('partial.noLiveRead')}</p>
-        ) : null}
-        {!canRunRead ? (
-          <p className="basis-full">{t('partial.noRunRead')}</p>
-        ) : null}
+        {!canLiveRead ? <p>{t('partial.noLiveRead')}</p> : null}
+        {!canRunRead ? <p>{t('partial.noRunRead')}</p> : null}
       </div>
     ) : undefined
 
@@ -1808,62 +1862,6 @@ function Inner({
           {/* ⛔ THE VIEWS OF THIS PAGE ARE NOT A TAB STRIP ANY MORE. The list header's `⋯`
             opens them (the table, the workspaces, the provider profiles) and `tab` is
             still the state that says which one is on screen; the list is its default. */}
-          <div className="flex shrink-0 flex-col gap-2 px-4 pt-2 empty:hidden">
-            <UrlStateNotice issues={[...addressIssues, ...viewIssues]} />
-            {retiredAddress && (
-              <p
-                role="status"
-                data-testid="sessions-address-retired"
-                className="rounded-md border border-border bg-muted px-2.5 py-2 text-caption text-muted-foreground"
-              >
-                {t('address.retired')}
-              </p>
-            )}
-
-            {/* A HALF THAT FAILED CAN BE ASKED AGAIN. The observed half has no timer and its
-              stream opens only over an answer, so without this a failed first read stayed
-              failed until the page was reloaded. Retry is the same permission-guarded read
-              the table's Retry makes. */}
-            {canRunRead && runsQuery.isError && (
-              <p
-                data-testid="sessions-run-lookup-failed"
-                className="flex items-center gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning"
-              >
-                <span className="min-w-0 flex-1">
-                  {t('partial.runLookupFailed')}
-                </span>
-                {noticeRetry ? (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={refrescarLegibles}
-                  >
-                    {t('common:actions.retry')}
-                  </Button>
-                ) : null}
-              </p>
-            )}
-            {canLiveRead && liveQuery.isError && (
-              <p
-                data-testid="sessions-live-lookup-failed"
-                className="flex items-center gap-2 rounded-md border border-warning-line bg-warning-soft px-2.5 py-2 text-caption text-warning"
-              >
-                <span className="min-w-0 flex-1">
-                  {t('partial.liveLookupFailed')}
-                </span>
-                {noticeRetry && !(canRunRead && runsQuery.isError) ? (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={refrescarLegibles}
-                  >
-                    {t('common:actions.retry')}
-                  </Button>
-                ) : null}
-              </p>
-            )}
-          </div>
-
           <div
             data-testid="sessions-panes"
             className="flex min-h-0 flex-1 flex-col"
@@ -1875,6 +1873,7 @@ function Inner({
             >
               <WorkSurface
                 sessions={sessions}
+                workspaceNames={workspaceNames}
                 loading={liveQuery.isLoading || runsQuery.isLoading}
                 address={address}
                 resolution={resolution}
@@ -1895,17 +1894,15 @@ function Inner({
                   setDetailBeside(false)
                   setDetailOpen(true)
                 }}
-                emptyAction={emptyActionVisible ? emptyNewSession : undefined}
+                emptyAction={emptyActionVisible ? emptyStart : undefined}
+                error={tableError}
+                onRetry={refrescarLegibles}
                 listFooter={listFooter}
                 listHeader={
                   <SessionsListHeader
                     count={counts.total}
                     countLabel={countText}
-                    onNew={
-                      canRunWrite && !emptyActionVisible
-                        ? openNewSession
-                        : undefined
-                    }
+                    onNew={canRunWrite ? openNewSession : undefined}
                     views={listViews}
                     onView={setTab}
                     streamFailed={canLiveRead && streamStatus === 'error'}
@@ -2130,6 +2127,7 @@ function ProvenanceChip({
   const key = notKnown ? 'unknown' : provenance
   return (
     <span
+      data-trust-chrome=""
       title={t(`card.provenance.${key}Explain`)}
       className={cn(
         'inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] font-medium',

@@ -88,8 +88,8 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
-| Parc | `/estate` | Consultez les ressources configurées et leurs relations, y compris les dépendances des éléments de travail. | `sessions:run:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
-| Inventaire | `/inventory` | Découvrez et cataloguez les agents, serveurs MCP et modèles que les connecteurs ont observés. | `inventory:catalog:read` | [reference/modules/i-inventory](/fr/reference/modules/i-inventory/) |
+| Ressources configurées | `/estate` | Ce que vous avez configuré et la façon dont ses éléments dépendent les uns des autres, éléments de travail compris. | `sessions:run:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
+| Ressources découvertes | `/inventory` | Agents, serveurs MCP et modèles observés par les connecteurs, et quand chacun a été vu pour la dernière fois. | `inventory:catalog:read` | [reference/modules/i-inventory](/fr/reference/modules/i-inventory/) |
 | Espace de travail | `/workspace` | Agents, sessions, ressources et activité limités à un espace de travail | `tenant:read` | [reference/modules/xx-multi-tenancy](/fr/reference/modules/xx-multi-tenancy/) |
 
 ### IA

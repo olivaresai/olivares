@@ -125,9 +125,9 @@ func buildGuardAdmissionGraph(current guardManifest) (guardEditionGraph, error) 
 	return addGuardCommunityPredecessors(g, current)
 }
 
-func guardAdmissionDeltaTables(target guardManifest, d guardEditionDelta) []string {
+func guardAdmissionDeltaTables(from, target guardManifest, d guardEditionDelta) []string {
 	if d == guardDeltaCommercial {
-		return guardProfileTables(target)
+		return guardProfileDeltaTables(from, target)
 	}
 	return guardEditionDeltaTables(d)
 }
@@ -139,7 +139,7 @@ func guardAdmissionModuleDelta(d guardEditionDelta) bool {
 func guardAdmissionDelta(from, to int64) (guardEditionDelta, error) {
 	if from < 0 && to > 0 {
 		membership, ok := guardEditionMembershipForEpoch(to)
-		if -from == to && ok && membership.has(guardDeltaAccessEvidence) {
+		if (-from == to || from == guardBusinessAITermsParent(to)) && ok && membership.has(guardDeltaAccessEvidence) {
 			return guardDeltaCommercial, nil
 		}
 		return 0, fmt.Errorf("%w: %d -> %d is not a compiled profile edge", ErrGuardManifestNoEdge, from, to)
@@ -169,6 +169,15 @@ func guardAdmissionParentEpochs(g guardEditionGraph, epoch int64) []int64 {
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	// Last, so a predecessor bridge still tries the Community profile first: a Community
+	// history keeps crossing to Business the way it always has. Only at the census's own
+	// epoch, where Business 0.4 wrote it: below it, every sealed path would carry the
+	// second layer again (measured: a Business boot took twice as long).
+	if epoch > 0 && epoch == g.Current && ok && membership.has(guardDeltaAccessEvidence) {
+		if _, present := g.nodes[guardBusinessAITermsParent(epoch)]; present {
+			out = append(out, guardBusinessAITermsParent(epoch))
+		}
+	}
 	return out
 }
 
@@ -180,7 +189,7 @@ func guardAdmissionEdge(g guardEditionGraph, from, to int64) (guardManifestEdge,
 			ErrGuardManifestNoEdge, from, to)
 	}
 	source, target := from, to
-	if guardProfileParent(to) == from {
+	if guardProfileParent(to) == from || (to > 0 && to == g.Current && from == guardBusinessAITermsParent(to)) {
 		source, target = -guardNodeEpoch(from), guardNodeEpoch(to)
 	}
 	delta, err := guardAdmissionDelta(source, target)
@@ -188,7 +197,7 @@ func guardAdmissionEdge(g guardEditionGraph, from, to int64) (guardManifestEdge,
 		return guardManifestEdge{}, err
 	}
 	want := map[string]bool{}
-	for _, table := range guardAdmissionDeltaTables(toNode.Manifest, delta) {
+	for _, table := range guardAdmissionDeltaTables(fromNode.Manifest, toNode.Manifest, delta) {
 		want[table] = true
 	}
 	additions := make([]guardSpec, 0, len(want))
@@ -266,6 +275,9 @@ func guardAdmissionPredecessorEdges(g guardEditionGraph, epoch int64) ([]guardMa
 
 func guardAdmissionEdgeSource(edge guardManifestEdge) int64 {
 	if edge.From.CodeEpoch == edge.To.CodeEpoch {
+		if guardManifestHolds(edge.From, guardCommercialTables[:]) {
+			return guardBusinessAITermsParent(edge.From.CodeEpoch)
+		}
 		return -edge.From.CodeEpoch
 	}
 	return edge.From.CodeEpoch

@@ -39,6 +39,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
+import { useTabParam } from '@/lib/hooks/use-tab-param'
 import { useUrlState } from '@/lib/hooks/use-url-state'
 import { cn } from '@/lib/utils'
 import { agentOpsApi, agentOpsKeys } from './api'
@@ -47,6 +48,7 @@ import {
   PERMISSION_CHOICES,
   PERMISSION_NAME,
 } from './session-launch'
+import { PersonalFoldersSwitch } from './personal-folders-switch'
 import { WorkspaceBrowser } from './workspace-browser'
 import { SessionTerminal } from '@/features/sessions/session-terminal'
 import { WorkspaceWiki } from './workspace-wiki'
@@ -55,6 +57,7 @@ import {
   type CreateWorkspaceRequest,
   type WorkspaceDTO,
 } from './types'
+import { BringFolders } from '@/features/first-hour/bring-folders'
 import '@/features/first-hour/i18n'
 import './i18n'
 import { WORKSPACE_METADATA } from '@/features/extensions'
@@ -69,12 +72,21 @@ export function WorkspacesPanel() {
   const canAdmin = can('sessions:workspace:admin')
   // A shell in the folder writes to it, so it needs the right to.
   const canWrite = can('sessions:workspace:write')
+  // The open workspace's tab is part of its place in the address (`?workspaceTab=`).
+  const [workspaceTab, setWorkspaceTab] = useTabParam(
+    canWrite ? ['files', 'wiki', 'terminal'] : ['files', 'wiki'],
+    { key: 'workspaceTab' },
+  )
 
   const [createOpen, setCreateOpen] = useState(false)
+  const [bringOpen, setBringOpen] = useState(false)
   const [confirmDel, setConfirmDel] = useState<WorkspaceDTO | null>(null)
-  const [location, patchLocation] = useUrlState(['workspace', 'path', 'file'], {
-    history: 'push',
-  })
+  const [location, patchLocation] = useUrlState(
+    ['workspace', 'path', 'file', 'workspaceTab'],
+    {
+      history: 'push',
+    },
+  )
 
   const query = useInfiniteQuery({
     queryKey: agentOpsKeys.workspaces(activeTenant, { limit: PAGE }),
@@ -182,6 +194,7 @@ export function WorkspacesPanel() {
                   workspace: row.original.workspace_ref,
                   path: undefined,
                   file: undefined,
+                  workspaceTab: undefined,
                 })
               }
             >
@@ -211,16 +224,26 @@ export function WorkspacesPanel() {
           {t('workspaces.subtitle')}
         </p>
         {canAdmin && (
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setCreateOpen(true)}
-          >
-            <HardDrive className="size-3.5" />
-            {t('workspaces.register')}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setBringOpen(true)}
+            >
+              {t('firstHour:bring.title')}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setCreateOpen(true)}
+            >
+              <HardDrive className="size-3.5" />
+              {t('workspaces.register')}
+            </Button>
+          </div>
         )}
       </div>
+      {canAdmin && <PersonalFoldersSwitch />}
 
       <DataTable
         columns={columns}
@@ -248,6 +271,17 @@ export function WorkspacesPanel() {
       {canAdmin && (
         <WorkspaceCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
       )}
+      {canAdmin && (
+        <Dialog open={bringOpen} onOpenChange={setBringOpen}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>{t('firstHour:bring.title')}</DialogTitle>
+              <DialogDescription>{t('firstHour:bring.body')}</DialogDescription>
+            </DialogHeader>
+            <BringFolders titled={false} onSkip={() => setBringOpen(false)} />
+          </DialogContent>
+        </Dialog>
+      )}
 
       <ConfirmDialog
         open={confirmDel !== null}
@@ -268,6 +302,7 @@ export function WorkspacesPanel() {
               workspace: undefined,
               path: undefined,
               file: undefined,
+              workspaceTab: undefined,
             })
         }}
       >
@@ -287,7 +322,7 @@ export function WorkspacesPanel() {
               </SheetHeader>
               <ReadOnlyFolders workspace={browse} canAdmin={canAdmin} />
               <DefaultPermission workspace={browse} canAdmin={canAdmin} />
-              <Tabs key={browse.workspace_ref} defaultValue="files">
+              <Tabs value={workspaceTab} onValueChange={setWorkspaceTab}>
                 <TabsList aria-label={browse.name || browse.workspace_ref}>
                   <TabsTrigger value="files">{t('browser.title')}</TabsTrigger>
                   <TabsTrigger value="wiki">{t('wiki.title')}</TabsTrigger>

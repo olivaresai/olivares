@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/auth/authtest"
 	"github.com/olivaresai/olivares/core/model"
 )
 
@@ -48,11 +49,7 @@ func TestCommunityBuildAnswers501ForDepartments(t *testing.T) {
 	sales := do("POST", "/v1/workspaces", root, tenant, map[string]any{"name": "Sales", "slug": "sales"}, 201)["id"].(string)
 	emea := do("POST", "/v1/workspaces", root, tenant, map[string]any{"name": "EMEA", "slug": "emea"}, 201)["id"].(string)
 	group := func(name string) string {
-		g, err := eng.authr.SCIMCreateGroup(context.Background(), principalOfToken(t, eng.authr, root), model.TenantID(tenant), auth.SCIMGroupInput{DisplayName: name})
-		if err != nil {
-			t.Fatalf("create group %s: %v", name, err)
-		}
-		return g.Group.ID.String()
+		return authtest.Group(t, eng.store, model.TenantID(tenant), name, "").Group.ID.String()
 	}
 	staff, team := group("Staff"), group("Team")
 

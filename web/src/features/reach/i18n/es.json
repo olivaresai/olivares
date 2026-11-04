@@ -31,6 +31,7 @@
   "waitingSummary": "En espera de aprobación: {{destinations}}",
   "empty": "Aún no hay alcance registrado.",
   "partial": "Vista parcial: el mapa de acceso tiene más.",
+  "otherReach": "Otra actividad de las herramientas (comandos de shell, búsquedas, bases de datos) no es una carpeta, un servidor MCP ni un endpoint de red, así que no se lista aquí. El mapa de acceso la muestra.",
   "loading": "Cargando alcance…",
   "error": "No se pudo cargar el gráfico de alcance.",
   "off": "Este módulo está apagado.",

@@ -95,7 +95,11 @@
     "localNameHint": "Ваше название этого адреса. Оно отображается в списке выбора.",
     "advanced": "Дополнительно: собственная конечная точка",
     "missingFields": "Заполните недостающие поля: {{fields}}.",
-    "requiredEndpointHint": "Введите адрес сервиса: https или обычный http на адресе loopback или частной сети."
+    "requiredEndpointHint": "Введите адрес сервиса: https или обычный http на адресе loopback или частной сети.",
+    "worksWith": "Работает с {{tools}}",
+    "otherKinds": "Другое (свой адрес)",
+    "keyLink": "Получить ключ API у {{vendor}}",
+    "docsLink": "Руководство по настройке {{vendor}}"
   },
   "rotate": {
     "title": "Заменить ключ этого провайдера",

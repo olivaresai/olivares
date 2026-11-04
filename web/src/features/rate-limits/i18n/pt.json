@@ -1,0 +1,70 @@
+{
+  "truncation": {
+    "label": "Carregadas {{n}} deteções; existem mais",
+    "hint": "Só as deteções carregadas foram pesquisadas para o resumo de limites de pedidos. Pode existir um resumo em falta para além desta página."
+  },
+  "title": "Limites de pedidos",
+  "description": "Inventário só de leitura dos limites de pedidos por organização e por espaço de trabalho que um gateway ou proxy tem de manter sincronizados. Obtido da API Rate Limits da Anthropic (só de leitura); esta vista nunca altera um limite.",
+  "caveats": {
+    "keepInSync": "Os gateways/proxies têm de manter a sincronização: estes limites são o inventário que um gateway ou proxy a montante tem de espelhar. Não são impostos aqui, e a sua alteração faz-se no fornecedor, não nesta consola.",
+    "managedAgents": "Os Managed Agents NÃO são abrangidos pela API Rate Limits. Os seus limites são uma lacuna documentada, não um valor zero — não é apresentada nenhuma linha de Managed Agents porque a API não comunica nenhuma."
+  },
+  "summary": {
+    "title": "Estado da sincronização",
+    "description": "Quantos limites de pedidos um gateway ou proxy tem de manter sincronizados, conforme comunicado pela ingestão de governação só de leitura."
+  },
+  "count": {
+    "label": "Limites a manter sincronizados",
+    "observedAt": "Observado {{at}}",
+    "unknown": "Contagem indisponível"
+  },
+  "degraded": {
+    "title": "Ingestão de governação da API Admin indisponível",
+    "hint": "Esta superfície de implementação (por exemplo, um gateway Bedrock, Vertex ou Foundry) não expõe a API Admin da Anthropic, pelo que o inventário de limites de pedidos não pode ser lido aqui. Isto é indisponibilidade assumida, não um inventário vazio."
+  },
+  "inventory": {
+    "title": "Inventário por limitador",
+    "description": "Cada limitador comunicado pelo fornecedor, agrupado por âmbito: primeiro os grupos de toda a organização, depois os grupos de substituição por espaço de trabalho.",
+    "unavailable": "Inventário indisponível",
+    "unavailableHint": "O conector Admin só de leitura não está configurado, pelo que o inventário por limitador não pode ser lido aqui. Isto é indisponibilidade assumida, não um inventário vazio.",
+    "tableLabel": "Inventário de limites de pedidos",
+    "empty": "Nenhum limite de pedidos comunicado",
+    "emptyHint": "O fornecedor não devolveu nenhuma entrada por limitador para esta organização.",
+    "scope": {
+      "org": "Organização"
+    },
+    "columns": {
+      "scope": "Âmbito",
+      "groupType": "Grupo",
+      "models": "Modelos",
+      "limiterType": "Limitador",
+      "value": "Valor",
+      "orgLimit": "Limite da org."
+    }
+  },
+  "groupType": {
+    "model_group": "Grupo de modelos",
+    "batch": "Lote",
+    "token_count": "Contagem de tokens",
+    "files": "Ficheiros",
+    "skills": "Skills",
+    "web_search": "Pesquisa na web"
+  },
+  "limitType": {
+    "requests_per_minute": "Pedidos por minuto",
+    "input_tokens_per_minute": "Tokens de entrada por minuto",
+    "output_tokens_per_minute": "Tokens de saída por minuto",
+    "enqueued_batch_requests": "Pedidos de lote em fila"
+  },
+  "empty": {
+    "rateLimitInventory": {
+      "title": "Ainda nenhum limite de pedidos comunicado",
+      "description": "As entradas aparecem quando a API Rate Limits da Anthropic, só de leitura, devolver limites por limitador para esta organização."
+    }
+  },
+  "effectiveState": {
+    "label": "O que pode alterar aqui:",
+    "proxy": "Proxy de inferência",
+    "finops": "Gastos"
+  }
+}

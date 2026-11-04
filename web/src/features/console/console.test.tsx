@@ -45,7 +45,6 @@ const { api, authState } = vi.hoisted(() => ({
     createInheritanceFilter: vi.fn(),
     removeInheritanceFilter: vi.fn(),
     listGroups: vi.fn(),
-    setGroupParent: vi.fn(),
     listModelGroups: vi.fn(),
     createModelGroup: vi.fn(),
     updateModelGroup: vi.fn(),
@@ -82,6 +81,10 @@ import { PeopleTab } from './people-tab'
 import { RolesTab } from './roles-tab'
 import { SSOTab } from './sso-tab'
 import { ScopesTab } from './scopes-tab'
+
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 
 function wrap(ui: ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -270,7 +273,11 @@ describe('SSOTab', () => {
   it('is superadmin-only', async () => {
     authState.isSuperadmin = false
     wrap(<SSOTab />)
-    expect(await screen.findByText(/only a superadmin/i)).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        /ask a system administrator to view or change it/i,
+      ),
+    ).toBeInTheDocument()
     expect(api.getSSO).not.toHaveBeenCalled()
   })
 

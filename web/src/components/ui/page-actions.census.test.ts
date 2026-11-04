@@ -138,10 +138,6 @@ const NO_VERB: ReadonlyArray<{ dir: string; why: string }> = [
     dir: 'features/reach',
     why: 'a projection of the access map: what each tool reaches; the engine offers no create',
   },
-  {
-    dir: 'features/recordings',
-    why: 'recordings are produced by sessions, never by this screen',
-  },
   { dir: 'features/redteam', why: 'a campaign starts from a scenario row' },
   {
     dir: 'features/reporting',
@@ -154,10 +150,6 @@ const NO_VERB: ReadonlyArray<{ dir: string; why: string }> = [
   {
     dir: 'features/security',
     why: 'five tabs of findings; the engine offers no create',
-  },
-  {
-    dir: 'features/session-viewer',
-    why: 'a detail screen: verify and summarise are secondary, and it has no list',
   },
   {
     dir: 'features/settings',
@@ -255,8 +247,9 @@ describe('the page header owns the verb, the filter row owns the filters', () =>
       }
     }
     // The floor: a parser that returns nothing passes the assertion above for free.
-    // 15 filter rows measured 2026-09-18, after this pass emptied eleven of them.
-    expect(rows).toBeGreaterThanOrEqual(12)
+    // 15 filter rows measured 2026-09-18, after this pass emptied eleven of them; the
+    // recordings page took one with it when recording moved to Business.
+    expect(rows).toBeGreaterThanOrEqual(11)
     expect(found).toEqual([])
   })
 
@@ -296,7 +289,7 @@ describe('the page header owns the verb, the filter row owns the filters', () =>
     ).toEqual([])
     // A screen that GAINED a verb must lose its row, or the list stops meaning anything.
     expect(stale).toEqual([])
-    expect(withHeader.size).toBeGreaterThanOrEqual(50)
+    expect(withHeader.size).toBeGreaterThanOrEqual(49)
   })
 
   it('every declared screen carries a reason', () => {

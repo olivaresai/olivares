@@ -74,6 +74,9 @@ func TestAuthSessionInventoryIsOwnOnlyAndRevokesOtherSessions(t *testing.T) {
 	if byID[browserID]["current"] != true || byID[browserID]["kind"] != "browser" {
 		t.Errorf("current browser session = %#v", byID[browserID])
 	}
+	if ip, _ := byID[browserID]["created_ip"].(string); ip == "" {
+		t.Errorf("browser session lacks the address it signed in from: %#v", byID[browserID])
+	}
 	if _, err := time.Parse(time.RFC3339Nano, byID[browserID]["last_used_at"].(string)); err != nil {
 		t.Errorf("browser last_used_at is not RFC3339: %v", err)
 	}

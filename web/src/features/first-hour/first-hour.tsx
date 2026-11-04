@@ -6,6 +6,8 @@
 // login, start a session in a folder — and the one New session form every entry
 // point opens. Every error says in one sentence what to do and offers the
 // button that does it.
+import { QueryErrorState } from '@/components/layout/query-error-state'
+import { usePermissionRestriction } from '@/features/agentops/permission-restriction'
 import {
   useMutation,
   useQuery,
@@ -13,12 +15,14 @@ import {
   type MutationKey,
 } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
+import { AppLink } from '@/components/ui/app-link'
 import { Check, ExternalLink, Loader2 } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { agentToolsKeys } from '@/features/agent-tools/api'
+import { SessionSkillsPreview } from '@/features/skills/selection-preview'
 import { useProfileList } from '@/features/agent-tools/use-profiles'
-import { ListTruncationBadge } from '@/features/_intel/notices'
+import { listaRecortada } from '@/features/_intel/notices'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -32,12 +36,13 @@ import { DisabledReason } from '@/components/ui/disabled-reason'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { PathText } from '@/components/ui/path-text'
-import { Segmented } from '@/components/ui/segmented'
 import { Spinner } from '@/components/ui/spinner'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -47,7 +52,11 @@ import { PANEL_EXTENSIONS, RUN_ON_EXTENSION } from '@/features/extensions'
 import type { ToolReadinessDTO, WorkspaceDTO } from '@/features/agentops/types'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import { ModelEffortFields } from '@/features/agentops/model-effort-picker'
-import { AccountUsage, AtLimit } from '@/features/agentops/account-usage'
+import {
+  AccountUsage,
+  AtLimit,
+  UsageMeter,
+} from '@/features/agentops/account-usage'
 import { useModelChoices } from '@/features/agentops/model-choices'
 import { LaunchSpeedFields } from '@/features/agentops/launch-speed-fields'
 import { LaunchPreflight } from '@/features/agentops/launch-identity'
@@ -57,7 +66,8 @@ import { ApiError } from '@/lib/api/errors'
 import type { RequestOptions } from '@/lib/api/client'
 import { useStepUpOwner, type StepUpAttempt } from '@/stores/step-up'
 import { useTenantStore } from '@/stores/tenant'
-import type { AdvancedLaunch } from './new-session-store'
+import { BringFoldersStep } from './bring-folders'
+import { useNewSessionDialog, type AdvancedLaunch } from './new-session-store'
 import { stoppedAtStartReason } from '@/features/agentops/launch-readiness'
 import {
   DEFAULT_PERMISSION,
@@ -68,6 +78,7 @@ import {
   PERMISSION_NAME,
   type PermissionChoice,
 } from '@/features/agentops/session-launch'
+import { ToolMark } from '@/features/agentops/tool-mark'
 import {
   FIRST_HOUR_TOOLS,
   sessionTools,
@@ -255,6 +266,7 @@ export function ToolCard({
       data-testid={`tool-${driver}`}
     >
       <div className="flex flex-wrap items-center gap-2">
+        <ToolMark driver={driver} />
         <span className="text-body font-semibold text-text">
           {t(`tools.${driver}`)}
         </span>
@@ -267,7 +279,14 @@ export function ToolCard({
                 {installed ? t('status.installed') : t('status.notInstalled')}
               </StatusLine>
             ) : null}
-            {installed && part !== 'install' ? (
+            {installed &&
+            part !== 'install' &&
+            !ready &&
+            status.data?.reason ? (
+              <span className="text-body text-text-2">
+                {status.data.reason}
+              </span>
+            ) : installed && part !== 'install' ? (
               <StatusLine ok={ready}>
                 {signedIn
                   ? status.data?.account
@@ -831,6 +850,9 @@ const STARTED_WINDOW = 20
 const FOLDER_WINDOW = 200
 
 /** The one New session form: tool, folder, first message; the rest under More. */
+/** The composer, then the choices. The composer is on screen from the first paint and keeps
+ * what is typed; the choices wait for the engine's answer on which tools can start, and
+ * Enter does nothing until the form that sends it is there. */
 export function StartSessionForm({
   onStarted,
   onAdvanced,
@@ -838,6 +860,52 @@ export function StartSessionForm({
   onStarted?: () => void
   /** The advanced launch dialog, offered inside More options: one expander (Root, 09b).
    * It opens on the sign-in, model and effort this form shows. */
+  onAdvanced?: (launch?: AdvancedLaunch) => void
+}) {
+  const { t } = useTranslation('firstHour')
+  const formId = useId()
+  const [prompt, setPrompt] = useState('')
+  return (
+    <div className="flex min-w-0 flex-col gap-4">
+      <Field label={t('start.prompt')}>
+        <Textarea
+          form={formId}
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          // As in a session's composer: Enter sends, Shift+Enter starts a new line.
+          onKeyDown={(e) => {
+            if (
+              e.key === 'Enter' &&
+              !e.shiftKey &&
+              !e.nativeEvent.isComposing
+            ) {
+              e.preventDefault()
+              e.currentTarget.form?.requestSubmit()
+            }
+          }}
+          placeholder={t('start.promptPlaceholder')}
+          rows={3}
+        />
+      </Field>
+      <StartSessionChoices
+        formId={formId}
+        prompt={prompt}
+        onStarted={onStarted}
+        onAdvanced={onAdvanced}
+      />
+    </div>
+  )
+}
+
+function StartSessionChoices({
+  formId,
+  prompt,
+  onStarted,
+  onAdvanced,
+}: {
+  formId: string
+  prompt: string
+  onStarted?: () => void
   onAdvanced?: (launch?: AdvancedLaunch) => void
 }) {
   const { t } = useTranslation('firstHour')
@@ -878,6 +946,9 @@ export function StartSessionForm({
     !defaults.tool || tool === defaults.tool ? defaults.account : ''
   // Start points at the sentence under the tool choice when that tool cannot start (#1083).
   const notReadyId = useId()
+  const accessId = useId()
+  const typedFolder = useRef<HTMLInputElement>(null)
+  const focusTyped = useRef(false)
   // The product fills the folder in, shows it, and asks for a path only after Change
   // folder: the last session's folder while it is still registered, else '' (a new folder
   // of the session's own, made by the engine). The runs are the same read as the setup
@@ -941,10 +1012,8 @@ export function StartSessionForm({
     scope: string
     folder: string
     workspace_ref?: string
-    editing: boolean
-    /** A path typed instead of picked: set by "Another folder…", or when Change folder
-     * opens with no folder to pick from. Fixed then, so a list that arrives later never
-     * swaps the field under what the user is typing. */
+    /** A path typed instead of picked: set by "Another folder…". Fixed then, so a list
+     * that arrives later never swaps the field under what the user is typing. */
     typing?: boolean
   } | null>(null)
   const pickable = (registered.data?.items ?? []).filter(
@@ -969,17 +1038,16 @@ export function StartSessionForm({
             workspace_ref: defaultFolder?.workspace_ref,
           }
         : lastFolder(runs.data?.items ?? [], registered.data?.items ?? [])),
-      editing: false,
     })
   const current = chosen?.scope === folderScope ? chosen : null
   const folder = current?.folder ?? ''
   // The folders sessions already use, to pick from; a path is typed only as the fallback.
-  const [prompt, setPrompt] = useState('')
   const [runOn, setRunOn] = useState('')
   const [more, setMore] = useState(false)
   // The person's own pick; until there is one, the permission the folder stores, else the
   // usual default. A stored Full is offered only to someone who may run it: the engine
   // refuses anyone else, so for them it is as if the folder had none.
+  const restriction = usePermissionRestriction()
   const [picked, setPicked] = useState<PermissionChoice | null>(null)
   const storedPermission = (registered.data?.items ?? []).find(
     (w) =>
@@ -991,7 +1059,15 @@ export function StartSessionForm({
       PERMISSION_NAME[c] === storedPermission &&
       mayChoosePermission(c, can('sessions:run:admin')),
   )
-  const permission = picked ?? folderPermission ?? DEFAULT_PERMISSION
+  const preferred = folderPermission ?? DEFAULT_PERMISSION
+  const permission =
+    picked ??
+    (restriction.allows(PERMISSION_NAME[preferred])
+      ? preferred
+      : (PERMISSION_CHOICES.find((p) =>
+          restriction.allows(PERMISSION_NAME[p]),
+        ) ?? preferred))
+  const permissionBlocked = !restriction.allows(PERMISSION_NAME[permission])
   const setPermission = setPicked
   const [secretEnv, setSecretEnv] = useState<SecretEnvChoice[]>([])
   const [credentials, setCredentials] = useState<string[]>([])
@@ -1169,6 +1245,7 @@ export function StartSessionForm({
   }
   return (
     <form
+      id={formId}
       className="flex min-w-0 flex-col gap-4"
       onSubmit={(e) => {
         e.preventDefault()
@@ -1178,7 +1255,9 @@ export function StartSessionForm({
           !current ||
           defaultsLoading ||
           !toolReady ||
-          speedUnavailable
+          speedUnavailable ||
+          permissionBlocked ||
+          (noDefault && !model)
         )
           return
         const owner = captureOwner()
@@ -1201,16 +1280,21 @@ export function StartSessionForm({
         </p>
       ) : null}
       <Field label={t('start.tool')}>
-        <Segmented
-          aria-label={t('start.tool')}
-          className="flex-wrap"
-          value={tool}
-          onValueChange={(v) => setDriver(v as SessionTool)}
-          options={sessionTools().map((d) => ({
-            value: d,
-            label: toolName(d),
-          }))}
-        />
+        <Select value={tool} onValueChange={(v) => setDriver(v as SessionTool)}>
+          <SelectTrigger aria-label={t('start.tool')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {sessionTools().map((d) => (
+              <SelectItem key={d} value={d}>
+                <span className="inline-flex items-center gap-1.5">
+                  <ToolMark driver={d} />
+                  {toolName(d)}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </Field>
       {profiles && profiles.choices.length > 1 ? (
         <Field label={t('start.profile')}>
@@ -1229,13 +1313,20 @@ export function StartSessionForm({
                   key={c.value || DEFAULT_PROFILE}
                   className="h-auto min-h-8 whitespace-normal"
                   value={c.value || DEFAULT_PROFILE}
-                  disabled={!c.ready && c.value !== ''}
+                  disabled={(!c.ready && c.value !== '') || c.atLimit}
                 >
+                  <ToolMark driver={tool} className="me-1.5 align-middle" />
                   {c.ready
                     ? c.label
                     : `${c.label} · ${t(c.missing === 'key' ? 'start.profileNeedsKey' : 'start.profileNotSignedIn')}`}
                   {c.usage ? (
-                    <AccountUsage usage={c.usage} className="ms-2" />
+                    <>
+                      <UsageMeter usage={c.usage} />
+                      <AccountUsage usage={c.usage} />
+                    </>
+                  ) : null}
+                  {c.atLimit ? (
+                    <AtLimit usage={c.usage} quiet className="ms-2" />
                   ) : null}
                 </SelectItem>
               ))}
@@ -1289,6 +1380,7 @@ export function StartSessionForm({
             <SelectContent>
               {noDefault ? null : (
                 <SelectItem value={DEFAULT_MODEL}>
+                  <ToolMark driver={tool} className="me-1.5 align-middle" />
                   {saved
                     ? t('start.providerDefault', { model: saved })
                     : t('start.nativeDefault', { tool: toolName(tool) })}
@@ -1296,6 +1388,7 @@ export function StartSessionForm({
               )}
               {tested.map((m) => (
                 <SelectItem key={m} value={m}>
+                  <ToolMark driver={tool} className="me-1.5 align-middle" />
                   {m}
                 </SelectItem>
               ))}
@@ -1303,6 +1396,12 @@ export function StartSessionForm({
           </Select>
         </Field>
       ) : null}
+      {tool && toolReady && (
+        <SessionSkillsPreview
+          profileRef={catalogProfile || undefined}
+          folderRef={current?.workspace_ref}
+        />
+      )}
       {tool && toolReady ? (
         <ModelEffortFields
           profileRef={catalogProfile}
@@ -1353,143 +1452,173 @@ export function StartSessionForm({
           {t('start.openProviders')}
         </Button>
       ) : null}
-      {current?.editing && !current.typing ? (
-        <Field label={t('start.folder')}>
+      {current ? (
+        <>
+          <Field label={t('start.folder')}>
+            <Select
+              value={
+                current.typing
+                  ? FOLDER_TYPED
+                  : (current.workspace_ref ?? FOLDER_NEW)
+              }
+              onValueChange={(v) => {
+                if (v === FOLDER_TYPED) {
+                  focusTyped.current = true
+                  return setChosen({
+                    ...current,
+                    typing: true,
+                    workspace_ref: undefined,
+                  })
+                }
+                if (v === FOLDER_NEW)
+                  return setChosen({
+                    ...current,
+                    folder: '',
+                    workspace_ref: undefined,
+                    typing: false,
+                  })
+                const picked = pickable.find((w) => w.workspace_ref === v)
+                if (picked)
+                  setChosen({
+                    ...current,
+                    folder: picked.root_path,
+                    workspace_ref: picked.workspace_ref,
+                    typing: false,
+                  })
+              }}
+            >
+              <SelectTrigger aria-label={t('start.folder')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent
+                className="max-w-[var(--radix-select-content-available-width)]"
+                // The picker hands focus back to its button when it closes; a typed path
+                // was just asked for, so the field takes it.
+                onCloseAutoFocus={(e) => {
+                  if (!focusTyped.current) return
+                  focusTyped.current = false
+                  e.preventDefault()
+                  typedFolder.current?.focus()
+                }}
+              >
+                {/* The list is a page of the registered folders: when it is cut, the picker
+                  says so where the list is, and "Another folder…" reaches the rest. */}
+                {listaRecortada(registered) ? (
+                  <SelectGroup>
+                    <SelectLabel>{t('lists.foldersHint')}</SelectLabel>
+                  </SelectGroup>
+                ) : null}
+                {/* A folder the list stopped naming after it was picked stays shown: Start
+                  sends what the form shows, and the engine refuses it in its own words. */}
+                {current.workspace_ref &&
+                !pickable.some(
+                  (w) => w.workspace_ref === current.workspace_ref,
+                ) ? (
+                  <SelectItem
+                    value={current.workspace_ref}
+                    textValue={folder}
+                    title={folder}
+                    className={FOLDER_ITEM}
+                  >
+                    <PathText value={folder} copy={false} />
+                  </SelectItem>
+                ) : null}
+                {pickable.map((w) => (
+                  <SelectItem
+                    key={w.workspace_ref}
+                    value={w.workspace_ref}
+                    textValue={folderLabel(w)}
+                    title={folderLabel(w)}
+                    className={FOLDER_ITEM}
+                  >
+                    <FolderLabel workspace={w} />
+                  </SelectItem>
+                ))}
+                <SelectItem value={FOLDER_NEW}>
+                  {t('start.folderNew')}
+                </SelectItem>
+                <SelectItem value={FOLDER_TYPED}>
+                  {t('start.folderTyped')}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          {current.typing ? (
+            <>
+              <Input
+                ref={typedFolder}
+                aria-label={t('start.folder')}
+                value={folder}
+                onChange={(e) =>
+                  setChosen({
+                    ...current,
+                    folder: e.target.value,
+                    workspace_ref: undefined,
+                  })
+                }
+                placeholder="/home/you/project"
+                spellCheck={false}
+              />
+              <p className="-mt-2 text-caption text-muted-foreground">
+                {
+                  // An unreadable list is not an empty one; a principal who may not list
+                  // folders is not told of a list they were never to see.
+                  registered.isError && can('sessions:workspace:read')
+                    ? t('start.foldersUnreadable')
+                    : t('start.folderHint')
+                }
+              </p>
+            </>
+          ) : null}
+        </>
+      ) : (
+        <Loader2 aria-hidden className="size-4 animate-spin text-text-3" />
+      )}
+      {/* The same presets for every tool (N1); a launch a tool cannot honour is refused
+          by the engine with one sentence, shown below. The current one is always on
+          screen, with what it does. */}
+      <div className="flex flex-col gap-1.5">
+        <Field label={t('start.permission')}>
           <Select
-            value={current.workspace_ref ?? FOLDER_NEW}
+            value={permission}
             onValueChange={(v) => {
-              if (v === FOLDER_TYPED)
-                return setChosen({
-                  ...current,
-                  typing: true,
-                  workspace_ref: undefined,
-                })
-              if (v === FOLDER_NEW)
-                return setChosen({
-                  ...current,
-                  folder: '',
-                  workspace_ref: undefined,
-                })
-              const picked = pickable.find((w) => w.workspace_ref === v)
-              if (picked)
-                setChosen({
-                  ...current,
-                  folder: picked.root_path,
-                  workspace_ref: picked.workspace_ref,
-                })
+              const next = PERMISSION_CHOICES.find((p) => p === v)
+              if (next) setPermission(next)
             }}
           >
-            <SelectTrigger autoFocus aria-label={t('start.folder')}>
+            <SelectTrigger
+              aria-label={t('start.permission')}
+              aria-describedby={accessId}
+            >
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="max-w-[var(--radix-select-content-available-width)]">
-              {/* A folder the list stopped naming after it was picked stays shown: Start
-                  sends what the form shows, and the engine refuses it in its own words. */}
-              {current.workspace_ref &&
-              !pickable.some(
-                (w) => w.workspace_ref === current.workspace_ref,
-              ) ? (
+            <SelectContent>
+              {PERMISSION_CHOICES.filter(
+                // The engine refuses Full and Auto to anyone who does not run sessions as
+                // an administrator, so only they are offered them.
+                (p) => mayChoosePermission(p, can('sessions:run:admin')),
+              ).map((p) => (
                 <SelectItem
-                  value={current.workspace_ref}
-                  textValue={folder}
-                  title={folder}
-                  className={FOLDER_ITEM}
+                  key={p}
+                  value={p}
+                  className={p === 'full' ? 'text-warning' : undefined}
+                  disabled={!restriction.allows(PERMISSION_NAME[p])}
+                  title={
+                    !restriction.allows(PERMISSION_NAME[p])
+                      ? restriction.reason
+                      : undefined
+                  }
                 >
-                  <PathText value={folder} copy={false} />
-                </SelectItem>
-              ) : null}
-              {pickable.map((w) => (
-                <SelectItem
-                  key={w.workspace_ref}
-                  value={w.workspace_ref}
-                  textValue={folderLabel(w)}
-                  title={folderLabel(w)}
-                  className={FOLDER_ITEM}
-                >
-                  <FolderLabel workspace={w} />
+                  {t(`permission.${p}`)}
                 </SelectItem>
               ))}
-              <SelectItem value={FOLDER_NEW}>{t('start.folderNew')}</SelectItem>
-              <SelectItem value={FOLDER_TYPED}>
-                {t('start.folderTyped')}
-              </SelectItem>
             </SelectContent>
           </Select>
         </Field>
-      ) : current?.editing ? (
-        <Field
-          label={t('start.folder')}
-          description={
-            // An unreadable list is not an empty one; a principal who may not list
-            // folders is not told of a list they were never to see.
-            registered.isError && can('sessions:workspace:read')
-              ? t('start.foldersUnreadable')
-              : t('start.folderHint')
-          }
-        >
-          <Input
-            autoFocus
-            value={folder}
-            onChange={(e) =>
-              setChosen({
-                ...current,
-                folder: e.target.value,
-                workspace_ref: undefined,
-              })
-            }
-            placeholder="/home/you/project"
-            spellCheck={false}
-          />
-        </Field>
-      ) : (
-        <div className="flex flex-col gap-1.5" data-slot="session-folder">
-          <span className="text-body font-medium text-foreground">
-            {t('start.folder')}
-          </span>
-          {current ? (
-            <p className="flex flex-wrap items-center gap-x-2 text-body">
-              {folder ? (
-                <PathText value={folder} />
-              ) : (
-                <span className="text-text">{t('start.folderNew')}</span>
-              )}
-              <Button
-                type="button"
-                variant="link"
-                onClick={() =>
-                  setChosen({
-                    ...current,
-                    editing: true,
-                    typing: pickable.length === 0,
-                  })
-                }
-              >
-                {t('start.folderChange')}
-              </Button>
-            </p>
-          ) : (
-            <Loader2 aria-hidden className="size-4 animate-spin text-text-3" />
-          )}
-        </div>
-      )}
-      <ListTruncationBadge
-        query={runs}
-        filas={runs.data?.items.length ?? 0}
-        label={t('lists.runsTruncated', {
-          count: runs.data?.items.length ?? 0,
-        })}
-        hint={t('lists.runsHint')}
-        className="p-0 [&_span]:leading-relaxed [&_span]:whitespace-normal"
-      />
-      <ListTruncationBadge
-        query={registered}
-        filas={registered.data?.items.length ?? 0}
-        label={t('lists.foldersTruncated', {
-          count: registered.data?.items.length ?? 0,
-        })}
-        hint={t('lists.foldersHint')}
-        className="p-0 [&_span]:leading-relaxed [&_span]:whitespace-normal"
-      />
+        <p id={accessId} className="text-caption text-text-3">
+          {t(`permissionSummary.${permission}`)}
+        </p>
+      </div>
       {RUN_ON_EXTENSION ? (
         <RUN_ON_EXTENSION
           value={runOn}
@@ -1497,14 +1626,6 @@ export function StartSessionForm({
           pending={start.isPending}
         />
       ) : null}
-      <Field label={t('start.prompt')}>
-        <Textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder={t('start.promptPlaceholder')}
-          rows={3}
-        />
-      </Field>
       <LaunchPreflight />
       <div>
         <Button
@@ -1516,44 +1637,17 @@ export function StartSessionForm({
           {t('start.more')}
         </Button>
       </div>
-      {more ? (
-        // The same presets for every tool (N1); a launch a tool cannot honour is refused
-        // by the engine with one sentence, shown below.
-        <Field label={t('start.permission')}>
-          <div
-            className="flex flex-col gap-1.5"
-            role="radiogroup"
-            aria-label={t('start.permission')}
-          >
-            {PERMISSION_CHOICES.filter(
-              // The engine refuses Full and Auto to anyone who does not run sessions as
-              // an administrator, so only they are offered them.
-              (p) => mayChoosePermission(p, can('sessions:run:admin')),
-            ).map((p) => (
-              <div key={p} className="flex flex-col">
-                <label
-                  className={`flex items-center gap-2 text-body ${p === 'full' ? 'text-warning' : 'text-text'}`}
-                >
-                  <input
-                    type="radio"
-                    name="permission"
-                    value={p}
-                    checked={permission === p}
-                    onChange={() => setPermission(p)}
-                    aria-describedby={`permission-${p}`}
-                  />
-                  {t(`permission.${p}`)}
-                </label>
-                <p
-                  id={`permission-${p}`}
-                  className="ml-6 text-caption text-text-3"
-                >
-                  {t(`permissionSummary.${p}`)}
-                </p>
-              </div>
-            ))}
-          </div>
-        </Field>
+      {restriction.reason && !restriction.error ? (
+        <p role="status" className="text-caption text-text-3">
+          {restriction.reason}
+        </p>
+      ) : null}
+      {restriction.error ? (
+        <QueryErrorState error={restriction.error} retry={restriction.retry} />
+      ) : restriction.retry ? (
+        <Button type="button" variant="link" onClick={restriction.retry}>
+          {t('common:actions.retry')}
+        </Button>
       ) : null}
       {more ? (
         <SessionSecrets value={secretEnv} onChange={setSecretEnv} />
@@ -1650,21 +1744,27 @@ export function StartSessionForm({
           {t('start.autoAsks', { tool: toolName(tool) })}
         </p>
       ) : null}
-      <div className="flex flex-wrap items-center gap-3">
+      <div>
         {/* A tool that cannot start says why under the tool choice; a key that needs a
-            model says it here, beside Start. */}
+            model says it here, under Start. */}
         <DisabledReason
+          className="w-full"
           disabled={
-            !current || speedUnavailable || (toolReady && noDefault && !model)
+            permissionBlocked ||
+            !current ||
+            speedUnavailable ||
+            (toolReady && noDefault && !model)
           }
           reason={
-            speedUnavailable
-              ? t('agentops:create.speedUnavailable')
-              : !current
-                ? t('start.readingFolder')
-                : untested
-                  ? t('start.noTestedModel')
-                  : t('start.chooseModel')
+            permissionBlocked
+              ? (restriction.reason ?? '')
+              : speedUnavailable
+                ? t('agentops:create.speedUnavailable')
+                : !current
+                  ? t('start.readingFolder')
+                  : untested
+                    ? t('start.noTestedModel')
+                    : t('start.chooseModel')
           }
           mode="native"
         >
@@ -1672,10 +1772,12 @@ export function StartSessionForm({
             type="submit"
             variant="primary"
             size="lg"
+            className="w-full"
             aria-describedby={tool && !toolReady ? notReadyId : undefined}
             disabled={
               !current ||
               defaultsLoading ||
+              permissionBlocked ||
               start.isPending ||
               !toolReady ||
               speedUnavailable ||
@@ -1728,7 +1830,63 @@ export function NewSessionDialog({
   )
 }
 
-/** Named accounts can start a session even when no default login is ready. */
+/** Named accounts can start a session even when no default login is ready. Undefined
+ * while the reads have not answered. */
+function useCanStart(): boolean | undefined {
+  const { ready, isLoading } = useReadyTools()
+  const profiles = useProfileList()
+  if (isLoading || profiles.isLoading) return undefined
+  return (
+    ready.length > 0 ||
+    !!profiles.data?.accounts.some((a) =>
+      sessionTools().some((d) => d === a.driver),
+    )
+  )
+}
+
+/** The tools a person can install and sign in from where they stand. */
+function ToolCards() {
+  return FIRST_HOUR_TOOLS.map((d) => <ToolCard key={d} driver={d} />)
+}
+
+/** The work surface before any session: the composer is always there, and until a tool
+ * can start one, the cards that get a tool ready are the step above it. */
+export function WorkStart() {
+  const { t } = useTranslation('firstHour')
+  const canStart = useCanStart()
+  const openAdvanced = useNewSessionDialog((s) => s.openAdvanced)
+  return (
+    <div
+      data-testid="work-start"
+      className="mx-auto flex w-full max-w-[640px] flex-col gap-5 p-4 sm:p-6"
+    >
+      <h2 className="text-title font-semibold text-text">
+        {t('steps.start.title')}
+      </h2>
+      {canStart === false ? (
+        <section
+          className="flex flex-col gap-3"
+          aria-labelledby="work-start-tools"
+        >
+          <div>
+            <h3
+              id="work-start-tools"
+              className="text-body-l font-semibold text-text"
+            >
+              {t('steps.signIn.title')}
+            </h3>
+            <p className="text-body text-text-2">{t('steps.signIn.body')}</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <ToolCards />
+          </div>
+        </section>
+      ) : null}
+      <StartSessionForm onAdvanced={openAdvanced} />
+    </div>
+  )
+}
+
 export function SessionReady({
   onStarted,
   onAdvanced,
@@ -1737,23 +1895,15 @@ export function SessionReady({
   onAdvanced?: (launch?: AdvancedLaunch) => void
 }) {
   const { t } = useTranslation('firstHour')
-  const { ready, isLoading } = useReadyTools()
-  const profiles = useProfileList()
-  if (isLoading || profiles.isLoading)
+  const canStart = useCanStart()
+  if (canStart === undefined)
     return <Loader2 aria-hidden className="size-5 animate-spin text-text-3" />
-  if (
-    ready.length > 0 ||
-    profiles.data?.accounts.some((a) =>
-      sessionTools().some((d) => d === a.driver),
-    )
-  )
+  if (canStart)
     return <StartSessionForm onStarted={onStarted} onAdvanced={onAdvanced} />
   // No tool ready: the cards that get one ready, and the advanced dialog as the only link.
   return (
     <div className="flex flex-col gap-3">
-      {FIRST_HOUR_TOOLS.map((d) => (
-        <ToolCard key={d} driver={d} />
-      ))}
+      <ToolCards />
       {onAdvanced ? (
         <Button
           variant="link"
@@ -1879,18 +2029,18 @@ export function FirstHourSteps() {
           // person back here (keyHref).
           <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-body text-text-2">
             {t('steps.install.orUse')}
-            <a
+            <AppLink
               href={keyHref('anthropic')}
               className="text-accent-text underline underline-offset-2"
             >
               {t('steps.install.addKey')}
-            </a>
-            <a
+            </AppLink>
+            <AppLink
               href={keyHref('ollama')}
               className="text-accent-text underline underline-offset-2"
             >
               {t('steps.install.addLocal')}
-            </a>
+            </AppLink>
           </p>
         )}
       </Step>
@@ -1921,17 +2071,7 @@ export function FirstHourSteps() {
         body={t('steps.start.body')}
         done={started}
       >
-        {signedIn ? null : (
-          <ListTruncationBadge
-            query={runs}
-            filas={runs.data?.items.length ?? 0}
-            label={t('lists.runsTruncated', {
-              count: runs.data?.items.length ?? 0,
-            })}
-            hint={t('lists.runsHint')}
-            className="p-0 [&_span]:leading-relaxed [&_span]:whitespace-normal"
-          />
-        )}
+        {signedIn ? <BringFoldersStep /> : null}
         {signedIn ? (
           <StartSessionForm />
         ) : deciding ? null : (

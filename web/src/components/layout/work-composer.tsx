@@ -7,7 +7,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
-import { ArrowUp, ChevronDown } from 'lucide-react'
+import { ArrowUp, ChevronDown, Lock } from 'lucide-react'
 import {
   useEffect,
   useId,
@@ -41,6 +41,7 @@ import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import '@/features/agentops/i18n'
 import { launchFailureMessage } from '@/features/agentops/launch-readiness'
 import { LaunchSpeedFields } from '@/features/agentops/launch-speed-fields'
+import { findModel } from '@/features/agentops/model-catalog'
 import {
   effortAfterModel,
   useModelChoices,
@@ -58,6 +59,7 @@ import { sendBlockedReason, sendTurn } from '@/features/agentops/session-turn'
 import type { RunCommandDTO, RunDTO } from '@/features/agentops/types'
 import { isWorkBound } from '@/features/agentops/work-fence'
 import { DictateButton } from '@/features/dictation/dictate-button'
+import { BackgroundTaskStrip } from '@/features/sessions/background-task-strip'
 import { joinDictation } from '@/features/dictation/join'
 import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
 import { governanceApi, governanceKeys } from '@/features/governance/api'
@@ -97,6 +99,12 @@ import {
   commandLabel,
   filterCommands,
   insertText,
+  isDollarSkill,
+  menuKeyOf,
+  mentionEntries,
+  mentionFolder,
+  mentionQuery,
+  skillQuery,
   slashOptionId,
   slashQuery,
   type SlashMenuEmpty,
@@ -470,8 +478,13 @@ function SessionComposer({
   // THE "/" MENU: while the first word of the message is a slash command being typed,
   // the session's own tool says what it offers (commands, skills, agents), asked again
   // each time the menu opens so a skill added meanwhile is there. Escape closes it for
-  // the word typed so far; the next character brings it back.
+  // the word typed so far; the next character brings it back. The same menu lists, after
+  // a leading "$", the skills a tool invokes with "$" (Codex), and after an "@" at the end
+  // of the draft, the files and folders of the session's folder.
   const slash = slashQuery(turn)
+  const skill = skillQuery(turn)
+  const mention = slash === null && skill === null ? mentionQuery(turn) : null
+  const menuKey = menuKeyOf(turn)
   const [slashDismissed, setSlashDismissed] = useState<string | null>(null)
   const [slashActive, setSlashActive] = useState(0)
   /** Every change of the draft: the choice goes back to the first entry, and an Escape lasts only while the word is the same. */
@@ -482,7 +495,7 @@ function SessionComposer({
       writeSessionDraft(draftKey, next)
     }
     setSlashActive(0)
-    if (slashQuery(next) !== slashDismissed) setSlashDismissed(null)
+    if (menuKeyOf(next) !== slashDismissed) setSlashDismissed(null)
   }
   // While a send is pending the field is disabled and the list would only be a target
   // for a click that rewrites the draft under it.
@@ -492,13 +505,13 @@ function SessionComposer({
     runLive &&
     !sending &&
     !!activeTenant &&
-    slash !== null &&
-    slashDismissed !== slash
+    menuKey !== null &&
+    slashDismissed !== menuKey
   const commandsQuery = useQuery({
     queryKey: agentOpsKeys.runCommands(activeTenant, attached.run.run_ref),
     queryFn: ({ signal }) =>
       agentOpsApi.commands(attached.run.run_ref, { signal }),
-    enabled: menuOpen,
+    enabled: menuOpen && mention === null,
     // Every opening asks again (the engine caches for a few seconds); the last answer
     // shows meanwhile.
     staleTime: 0,
@@ -508,19 +521,52 @@ function SessionComposer({
     retry: false,
   })
   const catalog = commandsQuery.data
-  const slashMatches = useMemo<RunCommandDTO[]>(
-    () =>
-      menuOpen && catalog?.reported
-        ? filterCommands(catalog.commands, slash ?? '')
-        : [],
-    [menuOpen, catalog, slash],
-  )
+  // "@": one folder of the session's workspace at a time, read through the jailed files API.
+  const workspaceRef = attached.run.workspace_ref ?? ''
+  const folder = mention === null ? '' : mentionFolder(mention).folder
+  const filesQuery = useQuery({
+    // Its own key under the folder's: the Files browser pages the same folder with an
+    // infinite query, whose cached data has another shape.
+    queryKey: [
+      ...agentOpsKeys.files(activeTenant, workspaceRef, folder),
+      'mention',
+    ],
+    queryFn: ({ signal }) =>
+      agentOpsApi.listFiles(
+        workspaceRef,
+        { path: folder || undefined, limit: PAGE },
+        { tenant: activeTenant, signal },
+      ),
+    enabled: menuOpen && mention !== null && workspaceRef !== '',
+    refetchOnWindowFocus: false,
+    retry: false,
+  })
+  const slashMatches = useMemo<RunCommandDTO[]>(() => {
+    if (!menuOpen) return []
+    if (mention !== null)
+      return filesQuery.data
+        ? mentionEntries(filesQuery.data.entries, mention)
+        : []
+    if (!catalog?.reported) return []
+    return skill !== null
+      ? filterCommands(catalog.commands.filter(isDollarSkill), skill)
+      : filterCommands(catalog.commands, slash ?? '')
+  }, [menuOpen, mention, filesQuery.data, catalog, skill, slash])
+  // A "$" opens the menu only for a tool that has "$" skills: "$5" in a message to any other
+  // tool is just text.
+  const showMenu =
+    menuOpen &&
+    (skill === null || (catalog?.commands.some(isDollarSkill) ?? false))
   const slashIndex = Math.min(slashActive, Math.max(slashMatches.length - 1, 0))
   // Why there is nothing to choose: still reading (also while an old "nothing reported"
   // is being asked again), not readable, nothing reported, or nothing matches.
   const readFailed = commandsQuery.isError && !commandsQuery.isFetching
   let slashEmpty: SlashMenuEmpty = 'nomatch'
-  if (!catalog) slashEmpty = readFailed ? 'failed' : 'loading'
+  if (mention !== null) {
+    if (!filesQuery.data)
+      slashEmpty =
+        filesQuery.isError || workspaceRef === '' ? 'failed' : 'loading'
+  } else if (!catalog) slashEmpty = readFailed ? 'failed' : 'loading'
   else if (!catalog.reported || catalog.commands.length === 0)
     slashEmpty = readFailed
       ? 'failed'
@@ -528,14 +574,17 @@ function SessionComposer({
         ? 'loading'
         : 'unreported'
   const slashEmptyText =
-    slashEmpty === 'nomatch'
-      ? t('nav:launcher.slashNoMatch', { query: slash ?? '' })
-      : t(`nav:launcher.slash.${slashEmpty}`)
+    mention !== null
+      ? t(`nav:launcher.mention.${slashEmpty}`, { query: mention })
+      : slashEmpty === 'nomatch'
+        ? t('nav:launcher.slashNoMatch', { query: skill ?? slash ?? '' })
+        : t(`nav:launcher.slash.${slashEmpty}`)
   // What is listed may be older than the tool: the engine served what the tool reported
   // before (stale), or this console's own refresh failed and the previous list stays.
   // The one line already says the read failed when there is nothing else to show.
   const slashStale =
-    menuOpen &&
+    showMenu &&
+    mention === null &&
     !!catalog?.reported &&
     slashEmpty !== 'failed' &&
     (catalog.stale === true || readFailed)
@@ -543,7 +592,7 @@ function SessionComposer({
   // The one live region of the menu: it exists before the menu opens and only its text
   // changes, which is what a screen reader announces. The active option is said here too,
   // because not every reader follows aria-activedescendant on a text field.
-  const slashSaid = !menuOpen
+  const slashSaid = !showMenu
     ? ''
     : slashMatches.length > 0
       ? t('nav:launcher.slashOption', {
@@ -553,7 +602,14 @@ function SessionComposer({
         })
       : slashEmptyText
   const pickCommand = (command: RunCommandDTO) => {
-    changeTurn(insertText(command))
+    if (mention === null) changeTurn(insertText(command))
+    else {
+      // The mention replaces the "@path" typed at the end; a folder stays open for its own.
+      const text = command.name.endsWith('/')
+        ? (command.insert_text ?? '')
+        : insertText(command)
+      changeTurn(turn.slice(0, turn.length - mention.length - 1) + text)
+    }
     fieldRef.current?.focus()
   }
   // A disabled Send says why, from the state that disables it.
@@ -631,14 +687,14 @@ function SessionComposer({
     // Enter sends and Shift+Enter breaks a line (the binding table matches Enter alone);
     // a key that is choosing a character of an IME composition is not a send.
     if (e.nativeEvent.isComposing) return
-    if (menuOpen && e.key === 'Escape') {
+    if (showMenu && e.key === 'Escape') {
       e.preventDefault()
       e.stopPropagation()
-      setSlashDismissed(slash)
+      setSlashDismissed(menuKey)
       return
     }
     const plain = !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey
-    if (menuOpen && slashMatches.length > 0 && plain) {
+    if (showMenu && slashMatches.length > 0 && plain) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault()
         const step = e.key === 'ArrowDown' ? 1 : -1
@@ -725,15 +781,16 @@ function SessionComposer({
   const speedChanged =
     chosenSpeed.fastMode !== attached.run.fast_mode ||
     (chosenSpeed.serviceTier ?? '') !== (attached.run.service_tier ?? '')
-  // the regression: a Claude session records the exact id its catalog selector launched on
-  // (claude-opus-5-5 for a launch with no model), which the catalog does not list. Its
-  // own Fast mode was checked at that launch; whether the id takes Fast mode is unknown
-  // here, so Off stays offered and On waits for a listed model.
+  // A Claude session records the exact id its catalog selector launched on
+  // (claude-opus-5-5 for a launch with no model). The catalog names that id as the
+  // selector's launch_model, so a listed session takes its selector's Fast mode support.
+  // An id the catalog neither lists nor launches from has unknown support: its own Fast
+  // mode was checked at that launch, so Off stays offered and On waits for a listed model.
   const ownModelUnlisted =
     !!sessionModel &&
     chosen.model === sessionModel &&
     !!modelChoices.catalog &&
-    !modelChoices.catalog.models.some((m) => m.id === sessionModel)
+    !findModel(modelChoices.catalog, sessionModel)
   const ownFastUnlisted =
     ownModelUnlisted && chosenSpeed.fastMode === attached.run.fast_mode
   const speedUnavailable =
@@ -753,8 +810,11 @@ function SessionComposer({
   // Tool, model and effort are said once per pane, here: the model by the
   // name every surface gives it ("Claude Opus 5.5"), with the id one hover away. The
   // catalog's own names stay in the list it opens, so the chip does not change on open.
+  const effortText = sessionEffort
+    ? t(`agentops:effort.${sessionEffort}`, { defaultValue: sessionEffort })
+    : ''
   const chipParts = (model: string) =>
-    [driver ? toolName(driver) : null, model || null, sessionEffort || null]
+    [driver ? toolName(driver) : null, model || null, effortText || null]
       .filter(Boolean)
       .join(' · ')
   const toolModel = chipParts(sessionModel && modelName(sessionModel))
@@ -765,11 +825,6 @@ function SessionComposer({
   const modelText = sessionModel
     ? modelName(sessionModel)
     : t('agentops:create.model')
-  const effortWord = sessionEffort
-    ? t(`agentops:effort.${sessionEffort}`, { defaultValue: sessionEffort })
-    : ''
-  const effortText =
-    effortWord.charAt(0).toLocaleUpperCase() + effortWord.slice(1)
   // A session that cannot take a turn says why where the sentence would go: the
   // placeholder is the one place a disabled field already is read.
   // A session that is not running offers one step, named as the header's button names it:
@@ -826,9 +881,16 @@ function SessionComposer({
         'focus-within:border-line-strong focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus',
       )}
     >
-      {menuOpen ? (
+      {showMenu ? (
         <SlashMenu
           listId={slashListId}
+          label={t(
+            mention !== null
+              ? 'nav:launcher.mentionLabel'
+              : skill !== null
+                ? 'nav:launcher.skillLabel'
+                : 'nav:launcher.slashLabel',
+          )}
           items={slashMatches}
           active={slashIndex}
           emptyText={slashEmptyText}
@@ -852,6 +914,8 @@ function SessionComposer({
           {t('nav:launcher.draftSaveFailed')}
         </p>
       ) : null}
+      {/* What the tool runs on its own, each with its Stop (#4013). */}
+      <BackgroundTaskStrip run={attached.run} />
       <WorkComposerQueue run={attached.run} queue={queue} />
       <AttachmentTray
         images={images.images}
@@ -874,16 +938,16 @@ function SessionComposer({
         }}
         // Leaving the field closes the menu: its keys only reach it while it has focus.
         onBlur={() => {
-          if (menuOpen) setSlashDismissed(slash)
+          if (menuOpen) setSlashDismissed(menuKey)
         }}
         placeholder={placeholder}
         aria-label={t('nav:launcher.turnAria')}
-        aria-autocomplete={menuOpen ? 'list' : undefined}
+        aria-autocomplete={showMenu ? 'list' : undefined}
         aria-controls={
-          menuOpen && slashMatches.length > 0 ? slashListId : undefined
+          showMenu && slashMatches.length > 0 ? slashListId : undefined
         }
         aria-activedescendant={
-          menuOpen && slashMatches.length > 0
+          showMenu && slashMatches.length > 0
             ? slashOptionId(slashListId, slashIndex)
             : undefined
         }
@@ -1050,7 +1114,8 @@ function SessionComposer({
           </button>
         ) : null}
         {/* THE ACCESS THE SESSION RUNS WITH. The tool cannot change it inside a running
-            session either: the picker says what this one keeps and starts the other. */}
+            session either, so it is a label with a lock, not a picker: it says what this
+            one keeps and offers a new session for another. */}
         <Popover>
           <PopoverTrigger asChild>
             <button
@@ -1059,8 +1124,8 @@ function SessionComposer({
               aria-label={t('nav:launcher.accessPicker', { value: accessText })}
               className={PICKER}
             >
+              <Lock aria-hidden className="size-3 shrink-0" />
               <span className="truncate">{accessText}</span>
-              <ChevronDown aria-hidden className="size-3 shrink-0" />
             </button>
           </PopoverTrigger>
           <PopoverContent
@@ -1088,7 +1153,7 @@ function SessionComposer({
                   })
                 }
               >
-                {t('nav:launcher.startWithChoice')}
+                {t('nav:launcher.newWithOtherAccess')}
               </Button>
             </div>
           </PopoverContent>

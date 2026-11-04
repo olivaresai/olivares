@@ -201,6 +201,20 @@ describe('the page of a view whose module is off', () => {
     ).toBeInTheDocument()
   })
 
+  it('tells a person refused a system:admin view to ask a system administrator, not "an administrator"', () => {
+    route.kind = 'forbidden'
+    const updates = FEATURE_VIEWS.find((v) => v.id === 'updates')!
+    renderIntel(
+      <RequirePermission view={updates}>
+        <p>Updates screen</p>
+      </RequirePermission>,
+    )
+    expect(
+      screen.getByText(/ask a system administrator to view or change it/i),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Ask an administrator for access/)).toBeNull()
+  })
+
   it('waits for an answer that is not established before it says a module is off', () => {
     route.kind = 'checking'
     page()

@@ -32,6 +32,7 @@ import (
 	"github.com/olivaresai/olivares/core/release"
 	"github.com/olivaresai/olivares/core/residency"
 	"github.com/olivaresai/olivares/core/runtime"
+	"github.com/olivaresai/olivares/core/runtime/hostmetrics"
 	"github.com/olivaresai/olivares/core/secret"
 	"github.com/olivaresai/olivares/core/secure"
 	"github.com/olivaresai/olivares/core/store"
@@ -739,6 +740,8 @@ type engine struct {
 	retirementPump *retirementPump
 	// retirementStop ends the pump's loop; nil when it was not started.
 	retirementStop context.CancelFunc
+	// hostMetricsStop ends the host metrics sampler; nil when it was not started.
+	hostMetricsStop context.CancelFunc
 	// legacyAdoptStop ends the naming of legacy provider profiles; nil when none was started.
 	legacyAdoptStop context.CancelFunc
 	// standing is the standing reader every fenced writer reads through
@@ -799,6 +802,14 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	if err := b.openStore(ctx); err != nil {
 		return nil, err
 	}
+	if b.upgradeSnapshotPending != "" {
+		// The store opened, so the request's migration ran. Without the record every later
+		// start copies the migrated store again, and refuses when the disk cannot hold it.
+		if err := recordUpgradeSnapshotConsumed(b.cfg.DataDir, b.upgradeSnapshotPending); err != nil {
+			b.log.Warn("package upgrade: could not record the pre-migration snapshot request as done; the next start takes another snapshot",
+				"path", upgradeSnapshotConsumedPath(b.cfg.DataDir), "error", err)
+		}
+	}
 	if b.cfg.ServeMode {
 		if err := editionIdentityStartup(ctx, b.sessionRuntimeRecoveryStore); err != nil {
 			return nil, err
@@ -852,6 +863,7 @@ type bootState struct {
 	prepareFreshCommunication   func()
 	preserveFreshModuleProfile  func() error
 	restorePublication          *coreengine.BootPublication
+	upgradeSnapshotPending      string // digest of the snapshot request whose migration this boot runs
 	custody                     coreengine.CustodyRequirement
 	auditKey                    loadedSigningKey
 	catalogKey                  loadedSigningKey
@@ -903,6 +915,7 @@ type bootState struct {
 	secretResolver              *secret.Resolver
 	settings                    *productSettings
 	tracingSettings             *tracingSettingsService
+	hostMetrics                 *hostmetrics.Monitor
 	editionRecovery             *ownedEditionRecovery
 	editionResources            []io.Closer
 	sourceStore                 *auth.SourceStore
@@ -1290,7 +1303,7 @@ func (b *bootState) loadSigningCustody(ctx context.Context) (err error) {
 	b.cleanup = append(b.cleanup, b.restorePublication.Close)
 
 	if b.cfg.ServeMode && !b.cfg.ReadOnly && b.cfg.upgradeSnapshotRequest != "" {
-		if err := snapshotPackageUpgrade(ctx, b.cfg.upgradeSnapshotRequest, b.cfg.DataDir, storeCfg); err != nil {
+		if b.upgradeSnapshotPending, err = snapshotPackageUpgrade(ctx, b.cfg.upgradeSnapshotRequest, b.cfg.DataDir, storeCfg); err != nil {
 			return fmt.Errorf("package upgrade: pre-migration snapshot failed; no migrations applied: %w", err)
 		}
 	}
@@ -1697,7 +1710,12 @@ func (b *bootState) openStore(ctx context.Context) (err error) {
 	}
 	b.restorePublication.Close()
 	if err != nil {
-		return fmt.Errorf("open store: %w", err)
+		err = fmt.Errorf("open store: %w", err)
+		if errors.Is(err, coreengine.ErrCoreSchemaVersionAhead) || errors.Is(err, coreengine.ErrCoreSchemaVersionUnrecognized) {
+			// A newer release migrated this store: starting this binary again cannot open it.
+			return exitcode.New(exitcode.Refused, err)
+		}
+		return err
 	}
 	// Retain the concrete pool drain before the residency/suspension wrappers.
 	if q, ok := b.st.(interface{ QuiesceForSQLiteRestore(context.Context) error }); ok {
@@ -2424,6 +2442,7 @@ func (b *bootState) bindServices(ctx context.Context) (err error) {
 	}
 	b.settings.used = func(ctx context.Context) ([]string, error) { return usedModules(ctx, b.st, b.census) }
 	b.tracingSettings = newTracingSettingsService(b.settings, b.tracer, b.cfg.Version)
+	b.hostMetrics = newHostMetrics(b.cfg.DataDir, b.log)
 	if err := b.tracingSettings.applyStored(ctx); err != nil {
 		// An unreadable optional tracing choice must not stop the core or enable export.
 		disabled := obstrace.FromEnv(b.cfg.Version)
@@ -2480,6 +2499,9 @@ func (b *bootState) bindSources(ctx context.Context) (err error) {
 		}
 	})
 	b.sourceReconcilerSvc = newSourceReconciler(b.rt, b.sourceStore, b.secretResolver, b.secretStore, b.connectorDir, b.srcCfg.ConnectorTrust, b.log)
+	if b.set.knowledge != nil {
+		b.sourceReconcilerSvc.useKnowledge(b.set.knowledge, newSandboxedRichDocExtractor(b.log))
+	}
 	if nd := notifyDispatcherOf(b.set); nd != nil {
 		b.notifyDestinationsSvc = newNotifyDestinationService(b.settings, b.secretStore, b.secretResolver, nd, b.log)
 	}
@@ -2814,9 +2836,18 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 		}
 		return installedSessionProgram(toolObserver, driver, exec.LookPath)
 	})
-	// first-hour check: the tools' own logins live in a home the product creates per tenant
-	// under the data directory (<data>/tool-logins/<tenant>/<driver>), never in the
-	// engine user's own home; a tenant this node does not serve has none.
+	// A tool already signed in for the engine's user serves the node's only person.
+	serverLoginOpen := func(ctx context.Context, tenant model.TenantID) bool {
+		only, err := isOnlyPersonsTenant(ctx, b.st, tenant)
+		if err != nil {
+			b.log.Warn("tool login: could not tell whether this node has one person; the server's own login stays closed", "tenant", tenant.String(), "err", err)
+		}
+		return only
+	}
+	b.agentTools.SetServerLoginOpen(serverLoginOpen)
+	// first-hour check: the login a person makes through the product lives in a home it
+	// creates per tenant under the data directory (<data>/tool-logins/<tenant>/<driver>),
+	// never in the engine user's own home; a tenant this node does not serve has none.
 	if dataDir, absErr := filepath.Abs(b.cfg.DataDir); b.cfg.DataDir != "" && absErr == nil {
 		loginsRoot := filepath.Join(dataDir, toolLoginsDir)
 		b.agentTools.SetLoginHome(func(ctx context.Context, tenant model.TenantID, driver, accountRef string) (string, string, error) {
@@ -2849,6 +2880,8 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 		// status the AI tools page shows (POST provider-profiles/resolve).
 		b.set.sessionDependencies.ToolLogin = b.agentTools.LoginStatus
 		b.set.sessionDependencies.ProfileLogin = b.agentTools.LoginStatusForProfile
+		b.set.sessionDependencies.ServerToolLogin = b.agentTools.ServerLoginHome
+		b.set.sessionDependencies.ServerLoginOpen = serverLoginOpen
 	}
 	wireModelAvailability(b.set, b.st, b.sourceReconcilerSvc)
 	if b.set.models != nil {
@@ -2936,6 +2969,13 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 		ModuleEnabled:             b.liveProfile.Active,
 		CommunicationReady:        communicationReadiness.Ready,
 		SetupToken:                b.setupTok, Logger: b.log, LogBroker: b.logBroker, Version: b.cfg.Version,
+		// First-boot setup just created the organization: leave the data directory
+		// owner's CLI credential now, not at the next restart.
+		AfterSetup: func(ctx context.Context) {
+			if err := ensureLocalOperatorToken(ctx, b.authr, b.st, b.cfg.DataDir); err != nil {
+				b.log.Warn("the local operator's CLI credential was not left; the CLI signs in with `olivares login`", "err", err)
+			}
+		},
 		// The build edition for server-info: the console shows only what this build serves.
 		Edition: thisEdition.name,
 		// the boot-owned registry, shared with the bus collectors and the
@@ -2957,6 +2997,7 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 		Departments:         b.departmentService(),
 		Modules:             b.set.all,
 		TracingSettings:     b.tracingSettings,
+		HostMetrics:         b.hostMetrics,
 		SessionIdleSettings: b.settings,
 		// Which optional modules the engine runs (/v1/console/modules).
 		ModuleSelection: moduleSelectionService{settings: b.settings, running: b.profile, live: b.liveProfile,
@@ -3032,7 +3073,7 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 		// $OLIVARES_DR_PASSPHRASE_FILE — is what lets the backup schedule run
 		// unattended; without it the schedule runner refuses loudly instead of
 		// writing a bundle it could not seal.
-		DR: consoleDRConfig(b.cfg, b.eng, b.storeSchema, b.storeQuiesce),
+		DR: consoleDRConfig(b.cfg, b.eng, b.storeSchema, b.storeQuiesce, b.bus),
 		// Enable the collector→core ingest endpoint on the gRPC server (CB-1 option
 		// C): pushed observations are authorized (ingest:write) and lifted onto the
 		// bus through the runtime. Remote use requires --grpc-client-ca (mTLS).
@@ -3488,17 +3529,20 @@ func (b *bootState) bindSessionGovernance(ctx context.Context) (err error) {
 	// CB-1 — wire the real ingestion as a PRODUCTION caller. Identity roster providers
 	// are resolved from OLIVARES_SOURCES_CONFIG BEFORE rt.Start (unchanged: the roster
 	// is read-once boot config, requires-restart to change). The OBSERVATION SOURCES,
-	// since live in the DURABLE ROSTER (the sealed store), not the file: the
-	// file's `sources[]` is imported once as a bootstrap seed (below), then the table
-	// is authoritative and the live reconciler — run just after Start — wires it. An
-	// unconfigured/un-embedded source or an empty roster warns honestly.
+	// since and the first-party DOCUMENT SOURCES live in the DURABLE ROSTER (the
+	// sealed store), not the file: the file's `sources[]` and `documents[]` are each
+	// imported once as a bootstrap seed (below), then the table is authoritative and
+	// the live reconciler — run just after Start — wires them. An unconfigured/
+	// un-embedded source or an empty roster warns honestly.
 	if b.set.deferredSecrets != nil {
 		b.set.deferredSecrets.rt = b.rt
 		b.set.deferredSecrets.connectorDir = b.connectorDir
 	}
 	loadStoredNotifyDestinations(ctx, b.settings, notifyDispatcherOf(b.set), b.log)
-	b.set.deferredSecrets.openAll(ctx, b.secretResolver, b.log)
 	seedSourceRosterIfEmpty(ctx, b.sourceStore, b.srcCfg, b.log)
+	seedDocumentRosterIfEmpty(ctx, b.sourceStore, b.srcCfg, b.log)
+	b.set.deferredSecrets.dropRosterDocuments(ctx, b.sourceStore, b.log)
+	b.set.deferredSecrets.openAll(ctx, b.secretResolver, b.log)
 	wireRoster(ctx, b.rt, b.set.gov, b.set.wif, b.srcCfg, b.secretResolver, b.log)
 
 	return nil
@@ -3588,6 +3632,14 @@ func (b *bootState) finish(ctx context.Context) (*engine, error) {
 		go b.retirement.run(retirementCtx, b.st.Leader().Active)
 	}
 
+	// The host metrics sampler runs for the life of the engine, except in a
+	// read-only boot (a listing command), which must leave nothing behind.
+	if !b.cfg.ReadOnly && b.hostMetrics != nil {
+		hostCtx, cancel := context.WithCancel(context.Background())
+		b.runtimeEngine.hostMetricsStop = cancel
+		go b.hostMetrics.Run(hostCtx)
+	}
+
 	b.runtimeEngine.haStop = haStop
 	b.runtimeEngine.retirementStop = retirementStop
 	b.runtimeEngine.legacyAdoptStop = b.legacyAdoptStop
@@ -3619,18 +3671,25 @@ func warnUnsupportedProductionPosture(log *slog.Logger, eng store.Engine, effect
 // first boot after upgrade, and thereafter the table is the source of truth (the
 // file's sources are ignored — a stable, honest migration). It never fails the
 // boot: a seed error is logged and the engine proceeds (the roster simply stays
-// as it was). Identity/Documents/ConnectorTrust are NOT seeded — they remain
-// file-config (requires-restart to change).
+// as it was). Documents are seeded by seedDocumentRosterIfEmpty; Identity and
+// ConnectorTrust are NOT seeded — they remain file-config (requires-restart to change).
 func seedSourceRosterIfEmpty(ctx context.Context, store *auth.SourceStore, cfg sourcesConfig, log *slog.Logger) {
 	existing, err := store.List(ctx, auth.GlobalSourceScope)
 	if err != nil {
 		log.Warn("ingest: could not read the durable source roster; skipping the bootstrap seed", "err", err)
 		return
 	}
-	if len(existing) > 0 {
+	// Document rows have their own seed: only observation rows make this one done.
+	observation := 0
+	for _, d := range existing {
+		if !isDocumentRow(d) {
+			observation++
+		}
+	}
+	if observation > 0 {
 		if len(cfg.Sources) > 0 {
 			log.Info("ingest: durable source roster is authoritative; the file's sources[] is ignored (edit via the console/CLI or POST /v1/console/runtime/reload)",
-				"roster_rows", len(existing), "file_sources", len(cfg.Sources))
+				"roster_rows", observation, "file_sources", len(cfg.Sources))
 		}
 		return
 	}
@@ -3683,8 +3742,14 @@ func (e *engine) Close() error {
 	if e.retirementStop != nil {
 		e.retirementStop()
 	}
+	if e.hostMetricsStop != nil {
+		e.hostMetricsStop()
+	}
 	if e.legacyAdoptStop != nil {
 		e.legacyAdoptStop()
+	}
+	if e.sourceReconciler != nil {
+		e.sourceReconciler.stopDocumentSchedules()
 	}
 	if e.haPublisher != nil {
 		e.haPublisher.haShutdownLabel()
@@ -3771,6 +3836,21 @@ func defaultDataDir() (string, error) {
 	if installationExistsAt(legacyDataDirName) {
 		return absOrSame(legacyDataDirName), nil
 	}
+	return homeDataDir()
+}
+
+// accountDataDir is defaultDataDir without the working-directory branch: the data
+// directory this account owns wherever it runs, never one a cloned repository or an
+// unpacked archive put under the current directory.
+func accountDataDir() (string, error) {
+	if d := envconfig.Get("OLIVARES_DATA_DIR"); d != "" {
+		return d, nil
+	}
+	return homeDataDir()
+}
+
+// homeDataDir is the absolute XDG or $HOME default of the data directory.
+func homeDataDir() (string, error) {
 	if root := strings.TrimSpace(os.Getenv("XDG_DATA_HOME")); root != "" && filepath.IsAbs(root) {
 		return filepath.Join(root, "olivares"), nil
 	}

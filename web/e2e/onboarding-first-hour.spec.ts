@@ -16,11 +16,15 @@
 import { expect, test } from './fixtures/ollama'
 import {
   JOURNEYS,
+  type JourneyStep,
   stepHref,
   unwalked,
 } from '../src/features/navigation/journeys'
 
-const [WIZARD, PROVIDERS, SESSIONS] = JOURNEYS.firstHour
+const [SESSIONS, PROVIDERS] = JOURNEYS.firstHour
+// Setup opens Sessions, so the wizard is no step of the first hour; this spec walks it
+// on purpose, at the address it keeps.
+const WIZARD: JourneyStep = { view: 'onboarding' }
 
 const setupToken = process.env.PLAYWRIGHT_SETUP_TOKEN ?? ''
 const PASSWORD = 'correct-horse-battery-staple-42'
@@ -66,7 +70,10 @@ test('first hour: the setup wizard asks only for what the first session needs', 
   await page.locator('#setup-email').fill('admin@example.com')
   await page.locator('#setup-password').fill(PASSWORD)
   await page.getByRole('button', { name: /create administrator/i }).click()
-  await page.waitForURL(`**${stepHref(WIZARD)}`)
+  // Setup lands on the work surface; the wizard stays one address away.
+  await page.waitForURL(`**${stepHref(SESSIONS)}`)
+  await expect(page.getByLabel('First message (optional)')).toBeVisible()
+  await page.goto(stepHref(WIZARD))
 
   const main = page.getByRole('main')
   await expect(main.getByText('0 of 3 done')).toBeVisible()
@@ -161,8 +168,8 @@ test('first hour: the setup wizard asks only for what the first session needs', 
   // APPROVALS: a session started to ask before each action asks for the shell command
   // the model wants, and waits in the queue the Rules place opens until a person approves.
   visited.splice(0)
-  await start.getByRole('button', { name: 'More options' }).click()
-  await start.getByRole('radio', { name: 'Supervised' }).check()
+  await start.getByRole('combobox', { name: 'What the agent may do' }).click()
+  await page.getByRole('option', { name: 'Supervised' }).click()
   await start
     .getByLabel('First message (optional)')
     .fill(`Please run: ${ollama.toolCommand}`)

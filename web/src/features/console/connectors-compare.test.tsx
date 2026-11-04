@@ -31,6 +31,9 @@ const { api, authState } = vi.hoisted(() => ({
   },
 }))
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 vi.mock('@/features/identity/assurance', () => ({
   AAL: { PASSWORD: 1, MFA: 2, HARDWARE: 3 },

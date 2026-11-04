@@ -31,6 +31,7 @@ import (
 	"github.com/olivaresai/olivares/core/cron"
 	"github.com/olivaresai/olivares/core/dr"
 	"github.com/olivaresai/olivares/core/envconfig"
+	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
 
@@ -67,6 +68,14 @@ type DRConfig struct {
 	// QuiesceStore stops and drains the boot-owned SQLite pool. It must leave
 	// serving unavailable until restart, including on failure.
 	QuiesceStore func(context.Context) error
+	// TreeSources lists the directories a backup carries beside the store: the data
+	// directory's sign-ins and homes and the registered folders, read from the
+	// snapshot path it is given. Nil carries none.
+	TreeSources func(ctx context.Context, snapshot string) ([]dr.TreeSource, []dr.NotIncluded, error)
+	// Alert raises a finding for one organization when the scheduled restore test
+	// misses the operator's RTO target. Nil raises none; the test is sealed in the
+	// ledger either way. The title is all an organization sees: no bundle, no timing.
+	Alert func(ctx context.Context, tenant model.TenantID, title string) error
 }
 
 // drService wraps the DR configuration and in-memory job tracker.
@@ -98,6 +107,7 @@ type drSchedule struct {
 	LastBackup       string  `json:"last_backup,omitempty"`
 	BackupAgeSeconds *int64  `json:"backup_age_seconds,omitempty"`
 	RPOExceeded      *bool   `json:"rpo_exceeded,omitempty"`
+	RTOExceeded      *bool   `json:"rto_exceeded,omitempty"`
 	TargetFreeBytes  *uint64 `json:"target_free_bytes,omitempty"`
 	Enabled          bool    `json:"enabled"`
 	Cron             string  `json:"cron"`
@@ -348,6 +358,8 @@ type backupListItem struct {
 	Version     string `json:"engine_version,omitempty"`
 	TenantCount int    `json:"tenant_count"`
 	Notes       string `json:"notes,omitempty"`
+	// DurationMS is how long the backup took to prepare, from the bundle's manifest.
+	DurationMS int64 `json:"duration_ms,omitempty"`
 }
 
 type restoreUploadResponse struct {
@@ -381,6 +393,7 @@ type drScheduleRequest struct {
 	LocalTarget        *string    `json:"local_target"`
 	VerifyCron         *string    `json:"verify_cron"`
 	RPOHours           *int       `json:"rpo_hours"`
+	RTOMinutes         *int       `json:"rto_minutes"`
 	Offsite            *drOffsite `json:"offsite"`
 	Enabled            bool       `json:"enabled"`
 	Cron               string     `json:"cron"`
@@ -402,6 +415,8 @@ type drScheduleRequest struct {
 	IgnoredLastBackup       string  `json:"last_backup"`
 	IgnoredBackupAge        *int64  `json:"backup_age_seconds"`
 	IgnoredRPOExceeded      *bool   `json:"rpo_exceeded"`
+	IgnoredRTOExceeded      *bool   `json:"rto_exceeded"`
+	IgnoredLastVerifyRTO    int64   `json:"last_verify_rto_ms"`
 	IgnoredTargetFree       *uint64 `json:"target_free_bytes"`
 }
 
@@ -445,6 +460,7 @@ func (s *Server) handleTriggerBackup(w http.ResponseWriter, r *http.Request, mc 
 
 func (s *Server) runBackup(ctx context.Context, jobID, passphrase, notes, actor string) {
 	svc := s.drSvc
+	started := time.Now()
 	// Deferred before any cleanup below, so it runs after all of it: a client that reads a terminal
 	// status finds no snapshot or scratch file left in the backup directory. Failure is the default, so a
 	// panic publishes failed, never completed; only the success path clears it.
@@ -646,6 +662,30 @@ func (s *Server) runBackup(ctx context.Context, jobID, passphrase, notes, actor 
 		}
 	}
 
+	// The files the database does not hold, sealed beside the snapshot.
+	var trees []*dr.PackedTree
+	var notIncluded []dr.NotIncluded
+	if svc.cfg.TreeSources != nil {
+		update("files", 60)
+		sources, left, err := svc.cfg.TreeSources(ctx, snapshotPath)
+		if err != nil {
+			fail(fmt.Errorf("list the files to back up: %w", err))
+			return
+		}
+		packed, missing, err := dr.CollectTrees(cipher, sources, backupDir)
+		if err != nil {
+			fail(fmt.Errorf("back up the files: %w", err))
+			return
+		}
+		trees, notIncluded = packed, append(left, missing...)
+		defer func() {
+			for _, p := range trees {
+				p.Remove()
+			}
+		}()
+	}
+	manifest.DurationMS = time.Since(started).Milliseconds()
+
 	update("bundle", 70)
 
 	ts := time.Now().UTC().Format("20060102-150405")
@@ -669,6 +709,8 @@ func (s *Server) runBackup(ctx context.Context, jobID, passphrase, notes, actor 
 		KEK:          cipher.Params(),
 		SnapshotPath: snapshotPath,
 		SealedKeys:   sealedKeys,
+		Trees:        trees,
+		NotIncluded:  notIncluded,
 	}, cipher); err != nil {
 		_ = f.Close()
 		_ = os.Remove(bundlePath)
@@ -746,6 +788,7 @@ func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request, mc Mo
 			item.Version = manifest.Version
 			item.TenantCount = len(manifest.Tenants)
 			item.Notes = manifest.Notes
+			item.DurationMS = manifest.DurationMS
 		}
 		items = append(items, item)
 	}
@@ -1132,6 +1175,14 @@ func (s *Server) runRestore(ctx context.Context, jobID, bundlePath, passphrase, 
 	}
 
 	dataDir := svc.cfg.DataDir
+	// Where the bundle's files go, decided while nothing is changed yet. A console
+	// restore replaces the estate in place: the live sign-in trees are moved aside,
+	// and a registered folder is written over by files of the same name.
+	treeTargets, err := dr.PlanTreeRestore(manifest, dataDir, "", true, true)
+	if err != nil {
+		fail(fmt.Errorf("place the files of the bundle: %w", err))
+		return
+	}
 	stage, err := stageConsoleRestoreKeys(dataDir, tmpDir, manifest, cipher)
 	if err != nil {
 		fail(err)
@@ -1187,6 +1238,20 @@ func (s *Server) runRestore(ctx context.Context, jobID, bundlePath, passphrase, 
 		}
 		return
 	}
+	filesNote := ""
+	if len(treeTargets) > 0 {
+		update("restoring_files", 80)
+		if err := dr.PreserveDataTrees(treeTargets, suffix); err != nil {
+			fail(fmt.Errorf("%w; the store and keys are restored; restart the engine", err))
+			return
+		}
+		rep, err := dr.RestoreTrees(cipher, tmpDir, treeTargets)
+		if err != nil {
+			fail(fmt.Errorf("the store and keys are restored but the files are not: %w; restart the engine, then restore again", err))
+			return
+		}
+		filesNote = fmt.Sprintf(". Restored %d files (%d bytes) from %d folders", rep.Files, rep.Bytes, len(treeTargets))
+	}
 	getenv := svc.cfg.Getenv
 	if getenv == nil {
 		getenv = envconfig.Get
@@ -1199,7 +1264,7 @@ func (s *Server) runRestore(ctx context.Context, jobID, bundlePath, passphrase, 
 	s.log.Warn("dr: restore verified in scratch and promoted — restart the engine to load the restored keys and module state",
 		"job", jobID, "actor", actor, "engine", manifest.EngineKind)
 
-	notes := custody + ". " + preservation
+	notes := custody + ". " + preservation + filesNote
 	if w := manifest.UnsealedSnapshotWarning(); w != "" {
 		s.log.Warn("dr: restored from a bundle whose store snapshot is not encrypted", "job", jobID)
 		notes += ". Warning: " + w
@@ -1495,6 +1560,9 @@ func (s *Server) handlePutDRSchedule(w http.ResponseWriter, r *http.Request, mc 
 	if req.RPOHours != nil {
 		next.RPOHours = *req.RPOHours
 	}
+	if req.RTOMinutes != nil {
+		next.RTOMinutes = *req.RTOMinutes
+	}
 	if req.Offsite != nil {
 		next.setOffsite(req.Offsite)
 	}
@@ -1575,6 +1643,10 @@ func (s *Server) drScheduleView() drSchedule {
 			exceeded := age > int64(sched.RPOHours)*3600
 			sched.RPOExceeded = &exceeded
 		}
+	}
+	if sched.RTOMinutes > 0 && sched.LastVerifyStatus == drJobCompleted {
+		exceeded := sched.rtoExceeded()
+		sched.RTOExceeded = &exceeded
 	}
 	sched.NextRun = ""
 	if sched.Enabled && sched.Cron != "" {

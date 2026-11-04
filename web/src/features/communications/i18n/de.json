@@ -89,11 +89,11 @@
   },
   "catalog": {
     "title": "Sichtbare Kanäle",
-    "description": "Nur die aktiven Kanäle, die dieser Principal jetzt lesen darf, mit seinen eigenen aktuellen lokalen Bits. Eine Seite ist keine Suche über den ganzen Katalog: Laden Sie mehr, um an der Fortsetzung des Servers weiterzumachen.",
+    "description": "Nur die aktiven Kanäle, die Sie jetzt lesen dürfen, mit Ihrem eigenen Zugriff. Eine Seite ist keine Suche über den ganzen Katalog: Laden Sie mehr, um weitere Kanäle zu sehen.",
     "emptyTitle": "Keine sichtbaren Kanäle",
-    "emptyBody": "Dieser Principal hat in diesem Arbeitsbereich keinen Kanal, den er lesen darf, oder es existiert noch keiner. Eine Leseberechtigung und die Berechtigung channel:read lassen einen hier erscheinen.",
+    "emptyBody": "Sie dürfen in diesem Arbeitsbereich keinen Kanal lesen, oder es existiert noch keiner. Ein Lesezugriff auf einen Kanal und die Berechtigung channel:read lassen einen hier erscheinen.",
     "truncated": "Über diese Seite hinaus existieren weitere Kanäle",
-    "truncatedHint": "Der Server hat weitere sichtbare Kanäle gemeldet. Laden Sie mehr, um an seiner Fortsetzung weiterzumachen.",
+    "truncatedHint": "Es gibt weitere sichtbare Kanäle. Laden Sie mehr, um sie zu sehen.",
     "columns": {
       "name": "Name",
       "slug": "Slug",
@@ -111,9 +111,9 @@
     "read": "lesen",
     "write": "schreiben",
     "admin": "admin",
-    "none": "keine lokalen Bits",
+    "none": "kein Zugriff",
     "unknown": "von diesem Lesen nicht gemeldet",
-    "hint": "Lokale Bits sind die eigenen Berechtigungen des Kanals für diesen Principal. Zusätzlich ist eine Core-Berechtigung nötig, und die Engine entscheidet jede Handlung in dem Moment, in dem sie angefragt wird."
+    "hint": "Ihr Zugriff ist das, was der Kanal selbst Ihnen gewährt. Zusätzlich ist die Berechtigung nötig, und die Engine entscheidet jede Handlung in dem Moment, in dem sie angefragt wird."
   },
   "kind": {
     "coordination": "Koordination",
@@ -171,15 +171,15 @@
       "tenant": "Mandant"
     },
     "sendHint": {
-      "canWrite": "Ihr lokales Schreib-Bit ist auf dieser Katalogseite aktuell und Sie halten die Sendeberechtigung. Die Engine entscheidet beim Senden erneut.",
-      "noWrite": "Diese Katalogseite meldet kein lokales Schreib-Bit für Sie. Die Engine würde ein Senden ablehnen; Verfassen wird nicht angeboten.",
-      "unknown": "Dieses Lesen meldet Ihre lokalen Bits nicht. Sie halten die Sendeberechtigung; die Engine entscheidet die lokale Autorität beim Senden.",
+      "canWrite": "Sie dürfen in diesen Kanal schreiben und halten die Sendeberechtigung. Die Engine entscheidet beim Senden erneut.",
+      "noWrite": "Diese Katalogseite zeigt, dass Sie in diesen Kanal nicht schreiben dürfen. Die Engine würde ein Senden ablehnen; Verfassen wird nicht angeboten.",
+      "unknown": "Dieses Lesen zeigt Ihren Zugriff auf den Kanal nicht. Sie halten die Sendeberechtigung; die Engine entscheidet beim Senden.",
       "noPermission": "Sie halten die Berechtigung zum Senden von Nachrichten nicht, daher wird Verfassen nicht angeboten."
     }
   },
   "create": {
     "title": "Kanal anlegen",
-    "description": "Jedes Feld des Vertrags ist verfügbar. Anfangsberechtigungen sind ausdrücklich: Fügen Sie jedes Subjekt hinzu und setzen Sie jedes beabsichtigte Bit. Nichts wird in Ihrem Namen hinzugefügt.",
+    "description": "Jedes Feld des Vertrags ist verfügbar. Anfangsberechtigungen sind ausdrücklich: Fügen Sie jedes Subjekt hinzu und wählen Sie jeden beabsichtigten Zugriff. Nichts wird in Ihrem Namen hinzugefügt.",
     "fields": {
       "slug": "Slug",
       "slugHint": "Kleinbuchstaben, Ziffern und Bindestriche; eindeutig im Arbeitsbereich.",
@@ -196,7 +196,7 @@
       "maxFanout": "Maximales Fanout",
       "maxAutomationDepth": "Maximale Automatisierungstiefe",
       "grants": "Anfangsberechtigungen",
-      "grantsHint": "Mindestens eine Berechtigung mit mindestens einem Bit. Eine Berechtigung ist ein Subjekt und seine drei unabhängigen Bits. Ihr eigenes Konto ist ein Subjekt wie jedes andere."
+      "grantsHint": "Mindestens eine Berechtigung mit mindestens einem Zugriff. Eine Berechtigung ist ein Subjekt und seine drei unabhängigen Zugriffe. Ihr eigenes Konto ist ein Subjekt wie jedes andere."
     },
     "grant": {
       "subject": "Subjekt",
@@ -211,7 +211,7 @@
       "name": "Ein Name ist erforderlich.",
       "grants": "Mindestens eine Anfangsberechtigung ist erforderlich.",
       "grantRef": "Jede Berechtigung braucht eine Subjektreferenz.",
-      "grantBits": "Jede Berechtigung braucht mindestens ein Bit.",
+      "grantBits": "Jede Berechtigung braucht mindestens einen Zugriff.",
       "number": "Muss eine ganze Zahl von null oder mehr sein.",
       "fanout": "Muss eine ganze Zahl von eins oder mehr sein."
     },
@@ -325,11 +325,12 @@
   },
   "inbox": {
     "title": "Persönlicher Posteingang",
-    "description": "Zustellungen an diesen Principal in diesem Arbeitsbereich, wie die Engine sie jetzt autorisiert. Das Lesen einer Seite bestätigt nichts und bewegt keinen Cursor.",
-    "emptyTitle": "Keine Zustellungen",
-    "emptyBody": "Derzeit ist in diesem Arbeitsbereich nichts an diesen Principal Adressiertes sichtbar.",
+    "description": "Zustellungen an Sie in diesem Arbeitsbereich, wie die Engine sie jetzt autorisiert. Das Lesen einer Seite bestätigt nichts und verschiebt keine Gesehen-Marke.",
+    "emptyTitle": "Ihr Posteingang ist leer",
+    "emptyBody": "Was Personen oder Sitzungen Ihnen über einen Kanal senden, erscheint hier. Zum Senden öffnen Sie Kanäle, wählen einen Kanal und dann Mitteilung senden.",
+    "showChannels": "Zu den Kanälen",
     "truncated": "Über diese Seite hinaus existieren weitere Zustellungen",
-    "truncatedHint": "Der Server hat weitere sichtbare Zustellungen gemeldet. Laden Sie mehr, um an seiner Fortsetzung weiterzumachen.",
+    "truncatedHint": "Es gibt weitere sichtbare Zustellungen. Laden Sie mehr, um sie zu sehen.",
     "columns": {
       "subject": "Betreff",
       "sender": "Absender",
@@ -343,7 +344,7 @@
   },
   "delivery": {
     "title": "Zustellung",
-    "description": "Frisch für diesen Principal gelesen. Bestätigen ist eine ausdrückliche Handlung mit der gerade gelesenen Version.",
+    "description": "Frisch für Sie gelesen. Bestätigen ist eine ausdrückliche Handlung mit der gerade gelesenen Version.",
     "fields": {
       "id": "Zustellungs-ID",
       "messageId": "Nachrichten-ID",
@@ -439,9 +440,9 @@
     "late": "Verspätet"
   },
   "failure": {
-    "forbidden": "Die Engine hat dies für den aktuellen Principal abgelehnt.",
+    "forbidden": "Die Engine hat dies für Sie abgelehnt.",
     "step_up": "Ihre Rolle erlaubt dies, aber die Sitzung muss zuerst erhöht werden.",
-    "not_found": "Nicht gefunden oder für diesen Principal nicht sichtbar.",
+    "not_found": "Nicht gefunden oder für Sie nicht sichtbar.",
     "unavailable": "Die Engine konnte nicht nachsehen: Aktuelle Autoritäts-, Verwahrungs- oder Speichernachweise sind nicht verfügbar. Das ist weder ein leeres Ergebnis noch eine Ablehnung.",
     "version_mismatch": "Die gelesene Version ist nicht mehr aktuell.",
     "version_required": "Die Engine hat eine Versionsvorbedingung verlangt, die die Konsole nicht gesendet hat.",
@@ -462,7 +463,7 @@
   "authority": {
     "lost": "Die Berechtigung für diese Handlung wird nicht mehr gehalten; nichts wurde gesendet.",
     "confirmationClosed": "Eine ausstehende Bestätigung wurde geschlossen, weil die zugrunde liegende Berechtigung verloren ging.",
-    "notAddressable": "Dieser Principal hat für diese Art keine Verzeichnisreferenz und kann nicht adressiert werden."
+    "notAddressable": "Dieses Subjekt hat für diese Art keine Verzeichnisreferenz und kann nicht adressiert werden."
   },
   "states": {
     "loading": "Wird geladen…",
@@ -470,7 +471,7 @@
   },
   "administration": {
     "title": "Verwaltbare Kanäle",
-    "description": "Kanäle, die dieser Principal jetzt verwalten darf: Core-channel:admin und ein gültiges lokales Admin-Bit, bei jedem Lesen von der Engine entschieden. Archivierte Kanäle bleiben gelistet und einsehbar. Dies ist nicht der Lesekatalog: ein lokales Lese-Bit wird weder verlangt noch unterstellt.",
+    "description": "Kanäle, die Sie jetzt verwalten dürfen: die Berechtigung channel:admin und Admin-Zugriff auf den Kanal, bei jedem Lesen von der Engine entschieden. Archivierte Kanäle bleiben gelistet und einsehbar. Dies ist nicht der Lesekatalog: Lesezugriff auf einen Kanal wird weder verlangt noch unterstellt.",
     "stateFilter": "Gespeicherter Zustand",
     "states": {
       "all": "Alle Zustände",
@@ -490,9 +491,9 @@
     "openById": "Kanal per ID verwalten",
     "openByIdHint": "Das Blatt wird über den Berechtigungsverlauf unter channel:admin gelesen; es nutzt nie die Kanallese der Lesestufe.",
     "emptyTitle": "Keine verwaltbaren Kanäle",
-    "emptyBody": "Kein Kanal dieses Arbeitsbereich gewährt diesem Principal ein gültiges Admin-Bit, oder keiner entspricht dem gewählten gespeicherten Zustand. Eine lokale Admin-Berechtigung und die Berechtigung channel:admin lassen einen hier erscheinen.",
+    "emptyBody": "Kein Kanal dieses Arbeitsbereichs gewährt Ihnen Admin-Zugriff, oder keiner entspricht dem gewählten Zustand. Admin-Zugriff auf einen Kanal und die Berechtigung channel:admin lassen einen hier erscheinen.",
     "truncated": "Jenseits dieser Seite existieren weitere verwaltbare Kanäle",
-    "truncatedHint": "Der Server hat weitere verwaltbare Kanäle gemeldet. Laden Sie mehr, um von seiner Fortsetzung aus weiterzugehen."
+    "truncatedHint": "Es gibt weitere verwaltbare Kanäle. Laden Sie mehr, um sie zu sehen."
   },
   "channelState": {
     "active": "Aktiv",
@@ -580,7 +581,7 @@
     },
     "columns": {
       "subject": "Subjekt",
-      "bits": "Bits",
+      "bits": "Zugriff",
       "generation": "Generation",
       "stored": "Gespeicherter Zustand",
       "temporal": "Bei Beobachtung",
@@ -589,7 +590,7 @@
       "created": "Erstellt"
     },
     "truncated": "Jenseits dieser Seite existieren weitere Generationen",
-    "truncatedHint": "Der Server hat weitere Generationen gemeldet. Laden Sie mehr, um von seiner Fortsetzung aus weiterzugehen; eine Kanaländerung zwischen Seiten startet die Auflistung neu.",
+    "truncatedHint": "Es gibt weitere Generationen. Laden Sie mehr, um sie zu sehen; eine Kanaländerung zwischen Seiten startet die Auflistung neu.",
     "emptyTitle": "Keine Generationen",
     "emptyBody": "Keine gespeicherte Berechtigungsgeneration entspricht dem gewählten Zustand und Subjekt. Eine neue Berechtigung fügt eine hinzu.",
     "temporalHint": "„Gespeicherter Zustand“ ist, was die Engine persistiert hat; „bei Beobachtung“ ist, ob die Zeile im beobachteten Zeitpunkt in Kraft war. Ein verstrichener Ablauf wird gemeldet, nicht materialisiert: Er widerruft die Zeile nicht, und ein Nachfolger für dieses Subjekt erfordert weiterhin zuerst einen ausdrücklichen Widerruf.",
@@ -605,7 +606,7 @@
     },
     "form": {
       "title": "Neue Berechtigungsgeneration",
-      "hint": "Ein Subjekt, drei unabhängige Bits, ein optionaler Ablauf. Eine Verzeichniszeile ist ein Kandidat, kein berechtigtes Subjekt: Die Engine entscheidet beim Akt, und eine erfasste Generation verspricht keinen wirksamen Zugriff."
+      "hint": "Ein Subjekt, drei unabhängige Zugriffe, ein optionaler Ablauf. Eine Verzeichniszeile ist ein Kandidat, kein berechtigtes Subjekt: Die Engine entscheidet beim Akt, und eine erfasste Generation verspricht keinen wirksamen Zugriff."
     },
     "validation": {
       "expiry": "Der Ablauf konnte nicht als Datum gelesen werden.",
@@ -646,17 +647,17 @@
   },
   "cursor": {
     "title": "Bis hier als gesehen markieren",
-    "description": "Rückt Ihren persönlichen Gesehen-Cursor bis zur letzten Zustellung einer Posteingangsseite vor. Es bestätigt nichts und ändert keine Zustellung.",
+    "description": "Verschiebt Ihre persönliche Gesehen-Marke bis zur letzten Zustellung einer Posteingangsseite. Es bestätigt nichts und ändert keine Zustellung.",
     "section": {
-      "title": "Gesehen-Cursor",
+      "title": "Gesehen-Marke",
       "hint": "Jede geladene Seite kann bis zu ihrer letzten Zustellung als gesehen markiert werden. Das Ziel ist das eigene der Seite, von der Engine für genau diese Zustellung geprägt; der lokale Filter der Tabelle muss leer sein, damit der Umfang eindeutig ist.",
       "page": "Seite {{page}} · {{count}} Zustellungen",
       "upTo": "bis"
     },
     "reasons": {
       "noPermission": "Erfordert die Berechtigung delivery:write.",
-      "noRecipient": "Diese Sitzung ist keine Benutzeridentität; der persönliche Cursor gehört zu einem Benutzerpostfach.",
-      "filtered": "Leeren Sie zuerst den Tabellenfilter: Das Cursorziel ist die Serverseite, nicht die gefilterten Zeilen.",
+      "noRecipient": "Diese Sitzung ist keine Benutzeridentität; die persönliche Gesehen-Marke gehört zu einem Benutzerpostfach.",
+      "filtered": "Leeren Sie zuerst den Tabellenfilter: Die Marke zielt auf die Serverseite, nicht auf die gefilterten Zeilen.",
       "emptyPage": "Diese Seite hat keine Zustellungen zum Markieren.",
       "otherRecipient": "Die letzte Zustellung dieser Seite ist nicht an Ihre Benutzeridentität adressiert."
     },
@@ -668,36 +669,36 @@
       "lastSubject": "Letzter Betreff",
       "lastDelivery": "Letzte Zustellung",
       "lastSeq": "Zustellsequenz",
-      "cursorVersion": "Cursorversion",
-      "cursorId": "Cursor-ID",
+      "cursorVersion": "Version der Marke",
+      "cursorId": "ID der Marke",
       "replayed": "Wiederholt",
       "lastSeenSeq": "Zuletzt gesehene Sequenz",
       "barrierDelivery": "Barriere-Zustellung",
       "barrierReason": "Grund der Barriere",
       "barrierSince": "Barriere seit"
     },
-    "preparing": "Vorbereitung: Die Engine wird nach dem Cursorziel dieser Seite gefragt…",
-    "prepareFailedTitle": "Das Cursorziel konnte nicht vorbereitet werden",
+    "preparing": "Vorbereitung: Die Engine wird nach dem Ziel dieser Seite gefragt…",
+    "prepareFailedTitle": "Das Ziel konnte nicht vorbereitet werden",
     "prepareFailedBody": "Nichts wurde vorgerückt. Aktualisieren Sie den Posteingang und bereiten Sie erneut von einer aktuellen Seite vor.",
     "confirm": {
       "title": "Vorrücken bestätigen",
-      "body": "Dies sendet das vorbereitete Ziel und die Zustellung oben mit der gelesenen Cursorversion und einem eigenen Schlüssel. Nur das Bestätigen rückt etwas vor. Eine Wiederholung nach einem mehrdeutigen Ergebnis sendet genau dies erneut."
+      "body": "Dies sendet das vorbereitete Ziel und die Zustellung oben mit der gelesenen Version der Marke und einem eigenen Schlüssel. Nur das Bestätigen verschiebt etwas. Eine Wiederholung nach einem mehrdeutigen Ergebnis sendet genau dies erneut."
     },
-    "conflictTitle": "Der Cursor hat sich seit der Vorbereitung geändert",
-    "conflictBody": "Die Engine hat das Vorrücken abgelehnt: Die Cursorversion oder das Ziel sind nicht mehr aktuell. Nichts wurde erneut gesendet. Aktualisieren Sie den Posteingang und bereiten Sie erneut von einer aktuellen Seite vor.",
+    "conflictTitle": "Die Marke hat sich seit der Vorbereitung geändert",
+    "conflictBody": "Die Engine hat das Verschieben abgelehnt: Die Version der Marke oder das Ziel sind nicht mehr aktuell. Nichts wurde erneut gesendet. Aktualisieren Sie den Posteingang und bereiten Sie erneut von einer aktuellen Seite vor.",
     "ambiguousTitle": "Ergebnis unbekannt",
     "ambiguousBody": "Die Verbindung ist ausgefallen, bevor eine Antwort ankam. Eine Wiederholung sendet dasselbe Ziel, dieselbe Version und denselben Schlüssel; die Engine wendet es einmal an, wiederholt es oder lehnt es mit ihrer aktuellen Version ab. Unbestimmt lassen hält das vorherige Ergebnis unbekannt.",
     "refusedTitle": "Vorrücken abgelehnt",
-    "refusedBody": "Die Engine hat den Cursor nicht vorgerückt. Aktualisieren Sie den Posteingang, bevor Sie erneut vorbereiten.",
+    "refusedBody": "Die Engine hat die Marke nicht verschoben. Aktualisieren Sie den Posteingang, bevor Sie erneut vorbereiten.",
     "result": {
-      "appliedTitle": "Cursor vorgerückt",
-      "appliedBody": "Die Engine hat das Vorrücken festgeschrieben und die Position unten zurückgegeben. Der Posteingang wird vom dauerhaften Cursor aus neu gelesen.",
+      "appliedTitle": "Marke verschoben",
+      "appliedBody": "Die Engine hat das Verschieben festgeschrieben und die Position unten zurückgegeben. Der Posteingang wird von der gespeicherten Marke aus neu gelesen.",
       "replayedTitle": "Bereits vorgerückt",
       "replayedBody": "Die Engine hat das Ergebnis eines identischen früheren Befehls wiederholt. Nichts wurde zweimal angewendet.",
       "barrierTitle": "Vorrücken durch eine Barriere begrenzt",
-      "barrierBody": "Die Engine hat bei der Zustellung unten aus dem genannten Grund angehalten; der Cursor hat das Ziel nicht erreicht. Das ist kein vollständiges Vorrücken.",
+      "barrierBody": "Die Engine hat bei der Zustellung unten aus dem genannten Grund angehalten; die Marke hat das Ziel nicht erreicht. Das ist kein vollständiges Verschieben.",
       "barrierHint": "Öffnen Sie die Barriere-Zustellung mit einer frischen Lesung. Sie aufzulösen rückt für sich nichts vor: Posteingang aktualisieren, ein neues Ziel vorbereiten und erneut bestätigen.",
-      "notAck": "Ein Gesehen-Cursor ist keine Bestätigung und ändert weder den Zustand noch die Erstgesehen-Marke einer Zustellung."
+      "notAck": "Eine Gesehen-Marke ist keine Bestätigung und ändert weder den Zustand noch die Erstgesehen-Marke einer Zustellung."
     }
   },
   "capability": {
@@ -832,7 +833,7 @@
     },
     "inbox": {
       "title": "An Sie gerichtete Übergaben",
-      "description": "Seite für Seite über die Fortsetzung des Servers. Diese Sammlung enthält keine Inhalte: Zusammenfassung, nächster Schritt und Risiko eines Angebots sind nur durch Öffnen lesbar.",
+      "description": "Seite für Seite; laden Sie mehr, um weitere Übergaben zu sehen. Diese Sammlung enthält keine Inhalte: Zusammenfassung, nächster Schritt und Risiko eines Angebots sind nur durch Öffnen lesbar.",
       "filter": "Zustand",
       "truncated": "Über diese Seite hinaus gibt es weitere Angebote",
       "truncatedHint": "Die Engine meldet, dass sie in derselben Transaktion ein weiteres Angebot autorisiert hat. Das ist keine Gesamtzahl und keine Zählung verborgener Zeilen.",

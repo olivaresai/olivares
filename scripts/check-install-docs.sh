@@ -206,6 +206,7 @@ stale="$tmp/stale-release-hits"
 scan_files=(
 	"$ROOT/README.md" "$ROOT/README.de.md" "$ROOT/README.es.md" "$ROOT/README.fr.md"
 	"$ROOT/README.ja.md" "$ROOT/README.ru.md" "$ROOT/README.zh.md"
+	"$ROOT/README.uk.md" "$ROOT/README.ko.md" "$ROOT/README.pt.md"
 	"$ROOT/INSTALL.md" "$ROOT/SECURITY.md" "$ROOT/SUPPORT.md" "$ROOT/CHANGELOG.md"
 	"$ROOT/RELEASE-VERSION" "$package_doc"
 )

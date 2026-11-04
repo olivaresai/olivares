@@ -1,0 +1,34 @@
+{
+  "title": "Relatórios",
+  "description": "Gere e transfira relatórios de governação a pedido e gira as entregas agendadas.",
+  "catalog": {
+    "title": "Relatórios a pedido",
+    "empty": "Não há tipos de relatório disponíveis.",
+    "emptyHint": "O catálogo lista os tipos de relatório que esta versão consegue produzir. Nenhum está disponível nesta edição.",
+    "colReport": "Relatório",
+    "colFormats": "Formatos",
+    "colActions": "Ações",
+    "generate": "Gerar"
+  },
+  "formats": {
+    "html": "HTML",
+    "pdf": "PDF"
+  },
+  "generate": {
+    "title": "Gerar {{title}}",
+    "subtitle": "Escolha o formato e o período; o relatório é transferido quando estiver pronto.",
+    "format": "Formato",
+    "from": "De",
+    "to": "Até",
+    "framework": "Referencial",
+    "frameworkHint": "Opcional — limite a evidência a um único referencial de conformidade.",
+    "frameworkPlaceholder": "p. ex. soc2",
+    "team": "Equipa",
+    "teamHint": "Opcional — limite a repartição de gastos a uma única equipa.",
+    "teamPlaceholder": "p. ex. platform",
+    "download": "Transferir",
+    "done": "{{title}} gerado.",
+    "failed": "A geração do relatório falhou.",
+    "pdfUnavailable": "A geração de PDF não está disponível nesta versão. Escolha HTML."
+  }
+}

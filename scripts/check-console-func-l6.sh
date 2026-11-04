@@ -75,8 +75,6 @@ lot6_forbid() {
 	fi
 }
 
-lot6_require DEPLOY_APPLY_TYPED \
-	web/src/features/deploy/definition-detail.tsx 'confirmPhrase="APPLY"'
 lot6_require PROTOCOL_LOSSES_ARRAY \
 	modules/sessions/communication_binding_spec_api.go 'if spec.KnownLosses == nil {'
 lot6_require EVENTING_BULK_FRESH_GET \
@@ -92,6 +90,8 @@ lot6_require VIEWER_PERMISSION_CONTEXT_ISOLATED \
 # The private assembler owns the paid subjects; missing files there still refuse.
 lot6_private_tests=()
 if [ -d enterprise ]; then
+lot6_require DEPLOY_APPLY_TYPED \
+	web/src/features/deploy/definition-detail.tsx 'confirmPhrase="APPLY"'
 lot6_require ORCHESTRATION_DECLARED_NOT_FIRED \
 	web/src/features/orchestration/orchestration-view.tsx "'declared_not_fired',"
 lot6_forbid ORCHESTRATION_NEIGHBORS_UNREACHABLE \
@@ -101,7 +101,7 @@ lot6_forbid ORCHESTRATION_TIMELINE_UNREACHABLE \
 lot6_forbid ORCHESTRATION_SCHEDULE_DETAIL_UNREACHABLE \
 	web/src/features/orchestration/orchestration-view.tsx 'orchestrationApi.schedule('
 
- lot6_private_tests=(src/features/orchestration/api.test.ts src/features/orchestration/decisions-estate.test.tsx src/features/orchestration/orchestration.test.tsx)
+ lot6_private_tests=(src/features/deploy/deploy.test.tsx src/features/orchestration/api.test.ts src/features/orchestration/decisions-estate.test.tsx src/features/orchestration/orchestration.test.tsx)
 fi
 
 if [ "$lot6_broken" -ne 0 ]; then
@@ -126,7 +126,6 @@ if pnpm -C web exec vitest run \
 	src/features/eventing/egress-policy-panel.test.tsx \
 	src/features/eventing/eventing-view.test.tsx \
 	src/features/eventing/sink-format.test.ts \
-	src/features/deploy/deploy.test.tsx \
 	"${lot6_private_tests[@]}" >"$lot6_log" 2>&1; then
 	echo "console-func-l6: PASS — FOCUSED_COMPONENT_TESTS"
 else

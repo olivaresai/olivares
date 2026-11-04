@@ -1,0 +1,61 @@
+{
+  "live": {
+    "open": "Em direto",
+    "connecting": "A ligar…",
+    "error": "A voltar a ligar…",
+    "closed": "Offline"
+  },
+  "sourceModes": {
+    "export": "Exportação",
+    "live": "Em direto",
+    "direct": "Direto",
+    "hints": {
+      "export": "O conteúdo veio de uma origem de exportação/offline, ou o modo não foi declarado.",
+      "live": "O conteúdo veio de uma origem a montante em direto.",
+      "direct": "O conteúdo foi enviado diretamente para a base de conhecimento."
+    }
+  },
+  "graph": {
+    "empty": "Sem relações para mostrar",
+    "emptyHint": "Ainda nada corresponde aos filtros atuais.",
+    "mobileTitle": "O grafo precisa de um ecrã mais largo",
+    "mobileHint": "Abra esta vista num ecrã maior para ver o mapa interativo.",
+    "fit": "Ajustar à vista",
+    "minimap": "Minimapa",
+    "controls": {
+      "zoomIn": "Ampliar",
+      "zoomOut": "Reduzir",
+      "reset": "Repor vista"
+    }
+  },
+  "urlState": {
+    "urlRejected": "Não foi possível usar {{count}} valor desta ligação ({{keys}}); a vista voltou à predefinição.",
+    "urlRejected_one": "Não foi possível usar {{count}} valor desta ligação ({{keys}}); a vista voltou às predefinições.",
+    "urlRejected_many": "Não foi possível usar {{count}} de valores desta ligação ({{keys}}); a vista voltou às predefinições.",
+    "urlRejected_other": "Não foi possível usar {{count}} valores desta ligação ({{keys}}); a vista voltou às predefinições.",
+    "savedViewRejected": "Não foi possível usar {{count}} valor guardado em «{{name}}» ({{keys}}); a vista voltou à predefinição.",
+    "savedViewRejected_one": "Não foi possível usar {{count}} valor guardado em «{{name}}» ({{keys}}); a vista voltou às predefinições.",
+    "savedViewRejected_many": "Não foi possível usar {{count}} de valores guardados em «{{name}}» ({{keys}}); a vista voltou às predefinições.",
+    "savedViewRejected_other": "Não foi possível usar {{count}} valores guardados em «{{name}}» ({{keys}}); a vista voltou às predefinições.",
+    "thisSavedView": "esta vista guardada"
+  },
+  "workspaceRequired": {
+    "use": "Usar {{name}}",
+    "choose": "Escolha um espaço de trabalho"
+  },
+  "names": {
+    "untitledSession": "Sessão sem título",
+    "unknownUser": "Utilizador desconhecido",
+    "unknownWorkspace": "Espaço de trabalho desconhecido"
+  },
+  "openInEditor": "Abrir em {{editor}}",
+  "headDiff": {
+    "file": "Ficheiro",
+    "changes": "Alterações desde HEAD",
+    "committed": "HEAD (com commit)",
+    "current": "Atual",
+    "same": "Sem diferenças em relação a HEAD.",
+    "view": "Ver",
+    "unavailable": "Não foi possível comparar com HEAD."
+  }
+}

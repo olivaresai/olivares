@@ -92,6 +92,8 @@ Ledger stillschweigend vergisst.
 
 ## Hinweise
 
+Bei unterstützten Codex-Berechtigungsanfragen gewährt **Für diese Sitzung genehmigen** die geprüfte Berechtigung für die aktuelle Sitzung. **Einmal genehmigen** behält sein einmaliges Verhalten bei. Dieselbe Wahl steht im Gespräch und in der Queue zur Verfügung. API-Clients können `{"decision":"approve","scope":"session"}` senden, wenn die Anfrage `session_scope_allowed: true` meldet. Andere Anfragen weisen diesen Geltungsbereich mit HTTP 400 ab und halten keine Entscheidung fest. Der Entscheidungsverlauf und das Audit-Ereignis behalten den Geltungsbereich; wenn mehrere Personen genehmigen müssen, hält eine einmalige Entscheidung die Freigabe einmalig.
+
 - `escalate_in_seconds` benachrichtigt das SoD-Team, wenn eine Anfrage
   unentschieden liegen bleibt — nutze es für produktionskritische Aktionen.
 - Abbruch (`POST …/{id}/cancel`) ist für den Anfragenden oder einen Admin auf

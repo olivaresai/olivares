@@ -16,10 +16,10 @@
     "infrastructure": "Infrastruttura"
   },
   "items": {
-    "estate": "Parco",
+    "estate": "Risorse configurate",
     "home": "Adesso",
     "onboarding": "Configurazione guidata",
-    "inventory": "Inventario",
+    "inventory": "Risorse rilevate",
     "sessions": "Sessioni",
     "accessMap": "Mappa degli accessi",
     "reach": "Portata",
@@ -38,7 +38,6 @@
     "vault": "Cassaforte",
     "claudePolicy": "Policy gestita",
     "routinePolicies": "Policy delle routine",
-    "deploy": "Deployment",
     "gitPublication": "Pubblicazione Git",
     "knowledge": "Conoscenza",
     "catalog": "Catalogo",
@@ -51,7 +50,6 @@
     "adoption": "Adozione",
     "evals": "Eval",
     "security": "Sicurezza",
-    "recordings": "Registrazioni",
     "compliance": "Compliance",
     "voice": "Voce",
     "sandbox": "Sandbox",
@@ -67,7 +65,6 @@
     "settings": "Impostazioni",
     "workspace-templates": "Template di workspace",
     "eventing": "Webhook ed eventi",
-    "session-viewer": "Visualizzatore di sessioni",
     "backups": "Backup",
     "updates": "Aggiornamenti",
     "logs": "Log",
@@ -93,10 +90,10 @@
     "truncated": "L'elenco è incompleto: esistono più workspace di quelli caricati"
   },
   "descriptions": {
-    "estate": "Esamina le risorse configurate e le loro relazioni, incluse le dipendenze tra gli elementi di lavoro.",
+    "estate": "Ciò che hai configurato e come le sue parti dipendono l'una dall'altra, elementi di lavoro inclusi.",
     "home": "Panoramica e stato di salute del parco a colpo d'occhio",
     "onboarding": "Configurazione guidata del deployment",
-    "inventory": "Individua e cataloga gli agenti, i server MCP e i modelli osservati dai connettori.",
+    "inventory": "Agenti, server MCP e modelli osservati dai connettori e quando ciascuno è stato visto l'ultima volta.",
     "sessions": "Avvia sessioni e segui che cosa fa ciascuna, comprese quelle che Olivares trova",
     "accessMap": "Che cosa legge e scrive ogni agente (R/RW)",
     "reach": "Vedi quali destinazioni può raggiungere ogni strumento e quali attendono approvazione.",
@@ -113,7 +110,6 @@
     "identity": "SSO, SCIM e le identità usate dai tuoi agenti",
     "vault": "Le tue password, note e codici di autenticazione",
     "claudePolicy": "Policy gestite, hook, MCP, sandbox e policy-as-code",
-    "deploy": "Effettua il provisioning degli agenti e collegali all'infrastruttura",
     "gitPublication": "Esegui push dei commit, apri pull request e fai merge tramite target Git approvati",
     "knowledge": "Basi di conoscenza, RAG e data lineage",
     "catalog": "Agenti e capacità selezionati e approvati",
@@ -128,7 +124,6 @@
     "adoption": "Produttività, accettazione e mix di modelli",
     "evals": "Qualità, eval e regressioni",
     "security": "Guardrail, analisi forense e anomalie",
-    "recordings": "Registrazione e riproduzione privilegiata delle sessioni",
     "compliance": "Framework, controlli ed evidenze",
     "voice": "Sessioni vocali e in tempo reale",
     "sandbox": "Test isolati e replay degli agenti",
@@ -186,13 +181,15 @@
     "agentcoreExport": "Esportazione AgentCore · AgentCore",
     "sessions": "Sessioni · Osserva sessioni · Gestisci sessioni · Claude Code · agentops",
     "agentops": "Gestisci sessioni · Claude Code · agentops · Portale operativo di Claude Code",
-    "console": "Console di controllo · Amministrazione del tenant"
+    "console": "Console di controllo · Amministrazione del tenant",
+    "estate": "Parco",
+    "inventory": "Inventario"
   },
   "areas": {
     "infrastructure": {
       "label": "Infrastruttura",
       "sections": {
-        "estate": "Inventario e workspace"
+        "estate": "Risorse e spazi di lavoro"
       }
     },
     "ai": {
@@ -298,6 +295,13 @@
     "draftSaveFailed": "Non è stato possibile salvare la bozza in questa scheda. Tieni aperta questa pagina o copia il messaggio prima di uscire.",
     "sendBackgroundHint": "Ctrl+Invio invia e tiene pronta la bozza per la frase successiva.",
     "slashLabel": "Comandi e skill",
+    "mentionLabel": "File e cartelle",
+    "skillLabel": "Skill",
+    "mention": {
+      "loading": "Lettura della cartella della sessione…",
+      "failed": "Impossibile leggere la cartella della sessione.",
+      "nomatch": "Nessun file o cartella inizia con “{{query}}”."
+    },
     "slashOption": "{{name}}, {{i}} di {{n}}",
     "slashNoMatch": "Nessun comando corrisponde a “{{query}}”.",
     "slash": {
@@ -315,7 +319,8 @@
     },
     "sessionKeeps": "Questa sessione mantiene {{value}}. Una scelta diversa avvia una nuova sessione.",
     "startWithChoice": "Avvia una nuova sessione con questa scelta",
-    "askPlaceholder": "Chiedi qualsiasi cosa, / per comandi e skill",
+    "newWithOtherAccess": "Nuova sessione con un altro accesso…",
+    "askPlaceholder": "Chiedi qualsiasi cosa, @ per file e cartelle, / per comandi e skill",
     "modelPicker": "Modello: {{value}}",
     "effortPicker": "Impegno: {{value}}",
     "accessPicker": "Accesso: {{value}}",
@@ -346,6 +351,7 @@
     }
   },
   "shell": {
+    "more": "Altro",
     "searchCommands": "Cerca e comandi",
     "search": "Cerca",
     "stopAll": "Ferma tutto",
@@ -450,6 +456,8 @@
     "work": "Lavoro",
     "tools": "Strumenti",
     "control": "Controllo",
-    "admin": "Amministrazione"
-  }
+    "admin": "Amministrazione",
+    "organization": "Organizzazione"
+  },
+  "readOnlyNotice": "Puoi leggere questa pagina ma non modificarla. Può farlo un amministratore dell'organizzazione."
 }

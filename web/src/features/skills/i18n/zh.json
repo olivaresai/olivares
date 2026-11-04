@@ -103,6 +103,29 @@
     "acts": "{{skill}} 现在会在加载时生效：{{items}}。分配它需要你的批准。",
     "pinsKeep": "现有分配会保留其修订，直到你用“使用最新版”逐个移动。",
     "apply": "应用此更新",
-    "applied": "更新已发布为修订 {{n}}"
+    "applied": "更新已发布为修订 {{n}}",
+    "checked": "检查时间",
+    "noDiff": "没有可用的文本差异。"
+  },
+  "catalog": {
+    "skills": "技能",
+    "packs": "包",
+    "name": "名称",
+    "description": "描述",
+    "kind": "类型",
+    "search": "搜索名称和描述",
+    "unassigned": "未分配",
+    "loading": "加载中…",
+    "incomplete": "部分修订未加载，分配列表可能不完整。",
+    "skill": "技能",
+    "agent": "智能体",
+    "command": "命令",
+    "rule": "规则"
+  },
+  "selection": {
+    "loading": "正在检查技能…",
+    "count_other": "此会话将获得 {{count}} 项技能",
+    "current_other": "当前分配：{{count}} 项技能",
+    "unavailable": "无法解析此部门的技能。"
   }
 }

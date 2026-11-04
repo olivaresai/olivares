@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import type { paths } from '@/lib/api/openapi.gen'
 
 /**
  * The provider plane's wire shapes.
@@ -38,6 +39,8 @@ export interface ProviderRecordDTO {
   kind: ProviderKind
   display_name: string
   base_url?: string
+  /** The vendor preset the record was registered from, when it was. */
+  service?: string
   /** Four characters and a marker. Enough to tell two credentials apart in a
    * picker, useless for anything else. */
   key_hint?: string
@@ -56,9 +59,15 @@ export interface ProviderRecordDTO {
   revoked_at?: string
 }
 
+/** One vendor endpoint of the engine's preset table (GET /v1/m/sessions/provider-presets). */
+export type ProviderPreset =
+  paths['/v1/m/sessions/provider-presets']['get']['responses'][200]['content']['application/json']['items'][number]
+
 /** The credential travels in `api_key` on the way IN and in nothing on the way out. */
 export interface CreateProviderRequest {
   kind: ProviderKind
+  /** A preset's ref: the engine fixes the kind and the vendor's endpoint from it. */
+  service?: string
   display_name: string
   base_url?: string
   api_key?: string

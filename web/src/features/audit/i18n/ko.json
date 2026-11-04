@@ -123,7 +123,7 @@
     "add": "{{token}}을(를) 쿼리에 추가",
     "commands": "검색 및 명령",
     "problem": {
-      "key": "{{token}}은(는) 원장 필터가 아닙니다. person:, action:, kind:, target:, since:, until: 또는 단어를 사용하세요.",
+      "key": "{{token}}은(는) 원장 필터가 아닙니다. person:, action:, kind:, target:, tool:, folder:, since:, until: 또는 단어를 사용하세요.",
       "time": "{{token}}은(는) 시간이 아닙니다. 90m, 24h, 7d, 2w 또는 2026-10-20 같은 날짜를 사용하세요.",
       "person": "{{token}}과(와) 일치하는 사람이 없습니다. 이름, 이메일 또는 user:<id>를 사용하세요.",
       "several": "{{token}}과(와) 일치하는 사람이 여러 명입니다. 전체 이름, 이메일 또는 user:<id>를 사용하세요.",

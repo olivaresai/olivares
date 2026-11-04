@@ -30,6 +30,10 @@ export const VIEWS = [
     helpHref: '/reference/modules/ii-sessions',
     icon: LayoutTemplate,
     permission: 'sessions:template:read',
+    changes: [
+      { permission: 'sessions:template:write' },
+      { permission: 'sessions:template:admin' },
+    ],
     element: lazyView(TemplatesView),
   },
 ] satisfies ViewEntry[]

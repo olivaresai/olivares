@@ -56,5 +56,34 @@ func (m *mcpManagement) ConfigureSessionMCP(ctx context.Context, tenant model.Te
 		return noop, auth.ErrMCPGatewayUnavailable
 	}
 	u.Path, u.RawPath = "/session/mcp", ""
-	return sessions.ConfigureSessionMCP(spec, driver, m.eng.dataDir, runRef, u.String(), envHookPEPToken)
+	cleanup, err := sessions.ConfigureSessionMCP(spec, driver, m.eng.dataDir, runRef, u.String(), envHookPEPToken)
+	if err != nil {
+		return cleanup, err
+	}
+	names, undecided := reachableServerNames(snapshot.Servers, m.assignedToSession(ctx, tenant, auth.Principal{SessionRunRef: runRef}))
+	if m.eng.log != nil {
+		for _, id := range undecided {
+			m.eng.log.Warn("mcp: session reach assignment unavailable", "server_id", id, "run_ref", runRef)
+		}
+	}
+	spec.SessionMCPReach = append(spec.SessionMCPReach, names...)
+	return cleanup, nil
+}
+
+// reachableServerNames names the enabled servers the session may use. A server
+// whose assignment cannot be read is left out and returned by id: a reach edge is
+// never guessed.
+func reachableServerNames(servers []auth.MCPGatewayServer, assigned func(auth.MCPGatewayServer) (bool, error)) (names, undecided []string) {
+	for _, server := range servers {
+		if !server.Enabled {
+			continue
+		}
+		switch ok, err := assigned(server); {
+		case err != nil:
+			undecided = append(undecided, server.ID)
+		case ok:
+			names = append(names, server.Name)
+		}
+	}
+	return names, undecided
 }

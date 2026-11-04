@@ -112,13 +112,22 @@ func (c *pitrCluster) run(tool string, args ...string) {
 // startCluster initialises a cluster in dir with the server's own defaults for
 // connections and locks, listening on loopback only. extra is appended to
 // postgresql.conf.
+//
+// The cluster is thrown away with the test, so neither initdb nor the server
+// waits for the disk (--no-sync, fsync = off; the PITR cell's pg_basebackup
+// likewise). WAL is still written and archived as before, so recovery replays
+// the same records; only the flushes that protect against an OS crash are
+// skipped. With them, the occupied-target test on one major ran 211 s with free
+// syncs and 823 s at 50 ms a sync; without them, 31 s at either cost. That
+// latency, on a runner disk shared with other jobs, is what took the four
+// dr:pitr tests past their 45-minute bound.
 func startCluster(t *testing.T, major int, bin, dir, extra string) *pitrCluster {
 	t.Helper()
 	if err := os.Mkdir(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	c := &pitrCluster{t: t, major: major, bin: bin, data: filepath.Join(dir, "data"), port: freeLoopbackPort(t), log: filepath.Join(dir, "server.log")}
-	c.run("initdb", "-D", c.data, "-U", "postgres", "-A", "trust", "--encoding=UTF8", "--locale=C")
+	c.run("initdb", "-D", c.data, "-U", "postgres", "-A", "trust", "--encoding=UTF8", "--locale=C", "--no-sync")
 	appendFileOrFatal(t, filepath.Join(c.data, "postgresql.conf"), fmt.Sprintf(`
 listen_addresses = '127.0.0.1'
 port = %d
@@ -126,6 +135,7 @@ unix_socket_directories = ''
 shared_buffers = 32MB
 timezone = 'UTC'
 log_timezone = 'UTC'
+fsync = off
 %s
 `, c.port, extra))
 	c.start()
@@ -285,7 +295,7 @@ func TestDRPostgresPITRRestoresToAnInstantBetweenTwoAuditEvents(t *testing.T) {
 			// Base backup, then the companion bundle taken right after it.
 			base := filepath.Join(root, "base")
 			primary.run("pg_basebackup", "-h", "127.0.0.1", "-p", strconv.Itoa(primary.port), "-U", "postgres",
-				"-D", base, "-F", "p", "-X", "stream", "-c", "fast", "-w")
+				"-D", base, "-F", "p", "-X", "stream", "-c", "fast", "-w", "--no-sync")
 			pf := passphraseFile(t)
 			companion := filepath.Join(root, "companion.drbundle")
 			args := append([]string{"backup", "--data-dir", dataDir}, est.drArgs()...)

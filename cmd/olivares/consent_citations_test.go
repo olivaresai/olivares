@@ -62,10 +62,11 @@ func localNoneCitationResolves(lineCounts map[string][]int, kind model.Kind, cit
 		{"spec.go", 138, 138}:    {"modules/deploy/spec_enterprise.go", 86, 86},
 		{"spec.go", 161, 161}:    {"modules/deploy/spec_enterprise.go", 104, 104},
 		{"helpers.go", 284, 284}: {"modules/deploy/helpers_enterprise.go", 257, 257},
-		// The renderer of the SCIM enterprise attributes left with the inbound SCIM
-		// server (Business); the engine's directory write stands at these lines.
-		{"core/api/scim/user.go", 192, 192}: {"core/auth/scim.go", 396, 396},
-		{"core/api/scim/user.go", 195, 195}: {"core/auth/scim.go", 397, 397},
+		// The renderer of the SCIM enterprise attributes and the engine's directory write
+		// left with the inbound SCIM server (Business); what Community keeps is the
+		// stored field, declared at these lines.
+		{"core/api/scim/user.go", 192, 192}: {"core/model/auth.go", 56, 56},
+		{"core/api/scim/user.go", 195, 195}: {"core/model/auth.go", 58, 58},
 	}
 	namespace, _, _ := strings.Cut(string(kind), ".")
 	// Bare citations can relocate only within their owning module. Explicit
@@ -242,11 +243,19 @@ var historicalBusinessNoneCitations = map[historicalNoneDeclaration][]string{
 	{"deploy.wiring", "the kind or natural reference of the enterprise resource a wiring reaches, published only as the edge resource: spec.go:50, wiring.go:144"}:                                                                                                                                                                                 {"wiring.go:144"},
 	// AI terms: Community registers the schema only; the one reader of these columns is the Business
 	// module enterprise/aiterms, which resolves the same citations in its own tree.
-	{"aiterms.policy", "server generated terms version; reader enterprise/aiterms/terms.go:78"}:                                                   {"enterprise/aiterms/terms.go:78"},
-	{"aiterms.policy", "organization-authored terms, rendered as plain text; reader enterprise/aiterms/terms.go:78"}:                              {"enterprise/aiterms/terms.go:78"},
-	{"aiterms.policy", "SHA-256 of the terms text; reader enterprise/aiterms/terms.go:78"}:                                                        {"enterprise/aiterms/terms.go:78"},
-	{"aiterms.acceptance", "accepted server-generated terms version; reader enterprise/aiterms/terms.go:221"}:                                     {"enterprise/aiterms/terms.go:221"},
-	{"aiterms.acceptance", "accepted text SHA-256; reader enterprise/aiterms/terms.go:221"}:                                                       {"enterprise/aiterms/terms.go:221"},
+	{"aiterms.policy", "server generated terms version; reader enterprise/aiterms/terms.go:78"}:                      {"enterprise/aiterms/terms.go:78"},
+	{"aiterms.policy", "organization-authored terms, rendered as plain text; reader enterprise/aiterms/terms.go:78"}: {"enterprise/aiterms/terms.go:78"},
+	{"aiterms.policy", "SHA-256 of the terms text; reader enterprise/aiterms/terms.go:78"}:                           {"enterprise/aiterms/terms.go:78"},
+	{"aiterms.acceptance", "accepted server-generated terms version; reader enterprise/aiterms/terms.go:221"}:        {"enterprise/aiterms/terms.go:221"},
+	{"aiterms.acceptance", "accepted text SHA-256; reader enterprise/aiterms/terms.go:221"}:                          {"enterprise/aiterms/terms.go:221"},
+	// Agent roles: Community registers the schema only; the one reader of these columns is the Business
+	// module enterprise/agentroles, which resolves the same citations in its own tree.
+	{"agentroles.role", "role slug chosen by an administrator, never a person (namePattern): enterprise/agentroles/roles.go:140"}:                 {"enterprise/agentroles/roles.go:140"},
+	{"agentroles.role", "writer or reviewer, never a person: enterprise/agentroles/roles.go:140"}:                                                 {"enterprise/agentroles/roles.go:140"},
+	{"agentroles.role", "administrator-authored role prompt, plain text: enterprise/agentroles/roles.go:140"}:                                     {"enterprise/agentroles/roles.go:140"},
+	{"agentroles.role", "the role's own short state note, plain text: enterprise/agentroles/roles.go:140"}:                                        {"enterprise/agentroles/roles.go:140"},
+	{"agentroles.role", "id of a git-host credential binding of the publication custody, not a secret: enterprise/agentroles/roles.go:141"}:       {"enterprise/agentroles/roles.go:141"},
+	{"agentroles.role", "name of a provider profile, not a person: enterprise/agentroles/roles.go:141"}:                                           {"enterprise/agentroles/roles.go:141"},
 	{"deploy.wiring", "the owning deploy.definition row id, written from that row's own id: definitions.go:576, wiring.go:103, lifecycle.go:680"}: {"definitions.go:576", "wiring.go:103", "lifecycle.go:680"},
 }
 

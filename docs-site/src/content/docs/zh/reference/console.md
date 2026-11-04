@@ -59,8 +59,8 @@ description: >-
 
 | 屏幕 | 路径 | 用途 | 需要 | 参考 |
 |---|---|---|---|---|
-| 环境 | `/estate` | 查看已配置的资源及其关系，包括工作项的依赖关系。 | `sessions:run:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
-| 清单 | `/inventory` | 发现并编目连接器观察到的智能体、MCP 服务器与模型。 | `inventory:catalog:read` | [reference/modules/i-inventory](/zh/reference/modules/i-inventory/) |
+| 已配置的资源 | `/estate` | 您已配置的内容，以及各部分（包括工作项）之间的依赖关系。 | `sessions:run:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
+| 已发现的资源 | `/inventory` | 连接器观察到的智能体、MCP 服务器和模型，以及各自最后一次出现的时间。 | `inventory:catalog:read` | [reference/modules/i-inventory](/zh/reference/modules/i-inventory/) |
 | 工作区 | `/workspace` | 限定在一个工作区内的 Agent、会话、资源和活动 | `tenant:read` | [reference/modules/xx-multi-tenancy](/zh/reference/modules/xx-multi-tenancy/) |
 
 ### AI

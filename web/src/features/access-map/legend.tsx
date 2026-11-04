@@ -40,7 +40,7 @@ function Swatch({
           strokeLinecap="round"
         />
       </svg>
-      <span className="text-[11px] text-muted-foreground">{label}</span>
+      <span className="text-xs text-muted-foreground">{label}</span>
     </span>
   )
 }

@@ -19,8 +19,9 @@
     "managed": "Gestito",
     "managedRev": "Gestito · rev {{rev}}",
     "discovered": "Rilevato",
+    "caption": "Server osservati dai connettori, che Olivares li colleghi o meno.",
     "empty": "Nessun server MCP rilevato",
-    "emptyHint": "I server compaiono qui quando i piani di inventario e introspezione li rilevano.",
+    "emptyHint": "I server compaiono qui quando inventario e introspezione li rilevano.",
     "truncated": "Caricati {{n}} server; ce ne sono altri"
   },
   "connection": {
@@ -127,7 +128,7 @@
     "endpoint": "Endpoint",
     "endpointHint": "Solo un riferimento: non inserire mai una credenziale nell'endpoint.",
     "scope": "Ambito",
-    "scopeHint": "Etichetta facoltativa di ambito di deployment/tenant (es. team-a).",
+    "scopeHint": "Etichetta facoltativa di ambito di deployment/organizzazione (es. team-a).",
     "enabled": "Abilitata",
     "note": "Nota",
     "secretRefs": "Riferimenti ai segreti",
@@ -188,7 +189,7 @@
     },
     "server": {
       "title": "Nessun server MCP rilevato",
-      "description": "I server MCP compaiono quando le osservazioni dei connettori li identificano nell'inventario del tenant."
+      "description": "I server MCP compaiono quando le osservazioni dei connettori li identificano nell'inventario dell'organizzazione."
     },
     "skill": {
       "title": "Nessuna skill rilevata",
@@ -196,7 +197,7 @@
     },
     "tool": {
       "title": "Nessun tool MCP rilevato",
-      "description": "I tool compaiono quando l'introspezione MCP o l'attività osservata dei tool li segnala all'inventario del tenant."
+      "description": "I tool compaiono quando l'introspezione MCP o l'attività osservata dei tool li segnala all'inventario dell'organizzazione."
     }
   },
   "truncatedHint": "Ci sono più righe di quelle mostrate; questa pagina le prende per id di riga (assegnato alla creazione), quindi mancano le ultime. Un server, tool, skill o configurazione NON elencato qui non prova che non esista."

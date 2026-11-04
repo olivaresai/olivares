@@ -29,6 +29,7 @@
   "waitingSummary": "Waiting for approval: {{destinations}}",
   "empty": "No reach recorded yet.",
   "partial": "Partial view: the access map has more.",
+  "otherReach": "Other tool activity (shell commands, searches, databases) is not a folder, MCP server or network endpoint, so it is not listed here. The access map shows it.",
   "loading": "Loading reach…",
   "error": "Could not load the reach graph.",
   "off": "This module is off.",

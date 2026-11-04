@@ -147,6 +147,7 @@ PY
 # The units earlier releases rendered are kept byte for byte so the installer can tell
 # an unedited install from an edited one; any change strands the installs it recognizes.
 for pin in \
+  'packaging/service/systemd-0.5.service 8266f91154a45d6ca2b9758a1449804f9610453aa9a24eca875850eed231ebae' \
   'packaging/service/systemd-0.2.service f668c047c263b6c62d3bac8f69f639e06c6b3d826431a134955b107e2b135723' \
   'packaging/service/systemd-26.10.service 2effb264f48f52cb51c8858d93fab15033895f4ef08e084c62a1747f54a48ad3'; do
   path="${pin% *}"

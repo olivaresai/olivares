@@ -6,6 +6,7 @@ package sqlstore_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -85,8 +86,8 @@ func TestUserAuthoritySCIMCompound(t *testing.T) {
 					beforeH := sqlstore.F2AUserAuthorityVersionForTest(t, raw, u.ID)
 					a := auth.NewAuthenticator(raw, nil)
 					actor := auth.Principal{Kind: auth.KindUser, UserID: f.Users[1].ID, CredID: f.Sessions[1].ID, Superadmin: true}
-					if err := a.SCIMDeprovisionUser(ctx, actor, f.Tenants[0], u.ID); err != nil {
-						t.Fatalf("compound SCIM: %v", err)
+					if err := a.RemoveMember(ctx, actor, f.Tenants[0], u.ID); err != nil {
+						t.Fatalf("compound removal: %v", err)
 					}
 					if err := raw.AuthView(ctx, func(as store.AuthScope) error {
 						got, err := as.Users().Get(ctx, u.ID)
@@ -131,11 +132,11 @@ func TestUserAuthoritySCIMCompound(t *testing.T) {
 					if gotH != beforeH+1 {
 						t.Fatalf("orphan=%t H=%d want %d (the offboard's one bump)", orphan, gotH, beforeH+1)
 					}
-					if err := a.SCIMDeprovisionUser(ctx, actor, f.Tenants[0], u.ID); err != nil {
-						t.Fatalf("SCIM retry: %v", err)
+					if err := a.RemoveMember(ctx, actor, f.Tenants[0], u.ID); !errors.Is(err, store.ErrNotFound) {
+						t.Fatalf("removal retry = %v, want ErrNotFound", err)
 					}
 					if got := sqlstore.F2AUserAuthorityVersionForTest(t, raw, u.ID); got != gotH {
-						t.Fatalf("SCIM retry bumped H=%d", got)
+						t.Fatalf("removal retry bumped H=%d", got)
 					}
 				})
 			}

@@ -33,6 +33,18 @@ export function groupModels(
   return groups
 }
 
+/** The catalog entry for `id`: the model of that id, else the selector that launches on
+ * it (a session records the exact id, not the selector it was chosen as). */
+export function findModel(
+  catalog: ProfileModelCatalogDTO | undefined,
+  id: string,
+): ProfileModelDTO | undefined {
+  return (
+    catalog?.models.find((m) => m.id === id) ??
+    catalog?.models.find((m) => m.launch_model === id)
+  )
+}
+
 /** The model a session starts on: the one chosen, else the tool's own default as the
  * catalog says it. A typed id the catalog does not list stays that id alone. Undefined
  * when nothing is chosen and the tool names no default. */
@@ -46,7 +58,7 @@ export function startModel(
     catalog?.models.find((m) => m.is_default)?.id ||
     ''
   if (!id) return undefined
-  return catalog?.models.find((m) => m.id === id) ?? { id }
+  return findModel(catalog, id) ?? { id }
 }
 
 /** The effort levels to offer for `model`, or null while no model is known: an effort is

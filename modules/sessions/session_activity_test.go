@@ -762,3 +762,36 @@ func TestActivity_SubagentsDirectoryIsOpenedOnce(t *testing.T) {
 		t.Fatalf("absent = %v, %v", dir, err)
 	}
 }
+
+// Claude Code 2.1.316 writes a subagent's tool results without the structured result
+// the conversation's carry, so the files a subagent changed are named only by its
+// calls. The Write records are a real 2.1.316 subagent's (path rewritten); the Edit,
+// the MultiEdit and the refused Write have the shapes Claude Code writes beside them.
+func TestActivity_ASubagentsEditsAreCountedFromItsCalls(t *testing.T) {
+	sub := `{"type":"assistant","isSidechain":true,"timestamp":"2026-11-01T15:01:07.566Z","message":{"role":"assistant","model":"claude-haiku-5-5","content":[{"type":"tool_use","id":"toolu_01JFrZHszMim7EBoXTfXB3JK","name":"Write","input":{"file_path":"/home/dev/demo/a.txt","content":"alpha"},"caller":{"type":"direct"}}]}}
+{"type":"user","isSidechain":true,"timestamp":"2026-11-01T15:01:07.797Z","message":{"role":"user","content":[{"tool_use_id":"toolu_01JFrZHszMim7EBoXTfXB3JK","type":"tool_result","content":"File created successfully at: /home/dev/demo/a.txt (file state is current in your context — no need to Read it back)"}]}}
+{"type":"assistant","isSidechain":true,"timestamp":"2026-11-01T15:01:08.000Z","message":{"role":"assistant","model":"claude-haiku-5-5","content":[{"type":"tool_use","id":"toolu_edit1","name":"Edit","input":{"file_path":"/home/dev/demo/a.txt","old_string":"alpha","new_string":"alpha\nomega"}}]}}
+{"type":"user","isSidechain":true,"timestamp":"2026-11-01T15:01:08.100Z","message":{"role":"user","content":[{"tool_use_id":"toolu_edit1","type":"tool_result","content":"The file /home/dev/demo/a.txt has been updated successfully."}]}}
+{"type":"assistant","isSidechain":true,"timestamp":"2026-11-01T15:01:08.500Z","message":{"role":"assistant","model":"claude-haiku-5-5","content":[{"type":"tool_use","id":"toolu_multi1","name":"MultiEdit","input":{"file_path":"/home/dev/demo/b.txt","edits":[{"old_string":"one","new_string":"uno"},{"old_string":"two\nthree","new_string":"dos"}]}}]}}
+{"type":"user","isSidechain":true,"timestamp":"2026-11-01T15:01:08.600Z","message":{"role":"user","content":[{"tool_use_id":"toolu_multi1","type":"tool_result","content":"Applied 2 edits to /home/dev/demo/b.txt"}]}}
+{"type":"assistant","isSidechain":true,"timestamp":"2026-11-01T15:01:09.000Z","message":{"role":"assistant","model":"claude-haiku-5-5","content":[{"type":"tool_use","id":"toolu_refused","name":"Write","input":{"file_path":"/home/dev/demo/refused.txt","content":"no"}}]}}
+{"type":"user","isSidechain":true,"timestamp":"2026-11-01T15:01:09.100Z","message":{"role":"user","content":[{"tool_use_id":"toolu_refused","type":"tool_result","content":"A hook refused this call.","is_error":true}]}}
+`
+	f := newActivityFold(true, nil)
+	if err := f.read(context.Background(), strings.NewReader(sub)); err != nil {
+		t.Fatal(err)
+	}
+	got := f.dto
+	if got.Unreadable != 0 || len(got.Files) != 2 {
+		t.Fatalf("unreadable %d files %+v", got.Unreadable, got.Files)
+	}
+	want := []activityFile{
+		{Path: "/home/dev/demo/a.txt", Added: 3, Removed: 1, Edits: 2, LastAt: "2026-11-01T15:01:08.100Z"},
+		{Path: "/home/dev/demo/b.txt", Added: 2, Removed: 3, Edits: 1, LastAt: "2026-11-01T15:01:08.600Z"},
+	}
+	for i, w := range want {
+		if got.Files[i] != w {
+			t.Fatalf("file %d %+v, want %+v", i, got.Files[i], w)
+		}
+	}
+}

@@ -2,15 +2,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { AppLink } from '@/components/ui/app-link'
 import { useQueries } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { PageHeader } from '@/components/ui/page-header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Field } from '@/components/ui/field'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useAuth } from '@/lib/auth/context'
 import { sameContext, useCapabilityPreflight } from '@/lib/auth/capabilities'
 import { moduleEnabled, moduleOn, useModulesStore } from '@/stores/modules'
+import { isBusinessOnlyPath } from '@/features/business-build'
 import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
 import { WorkspaceContents } from '@/features/workspace-dashboard/workspace-contents'
 import { readEstateFamily } from './api'
@@ -34,6 +43,9 @@ const permissions: Record<EstateFamily, string> = {
   mcp: 'tenant:admin',
   policy: 'governance:policy:read',
 }
+
+// Radix gives no item an empty value, so "all" is this stand-in; the filter state stays ''.
+const ALL = '__all__'
 
 export default function EstateView() {
   const auth = useAuth()
@@ -75,7 +87,9 @@ export default function EstateView() {
       canWriteWork={canWriteWork}
       canStartSession={canStartSession}
       canOpenWorkflow={
-        auth.can('orchestration:schedule:read') && moduleOn('orchestration')
+        auth.can('orchestration:schedule:read') &&
+        moduleOn('orchestration') &&
+        !isBusinessOnlyPath('/automations')
       }
       canReadContents={auth.can('tenant:admin')}
       isCurrent={() =>
@@ -186,7 +200,7 @@ function EstateContent({
           <>
             {canOpenWorkflow && (
               <Button asChild>
-                <a href="/automations">{t('workflows')}</a>
+                <AppLink href="/automations">{t('workflows')}</AppLink>
               </Button>
             )}
             <Button onClick={refresh} disabled={busy}>
@@ -220,39 +234,45 @@ function EstateContent({
           />
         </Field>
         <Field label={t('workspace')} htmlFor="estate-workspace">
-          <select
-            id="estate-workspace"
-            value={workspace}
-            onChange={(event) => {
-              setWorkspace(event.target.value)
+          <Select
+            value={workspace || ALL}
+            onValueChange={(value) => {
+              setWorkspace(value === ALL ? '' : value)
               setSelected(null)
             }}
-            className="min-h-11 w-full rounded-ctl border border-ctl-border bg-surface px-2 text-body"
           >
-            <option value="">{t('allWorkspaces')}</option>
-            {nodes
-              .filter((node) => node.kind === 'workspace')
-              .map((node) => (
-                <option key={node.ref} value={node.ref}>
-                  {node.label}
-                </option>
-              ))}
-          </select>
+            <SelectTrigger id="estate-workspace">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>{t('allWorkspaces')}</SelectItem>
+              {nodes
+                .filter((node) => node.kind === 'workspace')
+                .map((node) => (
+                  <SelectItem key={node.ref} value={node.ref}>
+                    {node.label}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
         </Field>
         <Field label={t('kind')} htmlFor="estate-kind">
-          <select
-            id="estate-kind"
-            value={kind}
-            onChange={(event) => setKind(event.target.value)}
-            className="min-h-11 w-full rounded-ctl border border-ctl-border bg-surface px-2 text-body"
+          <Select
+            value={kind || ALL}
+            onValueChange={(value) => setKind(value === ALL ? '' : value)}
           >
-            <option value="">{t('allKinds')}</option>
-            {families.map((family) => (
-              <option key={family} value={family}>
-                {t('kinds.' + family)}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger id="estate-kind">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>{t('allKinds')}</SelectItem>
+              {families.map((family) => (
+                <SelectItem key={family} value={family}>
+                  {t('kinds.' + family)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
       </div>
       <p className="text-caption text-text-2">{t('sharedScope')}</p>
@@ -268,8 +288,12 @@ function EstateContent({
             className="flex flex-wrap items-center gap-2 text-caption text-text-2"
           >
             <span>
-              {t('kinds.' + families[index])}:{' '}
-              {query.error ? t('unavailable') : t('more')}
+              {t('kinds.' + families[index])}
+              {query.error
+                ? `: ${t('unavailable')}`
+                : query.data?.hasMore
+                  ? `: ${t('more', { count: query.data.nodes.length })}`
+                  : ''}
             </span>
             {!query.error &&
               query.data?.hasMore &&
@@ -305,9 +329,11 @@ function EstateContent({
             )}
             {ownerFamilies.includes(families[index]!) && (
               <Button asChild size="sm">
-                <a href={estateOwnerPaths[families[index]!]}>
-                  {t('openOwner')}
-                </a>
+                <AppLink href={estateOwnerPaths[families[index]!]}>
+                  {t('openOwner', {
+                    resource: t('kinds.' + families[index]),
+                  })}
+                </AppLink>
               </Button>
             )}
           </div>

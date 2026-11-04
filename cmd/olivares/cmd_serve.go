@@ -299,6 +299,11 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 		return err
 	}
 	defer func() { _ = eng.Close() }()
+	// An install that already has its organization (a restart, an upgrade) gets the
+	// data directory owner's CLI credential now; a fresh one gets it when setup ends.
+	if err := ensureLocalOperatorToken(ctx, eng.authr, eng.store, eng.dataDir); err != nil {
+		log.Warn("the local operator's CLI credential was not left; the CLI signs in with `olivares login`", "err", err)
+	}
 	// Before any child starts: a previous engine's confined children are gone, and so is their need for the private
 	// TMPDIRs they left under <data>/tool-tmp.
 	if err := confine.SweepChildTemp(); errors.Is(err, confine.ErrChildTempHeld) {
@@ -965,6 +970,11 @@ func buildHITLReceiverServer(eng *engine, tlsCert, tlsKey string, insecure bool,
 	return srv, nil
 }
 
+// shutdownDrainBudget bounds the drain of the HTTP servers at stop. A container
+// runtime must give the engine more than this before it kills it: the sessions,
+// their credentials and the store are closed only after the drain.
+const shutdownDrainBudget = 20 * time.Second
+
 // waitAndShutdown blocks until a signal, a canceled context or a fatal listener
 // error, then drains the HTTP server(s) it was given and gracefully stops gRPC.
 // It owns transports only: closing the engine and its store belongs to its caller.
@@ -993,7 +1003,7 @@ func waitAndShutdown(ctx context.Context, httpSrv *http.Server, grpcSrv *grpc.Se
 		}
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownDrainBudget)
 	defer cancel()
 	if err := httpSrv.Shutdown(shutdownCtx); err != nil {
 		log.Warn("http shutdown", "err", err)

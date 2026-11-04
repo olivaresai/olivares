@@ -293,9 +293,7 @@ test('health controls fire real handlers and detail links reach their destinatio
   expect(
     statusBody.items.some((item) => item.subject_ref === 'l5-live-agent'),
   ).toBe(true)
-  await expect(
-    page.getByRole('heading', { name: 'Health & SLA' }),
-  ).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Operations' })).toBeVisible()
   await expect(await rowFor(page, 'L5 live agent')).toContainText('Down')
   const alternateSubject = statusBody.items.find(
     (item) => item.subject_ref !== 'l5-live-agent',

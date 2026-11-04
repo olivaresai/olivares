@@ -207,9 +207,9 @@ func expiryExtended(old, updated string) bool {
 // one; posture_classify_test.go pins that as a property over the whole input space.
 func classifyUpdate(old, updated bindingDTO, otherEnabledAllows int) (bool, string) {
 	oldEff, newEff := normalizeEffect(old.Effect), normalizeEffect(updated.Effect)
-	forbidExpiry := old.ExpiresAt != updated.ExpiresAt || (oldEff != newEff && updated.ExpiresAt != "")
-	if (oldEff == effectForbid || newEff == effectForbid) && forbidExpiry {
-		return true, "forbid expiry changed (a restriction lifts at a different time)"
+	restrictionExpiry := old.ExpiresAt != updated.ExpiresAt || (oldEff != newEff && updated.ExpiresAt != "")
+	if (restricts(oldEff) || restricts(newEff)) && restrictionExpiry {
+		return true, "restriction expiry changed (a forbid or a mandatory template lifts at a different time)"
 	}
 	if expiryExtended(old.ExpiresAt, updated.ExpiresAt) {
 		return true, "expiry extended (access remains available for longer)"

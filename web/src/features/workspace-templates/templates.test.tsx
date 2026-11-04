@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { ApiError } from '@/lib/api/errors'
 import type { TemplateDTO } from './types'
 
 // ---- Hoist mock objects (must appear before vi.mock calls) ----
@@ -224,6 +225,34 @@ describe('TemplateCard', () => {
     )
     await waitFor(() => expect(toast.error).toHaveBeenCalled())
     expect(toast.success).not.toHaveBeenCalled()
+  })
+
+  // A template that a department or group is assigned cannot be archived: the engine says why
+  // (409), and the administrator reads it, not only that the archive failed.
+  it('archiving an assigned template tells the administrator why', async () => {
+    const why =
+      'this template is assigned to a department or group; unassign it before archiving it'
+    api.remove.mockRejectedValue(new ApiError(409, 'conflict', why))
+    wrap(
+      <TemplateCard
+        template={customTemplate}
+        onEdit={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    await userEvent.click(
+      await screen.findByRole('menuitem', { name: /archive/i }),
+    )
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Archive' }),
+    )
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('Failed to archive template.', {
+        description: why,
+      }),
+    )
   })
 
   it('duplicate creates new template', async () => {

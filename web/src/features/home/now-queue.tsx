@@ -253,7 +253,8 @@ function FlaggedCard({
     <article
       aria-labelledby={headingId}
       data-testid="now-flagged-request"
-      className="flex min-w-0 flex-col gap-3 rounded-lg border-l-2 border-accent bg-surface px-4 py-3"
+      data-trust-chrome=""
+      className="flex min-w-0 flex-col gap-3 rounded-lg border-l-2 border-accent bg-surface px-4 py-3 text-foreground"
     >
       <div className="flex min-w-0 flex-col gap-0.5">
         <h3 id={headingId} className="break-words text-heading text-text">

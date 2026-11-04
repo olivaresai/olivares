@@ -1,7 +1,8 @@
 {
-  "title": "Inventaire",
+  "title": "Ressources découvertes",
   "unnamed": "Sans nom",
-  "subtitle": "Chaque agent, session, MCP, modèle et identité découvert dans votre parc.",
+  "subtitle": "Chaque agent, session, MCP, modèle et identité découverts par les connecteurs.",
+  "mcpPointer": "Ajoutez et gouvernez les serveurs MCP dans MCP et compétences",
   "refresh": "Actualiser",
   "scope": {
     "note": "Inventaire de tout le tenant. Le sélecteur d’espace de travail ne filtre pas cette vue."

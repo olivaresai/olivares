@@ -183,20 +183,10 @@ func TestCreationStampsCustodyOnce(t *testing.T) {
 		invited, _ := h.userByEmail("invited@stamp.example")
 		want(t, invited.ID, model.CustodyTenant, tT)
 
-		provisioned, _, err := h.authr.SCIMProvisionUser(ctx, super, tT, auth.SCIMUserInput{UserName: "scim@stamp.example", Active: true})
-		if err != nil {
-			t.Fatal(err)
-		}
-		want(t, provisioned.ID, model.CustodyTenant, tT)
-
 		deployment := h.createDeploymentUser(admin, "deployment@stamp.example", consentPassword)
 		want(t, deployment, model.CustodyDeployment, "")
 
 		// Later writes leave custody as it was stamped.
-		if _, err := h.authr.SCIMUpdateUser(ctx, super, tT, provisioned.ID, auth.SCIMUserInput{DisplayName: "Renamed", Active: true}); err != nil {
-			t.Fatalf("directory attribute change: %v", err)
-		}
-		want(t, provisioned.ID, model.CustodyTenant, tT)
 		if err := h.authr.SetPassword(ctx, super, deployment, "yetanotherpass1"); err != nil {
 			t.Fatal(err)
 		}

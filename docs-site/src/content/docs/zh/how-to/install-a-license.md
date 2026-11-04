@@ -89,9 +89,9 @@ curl -X POST .../v1/console/runtime/reload    # the API half
 olivares license status --data-dir /var/lib/olivares
 ```
 
-`status` 离线运行，并按引擎使用的相同优先级解析许可证，因此它回答的是关键问题——
+在引擎所在主机上，或使用 `--data-dir` 时，`status` 离线运行，并按引擎使用的相同优先级解析许可证，因此它回答的是关键问题——
 *实际生效的是哪一个许可证*——而不是“是否存在一个文件”。它会报告解析到的来源、持有者、
-套餐和到期时间。
+套餐和到期时间。如果已登录到另一台主机上的引擎，它会改为向该引擎查询。
 
 每次安装后以及移除 override 后都应运行它。
 

@@ -472,7 +472,7 @@
     "subtitle": "为 Claude Code 例行任务设定执行间隔下限、并发上限、审批要求、cron 允许列表与被封禁的环境。重叠的策略按“最严格者胜出”合成。",
     "search": "搜索例行任务策略…",
     "newPolicy": "新建策略",
-    "enforcementCaption": "这些控制在例行任务声明时生效，并在每次触发时再次生效。已禁用的策略仍会保存，但不参与合成。",
+    "enforcementCaption": "这些控制在例行任务声明时生效，并在每次触发时再次生效。已禁用的策略仍会保存，但不会应用于任何对象。",
     "enabledYes": "已启用",
     "enabledNo": "已禁用",
     "approvalYes": "必须",
@@ -491,7 +491,7 @@
       "envs": "被封禁的环境"
     },
     "scope": {
-      "tenant": "租户",
+      "tenant": "组织",
       "workspace": "工作区",
       "user": "用户"
     },
@@ -509,12 +509,12 @@
       "unreadableCaveat": "引擎无法解析这个存储字段。执行端会彻底拒绝这样的策略，也就是默认拒绝，而不是放行任何内容。"
     },
     "posture": {
-      "title": "实际生效的态势",
+      "title": "当前生效的规则",
       "counts": "{{total}} 条策略中有 {{enabled}} 条已启用",
       "workspaceRef": "工作区",
       "userRef": "用户",
-      "defaultWorkspace": "租户默认",
-      "noUser": "无归属用户",
+      "defaultWorkspace": "组织默认",
+      "noUser": "无归属人",
       "resolve": "解析",
       "indeterminate": "此解析在 {{axis}} 维度上不确定。此处执行端默认拒绝：这是一次拒绝，而不是缺少控制。",
       "floor": "执行间隔下限",
@@ -524,17 +524,17 @@
       "cap": "{{scope}} · 最多 {{max}}",
       "origin": "合成自：",
       "none": "没有已启用的策略管辖此范围。",
-      "failed": "无法读取态势",
+      "failed": "无法读取当前生效的规则",
       "resolvedFor": "针对工作区 {{workspace}} · 用户 {{user}} 解析",
       "stale": "上方的范围已更改，请重新解析",
-      "unknownUser": "无法回答的用户维度",
-      "unknownUserAxis": "用户维度无法回答",
+      "unknownUser": "归属人未知",
+      "unknownUserAxis": "归属人未知",
       "supersededByIndeterminate": "下面的值只是到目前为止合成出来的内容，并不是最终结果：不确定的解析会被整体拒绝，无论上面显示什么。",
-      "noneIndeterminate": "本作用域未组合出任何策略，且解析在一个无法作答的维度上被拒绝——这与此处没有任何管控并不相同。"
+      "noneIndeterminate": "Olivares 无法确定本作用域适用哪些策略，因此查询被拒绝——这与此处没有任何管控并不相同。"
     },
     "remove": {
       "title": "删除例行任务策略",
-      "body": "“{{name}}” 将不再参与实际生效态势的合成。它原本约束的例行任务将仅受剩余策略约束。",
+      "body": "“{{name}}” 将不再生效。它原本约束的例行任务将仅受剩余策略约束。",
       "confirm": "删除策略",
       "done": "已删除例行任务策略"
     },
@@ -550,7 +550,7 @@
       "scopeImmutable": "创建后不可修改。",
       "scopeRef": "范围引用",
       "scopeRefRequired": "工作区或用户范围的策略必须提供引用。",
-      "tenantScopeRef": "租户范围的策略不得携带引用。",
+      "tenantScopeRef": "组织范围的策略不得携带引用。",
       "enabled": "启用策略",
       "floorToggle": "强制执行间隔下限",
       "floor": "最小间隔（秒）",

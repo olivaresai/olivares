@@ -42,7 +42,7 @@ herramienta y no necesita ninguna de las dos variables. Consulta
 
 Abre **Sesiones → Nueva sesión** y elige una herramienta lista. El motor rellena
 el perfil y la carpeta. Para la instalación de Compose del README, elige
-**Cambiar carpeta** e introduce `/project` para trabajar en tu proyecto del host
+**Carpeta → Otra carpeta…** e introduce `/project` para trabajar en tu proyecto del host
 montado. Dejar la carpeta predeterminada no requiere escribir ninguna ruta. Deja
 **Primer mensaje** vacío para empezar y escribe después en la conversación, o
 escríbelo antes de pulsar **Iniciar**.
@@ -91,7 +91,7 @@ docker compose exec olivares olivares session follow first-hour
 
 ## Aprueba, interrumpe, detén y reanuda
 
-En **Más opciones**, **Pedir confirmación antes de cada acción** hace que la
+En **Qué puede hacer el agente**, **Pedir confirmación antes de cada acción** hace que la
 herramienta pida confirmación antes de actuar. En **Reglas**, la solicitud que
 espera tu respuesta aparece abierta junto a la cola, con su comando, a qué afecta
 y la regla que la pidió. Elige **Aprobar una vez** (`A`), o **Rechazar** (`D`) y

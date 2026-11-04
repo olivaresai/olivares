@@ -9,6 +9,7 @@ import {
   Cloud,
   Database,
   FileText,
+  Folder,
   Globe,
   KeyRound,
   type LucideIcon,
@@ -20,6 +21,23 @@ import { useTranslation } from 'react-i18next'
 import { useSessionNames } from '@/features/shared'
 import { cn } from '@/lib/utils'
 import type { OriginNodeData, ResourceNodeData } from './graph-model'
+import type { GroupNodeData } from './groups'
+
+type Grouped = Partial<GroupNodeData>
+
+/** A node that stands for several looks like a small stack of cards. */
+const STACK =
+  'shadow-[4px_4px_0_-1px_var(--color-surface),4px_4px_0_0_var(--color-border)]'
+
+/** The name and the second line a group or "+N more" node paints. */
+function useGroupText(data: Grouped & { label: string }) {
+  const { t } = useTranslation('accessMap')
+  if (!data.cluster) return null
+  const count = data.clusterCount ?? 0
+  return data.more
+    ? { name: t('group.more', { count }), line: null }
+    : { name: data.label, line: t('group.items', { count }) }
+}
 
 const ORIGIN_ICON: Record<string, LucideIcon> = {
   agent: Bot,
@@ -34,6 +52,7 @@ const RESOURCE_ICONS = {
   server: Server,
   api: Globe,
   file: FileText,
+  folder: Folder,
   box: Box,
 } as const
 
@@ -85,17 +104,20 @@ const COVERAGE_VARIANT: Record<string, string> = {
 export function OriginNode({
   data,
   selected,
-}: NodeProps<Node<OriginNodeData>>) {
+}: NodeProps<Node<OriginNodeData & Grouped>>) {
   const { t } = useTranslation('accessMap')
   const sessionNames = useSessionNames()
+  const group = useGroupText(data)
   const sessionName =
-    data.kind === 'session' ? sessionNames.nameOf(data.label) : null
+    data.kind === 'session' && !group ? sessionNames.nameOf(data.ref) : null
   const Icon = ORIGIN_ICON[data.kind] ?? Bot
   return (
     <div
+      title={data.ref}
       className={cn(
         'flex items-center gap-2 rounded-lg border bg-elevated px-3 py-2 shadow-sm transition-opacity',
         'border-border',
+        group && STACK,
         selected && 'border-accent-text ring-2 ring-accent-text/40',
         data.dimmed && 'opacity-40',
       )}
@@ -119,15 +141,18 @@ export function OriginNode({
         <div
           className={cn(
             'max-w-[170px] whitespace-normal text-caption [overflow-wrap:anywhere] text-foreground',
-            !sessionName && 'font-mono',
+            !sessionName && !group && 'font-mono',
+            group && 'font-medium',
           )}
-          title={data.label}
         >
-          {sessionName ?? data.label}
+          {group?.name ?? sessionName ?? data.label}
         </div>
-        <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-          {t(`kinds.${data.kind}`, { defaultValue: data.kind })}
-        </div>
+        {(!group || group.line) && (
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {group?.line ??
+              t(`kinds.${data.kind}`, { defaultValue: data.kind })}
+          </div>
+        )}
       </div>
       <Handle
         type="source"
@@ -141,13 +166,21 @@ export function OriginNode({
 export function ResourceNode({
   data,
   selected,
-}: NodeProps<Node<ResourceNodeData>>) {
+}: NodeProps<Node<ResourceNodeData & Grouped>>) {
   const { t } = useTranslation('accessMap')
-  const Icon = RESOURCE_ICONS[resourceIconKey(data.resourceKind)]
-  const tier = data.coverageTier
+  const group = useGroupText(data)
+  const Icon =
+    RESOURCE_ICONS[
+      group && data.ref.includes('/') && !data.ref.includes('://')
+        ? 'folder'
+        : resourceIconKey(data.resourceKind)
+    ]
+  const tier = group ? undefined : data.coverageTier
   return (
     <div
+      title={data.ref}
       className={cn(
+        group && STACK,
         'flex items-center gap-2 rounded-lg border bg-surface px-3 py-2 shadow-sm transition-opacity',
         data.hasUnexpected
           ? 'border-danger ring-2 ring-danger/40'
@@ -175,21 +208,26 @@ export function ResourceNode({
       </span>
       <div className="min-w-0">
         <div
-          className="max-w-[190px] whitespace-normal font-mono text-caption [overflow-wrap:anywhere] text-foreground"
-          title={data.label}
+          className={cn(
+            'max-w-[190px] whitespace-normal text-caption [overflow-wrap:anywhere] text-foreground',
+            group ? 'font-medium' : 'font-mono',
+          )}
         >
-          {data.label}
+          {group?.name ?? data.label}
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            {t(`kinds.${data.resourceKind}`, {
-              defaultValue: data.resourceKind ?? 'resource',
-            })}
-          </span>
+          {(!group || group.line) && (
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {group?.line ??
+                t(`kinds.${data.resourceKind}`, {
+                  defaultValue: data.resourceKind ?? 'resource',
+                })}
+            </span>
+          )}
           {tier && (
             <span
               className={cn(
-                'rounded-sm border px-1 text-[9px] font-medium uppercase leading-tight',
+                'rounded-sm border px-1 text-xs font-medium uppercase leading-tight',
                 COVERAGE_VARIANT[tier] ?? COVERAGE_VARIANT.opaque,
               )}
               title={t(`coverageHint.${tier}`, { defaultValue: '' })}

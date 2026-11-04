@@ -1,20 +1,13 @@
 {
   "title": "Nutzung und Kosten, nach Konto",
   "subtitle": "Offizielle 5-Stunden- und Wochenlimits neben den Tokens und Kosten von heute.",
-  "windows": {
-    "fiveHour": "5 Stunden",
-    "week": "wöchentlich"
-  },
   "accounts": {
     "heading": "Konten",
     "loading": "Die Konten jedes Werkzeugs werden gelesen…",
     "error": "Die Limits der Konten konnten nicht gelesen werden.",
     "empty": "Noch kein Konto hat seine Limits gemeldet.",
-    "resets": "setzt {{when}} zurück",
-    "stale": "zuletzt gelesen {{at}}",
     "details": "Details",
-    "detailsFor": "Details zu {{account}}",
-    "adminOnly": "Die Kontolimits sieht ein Systemadministrator."
+    "detailsFor": "Details zu {{account}}"
   },
   "today": {
     "heading": "Heute",

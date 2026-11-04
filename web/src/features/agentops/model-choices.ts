@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/lib/auth/context'
 import { agentOpsApi, agentOpsKeys } from './api'
 import { useAuthBoundary } from './auth-boundary'
-import { effortChoices, startModel } from './model-catalog'
+import { effortChoices, findModel, startModel } from './model-catalog'
 import { toolName } from './engine-tools'
 import type { ProfileModelCatalogDTO, ProfileModelDTO } from './types'
 import './i18n'
@@ -90,6 +90,12 @@ export function modelLabel(m: ProfileModelDTO): string {
   return m.display_name || m.id
 }
 
+/** Claude Code lists its own default as a model (`default`, "Default (recommended)"): the
+ * same choice as leaving the model empty, so the console names it once, in its own words. */
+export function isToolDefault(m: { id: string }): boolean {
+  return m.id === 'default'
+}
+
 /** What a model trigger shows: the chosen model, else the model the tool starts on, else
  * the tool's default said as such. */
 export function useModelTriggerText(
@@ -98,13 +104,15 @@ export function useModelTriggerText(
   model: string,
 ): string {
   const { t } = useTranslation('agentops')
-  if (model) {
-    const listed = choices.catalog?.models.find((m) => m.id === model)
+  if (model && !isToolDefault({ id: model })) {
+    const listed = findModel(choices.catalog, model)
     return listed ? modelLabel(listed) : model
   }
-  return choices.start
-    ? t('picker.defaultNamed', { model: modelLabel(choices.start) })
-    : t('picker.defaultUnnamed', { tool: toolName(driver) })
+  if (!choices.start)
+    return t('picker.defaultUnnamed', { tool: toolName(driver) })
+  return isToolDefault(choices.start)
+    ? t('picker.toolDefault')
+    : t('picker.defaultNamed', { model: modelLabel(choices.start) })
 }
 
 /** The effort a different model keeps: the same level when the new model takes it. */

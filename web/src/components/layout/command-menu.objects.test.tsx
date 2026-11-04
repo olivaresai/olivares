@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { act, screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createTestQueryClient, DEFAULT_AUTH, renderIntel } from '@/test/intel'
@@ -14,6 +14,8 @@ import { useCommandStore } from '@/stores/command'
 import { useModulesStore } from '@/stores/modules'
 import { useSessionStore } from '@/stores/session'
 import { CommandMenu } from './command-menu'
+import type { RailGroup, RailRow } from './session-rail-model'
+import { useObjectActionsStore } from '@/stores/object-actions'
 import { AgentToolsView } from '@/features/agent-tools/agent-tools-view'
 import '@/features/agent-tools/i18n'
 import {
@@ -48,8 +50,11 @@ vi.mock('@/lib/auth/context', () => ({
         : !state.restricted,
   }),
 }))
+const railState = vi.hoisted(() => ({
+  groups: [] as RailGroup[],
+}))
 vi.mock('./use-session-rail', () => ({
-  useSessionRail: () => ({ groups: [] }),
+  useSessionRail: () => ({ groups: railState.groups }),
 }))
 
 const inventory: ToolInventory = {
@@ -101,6 +106,8 @@ beforeEach(() => {
     if (path === '/v1/m/agenttools/providers') return { providers: [snapshot] }
     throw new Error(`Unexpected read: ${path}`)
   })
+  railState.groups = []
+  useObjectActionsStore.setState({ current: null })
 })
 afterEach(() => {
   vi.restoreAllMocks()
@@ -209,9 +216,10 @@ it('withholds administrative settings for a non-superadmin and unoffered setting
     screen.queryByRole('option', { name: /Report signing/ }),
   ).not.toBeInTheDocument()
   await user.clear(screen.getByRole('combobox'))
-  await user.type(screen.getByRole('combobox'), 'Notifications')
+  // Updates moved to its own page (MOVED_SECTIONS), so Settings never offers it.
+  await user.type(screen.getByRole('combobox'), 'Updates')
   expect(
-    screen.queryByRole('option', { name: /^Notifications/ }),
+    screen.queryByRole('option', { name: /^UpdatesSettings/ }),
   ).not.toBeInTheDocument()
   expect(http.get).not.toHaveBeenCalledWith(
     '/v1/m/agenttools/inventory',
@@ -361,4 +369,145 @@ it('leaving Tools preserves an open palette lookup', async () => {
   expect(
     await screen.findByRole('option', { name: 'CodexAI tools' }),
   ).toBeInTheDocument()
+})
+
+describe('object actions and scopes', () => {
+  const sessionRow = (ref: string): RailRow => ({
+    key: `s:${ref}`,
+    kind: 'session',
+    state: 'live',
+    status: 'working',
+    title: ref,
+    reference: ref,
+    meta: 'Realtime',
+    minutes: 4,
+    to: '/sessions',
+    search: { session: `run:${ref}` },
+    href: `/sessions?session=run:${ref}`,
+  })
+
+  it('lists the selected object FIRST, with its actions and their shortcuts', async () => {
+    const run = vi.fn()
+    act(() =>
+      useObjectActionsStore.getState().set({
+        label: 'Marc · Codex',
+        actions: [{ id: 'approve', label: 'Approve', shortcut: 'A', run }],
+      }),
+    )
+    const user = userEvent.setup()
+    open()
+    expect(await screen.findByText('For Marc · Codex')).toBeInTheDocument()
+    const item = screen.getByTestId('palette-object-approve')
+    expect(within(item).getByText('A')).toBeInTheDocument()
+    // The object group precedes the general Actions group.
+    const actionsHeading = await screen.findByText('Actions')
+    expect(
+      item.compareDocumentPosition(actionsHeading) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    await user.click(item)
+    expect(run).toHaveBeenCalledTimes(1)
+    expect(useCommandStore.getState().open).toBe(false)
+  })
+
+  it('withdraws the object actions once a typed query owns the list', async () => {
+    act(() =>
+      useObjectActionsStore.getState().set({
+        label: 'Marc · Codex',
+        actions: [
+          { id: 'approve', label: 'Approve', shortcut: 'A', run: vi.fn() },
+        ],
+      }),
+    )
+    const user = userEvent.setup()
+    open()
+    expect(await screen.findByText('For Marc · Codex')).toBeInTheDocument()
+    await user.type(screen.getByRole('combobox'), 's')
+    expect(screen.queryByText('For Marc · Codex')).not.toBeInTheDocument()
+    expect(
+      screen.queryByTestId('palette-object-approve'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('narrows the data search to people on @, with navigation out', async () => {
+    const user = userEvent.setup()
+    vi.mocked(http.get).mockImplementation(async (path) => {
+      if (path === '/v1/search')
+        return {
+          results: [
+            { kind: 'user', id: 'u1', name: 'Marc', detail: 'Codex' },
+            {
+              kind: 'workspace',
+              id: 'w1',
+              name: 'Marc ops',
+              detail: 'Workspace',
+            },
+          ],
+          truncated: false,
+        }
+      if (path === '/v1/m/agenttools/inventory') return inventory
+      if (path === '/v1/m/agenttools/providers')
+        return { providers: [snapshot] }
+      throw new Error(`Unexpected read: ${path}`)
+    })
+    open()
+    await user.type(screen.getByRole('combobox'), '@mar')
+    expect(
+      await screen.findByRole('option', { name: /^Marc/ }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('option', { name: /Marc ops/ }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Go to')).not.toBeInTheDocument()
+    expect(screen.getByTestId('footer-people')).toHaveTextContent('@')
+  })
+
+  it('asks for a name on a bare @, before there is anything to match', async () => {
+    const user = userEvent.setup()
+    open()
+    await user.type(screen.getByRole('combobox'), '@')
+    expect(
+      await screen.findByRole('option', { name: 'Type a name.' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('No matches.')).not.toBeInTheDocument()
+  })
+
+  it('filters sessions on # from the rail, without the data search', async () => {
+    const user = userEvent.setup()
+    railState.groups = [
+      {
+        id: 'working',
+        rows: [sessionRow('run:alpha'), sessionRow('run:beta')],
+        total: 2,
+        sessionTotal: 2,
+      },
+    ]
+    open()
+    await user.type(screen.getByRole('combobox'), '#alpha')
+    expect(
+      await screen.findByRole('option', { name: /run:alpha/ }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('option', { name: /run:beta/ }),
+    ).not.toBeInTheDocument()
+    expect(http.get).not.toHaveBeenCalledWith('/v1/search', expect.anything())
+    expect(screen.getByTestId('footer-sessions')).toHaveTextContent('#')
+  })
+
+  it('always names the three scopes in the footer, whatever is filtered', async () => {
+    open()
+    // The scope hints are a map, not a breadcrumb of where the operator is:
+    // `>` commands, `@` people, `#` sessions show before any scope is chosen.
+    expect(screen.getByTestId('footer-people')).toHaveTextContent('@')
+    expect(screen.getByTestId('footer-sessions')).toHaveTextContent('#')
+  })
+
+  it('marks matches by weight, not underline', async () => {
+    const user = userEvent.setup()
+    open()
+    await user.type(screen.getByRole('combobox'), 'Start a')
+    const mark = await screen.findByText('Start a', { selector: 'mark' })
+    expect(mark.className).toContain('font-semibold')
+    expect(mark.className).not.toContain('underline')
+  })
 })

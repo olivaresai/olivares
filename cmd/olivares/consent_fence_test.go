@@ -10,10 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/olivaresai/olivares/core/auth"
-	coreengine "github.com/olivaresai/olivares/core/engine"
-	"github.com/olivaresai/olivares/core/model"
-	"github.com/olivaresai/olivares/core/store"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -21,6 +17,10 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	coreengine "github.com/olivaresai/olivares/core/engine"
+	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 // workCreateSteps is a workflow graph of one work-create step whose owner is
@@ -235,7 +235,7 @@ func (e *consentEstate) fenceMember(label string) fenceSubject {
 	email := label + "@fence.test"
 	ext := "ext-" + label
 	id := e.onboard(e.tT, email, "admin")
-	if err := patchDirectoryUserErr(e.eng.authr, e.directoryActor(e.tT), e.tT, id, func(in *auth.SCIMUserInput) { in.ExternalID = ext }); err != nil {
+	if err := patchDirectoryUserErr(e.eng.store, e.eng.authr, e.directoryActor(e.tT), e.tT, id, func(in *directoryAttrs) { in.ExternalID = ext }); err != nil {
 		e.t.Fatalf("give %s its external id: %v", email, err)
 	}
 	e.rosterHuman(e.tT, ext)
@@ -469,12 +469,12 @@ func interleaveWithRemovals(t *testing.T, e *consentEstate, writers []fenceWrite
 				}
 			},
 			func() {
-				if err := e.eng.authr.SCIMDeprovisionUser(context.Background(), actorT, e.tT, v); err != nil && !isDirectoryRefusal(err) {
+				if err := e.eng.authr.RemoveMember(context.Background(), actorT, e.tT, v); err != nil && !isDirectoryRefusal(err) {
 					failures <- "offboard: " + err.Error()
 				}
 			},
 			func() {
-				if err := patchDirectoryUserErr(e.eng.authr, actorB, e.tB, v, func(in *auth.SCIMUserInput) { in.DisplayName = "x" }); err != nil && !isDirectoryRefusal(err) {
+				if err := patchDirectoryUserErr(e.eng.store, e.eng.authr, actorB, e.tB, v, func(in *directoryAttrs) { in.DisplayName = "x" }); err != nil && !isDirectoryRefusal(err) {
 					failures <- "account update: " + err.Error()
 				}
 			},

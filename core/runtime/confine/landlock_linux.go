@@ -113,6 +113,28 @@ func (r *ruleset) grant(path string, kind grantKind) error {
 	return err
 }
 
+// grantReadFile grants one file read-only, and only the file the caller checked: the path is opened with no
+// link in any of its names, the held object must be a regular file with a single link, and the rule is added
+// through that descriptor, so the object that passed is the object granted. A missing path, a link, a folder
+// or a second name for another file refuses the launch; the caller judged the file where it really is, and
+// that name now leads to it without a link.
+func (r *ruleset) grantReadFile(path string) error {
+	fd, err := openNoSymlinks(path, 0)
+	if err != nil {
+		return fmt.Errorf("open read-only file %s without symlinks: %w", path, err)
+	}
+	file := os.NewFile(uintptr(fd), path)
+	defer file.Close()
+	var st unix.Stat_t
+	if err := unix.Fstat(fd, &st); err != nil {
+		return fmt.Errorf("stat read-only file %s: %w", path, err)
+	}
+	if st.Mode&unix.S_IFMT != unix.S_IFREG || st.Nlink != 1 {
+		return fmt.Errorf("read-only file %s is not a regular file of its own", path)
+	}
+	return r.addRuleHandle(fd, path, r.access.fileRO)
+}
+
 func (r *ruleset) grantPath(real string, kind grantKind, named bool) error {
 	fd, err := openNoSymlinks(real, 0)
 	if err != nil {
@@ -318,6 +340,11 @@ func restrictAndExec(p Policy, program string, argv []string) error {
 	readOnly := append(append([]string{}, p.ReadOnly...), p.Sealed...)
 	for _, path := range readOnly {
 		if err := r.grant(path, grantRead); err != nil {
+			return err
+		}
+	}
+	for _, path := range p.ReadFiles {
+		if err := r.grantReadFile(path); err != nil {
 			return err
 		}
 	}

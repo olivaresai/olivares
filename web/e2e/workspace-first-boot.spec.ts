@@ -35,7 +35,7 @@ test('fresh install opens its only workspace overview without a selection step',
     await page.locator('#setup-password').fill('')
   }
   expect(setup.ok(), `Setup HTTP status: ${setup.status()}`).toBe(true)
-  await page.waitForURL('**/onboarding', { timeout: 15_000 })
+  await page.waitForURL('**/sessions', { timeout: 15_000 })
   await expect(
     page
       .getByRole('navigation', { name: 'Main navigation', exact: true })

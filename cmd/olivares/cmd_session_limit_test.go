@@ -62,7 +62,7 @@ func TestSessionShowSaysWhenTheToolRanOutOfQuota(t *testing.T) {
 }
 
 func TestLimitSentence(t *testing.T) {
-	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.Local)
+	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.FixedZone("CET", 3600))
 	soon := now.Add(3 * time.Hour)
 	next := now.Add(30 * time.Hour)
 	for _, tc := range []struct {
@@ -70,8 +70,8 @@ func TestLimitSentence(t *testing.T) {
 		limit map[string]any
 		want  string
 	}{
-		{"usage today", map[string]any{"kind": "usage", "resets_at": soon.UTC().Format(time.RFC3339)}, "Out of quota until 15:00"},
-		{"usage another day", map[string]any{"kind": "usage", "resets_at": next.UTC().Format(time.RFC3339)}, "Out of quota until 2026-10-15 18:00"},
+		{"usage today", map[string]any{"kind": "usage", "resets_at": soon.UTC().Format(time.RFC3339)}, "Out of quota until 14:00 UTC"},
+		{"usage another day", map[string]any{"kind": "usage", "resets_at": next.UTC().Format(time.RFC3339)}, "Out of quota until 2026-10-15 17:00 UTC"},
 		{"usage without a time", map[string]any{"kind": "usage"}, "Out of quota."},
 		{"usage that has lifted", map[string]any{"kind": "usage", "resets_at": now.Add(-time.Minute).UTC().Format(time.RFC3339)}, ""},
 		{"rate", map[string]any{"kind": "rate"}, "Rate limited by the provider. Try again in a moment."},

@@ -38,6 +38,10 @@ const policyArg = "--policy-v1"
 // itself would give every right back.
 type Policy struct {
 	ReadWrite, ReadOnly, Protect, Sealed, NoDelete, KeepWritable []string
+	// ReadFiles are files the child may read, each one a regular file of its own that the caller
+	// already checked. Unlike a ReadOnly path, which may be a folder or a link, each is opened again
+	// when the grant is made, and the launch is refused when it is anything else.
+	ReadFiles []string
 	// SealedFiles are borrowed canonical directory handles; the caller closes them after launch.
 	SealedFiles []*os.File `json:"-"`
 	Devices     []Device
@@ -99,9 +103,18 @@ type directoryHandle struct {
 // session helper's legacy four-field flags.
 func IsExplicitPolicy(args []string) bool { return len(args) > 0 && args[0] == policyArg }
 
-// IsWrapped reports whether Wrap replaced cmd's executable with the helper.
+// IsWrapped reports whether Wrap replaced cmd's executable with the helper. A mount layer
+// WrapMounts put in front of the policy (the user manager hidden from a plugin) is looked
+// through: the arguments that follow it are Wrap's.
 func IsWrapped(cmd *exec.Cmd) bool {
-	return len(cmd.Args) > 2 && cmd.Args[1] == HelperArg && IsExplicitPolicy(cmd.Args[2:])
+	if len(cmd.Args) < 3 || cmd.Args[1] != HelperArg {
+		return false
+	}
+	args := cmd.Args[2:]
+	if args[0] == mountsArg && len(args) > 2 {
+		args = args[2:]
+	}
+	return IsExplicitPolicy(args)
 }
 
 // Wrap preserves the caller's environment, directory, streams, cancellation
@@ -145,21 +158,30 @@ func RunHelper(args []string) int {
 
 // RunHelperWithReady preserves the launch handshake through the explicit helper.
 func RunHelperWithReady(args []string, ready *os.File) int {
+	if IsMountsProbe(args) {
+		return RunMountsProbe(args)
+	}
 	var req request
-	var err error
-	if len(args) < 4 || !IsExplicitPolicy(args) || args[2] != "--" {
+	// A plugin jail's mount layer (the engine user's user manager hidden from it) comes
+	// before the policy, as in the session helper; arguments without one come back as they were.
+	args, err := ConsumeMounts(args)
+	switch {
+	case err != nil:
+	case len(args) < 4 || !IsExplicitPolicy(args) || args[2] != "--":
 		err = errors.New("invalid explicit confinement payload")
-	} else if err = json.Unmarshal([]byte(args[1]), &req); err == nil {
-		req.Policy.Ready = ready
-		for _, handle := range req.Handles {
-			if handle.FD < 3 {
-				err = errors.New("invalid sealed directory handle")
-				break
+	default:
+		if err = json.Unmarshal([]byte(args[1]), &req); err == nil {
+			req.Policy.Ready = ready
+			for _, handle := range req.Handles {
+				if handle.FD < 3 {
+					err = errors.New("invalid sealed directory handle")
+					break
+				}
+				req.Policy.SealedFiles = append(req.Policy.SealedFiles, os.NewFile(uintptr(handle.FD), handle.Path))
 			}
-			req.Policy.SealedFiles = append(req.Policy.SealedFiles, os.NewFile(uintptr(handle.FD), handle.Path))
-		}
-		if err == nil {
-			err = Exec(req.Policy, req.Program, args[3:])
+			if err == nil {
+				err = Exec(req.Policy, req.Program, args[3:])
+			}
 		}
 	}
 	if ready != nil {
@@ -182,7 +204,7 @@ func Exec(p Policy, program string, argv []string) error {
 }
 
 func (p Policy) validate() error {
-	for _, group := range [][]string{p.ReadWrite, p.ReadOnly, p.Protect, p.Sealed, p.NoDelete, p.KeepWritable} {
+	for _, group := range [][]string{p.ReadWrite, p.ReadOnly, p.ReadFiles, p.Protect, p.Sealed, p.NoDelete, p.KeepWritable} {
 		for _, path := range group {
 			if !filepath.IsAbs(path) {
 				return fmt.Errorf("confine: %q is not an absolute path", path)

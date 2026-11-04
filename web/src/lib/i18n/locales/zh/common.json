@@ -106,7 +106,19 @@
     "scope": "在 {{name}} 中",
     "footerMove": "移动",
     "footerOpen": "打开",
-    "footerCommands": "仅命令"
+    "footerCommands": "仅命令",
+    "objectActions": "针对 {{name}}",
+    "footerPeople": "人员",
+    "footerSessions": "会话",
+    "peopleHint": "请输入姓名。"
+  },
+  "hintBar": {
+    "move": "移动",
+    "open": "打开",
+    "approve": "批准",
+    "deny": "拒绝",
+    "launcher": "启动栏",
+    "command": "命令"
   },
   "permissionWords": {
     "read": "读取权限",
@@ -327,11 +339,16 @@
         "last": "最后一个会话",
         "open": "打开会话",
         "pin": "固定或取消固定",
+        "undo": "撤销最近一次归档、暂停、标记完成或取消固定",
         "menu": "打开会话操作菜单"
       },
       "session": {
         "new": "新建会话",
         "previous": "返回上一个会话"
+      },
+      "list": {
+        "next": "移到下一行",
+        "previous": "移到上一行"
       },
       "sourceDiff": {
         "nextFile": "下一个文件",
@@ -342,15 +359,20 @@
       "approvals": {
         "approve": "仅批准一次当前打开的请求",
         "deny": "拒绝当前打开的请求"
+      },
+      "accessMap": {
+        "fullScreen": "进入或退出全屏地图"
       }
     },
     "when": {
       "railFocused": "在会话栏中",
+      "outsideList": "不在列表中",
       "launcherFocused": "在启动输入框中",
       "workSurface": "在会话页面",
       "sessionHistory": "有上一个会话时",
       "paletteRecent": "在查询为空的命令面板结果中",
-      "approvalQueue": "在审批队列中"
+      "approvalQueue": "在审批队列中",
+      "accessMap": "在访问映射中"
     },
     "precedence": "当两行使用相同按键时，以最后一条适用的为准。",
     "problems_other": "有 {{count}} 个按键绑定无法读取，不会生效：{{commands}}"
@@ -402,7 +424,6 @@
     },
     "quoteReply": "引用回复",
     "copy": {
-      "markdown": "复制 Markdown 块",
       "message": "复制消息",
       "code": "复制代码",
       "copied": "已复制",

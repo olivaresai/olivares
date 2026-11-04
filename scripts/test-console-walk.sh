@@ -35,7 +35,7 @@ bash scripts/test-console-walk-boot.sh
 TMP="$(mktemp -d)"
 cleanup() {
   local pid
-  for pid in "${SRV_PID:-}" "${SRV3_PID:-}" "${SRV4_PID:-}"; do
+  for pid in "${SRV_PID:-}" "${SRV3_PID:-}" "${SRV4_PID:-}" "${SRV5_PID:-}"; do
     [ -z "${pid}" ] || kill "${pid}" 2>/dev/null || true
   done
   if [ -s "${TMP}/workflow-engine.pid" ]; then
@@ -418,6 +418,9 @@ echo "OK: console-walk tells its three answers apart — stream vs stall vs 404,
 # ---------------------------------------------------------------------------
 cat > "${TMP}/setup-decoy.mjs" <<'JS'
 import { createServer } from 'node:http'
+// The leak leg adds a screen that, like /sessions, holds a stream open: only a screen that
+// never reaches networkidle looks at what is still pending.
+const LEAK_NAV = process.env.SETUP_DECOY_SILENT ? '<a href="/sse">sse</a>' : ''
 const setup = `<!doctype html><html><body><form id="f">
 <input id="token"><input id="setup-email" type="email"><input id="setup-password" type="password">
 <button type="submit">Create administrator</button></form>
@@ -427,17 +430,24 @@ document.getElementById('f').addEventListener('submit', async (e) => {
   e.submitter.disabled = true
   await fetch('/api/setup', { method: 'POST' })
   history.pushState({}, '', '/onboarding')
-  document.body.innerHTML = '<nav><a href="/clean">clean</a></nav><p>signed in</p>'
+  document.body.innerHTML = '<nav><a href="/clean">clean</a>${LEAK_NAV}</nav><p>signed in</p>'
+  ${process.env.SETUP_DECOY_SILENT ? "fetch('/api/silent')" : ''}
 })
 </script></body></html>`
 const srv = createServer((req, res) => {
   const u = req.url.split('?')[0]
+  if (u === '/api/silent') return // never answers, as the engine did for a read its page abandoned
+  if (u === '/api/stream') {
+    res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' })
+    res.write('data: hello\n\n')
+    return
+  }
   if (u === '/api/setup') {
     setTimeout(() => { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}') }, 2500)
     return
   }
   res.writeHead(200, { 'content-type': 'text/html' })
-  res.end(u === '/' ? setup : '<!doctype html><html><body><nav><a href="/clean">clean</a></nav><p>clean</p></body></html>')
+  res.end(u === '/' ? setup : `<!doctype html><html><body><nav><a href="/clean">clean</a>${LEAK_NAV}</nav><p>clean</p>${u === '/sse' ? "<script>fetch('/api/stream')</script>" : ''}</body></html>`)
 })
 srv.listen(0, '127.0.0.1', () => console.log(srv.address().port))
 JS
@@ -461,3 +471,35 @@ grep -q '^\[login\]' "${TMP}/walk4.log" \
 [ "${RC4}" = "0" ] \
   || { cat "${TMP}/walk4.log" >&2; fail "a setup that takes 2.5 s must end in a clean walk, got exit ${RC4}"; }
 echo "OK: the walk waits for setup to finish before it signs in."
+
+# ---------------------------------------------------------------------------
+# Leg 5 — A REQUEST THAT DIED WITH ITS PAGE IS NOT A STALL ON THE NEXT SCREEN (#4200).
+#
+# Playwright emits neither `requestfinished` nor `requestfailed` for a request that had no
+# response headers yet when its document went away, so the walk kept it in `inflight` and a
+# LATER screen reported it as STALLED. On the nightly of 2026-11-03 the setup page, which
+# changes view without a new document (`networkidle` was already reached, so that step ends
+# at once), had a readiness read in flight when the walk moved on; /sessions, whose own reads
+# all finished in 12 ms, failed with `STALLED GET .../provider-profiles/readiness`. Here the
+# setup page fires a request nobody answers and the walk leaves it: every later screen is clean.
+# ---------------------------------------------------------------------------
+SETUP_DECOY_SILENT=1 node "${TMP}/setup-decoy.mjs" > "${TMP}/port5" 2>"${TMP}/decoy5.err" &
+SRV5_PID=$!
+for _ in $(seq 1 50); do [ -s "${TMP}/port5" ] && break; sleep 0.1; done
+PORT5="$(cat "${TMP}/port5" 2>/dev/null || true)"
+[ -n "${PORT5}" ] || { cat "${TMP}/decoy5.err" >&2; fail "leak decoy never reported a port"; }
+
+set +e
+OLIVARES_WALK_BASE="http://127.0.0.1:${PORT5}" \
+OLIVARES_WALK_OUT="${TMP}/out5" \
+OLIVARES_WALK_IDLE_MS=2000 \
+OLIVARES_WALK_TOKEN='olst_TESTONLY' \
+  node scripts/console-walk.mjs > "${TMP}/walk5.log" 2>&1
+RC5=$?
+set -e
+
+grep -q 'STALLED' "${TMP}/walk5.log" \
+  && { cat "${TMP}/walk5.log" >&2; fail "a screen reported a request that died with the previous page as STALLED"; }
+[ "${RC5}" = "0" ] \
+  || { cat "${TMP}/walk5.log" >&2; fail "a request abandoned by its page must leave the walk clean, got exit ${RC5}"; }
+echo "OK: a request that died with its page is not reported on a later screen."

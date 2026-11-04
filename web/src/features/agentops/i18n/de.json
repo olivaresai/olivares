@@ -73,11 +73,11 @@
     "bypassPermissions": "bypassPermissions"
   },
   "effort": {
-    "low": "low",
-    "medium": "medium",
-    "high": "high",
-    "xhigh": "xhigh",
-    "max": "max"
+    "low": "Niedrig",
+    "medium": "Mittel",
+    "high": "Hoch",
+    "xhigh": "Sehr hoch",
+    "max": "Maximal"
   },
   "summary": {
     "total": "Gesamt",
@@ -91,7 +91,7 @@
     "state": "Zustand",
     "workspace": "Arbeitsbereich",
     "model": "Modell",
-    "effort": "Effort",
+    "effort": "Aufwand",
     "mode": "Modus",
     "transport": "Transport",
     "identity": "Identität",
@@ -140,11 +140,11 @@
     "namePlaceholder": "Eine Anzeigebezeichnung (optional)",
     "transport": "Transport",
     "permissionMode": "Berechtigungsmodus",
-    "effort": "Effort",
+    "effort": "Aufwand",
     "effortDefault": "Modellstandard",
     "model": "Modell",
     "workspace": "Ordner",
-    "workspaceNone": "Temporärer Ordner dieser Sitzung",
+    "workspaceNone": "Standard (Meine Dateien)",
     "worktree": "In einem neuen Git-Worktree arbeiten",
     "worktreeHint": "Startet einen neuen Branch in einem eigenen Worktree, damit Sitzungen im selben Repository keine Dateien teilen. Der Ordner muss der oberste Ordner des Repositorys sein.",
     "worktreeFrom": "Startet bei",
@@ -208,8 +208,9 @@
     "use": "„{{model}}“ verwenden",
     "defaultNamed": "Vorgabe ({{model}})",
     "defaultUnnamed": "Vorgabe von {{tool}}",
+    "toolDefault": "Vorgabe (empfohlen)",
     "effortDefaultNamed": "Modellstandard ({{effort}})",
-    "effortNeedsModel": "Wählen Sie zuerst ein Modell: Ein Effort ist eine Stufe eines Modells."
+    "effortNeedsModel": "Wählen Sie zuerst ein Modell: Der Aufwand ist eine Stufe eines Modells."
   },
   "detail": {
     "live": "Live",
@@ -229,7 +230,7 @@
     "transport": "Transport",
     "isolation": "Isolation",
     "permissionMode": "Berechtigungsmodus",
-    "effort": "Effort",
+    "effort": "Aufwand",
     "model": "Modell",
     "workspace": "Arbeitsbereich",
     "workspaceDirectory": "Arbeitsverzeichnis",
@@ -332,6 +333,8 @@
     "title": "Arbeitsbereiche",
     "subtitle": "Host-Verzeichnisse, in denen eine Sitzung arbeitet — eingebunden, isoliert und DLP-klassifiziert.",
     "register": "Arbeitsbereich registrieren",
+    "personalFolders": "Jeder Person einen eigenen Ordner geben (Meine Dateien)",
+    "personalFoldersSaved": "Einstellung für persönliche Ordner gespeichert.",
     "cols": {
       "name": "Arbeitsbereich",
       "rootPath": "Stammpfad",
@@ -405,6 +408,21 @@
     }
   },
   "browser": {
+    "notes": {
+      "title": "Notizen",
+      "add": "Notiz hinzufügen",
+      "select": "Markieren Sie zuerst eine Stelle der Datei, dann fügen Sie eine Notiz hinzu.",
+      "note": "Notiz",
+      "keep": "Hinzufügen",
+      "cancel": "Abbrechen",
+      "sendTo": "Notizen senden an",
+      "send": "Senden",
+      "sent": "Notizen an die Sitzung gesendet.",
+      "failed": "Die Notizen konnten nicht gesendet werden. Versuchen Sie es gleich noch einmal.",
+      "noSession": "Keine laufende Sitzung in diesem Arbeitsbereich, an die sie gehen könnten.",
+      "count_one": "{{count}} Notiz",
+      "count_other": "{{count}} Notizen"
+    },
     "title": "Dateien",
     "root": "Stamm",
     "upDir": "Nach oben",
@@ -447,7 +465,20 @@
     "deletedFile": "Gelöscht",
     "sizeLabel": "Größe",
     "modifiedLabel": "Geändert",
-    "create": "Erstellen"
+    "create": "Erstellen",
+    "upload": "Hochladen",
+    "uploadLimit": "Bis zu {{size}} pro Datei",
+    "uploadReadOnly": "Dieser Ordner ist schreibgeschützt, daher können keine Dateien hinzugefügt werden.",
+    "uploadNoAccess": "Sie haben keinen Schreibzugriff auf diesen Ordner.",
+    "uploaded": "Hochgeladen: {{n}}",
+    "uploadTooLarge": "{{name}} überschreitet das Limit von {{size}} und wurde nicht hochgeladen.",
+    "uploadExists": "{{name}} existiert bereits und wurde nicht ersetzt.",
+    "uploadFailed": "Hochladen fehlgeschlagen",
+    "downloadSelected": "Auswahl herunterladen ({{n}})",
+    "downloadFolder": "Ordner herunterladen",
+    "downloadFailed": "Herunterladen fehlgeschlagen",
+    "labeled": "DLP-Labels: {{classes}}",
+    "select": "{{name}} auswählen"
   },
   "empty": {
     "title": "Keine Claude-Code-Sitzungen",
@@ -1042,6 +1073,7 @@
   "usage": {
     "fiveHour": "5 Stunden",
     "week": "Wöchentlich",
+    "weekModel": "Nur {{model}}",
     "percent": "{{window}} {{percent}} %",
     "unknown": "Nutzung unbekannt",
     "limit": {

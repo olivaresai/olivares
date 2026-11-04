@@ -69,8 +69,8 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 
 | 画面 | パス | 内容 | 必要な権限 | リファレンス |
 |---|---|---|---|---|
-| 環境 | `/estate` | 設定済みリソースとその関係を確認し、作業項目の依存関係を調べます。 | `sessions:run:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
-| インベントリ | `/inventory` | コネクタが観察したエージェント、MCP サーバー、モデルを検出してカタログ化 | `inventory:catalog:read` | [reference/modules/i-inventory](/ja/reference/modules/i-inventory/) |
+| 設定済みリソース | `/estate` | 設定した内容と、作業項目を含む各要素の依存関係。 | `sessions:run:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
+| 検出されたリソース | `/inventory` | コネクターが観測したエージェント・MCPサーバー・モデルと、それぞれを最後に確認した時刻。 | `inventory:catalog:read` | [reference/modules/i-inventory](/ja/reference/modules/i-inventory/) |
 | ワークスペース | `/workspace` | 1 つのワークスペースにスコープされたエージェント、セッション、リソース、アクティビティ | `tenant:read` | [reference/modules/xx-multi-tenancy](/ja/reference/modules/xx-multi-tenancy/) |
 
 ### AI

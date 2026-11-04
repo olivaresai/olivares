@@ -4,7 +4,7 @@
 import * as SelectPrimitive from '@radix-ui/react-select'
 import { useFieldControl } from '@/components/ui/field'
 import { Check, ChevronDown, ChevronUp } from 'lucide-react'
-import type { ComponentProps } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
 /**
@@ -127,13 +127,18 @@ export function SelectLabel({
 export function SelectItem({
   className,
   children,
+  hint,
   ...props
-}: ComponentProps<typeof SelectPrimitive.Item>) {
+}: ComponentProps<typeof SelectPrimitive.Item> & {
+  /** A second line under the label, in the list only: the trigger shows the label. */
+  hint?: ReactNode
+}) {
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        'relative flex h-8 w-full cursor-default items-center rounded-[6px] py-1 pr-8 pl-2 text-body outline-none select-none',
+        'relative flex w-full cursor-default rounded-[6px] py-1 pr-8 pl-2 text-body outline-none select-none',
+        hint ? 'flex-col items-start' : 'h-8 items-center',
         'data-[highlighted]:bg-hover data-[highlighted]:text-text',
         'data-[state=checked]:font-medium data-[state=checked]:text-accent-text',
         'data-[disabled]:pointer-events-none data-[disabled]:text-text-3',
@@ -148,6 +153,7 @@ export function SelectItem({
         </SelectPrimitive.ItemIndicator>
       </span>
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+      {hint && <span className="text-caption text-text-3">{hint}</span>}
     </SelectPrimitive.Item>
   )
 }

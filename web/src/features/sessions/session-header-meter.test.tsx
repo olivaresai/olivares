@@ -11,7 +11,6 @@ import { useTenantStore } from '@/stores/tenant'
 import { useModulesStore } from '@/stores/modules'
 import { COST_VIEW } from '@/features/registry'
 import type { RunDTO } from '@/features/agentops/types'
-import type { ProviderSnapshot } from '@/features/agent-tools/api'
 import { mergeSessions } from './provenance'
 import type { LiveDTO } from './types'
 import { SessionNarrative } from './session-narrative'
@@ -102,22 +101,6 @@ function run(over: Partial<RunDTO> = {}): RunDTO {
     provider_profile_ref: 'ppf_claude',
     provider_driver: 'claude',
     live_ref: 'lr-a',
-    ...over,
-  }
-}
-
-function snapshot(over: Partial<ProviderSnapshot>): ProviderSnapshot {
-  return {
-    instance: 'claude',
-    driver: 'claude',
-    default: true,
-    config_dir: '/x',
-    state: 'ready',
-    installed: true,
-    limits: [],
-    models: [],
-    checked_at: '2026-10-07T08:00:00Z',
-    source: 'claude auth status --json',
     ...over,
   }
 }
@@ -379,7 +362,7 @@ describe('session header — the tool’s own mode', () => {
 describe('session header — this session’s usage', () => {
   it('links the meter to the installed cost view, without an unsupported session filter', () => {
     renderHeader(run({ input_tokens: 10, cost_micro_usd: 27430 }))
-    const meter = screen.getByTestId('narrative-usage')
+    const meter = screen.getByTestId('context-usage')
     const link = within(meter).getByRole('link', { name: /View costs/ })
     expect(link).toHaveAttribute('href', COST_VIEW.path)
     expect(link).toHaveTextContent('$0.027')
@@ -391,7 +374,7 @@ describe('session header — this session’s usage', () => {
   it('keeps the figures without a cost link when the view is denied', () => {
     auth.can = (permission) => permission !== COST_VIEW.permission
     renderHeader(run({ input_tokens: 10, cost_micro_usd: 27430 }))
-    const meter = screen.getByTestId('narrative-usage')
+    const meter = screen.getByTestId('context-usage')
     expect(meter).toHaveTextContent('$0.027')
     expect(within(meter).queryByRole('link')).toBeNull()
   })
@@ -399,7 +382,7 @@ describe('session header — this session’s usage', () => {
   it('keeps the figures without a cost link when the module is off', () => {
     useModulesStore.getState().setOff(['finops'])
     renderHeader(run({ input_tokens: 10, cost_micro_usd: 27430 }))
-    const meter = screen.getByTestId('narrative-usage')
+    const meter = screen.getByTestId('context-usage')
     expect(meter).toHaveTextContent('$0.027')
     expect(within(meter).queryByRole('link')).toBeNull()
   })
@@ -409,7 +392,7 @@ describe('session header — this session’s usage', () => {
       run({ input_tokens: 10, output_tokens: 2, cost_micro_usd: 27430 }),
       run({ run_ref: 'run-2', input_tokens: 20, output_tokens: 3 }),
     ])
-    for (const id of ['narrative-usage', 'context-usage']) {
+    for (const id of ['context-usage', 'context-usage']) {
       const meter = screen.getByTestId(id)
       expect(meter).toHaveTextContent('30 in / 5 out tokens')
       expect(meter).toHaveTextContent('$0.0274 (partial)')
@@ -421,7 +404,7 @@ describe('session header — this session’s usage', () => {
       run({ input_tokens: 10, cost_micro_usd: 20000 }),
       run({ run_ref: 'run-2', input_tokens: 20, cost_micro_usd: 30000 }),
     ])
-    const meter = screen.getByTestId('narrative-usage')
+    const meter = screen.getByTestId('context-usage')
     expect(meter).toHaveTextContent('$0.05')
     expect(meter).not.toHaveTextContent('partial')
   })
@@ -431,7 +414,7 @@ describe('session header — this session’s usage', () => {
       run({ input_tokens: 10 }),
       run({ run_ref: 'run-2', input_tokens: 20 }),
     ])
-    const meter = screen.getByTestId('narrative-usage')
+    const meter = screen.getByTestId('context-usage')
     expect(meter).toHaveTextContent('cost not reported')
     expect(meter).not.toHaveTextContent('$0')
     expect(meter).not.toHaveTextContent('partial')
@@ -442,7 +425,7 @@ describe('session header — this session’s usage', () => {
 
   it('preserves an explicitly reported zero amount', () => {
     renderHeader(run({ input_tokens: 10, cost_micro_usd: 0 }))
-    const meter = screen.getByTestId('narrative-usage')
+    const meter = screen.getByTestId('context-usage')
     expect(meter).toHaveTextContent('$0.00')
     expect(meter).not.toHaveTextContent('cost not reported')
     expect(meter).not.toHaveTextContent('partial')
@@ -450,7 +433,7 @@ describe('session header — this session’s usage', () => {
 
   it('shows the cost alone when the tool reported a cost and no tokens', () => {
     renderHeader(run({ cost_micro_usd: 120_000 }))
-    const meter = screen.getByTestId('narrative-usage')
+    const meter = screen.getByTestId('context-usage')
     expect(meter).toHaveTextContent(/^\$0\.12$/)
     expect(meter).not.toHaveTextContent('0 in')
   })
@@ -473,7 +456,7 @@ describe('session header — this session’s usage', () => {
       run({ input_tokens: 52755, output_tokens: 4, cost_micro_usd: 27430 }),
       live({ cost_micro_usd: 27430 }),
     )
-    const usage = screen.getByTestId('narrative-usage')
+    const usage = screen.getByTestId('context-usage')
     expect(usage).toHaveTextContent('52,755 in / 4 out tokens')
     expect(usage).toHaveTextContent('$0.027')
     expect(screen.getByTestId('narrative-facts')).not.toHaveTextContent('$')
@@ -484,7 +467,7 @@ describe('session header — this session’s usage', () => {
       run({ input_tokens: 7855, output_tokens: 13 }),
       live({ cost_micro_usd: 4200 }),
     )
-    expect(screen.getByTestId('narrative-usage')).toHaveTextContent(
+    expect(screen.getByTestId('context-usage')).toHaveTextContent(
       'cost not reported',
     )
     expect(screen.getByTestId('narrative-facts')).not.toHaveTextContent('$')
@@ -492,20 +475,20 @@ describe('session header — this session’s usage', () => {
 
   it('says the cost is unknown when the tool reported tokens and no money', () => {
     renderHeader(run({ input_tokens: 7855, output_tokens: 13 }))
-    expect(screen.getByTestId('narrative-usage')).toHaveTextContent(
+    expect(screen.getByTestId('context-usage')).toHaveTextContent(
       'cost not reported',
     )
-    expect(screen.getByTestId('narrative-usage')).not.toHaveTextContent('$0')
+    expect(screen.getByTestId('context-usage')).not.toHaveTextContent('$0')
   })
 
   it('shows no meter when the tool reported nothing', () => {
     renderHeader(run())
-    expect(screen.queryByTestId('narrative-usage')).toBeNull()
+    expect(screen.queryByTestId('context-usage')).toBeNull()
   })
 
   it('leaves the cost to the facts line when there is no meter', () => {
     renderHeader(run(), live({ cost_micro_usd: 4200 }))
-    expect(screen.queryByTestId('narrative-usage')).toBeNull()
+    expect(screen.queryByTestId('context-usage')).toBeNull()
     expect(screen.getByTestId('narrative-facts')).toHaveTextContent('$')
   })
 
@@ -521,102 +504,5 @@ describe('session header — this session’s usage', () => {
       costMicroUsd: undefined,
       costPartial: false,
     })
-  })
-})
-
-describe('session header — the plan window of the login it spends', () => {
-  const fiveHour = {
-    label: '5-hour',
-    percent: 54,
-    resets_at: '2026-10-07T10:00:00Z',
-  }
-
-  it('shows the windows of the run’s own instance, and no other', async () => {
-    auth.isSuperadmin = true
-    tools.providers.mockResolvedValue({
-      providers: [
-        snapshot({
-          instance: 'claude',
-          limits: [{ label: 'Weekly', percent: 80 }],
-        }),
-        snapshot({
-          instance: 'claude/olivares',
-          default: false,
-          limits: [fiveHour],
-        }),
-      ],
-    })
-    renderHeader(run({ provider_instance: 'claude/olivares' }))
-    const plan = await screen.findByTestId('narrative-plan')
-    expect(within(plan).getByText(/5-hour/)).toBeInTheDocument()
-    expect(plan).toHaveTextContent('54%')
-    expect(plan).not.toHaveTextContent('Weekly')
-    expect(tools.providers).toHaveBeenCalledWith('tnt-demo', expect.anything())
-  })
-
-  it('says the window was not read when the providers read fails', async () => {
-    auth.isSuperadmin = true
-    tools.providers.mockRejectedValue(new Error('engine said no'))
-    renderHeader(run({ provider_instance: 'claude/olivares' }))
-    expect(await screen.findByTestId('narrative-plan-error')).toHaveTextContent(
-      'plan window not read',
-    )
-  })
-
-  it.each([
-    [
-      'is not ready',
-      [
-        snapshot({
-          instance: 'claude/olivares',
-          state: 'error',
-          error: 'claude auth status --json: exit 1',
-        }),
-      ],
-    ],
-    ['is not listed', [snapshot({ instance: 'claude', limits: [fiveHour] })]],
-  ])(
-    'says the window was not read when the instance %s',
-    async (_, providers) => {
-      auth.isSuperadmin = true
-      tools.providers.mockResolvedValue({ providers })
-      renderHeader(run({ provider_instance: 'claude/olivares' }))
-      expect(
-        await screen.findByTestId('narrative-plan-error'),
-      ).toHaveTextContent('plan window not read')
-      expect(screen.queryByTestId('narrative-plan')).toBeNull()
-    },
-  )
-
-  it('marks a stale window as the last known one, with when it was read', async () => {
-    auth.isSuperadmin = true
-    tools.providers.mockResolvedValue({
-      providers: [
-        snapshot({
-          instance: 'claude/olivares',
-          default: false,
-          limits: [fiveHour],
-          stale: true,
-        }),
-      ],
-    })
-    renderHeader(run({ provider_instance: 'claude/olivares' }))
-    const stale = await screen.findByText('last known')
-    expect(stale).toHaveAttribute('title', expect.stringContaining('2026'))
-  })
-
-  it('does not read the providers page for a viewer who may not', async () => {
-    renderHeader(run({ provider_instance: 'claude/olivares' }))
-    await waitFor(() =>
-      expect(screen.getByTestId('session-narrative')).toBeInTheDocument(),
-    )
-    expect(tools.providers).not.toHaveBeenCalled()
-    expect(screen.queryByTestId('narrative-plan')).toBeNull()
-  })
-
-  it('reads nothing for a run on a key or on homes of its own', () => {
-    auth.isSuperadmin = true
-    renderHeader(run())
-    expect(tools.providers).not.toHaveBeenCalled()
   })
 })

@@ -25,7 +25,7 @@ test('fresh skills catalog installs a builtin and assigns its immutable revision
   await page.locator('#setup-email').fill('skills@example.test')
   await page.locator('#setup-password').fill('skills-fixture-password-1515')
   await page.getByRole('button', { name: /create administrator/i }).click()
-  await page.waitForURL('**/onboarding')
+  await page.waitForURL('**/sessions')
 
   const workspaces = page.waitForResponse(
     (r) => new URL(r.url()).pathname === '/v1/workspaces' && r.ok(),
@@ -42,21 +42,22 @@ test('fresh skills catalog installs a builtin and assigns its immutable revision
   const published = page.waitForResponse(
     (r) =>
       new URL(r.url()).pathname === '/v1/m/skills/packs' &&
-      r.request().method() === 'POST' &&
-      r.ok(),
+      r.request().method() === 'POST',
   )
   const pinned = page.waitForResponse(
     (r) =>
       new URL(r.url()).pathname === '/v1/m/skills/assignments' &&
-      r.request().method() === 'POST' &&
-      r.ok(),
+      r.request().method() === 'POST',
   )
   await page
     .getByRole('button', { name: 'Install ecc-security', exact: true })
     .click()
   const publishedResponse = await published
+  expect(publishedResponse.status()).toBe(201)
   const installed = await publishedResponse.json()
-  const assignment = await (await pinned).json()
+  const assignmentResponse = await pinned
+  expect(assignmentResponse.status()).toBe(201)
+  const assignment = await assignmentResponse.json()
   expect(installed.revision.source.kind).toBe('builtin')
   expect(installed.revision.source.source_digest).toMatch(/^[0-9a-f]{64}$/)
   expect(assignment.assignment.pack_revision_id).toBe(installed.revision.id)
@@ -67,7 +68,7 @@ test('fresh skills catalog installs a builtin and assigns its immutable revision
       .filter({ hasText: 'Skill pack installed and assigned' }),
   ).toBeVisible()
   await expect(
-    page.getByRole('gridcell', { name: 'ecc-security', exact: true }),
+    page.getByRole('gridcell', { name: 'ecc-security', exact: true }).first(),
   ).toBeVisible()
   // Public, already-reviewed source pinned by the embedded catalog. No code runs.
   const gitCommit = 'c05b2d6614f62f6db0047669aa4eefb223d478f9'
@@ -82,20 +83,25 @@ test('fresh skills catalog installs a builtin and assigns its immutable revision
   const gitPublished = page.waitForResponse(
     (r) =>
       new URL(r.url()).pathname === '/v1/m/skills/packs' &&
-      r.request().method() === 'POST' &&
-      r.ok(),
+      r.request().method() === 'POST',
   )
   const gitPinned = page.waitForResponse(
     (r) =>
       new URL(r.url()).pathname === '/v1/m/skills/assignments' &&
-      r.request().method() === 'POST' &&
-      r.ok(),
+      r.request().method() === 'POST',
   )
   await page
     .getByRole('button', { name: 'Install from Git', exact: true })
     .click()
-  const gitInstalled = await (await gitPublished).json()
-  const gitAssignment = await (await gitPinned).json()
+  const gitResponse = await gitPublished
+  const gitInstalled = await gitResponse.json()
+  expect(
+    gitResponse.status(),
+    JSON.stringify(gitInstalled.error ?? gitInstalled.message),
+  ).toBe(201)
+  const gitAssignmentResponse = await gitPinned
+  expect(gitAssignmentResponse.status()).toBe(201)
+  const gitAssignment = await gitAssignmentResponse.json()
   expect(gitAssignment.assignment.pack_revision_id).toBe(
     gitInstalled.revision.id,
   )
@@ -105,6 +111,23 @@ test('fresh skills catalog installs a builtin and assigns its immutable revision
   await expect(
     page.getByRole('gridcell', { name: 'review-console', exact: true }),
   ).toBeVisible()
+
+  // The catalog searches inside both imported packs, rather than only pack names.
+  const member = gitInstalled.revision.members[0]
+  const search = page.getByPlaceholder('Search names and descriptions')
+  await search.fill(member.description.slice(0, 24))
+  const gitRow = page.getByRole('row').filter({ hasText: 'review-console' })
+  await expect(gitRow).toContainText(member.name)
+  await expect(gitRow).toContainText('Department:')
+  await gitRow.getByText(member.name, { exact: true }).click()
+  await expect(page).toHaveURL(
+    new RegExp(`skill=${encodeURIComponent(member.name)}`),
+  )
+  await expect(page.getByRole('dialog')).toContainText(member.description)
+  await page.reload()
+  await expect(page.getByRole('dialog')).toContainText(member.name)
+  await page.goBack()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
 
   const binary = process.env.OLIVARES_E2E_BINARY
   if (binary) {
@@ -232,14 +255,16 @@ test('fresh skills catalog installs a builtin and assigns its immutable revision
     await expect(
       page.getByRole('gridcell', { name: 'review-console', exact: true }),
     ).toBeVisible()
-    await page.getByText('From Git', { exact: true }).focus()
-    await page.keyboard.press('Enter')
+    await page.getByText('Built-in packs', { exact: true }).click()
     const accessibility = await new AxeBuilder({ page })
-      .include('section[aria-label="Install a skill pack"]')
+      .include('[role="tabpanel"]')
       .analyze()
     expect(accessibility.violations).toEqual([])
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 })
+      await page
+        .getByRole('grid', { name: 'Skills, agents, commands and rules' })
+        .scrollIntoViewIfNeeded()
       await page.screenshot({
         path: testInfo.outputPath(`skills-${theme}-${width}.png`),
         fullPage: true,
@@ -249,6 +274,20 @@ test('fresh skills catalog installs a builtin and assigns its immutable revision
           () => document.documentElement.scrollWidth <= window.innerWidth,
         ),
       ).toBe(true)
+      const catalogRow = page
+        .getByRole('row')
+        .filter({ hasText: 'review-console' })
+      await catalogRow.getByText(member.name, { exact: true }).click()
+      await expect(page.getByRole('dialog')).toContainText(member.description)
+      const sheetAxe = await new AxeBuilder({ page })
+        .include('[role="dialog"]')
+        .analyze()
+      expect(sheetAxe.violations).toEqual([])
+      await page.screenshot({
+        path: testInfo.outputPath(`skill-detail-${theme}-${width}.png`),
+        fullPage: true,
+      })
+      await page.keyboard.press('Escape')
     }
   }
 })

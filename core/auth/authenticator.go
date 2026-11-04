@@ -79,6 +79,9 @@ type Authenticator struct {
 	// set once at boot via WithTOTPSeedSealer. nil means enrolment and
 	// verification fail closed with ErrNoTOTPSealer — never a silent skip.
 	totpSealer TOTPSeedSealer
+	// freshness is the optional rights-data freshness port (freshness.go), set
+	// once at boot via WithFreshnessSource. nil keeps behavior unchanged.
+	freshness FreshnessSource
 	// totpThrottle is the factor's own verification budget, separate from the
 	// password throttle so neither can exhaust the other's window.
 	totpThrottle *throttle
@@ -210,6 +213,7 @@ func (a *Authenticator) authSession(ctx context.Context, selector, secret string
 	if err != nil {
 		return Principal{}, err
 	}
+	p = a.withFreshness(ctx, p)
 	a.recordSessionUse(ctx, p.CredID, sessionClientKind(ctx))
 	return p, nil
 }
@@ -925,6 +929,10 @@ func (a *Authenticator) LoginFrom(ctx context.Context, emailRaw, password, ip st
 		return LoginResult{}, err
 	}
 	if challenge {
+		// No code challenge for a sign-in the freshness port already refuses.
+		if err := a.requireFreshSignIn(ctx, user.ID, attempt.ip); err != nil {
+			return LoginResult{}, err
+		}
 		pending, err := a.mintTOTPPending(user, attempt.ip, user.CustodyScope(), nil)
 		if err != nil {
 			return LoginResult{}, err
@@ -967,6 +975,11 @@ func (a *Authenticator) mintSession(ctx context.Context, attempt *loginAttempt, 
 	// consulted it and still does not.
 	ip, amr := attempt.ip, []string{string(method)}
 	amr = append(amr, amrExtra...)
+	// The freshness port may refuse a new sign-in by any factor: asked once here,
+	// where every producer converges and before the transaction opens.
+	if err := a.requireFreshSignIn(ctx, user.ID, attempt.ip); err != nil {
+		return "", model.AuthSession{}, err
+	}
 	var (
 		tok  string
 		sess model.AuthSession

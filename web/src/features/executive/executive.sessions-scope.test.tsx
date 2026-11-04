@@ -60,10 +60,10 @@ vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 const TENANT_WIDE_LABEL = 'All workspaces'
 /** One note for the whole tile, naming the sources the role reads:
  *  "<Sessions noun> · <Inventory item> · <tenant-wide>". */
-const BOTH_SCOPE_NOTE = `Sessions · Inventory · ${TENANT_WIDE_LABEL}`
+const BOTH_SCOPE_NOTE = `Sessions · Discovered resources · ${TENANT_WIDE_LABEL}`
 /** With sessions alone, the note is the disclosure accepted on 2026-09-08, unchanged. */
 const SESSIONS_SCOPE_NOTE = `Sessions · ${TENANT_WIDE_LABEL}`
-const INVENTORY_SCOPE_NOTE = `Inventory · ${TENANT_WIDE_LABEL}`
+const INVENTORY_SCOPE_NOTE = `Discovered resources · ${TENANT_WIDE_LABEL}`
 
 const BOTH = (p: string) =>
   p === 'sessions:live:read' || p === 'inventory:catalog:read'
@@ -237,7 +237,7 @@ describe('ExecutiveView — the usage pillar pretends the workspace filter for n
     // It travels with the tile's accessible name.
     expect(
       screen.getByRole('link', {
-        name: /Sessions · Inventory · All workspaces/i,
+        name: /Sessions · Discovered resources · All workspaces/i,
       }),
     ).toBe(usageTile())
   })
@@ -272,7 +272,7 @@ describe('ExecutiveView — the usage pillar pretends the workspace filter for n
     expect(summary).not.toHaveBeenCalled()
     const note = screen.getByTestId('executive-usage-scope-note')
     expect(note).toHaveTextContent(SESSIONS_SCOPE_NOTE)
-    expect(note).not.toHaveTextContent('Inventory')
+    expect(note).not.toHaveTextContent('Discovered resources')
     expect(usageTile()).toContainElement(note)
   })
 

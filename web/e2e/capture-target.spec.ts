@@ -723,6 +723,31 @@ test.describe('capture target — a screen that looks broken or unfinished', () 
     }
   })
 
+  test('accepts the alert a view declares it exists to show, requires it, and refuses any other', async ({
+    page,
+  }) => {
+    const aviso = /Someone else changed this item/
+    await monta(
+      page,
+      '<main><h1>Work</h1><div role="alert">Someone else changed this item</div></main>',
+    )
+    await expect(exigirPantallaTerminada(page, 'work')).rejects.toThrow(
+      /shows an error/,
+    )
+    await exigirPantallaTerminada(page, 'work-apply-refused', { aviso })
+    await monta(page, '<main><h1>Work</h1><p>Plan: clean</p></main>')
+    await expect(
+      exigirPantallaTerminada(page, 'work-apply-refused', { aviso }),
+    ).rejects.toThrow(/state its id names was not reached/)
+    await monta(
+      page,
+      '<main><h1>Work</h1><div role="alert">Someone else changed this item</div><div role="alert">Upstream unavailable</div></main>',
+    )
+    await expect(
+      exigirPantallaTerminada(page, 'work-apply-refused', { aviso }),
+    ).rejects.toThrow(/Upstream unavailable/)
+  })
+
   test('accepts an empty or hidden live region and an ordinary status line', async ({
     page,
   }) => {
@@ -799,6 +824,28 @@ test.describe('capture target — a screen that looks broken or unfinished', () 
   })
 })
 
+test.describe('capture target — a font for every character the page prints', () => {
+  const FUENTE = '<style>body{font-family:system-ui,sans-serif}</style>'
+
+  test('rejects a character that no installed font draws, and accepts accents and Cyrillic', async ({
+    page,
+  }) => {
+    await monta(
+      page,
+      `${FUENTE}<main><h1>Settings</h1><p>Español · Français · Русский · “quotes” — …</p></main>`,
+    )
+    await exigirInstanteLimpio(page, 'settings', { version: VERSION })
+    // U+10FFFD is in no font: the same box stands in for every character a host cannot draw.
+    await monta(
+      page,
+      `${FUENTE}<main><h1>Settings</h1><p>Language: \u{10FFFD}\u{10FFFD}</p></main>`,
+    )
+    await expect(
+      exigirInstanteLimpio(page, 'settings', { version: VERSION }),
+    ).rejects.toThrow(/no installed font/)
+  })
+})
+
 test.describe('capture target — the dates a capture would carry', () => {
   const clean = (page: import('@playwright/test').Page, id: string) =>
     exigirInstanteLimpio(page, id, { version: VERSION })
@@ -817,6 +864,39 @@ test.describe('capture target — the dates a capture would carry', () => {
     const text = await page.locator('main').innerText()
     expect(text).toContain('claude-platform')
     expect(text).not.toMatch(/Oct|2026|PM|T11/)
+  })
+
+  test('masks the clock time of a read ("Last updated: 3:15:42 PM") and leaves durations and times in prose', async ({
+    page,
+  }) => {
+    await monta(
+      page,
+      `<main><h1>Status</h1><p>Last updated: 3:15:42\u202fPM</p>
+        <p>Took 1:30:00, ran at 12:05 a.m. and again at 9:07 AM.</p></main>`,
+    )
+    await expect(clean(page, 'status-page')).rejects.toThrow(/clock time/)
+    expect(await ocultarFechas(page)).toBe(3)
+    await clean(page, 'status-page')
+    const text = await page.locator('main').innerText()
+    expect(text).toContain('Last updated:')
+    expect(text).toContain('Took 1:30:00')
+    expect(text).not.toMatch(/3:15|a\.m\.|9:07|PM|AM/)
+  })
+
+  test('masks the release number inside a sentence and keeps "$0.1" and "10.1"', async ({
+    page,
+  }) => {
+    await monta(
+      page,
+      `<main><h1>Supply chain</h1><p>release-stamped ${VERSION} (self-declared); V${VERSION} and v${VERSION}.</p>
+        <p>$${VERSION} and 1${VERSION} and ${VERSION}.2</p></main>`,
+    )
+    await expect(clean(page, 'attestation')).rejects.toThrow(/release number/)
+    expect(await ocultarFechas(page, { version: VERSION })).toBe(3)
+    await clean(page, 'attestation')
+    const text = await page.locator('main').innerText()
+    expect(text).toContain('release-stamped')
+    expect(text).toContain(`$${VERSION} and 1${VERSION} and ${VERSION}.2`)
   })
 
   test('keeps the width of what it masks and draws it as a bar, not as a hole', async ({

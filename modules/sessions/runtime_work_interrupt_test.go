@@ -547,7 +547,7 @@ func TestRunControlLockIsTakenOnceAtTheOuterEntry(t *testing.T) {
 		})
 
 		mustReturnWithin(t, "InputForWork", 20*time.Second, func() {
-			if err := fx.m.InputForWork(ctx, fx.tenant, fx.runRef, fx.lease.Fence, []byte(`{"type":"serialized"}`)); err != nil {
+			if err := fx.m.InputForWork(ctx, fx.tenant, fx.runRef, fx.lease.Fence, []byte(`{"type":"user"}`)); err != nil {
 				t.Errorf("fenced raw input: %v", err)
 			}
 		})
@@ -605,7 +605,7 @@ func TestRunControlLockIsTakenOnceAtTheOuterEntry(t *testing.T) {
 		})
 
 		mustReturnWithin(t, "sendInput", 20*time.Second, func() {
-			if err := m.sendInput(ctx, tenant, run.RunRef, []byte(`{"type":"legacy-serialized"}`)); err != nil {
+			if err := m.sendInput(ctx, tenant, run.RunRef, []byte(`{"type":"user"}`)); err != nil {
 				t.Errorf("legacy raw input: %v", err)
 			}
 		})

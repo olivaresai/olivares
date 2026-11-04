@@ -149,6 +149,8 @@ test.describe('the navigation and the Now header (#3121) @nav3121', () => {
     await page.goto('/')
     const nav = page.locator('[data-slot="sidebar"]')
     await expect(nav).toBeVisible()
+    // A new person sees the first places; More opens every other.
+    await nav.getByRole('button', { name: 'More', exact: true }).click()
     const groups = await nav
       .locator('section')
       .evaluateAll((s) => s.map((g) => g.getAttribute('aria-label')))

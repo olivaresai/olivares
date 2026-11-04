@@ -2,7 +2,7 @@
 
 <a href="https://olivares.ai"><img src=".github/assets/olivares-banner.png" alt="Olivares AI — Ground truth for enterprise AI" width="720"></a>
 
-**Sprachen:** [English](./README.md) · [Español](./README.es.md) · [简体中文](./README.zh.md) · [Русский](./README.ru.md) · [日本語](./README.ja.md) · **Deutsch** · [Français](./README.fr.md)
+**Sprachen:** [English](./README.md) · [Español](./README.es.md) · [简体中文](./README.zh.md) · [Русский](./README.ru.md) · [日本語](./README.ja.md) · **Deutsch** · [Français](./README.fr.md) · [Українська](./README.uk.md) · [한국어](./README.ko.md) · [Português](./README.pt.md)
 
 **Betreiben Sie die KI, die Ihr Team bereits nutzt, mit derselben Kontrolle wie über Ihre übrige Infrastruktur.**
 
@@ -55,6 +55,8 @@ Olivares AI beantwortet diese Fragen an einem Ort. Es verbindet sich mit den Age
 <br><sub><b>Arbeit</b>: Aufgaben, Verantwortliche und Entscheidungen, die bleiben, wenn eine Sitzung endet.</sub>
 </div>
 
+[Unterstützte Werkzeuge](docs-site/src/content/docs/reference/supported-tools.md) (English).
+
 ## Was es tut
 
 - **Wissen, was läuft.** Alle Agenten, Sitzungen, Modelle, MCP-Server und Tools in einem Inventar. Die Access Map zeigt, was jeder liest und schreibt, und markiert Zugriffe, die keine Regel erlaubt.
@@ -68,7 +70,7 @@ Es funktioniert mit Ihren vorhandenen Tools: Claude Code, Codex, Grok, Cursor, g
 
 Community behält lokale Observability, gespeicherte Einstellungen und den Backup-Export. SIEM/ITSM-Versand, externe Telemetrieübertragung und Posture-Export gehören zur Business-Basisedition.
 
-**Die Netzwerkisolation von Sitzungen umfasst Claude-Code-, Codex- und OpenCode-Sitzungen, die an einen Anbieterschlüssel gebunden sind, sowie OpenCode-Sitzungen mit der eigenen Anmeldung des Tools.** Eine solche Sitzung erreicht nur den Endpunkt ihres Anbieters oder die Hosts ihrer Anmeldung, über einen Proxy je Sitzung in ihrem eigenen Netzwerk-Namespace, oder sie startet nicht. Bei OpenCode mit Anbieterschlüssel beruhen die Hosts auf einem früheren Inventar, nicht auf einem hinter dem Proxy gezeigten Turn. Grok-Build-Sitzungen und Sitzungen anderer Tools mit Kontoanmeldung können weiterhin jeden Host erreichen, den das Netzwerk zulässt. Lesen Sie [Netzwerkisolation von Sitzungen](SECURITY.md#session-network-isolation), bevor Sie Workloads ausführen, die exklusiven Zugriff auf einen einzigen Anbieter erfordern.
+Die Netzwerkisolation hängt vom Werkzeug und der Verbindung ab. Sitzungen mit Anbieterschlüssel von Claude Code, Codex, OpenCode und Gemini CLI sowie unterstützte Kontositzungen von OpenCode und Cursor haben eine Grenze aus Netzwerk-Namespace und Proxy. Grok Build und andere Kontositzungen haben diese nicht. Die [unterstützten Werkzeuge und Isolationsgrenzen](docs-site/src/content/docs/reference/supported-tools.md#confinement-depends-on-the-connection) (Englisch) beschreiben den Umfang und die Grenzen der Nachweise.
 
 ## Installation
 
@@ -98,7 +100,7 @@ if grep -qsw userns_create /sys/kernel/security/apparmor/features/namespaces/mas
   sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions &&
   apparmor=--security-opt=apparmor=olivares-sessions
 fi &&
-docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
+docker run -d --name olivares --hostname olivares -p 8443:8443 -p 8444:8444 \
   --security-opt no-new-privileges --security-opt seccomp=olivares-sessions.json $apparmor \
   -v olivares-data:/var/lib/olivares \
   "$img" \

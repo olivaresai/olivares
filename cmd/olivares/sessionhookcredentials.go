@@ -147,7 +147,33 @@ func (c *sessionHookCredentials) bindEndpoint(addr string) error {
 }
 
 func (c *sessionHookCredentials) mint(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) (string, error) {
+	if intent.Schedule != nil {
+		return c.mintScheduled(ctx, tenant, intent)
+	}
 	return c.mintForPrincipalContext(ctx, intent.LauncherPrincipal, tenant, intent)
+}
+
+// mintScheduled mints the session credential of a scheduled run, which no person
+// launched: the launch gate verified the run's approval before provisioning, and the
+// session runs as its work item's owner agent on that agent's own credential, never the
+// approver's or the schedule owner's. A scheduled launch that carries a person's
+// credential is refused rather than given two launchers.
+func (c *sessionHookCredentials) mintScheduled(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) (string, error) {
+	if _, held := intent.LauncherPrincipal.Ref(); held || intent.AgentRef == "" || c.authr == nil {
+		return "", auth.ErrUnauthenticated
+	}
+	system, err := auth.NewSystemOperator("sessions.scheduled-launch", "an approved scheduled run launches as its owner agent")
+	if err != nil {
+		return "", err
+	}
+	agent, err := c.authr.IssueAgentLaunchCredential(ctx, system, auth.AgentLaunchSpec{
+		Tenant: tenant, AgentRef: intent.AgentRef, RunRef: intent.RunRef,
+		ScheduleRef: intent.Schedule.ScheduleRef, ApprovalRef: intent.Schedule.ApprovalRef,
+	})
+	if err != nil {
+		return "", err
+	}
+	return c.mintScoped(ctx, agent, tenant, intent)
 }
 
 func (c *sessionHookCredentials) mintForPrincipal(p auth.Principal, tenant model.TenantID, intent sessions.LaunchIntent) (string, error) {
@@ -158,6 +184,11 @@ func (c *sessionHookCredentials) mintForPrincipalContext(ctx context.Context, p 
 	if p.Actor() != intent.Actor {
 		return "", auth.ErrUnauthenticated
 	}
+	return c.mintScoped(ctx, p, tenant, intent)
+}
+
+// mintScoped mints p's session credential, narrowed to the launch's canonical session.
+func (c *sessionHookCredentials) mintScoped(ctx context.Context, p auth.Principal, tenant model.TenantID, intent sessions.LaunchIntent) (string, error) {
 	// The canonical session, not the caller's hint, supplies the authz workspace.
 	var workspace model.ID
 	err := c.store.View(ctx, tenant, func(sc store.Scope) error {

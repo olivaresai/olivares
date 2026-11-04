@@ -167,6 +167,22 @@ describe('EstateSummary', () => {
     },
   )
 
+  it('a budget clause an edition supplies ends the sentence; none adds nothing', () => {
+    const { rerender } = renderIntel(
+      <EstateSummary
+        {...FULL}
+        budgetClause="Payments is at 92% of its budget"
+      />,
+    )
+    expect(sentence()).toHaveTextContent(
+      '7 sessions open for 6 people · $6.84 today · 3 need you · Payments is at 92% of its budget',
+    )
+    rerender(<EstateSummary {...FULL} budgetClause={null} />)
+    expect(sentence()).toHaveTextContent(
+      /^7 sessions open for 6 people · \$6\.84 today · 3 need you$/,
+    )
+  })
+
   it('a failed read is said, never a zero', () => {
     renderIntel(
       <EstateSummary

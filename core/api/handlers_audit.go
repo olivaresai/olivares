@@ -163,6 +163,12 @@ func (s *Server) auditListInto(w http.ResponseWriter, r *http.Request, p auth.Pr
 		s.badRequest(w, r, ferr.Error())
 		return
 	}
+	// The system ledger records no sessions: a tool or folder asked of it would come
+	// back as an empty page that reads "nothing happened".
+	if tenant == model.SystemTenantID && (filters.values["tool"] != "" || filters.values["folder"] != "") {
+		s.badRequest(w, r, "tool and folder filter a tenant's ledger; the system ledger records no sessions")
+		return
+	}
 	if filtered {
 		s.auditFilteredListInto(w, r, p, tenant, from, limit, filters)
 		return
@@ -237,6 +243,8 @@ func (f auditFilters) storeFilter() store.AuditFilter {
 		Since:                 f.since,
 		Until:                 f.until,
 		Q:                     f.q,
+		Tool:                  f.values["tool"],
+		Folder:                f.values["folder"],
 	}
 	return out
 }
@@ -363,6 +371,14 @@ func (s *Server) auditFilteredListLegacy(
 			s.writeError(w, r, rerr)
 			return
 		}
+		// matches() has no tool or folder: they are facts of the run an entry targets,
+		// which only the store can join, so filtering here would return every entry as
+		// a match. It refuses only after the walk was allowed, so a principal the ledger
+		// denies keeps that denial.
+		if filters.values["tool"] != "" || filters.values["folder"] != "" {
+			s.writeError(w, r, store.ErrAuditFilterUnavailable)
+			return
+		}
 
 		stoppedAtLimit := false
 		for i, ev := range page {
@@ -453,10 +469,17 @@ func queryOptionalInt64(r *http.Request, key string) (int64, bool, error) {
 func parseAuditFilters(r *http.Request) (auditFilters, bool, error) {
 	filters := auditFilters{values: map[string]string{}}
 	query := r.URL.Query()
-	for _, key := range []string{"since", "until", "actor", "action", "target_kind", "target_id", "q"} {
+	for _, key := range []string{"since", "until", "actor", "action", "target_kind", "target_id", "q", "tool", "folder"} {
 		values, ok := query[key]
 		if !ok {
 			continue
+		}
+		// tool and folder are read once: the other keys take values[0] and drop the
+		// rest, which here would let ?tool=&tool=codex read as "cleared" and answer
+		// with the whole ledger, and ?tool=a&tool=b answer for a alone. The two keys
+		// are new, so refusing a repeat breaks no caller.
+		if (key == "tool" || key == "folder") && len(values) > 1 {
+			return auditFilters{}, false, fmt.Errorf("%s may be given once", key)
 		}
 		value := ""
 		if len(values) > 0 {

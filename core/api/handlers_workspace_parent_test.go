@@ -13,38 +13,61 @@ import (
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/auth/authtest"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
 
 // groupDepartments is the department surface a test wires to reach the group
-// placement through HTTP. The Business service gates its add-on and then calls the
-// same auth primitive, so the route's answers and refusal envelopes are the ones
-// under test. The workspace move is the Business service's own transaction and is
-// not reachable here.
+// placement through HTTP. It stands for the Business service, which gates its add-on
+// and applies the edit with its own checks (the Business suite runs those against
+// the real service): this one writes the edit to the store and refuses a group
+// another provisioner owns, so the route's answers and refusal envelopes are the
+// ones under test. The workspace move is the Business service's own transaction and
+// is not reachable here.
 func groupDepartments(o *api.Options) {
-	o.Departments = authDepartments{o.Authenticator}
+	o.Departments = storeDepartments{o.Store}
 }
 
-type authDepartments struct{ authr *auth.Authenticator }
+type storeDepartments struct{ st store.Store }
 
-func (d authDepartments) SetWorkspaceParent(context.Context, auth.Principal, model.TenantID, model.ID, model.ID) (model.Workspace, error) {
+func (d storeDepartments) SetWorkspaceParent(context.Context, auth.Principal, model.TenantID, model.ID, model.ID) (model.Workspace, error) {
 	return model.Workspace{}, errors.New("the workspace move is not under test here")
 }
 
-func (d authDepartments) SetGroupParent(ctx context.Context, p auth.Principal, tenant model.TenantID, id, parent model.ID) (model.UserGroup, error) {
-	return d.authr.ConfigureGroupParent(ctx, p, tenant, id, parent)
+func (d storeDepartments) SetGroupParent(ctx context.Context, _ auth.Principal, tenant model.TenantID, id, parent model.ID) (model.UserGroup, error) {
+	return d.editGroup(ctx, tenant, id, func(g *model.UserGroup) { g.ParentGroupID = parent })
 }
 
-func (d authDepartments) SetGroupWorkspace(ctx context.Context, p auth.Principal, tenant model.TenantID, id, workspace model.ID) (model.UserGroup, error) {
-	return d.authr.ConfigureGroupWorkspace(ctx, p, tenant, id, workspace)
+func (d storeDepartments) SetGroupWorkspace(ctx context.Context, _ auth.Principal, tenant model.TenantID, id, workspace model.ID) (model.UserGroup, error) {
+	return d.editGroup(ctx, tenant, id, func(g *model.UserGroup) { g.WorkspaceID = workspace })
+}
+
+func (d storeDepartments) editGroup(ctx context.Context, tenant model.TenantID, id model.ID, change func(*model.UserGroup)) (model.UserGroup, error) {
+	var out model.UserGroup
+	err := d.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		g, err := as.Groups().Get(ctx, id)
+		if err != nil {
+			return err
+		}
+		if g.TargetTenantID != tenant {
+			return store.ErrNotFound
+		}
+		if g.ProvisionedBy != "" && g.ProvisionedBy != auth.GroupProvisionerOperator {
+			return auth.ErrGroupOriginReadOnly
+		}
+		change(&g)
+		out, err = as.Groups().Update(ctx, g)
+		return err
+	})
+	return out, err
 }
 
 // recordingDepartments answers a workspace move with the workspace it was given a
 // parent for, and records the calls, so a test can tell a refusal before the
 // service from one by it.
 type recordingDepartments struct {
-	authDepartments
+	storeDepartments
 	calls *[]model.ID
 }
 
@@ -73,10 +96,6 @@ func TestDepartmentsAreBusiness(t *testing.T) {
 	tenant := h.createOrg(admin, "departments-community")
 	h.elevate(admin)
 	ctx := context.Background()
-	actor, err := h.authr.Authenticate(ctx, admin)
-	if err != nil {
-		t.Fatal(err)
-	}
 	mk := func(slug string) string {
 		t.Helper()
 		r := h.do(http.MethodPost, "/v1/workspaces", admin, map[string]any{"name": slug, "slug": slug}, tenantHdr(tenant))
@@ -88,11 +107,7 @@ func TestDepartmentsAreBusiness(t *testing.T) {
 	sales, emea, apac := mk("sales"), mk("emea"), mk("apac")
 	groups := map[string]model.UserGroup{}
 	for _, name := range []string{"child", "parent"} {
-		g, err := h.authr.SCIMCreateGroup(ctx, actor, tenant, auth.SCIMGroupInput{DisplayName: name, ExternalID: name})
-		if err != nil {
-			t.Fatal(err)
-		}
-		groups[name] = g.Group
+		groups[name] = authtest.Group(t, h.st, tenant, name, name).Group
 	}
 	// What a Business install stored, written below the HTTP surface.
 	if err := h.st.Mutate(ctx, tenant, func(sc store.Scope) error {
@@ -191,50 +206,10 @@ func TestDepartmentsAreBusiness(t *testing.T) {
 			if r.code != http.StatusNotImplemented || errorCodeOf(r) != "departments_unavailable" {
 				t.Errorf("Community %s nesting parent_id=%q = %d %s, want 501 departments_unavailable", name, parent, r.code, r.raw)
 			}
-			if g, err := h.authr.SCIMGetGroup(context.Background(), tenant, groups["child"].ID); err != nil || g.Group.ParentGroupID != groups["parent"].ID {
-				t.Errorf("Community %s nesting parent_id=%q changed the stored edge: parent %q, %v; want %q", name, parent, g.Group.ParentGroupID, err, groups["parent"].ID)
+			if g := authtest.Read(t, h.authr, tenant, groups["child"].ID); g.Group.ParentGroupID != groups["parent"].ID {
+				t.Errorf("Community %s nesting parent_id=%q changed the stored edge: parent %q; want %q", name, parent, g.Group.ParentGroupID, groups["parent"].ID)
 			}
 		}
-	}
-}
-
-// With the Business department service wired, nesting works as before: the owner
-// nests a group under another and un-nests it, and a cycle is a 409.
-func TestGroupNestingWorksWithTheDepartmentService(t *testing.T) {
-	h := newHarnessOpts(t, groupDepartments)
-	admin := h.adminLogin()
-	tenant := h.createOrg(admin, "group-nesting-business")
-	h.elevate(admin)
-	ctx := context.Background()
-	actor := h.principalOf(admin)
-	mk := func(name string) model.ID {
-		t.Helper()
-		g, err := h.authr.SCIMCreateGroup(ctx, actor, tenant, auth.SCIMGroupInput{DisplayName: name})
-		if err != nil {
-			t.Fatal(err)
-		}
-		return g.Group.ID
-	}
-	child, parent := mk("child"), mk("parent")
-	put := func(id, to model.ID) resp {
-		return h.do(http.MethodPut, "/v1/groups/"+id.String()+"/parent", admin, map[string]any{"parent_id": to.String()}, tenantHdr(tenant))
-	}
-	storedParent := func() model.ID {
-		t.Helper()
-		g, err := h.authr.SCIMGetGroup(ctx, tenant, child)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return g.Group.ParentGroupID
-	}
-	if r := put(child, parent); r.code != http.StatusOK || r.body["parent_group_id"] != parent.String() || storedParent() != parent {
-		t.Fatalf("Business nesting = %d %s, want 200 with parent %s stored (stored %q)", r.code, r.raw, parent, storedParent())
-	}
-	if r := put(parent, child); r.code != http.StatusConflict {
-		t.Errorf("a nesting cycle = %d %s, want 409", r.code, r.raw)
-	}
-	if r := put(child, ""); r.code != http.StatusOK || r.body["parent_group_id"] != "" || storedParent() != "" {
-		t.Errorf("Business un-nesting = %d %s, want 200 with no parent stored (stored %q)", r.code, r.raw, storedParent())
 	}
 }
 
@@ -245,7 +220,7 @@ func TestGroupNestingWorksWithTheDepartmentService(t *testing.T) {
 func TestWorkspaceParentGuardsRunBeforeTheService(t *testing.T) {
 	var calls []model.ID
 	h := newHarnessOpts(t, func(o *api.Options) {
-		o.Departments = recordingDepartments{authDepartments{o.Authenticator}, &calls}
+		o.Departments = recordingDepartments{storeDepartments{o.Store}, &calls}
 	})
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "workspace-parent-guards")

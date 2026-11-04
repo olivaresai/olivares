@@ -9,6 +9,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ChevronRight } from 'lucide-react'
 import { KvList, KvRow } from '@/components/ui/kv'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { AccountUsage as AdditionalUsage } from '@/features/agentops/account-usage'
@@ -48,24 +49,45 @@ export function SessionFacts({
     ? t(`agentops:effort.${run.effort}`, { defaultValue: run.effort })
     : ''
   const cost = live?.cost_micro_usd
+  // ONE PLACE PER FACT: the header and the composer already say the tool, account, model
+  // and access, and the status bar the account's use. Details shows what they do not
+  // (state, workspace, cost); the rest waits one click away under "Session ›".
   return (
-    <>
-      <section aria-labelledby={titleId} data-testid="session-facts">
-        <h3 id={titleId} className="text-body font-semibold text-text">
-          {t('context.facts.title')}
-        </h3>
-        <KvList className="[&_dt]:w-24 [&_dt]:shrink-0">
-          <KvRow label={t('context.facts.state')} align="start">
-            {/* The word and its age, apart, as the list's row spaces them. */}
-            <span className="inline-flex items-baseline gap-1.5">
-              <StateWord session={session} />
-            </span>
+    <section
+      aria-label={t('context.facts.title')}
+      data-testid="session-facts"
+      className="flex flex-col gap-2"
+    >
+      <KvList className="[&_dt]:w-24 [&_dt]:shrink-0">
+        <KvRow label={t('context.facts.state')} align="start">
+          {/* The word and its age, apart, as the list's row spaces them. */}
+          <span className="inline-flex items-baseline gap-1.5">
+            <StateWord session={session} />
+          </span>
+        </KvRow>
+        {workspace ? (
+          <KvRow label={t('context.facts.workspace')} align="start">
+            {workspace}
           </KvRow>
-          {workspace ? (
-            <KvRow label={t('context.facts.workspace')} align="start">
-              {workspace}
-            </KvRow>
-          ) : null}
+        ) : null}
+        {cost ? (
+          <KvRow label={t('context.facts.cost')} align="start">
+            {formatMicroUsd(cost, { locale: i18n.language })}
+          </KvRow>
+        ) : null}
+      </KvList>
+      <details data-testid="session-facts-more" className="group">
+        <summary
+          id={titleId}
+          className="flex cursor-pointer list-none items-center gap-1 text-caption font-medium text-foreground"
+        >
+          {t('context.facts.title')}
+          <ChevronRight
+            aria-hidden
+            className="size-3.5 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none"
+          />
+        </summary>
+        <KvList className="mt-1 [&_dt]:w-24 [&_dt]:shrink-0">
           {driver ? (
             <KvRow label={t('context.facts.tool')} align="start">
               {toolName(driver)}
@@ -78,24 +100,14 @@ export function SessionFacts({
           ) : null}
           {model ? (
             <KvRow label={t('context.facts.model')} align="start">
-              {[
-                modelName(model),
-                effort.charAt(0).toLocaleUpperCase() + effort.slice(1),
-              ]
-                .filter(Boolean)
-                .join(' · ')}
+              {[modelName(model), effort].filter(Boolean).join(' · ')}
             </KvRow>
           ) : null}
           {run ? <AccessRow run={run} /> : null}
-          {cost ? (
-            <KvRow label={t('context.facts.cost')} align="start">
-              {formatMicroUsd(cost, { locale: i18n.language })}
-            </KvRow>
-          ) : null}
         </KvList>
-      </section>
-      {accountRef ? <AccountUsage profileRef={accountRef} /> : null}
-    </>
+        {accountRef ? <AccountUsage profileRef={accountRef} /> : null}
+      </details>
+    </section>
   )
 }
 

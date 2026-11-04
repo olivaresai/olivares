@@ -81,6 +81,11 @@ func runRootStatus(cmd *cobra.Command) error {
 		if report.Refusal != "" {
 			r.Line(report.Refusal)
 		}
+		if report.Engine == "" {
+			// Next stays quickstart (the menu runs it); a computer that only runs the CLI
+			// signs in to an engine elsewhere.
+			r.Line("To use an engine on another computer: olivares login --server <url>")
+		}
 		r.Blank()
 		r.Line("Start here:")
 		root := cmd.Root()
@@ -124,30 +129,7 @@ func rootStatus(ctx context.Context) rootStatusReport {
 		return report
 	}
 	get := func(path string, withToken bool, into any) (int, error) {
-		r := resolved
-		if !withToken {
-			r.Token, r.Tenant = "", ""
-		}
-		client, headers, err := cliTransport(cliTransportOptions{Resolved: r, Timeout: rootProbeTimeout, Stderr: io.Discard})
-		if err != nil {
-			return 0, err
-		}
-		cctx, cancel := context.WithTimeout(ctx, rootProbeTimeout)
-		defer cancel()
-		req, err := http.NewRequestWithContext(cctx, http.MethodGet, r.Server+path, nil)
-		if err != nil {
-			return 0, err
-		}
-		req.Header = headers
-		resp, err := client.Do(req)
-		if err != nil {
-			return 0, err
-		}
-		defer func() { _ = resp.Body.Close() }()
-		if into != nil && resp.StatusCode == http.StatusOK {
-			_ = json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(into)
-		}
-		return resp.StatusCode, nil
+		return engineGet(ctx, resolved, path, withToken, into, rootProbeTimeout)
 	}
 	status, probeErr := get("/livez", false, nil)
 	report.Reachable = probeErr == nil && status == http.StatusOK
@@ -181,6 +163,35 @@ func rootStatus(ctx context.Context) rootStatusReport {
 		report.Next = rootNextFromTools(rows)
 	}
 	return report
+}
+
+// engineGet reads one path of the engine the context names, with the saved credential
+// only when withToken, and decodes a 200 body into into when it is not nil. It returns
+// the HTTP status, or the transport error when the engine gave none.
+func engineGet(ctx context.Context, resolved cliResolvedConfig, path string, withToken bool, into any, timeout time.Duration) (int, error) {
+	if !withToken {
+		resolved.Token, resolved.Tenant = "", ""
+	}
+	client, headers, err := cliTransport(cliTransportOptions{Resolved: resolved, Timeout: timeout, Stderr: io.Discard})
+	if err != nil {
+		return 0, err
+	}
+	cctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(cctx, http.MethodGet, resolved.Server+path, nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header = headers
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if into != nil && resp.StatusCode == http.StatusOK {
+		_ = json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(into)
+	}
+	return resp.StatusCode, nil
 }
 
 // dockerEngineNext is the documented way to the engine a container runs: the CLI

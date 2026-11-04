@@ -17,7 +17,7 @@ func sessionsGitDocumentation(method, pattern string) (api.ModuleOperationDocume
 	doc := api.ModuleOperationDocumentation{}
 	status := method == http.MethodGet && pattern == base
 	action := strings.TrimPrefix(pattern, base+"/")
-	if !status && (method != http.MethodPost || (action != "stage" && action != "unstage" && action != "commit" && action != "branch")) {
+	if !status && (method != http.MethodPost || (action != "stage" && action != "unstage" && action != "commit" && action != "branch" && action != "init" && action != "merge")) {
 		return doc, false
 	}
 	responses := api.GenericModuleResponses()
@@ -44,6 +44,13 @@ func sessionsGitDocumentation(method, pattern string) (api.ModuleOperationDocume
 			required = []string{"name"}
 		}
 		schema := oas.Obj("type", "object", "additionalProperties", false, "required", required, "properties", props)
+		if action == "init" {
+			// Init takes no field but the optional fence: the folder becomes a repository on branch main.
+			schema = oas.Obj("type", "object", "additionalProperties", false, "properties", oas.Obj("work_lease_fence", props["work_lease_fence"]))
+		}
+		if action == "merge" {
+			schema = oas.Obj("type", "object", "additionalProperties", false, "properties", oas.Obj(), "description", "Fast-forward the workspace branch to the stopped session's owned worktree branch. Both folders must be clean and the target must be on a branch. A diverged target is refused; no worktree is removed.")
+		}
 		doc.BodyKind = api.ModuleOperationJSONBody
 		doc.RequestBody = oas.Obj("required", true, "content", oas.Obj("application/json", oas.Obj("schema", schema)))
 	}

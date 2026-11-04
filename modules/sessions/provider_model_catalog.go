@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,6 +42,9 @@ type CatalogModel struct {
 	IsLegacy         *bool    `json:"is_legacy,omitempty"`
 	SupportsFastMode *bool    `json:"supports_fast_mode,omitempty"`
 	ServiceTiers     []string `json:"service_tiers,omitempty"`
+	// LaunchModel is the exact id a Claude Code selector launches on and a session
+	// records (claudeModelAliases); absent for any other model.
+	LaunchModel string `json:"launch_model,omitempty"`
 }
 
 type ProfileModelCatalog struct {
@@ -119,7 +123,10 @@ func (m *Module) profileCatalogContext(ctx context.Context, tenant model.TenantI
 
 // ProfileModelCatalog discovers without inference. Concurrent reads of the same
 // profile coalesce; other profiles remain independent. Failures are explicit and
-// never publish stale models or raw vendor error text.
+// never publish stale models or raw vendor error text. A list past its lifetime
+// still answers at once while the same login stays in place: the tool is asked
+// again behind the answer, so a page does not wait for a cold start, and a failed
+// read behind it drops the list so the next read says so.
 func (m *Module) ProfileModelCatalog(ctx context.Context, tenant model.TenantID, ref string, refresh bool) (ProfileModelCatalog, error) {
 	key := tenant.String() + "/" + ref
 	c := &m.profileCatalogs
@@ -129,6 +136,25 @@ func (m *Module) ProfileModelCatalog(ctx context.Context, tenant model.TenantID,
 			return ProfileModelCatalog{}, err
 		}
 		c.mu.Lock()
+		if cached, ok := c.entries[key]; !refresh && ok && cached.revision == revision {
+			result := cloneProfileCatalog(cached.result)
+			if m.now().Before(cached.expires) || c.pending[key] != nil {
+				c.mu.Unlock()
+				return result, nil
+			}
+			done := c.start(key)
+			c.mu.Unlock()
+			go func() {
+				// Outside the request's own recovery: a panic here would end the engine.
+				defer func() {
+					if p := recover(); p != nil && m.log != nil {
+						m.log.Error("sessions: model catalog refresh panicked", "profile_ref", ref, "panic", p, "stack", string(debug.Stack()))
+					}
+				}()
+				_, _ = m.readProfileCatalog(context.WithoutCancel(ctx), tenant, ref, prof, home, rec, revision, done)
+			}()
+			return result, nil
+		}
 		if pending := c.pending[key]; pending != nil {
 			c.mu.Unlock()
 			select {
@@ -139,104 +165,124 @@ func (m *Module) ProfileModelCatalog(ctx context.Context, tenant model.TenantID,
 			refresh = false // a concurrent refresh satisfies this request
 			continue
 		}
-		if cached, ok := c.entries[key]; !refresh && ok && cached.revision == revision && m.now().Before(cached.expires) {
-			result := cloneProfileCatalog(cached.result)
-			c.mu.Unlock()
-			return result, nil
-		}
-		if c.entries == nil {
-			c.entries = make(map[string]profileCatalogEntry)
-			c.pending = make(map[string]chan struct{})
-		}
 		// A canceled refresh must not satisfy its waiting callers with an older
 		// cached answer. Only this flight's publication can refill the entry.
 		delete(c.entries, key)
-		done := make(chan struct{})
-		c.pending[key] = done
+		done := c.start(key)
 		c.mu.Unlock()
-		// Release the flight on every exit, including a panic recovered upstream.
-		defer func() {
-			c.mu.Lock()
-			delete(c.pending, key)
-			close(done)
-			c.mu.Unlock()
-		}()
-		out := ProfileModelCatalog{ProfileRef: ref, Driver: prof.Driver, State: "fresh", Models: []CatalogModel{}, FreeText: true, RefreshIntervalSeconds: int(profileModelCatalogTTL.Seconds())}
-		probeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-		if prof.ProviderRecordRef != "" {
-			var ids []string
-			ids, err = m.ReadProviderModels(probeCtx, tenant, rec)
-			for _, id := range ids {
-				out.Models = append(out.Models, CatalogModel{ID: id})
-			}
-		} else if prof.AuthSource == AuthSourceAccountHome {
-			out.Models, err = m.readToolModelCatalog(probeCtx, home)
-		} else {
-			err = ErrToolModelListUnsupported
-		}
-		cancel()
-		if err == nil {
-			if len(out.Models) > 1000 {
-				err = errors.New("model catalog exceeded its model bound")
-			}
-			for _, md := range out.Models {
-				if validationErr := validateCatalogModel(md); validationErr != nil {
-					err = validationErr
-					break
-				}
-				if md.IsDefault != nil && *md.IsDefault {
-					out.DefaultModel = md.ID
-				}
-			}
-			if err == nil && len(out.Models) == 0 {
-				err = errEmptyToolCatalog
-			}
-		}
-		if err != nil {
-			out.Models = []CatalogModel{}
-			out.DefaultModel = ""
-			out.State = "failed"
-			out.Message = "Models could not be refreshed. Check the provider connection or sign in again."
-			var launchErr *runErr
-			switch {
-			case errors.Is(err, ErrToolModelListUnsupported), errors.Is(err, ErrNoProviderProbe):
-				out.State = "unsupported"
-				out.Message = "This tool cannot report its model catalog. Use its default model or enter a model name."
-			case errors.Is(err, errEmptyToolCatalog):
-				out.State = "unsupported"
-				out.Message = "The tool reported no models. Use its default model or enter a model name."
-			case errors.As(err, &launchErr):
-				out.Message = launchErr.Error()
-			case m.log != nil:
-				m.log.Warn("sessions: model catalog read failed", "profile_ref", ref, "driver", prof.Driver, "error", redactErr(err))
-			}
-		}
-		if out.Models == nil {
-			out.Models = []CatalogModel{}
-		}
-		out.CheckedAt = m.now().UTC().Format(time.RFC3339Nano)
-		_, _, _, after, checkErr := m.profileCatalogContext(ctx, tenant, ref)
-		if checkErr == nil && after != revision {
-			checkErr = ErrProviderRecordChanged
-		}
-		if ctx.Err() != nil {
-			checkErr = ctx.Err()
-		}
-		c.mu.Lock()
-		// A failed read is never cached: the next read asks the tool again.
-		if checkErr == nil && out.State != "failed" {
-			// Bound idle memory without retaining retired profile histories forever.
-			if len(c.entries) >= 256 {
-				for oldKey := range c.entries {
-					delete(c.entries, oldKey)
-					break
-				}
-			}
-			c.entries[key] = profileCatalogEntry{revision: revision, expires: m.now().Add(profileModelCatalogTTL), result: cloneProfileCatalog(out)}
-		}
-		c.mu.Unlock()
-		return out, checkErr
+		return m.readProfileCatalog(ctx, tenant, ref, prof, home, rec, revision, done)
 	}
+}
+
+// start registers the read of key in flight; the caller holds c.mu.
+func (c *profileCatalogCache) start(key string) chan struct{} {
+	if c.entries == nil {
+		c.entries = make(map[string]profileCatalogEntry)
+		c.pending = make(map[string]chan struct{})
+	}
+	done := make(chan struct{})
+	c.pending[key] = done
+	return done
+}
+
+// readProfileCatalog asks the tool or provider once, then publishes the result and ends
+// the flight that start registered. A result that is not kept (a failed read, a changed
+// profile, a canceled caller) also removes the entry it was to replace.
+func (m *Module) readProfileCatalog(ctx context.Context, tenant model.TenantID, ref string, prof ProviderProfile, home ProviderHomeSnapshot, rec ProviderRecord, revision string, done chan struct{}) (ProfileModelCatalog, error) {
+	key := tenant.String() + "/" + ref
+	c := &m.profileCatalogs
+	// Release the flight on every exit, including a panic recovered upstream.
+	defer func() {
+		c.mu.Lock()
+		delete(c.pending, key)
+		close(done)
+		c.mu.Unlock()
+	}()
+	var err error
+	out := ProfileModelCatalog{ProfileRef: ref, Driver: prof.Driver, State: "fresh", Models: []CatalogModel{}, FreeText: true, RefreshIntervalSeconds: int(profileModelCatalogTTL.Seconds())}
+	probeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	if prof.ProviderRecordRef != "" {
+		var ids []string
+		ids, err = m.ReadProviderModels(probeCtx, tenant, rec)
+		for _, id := range ids {
+			out.Models = append(out.Models, CatalogModel{ID: id})
+		}
+	} else if prof.AuthSource == AuthSourceAccountHome {
+		out.Models, err = m.readToolModelCatalog(probeCtx, home)
+		if prof.Driver == providerDriverClaude {
+			for i, md := range out.Models {
+				if id := claudeModelID(md.ID); id != md.ID {
+					out.Models[i].LaunchModel = id
+				}
+			}
+		}
+	} else {
+		err = ErrToolModelListUnsupported
+	}
+	cancel()
+	if err == nil {
+		if len(out.Models) > 1000 {
+			err = errors.New("model catalog exceeded its model bound")
+		}
+		for _, md := range out.Models {
+			if validationErr := validateCatalogModel(md); validationErr != nil {
+				err = validationErr
+				break
+			}
+			if md.IsDefault != nil && *md.IsDefault {
+				out.DefaultModel = md.ID
+			}
+		}
+		if err == nil && len(out.Models) == 0 {
+			err = errEmptyToolCatalog
+		}
+	}
+	if err != nil {
+		out.Models = []CatalogModel{}
+		out.DefaultModel = ""
+		out.State = "failed"
+		out.Message = "Models could not be refreshed. Check the provider connection or sign in again."
+		var launchErr *runErr
+		switch {
+		case errors.Is(err, ErrToolModelListUnsupported), errors.Is(err, ErrNoProviderProbe):
+			out.State = "unsupported"
+			out.Message = "This tool cannot report its model catalog. Use its default model or enter a model name."
+		case errors.Is(err, errEmptyToolCatalog):
+			out.State = "unsupported"
+			out.Message = "The tool reported no models. Use its default model or enter a model name."
+		case errors.As(err, &launchErr):
+			out.Message = launchErr.Error()
+		case m.log != nil:
+			m.log.Warn("sessions: model catalog read failed", "profile_ref", ref, "driver", prof.Driver, "error", redactErr(err))
+		}
+	}
+	if out.Models == nil {
+		out.Models = []CatalogModel{}
+	}
+	out.CheckedAt = m.now().UTC().Format(time.RFC3339Nano)
+	_, _, _, after, checkErr := m.profileCatalogContext(ctx, tenant, ref)
+	if checkErr == nil && after != revision {
+		checkErr = ErrProviderRecordChanged
+	}
+	if ctx.Err() != nil {
+		checkErr = ctx.Err()
+	}
+	c.mu.Lock()
+	// A failed read is never cached: the next read asks the tool again.
+	if checkErr == nil && out.State != "failed" {
+		// Bound idle memory without retaining retired profile histories forever.
+		if len(c.entries) >= 256 {
+			for oldKey := range c.entries {
+				delete(c.entries, oldKey)
+				break
+			}
+		}
+		c.entries[key] = profileCatalogEntry{revision: revision, expires: m.now().Add(profileModelCatalogTTL), result: cloneProfileCatalog(out)}
+	} else {
+		delete(c.entries, key)
+	}
+	c.mu.Unlock()
+	return out, checkErr
 }
 
 func cloneProfileCatalog(in ProfileModelCatalog) ProfileModelCatalog {
@@ -255,7 +301,7 @@ func cloneProfileCatalog(in ProfileModelCatalog) ProfileModelCatalog {
 	return in
 }
 
-// handleProfileModelCatalog lists the models and effort levels that the installed tool or bound provider of one provider profile reports now, cached for two minutes; it sends no prompt, starts no conversation and returns no credential.
+// handleProfileModelCatalog lists the models and effort levels that the installed tool or bound provider of one provider profile reports now, cached for two minutes, then answered from the last read while it is read again; it sends no prompt, starts no conversation and returns no credential.
 func (m *Module) handleProfileModelCatalog(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	w.Header().Set("Cache-Control", "no-store")
 	q, err := url.ParseQuery(r.URL.RawQuery)

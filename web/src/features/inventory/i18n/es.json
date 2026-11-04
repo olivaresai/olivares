@@ -1,7 +1,8 @@
 {
-  "title": "Inventario",
+  "title": "Recursos descubiertos",
   "unnamed": "Sin nombre",
-  "subtitle": "Todos los agentes, sesiones, MCP, modelos e identidades descubiertos en tu infraestructura.",
+  "subtitle": "Todos los agentes, sesiones, MCP, modelos e identidades que han descubierto los conectores.",
+  "mcpPointer": "Añade y gobierna servidores MCP en MCP y skills",
   "refresh": "Actualizar",
   "scope": {
     "note": "Inventario de todo el tenant. El selector de espacio de trabajo no filtra esta vista."

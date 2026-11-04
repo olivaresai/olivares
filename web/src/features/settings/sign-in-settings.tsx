@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useQuery } from '@tanstack/react-query'
+import { AppLink } from '@/components/ui/app-link'
 import { consoleApi, consoleKeys } from '@/features/console/api'
 import { useTranslation } from 'react-i18next'
 import { KvList, KvRow } from '@/components/ui/kv'
@@ -80,12 +81,12 @@ export function SignInSettings() {
           <p role="status">{t('common:states.loading')}</p>
         )}
         {can('system:admin') ? (
-          <a
+          <AppLink
             className="text-body text-primary underline"
             href="/identity?tab=sso"
           >
             {t('settings:signIn.manageSso')}
-          </a>
+          </AppLink>
         ) : null}
       </section>
       <section aria-label={t('settings:signIn.session')}>

@@ -56,6 +56,10 @@ Tests adversariales prueban el rechazo de symlink-escape y traversal.
 }
 ```
 
+### Desde la consola
+
+**Consola → Conectores → Añadir** ofrece el mismo conector como `fscontent`: ponle nombre y fija `root`; **Probar** lista los diez primeros archivos con la ACL con la que se guardaría cada uno. Elige una **Base de conocimiento** y el motor sincroniza la fuente en ella al guardar y después en cada intervalo de sondeo, sin reiniciar. La **Salvaguarda de borrado** (`max_delete_percent`, 20 % por defecto en la consola) detiene una sincronización que borraría una parte mayor de los documentos de la fuente: no borra ninguno y explica por qué. **Exportar** guarda la definición sin credenciales; **Importar** en otro servidor la crea, marcada *Falta la credencial* hasta que se fije allí. La sección `documents` del archivo se importa una vez en el mismo registro, en el primer arranque que no encuentra en él ninguna fuente de documentos; desde entonces manda el registro.
+
 Cada fichero se convierte en un Documento: el cuerpo es el contenido del fichero, el DocID
 es su ruta relativa a la raíz, y los atributos de procedencia llevan `owner`, `group`,
 `mode`, `size`, `world_readable` y `path`.

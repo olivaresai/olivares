@@ -90,6 +90,18 @@ func (m *Module) requireProfileAccess(ctx context.Context, mc api.ModuleContext,
 	return err
 }
 
+// RequireProfileAssigned is requireProfileAccess for the skills routes that pin, read or list
+// the skills of one profile: a profile the principal is not assigned answers as a route the
+// principal may not use, which those routes conceal as a missing target. An unknown reference
+// passes and keeps the answer the target read gives it.
+func (m *Module) RequireProfileAssigned(ctx context.Context, tenant model.TenantID, p auth.Principal, ref string) error {
+	err := m.requireProfileAccess(ctx, api.ModuleContext{Tenant: tenant, Principal: p}, ref)
+	if errors.Is(err, ErrProfileNotFound) {
+		return auth.ErrRouteDenied
+	}
+	return err
+}
+
 // requireAccountAccess is requireProfileAccess for the account routes whose unknown
 // reference answers "provider account not found": a profile the caller is not assigned
 // answers the same.

@@ -14,6 +14,7 @@ import {
 } from '@/features/agent-tools/use-profiles'
 import '@/features/agent-tools/i18n'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
+import { limitReached } from '@/features/agentops/account-usage'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import type { ProviderAccountUsage, RunDTO } from '@/features/agentops/types'
 import { useAuth } from '@/lib/auth/context'
@@ -53,6 +54,9 @@ export interface SessionProfileChoice {
   usage?: ProviderAccountUsage[]
   /** Why it cannot start: its login is missing, or the key it runs on is. */
   missing?: 'signIn' | 'key'
+  /** A window its tool reported at 100 %: a first turn there fails with the tool's limit,
+   * so it is listed last, cannot be picked, and is never the one preselected. */
+  atLimit?: boolean
 }
 
 export interface SessionProfiles {
@@ -134,6 +138,7 @@ export function useSessionProfiles(
         label: a.name,
         ready,
         usage: a.usage,
+        ...(limitReached(a.usage) ? { atLimit: true } : {}),
         ...(ready
           ? {}
           : {
@@ -143,8 +148,10 @@ export function useSessionProfiles(
     }),
   ]
   if (!driver || (choices.length === 1 && choices[0].value === '')) return null
+  // Accounts at their limit go last, in their own order (the sort is stable).
+  choices.sort((x, y) => Number(!!x.atLimit) - Number(!!y.atLimit))
   const readyValues = new Set(
-    choices.filter((c) => c.ready).map((c) => c.value),
+    choices.filter((c) => c.ready && !c.atLimit).map((c) => c.value),
   )
   const knownRefs = new Set(accounts.map((a) => a.account_ref))
   const inactive = list.data?.inactive ?? new Set<string>()
@@ -164,7 +171,8 @@ export function useSessionProfiles(
           : undefined,
     )
     .find((value) => value !== undefined && readyValues.has(value))
-  const fallback = choices.find((c) => c.ready)?.value ?? choices[0].value
+  const fallback =
+    choices.find((c) => readyValues.has(c.value))?.value ?? choices[0].value
   const selected =
     pick?.scope === scope && choices.some((c) => c.value === pick.value)
       ? pick.value

@@ -16,10 +16,10 @@
     "infrastructure": "インフラストラクチャ"
   },
   "items": {
-    "estate": "エステート",
+    "estate": "設定済みリソース",
     "home": "ホーム",
     "onboarding": "セットアップウィザード",
-    "inventory": "インベントリ",
+    "inventory": "検出されたリソース",
     "sessions": "セッション",
     "accessMap": "アクセスマップ",
     "reach": "リーチ",
@@ -38,7 +38,6 @@
     "vault": "ボールト",
     "claudePolicy": "管理ポリシー",
     "routinePolicies": "ルーチンポリシー",
-    "deploy": "デプロイ",
     "gitPublication": "Git 公開",
     "knowledge": "ナレッジ",
     "catalog": "カタログ",
@@ -51,7 +50,6 @@
     "adoption": "導入状況",
     "evals": "評価",
     "security": "セキュリティ",
-    "recordings": "記録",
     "compliance": "コンプライアンス",
     "voice": "音声",
     "sandbox": "サンドボックス",
@@ -67,7 +65,6 @@
     "settings": "設定",
     "workspace-templates": "ワークスペーステンプレート",
     "eventing": "Webhookとイベント",
-    "session-viewer": "セッションビューア",
     "backups": "バックアップ",
     "updates": "アップデート",
     "logs": "ログ",
@@ -93,10 +90,10 @@
     "truncated": "一覧は不完全です——読み込み済みより多くのワークスペースがあります"
   },
   "descriptions": {
-    "estate": "設定済みリソースとその関係を確認し、作業項目の依存関係を調べます。",
+    "estate": "設定した内容と、作業項目を含む各要素の依存関係。",
     "home": "エステートの概要と正常性を一目で把握",
     "onboarding": "ステップバイステップのデプロイメント設定",
-    "inventory": "コネクタが観察したエージェント、MCP サーバー、モデルを検出してカタログ化",
+    "inventory": "コネクターが観測したエージェント・MCPサーバー・モデルと、それぞれを最後に確認した時刻。",
     "sessions": "セッションを開始し、Olivares が見つけたものも含めて、それぞれの動きを追います",
     "accessMap": "各エージェントが読み書きする対象（R/RW）",
     "reach": "各ツールが到達できる接続先と、承認待ちの接続先を確認できます。",
@@ -113,7 +110,6 @@
     "identity": "SSO、SCIM、エージェントが使うアイデンティティ",
     "vault": "パスワード、メモ、認証コード",
     "claudePolicy": "管理対象ポリシー、フック、MCP、サンドボックス、ポリシーアズコード",
-    "deploy": "エージェントをプロビジョニングしインフラに接続",
     "gitPublication": "承認済みの Git ターゲットを通じてコミットのプッシュ、プルリクエストの作成、マージを行う",
     "knowledge": "ナレッジベース、RAG、データリネージ",
     "catalog": "キュレーションされ承認されたエージェントとケーパビリティ",
@@ -127,7 +123,6 @@
     "adoption": "生産性、採用率、モデル構成",
     "evals": "品質、評価、回帰",
     "security": "ガードレール、フォレンジック、異常",
-    "recordings": "特権セッションの記録と再生",
     "compliance": "フレームワーク、統制、証拠",
     "voice": "音声およびリアルタイムセッション",
     "sandbox": "分離されたエージェントのテストと再生",
@@ -186,13 +181,15 @@
     "agentcoreExport": "AgentCore エクスポート · AgentCore",
     "sessions": "セッション · セッションを観測 · セッションを運用 · Claude Code · agentops",
     "agentops": "セッションを運用 · Claude Code · agentops",
-    "console": "統制コンソール · テナント管理"
+    "console": "統制コンソール · テナント管理",
+    "estate": "エステート · 環境",
+    "inventory": "インベントリ"
   },
   "areas": {
     "infrastructure": {
       "label": "インフラ",
       "sections": {
-        "estate": "インベントリとワークスペース"
+        "estate": "リソースとワークスペース"
       }
     },
     "ai": {
@@ -298,6 +295,13 @@
     "draftSaveFailed": "このタブに下書きを保存できませんでした。このページを開いたままにするか、離れる前にメッセージをコピーしてください。",
     "sendBackgroundHint": "Ctrl+Enter で送信し、次の文の下書きを残します。",
     "slashLabel": "コマンドとスキル",
+    "mentionLabel": "ファイルとフォルダー",
+    "skillLabel": "スキル",
+    "mention": {
+      "loading": "セッションのフォルダーを読み込んでいます…",
+      "failed": "セッションのフォルダーを読み込めませんでした。",
+      "nomatch": "「{{query}}」で始まるファイルやフォルダーはありません。"
+    },
     "slashOption": "{{name}}、{{n}}件中{{i}}件目",
     "slashNoMatch": "「{{query}}」に一致するコマンドはありません。",
     "slash": {
@@ -315,7 +319,8 @@
     },
     "sessionKeeps": "このセッションは {{value}} のままです。別の設定を使うには新しいセッションを開始します。",
     "startWithChoice": "この選択で新しいセッションを開始",
-    "askPlaceholder": "何でも質問できます。/ でコマンドとスキル",
+    "newWithOtherAccess": "別のアクセスで新しいセッション…",
+    "askPlaceholder": "何でも質問できます。@ でファイルとフォルダー、/ でコマンドとスキル",
     "modelPicker": "モデル: {{value}}",
     "effortPicker": "推論レベル: {{value}}",
     "accessPicker": "アクセス: {{value}}",
@@ -346,6 +351,7 @@
     }
   },
   "shell": {
+    "more": "その他",
     "searchCommands": "検索とコマンド",
     "search": "検索",
     "stopAll": "すべて停止",
@@ -446,6 +452,8 @@
     "work": "作業",
     "tools": "ツール",
     "control": "コントロール",
-    "admin": "管理"
-  }
+    "admin": "管理",
+    "organization": "組織"
+  },
+  "readOnlyNotice": "このページは閲覧できますが、変更はできません。変更できるのは組織の管理者です。"
 }

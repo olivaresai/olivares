@@ -56,6 +56,10 @@ import { AgentArtifactsView } from './agent-artifacts-view'
 import './i18n'
 import '@/features/_intel'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 const artifact: AgentArtifact = {
   id: 'aa-1',
   artifact_class: 'skill',

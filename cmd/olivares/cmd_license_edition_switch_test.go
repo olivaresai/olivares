@@ -8,10 +8,15 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/core/license"
 	"github.com/olivaresai/olivares/core/release"
 )
@@ -158,5 +163,110 @@ func TestLicenseStatusOffersNoSwitchForARevokedLicense(t *testing.T) {
 	revoked := status("--manifest", manifest, "--ota-pubkey", base64.StdEncoding.EncodeToString(otaPub))
 	if revoked["status"] != "revoked" || revoked["edition_switch"] != nil {
 		t.Fatalf("status=%v edition_switch=%v: a revoked license must print no switch", revoked["status"], revoked["edition_switch"])
+	}
+}
+
+// A client signed in to an engine is told that engine's licence state, not what its own empty data
+// directory holds (a 0.6 client printed `status: none` whatever the engine ran). The
+// data-dir form stays for the engine host: naming --data-dir keeps the answer offline.
+func TestLicenseStatusAsksTheSignedInEngine(t *testing.T) {
+	var asked atomic.Int64
+	status := http.StatusOK
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked.Add(1)
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/console/license" || r.Header.Get("Authorization") != "Bearer secret-token" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		w.WriteHeader(status)
+		if status == http.StatusOK {
+			_ = json.NewEncoder(w).Encode(map[string]any{"edition": "enterprise", "status": "valid", "source": "data-dir", "plan": "business"})
+		}
+	}))
+	defer server.Close()
+	t.Setenv("OLIVARES_DATA_DIR", t.TempDir())
+	t.Setenv("OLIVARES_SERVER_URL", server.URL)
+	t.Setenv("OLIVARES_TOKEN", "secret-token")
+
+	out, _, err := execRoot(t, "license", "status")
+	var got map[string]any
+	if err != nil || json.Unmarshal([]byte(out), &got) != nil || got["status"] != "valid" || got["plan"] != "business" {
+		t.Fatalf("license status signed in: err=%v output=%q, want the engine's valid business licence", err, out)
+	}
+
+	before := asked.Load()
+	out, _, err = execRoot(t, "license", "status", "--data-dir", t.TempDir())
+	if err != nil || !strings.Contains(out, `"status": "none"`) || asked.Load() != before {
+		t.Fatalf("license status --data-dir must stay offline: err=%v output=%q, engine asked %d more times", err, out, asked.Load()-before)
+	}
+
+	status = http.StatusForbidden
+	_, _, err = execRoot(t, "license", "show")
+	if exitcode.From(err) != exitcode.Auth || err == nil || !strings.Contains(err.Error(), "superadmin") {
+		t.Fatalf("a non-superadmin must be told the licence needs a superadmin, with the auth exit code: %v", err)
+	}
+}
+
+// A named server is a sign-in the caller asked for. Without a credential `license status` says so
+// instead of answering `none` from an empty data directory; on the host of the engine it is signed
+// in to it keeps the full offline document (edition_switch, reason, claims) that only that host
+// holds; and an engine that answers `null` is an error, not a panic.
+func TestLicenseStatusSignedInBoundaries(t *testing.T) {
+	var asked atomic.Int64
+	body := "null"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		asked.Add(1)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+	hostPort := strings.TrimPrefix(server.URL, "http://")
+	cases := []struct {
+		name     string
+		args     []string
+		env      map[string]string
+		engine   bool // the data directory records server as the engine this host runs
+		wantCode int
+		wantOut  string
+		wantAsk  int64
+	}{
+		{name: "--server without a credential", args: []string{"--server", server.URL},
+			wantCode: exitcode.Usage},
+		{name: "$OLIVARES_SERVER_URL without a credential", env: map[string]string{"OLIVARES_SERVER_URL": server.URL},
+			wantCode: exitcode.Usage},
+		{name: "the engine this host runs stays offline", env: map[string]string{"OLIVARES_SERVER_URL": server.URL, "OLIVARES_TOKEN": "secret-token"},
+			engine: true, wantOut: `"status": "none"`},
+		{name: "a null answer", env: map[string]string{"OLIVARES_SERVER_URL": server.URL, "OLIVARES_TOKEN": "secret-token"},
+			wantCode: exitcode.Server, wantAsk: 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			data := t.TempDir()
+			t.Setenv("OLIVARES_DATA_DIR", data)
+			t.Setenv("OLIVARES_SERVER_URL", "")
+			t.Setenv("OLIVARES_TOKEN", "")
+			for k, v := range tc.env {
+				t.Setenv(k, v)
+			}
+			if tc.engine {
+				if err := os.Chmod(data, 0o700); err != nil { // localEngineFor trusts only a directory no other account can write
+					t.Fatal(err)
+				}
+				writeConsoleFixture(t, data, consoleState{Version: consoleStateVersion, Listen: hostPort, Insecure: true})
+			}
+			before := asked.Load()
+			out, _, err := execRoot(t, append([]string{"license", "status"}, tc.args...)...)
+			got := 0
+			if err != nil {
+				got = exitcode.From(err)
+			}
+			if got != tc.wantCode {
+				t.Fatalf("license status: exit %d err=%v output=%q, want exit %d", got, err, out, tc.wantCode)
+			}
+			if tc.wantOut != "" && !strings.Contains(out, tc.wantOut) {
+				t.Fatalf("license status output %q lacks %q", out, tc.wantOut)
+			}
+			if asked.Load()-before != tc.wantAsk {
+				t.Fatalf("the engine was asked %d times, want %d", asked.Load()-before, tc.wantAsk)
+			}
+		})
 	}
 }

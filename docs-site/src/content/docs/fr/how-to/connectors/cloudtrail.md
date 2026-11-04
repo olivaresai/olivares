@@ -74,7 +74,7 @@ propre ; les lectures et écritures sont colorées d'après le flag `readOnly`. 
 panneau de dérive les confronte aux droits déclarés exactement comme pour toute
 autre source.
 
-Dans **Inventory**, les principaux auxquels CloudTrail attribue les appels
+Dans **Ressources découvertes**, les principaux auxquels CloudTrail attribue les appels
 apparaissent comme des identités, prêtes à être liées à des agents — c'est cette
 liaison qui transforme un `approximate` de rôle partagé en un `attributed` par
 agent.

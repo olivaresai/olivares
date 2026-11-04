@@ -165,7 +165,7 @@ const ROUTES = [
   'sandbox',
   'security',
   ...businessRoute('red-team'),
-  'compliance',
+  ...businessRoute('compliance'),
   ...(existsSync(
     fileURLToPath(
       new URL('../src/features/orchestration/views.tsx', import.meta.url),

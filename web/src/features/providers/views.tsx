@@ -26,6 +26,11 @@ export const VIEWS = [
     // is how a sidebar stops being scannable.
     icon: KeySquare,
     permission: 'sessions:provider:read',
+    changes: [
+      { permission: 'sessions:provider:write' },
+      { permission: 'sessions:provider:admin' },
+      { permission: 'sessions:profile:write' },
+    ],
     // A door into Tools (#2552), where the API keys are listed beside the accounts.
     // `?add=<kind>&returnTo=` (the setup wizard's "Add an API key") still opens the form.
     doorTo: 'agent-tools',

@@ -87,6 +87,14 @@ describe('filter folding', () => {
       '에이전트',
       '워크플로',
       '작업', // ko
+      'Сесії',
+      'Інфраструктура',
+      'Робота',
+      'Керування сесіями', // uk
+      'Sessões',
+      'Infraestrutura',
+      'Trabalho',
+      'Operar sessões', // pt
     ]
     for (const l of labels) expect(fold(l).includes(fold(l))).toBe(true)
     // And distinct labels must not collapse into one another.

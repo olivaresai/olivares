@@ -48,6 +48,11 @@ type Policy struct {
 	PublicProviders []string
 	Controls        []string
 	PublicOnly      bool
+	// OwnNetwork keeps the container's own runtime network and relays only the
+	// engine's loopback Providers and Controls into it over the mounted Unix
+	// socket. It adds no proxy variable and no socket filter, and needs no
+	// provider. Container launches only.
+	OwnNetwork bool `json:",omitempty"`
 	// Offline retains the same OS network boundary without granting any endpoint.
 	// Local session tools such as Git use it even after the agent has stopped.
 	Offline bool
@@ -93,7 +98,7 @@ func destinations(p Policy) ([]destination, error) {
 		}
 		return nil, nil
 	}
-	if len(p.Providers) == 0 || len(p.Providers)+len(p.PublicProviders)+len(p.Controls) > maxEndpoints {
+	if len(p.Providers) == 0 && !p.OwnNetwork || len(p.Providers)+len(p.PublicProviders)+len(p.Controls) > maxEndpoints {
 		return nil, errors.New("session egress requires a bounded provider endpoint list")
 	}
 	var out []destination

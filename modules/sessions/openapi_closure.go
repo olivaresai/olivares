@@ -58,6 +58,8 @@ func sessionsClosureRequestBodyDeclarationFor(method, pattern string) (sessionsC
 		return sessionsClosureBodyDeclaration(false, sessionsClosureClosedObject(oas.Obj("at_reset", oas.Obj("type", "boolean"), "cancel_reset", oas.Obj("type", "boolean")))), true
 	case http.MethodPut + " /limit-resume-settings":
 		return sessionsClosureBodyDeclaration(true, sessionsClosureClosedObject(oas.Obj("automatic", oas.Obj("type", "boolean")), "automatic")), true
+	case http.MethodPut + " /personal-folders-settings":
+		return sessionsClosureBodyDeclaration(true, sessionsClosureClosedObject(oas.Obj("enabled", oas.Obj("type", "boolean")), "enabled")), true
 	case http.MethodPost + " /runs":
 		return sessionsClosureBodyDeclaration(true, sessionsCreateRunSchema()), true
 	case http.MethodPost + " /push/subscriptions":
@@ -141,7 +143,9 @@ func sessionsClosureRequestBodyDeclarationFor(method, pattern string) (sessionsC
 		// record, and a body would be a second place to say it. The revoke is
 		// bodyless for the reason its siblings are: the reference IS the request.
 		http.MethodPost + " /providers/{ref}/test",
-		http.MethodPost + " /providers/{ref}/revoke":
+		http.MethodPost + " /providers/{ref}/revoke",
+		// Stopping one background task: the path names the session and the task.
+		http.MethodPost + " /runs/{ref}/tasks/{task}/stop":
 		return sessionsClosureRequestBodyDeclaration{kind: sessionsClosureBodyless}, true
 	// ⛔ /runs/{ref}/interrupt IS NOT IN THIS LIST ANY MORE, and the omission is the
 	// point: it now accepts an OPTIONAL fenced body, declared beside its two sibling
@@ -202,10 +206,15 @@ func sessionsClosureRequestBodyDeclarationFor(method, pattern string) (sessionsC
 		// reference IS the request, and there is nothing else to say (run_pin.go).
 		http.MethodPost + " /runs/{ref}/pin",
 		http.MethodDelete + " /runs/{ref}/pin",
+		http.MethodPost + " /live/by-id/{live_ref}/pin",
+		http.MethodDelete + " /live/by-id/{live_ref}/pin",
 		// So are the caller's done mark and the end of a snooze (run_mark.go).
 		http.MethodDelete + " /runs/{ref}/snooze",
 		http.MethodPost + " /runs/{ref}/done",
 		http.MethodDelete + " /runs/{ref}/done",
+		// And so is the read state (run_mark.go).
+		http.MethodPost + " /runs/{ref}/unread",
+		http.MethodDelete + " /runs/{ref}/unread",
 		// So is the archive toggle (run_name_archive.go).
 		http.MethodPost + " /runs/{ref}/archive",
 		http.MethodDelete + " /runs/{ref}/archive",
@@ -214,14 +223,19 @@ func sessionsClosureRequestBodyDeclarationFor(method, pattern string) (sessionsC
 		http.MethodDelete + " /workspaces/{ref}/files",
 		// The terminal to end is named by its path: the reference IS the request.
 		http.MethodDelete + " /workspaces/{ref}/terminals/{tid}",
+		// Connect names the folder by its path and says nothing else: the credential is the answer.
+		http.MethodPost + " /workspaces/{ref}/sftp",
 		http.MethodPost + " /workspaces/{ref}/files/dir",
 		http.MethodPost + " /workspaces/{ref}/wiki",
 		http.MethodPost + " /channels/{id}/grants/{grant_id}/revoke",
 		http.MethodPost + " /deliveries/{id}/ack":
 		return sessionsClosureRequestBodyDeclaration{kind: sessionsClosureBodyless}, true
 	default:
-		// The message queue's routes (run_queue.go).
-		return sessionsRunQueueBody(method, pattern)
+		// The message queue's routes (run_queue.go), then the turn checkpoints' (run_checkpoints.go).
+		if decl, ok := sessionsRunQueueBody(method, pattern); ok {
+			return decl, true
+		}
+		return sessionsRunCheckpointsBody(method, pattern)
 	}
 }
 
@@ -419,6 +433,7 @@ func sessionsApplyTemplateSchema() map[string]any {
 func sessionsCreateWorkspaceSchema() map[string]any {
 	return sessionsClosureClosedObject(oas.Obj(
 		"name", sessionsClosureOptionalString("Trimmed workspace display name."),
+		"workspace_id", sessionsClosureOptionalString("The department (workspace id) the folder belongs to. Empty or absent registers it for the tenant, which needs the tenant-wide permission; the administrator of a department names that department."),
 		"root_path", oas.Obj("type", "string", "description", "After trimming, must be an absolute, existing directory; the server stores its canonical real path."),
 		"mount_mode", sessionsClosureNullable(oas.Obj("type", "string", "enum", oas.Enum("", "rw", "ro", "write_no_delete"), "description", "Empty/null defaults to rw. write_no_delete is read-write without the right to remove a name: a native session creates and changes files in the folder (existing files can still be overwritten or emptied) and cannot unlink, rmdir, rename or move one out, and the file API refuses delete and move. The kernel enforces it (Linux Landlock), so a session in such a folder does not start on a host that cannot confine. In a folder that is a Git repository, .git stays fully writable so the agent's own git works (it renames a lock file over its index), which also lets the session empty .git and destroy the repository's history; the working files stay protected. A tool that replaces a file by removing or renaming it (sed -i, an atomic-save formatter) is refused and can leave its temporary file. The session's Git panel acts for the person and is not restricted.")),
 		"container_target", sessionsClosureOptionalString("Must be absolute after trimming; empty/null selects the default container target."),
@@ -443,6 +458,7 @@ func sessionsPatchWorkspaceSchema() map[string]any {
 		"read_only_folders", sessionsClosureNullable(sessionsWorkspaceReadOnlyFoldersSchema()),
 		"dlp_mode", sessionsClosureNullable(sessionsWorkspaceDLPModeSchema("Empty selects off, as on registration.")),
 		"default_permission", sessionsClosureNullable(sessionsWorkspaceDefaultPermissionSchema()),
+		"retention_days", sessionsClosureNullable(oas.Obj("type", "integer", "format", "int64", "minimum", 0, "maximum", maxRetentionDays, "description", "Days the folder keeps its files after their last change. Within that period the file API refuses to overwrite, move or delete an entry (423 retention_period); creating a file is allowed. Zero takes the period away. A legal hold on the folder (subject workspace, its workspace_ref) refuses the same edits until it is released (423 legal_hold).")),
 	))
 	schema["minProperties"] = 1
 	schema["description"] = "Name at least one setting with a value. A setting left out or null is not changed."

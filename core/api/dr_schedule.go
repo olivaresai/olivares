@@ -142,6 +142,9 @@ func (s *Server) loadDRSchedule(ctx context.Context) error {
 		if p.RPOHours != 0 {
 			policy.RPOHours = &p.RPOHours
 		}
+		if p.RTOMinutes != 0 {
+			policy.RTOMinutes = &p.RTOMinutes
+		}
 		if err := validateDRProtection(policy); err != nil {
 			return fmt.Errorf("stored DR protection policy: %w", err)
 		}
@@ -220,10 +223,23 @@ func (s *Server) persistDRSchedule(ctx context.Context, sched drSchedule, action
 		settings[drScheduleSettingsKey] = string(raw)
 		_, err = sc.SetOrgSettings(ctx, settings, org.Version)
 		if err == nil && action != "" {
-			_, err = sc.Audit().Append(ctx, model.AuditDraft{Actor: drScheduleActor, ActorKind: "system", Action: action, Meta: map[string]any{"status": sched.LastVerifyStatus, "bundle": sched.LastBundle, "verified_at": sched.LastVerify}})
+			_, err = sc.Audit().Append(ctx, model.AuditDraft{Actor: drScheduleActor, ActorKind: "system", Action: action, Meta: drVerifyAuditMeta(sched)})
 		}
 		return err
 	})
+}
+
+// drVerifyAuditMeta is what the ledger records for a scheduled restore test: the
+// verdict and the restore time against the RTO target, so an auditor reads the
+// test from the ledger without the console.
+func drVerifyAuditMeta(sched drSchedule) map[string]any {
+	meta := map[string]any{"status": sched.LastVerifyStatus, "bundle": sched.LastBundle, "verified_at": sched.LastVerify}
+	if sched.LastVerifyStatus == drJobCompleted {
+		meta["rto_ms"] = sched.LastVerifyRTOMillis
+		meta["rto_target_ms"] = int64(sched.RTOMinutes) * 60_000
+		meta["rto_exceeded"] = sched.rtoExceeded()
+	}
+	return meta
 }
 
 // ScheduledBackupConfigured reloads the persisted state and reports whether an

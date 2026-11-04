@@ -15,8 +15,10 @@
   },
   "webgl": {
     "badge": "Hochdichte-Ansicht",
-    "hint": "Es werden {{n}} Knoten angezeigt — für die Skalierung wurde zum beschleunigten WebGL-Renderer gewechselt.",
-    "clustered": "Ressourcen werden bei dieser Skalierung nach Host gruppiert; eine Gruppe erscheint als „Host (N)“. Kein Befund wird verborgen — jede Gruppe mit unerwartetem Zugriff wird gekennzeichnet."
+    "hint": "Es werden {{n}} Knoten angezeigt — für die Skalierung wurde zum beschleunigten WebGL-Renderer gewechselt."
+  },
+  "lod": {
+    "grouped": "Gruppen: Klicken Sie auf eine, um sie zu öffnen."
   },
   "filters": {
     "search": "Ursprung, Ressource, Werkzeug suchen…",
@@ -167,8 +169,13 @@
     "description": "Ihre Rolle umfasst keine Berechtigung zum Anzeigen des Zugriffsgraphen."
   },
   "mobile": {
-    "title": "Die Karte benötigt einen breiteren Bildschirm",
-    "hint": "Öffnen Sie diese Ansicht auf einem größeren Display, um den interaktiven R/RW-Graphen zu sehen."
+    "title": "Die Karte öffnet sich im Vollbild",
+    "hint": "Mit einem Finger verschieben, mit zwei Fingern zoomen. Die Liste darunter funktioniert ebenfalls.",
+    "open": "Vollbild-Karte öffnen"
+  },
+  "fullscreen": {
+    "enter": "Vollbild",
+    "exit": "Vollbild beenden"
   },
   "attackPaths": {
     "chooseAgent": "Wählen Sie im Graphen einen Agenten, um seine Angriffspfade zu sehen.",
@@ -203,5 +210,17 @@
   },
   "graph": {
     "keyboardHint": "Fokussieren Sie einen Knoten, wechseln Sie mit den Pfeiltasten zu einem verbundenen Knoten und öffnen Sie ihn mit der Eingabetaste. Die Liste unter dem Graphen leistet dasselbe ohne die Zeichenfläche."
+  },
+  "groupKinds": {
+    "session": "Sitzungen",
+    "agent": "Agenten",
+    "identity": "Identitäten"
+  },
+  "group": {
+    "items_one": "{{count}} Element",
+    "items_other": "{{count}} Elemente",
+    "more": "+{{count}} weitere",
+    "close": "{{name}} schließen",
+    "members": "Mitglieder"
   }
 }

@@ -455,7 +455,7 @@ render() {
     legacy_match=""
     if [ "$init" = systemd ] && [ ! -L "$output" ]; then
       # Frozen copies of the units earlier releases rendered, newest first.
-      for legacy in 0.2 26.10; do
+      for legacy in 0.5 0.2 26.10; do
         [ -r "$templates/systemd-$legacy.service" ] || continue
         old_tmp="$(mktemp "${TMPDIR:-/tmp}/olivares-service-legacy.XXXXXX")"
         render_content "$templates/systemd-$legacy.service" "$old_tmp"

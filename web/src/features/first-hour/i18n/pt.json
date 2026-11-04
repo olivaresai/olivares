@@ -1,0 +1,181 @@
+{
+  "tools": {
+    "claude": "Claude Code",
+    "codex": "Codex",
+    "grok": "Grok Build",
+    "opencode": "OpenCode",
+    "gemini-cli": "Gemini CLI",
+    "cursor": "Cursor CLI"
+  },
+  "status": {
+    "installed": "Instalada",
+    "notInstalled": "Não instalada",
+    "signedIn": "Sessão iniciada",
+    "signedInAs": "Sessão iniciada como {{account}}",
+    "notSignedIn": "Sessão não iniciada",
+    "usesKey": "Usa a sua chave de API: {{name}}",
+    "usesLocal": "Usa o servidor de modelos local: {{name}}",
+    "keyRefused": "A chave de API {{name}} foi recusada. Substitua-a em Fornecedores.",
+    "noSignIn": "Esta ferramenta não tem início de sessão oficial para executar aqui. Use o comando de terminal em Outras formas."
+  },
+  "actions": {
+    "install": "Instalar",
+    "installing": "A instalar…",
+    "retry": "Tentar de novo",
+    "cancel": "Cancelar",
+    "signInClaude": "Iniciar sessão com o Claude",
+    "signInChatGPT": "Iniciar sessão com o ChatGPT",
+    "useApiKey": "Usar antes uma chave de API",
+    "signInGrok": "Iniciar sessão com a sua conta xAI",
+    "signInCursor": "Iniciar sessão com a sua conta Cursor",
+    "signInGoogle": "Iniciar sessão com o Google",
+    "signIn": "Iniciar sessão"
+  },
+  "signIn": {
+    "openLink": "Abrir a página de início de sessão",
+    "openKeyPage": "Abrir a página da chave",
+    "codeLabel": "Código da página de início de sessão",
+    "codeHint": "Depois de aprovar o acesso, a página mostra um código. Cole-o aqui.",
+    "keyLabel": "Chave de API",
+    "keyHint": "Crie uma chave na página acima e cole-a aqui. {{name}} guarda-a neste servidor; a Olivares não a conserva.",
+    "continue": "Continuar",
+    "enterCode": "Na página de início de sessão, introduza este código:",
+    "waiting": "A aguardar que conclua na página de início de sessão…",
+    "expires": "O código é válido durante 15 minutos. Cancelar interrompe o início de sessão neste servidor.",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "starting": "A preparar o início de sessão…",
+    "lostTouch": "Perdeu-se o contacto com o servidor. O início de sessão pode ainda estar em curso.",
+    "method": "Método de início de sessão",
+    "methods": {
+      "opencode": "OpenCode Zen e modelos gratuitos (chave de API)",
+      "opencode-go": "OpenCode Go (chave de API)",
+      "chatgpt-headless": "ChatGPT Pro/Plus (headless)"
+    }
+  },
+  "errors": {
+    "status": "Não foi possível ler o estado da ferramenta.",
+    "install": "A instalação não terminou: {{error}}",
+    "signIn": "O início de sessão não foi concluído. Inicie-o de novo.",
+    "start": "A sessão não arrancou: {{error}}",
+    "needsApproval": "Executar comandos sem perguntar precisa da aprovação de uma segunda pessoa nesta implementação. Comece antes só com edições:"
+  },
+  "steps": {
+    "install": {
+      "title": "Instalar uma ferramenta de agente",
+      "body": "A Olivares executa neste servidor o Claude Code ou o Codex oficial. Basta um.",
+      "orUse": "Ou use antes uma chave de API ou um modelo local:",
+      "addKey": "Adicionar uma chave de API",
+      "addLocal": "Adicionar um modelo local"
+    },
+    "signIn": {
+      "title": "Iniciar sessão",
+      "body": "Use a sua subscrição do Claude ou do ChatGPT. A sessão iniciada fica neste servidor, onde a ferramenta a guarda.",
+      "waiting": "Instale primeiro uma ferramenta."
+    },
+    "start": {
+      "title": "Iniciar uma sessão",
+      "body": "Escolha uma ferramenta e, se quiser, diga o que fazer primeiro."
+    },
+    "progress": "{{done}} de 3 concluídos"
+  },
+  "start": {
+    "tool": "Ferramenta",
+    "notReady": "{{tool}} ainda não pode arrancar.",
+    "folder": "Pasta",
+    "folderHint": "Uma pasta neste servidor. Deixe vazio para começar numa pasta nova.",
+    "folderNew": "Uma pasta nova para esta sessão",
+    "folderTyped": "Outra pasta…",
+    "readingFolder": "A ler a pasta da última sessão…",
+    "prompt": "Primeira mensagem (opcional)",
+    "promptPlaceholder": "O que deve fazer primeiro?",
+    "more": "Mais opções",
+    "permission": "O que o agente pode fazer",
+    "start": "Iniciar",
+    "starting": "A iniciar…",
+    "needTool": "Instale primeiro uma ferramenta e inicie sessão nela.",
+    "dialogTitle": "Nova sessão",
+    "dialogDescription": "Escolha uma ferramenta e diga o que fazer.",
+    "advanced": "Opções de arranque avançadas",
+    "secrets": "Segredos como variáveis de ambiente",
+    "secretsHint": "A sessão lê cada segredo do cofre escolhido a partir da variável que indicar. O valor nunca é mostrado, registado nem escrito na pasta.",
+    "secretsNone": "Ainda não há segredos de sessão. Adicione um com um nome que comece por env/.",
+    "secretUse": "Dar {{name}} a esta sessão",
+    "secretVariable": "Variável para {{name}}",
+    "secretsManage": "Gerir segredos de sessão",
+    "credentials": "Credenciais geridas (Business)",
+    "credentialsHint": "A sessão usa cada credencial escolhida através de um auxiliar que o motor executa; o valor selado nunca lhe chega. Requer a Olivares Business.",
+    "credentialsNone": "Ainda não há credenciais geridas. Adicione uma com um nome que comece por credential/.",
+    "credentialUse": "Dar {{name}} a esta sessão",
+    "credentialsManage": "Gerir credenciais geridas",
+    "listUnavailable": "O motor não respondeu à lista de segredos. Por agora não é possível escolher nada.",
+    "openTools": "Abrir ferramentas de IA",
+    "model": "Modelo",
+    "providerDefault": "Predefinição ({{model}})",
+    "nativeDefault": "Predefinição de {{tool}}",
+    "modelChoice": "Modelos que passaram o último teste de ligação desta chave.",
+    "chooseModel": "Escolha um modelo: esta chave não tem modelo predefinido.",
+    "noTestedModel": "Nenhum modelo desta chave passou ainda o teste de ligação: teste a chave em Fornecedores.",
+    "openProviders": "Abrir Fornecedores",
+    "profile": "Perfil",
+    "profileNotSignedIn": "Sessão não iniciada",
+    "profileNeedsKey": "Precisa de uma chave",
+    "foldersUnreadable": "Não foi possível ler as pastas registadas. Escreva o caminho de uma pasta neste servidor.",
+    "folderPermission": "Arranca como {{name}}, a predefinição desta pasta.",
+    "autoAsks": "{{tool}} não tem modo automático: vai perguntar antes de cada ação."
+  },
+  "lists": {
+    "foldersTruncated": "Pastas registadas: {{count}} carregadas; existem mais.",
+    "foldersHint": "Algumas pastas registadas estão fora desta lista."
+  },
+  "permission": {
+    "editsOnly": "Aceitar edições automaticamente",
+    "editsAndCommands": "Editar ficheiros e executar comandos",
+    "readOnly": "Só de leitura",
+    "ask": "Supervisionado",
+    "auto": "Automático",
+    "full": "Total"
+  },
+  "next": {
+    "title": "A seguir, quando precisar",
+    "invite": "Convidar pessoas",
+    "identity": "Ligar um fornecedor de identidade",
+    "policies": "Definir políticas",
+    "mcp": "Adicionar servidores MCP",
+    "budgets": "Definir orçamentos",
+    "cli": "Usar a linha de comandos olivares",
+    "cliHint": "Neste servidor, o comando olivares já está instalado. A partir de outro computador, instale-o com:"
+  },
+  "permissionSummary": {
+    "readOnly": "Lê e planeia. Qualquer alteração é recusada.",
+    "ask": "Pergunta antes de qualquer ação que não seja uma leitura.",
+    "editsOnly": "Lê e edita ficheiros sem perguntar. Tudo o resto pergunta.",
+    "editsAndCommands": "Lê, edita ficheiros e executa comandos sem perguntar. As outras ferramentas são recusadas.",
+    "auto": "É o modo automático revisto da própria ferramenta que decide. Uma ferramenta sem ele pergunta, como em Supervisionado. Requer administração de execuções.",
+    "full": "Nada pergunta. A Olivares continua a confinar a sessão e a registar todas as ações. Requer administração de execuções."
+  },
+  "bring": {
+    "title": "Traga as suas pastas",
+    "body": "Pastas em que as suas ferramentas já trabalharam, lidas dos registos próprios das ferramentas sobre caminhos de projetos e datas. Nada é registado até confirmar.",
+    "error": "Não foi possível procurar as pastas das suas ferramentas.",
+    "unreadable": "Não foi possível ler os registos de {{tool}}. Adicione as pastas manualmente.",
+    "cols": {
+      "folder": "Pasta",
+      "tool": "Ferramenta",
+      "lastUsed": "Última utilização",
+      "conversations": "Conversas"
+    },
+    "pick": "Registar {{folder}}",
+    "confirm": "Registar selecionadas ({{n}})",
+    "skipStep": "Agora não",
+    "skip": {
+      "missing": "A pasta já não existe",
+      "unreadable": "Não é possível ler a pasta",
+      "outside_allowed_roots": "Fora das pastas permitidas: sobrepõe-se a uma protegida",
+      "already_registered": "Já registada"
+    },
+    "failed": "Não foi possível registar.",
+    "toast": "Registadas: {{n}}",
+    "result": "Registadas: {{imported}}. Ignoradas: {{skipped}}."
+  }
+}

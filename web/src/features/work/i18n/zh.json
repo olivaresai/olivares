@@ -13,7 +13,6 @@
   },
   "apply": {
     "planning": "正在规划变更。此步骤不写入任何内容。",
-    "planTitle": "计划",
     "command": "命令",
     "permission": "权限",
     "eventType": "事件",
@@ -29,14 +28,14 @@
     "close": "关闭",
     "appliedTitle": "已应用",
     "replayedTitle": "此前已应用",
-    "replayedBody": "引擎识别出这个幂等键并重放了原始结果。没有进行第二次写入。",
+    "replayedBody": "此更改已应用，未重复执行。",
     "commandId": "命令 ID",
     "resultId": "结果 ID",
     "status": "新状态",
     "etag": "新版本标记",
     "auditSeq": "审计序号",
     "reread": "重新读取并比较",
-    "retrySameKey": "用同一个键重试",
+    "retrySameKey": "重试",
     "failure": {
       "conflict-version": "其他人修改了此工作项",
       "version-required": "缺少版本前置条件",
@@ -272,7 +271,7 @@
   "unavailable": {
     "title": "无法查看",
     "body": "引擎未能完成这次观测，因此报告的是未知结局而不是结果。请勿把本面板上的任何内容当作已确认。",
-    "retryHint": "变更是否已写入尚未确定。请使用同一个幂等键重试：正因如此重试才是安全的，引擎会把它识别为同一个意图，而不是第二个。",
+    "retryHint": "无法确认结果。在此重试可安全确认结果，不会重复执行更改。",
     "code": "引擎代码：{{code}}"
   },
   "verdict": {

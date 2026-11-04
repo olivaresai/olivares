@@ -89,11 +89,11 @@
   },
   "catalog": {
     "title": "Canaux visibles",
-    "description": "Seuls les canaux actifs que ce principal peut lire maintenant, avec ses propres bits locaux actuels. Une page n’est pas une recherche sur tout le catalogue : chargez plus pour continuer depuis la continuation du serveur.",
+    "description": "Seuls les canaux actifs que vous pouvez lire maintenant, avec votre propre accès. Une page n’est pas une recherche sur tout le catalogue : chargez plus pour voir d’autres canaux.",
     "emptyTitle": "Aucun canal visible",
-    "emptyBody": "Ce principal n’a aucun canal qu’il puisse lire dans cet espace de travail, ou aucun n’existe encore. Un droit de lecture et la permission channel:read en font apparaître un ici.",
+    "emptyBody": "Vous ne pouvez lire aucun canal dans cet espace de travail, ou aucun n’existe encore. Un accès en lecture à un canal et la permission channel:read en font apparaître un ici.",
     "truncated": "D’autres canaux existent au-delà de cette page",
-    "truncatedHint": "Le serveur a signalé d’autres canaux visibles. Chargez plus pour continuer depuis sa continuation.",
+    "truncatedHint": "Il y a d’autres canaux visibles. Chargez plus pour les voir.",
     "columns": {
       "name": "Nom",
       "slug": "Slug",
@@ -111,9 +111,9 @@
     "read": "lecture",
     "write": "écriture",
     "admin": "admin",
-    "none": "aucun bit local",
+    "none": "aucun accès",
     "unknown": "non rapporté par cette lecture",
-    "hint": "Les bits locaux sont les droits propres du canal pour ce principal. Une permission cœur est également requise, et le moteur décide chaque acte au moment où il est demandé."
+    "hint": "Votre accès est ce que le canal vous accorde lui-même. Une permission est également requise, et le moteur décide chaque acte au moment où il est demandé."
   },
   "kind": {
     "coordination": "Coordination",
@@ -171,15 +171,15 @@
       "tenant": "Locataire"
     },
     "sendHint": {
-      "canWrite": "Votre bit local d’écriture est à jour sur cette page du catalogue et vous détenez la permission d’envoi. Le moteur décide à nouveau lors de l’envoi.",
-      "noWrite": "Cette page du catalogue ne rapporte aucun bit local d’écriture pour vous. Le moteur refuserait un envoi ; la composition n’est pas proposée.",
-      "unknown": "Cette lecture ne rapporte pas vos bits locaux. Vous détenez la permission d’envoi ; le moteur décide l’autorité locale lors de l’envoi.",
+      "canWrite": "Vous pouvez écrire dans ce canal et vous détenez la permission d’envoi. Le moteur décide à nouveau lors de l’envoi.",
+      "noWrite": "Cette page du catalogue indique que vous ne pouvez pas écrire dans ce canal. Le moteur refuserait un envoi ; la composition n’est pas proposée.",
+      "unknown": "Cette lecture n’indique pas votre accès au canal. Vous détenez la permission d’envoi ; le moteur décide lors de l’envoi.",
       "noPermission": "Vous ne détenez pas la permission d’envoi de messages, la composition n’est donc pas proposée."
     }
   },
   "create": {
     "title": "Créer un canal",
-    "description": "Chaque champ du contrat est disponible. Les droits initiaux sont explicites : ajoutez chaque sujet et cochez chaque bit voulu. Rien n’est ajouté en votre nom.",
+    "description": "Chaque champ du contrat est disponible. Les droits initiaux sont explicites : ajoutez chaque sujet et cochez chaque accès voulu. Rien n’est ajouté en votre nom.",
     "fields": {
       "slug": "Slug",
       "slugHint": "Minuscules, chiffres et tirets ; unique dans l’espace de travail.",
@@ -196,7 +196,7 @@
       "maxFanout": "Fanout maximal",
       "maxAutomationDepth": "Profondeur d’automatisation maximale",
       "grants": "Droits initiaux",
-      "grantsHint": "Au moins un droit avec au moins un bit. Un droit est un sujet et ses trois bits, chacun indépendant. Votre propre compte est un sujet comme un autre."
+      "grantsHint": "Au moins un droit avec au moins un accès. Un droit est un sujet et ses trois accès, chacun indépendant. Votre propre compte est un sujet comme un autre."
     },
     "grant": {
       "subject": "Sujet",
@@ -211,7 +211,7 @@
       "name": "Un nom est requis.",
       "grants": "Au moins un droit initial est requis.",
       "grantRef": "Chaque droit a besoin d’une référence de sujet.",
-      "grantBits": "Chaque droit a besoin d’au moins un bit.",
+      "grantBits": "Chaque droit a besoin d’au moins un accès.",
       "number": "Doit être un nombre entier supérieur ou égal à zéro.",
       "fanout": "Doit être un nombre entier supérieur ou égal à un."
     },
@@ -325,11 +325,12 @@
   },
   "inbox": {
     "title": "Boîte de réception personnelle",
-    "description": "Remises adressées à ce principal dans cet espace de travail, telles que le moteur les autorise maintenant. Lire une page n’accuse rien et n’avance aucun curseur.",
-    "emptyTitle": "Aucune remise",
-    "emptyBody": "Rien d’adressé à ce principal n’est visible dans cet espace de travail pour le moment.",
+    "description": "Remises qui vous sont adressées dans cet espace de travail, telles que le moteur les autorise maintenant. Lire une page n’accuse rien et ne déplace aucun repère de lecture.",
+    "emptyTitle": "Votre boîte est vide",
+    "emptyBody": "Ce que des personnes ou des sessions vous envoient par un canal apparaît ici. Pour en envoyer un, ouvrez Canaux, choisissez un canal puis Envoyer un avis.",
+    "showChannels": "Aller aux canaux",
     "truncated": "D’autres remises existent au-delà de cette page",
-    "truncatedHint": "Le serveur a signalé d’autres remises visibles. Chargez plus pour continuer depuis sa continuation.",
+    "truncatedHint": "Il y a d’autres remises visibles. Chargez plus pour les voir.",
     "columns": {
       "subject": "Objet",
       "sender": "Expéditeur",
@@ -343,7 +344,7 @@
   },
   "delivery": {
     "title": "Remise",
-    "description": "Lue à neuf pour ce principal. Accuser réception est un acte explicite avec la version que vous venez de lire.",
+    "description": "Lue à neuf pour vous. Accuser réception est un acte explicite avec la version que vous venez de lire.",
     "fields": {
       "id": "ID de la remise",
       "messageId": "ID du message",
@@ -439,9 +440,9 @@
     "late": "Tardif"
   },
   "failure": {
-    "forbidden": "Le moteur l’a refusé pour le principal actuel.",
+    "forbidden": "Le moteur l’a refusé pour vous.",
     "step_up": "Votre rôle le permet, mais la session doit d’abord être élevée.",
-    "not_found": "Introuvable, ou non visible pour ce principal.",
+    "not_found": "Introuvable, ou non visible pour vous.",
     "unavailable": "Le moteur n’a pas pu regarder : les preuves actuelles d’autorité, de garde ou de stockage sont indisponibles. Ce n’est ni un résultat vide ni un refus.",
     "version_mismatch": "La version que vous avez lue n’est plus actuelle.",
     "version_required": "Le moteur a exigé une précondition de version que la console n’a pas envoyée.",
@@ -462,7 +463,7 @@
   "authority": {
     "lost": "La permission pour cet acte n’est plus détenue ; rien n’a été envoyé.",
     "confirmationClosed": "Une confirmation en attente a été fermée parce que la permission qui la soutenait a été perdue.",
-    "notAddressable": "Ce principal n’a pas de référence d’annuaire pour ce type et ne peut pas être adressé."
+    "notAddressable": "Ce sujet n’a pas de référence d’annuaire pour ce type et ne peut pas être adressé."
   },
   "states": {
     "loading": "Chargement…",
@@ -470,7 +471,7 @@
   },
   "administration": {
     "title": "Canaux administrables",
-    "description": "Canaux que ce principal peut administrer maintenant : channel:admin core et un bit local admin en vigueur, décidés par le moteur à chaque lecture. Les canaux archivés restent listés et inspectables. Ce n'est pas le catalogue de lecture : un bit local de lecture n'est ni exigé ni supposé.",
+    "description": "Canaux que vous pouvez administrer maintenant : la permission channel:admin et un accès admin sur le canal, décidés par le moteur à chaque lecture. Les canaux archivés restent listés et inspectables. Ce n'est pas le catalogue de lecture : un accès en lecture au canal n'est ni exigé ni supposé.",
     "stateFilter": "État persisté",
     "states": {
       "all": "Tous les états",
@@ -490,9 +491,9 @@
     "openById": "Administrer un canal par ID",
     "openByIdHint": "La fiche est lue via l'historique des droits sous channel:admin ; elle n'utilise jamais la lecture de canal du niveau lecture.",
     "emptyTitle": "Aucun canal administrable",
-    "emptyBody": "Aucun canal de cet espace de travail n’accorde à ce principal un bit admin en vigueur, ou aucun ne correspond à l’état persisté sélectionné. Un droit local admin et la permission channel:admin en font apparaître un ici.",
+    "emptyBody": "Aucun canal de cet espace de travail ne vous donne d’accès admin, ou aucun ne correspond à l’état sélectionné. Un accès admin à un canal et la permission channel:admin en font apparaître un ici.",
     "truncated": "D'autres canaux administrables existent au-delà de cette page",
-    "truncatedHint": "Le serveur a signalé d'autres canaux administrables. Chargez-en plus pour continuer depuis sa continuation."
+    "truncatedHint": "Il y a d'autres canaux administrables. Chargez-en plus pour les voir."
   },
   "channelState": {
     "active": "Actif",
@@ -580,7 +581,7 @@
     },
     "columns": {
       "subject": "Sujet",
-      "bits": "Bits",
+      "bits": "Accès",
       "generation": "Génération",
       "stored": "État stocké",
       "temporal": "À l'observation",
@@ -589,7 +590,7 @@
       "created": "Créé"
     },
     "truncated": "D'autres générations existent au-delà de cette page",
-    "truncatedHint": "Le serveur a signalé d'autres générations. Chargez-en plus pour continuer depuis sa continuation ; un changement du canal entre deux pages redémarre la liste.",
+    "truncatedHint": "Il y a d'autres générations. Chargez-en plus pour les voir ; un changement du canal entre deux pages redémarre la liste.",
     "emptyTitle": "Aucune génération",
     "emptyBody": "Aucune génération de droit stockée ne correspond à l'état et au sujet sélectionnés. Un nouveau droit en ajoute une.",
     "temporalHint": "« État stocké » est ce que le moteur a persisté ; « à l'observation » indique si la ligne était en vigueur à l'instant observé. Une expiration passée est signalée, pas matérialisée : elle ne révoque pas la ligne, et un successeur pour ce sujet exige d'abord une révocation explicite.",
@@ -605,7 +606,7 @@
     },
     "form": {
       "title": "Nouvelle génération de droit",
-      "hint": "Un sujet, trois bits indépendants, une expiration facultative. Une ligne de l'annuaire est un candidat, pas un sujet éligible : le moteur décide lors de l'acte, et une génération enregistrée ne promet pas un accès effectif."
+      "hint": "Un sujet, trois accès indépendants, une expiration facultative. Une ligne de l'annuaire est un candidat, pas un sujet éligible : le moteur décide lors de l'acte, et une génération enregistrée ne promet pas un accès effectif."
     },
     "validation": {
       "expiry": "L'expiration n'a pas pu être lue comme une date.",
@@ -647,17 +648,17 @@
   },
   "cursor": {
     "title": "Marquer vu jusqu'ici",
-    "description": "Avance votre curseur personnel de lecture jusqu'à la dernière remise d'une page de la boîte. N'accuse rien et ne modifie aucune remise.",
+    "description": "Déplace votre repère de lecture personnel jusqu'à la dernière remise d'une page de la boîte. N'accuse rien et ne modifie aucune remise.",
     "section": {
-      "title": "Curseur de lecture",
+      "title": "Repère de lecture",
       "hint": "Chaque page chargée peut être marquée vue jusqu'à sa dernière remise. La cible est celle de la page, frappée par le moteur pour cette remise exacte ; le filtre local de la table doit être vide pour que la portée soit sans ambiguïté.",
       "page": "Page {{page}} · {{count}} remises",
       "upTo": "jusqu'à"
     },
     "reasons": {
       "noPermission": "Exige la permission delivery:write.",
-      "noRecipient": "Cette session n'est pas une identité utilisateur ; le curseur personnel appartient à une boîte utilisateur.",
-      "filtered": "Videz d'abord le filtre de la table : la cible du curseur est la page du serveur, pas les lignes filtrées.",
+      "noRecipient": "Cette session n'est pas une identité utilisateur ; le repère de lecture personnel appartient à une boîte utilisateur.",
+      "filtered": "Videz d'abord le filtre de la table : le repère cible la page du serveur, pas les lignes filtrées.",
       "emptyPage": "Cette page n'a aucune remise à marquer.",
       "otherRecipient": "La dernière remise de cette page n'est pas adressée à votre identité utilisateur."
     },
@@ -669,36 +670,36 @@
       "lastSubject": "Dernier objet",
       "lastDelivery": "Dernière remise",
       "lastSeq": "Séquence de remise",
-      "cursorVersion": "Version du curseur",
-      "cursorId": "ID du curseur",
+      "cursorVersion": "Version du repère",
+      "cursorId": "ID du repère",
       "replayed": "Rejoué",
       "lastSeenSeq": "Dernière séquence vue",
       "barrierDelivery": "Remise barrière",
       "barrierReason": "Motif de la barrière",
       "barrierSince": "Barrière depuis"
     },
-    "preparing": "Préparation : demande au moteur de la cible de curseur de cette page…",
-    "prepareFailedTitle": "La cible du curseur n'a pas pu être préparée",
+    "preparing": "Préparation : demande au moteur de la cible de cette page…",
+    "prepareFailedTitle": "La cible n'a pas pu être préparée",
     "prepareFailedBody": "Rien n'a été avancé. Actualisez la boîte et préparez à nouveau depuis une page actuelle.",
     "confirm": {
       "title": "Confirmer l'avancement",
-      "body": "Ceci envoie la cible préparée et la remise ci-dessus avec la version de curseur lue, et une clé propre. Seule la confirmation avance quelque chose. Une nouvelle tentative après un résultat ambigu renvoie exactement ceci."
+      "body": "Ceci envoie la cible préparée et la remise ci-dessus avec la version du repère lue, et une clé propre. Seule la confirmation déplace quelque chose. Une nouvelle tentative après un résultat ambigu renvoie exactement ceci."
     },
-    "conflictTitle": "Le curseur a changé depuis sa préparation",
-    "conflictBody": "Le moteur a refusé l'avancement : la version du curseur ou la cible ne sont plus actuelles. Rien n'a été renvoyé. Actualisez la boîte et préparez à nouveau depuis une page actuelle.",
+    "conflictTitle": "Le repère a changé depuis sa préparation",
+    "conflictBody": "Le moteur a refusé le déplacement : la version du repère ou la cible ne sont plus actuelles. Rien n'a été renvoyé. Actualisez la boîte et préparez à nouveau depuis une page actuelle.",
     "ambiguousTitle": "Résultat inconnu",
     "ambiguousBody": "La connexion a échoué avant l’arrivée d’une réponse. Réessayer renvoie la même cible, la même version et la même clé ; le moteur l’applique une fois, le rejoue ou le refuse avec sa version actuelle. Le laisser indéterminé garde le résultat précédent inconnu.",
     "refusedTitle": "Avancement refusé",
-    "refusedBody": "Le moteur n'a pas avancé le curseur. Actualisez la boîte avant de préparer à nouveau.",
+    "refusedBody": "Le moteur n'a pas déplacé le repère. Actualisez la boîte avant de préparer à nouveau.",
     "result": {
-      "appliedTitle": "Curseur avancé",
-      "appliedBody": "Le moteur a validé l'avancement et renvoyé la position ci-dessous. La boîte est relue depuis le curseur durable.",
+      "appliedTitle": "Repère déplacé",
+      "appliedBody": "Le moteur a validé le déplacement et renvoyé la position ci-dessous. La boîte est relue depuis le repère enregistré.",
       "replayedTitle": "Déjà avancé",
       "replayedBody": "Le moteur a rejoué le résultat d'une commande identique antérieure. Rien n'a été appliqué deux fois.",
       "barrierTitle": "Avancement limité par une barrière",
-      "barrierBody": "Le moteur s'est arrêté à la remise ci-dessous pour le motif qu'il nomme ; le curseur n'a pas atteint la cible. Ce n'est pas un avancement complet.",
+      "barrierBody": "Le moteur s'est arrêté à la remise ci-dessous pour le motif qu'il nomme ; le repère n'a pas atteint la cible. Ce n'est pas un déplacement complet.",
       "barrierHint": "Ouvrez la remise barrière avec une lecture à neuf. La résoudre n'avance rien par elle-même : actualisez la boîte, préparez une nouvelle cible et confirmez à nouveau.",
-      "notAck": "Un curseur de lecture n'est pas un accusé et ne modifie ni l'état ni la marque de première lecture d'aucune remise."
+      "notAck": "Un repère de lecture n'est pas un accusé et ne modifie ni l'état ni la marque de première lecture d'aucune remise."
     }
   },
   "capability": {
@@ -833,7 +834,7 @@
     },
     "inbox": {
       "title": "Transferts qui vous sont adressés",
-      "description": "Une page à la fois, sur la continuation du serveur. Cette collection ne porte pas de contenu : le résumé, l'action suivante et le risque d'une offre ne se lisent qu'en l'ouvrant.",
+      "description": "Une page à la fois ; chargez plus pour voir d'autres transferts. Cette collection ne porte pas de contenu : le résumé, l'action suivante et le risque d'une offre ne se lisent qu'en l'ouvrant.",
       "filter": "État",
       "truncated": "D'autres offres existent au-delà de cette page",
       "truncatedHint": "Le moteur signale qu'il a autorisé une offre de plus dans la même transaction. Ce n'est pas un total, ni un décompte de lignes cachées.",

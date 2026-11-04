@@ -44,6 +44,11 @@ pkg_init() {
     OLIVARES_PKG_INIT=systemd
     return 0
   fi
+  # Only Anaconda's /run/install witnesses an installroot; /run/initramfs can persist after boot.
+  if [ -d /run/install ]; then
+    OLIVARES_PKG_INIT=systemd
+    return 0
+  fi
   echo "error: olivares package: refused: package-init-unknown — cannot determine package init from installed units" >&2
   receipt unknown unknown refused:package-init-unknown
   return 1
@@ -388,7 +393,12 @@ fi
 
 # deb/rpm and apk upgrades share this migration. APK normally uses OpenRC, but
 # preserve or replace a previous native systemd drop-in if one is present.
-/bin/sh /usr/share/olivares/migrate-agentops-dropin.sh /etc/systemd/system/olivares.service.d/agentops.conf
+if [ -x /usr/share/olivares/migrate-agentops-dropin.sh ]; then
+  /bin/sh /usr/share/olivares/migrate-agentops-dropin.sh /etc/systemd/system/olivares.service.d/agentops.conf
+elif [ ! -d /run/install ]; then
+  echo "error: olivares package: migration helper is missing: /usr/share/olivares/migrate-agentops-dropin.sh" >&2
+  exit 1
+fi
 
 # Package-owned paths are listed but not marked managed: dpkg/rpm/apk removes
 # them. The same v2 manifest still drives plan/preserve/purge and bounds an
@@ -517,6 +527,12 @@ unit_enabled=
 unit_active=
 if [ "$OLIVARES_PKG_INIT" = systemd ] && command -v systemctl >/dev/null 2>&1; then
   systemctl daemon-reload >/dev/null 2>&1 || true
+  # A user manager for the service account lets the engine give each session its own
+  # systemd scope, with the memory and task ceilings. Best effort: without it sessions
+  # start without the ceilings and the session says why. Only for the account this
+  # package created: uninstall releases that manager again, and an account that was
+  # here before is not ours to change.
+  if [ "$user_created" = true ] && command -v loginctl >/dev/null 2>&1; then loginctl enable-linger olivares >/dev/null 2>&1 || true; fi
   unit_enabled=$(systemctl is-enabled olivares 2>/dev/null || true)
   unit_active=$(systemctl is-active olivares 2>/dev/null || true)
   case "$unit_enabled" in ''|*[!a-z-]*) unit_enabled=unknown ;; esac

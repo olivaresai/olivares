@@ -139,18 +139,38 @@ func WithSource(name string, src contentsource.Source) Option {
 	}
 }
 
-// AddSource registers a content source AFTER construction. The composition root
-// uses it to wire a document source whose secret-bearing config (a credential_ref)
-// can only be resolved and opened once the engine's secret store exists —
-// which is after this module is built but BEFORE it starts. It must be called
-// before Start (no ingest is in flight), so it needs no lock; a source that fails
-// to resolve/open is simply never added (the same "only openable sources are
+// AddSource registers an opened content source under name, at boot or while the
+// engine runs (the live source roster adds and rotates document sources without a
+// restart). It returns the source it replaced, or nil; the caller closes it. A
+// source that fails to resolve/open is never added (the "only openable sources are
 // wired" contract WithSource had at boot).
-func (m *Module) AddSource(name string, src contentsource.Source) {
+func (m *Module) AddSource(name string, src contentsource.Source) contentsource.Source {
+	m.sourcesMu.Lock()
+	defer m.sourcesMu.Unlock()
 	if m.sources == nil {
 		m.sources = map[string]contentsource.Source{}
 	}
+	prev := m.sources[name]
 	m.sources[name] = src
+	return prev
+}
+
+// RemoveSource unregisters the source wired under name and returns it, or nil
+// when none was. The caller closes it. An ingest already holding it finishes.
+func (m *Module) RemoveSource(name string) contentsource.Source {
+	m.sourcesMu.Lock()
+	defer m.sourcesMu.Unlock()
+	prev := m.sources[name]
+	delete(m.sources, name)
+	return prev
+}
+
+// source returns the content source wired under name.
+func (m *Module) source(name string) (contentsource.Source, bool) {
+	m.sourcesMu.RLock()
+	defer m.sourcesMu.RUnlock()
+	src, ok := m.sources[name]
+	return src, ok
 }
 
 // Module is module VIII — data, knowledge & context: the GOVERNED DATA PLANE for
@@ -170,6 +190,7 @@ type Module struct {
 	redactor       Redactor
 	holdGate       HoldGate
 	contentScanner RetrievalContentScanner
+	sourcesMu      sync.RWMutex
 	sources        map[string]contentsource.Source
 	sourceOpener   SourceOpener
 

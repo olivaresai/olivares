@@ -42,6 +42,7 @@ fixed=(
 	"$WITNESS" docs/UPGRADE-AND-ROLLBACK.md
 	scripts/check-docs-honesty.sh modules/governance/risktier.go
 	README.md README.de.md README.es.md README.fr.md README.ja.md README.ru.md README.zh.md
+	README.uk.md README.ko.md README.pt.md
 	INSTALL.md SECURITY.md SUPPORT.md CHANGELOG.md
 	docs-site/astro.config.mjs
 )

@@ -164,6 +164,18 @@ type WorkLaunchRequest struct {
 	// workspace-less launches; Isolation is empty, native, container or sandbox.
 	WorkspaceRef string
 	Isolation    string
+	// Schedule is set for a run a cron period started. No person launches it: the
+	// session runs as the work item's owner agent once the launch gate has verified
+	// the period's approval.
+	Schedule *WorkLaunchSchedule
+}
+
+// WorkLaunchSchedule names a cron period: its schedule, the approval a second
+// administrator granted for it and the plan hash that approval binds.
+type WorkLaunchSchedule struct {
+	ScheduleRef string
+	ApprovalRef string
+	PlanHash    string
 }
 
 type ManagedWorkRun struct {

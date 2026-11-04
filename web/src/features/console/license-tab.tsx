@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { PanelSlot } from '@/components/ui/trust-chrome'
 import { QueryErrorState } from '@/components/layout/query-error-state'
+import { SystemAdminOnly } from '@/components/layout/system-admin-only'
 import { EditionBadge } from './edition-badge'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -133,14 +135,14 @@ function LicenseFacts({
     >
       <dl className="divide-y divide-border">
         <Row label={t('console:license.edition')}>
-          <Badge variant={editionVariant}>
+          <Badge variant={editionVariant} data-trust-chrome="">
             {t(`console:license.editions.${license.edition}`, {
               defaultValue: license.edition,
             })}
           </Badge>
         </Row>
         <Row label={t('console:license.status')}>
-          <Badge variant={statusTone}>
+          <Badge variant={statusTone} data-trust-chrome="">
             {showCheck ? (
               <BadgeCheck className="size-3 shrink-0" aria-hidden />
             ) : null}
@@ -253,13 +255,13 @@ export function LicenseTab() {
   })
 
   if (!isSuperadmin) {
+    // The License page has no tab or title around it, so the notice is under its own heading.
     return (
-      <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-body text-muted-foreground">
-        <ShieldAlert
-          className="mt-0.5 size-4 shrink-0 text-warning"
-          aria-hidden
-        />
-        {t('console:license.superadminOnly')}
+      <div className="flex flex-col gap-2">
+        <h2 className="text-heading text-foreground">
+          {t('console:license.title')}
+        </h2>
+        <SystemAdminOnly />
       </div>
     )
   }
@@ -439,7 +441,9 @@ export function LicenseTab() {
         </DialogContent>
       </Dialog>
       {extensionCards.map((p) => (
-        <p.Component key={p.id} />
+        <PanelSlot key={p.id}>
+          <p.Component />
+        </PanelSlot>
       ))}
     </div>
   )

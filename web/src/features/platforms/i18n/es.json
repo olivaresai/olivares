@@ -13,7 +13,7 @@
   },
   "surfaces": {
     "title": "Superficies de despliegue",
-    "description": "Las seis superficies de Claude modeladas (ANT2-01/17). Cada una difiere en URL base, autenticación, forma del model-id, facturación, residencia y postura de cumplimiento — no son intercambiables.",
+    "description": "Las seis superficies de Claude modeladas. Cada una difiere en URL base, autenticación, forma del model-id, facturación, residencia y postura de cumplimiento — no son intercambiables.",
     "matrixTitle": "Matriz de atributos por superficie",
     "matrixSummary": "Seis superficies de despliegue comparadas por operador, endpoint, autenticación, forma del model-id, soporte de API, facturación, HIPAA, ZDR y residencia.",
     "unmodeled": "Superficie no modelada — sin matriz de atributos.",
@@ -60,7 +60,7 @@
   },
   "lifecycle": {
     "title": "Ciclo de vida de modelo por plataforma",
-    "description": "La retirada de modelos es por plataforma, no global (ANT2-03). Las superficies operadas por Anthropic retiran un modelo en una fecha distinta a Bedrock y Vertex — un único estado \"retirado\" daría una fecha de migración falsa en la mitad del parque.",
+    "description": "La retirada de modelos es por plataforma, no global. Las superficies operadas por Anthropic retiran un modelo en una fecha distinta a Bedrock y Vertex — un único estado \"retirado\" daría una fecha de migración falsa en la mitad del parque.",
     "datePending": "fecha no publicada / por confirmar",
     "noSuccessor": "Sin sucesor declarado",
     "noSuccessorHint": "La autoridad no nombró ningún modelo de reemplazo para esta familia. No se infiere ninguno.",
@@ -75,7 +75,7 @@
     "paramDeprecation": {
       "title": "Pre-aviso de deprecación de parámetros",
       "badge": "Informativo",
-      "body": "{{affected}} rechazan un {{params}} no por defecto con un HTTP {{status}}. Es una deprecación de Anthropic (ANT2-03), no un fallo del producto ni un error subsanable — el plano de inferencia retiene estos parámetros como pre-aviso.",
+      "body": "{{affected}} rechazan un {{params}} no por defecto con un HTTP {{status}}. Es una deprecación de Anthropic, no un fallo del producto ni un error subsanable — Olivares retiene estos parámetros como pre-aviso.",
       "paramsJoin": ", "
     },
     "notes": {
@@ -90,11 +90,11 @@
   "empty": {
     "lifecycle": {
       "title": "No se han declarado calendarios de retirada de modelos",
-      "description": "La referencia del ciclo de vida de Claude compilada en el motor debe proporcionar estos plazos; ni la actividad del tenant ni las entradas de la consola los rellenan."
+      "description": "La referencia del ciclo de vida de Claude compilada en el motor debe proporcionar estos plazos; ni tu actividad ni las entradas de la consola los rellenan."
     },
     "surface": {
       "title": "No se han declarado superficies de despliegue",
-      "description": "La referencia de superficies de Claude compilada en el motor debe proporcionar estas filas; ni la actividad del tenant ni las entradas de la consola las rellenan."
+      "description": "La referencia de superficies de Claude compilada en el motor debe proporcionar estas filas; ni tu actividad ni las entradas de la consola las rellenan."
     }
   },
   "effectiveState": {

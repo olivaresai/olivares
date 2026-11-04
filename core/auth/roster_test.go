@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/auth/authtest"
 	"github.com/olivaresai/olivares/core/model"
 )
 
@@ -38,12 +39,7 @@ func TestTenantRosterEnrichesAndIsolates(t *testing.T) {
 	}
 
 	// A directory group in acme with ed as its only member.
-	if _, err := a.SCIMCreateGroup(ctx, super, acme, auth.SCIMGroupInput{
-		DisplayName: "Engineering",
-		Members:     []model.ID{ed.ID},
-	}); err != nil {
-		t.Fatalf("create group: %v", err)
-	}
+	authtest.Group(t, st, acme, "Engineering", "", ed.ID)
 
 	roster, err := a.TenantRoster(ctx, acme)
 	if err != nil {

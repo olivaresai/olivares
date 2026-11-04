@@ -103,6 +103,33 @@
     "acts": "{{skill}} ahora actúa al cargarse: {{items}}. Asignarla requiere tu aprobación.",
     "pinsKeep": "Las asignaciones existentes conservan su revisión hasta que muevas cada una con «Usar la última».",
     "apply": "Aplicar esta actualización",
-    "applied": "Actualización publicada como revisión {{n}}"
+    "applied": "Actualización publicada como revisión {{n}}",
+    "checked": "Comprobado",
+    "noDiff": "No hay diferencias de texto disponibles."
+  },
+  "catalog": {
+    "skills": "Habilidades",
+    "packs": "Paquetes",
+    "name": "Nombre",
+    "description": "Descripción",
+    "kind": "Tipo",
+    "search": "Buscar nombres y descripciones",
+    "unassigned": "Sin asignar",
+    "loading": "Cargando…",
+    "incomplete": "Faltan revisiones; las asignaciones pueden estar incompletas.",
+    "skill": "Habilidad",
+    "agent": "Agente",
+    "command": "Comando",
+    "rule": "Regla"
+  },
+  "selection": {
+    "loading": "Consultando habilidades…",
+    "count_one": "Esta sesión recibe {{count}} habilidad",
+    "count_other": "Esta sesión recibe {{count}} habilidades",
+    "count_many": "Esta sesión recibe {{count}} de habilidades",
+    "current_one": "Asignadas actualmente: {{count}} habilidad",
+    "current_other": "Asignadas actualmente: {{count}} habilidades",
+    "current_many": "Asignadas actualmente: {{count}} de habilidades",
+    "unavailable": "No se pudieron resolver las habilidades de este departamento."
   }
 }

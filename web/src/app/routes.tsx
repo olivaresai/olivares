@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { useQueryClient } from '@tanstack/react-query'
 import {
   createRootRoute,
   createRoute,
@@ -16,10 +17,11 @@ import { Spinner } from '@/components/ui/spinner'
 import { FEATURE_VIEWS, ROUTE_ALIASES, TAB_ALIASES } from '@/features/registry'
 import { ANONYMOUS_VIEWS } from '@/features/anonymous-registry'
 import { MOVED_SECTIONS } from '@/features/settings/sections'
+import { rememberComponentStack } from '@/lib/errors/report-boundary-error'
 import { AcceptPairingPage } from './pages/accept-pairing'
 import { AcceptInvitePage } from './pages/accept-invite'
 import { LoginPage } from './pages/login'
-import { NotFoundPage } from './pages/not-found'
+import { NotFoundInShell, NotFoundPage } from './pages/not-found'
 import { RouteErrorPage } from './pages/route-error'
 import { SetupPage } from './pages/setup'
 
@@ -62,6 +64,20 @@ function ShellError({ error }: ErrorComponentProps) {
   return <RouteErrorPage error={error} />
 }
 
+/** A view that throws renders this in the shell's content area: the sidebar
+ * and top bar stay, and Retry re-mounts the view instead of reloading. Retry
+ * drops every inactive query (the crashed view's among them, plus any other
+ * view's not on screen, which refetch on their next visit), so the re-mount
+ * fetches fresh data instead of rendering the cached reply that crashed it. */
+function ViewError({ error, reset }: ErrorComponentProps) {
+  const queryClient = useQueryClient()
+  const retry = () => {
+    queryClient.removeQueries({ type: 'inactive' })
+    reset()
+  }
+  return <RouteErrorPage error={error} reset={retry} embedded />
+}
+
 /** The root of every route, public or shell: it names the page in the document title. */
 function RootLayout() {
   useDocumentTitle()
@@ -72,6 +88,7 @@ export const rootRoute = createRootRoute({
   component: RootLayout,
   notFoundComponent: NotFoundPage,
   errorComponent: RouteErrorPage,
+  onCatch: rememberComponentStack,
 })
 
 const loginRoute = createRoute({
@@ -124,6 +141,7 @@ const appRoute = createRoute({
   component: AppLayout,
   pendingComponent: ViewLoading,
   errorComponent: ShellError,
+  onCatch: rememberComponentStack,
 })
 
 const settingsRoute = createRoute({
@@ -144,6 +162,8 @@ const settingsRoute = createRoute({
       <SettingsPage />
     </Suspense>
   ),
+  errorComponent: ViewError,
+  onCatch: rememberComponentStack,
 })
 
 /**
@@ -169,6 +189,15 @@ function landing(
   })
 }
 
+// An address no page answers (a typo, a Business page in Community) lands in the shell's
+// content area, so the navigation stays; signed out, the guard sends the visitor to sign in
+// first. The root notFoundComponent stays the full page for what reaches it without a shell.
+const unknownRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '$',
+  component: NotFoundInShell,
+})
+
 const featureRoutes = FEATURE_VIEWS.map((view) =>
   createRoute({
     getParentRoute: () => appRoute,
@@ -188,6 +217,8 @@ const featureRoutes = FEATURE_VIEWS.map((view) =>
     component: () => (
       <RequirePermission view={view}>{view.element()}</RequirePermission>
     ),
+    errorComponent: ViewError,
+    onCatch: rememberComponentStack,
   }),
 )
 
@@ -233,5 +264,10 @@ export const routeTree = rootRoute.addChildren([
   acceptPairingRoute,
   statusPageRoute,
   ...anonymousFeatureRoutes,
-  appRoute.addChildren([settingsRoute, ...featureRoutes, ...aliasRoutes]),
+  appRoute.addChildren([
+    settingsRoute,
+    ...featureRoutes,
+    ...aliasRoutes,
+    unknownRoute,
+  ]),
 ])

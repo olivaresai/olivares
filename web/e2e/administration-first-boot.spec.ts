@@ -17,7 +17,7 @@ test('the people list renders within five seconds on a fresh installation', asyn
   await page.locator('#setup-email').fill(email)
   await page.locator('#setup-password').fill(password)
   await page.getByRole('button', { name: /create administrator/i }).click()
-  await page.waitForURL('**/onboarding')
+  await page.waitForURL('**/sessions')
   await expect(
     page
       .getByRole('navigation', { name: 'Main navigation', exact: true })
@@ -32,8 +32,9 @@ test('the people list renders within five seconds on a fresh installation', asyn
   await expect(
     row.getByRole('link', { name: 'Setup wizard', exact: true }),
   ).toBeVisible()
-  await page
-    .locator('[data-slot="sidebar"]')
+  const sidebar = page.locator('[data-slot="sidebar"]')
+  await sidebar.getByRole('button', { name: 'More', exact: true }).click()
+  await sidebar
     .getByRole('link', { name: 'People & groups', exact: true })
     .click()
   await expect(
@@ -43,7 +44,7 @@ test('the people list renders within five seconds on a fresh installation', asyn
   const started = performance.now()
   await page.goto('/identity?tab=people')
   await expect(
-    page.getByRole('heading', { name: 'Identity & access', exact: true }),
+    page.getByRole('heading', { name: 'People & groups', exact: true }),
   ).toBeVisible({ timeout: 5_000 })
   await expect(page.getByRole('tabpanel')).toContainText(email, {
     timeout: 5_000,

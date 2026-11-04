@@ -106,7 +106,19 @@
     "scope": "in {{name}}",
     "footerMove": "sposta",
     "footerOpen": "apri",
-    "footerCommands": "solo comandi"
+    "footerCommands": "solo comandi",
+    "objectActions": "Per {{name}}",
+    "footerPeople": "persone",
+    "footerSessions": "sessioni",
+    "peopleHint": "Digita un nome."
+  },
+  "hintBar": {
+    "move": "sposta",
+    "open": "apri",
+    "approve": "approva",
+    "deny": "rifiuta",
+    "launcher": "launcher",
+    "command": "comandi"
   },
   "permissionWords": {
     "read": "accesso in lettura",
@@ -327,11 +339,16 @@
         "last": "Ultima sessione",
         "open": "Apri la sessione",
         "pin": "Fissa o sblocca",
+        "undo": "Annulla l’ultima archiviazione, posticipo, completamento o sblocco",
         "menu": "Apri il menu azioni della sessione"
       },
       "session": {
         "new": "Nuova sessione",
         "previous": "Torna alla sessione precedente"
+      },
+      "list": {
+        "next": "Vai alla riga successiva",
+        "previous": "Vai alla riga precedente"
       },
       "sourceDiff": {
         "nextFile": "File successivo",
@@ -342,15 +359,20 @@
       "approvals": {
         "approve": "Approva una volta la richiesta aperta",
         "deny": "Rifiuta la richiesta aperta"
+      },
+      "accessMap": {
+        "fullScreen": "Entra o esci dalla mappa a schermo intero"
       }
     },
     "when": {
       "railFocused": "nella barra delle sessioni",
+      "outsideList": "fuori da un elenco",
       "launcherFocused": "nel campo del launcher",
       "workSurface": "nella schermata delle sessioni",
       "sessionHistory": "quando è disponibile una sessione precedente",
       "paletteRecent": "nei risultati della palette con ricerca vuota",
-      "approvalQueue": "nella coda delle approvazioni"
+      "approvalQueue": "nella coda delle approvazioni",
+      "accessMap": "sulla mappa degli accessi"
     },
     "precedence": "Quando due righe condividono gli stessi tasti, vale l'ultima che si applica.",
     "problems_one": "{{count}} scorciatoia non è leggibile e non si attiva: {{commands}}",
@@ -406,7 +428,6 @@
     },
     "quoteReply": "Cita la risposta",
     "copy": {
-      "markdown": "Copia il blocco Markdown",
       "message": "Copia messaggio",
       "code": "Copia codice",
       "copied": "Copiato",

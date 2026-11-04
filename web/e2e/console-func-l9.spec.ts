@@ -238,9 +238,7 @@ test('knowledge governs KB, prompt, memory, context, DLP and data-product lifecy
   const initialKbs = observe(page, 'GET', '/v1/m/knowledge/kbs', 200)
   await page.goto('/knowledge')
   await initialKbs
-  await expect(
-    page.getByRole('heading', { name: 'Data, knowledge & context' }),
-  ).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Sources' })).toBeVisible()
 
   const refreshed = observe(page, 'GET', '/v1/m/knowledge/kbs', 200)
   await page.getByRole('button', { name: 'Refresh', exact: true }).click()
@@ -468,9 +466,9 @@ test('knowledge governs KB, prompt, memory, context, DLP and data-product lifecy
   await exportRead
 
   await page.getByRole('tab', { name: 'Context' }).click()
-  await page.getByRole('button', { name: 'Upsert policy' }).click()
+  await page.getByRole('button', { name: 'Add policy' }).click()
   let contextEditor = page.getByRole('dialog', {
-    name: 'Upsert context policy',
+    name: 'Context policy',
   })
   await contextEditor.locator('#ctx-scope-ref').fill(contextRef)
   await contextEditor.locator('#ctx-max-tokens').fill('4096')
@@ -489,7 +487,7 @@ test('knowledge governs KB, prompt, memory, context, DLP and data-product lifecy
 
   await (await rowFor(page, contextRef)).click()
   contextEditor = page.getByRole('dialog', {
-    name: 'Upsert context policy',
+    name: 'Context policy',
   })
   await contextEditor.locator('#ctx-max-tokens').fill('2048')
   await choose(page, contextEditor.locator('#ctx-strategy'), 'Truncate')

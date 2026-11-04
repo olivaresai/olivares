@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 type sseEvt struct {
@@ -147,6 +148,42 @@ func attachHTTPHarness(t *testing.T, opts ...Option) (*harness, *fakeRunner, str
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 	return h, fr, admin, tenant
+}
+
+// An SSE reconnect and every ?before= page are attaches by the same person to the
+// same session: the ledger records the read once per window, like the activity read.
+func TestAttachHTTP_RepeatedAttachIsRecordedOncePerWindow(t *testing.T) {
+	h, _, admin, tenant := attachHTTPHarness(t)
+	ref := launchHTTPRun(t, h, admin, tenant, map[string]any{
+		"transport": "stream-json", "name": "attach-audit",
+	})
+	if r := h.doJSON("POST", "/v1/m/sessions/runs/"+ref+"/stop", admin, nil, tenantHdr(tenant)); r.code != http.StatusOK {
+		t.Fatalf("stop = %d %s", r.code, r.raw)
+	}
+	attachRows := func() int {
+		n := 0
+		ctx := context.Background()
+		if err := h.m.Data.View(ctx, tenant, func(sc store.Scope) error {
+			return sc.Audit().Walk(ctx, 0, func(ev model.AuditEvent) error {
+				if ev.Action == "sessions.run.attach" {
+					n++
+				}
+				return nil
+			})
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	before := attachRows()
+	for _, q := range []string{"?from=0", "?from=0", "?before=1"} {
+		if r := h.do("GET", "/v1/m/sessions/runs/"+ref+"/attach"+q, admin, tenantHdr(tenant)); r.code != http.StatusOK {
+			t.Fatalf("attach%s = %d %s", q, r.code, r.raw)
+		}
+	}
+	if got := attachRows() - before; got != 1 {
+		t.Fatalf("3 attaches by one person recorded %d audit rows, want 1", got)
+	}
 }
 
 func TestAttachHTTP_NotLiveNoticeIsTypedAndNotEnd(t *testing.T) {

@@ -41,10 +41,11 @@ type UpstreamForwarder struct {
 
 var _ mcpc.SubscriptionUpstream = (*UpstreamForwarder)(nil)
 
-// mcpForwardMaxResponse caps an upstream response body. The forwarder reads ONE
-// byte past it so an over-limit body is DETECTED (a truncated body can never be
-// validated, so it can never confirm an outcome).
-const mcpForwardMaxResponse = 8 << 20
+// mcpForwardMaxResponse caps an upstream response body: the bound every MCP client of
+// the engine reads to (mcpc.MaxHTTPBody). The forwarder reads ONE byte past it so an
+// over-limit body is DETECTED (a truncated body can never be validated, so it can
+// never confirm an outcome).
+const mcpForwardMaxResponse = mcpc.MaxHTTPBody
 
 // Forward classifies every leg per the dispatch contract (mcpc.Upstream):
 // errors BEFORE http.Client.Do are proven not_sent; after invoking Do, the ONLY

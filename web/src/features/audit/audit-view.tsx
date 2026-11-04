@@ -43,7 +43,7 @@ import { useUrlState } from '@/lib/hooks/use-url-state'
 import { useNewRowIds } from '@/lib/use-new-row-ids'
 import { AuditEntryDetail } from './audit-detail'
 import { EvidenceControls } from './evidence'
-import { DAY, SESSION_KIND, useEntryNames } from './ledger'
+import { DAY, sessionOf, useEntryNames } from './ledger'
 import { LedgerEntries } from './ledger-entries'
 import { LedgerHistogram } from './ledger-histogram'
 import { LedgerQuery } from './ledger-query'
@@ -255,11 +255,7 @@ export function AuditView() {
   const caption = [
     t('ledger.histogram.loaded', { count: rows.length }),
     t('ledger.histogram.sessions', {
-      count: new Set(
-        rows
-          .filter((e) => e.target_kind === SESSION_KIND)
-          .map((e) => e.target_id),
-      ).size,
+      count: new Set(rows.map(sessionOf).filter(Boolean)).size,
     }),
     t('ledger.histogram.people', {
       count: new Set(

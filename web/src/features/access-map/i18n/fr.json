@@ -15,8 +15,10 @@
   },
   "webgl": {
     "badge": "Vue haute densité",
-    "hint": "Affichage de {{n}} nœuds — passage au moteur de rendu WebGL accéléré pour la mise à l’échelle.",
-    "clustered": "Les ressources sont regroupées par hôte à cette échelle ; un groupe se lit « hôte (N) ». Aucun constat n’est masqué — tout groupe présentant un accès inattendu est signalé."
+    "hint": "Affichage de {{n}} nœuds — passage au moteur de rendu WebGL accéléré pour la mise à l’échelle."
+  },
+  "lod": {
+    "grouped": "Groupes : cliquez sur l’un d’eux pour l’ouvrir."
   },
   "filters": {
     "search": "Rechercher une origine, une ressource, un outil…",
@@ -167,8 +169,13 @@
     "description": "Votre rôle n’inclut pas la permission de consulter le graphe des accès."
   },
   "mobile": {
-    "title": "La carte nécessite un écran plus large",
-    "hint": "Ouvrez cette vue sur un écran plus grand pour le graphe interactif R/RW."
+    "title": "La carte s'ouvre en plein écran",
+    "hint": "Déplacez-vous d'un doigt, pincez pour zoomer. La liste ci-dessous fonctionne aussi.",
+    "open": "Ouvrir la carte en plein écran"
+  },
+  "fullscreen": {
+    "enter": "Plein écran",
+    "exit": "Quitter le plein écran"
   },
   "attackPaths": {
     "chooseAgent": "Choisissez un agent dans le graphe pour voir ses chemins d'attaque.",
@@ -203,5 +210,18 @@
   },
   "graph": {
     "keyboardHint": "Placez le focus sur un nœud, puis utilisez les flèches pour passer à un nœud connecté et Entrée pour l’ouvrir. La liste sous le graphe fait de même sans le canevas."
+  },
+  "groupKinds": {
+    "session": "Sessions",
+    "agent": "Agents",
+    "identity": "Identités"
+  },
+  "group": {
+    "items_one": "{{count}} élément",
+    "items_many": "{{count}} d’éléments",
+    "items_other": "{{count}} éléments",
+    "more": "+{{count}} de plus",
+    "close": "Fermer {{name}}",
+    "members": "Membres"
   }
 }

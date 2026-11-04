@@ -23,6 +23,12 @@ export const VIEWS = [
     helpHref: '/reference/modules/ix-security',
     icon: ShieldAlert,
     permission: 'security:finding:read',
+    changes: [
+      { permission: 'security:case:write' },
+      { permission: 'security:finding:write' },
+      { permission: 'security:guardrail:write' },
+      { permission: 'security:enforcement:admin' },
+    ],
     element: lazyView(SecurityView),
   },
 ] satisfies ViewEntry[]

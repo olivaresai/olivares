@@ -127,7 +127,7 @@ func (f *sourcescopeBindingFlags) add(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&f.sourceRef, "source-ref", "", "reference of the source being confined")
 	cmd.Flags().StringVar(&f.scopeTree, "scope-tree", "", "scope tree the binding attaches to (e.g. workspace, agent_group)")
 	cmd.Flags().StringVar(&f.scopeRef, "scope-ref", "", "reference within the scope tree")
-	cmd.Flags().StringVar(&f.effect, "effect", "", "allow or forbid")
+	cmd.Flags().StringVar(&f.effect, "effect", "", "allow or forbid; require makes a template mandatory for its department; decline stops an instruction or template reaching a department from above")
 	cmd.Flags().StringVar(&f.expiresAt, "expires-at", "", "optional RFC3339 time when the binding stops granting access")
 	cmd.Flags().StringVar(&f.folderPath, "folder-path", "", "folder or subtree the binding is anchored to")
 	cmd.Flags().StringVar(&f.credName, "cred-name", "", "name of the scoped credential the binding carries")

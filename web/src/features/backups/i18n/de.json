@@ -30,6 +30,7 @@
       "date": "Datum",
       "filename": "Dateiname",
       "size": "Größe",
+      "duration": "Dauer",
       "engine": "Engine",
       "tenants": "Tenants",
       "notes": "Notizen"
@@ -88,6 +89,9 @@
     "freeSpace": "Freier Speicher am Ziel",
     "notAvailable": "Nicht verfügbar",
     "overdue": "Wiederherstellungspunktziel überschritten",
+    "rtoMinutes": "Wiederherstellungszeitziel (Minuten)",
+    "rtoExceeded": "Der letzte Wiederherstellungstest dauerte länger als das Ziel von {{minutes}} Minuten",
+    "restoreTook": "Wiederherstellungstest dauerte {{seconds}} s",
     "age": "{{hours}} Stunden alt",
     "offsiteLockMissing": "Bucket {{bucket}} sperrt neue Kopien nicht im `COMPLIANCE`-Modus, daher könnten die Zugangsdaten dieses Servers sie löschen. Aktivieren Sie S3 Object Lock mit einer standardmäßigen `COMPLIANCE`-Aufbewahrung und bereinigen Sie mit separaten Zugangsdaten.",
     "offsiteLockUnknown": "Der Object Lock von Bucket {{bucket}} konnte nicht gelesen werden, daher sind diese Kopien möglicherweise nicht vor dem Löschen geschützt."
@@ -165,6 +169,8 @@
     "tenants": "Mandanten",
     "keys": "Versiegelte Schlüssel",
     "empty": "Keine",
+    "notIncluded": "Nicht in dieser Sicherung",
+    "notIncludedHint": "Diese Pfade werden nicht kopiert. Sichern Sie sie selbst.",
     "loadFailed": "Das Backup-Detail konnte nicht geladen werden."
   },
   "empty": {

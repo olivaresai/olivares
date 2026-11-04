@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useQuery } from '@tanstack/react-query'
+import { AppLink } from '@/components/ui/app-link'
 import { useEffect, useMemo, useRef, useState, type Ref } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -719,7 +720,7 @@ export function SourceCompareControl({
   }
   return (
     <Button type="button" variant="ghost" size="sm" asChild>
-      <a href={href}>{t('compare')}</a>
+      <AppLink href={href}>{t('compare')}</AppLink>
     </Button>
   )
 }

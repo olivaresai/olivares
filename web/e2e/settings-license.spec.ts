@@ -17,7 +17,7 @@ test('License is one page: its old Administration address and the Settings searc
   await page.locator('#setup-email').fill('settings-license@example.com')
   await page.locator('#setup-password').fill(`${randomUUID()}-Aa1!`)
   await page.getByRole('button', { name: /create administrator/i }).click()
-  await page.waitForURL('**/onboarding')
+  await page.waitForURL('**/sessions')
 
   for (const theme of ['light', 'dark']) {
     await page.goto('/settings')
@@ -52,10 +52,9 @@ test('License is one page: its old Administration address and the Settings searc
       // License is a place of the sidebar (a drawer item at 390 px), not a row of Settings.
       if (width < 761)
         await page.getByRole('button', { name: /open navigation/i }).click()
-      await page
-        .getByRole('navigation', { name: 'Main navigation' })
-        .getByRole('link', { name: 'License', exact: true })
-        .click()
+      const nav = page.getByRole('navigation', { name: 'Main navigation' })
+      await nav.getByRole('button', { name: 'More', exact: true }).click()
+      await nav.getByRole('link', { name: 'License', exact: true }).click()
       await expect(page.getByText('No license', { exact: true })).toBeVisible()
       await expect(page).toHaveURL(/section=edition/)
       await page.screenshot({

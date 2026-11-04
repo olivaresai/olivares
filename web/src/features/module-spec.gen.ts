@@ -68,4 +68,5 @@ export const CONSOLE_ENTRIES: Readonly<Record<string, readonly string[]>> = {
   voice: ['voice'],
   aiterms: [],
   'session-cockpit': [],
+  agentroles: [],
 }

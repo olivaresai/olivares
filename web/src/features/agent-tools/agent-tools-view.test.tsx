@@ -61,6 +61,10 @@ import { setEngineTools } from '@/features/agentops/engine-tools'
 import engineTools from '@/features/agentops/engine-tools.fixture.json'
 import type { ProviderSnapshot } from './api'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 const snap = (driver: string): ProviderSnapshot => ({
   instance: driver,
   driver,
@@ -637,6 +641,9 @@ it('names a tool the engine adds to its table, with no console change', async ()
       key: 'hermes',
       name: 'Hermes Agent',
       name_stem: 'hermes',
+      vendor: 'nous',
+      monogram: 'HA',
+      color: '#888892',
       session: true,
       bindings: [{ kind: 'openai', egress: 'configured-endpoint' }],
     },

@@ -125,6 +125,11 @@ type OllamaStatus struct {
 	// Runtime says which flavour serves the row: "process" for the installed program,
 	// "container" for the image. Empty while nothing runs.
 	Runtime string `json:"runtime,omitempty"`
+	// ModelSizes is what each model in Models takes on disk, in bytes, as Ollama reports it.
+	ModelSizes map[string]int64 `json:"model_sizes,omitempty"`
+	// ModelsError says when Ollama's list could not be read; Models is then empty, not evidence
+	// that the server holds no models.
+	ModelsError string `json:"models_error,omitempty"`
 }
 
 type ollamaService struct {
@@ -201,8 +206,10 @@ func (m *Module) ollamaStatus(ctx context.Context) OllamaStatus {
 	out.Installed = m.program("ollama") != "" || (serving && out.Runtime == ollamaRuntimeContainer)
 	if running {
 		out.Endpoint = m.ollamaEndpoint()
-		if models, err := m.ollamaModels(ctx); err == nil {
-			out.Models = models
+		if models, sizes, err := m.ollamaModels(ctx); err == nil {
+			out.Models, out.ModelSizes = models, sizes
+		} else {
+			out.ModelsError = "Ollama's model list could not be read: " + err.Error()
 		}
 	}
 	return out
@@ -744,29 +751,42 @@ func (m *Module) waitOllamaReady(ctx context.Context, timeout time.Duration) boo
 	return false
 }
 
-// ollamaModels lists the models the running service holds (GET /api/tags).
-func (m *Module) ollamaModels(ctx context.Context) ([]string, error) {
+// ollamaModels lists the models the running service holds, with the bytes each takes
+// (GET /api/tags).
+func (m *Module) ollamaModels(ctx context.Context) ([]string, map[string]int64, error) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, "GET", m.ollamaEndpoint()+"/api/tags", nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		var failure struct {
+			Error string `json:"error"`
+		}
+		if json.NewDecoder(io.LimitReader(resp.Body, 1<<16)).Decode(&failure) == nil && failure.Error != "" {
+			return nil, nil, errors.New("Ollama: " + failure.Error)
+		}
+		return nil, nil, fmt.Errorf("Ollama answered %s to the model-list read", resp.Status)
+	}
 	var tags struct {
 		Models []struct {
 			Name string `json:"name"`
+			Size int64  `json:"size"`
 		} `json:"models"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&tags); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	out := make([]string, 0, len(tags.Models))
+	names := make([]string, 0, len(tags.Models))
+	sizes := make(map[string]int64, len(tags.Models))
 	for _, t := range tags.Models {
-		out = append(out, t.Name)
+		names = append(names, t.Name)
+		sizes[t.Name] = t.Size
 	}
-	return out, nil
+	return names, sizes, nil
 }
 
 // tailBuffer keeps the last bytes a child printed, to say why it ended.

@@ -403,7 +403,10 @@ describe('RoutinePoliciesView posture header', () => {
     expect(section.textContent).not.toMatch(
       /No enabled policy governs this scope/i,
     )
-    expect(section.textContent).toMatch(/the resolution was REFUSED/i)
+    expect(section.textContent).toMatch(/the lookup was REFUSED/i)
+    // A refusal means a policy may govern this scope and could not be read: the
+    // text must never claim that none applies, whichever axis was refused.
+    expect(section.textContent).not.toMatch(/No policy applies/i)
   })
 
   // The mirror case, so the fix cannot be "always say refused": a genuinely
@@ -431,7 +434,7 @@ describe('RoutinePoliciesView posture header', () => {
       await screen.findByText(/No enabled policy governs this scope/i),
     ).toBeInTheDocument()
     const section = screen.getByTestId('routine-posture')
-    expect(section.textContent).not.toMatch(/the resolution was REFUSED/i)
+    expect(section.textContent).not.toMatch(/the lookup was REFUSED/i)
     expect(
       screen.queryByTestId('posture-indeterminate'),
     ).not.toBeInTheDocument()

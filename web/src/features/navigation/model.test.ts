@@ -103,7 +103,6 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
 
 /** Pages only a Business build serves (business-views.tsx); Community registers none of them. */
 const BUSINESS_ONLY_PLACEMENTS: Record<string, [string, string]> = {
-  deploy: ['deployment', 'deployments'],
   recordings: ['observation', 'audit-recordings'],
   compliance: ['observation', 'audit-recordings'],
   'session-viewer': ['observation', 'audit-recordings'],

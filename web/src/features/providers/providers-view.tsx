@@ -9,7 +9,7 @@ import {
 } from '@/features/first-hour/api'
 import { agentToolsKeys } from '@/features/agent-tools/api'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
-import { toolName } from '@/features/agentops/engine-tools'
+import { toolName, vendorColor } from '@/features/agentops/engine-tools'
 import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
@@ -22,9 +22,11 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useId, useRef, useState, type ReactNode } from 'react'
+import { useUrlState } from '@/lib/hooks/use-url-state'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
 import { Badge } from '@/components/ui/badge'
+import { MonoMark } from '@/components/ui/mono-mark'
 import { Button } from '@/components/ui/button'
 import { withInlineCommands } from '@/components/ui/inline-commands'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -108,20 +110,32 @@ function probeHintKey(record: ProviderRecordDTO) {
   return `probe.${record.kind === 'ollama' ? 'local.' : ''}${state}Hint`
 }
 
+/** A key's mark: the mark of the vendor whose kind it is (the engine's tool table), else
+ * the initials of its name on that vendor's color; a kind with no vendor tool keeps the
+ * neutral square. */
+function ProviderMark({ record }: { record: ProviderRecordDTO }) {
+  return (
+    <MonoMark
+      name={record.display_name || record.kind}
+      vendor={record.kind}
+      color={vendorColor(record.kind)}
+      size="sm"
+      data-testid="provider-mark"
+    />
+  )
+}
+
 /** The provider `?add=<kind>` asks for: the setup wizard's "Add an API key" or "Add a
- * local model" opens the form on that provider. Read once, like the other views'
- * `?tab=`; anything else opens nothing. */
-function addFromURL(): ProviderKind | undefined {
-  const want = new URLSearchParams(window.location.search).get('add')
+ * local model" opens the form on that provider; anything else opens nothing. */
+function addFromURL(want: string | undefined): ProviderKind | undefined {
   return PROVIDER_KINDS.find((k) => k === want)
 }
 
 /** Where the wizard's "Add an API key" came from (`?returnTo=`, a console page on this
  * origin only): the person goes back there once the new key passes its test; a refused key
  * keeps them here, where it is fixed. */
-function returnFromURL(): string | null {
-  const want = new URLSearchParams(window.location.search).get('returnTo')
-  return consoleReturnPath(want, window.location.origin)
+function returnFromURL(want: string | undefined): string | null {
+  return consoleReturnPath(want ?? null, window.location.origin)
 }
 
 /** The engine's latest "downloaded …" line of a tool job: how far the download is. The
@@ -156,8 +170,11 @@ function Inner({
 
   const addReasonId = useId()
   const headingId = useId()
-  const [addKind] = useState(addFromURL)
-  const [returnTo] = useState(returnFromURL)
+  // The wizard's hand-off lives in the address, so a second link to this page while it is
+  // mounted opens the form again and a reload keeps it. Closing the form clears `add`.
+  const [urlParams, patchUrl] = useUrlState(['add', 'returnTo'])
+  const addKind = addFromURL(urlParams.add)
+  const returnTo = returnFromURL(urlParams.returnTo)
   // The provider this page just created, whose first test decides the return.
   const created = useRef<string | null>(null)
   const [ownOpen, setOwnOpen] = useState(!!addKind)
@@ -165,6 +182,19 @@ function Inner({
   const setCreateOpen = (open: boolean) => {
     setOwnOpen(open)
     onAddingChange?.(open)
+  }
+  // The form starts over on the provider a new link names; leaving the address also resets it,
+  // so Back cannot retain a typed credential. Closing keeps its exit and focus return.
+  const [seenAdd, setSeenAdd] = useState(addKind)
+  const [dialogKind, setDialogKind] = useState(addKind)
+  if (addKind !== seenAdd) {
+    setSeenAdd(addKind)
+    setDialogKind(addKind)
+    setOwnOpen(!!addKind)
+  }
+  const onCreateOpenChange = (open: boolean) => {
+    setCreateOpen(open)
+    if (!open && addKind) patchUrl({ add: undefined })
   }
   const [binding, setBinding] = useState<ProviderRecordDTO | null>(null)
   const [rotating, setRotating] = useState<ProviderRecordDTO | null>(null)
@@ -338,13 +368,16 @@ function Inner({
       header: t('columns.name'),
       accessorFn: (r) => r.display_name,
       cell: ({ row }) => (
-        <div className="flex flex-col">
-          <span className="font-medium text-foreground">
-            {row.original.display_name}
-          </span>
-          <span className="font-mono text-xs text-muted-foreground">
-            {row.original.provider_ref}
-          </span>
+        <div className="flex items-center gap-2">
+          <ProviderMark record={row.original} />
+          <div className="flex min-w-0 flex-col">
+            <span className="font-medium text-foreground">
+              {row.original.display_name}
+            </span>
+            <span className="font-mono text-xs text-muted-foreground">
+              {row.original.provider_ref}
+            </span>
+          </div>
         </div>
       ),
     },
@@ -520,8 +553,11 @@ function Inner({
           </h3>
           <p className="text-caption text-text-2">{t('subtitle')}</p>
         </div>
-        {/* Secondary: the one filled control of Tools is the page's own verb. */}
-        {canWrite && !(listQ.isSuccess && rows.length === 0) ? (
+        {/* The page that owns the verb (AI tools: its header) offers it once; a list on its
+            own, or an empty one (its empty state), carries it. */}
+        {canWrite &&
+        !onAddingChange &&
+        !(listQ.isSuccess && rows.length === 0) ? (
           <Button
             variant="secondary"
             onClick={() => setCreateOpen(true)}
@@ -608,13 +644,16 @@ function Inner({
                 data-testid="provider-card"
                 className="flex min-w-0 flex-col gap-3 rounded-lg border border-border p-3"
               >
-                <div className="min-w-0">
-                  <h2 className="break-words text-sm font-medium">
-                    {record.display_name}
-                  </h2>
-                  <p className="break-all font-mono text-xs text-muted-foreground">
-                    {record.provider_ref}
-                  </p>
+                <div className="flex min-w-0 items-start gap-2">
+                  <ProviderMark record={record} />
+                  <div className="min-w-0">
+                    <h2 className="break-words text-sm font-medium">
+                      {record.display_name}
+                    </h2>
+                    <p className="break-all font-mono text-xs text-muted-foreground">
+                      {record.provider_ref}
+                    </p>
+                  </div>
                 </div>
                 <dl className="grid min-w-0 grid-cols-2 gap-3 text-xs">
                   <div>
@@ -688,7 +727,7 @@ function Inner({
               title={t('empty.title')}
               description={t('empty.description')}
               action={
-                canWrite ? (
+                canWrite && !onAddingChange ? (
                   <Button
                     variant="secondary"
                     onClick={() => setCreateOpen(true)}
@@ -707,9 +746,10 @@ function Inner({
 
       {canWrite && (
         <ProviderCreateDialog
+          key={dialogKind ?? 'new'}
           open={createOpen}
-          onOpenChange={setCreateOpen}
-          initialKind={addKind}
+          onOpenChange={onCreateOpenChange}
+          initialKind={dialogKind}
           onCreated={(record) => {
             setPreparing(null)
             prepare.reset()

@@ -905,6 +905,28 @@ class PublishBlock(unittest.TestCase):
         self.assertIn("NOT PUBLISHED 1 capture(s)", proc.stderr)
 
 
+class SeederWorkspaces(unittest.TestCase):
+    def test_the_engines_own_my_files_folder_is_not_a_sixth_estate_folder(self):
+        # On first boot the engine registers the signed-in person's "My files" folder under
+        # <data>/files/<user-id> and lists it to whoever asks: it is not part of the canonical estate.
+        with tempfile.TemporaryDirectory() as work:
+            ctx = {"root": os.path.realpath(work)}
+            items = []
+            for name, (folder, mode, dlp) in SEEDER.WORKSPACES.items():
+                root = SEEDER.make_repo(ctx["root"], folder, SEEDER.REPOS[folder])
+                items.append({"name": name, "root_path": root, "mount_mode": mode, "dlp_mode": dlp,
+                              "workspace_ref": "ws-" + folder})
+            personal = os.path.join(ctx["root"], "data", "files", "0f3c9a2e-1b7d-4c1e-9a55-2d6f0e8b7a10")
+            os.makedirs(personal)
+            items.append({"name": "My files", "root_path": os.path.realpath(personal), "mount_mode": "rw",
+                          "dlp_mode": "off", "workspace_ref": "ws-personal"})
+            # No POST route: the seed must reuse the five canonical registrations and create nothing.
+            api = StubApi({("GET", "/v1/m/sessions/workspaces"): (200, {"items": items, "has_more": False})})
+            SEEDER.step_workspaces(api, ctx)
+        self.assertEqual(ctx["workspaces"],
+                         {name: "ws-" + folder for name, (folder, _, _) in SEEDER.WORKSPACES.items()})
+
+
 class StubApi(SEEDER.Api):
     """The engine's answers for the seeder's own decisions, from a table: what the seeder does with a
     list, a decision or a refusal is its logic, and the product contract is exercised against a real

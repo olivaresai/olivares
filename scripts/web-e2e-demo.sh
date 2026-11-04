@@ -190,7 +190,7 @@ echo "==> Demo tenant: $TENANT"
 seed_conversation_fixture
 
 # Enable the optional shared readers exercised by the browser journey.
-enable_console_modules "http://127.0.0.1:$PORT" accessmap catalog compliance evals finops health inventory knowledge models notify observability orchestration recording redteam reporting security sessions
+enable_console_modules "http://127.0.0.1:$PORT" accessmap catalog compliance evals finops health inventory knowledge models notify observability orchestration recording redteam reporting security sessions voice
 
 # Only authenticated 200 and the published 501 refusal describe a capability.
 capability_status() {
@@ -243,10 +243,12 @@ cd "$ROOT/web"
 # settings-sections.spec.ts for the same reason: it signs in as the demo operator and walks AI tools,
 # Workspaces and Back inside Settings, which the shared engine cannot sign in to. It creates a
 # profile on this engine (Playwright runs the files in name order, not in the order of this list).
+# console-keyboard-actions.spec.ts for the same reason: its keyboard-only approve walk needs the
+# seeded estate's pending approvals, and on the shared engine it would grade the login page.
 SPECS=(e2e/demo-graph.spec.ts e2e/console-func-l4.spec.ts e2e/console-keyboard-routes.spec.ts
   e2e/first-screens.spec.ts e2e/session-work-surface.spec.ts e2e/console-wide-standard.spec.ts
   e2e/pane-resize.spec.ts e2e/session-row-menu.spec.ts e2e/theme-black.spec.ts
-  e2e/settings-sections.spec.ts)
+  e2e/settings-sections.spec.ts e2e/console-keyboard-actions.spec.ts)
 # The access graph and the identity inventory are Community: the public specs above cover them.
 # A non-Community build that serves them must bring its private suites; an installed one is always run.
 if [ "$BUILD_EDITION" != community ]; then

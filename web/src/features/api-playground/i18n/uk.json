@@ -1,0 +1,68 @@
+{
+  "title": "Пісочниця API",
+  "description": "Досліджуйте й перевіряйте API Olivares AI.",
+  "filterPlaceholder": "Фільтрувати кінцеві точки…",
+  "selectEndpoint": "Виберіть кінцеву точку на лівій панелі",
+  "send": "Надіслати",
+  "sending": "Надсилання…",
+  "streaming": "Потокова передача…",
+  "cancel": "Скасувати",
+  "requiredPermission": "Потрібний дозвіл",
+  "copyAsCurl": "Копіювати як curl",
+  "response": "Відповідь",
+  "history": "Історія",
+  "clearHistory": "Очистити",
+  "noRequests": "Запитів ще немає",
+  "noMatch": "Жодна кінцева точка не відповідає вашому фільтру.",
+  "pathParams": "Параметри шляху",
+  "queryParams": "Запит",
+  "headers": "Заголовки",
+  "body": "Тіло",
+  "networkError": "Помилка мережі",
+  "beta": "бета",
+  "summary": "Кінцевих точок: {{endpoints}} у групах: {{groups}}",
+  "summaryWithBeta": "Кінцевих точок: {{endpoints}} у групах: {{groups}} · маршрутів бета-модулів: {{beta}}",
+  "endpointTree": {
+    "ariaLabel": "Кінцеві точки API"
+  },
+  "errors": {
+    "loadSpec": "Не вдалося завантажити специфікацію OpenAPI"
+  },
+  "request": {
+    "networkError": "Помилка мережі",
+    "failedNetworkHint": "Запит не вдався — перевірте підключення до мережі.",
+    "blockedDestination": "Заблоковане призначення",
+    "blockedDestinationHint": "Пісочниця API може надсилати запити лише на цей сервер Olivares AI.",
+    "enterPathParam": "Введіть {{name}}",
+    "headerNamePlaceholder": "Назва заголовка",
+    "headerValuePlaceholder": "Значення",
+    "curlCommand": "curl",
+    "removeHeaderAria": "Вилучити заголовок {{header}}",
+    "addHeaderAria": "Додати власний заголовок",
+    "bodyAria": "Тіло запиту"
+  },
+  "responsePanel": {
+    "empty": "Виберіть кінцеву точку й надішліть запит",
+    "statusError": "ПОМ",
+    "duration": "{{duration}} мс",
+    "size": {
+      "bytes": "{{value}} Б",
+      "kilobytes": "{{value}} КБ",
+      "megabytes": "{{value}} МБ"
+    },
+    "headersCount": "Заголовки ({{count}})",
+    "bodyAria": "Тіло відповіді"
+  },
+  "historyPanel": {
+    "recentCount": "Нещодавні ({{count}})",
+    "clearAria": "Очистити історію запитів",
+    "statusError": "ПОМ",
+    "duration": "{{duration}} мс",
+    "relative": {
+      "justNow": "щойно",
+      "minutes": "{{count}} хв тому",
+      "hours": "{{count}} год тому",
+      "days": "{{count}} дн тому"
+    }
+  }
+}

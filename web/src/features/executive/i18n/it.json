@@ -93,6 +93,7 @@
     "driftFirm": "Accessi imprevisti",
     "driftPending": "In attesa del collegamento all'identità",
     "driftUnused": "Concessioni inutilizzate",
+    "driftNoRules": "Nessuna regola di accesso dichiarata, quindi non c'è nulla da confrontare: dichiara delle regole per vedere gli scostamenti.",
     "coverageNote": "Alcuni accessi sono osservati con copertura parziale (acquisizione approssimata od opaca); le cifre della deriva sono un limite inferiore.",
     "driftTruncated": "La lettura della deriva è parziale; le cifre della deriva degli accessi sono un limite inferiore.",
     "driftUnavailable": "Impossibile leggere la deriva degli accessi.",

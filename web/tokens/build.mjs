@@ -330,6 +330,28 @@ const blackBlock = block('.dark.black', black, [
   ...ROLES,
 ])
 
+// TRUST CHROME (#3140). The approval card, the consent and step-up dialogs, the
+// provenance chips and the edition badges carry a decision, so a brand accent or a pack
+// variable set on :root or <html> must not reach them. Each of these blocks declares the
+// SAME plan at the surface itself (a declaration on the element always beats an inherited
+// one), so inside `[data-trust-chrome]` every colour is the host's, per theme. They are
+// emitted from the sources above: a token changed once changes here too, and the three
+// selectors mirror the three theme blocks.
+const trustSections = (suffix) => [
+  ...PALETTE.map((s) => ({ ...s, comment: `${s.comment} — ${suffix}` })),
+  ...ROLES,
+]
+const trustLightBlock = block('[data-trust-chrome]', light, [
+  ...trustSections('TRUST CHROME, LIGHT'),
+  { comment: 'Status hairlines', names: DERIVED },
+])
+const trustDarkBlock = block('.dark [data-trust-chrome]', dark, [
+  ...trustSections('TRUST CHROME, DARK'),
+])
+const trustBlackBlock = block('.dark.black [data-trust-chrome]', black, [
+  ...trustSections('TRUST CHROME, BLACK'),
+])
+
 const comfortableBlock = block(
   ":root, [data-density='comfortable']",
   variant('density', 'comfortable'),
@@ -461,6 +483,7 @@ const header = `/* SPDX-FileCopyrightText: 2026 Olivares.AI */
 writeFileSync(
   OUT,
   `${header}\n${rootBlock}\n\n${darkBlock}\n\n${blackBlock}\n\n${themeLines.join('\n')}\n\n` +
+    `${trustLightBlock}\n\n${trustDarkBlock}\n\n${trustBlackBlock}\n\n` +
     `${comfortableBlock}\n\n${compactBlock}\n\n${motionBlock}\n\n` +
     `@media (prefers-reduced-motion: reduce) {\n${reducedMediaBlock}\n}\n\n${reducedBlock}\n`,
 )

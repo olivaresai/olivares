@@ -13,6 +13,7 @@ import (
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/sdk/event"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
@@ -296,5 +297,97 @@ func TestCoverageTierClassification(t *testing.T) {
 		if got := coverageTier(kind); got != want {
 			t.Errorf("coverageTier(%q) = %q, want %q", kind, got, want)
 		}
+	}
+}
+
+func TestSessionExpiryRetiresOnlyTheLaunchGrant(t *testing.T) {
+	st, tenant := newStore(t)
+	m := New()
+	m.UseData(api.NewModuleData(st))
+	ctx := context.Background()
+	if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		_, err := sc.Sessions().Create(ctx, model.Session{ExternalID: "launch-1", State: model.SessionRunning})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	launch := obs("session", "launch-1", "mcp_server", "payments-api", sdkmodel.ModeReadWrite,
+		sdkmodel.SignalSessionLaunch, sdkmodel.ConfidenceAttributed)
+	mustIngest(t, m, tenant, launch)
+	mustIngest(t, m, tenant, obs("session", "launch-1", "mcp_server", "payments-api", sdkmodel.ModeReadWrite,
+		sdkmodel.SignalOTEL, sdkmodel.ConfidenceAttributed))
+	mustIngest(t, m, tenant, obs("session", "launch-1", "provider", "api.anthropic.com", sdkmodel.ModeRead,
+		sdkmodel.SignalSessionLaunch, sdkmodel.ConfidenceAttributed))
+
+	if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		session, _, _, err := sessionByExternalID(ctx, sc, "launch-1")
+		if err != nil {
+			return err
+		}
+		session.State = model.SessionCompleted
+		_, err = sc.Sessions().Update(ctx, session)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.onEvent(ctx, event.Event{
+		Type: event.TypeSessionReachExpired, Tenant: tenant.String(), Source: "olivares.sessions", SessionProjection: true,
+		Payload: sdkmodel.EdgeObservation{OriginKind: "session", OriginRef: "launch-1", Source: sdkmodel.SignalSessionLaunch},
+	}); err != nil {
+		t.Fatalf("expire launch: %v", err)
+	}
+
+	var edges []model.AccessEdge
+	if err := st.View(ctx, tenant, func(sc store.Scope) error {
+		var err error
+		edges, _, err = sc.AccessEdges().List(ctx, model.Query{Limit: 10})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(edges) != 1 {
+		t.Fatalf("edges after expiry = %+v, want only the observed server access", edges)
+	}
+	got := edges[0]
+	if got.Metadata["resource_ref"] != "payments-api" || got.SignalSource != sdkmodel.SignalOTEL {
+		t.Errorf("remaining edge = %+v, want the server's OTEL observation", got)
+	}
+	if !got.Observed || got.Permitted {
+		t.Errorf("observed=%v permitted=%v, want the observation without its expired launch grant", got.Observed, got.Permitted)
+	}
+	if got.OccurrenceCount != 1 {
+		t.Errorf("occurrence count = %d, want the one remaining observation", got.OccurrenceCount)
+	}
+	sources, _ := got.Metadata["signal_sources"].(string)
+	if strings.Contains(sources, string(sdkmodel.SignalSessionLaunch)) || !strings.Contains(sources, string(sdkmodel.SignalOTEL)) {
+		t.Errorf("signal sources = %q, want only OTEL", sources)
+	}
+}
+
+func TestSessionReachRejectsCollectorGrant(t *testing.T) {
+	st, tenant := newStore(t)
+	m := New()
+	m.UseData(api.NewModuleData(st))
+	if err := st.Mutate(t.Context(), tenant, func(sc store.Scope) error {
+		_, err := sc.Sessions().Create(t.Context(), model.Session{ExternalID: "launch", State: model.SessionRunning})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	edge := obs("session", "launch", "resource", "folder", sdkmodel.ModeReadWrite, sdkmodel.SignalSessionLaunch, sdkmodel.ConfidenceAttributed)
+	// A Source label cannot authorize a launch projection.
+	e := event.FromObservation(tenant.String(), "olivares.sessions", edge)
+	if err := m.onEvent(t.Context(), e); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.View(t.Context(), tenant, func(sc store.Scope) error {
+		edges, _, err := sc.AccessEdges().List(t.Context(), model.Query{Limit: 10})
+		if len(edges) != 0 {
+			t.Fatalf("collector forged launch grant: %+v", edges)
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
 	}
 }

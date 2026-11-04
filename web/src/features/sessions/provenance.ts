@@ -716,11 +716,31 @@ export function sessionFolder(s: UnifiedSession): string | null {
   )
 }
 
+/** The registered workspace a session runs in, by its ref; `null` for a session with no run. */
+export function sessionWorkspace(s: UnifiedSession): string | null {
+  return primaryRun(s.runs)?.workspace_ref || null
+}
+
+/** The branch of the git worktree a session runs in; `null` when it runs in the workspace
+ * itself. In Olivares a worktree holds one session: each worktree launch makes its own. */
+export function sessionWorktree(s: UnifiedSession): string | null {
+  return primaryRun(s.runs)?.worktree_branch || null
+}
+
 /** The tool a session runs, by its product name; `null` when nothing declared one. */
 export function sessionTool(s: UnifiedSession): string | null {
-  const driver =
-    primaryRun(s.runs)?.provider_driver || s.live?.provider || s.live?.engine
+  const driver = sessionDriver(s)
   return driver ? toolName(driver) : null
+}
+
+/** The driver key of the tool a session runs on, as sessionTool reads it. */
+export function sessionDriver(s: UnifiedSession): string | null {
+  return (
+    primaryRun(s.runs)?.provider_driver ||
+    s.live?.provider ||
+    s.live?.engine ||
+    null
+  )
 }
 
 /**

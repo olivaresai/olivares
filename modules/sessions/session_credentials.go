@@ -254,7 +254,8 @@ func (m *Module) configureCredentials(ctx, runCtx context.Context, tenant model.
 		named = append(named, e.Name)
 	}
 	// Each file a confined child may read is checked on its own: one bad element refuses the list.
-	// The child is granted the file that was checked, where it really is.
+	// The child is granted the file that was checked, where it really is; the helper opens it again
+	// without a link when it grants it, so a name swapped since this check refuses the launch.
 	var granted []string
 	for _, path := range got.Read {
 		real, err := m.credentialReadPath(path, runRef)
@@ -271,7 +272,7 @@ func (m *Module) configureCredentials(ctx, runCtx context.Context, tenant model.
 	spec.OnStart = got.Bind
 	spec.Env = append(spec.Env, got.Env...)
 	for _, path := range granted {
-		spec.AllowRead(path)
+		spec.AllowReadFile(path)
 	}
 	p.credentialWithhold = withholdableLines(got.Withhold)
 	p.credentialDetail = got.Detail

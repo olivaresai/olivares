@@ -331,6 +331,67 @@ func TestOpenCodeStatusRecoversImmediatelyAfterNativeFailure(t *testing.T) {
 	}
 }
 
+// A status past its lifetime is not waited for: the page that asks gets the last answer at
+// once and the tool is asked again behind it, so the first visit after a pause does not pay
+// the tool's start (#3931).
+func TestOpenCodeStatusPastItsLifetimeAnswersAtOnceAndRefreshesBehind(t *testing.T) {
+	var m *Module
+	_, home := newSignInServer(t, func(module *Module, _ string) { m = module })
+	tenant := model.TenantID(filepath.Base(home))
+	var starts atomic.Int32
+	release := make(chan struct{})
+	previous := toolCommand
+	toolCommand = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
+		if starts.Add(1) == 2 {
+			<-release // the refresh behind the answer is slow
+		}
+		return exec.CommandContext(ctx, "/bin/sh", "-c", "printf 'OpenAI oauth\\n'")
+	}
+	t.Cleanup(func() { toolCommand = previous })
+	if _, signedIn, err := m.LoginStatus(t.Context(), tenant, "opencode"); err != nil || !signedIn {
+		t.Fatalf("first read = %v %v", signedIn, err)
+	}
+	m.mu.Lock()
+	for _, read := range m.statusReads {
+		read.expires = time.Now().Add(-time.Second)
+	}
+	m.mu.Unlock()
+	answered := make(chan bool, 1)
+	go func() {
+		_, signedIn, _ := m.LoginStatus(t.Context(), tenant, "opencode")
+		answered <- signedIn
+	}()
+	select {
+	case signedIn := <-answered:
+		if !signedIn {
+			t.Fatal("the last answer was not served")
+		}
+	case <-time.After(5 * time.Second):
+		close(release)
+		t.Fatal("a status past its lifetime waited for the tool")
+	}
+	close(release)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		m.mu.Lock()
+		fresh := false
+		for _, read := range m.statusReads {
+			fresh = fresh || time.Now().Before(read.expires)
+		}
+		m.mu.Unlock()
+		if fresh {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the refresh behind the answer never stored its result")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, _, err := m.LoginStatus(t.Context(), tenant, "opencode"); err != nil || starts.Load() != 2 {
+		t.Fatalf("native starts = %d, want 2 (one cold, one behind the answer)", starts.Load())
+	}
+}
+
 func TestOpenCodeStatusTracksNativeLoginAndProgramChanges(t *testing.T) {
 	var m *Module
 	var bin string

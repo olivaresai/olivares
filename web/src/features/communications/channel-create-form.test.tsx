@@ -105,7 +105,7 @@ describe('ChannelCreateForm — explicit grants', () => {
     // Submitting with no bit is a KNOWN-invalid intent: refused here, no request.
     await user.click(screen.getByRole('button', { name: 'Create channel' }))
     expect(
-      await screen.findByText('Every grant needs at least one bit.'),
+      await screen.findByText('Every grant needs at least one access.'),
     ).toBeInTheDocument()
     expect(api.createChannel).not.toHaveBeenCalled()
     await user.click(

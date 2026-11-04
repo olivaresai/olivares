@@ -13,7 +13,7 @@
   },
   "surfaces": {
     "title": "Bereitstellungsoberflächen",
-    "description": "Die sechs modellierten Claude-Oberflächen (ANT2-01/17). Jede unterscheidet sich in Basis-URL, Authentifizierung, Modell-ID-Form, Abrechnung, Datenresidenz und Compliance-Sicherheitslage — sie sind nicht austauschbar.",
+    "description": "Die sechs modellierten Claude-Oberflächen. Jede unterscheidet sich in Basis-URL, Authentifizierung, Modell-ID-Form, Abrechnung, Datenresidenz und Compliance-Sicherheitslage — sie sind nicht austauschbar.",
     "matrixTitle": "Attributmatrix der Oberflächen",
     "matrixSummary": "Sechs Bereitstellungsoberflächen im Vergleich über Betreiber, Endpunkt, Authentifizierung, Modell-ID-Form, API-Unterstützung, Abrechnung, HIPAA, ZDR und Datenresidenz.",
     "unmodeled": "Nicht modellierte Oberfläche — keine Attributmatrix.",
@@ -60,7 +60,7 @@
   },
   "lifecycle": {
     "title": "Plattformspezifischer Modell-Lebenszyklus",
-    "description": "Die Modellabschaltung erfolgt plattformspezifisch, nicht global (ANT2-03). Anthropic-betriebene Oberflächen schalten ein Modell zu einem anderen Datum ab als Bedrock und Vertex — ein einzelnes \"abgeschaltet\"-Flag würde auf der Hälfte des Bestands eine falsche Migrationsfrist ergeben.",
+    "description": "Die Modellabschaltung erfolgt plattformspezifisch, nicht global. Anthropic-betriebene Oberflächen schalten ein Modell zu einem anderen Datum ab als Bedrock und Vertex — ein einzelnes \"abgeschaltet\"-Flag würde auf der Hälfte des Bestands eine falsche Migrationsfrist ergeben.",
     "datePending": "Datum nicht veröffentlicht / zu bestätigen",
     "noSuccessor": "Kein Nachfolger deklariert",
     "noSuccessorHint": "Die Autorität hat für diese Familie kein Ersatzmodell benannt. Es wird keines abgeleitet.",
@@ -75,7 +75,7 @@
     "paramDeprecation": {
       "title": "Vorabhinweis zur Parameter-Deprecation",
       "badge": "Informativ",
-      "body": "{{affected}} lehnen ein nicht standardmäßiges {{params}} mit einem HTTP {{status}} ab. Dies ist Anthropics Deprecation (ANT2-03), kein Produktfehler und kein behebbarer Fehler — die Inferenzebene hält diese Parameter als Vorabhinweis zurück.",
+      "body": "{{affected}} lehnen ein nicht standardmäßiges {{params}} mit einem HTTP {{status}} ab. Dies ist Anthropics Deprecation, kein Produktfehler und kein behebbarer Fehler — Olivares hält diese Parameter als Vorabhinweis zurück.",
       "paramsJoin": ", "
     },
     "notes": {
@@ -90,11 +90,11 @@
   "empty": {
     "lifecycle": {
       "title": "Keine Modellabschaltpläne deklariert",
-      "description": "Die einkompilierte Claude-Lebenszyklusreferenz der Engine liefert diese Fristen; Mandantenaktivität und Konsoleneingaben befüllen sie nicht."
+      "description": "Die einkompilierte Claude-Lebenszyklusreferenz der Engine liefert diese Fristen; Ihre Aktivität und Konsoleneingaben befüllen sie nicht."
     },
     "surface": {
       "title": "Keine Bereitstellungsoberflächen deklariert",
-      "description": "Die einkompilierte Claude-Oberflächenreferenz der Engine liefert diese Zeilen; Mandantenaktivität und Konsoleneingaben befüllen sie nicht."
+      "description": "Die einkompilierte Claude-Oberflächenreferenz der Engine liefert diese Zeilen; Ihre Aktivität und Konsoleneingaben befüllen sie nicht."
     }
   },
   "effectiveState": {

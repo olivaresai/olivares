@@ -12,7 +12,7 @@
 // and the fold button answers Enter and Space. Each link names its place even folded (the
 // label stays for a screen reader and in the tooltip), and its count is part of its name.
 import { Link, useRouterState } from '@tanstack/react-router'
-import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react'
+import { ChevronDown, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CountBadge } from '@/components/ui/count-badge'
@@ -23,7 +23,9 @@ import {
 } from '@/features/governance/use-pending-approvals'
 import { useViewAccess } from '@/features/navigation/authorization'
 import {
+  FIRST_PLACES,
   currentPlace,
+  groupLabel,
   settingsPlace,
   sidebarGroups,
   type PlaceId,
@@ -136,11 +138,31 @@ function SidebarBody({
   const { t } = useTranslation(['nav', 'common'])
   const { listed } = useViewAccess()
   const counts = usePlaceCounts()
+  const showAll = usePreferencesStore((s) => s.navAll)
+  const setShowAll = usePreferencesStore((s) => s.setNavAll)
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const search = useRouterState({
     select: (s) => (s.location.search ?? {}) as Record<string, unknown>,
   })
   const here = currentPlace(pathname, search)
+  const groups = sidebarGroups(listed)
+  // Folded away never means out of reach of what needs the person: the place they are on
+  // and a place with something waiting stay.
+  const shown = groups
+    .map((g) => ({
+      ...g,
+      places: g.places.filter(
+        (p) =>
+          showAll ||
+          FIRST_PLACES.has(p.id) ||
+          p.id === here ||
+          counts[p.id]?.needsYou,
+      ),
+    }))
+    .filter((g) => g.places.length > 0)
+  const foldable = groups.some((g) =>
+    g.places.some((p) => !FIRST_PLACES.has(p.id)),
+  )
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div
@@ -171,10 +193,10 @@ function SidebarBody({
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
-        {sidebarGroups(listed).map((group) => (
+        {shown.map((group) => (
           <section
             key={group.id}
-            aria-label={t(`nav:groups.${group.id}`)}
+            aria-label={groupLabel(t, group.id, listed)}
             className="mb-3.5"
           >
             <h2
@@ -184,7 +206,7 @@ function SidebarBody({
                 folded && 'sr-only',
               )}
             >
-              {t(`nav:groups.${group.id}`)}
+              {groupLabel(t, group.id, listed)}
             </h2>
             <ul className="flex flex-col gap-0.5">
               {group.places.map((place) => (
@@ -201,6 +223,26 @@ function SidebarBody({
             </ul>
           </section>
         ))}
+        {foldable ? (
+          <button
+            type="button"
+            aria-expanded={showAll}
+            title={folded ? t('nav:shell.more') : undefined}
+            onClick={() => setShowAll(!showAll)}
+            className={cn(
+              ITEM_CLASS,
+              'w-full',
+              folded && 'justify-center px-0',
+            )}
+          >
+            <ChevronDown aria-hidden className={cn(showAll && 'rotate-180')} />
+            <span
+              className={cn('min-w-0 flex-1 text-left', folded && 'sr-only')}
+            >
+              {t('nav:shell.more')}
+            </span>
+          </button>
+        ) : null}
       </div>
 
       <div className="shrink-0 border-t border-line p-2">
@@ -218,8 +260,15 @@ function SidebarBody({
 /** The column, from 761 px: 228 px, folding to its 64 px icons and back. */
 export function Sidebar() {
   const { t } = useTranslation(['nav', 'common'])
-  const folded = usePreferencesStore((s) => s.navCollapsed)
+  const chosen = usePreferencesStore((s) => s.navCollapsed)
   const setFolded = usePreferencesStore((s) => s.setNavCollapsed)
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const search = useRouterState({
+    select: (s) => (s.location.search ?? {}) as Record<string, unknown>,
+  })
+  // A person's own fold wins everywhere. With none yet, Sessions folds the navigation to
+  // its icons, so the conversation keeps the main column beside the list.
+  const folded = chosen ?? currentPlace(pathname, search) === 'sessions'
   const label = t(folded ? 'nav:shell.expand' : 'nav:shell.collapse')
   return (
     <nav

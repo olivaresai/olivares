@@ -9,10 +9,12 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/core/model"
@@ -31,7 +33,10 @@ import (
 //     own vendor kind, then a local model if the driver can use one, then any other
 //     compatible key; the oldest first within a kind. The profile is a managed
 //     credential bound to that record.
-//  4. Neither: refused, with one sentence that names the tool and what to add.
+//  4. Otherwise the login the tool already has for the engine's user, where the node
+//     allows it (ServerToolLogin): a record the person chose comes before a login nobody
+//     gave the product, unless its provider refused it.
+//  5. Neither: refused, with one sentence that names the tool and what to add.
 //
 // A matching active profile is reused (the oldest), otherwise one is created with
 // the server's own homes and no tool list: the engine's default surface applies
@@ -56,6 +61,16 @@ type ToolLoginStatus func(ctx context.Context, tenant model.TenantID, driver str
 // ProfileLoginStatus asks the native tool about the selected profile's own home.
 // An empty profile reference has the same meaning as ToolLoginStatus.
 type ProfileLoginStatus func(ctx context.Context, tenant model.TenantID, driver, profileRef string) (installed, signedIn bool, err error)
+
+// ServerToolLoginHome is the configuration home of the engine user's own login when
+// a new session of this tool and organization runs on it, and otherwise why that login
+// cannot run one, when the tool's answers show why. Both are empty for any other case.
+type ServerToolLoginHome func(ctx context.Context, tenant model.TenantID, driver string) (configHome, unusable string)
+
+// ServerLoginPolicy says whether the engine user's own tool login may serve this
+// organization: the node's only account, with its only membership. A nil policy, or an
+// answer it cannot give, closes it.
+type ServerLoginPolicy func(ctx context.Context, tenant model.TenantID) bool
 
 // ResolvedProfile is the profile a new session uses, and why.
 type ResolvedProfile struct {
@@ -132,8 +147,9 @@ func pickRecord(driver string, tool resolveTool, records []ProviderRecord) *Prov
 		case kind == ProviderKindOllama:
 			return 1
 		case driver == providerDriverOpenCode && kind == ProviderKindOpenAICompatible:
-			// Only a server at a local address binds to OpenCode, and it could not before. A
-			// tenant that already had one and later added a key keeps getting the key.
+			// A server at a local address, or a vendor key at its catalog address (never the
+			// governed DeepSeek row), binds to OpenCode, and neither could before. A tenant
+			// that already had one and later added a key keeps getting the key.
 			return 3
 		default:
 			return 2
@@ -141,7 +157,7 @@ func pickRecord(driver string, tool resolveTool, records []ProviderRecord) *Prov
 	}
 	var usable []ProviderRecord
 	for _, rec := range records {
-		if rec.State == ProviderRecordActive && recordServesDriver(rec.Kind, rec.BaseURL, driver) && !resolveSkips(driver, rec.Kind) {
+		if rec.State == ProviderRecordActive && recordServesDriver(rec.Kind, rec.BaseURL, rec.Service, driver) && !resolveSkips(driver, rec.Kind) {
 			usable = append(usable, rec)
 		}
 	}
@@ -168,7 +184,10 @@ type resolveChoice struct {
 	tool      resolveTool
 	source    string
 	recordRef string
-	out       ResolvedProfile
+	// serverHome is the engine user's own tool home when the tool is signed in there and not
+	// in the organization's home: the session runs on it (ServerToolLogin).
+	serverHome string
+	out        ResolvedProfile
 }
 
 // resolveDriver is the opening every resolve shares: the driver as typed, made a
@@ -182,7 +201,7 @@ func resolveDriver(driverIn string) (string, resolveTool, error) {
 	return driver, tool, nil
 }
 
-// chooseProfileSource applies steps 1-4 of the rule. It reads the tool's sign-in
+// chooseProfileSource applies steps 1-5 of the rule. It reads the tool's sign-in
 // status and the active records and writes nothing, so a page can show the answer
 // (PreviewProfile) without making a profile by being viewed.
 func (m *Module) chooseProfileSource(ctx context.Context, tenant model.TenantID, driverIn string) (resolveChoice, error) {
@@ -207,7 +226,11 @@ func (m *Module) chooseProfileSource(ctx context.Context, tenant model.TenantID,
 		return resolveChoice{}, &codedRunErr{conflictErr(grokSandboxMissing + "."), resolveCodeToolNotInstalled}
 	}
 	c := resolveChoice{driver: driver, tool: tool, source: AuthSourceAccountHome, out: ResolvedProfile{Reason: ResolveOwnLogin}}
-	if signedIn && tool.signsIn {
+	var unusable string
+	if tool.signsIn && m.ServerToolLogin != nil {
+		c.serverHome, unusable = m.ServerToolLogin(ctx, tenant, driver)
+	}
+	if signedIn && tool.signsIn && c.serverHome == "" {
 		return c, nil
 	}
 	records, _, err := m.ListProviderRecords(ctx, tenant, ProviderRecordActive, "",
@@ -216,14 +239,20 @@ func (m *Module) chooseProfileSource(ctx context.Context, tenant model.TenantID,
 		return resolveChoice{}, err
 	}
 	rec := pickRecord(driver, tool, records)
+	if c.serverHome != "" && (rec == nil || rec.ProbeState == ProbeRefused) {
+		return c, nil
+	}
 	if rec == nil {
 		if driver == providerDriverOpenCode && len(records) > 0 {
 			facts, _ := driverfacts.Lookup(driver)
 			return resolveChoice{}, &codedRunErr{conflictErr(facts.BindingDescription + "."), resolveCodeNothingToRunOn}
 		}
+		if unusable != "" {
+			return resolveChoice{}, &codedRunErr{conflictErr(unusable), resolveCodeNothingToRunOn}
+		}
 		return resolveChoice{}, tool.nothingToRunOn()
 	}
-	c.source, c.recordRef = AuthSourceManagedInjection, rec.Ref
+	c.source, c.recordRef, c.serverHome = AuthSourceManagedInjection, rec.Ref, ""
 	c.out.Reason, c.out.Provider = ResolveAPIKey, rec
 	return c, nil
 }
@@ -250,9 +279,12 @@ func (m *Module) PreviewProfile(ctx context.Context, tenant model.TenantID, driv
 	}
 	loginHome := ""
 	if c.source == AuthSourceAccountHome {
-		_, raw, ok := m.OwnToolLoginHomes(tenant, c.driver)
-		if !ok {
-			return c.out, nil
+		raw := c.serverHome
+		if raw == "" {
+			var ok bool
+			if _, raw, ok = m.OwnToolLoginHomes(tenant, c.driver); !ok {
+				return c.out, nil
+			}
 		}
 		if _, err := os.Stat(raw); errors.Is(err, os.ErrNotExist) {
 			return c.out, nil
@@ -447,9 +479,11 @@ func (m *Module) ResolveProfile(ctx context.Context, tenant model.TenantID, driv
 	// that pointed at the engine user's own ~/.claude).
 	loginHome := ""
 	if source == AuthSourceAccountHome {
-		raw, err := m.ownLoginConfigHome(tenant, driver)
-		if err != nil {
-			return ResolvedProfile{}, err
+		raw := c.serverHome
+		if raw == "" {
+			if raw, err = m.ownLoginConfigHome(tenant, driver); err != nil {
+				return ResolvedProfile{}, err
+			}
 		}
 		if loginHome, err = canonicalHome("config_home", raw); err != nil {
 			return ResolvedProfile{}, err
@@ -480,6 +514,9 @@ func (m *Module) ResolveProfile(ctx context.Context, tenant model.TenantID, driv
 			return nil
 		}
 		name := tool.name
+		if c.serverHome != "" {
+			name = tool.name + " (this server's login)"
+		}
 		if out.Provider != nil {
 			label := out.Provider.DisplayName
 			if label == "" {
@@ -487,7 +524,7 @@ func (m *Module) ResolveProfile(ctx context.Context, tenant model.TenantID, driv
 			}
 			name = tool.name + " (" + label + ")"
 		}
-		row, err := m.serverHomedProfileRow(tenant, env, driver, source, recordRef, name)
+		row, err := m.serverHomedProfileRow(tenant, env, driver, source, recordRef, c.serverHome, name)
 		if err != nil {
 			return err
 		}
@@ -523,7 +560,91 @@ func (m *Module) findChosenProfile(ctx context.Context, tenant model.TenantID, c
 		found, err = findResolvedProfile(ctx, repo, c, env, loginHome)
 		return err
 	})
-	return found, err
+	if err != nil || found == nil || c.source != AuthSourceAccountHome || m.rt.AccountUsage == nil {
+		return found, err
+	}
+	return m.accountWithRoom(ctx, tenant, c.driver, env, found, time.Now())
+}
+
+// resolveCodeAtLimit: every account the tool could start on is at a plan limit its own
+// tool reported, and none has reset yet.
+const resolveCodeAtLimit = "accounts_at_limit"
+
+// usedUpUntil reads the usage the tool last reported for an account, without waiting
+// for it: known is false when it reported none (cold, not signed in, a key), full is
+// true while a window is used up, and until is when the last used-up window lifts
+// (zero when the tool named no reset).
+func (m *Module) usedUpUntil(ctx context.Context, tenant model.TenantID, driver, ref string, now time.Time) (until time.Time, known, full bool) {
+	for _, u := range m.rt.AccountUsage(ctx, tenant, driver, ref, false) {
+		known = true
+		if u.Credit != nil || u.Utilization < 100 || (u.ResetsAt != nil && !u.ResetsAt.After(now)) {
+			continue
+		}
+		full = true
+		if u.ResetsAt != nil && u.ResetsAt.After(until) {
+			until = *u.ResetsAt
+		}
+	}
+	return until, known, full
+}
+
+// accountWithRoom is the own-login profile the rule found, unless its tool reported a
+// plan window used up that has not reset: a session started there fails at once ("You've
+// hit your weekly limit"). Then it is the oldest other active account of the tool on this
+// environment whose tool reports room, as the account list shows it. When every account
+// is known to be used up, the refusal names the first reset. An account the tool has
+// not reported on yet is not judged, so the rule stays as it was.
+func (m *Module) accountWithRoom(ctx context.Context, tenant model.TenantID, driver, env string, found model.Record, now time.Time) (model.Record, error) {
+	foundRef := found.String(colPPRef)
+	until, _, full := m.usedUpUntil(ctx, tenant, driver, foundRef, now)
+	if !full {
+		return found, nil
+	}
+	var rows []model.Record
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(providerProfileKind)
+		if err != nil {
+			return err
+		}
+		rows, _, err = repo.List(ctx, model.Query{
+			Filters: []model.Filter{eq(colPPDriver, driver), eq(colPPState, ProfileActive), eq(colPPEnvRef, env),
+				eq(colPPAuthSource, AuthSourceAccountHome), {Column: colPPAccountName, Op: model.OpNotNull}},
+			Sort:  []model.Sort{{Column: model.ColCreatedAt}},
+			Limit: 200,
+		})
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	first, firstName := until, found.String(colPPAccountName)
+	unjudged := false
+	for _, row := range rows {
+		if row.String(colPPRef) == foundRef {
+			continue
+		}
+		at, known, used := m.usedUpUntil(ctx, tenant, driver, row.String(colPPRef), now)
+		switch {
+		case !known:
+			unjudged = true
+		case !used:
+			return row, nil
+		case !at.IsZero() && (first.IsZero() || at.Before(first)):
+			first, firstName = at, row.String(colPPAccountName)
+		}
+	}
+	if unjudged {
+		return found, nil
+	}
+	tool, _ := resolveToolFor(driver)
+	msg := "Every " + tool.name + " account is at its plan limit"
+	if !first.IsZero() {
+		if firstName == "" {
+			firstName = "its own login"
+		}
+		msg += "; the first to reset is " + firstName + ", at " + first.UTC().Format("2006-01-02 15:04") + " UTC"
+	}
+	return nil, &codedRunErr{conflictErr(msg + ". Start the session then, or add an account."), resolveCodeAtLimit}
 }
 
 // ResolveAccountProfile answers a request that names its account (a name, or a
@@ -627,11 +748,21 @@ func (m *Module) requireAccountLogin(ctx context.Context, tenant model.TenantID,
 
 // serverHomedProfileRow is a new profile row whose homes the server makes: the
 // tool's own login folder (account home) or the profile's own folders (managed).
-func (m *Module) serverHomedProfileRow(tenant model.TenantID, env, driver, source, recordRef, displayName string) (model.Record, error) {
+// serverHome, when set, is the login folder: the engine user's own, with a HOME the
+// product makes for this profile.
+func (m *Module) serverHomedProfileRow(tenant model.TenantID, env, driver, source, recordRef, serverHome, displayName string) (model.Record, error) {
 	ref := newProfileRef()
 	var configHome, userHome string
 	var err error
-	if source == AuthSourceAccountHome {
+	if serverHome != "" {
+		if m.profileHomesRoot == "" {
+			return nil, &runErr{http.StatusUnprocessableEntity, "this node has no directory for a profile's own home; name config_home and user_home"}
+		}
+		configHome, userHome = serverHome, filepath.Join(m.profileHomesRoot, ref)
+		if err = os.MkdirAll(userHome, 0o700); err != nil {
+			return nil, &runErr{http.StatusUnprocessableEntity, "the profile's home directory could not be created on this execution environment"}
+		}
+	} else if source == AuthSourceAccountHome {
 		configHome, userHome, err = m.standardAccountHomes(tenant, driver, ref)
 	} else {
 		configHome, userHome, err = m.managedProfileHomes(driver, ref)

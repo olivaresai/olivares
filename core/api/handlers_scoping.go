@@ -159,12 +159,14 @@ func (s *Server) handleGetWorkspace(w http.ResponseWriter, r *http.Request, mc M
 // on tenant:admin exactly as before. A create under parent_id is delegated
 // administration, gated like the grant routes: coarsely on the Access Control right
 // (auth.PermRBACAdmin, which every admin-capable subject holds and an editor does
-// not, and a caller confined to a workspace is refused), then the handler asks
-// whether the caller administers that parent. A body
+// not), admitted at the parent department so that a caller confined to it by its
+// placement, as a directory does for a person in an OU, is admitted by its admin
+// grant there and nowhere else; then the handler asks whether the caller
+// administers that parent. A body
 // that cannot be read takes the root admission, whose handler answers 400 as before.
 func (s *Server) workspaceCreateRoute() coreAdmission {
 	root := s.tenantRoute("tenant:admin")
-	child := s.tenantRoute(auth.PermRBACAdmin)
+	child := s.collectionRoute(auth.PermRBACAdmin, CollectionScopeRef{WorkspaceBodyField: "parent_id", WorkspaceQueryParam: "parent_id"})
 	return func(w http.ResponseWriter, r *http.Request) (ModuleContext, bool) {
 		if parent, err := bodyEntityString(r, "parent_id", true); err == nil && parent != "" {
 			return child(w, r)
@@ -179,8 +181,9 @@ func (s *Server) workspaceCreateRoute() coreAdmission {
 // to be the tenant owner (or a superadmin), and — as a privilege-shaped action —
 // AAL3. A parent_id creates a sub-department, the Business department surface
 // (DepartmentCreator; Community answers 501): the owner may name any parent, and
-// anyone else only a parent it administers (WorkspaceAdministration). The route's
-// tenant-wide Access Control gate already refuses a confined caller, owner or not.
+// anyone else only a parent it administers (WorkspaceAdministration). A caller
+// confined to a department is anyone else, and its own admin-or-above role does not
+// delegate: it needs an admin grant on the parent.
 func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	p := mc.Principal
 	tenant := mc.Tenant
@@ -239,7 +242,16 @@ func (s *Server) createWorkspaceUnder(w http.ResponseWriter, r *http.Request, p 
 		s.writeError(w, r, ErrDepartmentsUnavailable)
 		return
 	}
-	if !isOwner(p, tenant) {
+	// A member confined to a department is no tenant owner whatever its role. Its
+	// own role of admin or above is not the grant that delegates (where a department
+	// sits is the organization's decision, as before); an admin grant on the parent
+	// is, and it creates under the department it administers and nowhere else.
+	_, confined := p.ConfinedWorkspaceIn(tenant)
+	if role, _ := p.RoleIn(tenant); confined && auth.RoleGrants(role, auth.PermRBACAdmin) {
+		s.writeError(w, r, errForbidden)
+		return
+	}
+	if confined || !isOwner(p, tenant) {
 		admin := false
 		if s.workspaceAdmin != nil {
 			var err error

@@ -5,6 +5,7 @@
   "listening": "Listening. Press again or Esc to stop.",
   "transcribing": "Transcribing…",
   "nothing": "No speech heard.",
+  "unavailable": "Dictation works while the session runs.",
   "failed": "Dictation failed. Try again.",
   "blocked": "The browser blocked the microphone."
 }

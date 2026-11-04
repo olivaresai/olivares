@@ -69,9 +69,23 @@ func applyOS(cmd *exec.Cmd, c Confinement, att *Attestation) (Cleanup, error) {
 				return nil, err
 			}
 			cmd.Env = append(cmd.Env, "TMPDIR="+scratch)
+			// A plugin at the engine's own uid would reach that user's user bus, and a unit
+			// started through it runs outside the jail. A root engine's plugin runs as
+			// another uid, which the 0700 runtime directory of root refuses.
+			if os.Geteuid() != 0 {
+				if err := confine.HideUserBus(cmd); err != nil && confine.UserBusExposed(cmd) {
+					att.Degraded = append(att.Degraded, "user bus: the plugin can reach the engine user's user manager, and a unit started through it runs outside the jail ("+err.Error()+")")
+				}
+			}
 		}
 	}
-	sysAttr := &syscall.SysProcAttr{Setpgid: true} // own process group ⇒ group-kill on teardown
+	// Own process group ⇒ group-kill on teardown. The mount layer's namespaces, when
+	// the jail asked for them above, stay.
+	sysAttr := cmd.SysProcAttr
+	if sysAttr == nil {
+		sysAttr = &syscall.SysProcAttr{}
+	}
+	sysAttr.Setpgid = true
 
 	// C3: run as a dedicated, per-launch non-root uid/gid with NO supplementary groups.
 	var releaseUID int

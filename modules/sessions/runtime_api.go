@@ -56,6 +56,8 @@ func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
 	reg.Handle("PUT", "/limit-resume-settings", permRunWrite, m.handleLimitResumeSettings)
 	// The tools a run can name, from the engine's one table (tools_api.go).
 	reg.Handle("GET", "/tools", permRunRead, m.handleListTools)
+	// What the runs the caller may read used, totalled by model, account, provider or tool.
+	reg.Handle("GET", "/usage", permRunRead, m.handleRunUsage)
 	// The issue or pull request a start names (session_source_item.go), read with the
 	// approved repository binding; it changes nothing on the host.
 	reg.Handle("GET", "/source-items", permRunWrite, m.handleSourceItem)
@@ -68,6 +70,9 @@ func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
 	// What the session changed in its folder (run_changes.go): read-only, nothing executed.
 	reg.HandleEntity("GET", "/runs/{ref}/changes", permRunOutput, outputEntity, m.handleRunChanges)
 	reg.HandleEntity("GET", "/runs/{ref}/changes/file", permRunOutput, outputEntity, m.handleRunChangedFile)
+	// What each turn changed, and the folder put back as it was before one
+	// (run_checkpoints.go): snapshots of the engine's own, nothing executed in the folder.
+	reg.HandleEntity("GET", "/runs/{ref}/checkpoints", permRunOutput, outputEntity, m.handleRunCheckpoints)
 	reg.HandleEntity("GET", "/runs/{ref}/git", permRunOutput, outputEntity, m.handleRunGit)
 	// What the branch of the session's own worktree holds against where it began
 	// (run_worktree_diff.go): committed objects only, plumbing git, read-only.
@@ -91,10 +96,13 @@ func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
 	// Readers may learn a denied action as 403. Foreign, unreadable and absent
 	// runs retain the same concealed 404.
 	runEntity.DeniedReadPermission = permRunRead
+	reg.HandleEntity("POST", "/runs/{ref}/checkpoints/{seq}/rewind", permRunWrite, runEntity, m.handleRunRewind)
 	reg.HandleEntity("POST", "/runs/{ref}/git/stage", permRunWrite, runEntity, m.handleRunGit)
 	reg.HandleEntity("POST", "/runs/{ref}/git/unstage", permRunWrite, runEntity, m.handleRunGit)
 	reg.HandleEntity("POST", "/runs/{ref}/git/commit", permRunWrite, runEntity, m.handleRunGit)
+	reg.HandleEntity("POST", "/runs/{ref}/git/merge", permRunWrite, runEntity, m.handleRunWorktreeMerge)
 	reg.HandleEntity("POST", "/runs/{ref}/git/branch", permRunWrite, runEntity, m.handleRunGit)
+	reg.HandleEntity("POST", "/runs/{ref}/git/init", permRunWrite, runEntity, m.handleRunGit)
 	// The commands, skills and agents the session's tool reports (tool_commands.go). A GET
 	// that asks the tool through the session's stdin, as an interrupt does: write.
 	reg.HandleEntity("GET", "/runs/{ref}/commands", permRunWrite, runEntity, m.handleRunCommands)
@@ -111,6 +119,7 @@ func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
 	reg.HandleEntity("POST", "/runs/{ref}/attachments", permRunWrite, runEntity, m.handleRunAttachmentUpload)
 	reg.HandleEntity("GET", "/runs/{ref}/attachments/{id}", permRunOutput, outputEntity, m.handleRunAttachmentGet)
 	reg.HandleEntity("POST", "/runs/{ref}/interrupt", permRunWrite, runEntity, m.handleInterruptRun)
+	reg.HandleEntity("POST", "/runs/{ref}/tasks/{task}/stop", permRunWrite, runEntity, m.handleStopRunTask)
 	reg.HandleEntity("POST", "/runs/{ref}/stop", permRunStop, runEntity, m.handleStopRun)
 	reg.HandleEntity("POST", "/runs/{ref}/resume", permRunWrite, runEntity, m.handleResumeRun)
 	// Rebinds a stopped session to another profile of its tool, carrying the tool's
@@ -123,11 +132,14 @@ func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
 	// is not ledgered. Unreadable runs keep the concealed 404 of the entity.
 	reg.HandleEntity("POST", "/runs/{ref}/pin", permRunRead, runEntity, m.handlePinRun)
 	reg.HandleEntity("DELETE", "/runs/{ref}/pin", permRunRead, runEntity, m.handleUnpinRun)
-	// The caller's own snooze and done marks (run_mark.go), by the pin's rules.
+	// The caller's own snooze, done and unread marks (run_mark.go), by the pin's rules.
 	reg.HandleEntity("POST", "/runs/{ref}/snooze", permRunRead, runEntity, m.handleSnoozeRun)
 	reg.HandleEntity("DELETE", "/runs/{ref}/snooze", permRunRead, runEntity, m.handleUnsnoozeRun)
 	reg.HandleEntity("POST", "/runs/{ref}/done", permRunRead, runEntity, m.handleDoneRun)
 	reg.HandleEntity("DELETE", "/runs/{ref}/done", permRunRead, runEntity, m.handleUndoneRun)
+	// POST marks the run unread for the caller; DELETE marks it read (they have seen it).
+	reg.HandleEntity("POST", "/runs/{ref}/unread", permRunRead, runEntity, m.handleUnreadRun)
+	reg.HandleEntity("DELETE", "/runs/{ref}/unread", permRunRead, runEntity, m.handleReadRun)
 	// Starts a NEW session in another profile, linked to this one, from a reviewed
 	// summary and the attached transcript (session_handoff.go).
 	reg.HandleEntity("POST", "/runs/{ref}/handoff", permRunWrite, runEntity, m.handleHandoffRun)
@@ -154,10 +166,15 @@ func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	// Refuse a name the rename refuses, and a known runner mismatch, before resolving
-	// (and possibly creating) the default profile: a refused launch leaves nothing
-	// behind. In-process launches repeat these checks in createRunInternal.
+	// Refuse a name the rename refuses, one a session already holds, and a known
+	// runner mismatch, before resolving (and possibly creating) the default profile:
+	// a refused launch leaves nothing behind. In-process launches repeat these
+	// checks in createRunInternal.
 	if err := checkRunName(strings.TrimSpace(body.Name)); err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	if err := m.refuseHeldRunName(r.Context(), mc.Tenant, strings.TrimSpace(body.Name)); err != nil {
 		writeRunErr(w, err)
 		return
 	}
@@ -187,6 +204,16 @@ func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.
 			return
 		}
 		body.ProviderProfileRef = got.Profile.Ref
+	}
+	// A session that names no folder, repository or template starts in its launcher's
+	// own folder (personal_folder.go), where Landlock limits its writes, instead of an
+	// empty temporary directory. A node without one keeps the temporary directory.
+	if body.WorkspaceRef == "" && body.RepositoryURL == "" && body.SourceURL == "" && body.TemplateID == "" && body.RunOn == "" && !body.Worktree {
+		ref, err := m.ensurePersonalFolder(r.Context(), mc.Tenant, mc.Principal)
+		if err != nil {
+			m.warnf("sessions: could not make the personal folder", "err", redactErr(err))
+		}
+		body.WorkspaceRef = ref
 	}
 	credential, _ := auth.QueuedCredentialFrom(mc.Principal)
 	dto, err := m.createRun(r.Context(), mc.Tenant, CreateRunParams{
@@ -623,7 +650,7 @@ func (m *Module) handleRunInput(w http.ResponseWriter, r *http.Request, mc api.M
 	}
 	ref := chi.URLParam(r, "ref")
 	var body inputRequest
-	if !decodeJSONBody(w, r, &body) {
+	if !decodeMessageBody(w, r, &body) {
 		return
 	}
 	if body.WorkLeaseFence != nil && *body.WorkLeaseFence <= 0 {
@@ -673,6 +700,7 @@ func (m *Module) handleRunInput(w http.ResponseWriter, r *http.Request, mc api.M
 			return
 		}
 		m.auditReviewComment(r, mc, ref, body.ReviewComment)
+		m.titleFromFirstInput(r.Context(), mc, ref, body.Text)
 		writeJSON(w, http.StatusAccepted, map[string]any{"accepted": true})
 		return
 	}
@@ -695,6 +723,7 @@ func (m *Module) handleRunInput(w http.ResponseWriter, r *http.Request, mc api.M
 		return
 	}
 	m.auditReviewComment(r, mc, ref, body.ReviewComment)
+	m.titleFromFirstInput(r.Context(), mc, ref, inputLineText(line))
 	writeJSON(w, http.StatusAccepted, map[string]any{"accepted": true})
 }
 
@@ -730,6 +759,18 @@ func (m *Module) handleInterruptRun(w http.ResponseWriter, r *http.Request, mc a
 		return
 	}
 	dto, err := m.interruptRun(r.Context(), mc.Tenant, ref,
+		mc.Principal.Actor(), mc.Principal.ActorKind())
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, dto)
+}
+
+// handleStopRunTask stops one background task of a live session and answers with the
+// session, which stays running (stopRunTask).
+func (m *Module) handleStopRunTask(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	dto, err := m.stopRunTask(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), chi.URLParam(r, "task"),
 		mc.Principal.Actor(), mc.Principal.ActorKind())
 	if err != nil {
 		writeRunErr(w, err)
@@ -863,8 +904,7 @@ func (m *Module) handleHandoffPreview(w http.ResponseWriter, r *http.Request, mc
 		writeRunErr(w, err)
 		return
 	}
-	// The preview returns text of the stored conversation, which the attach stream
-	// also does and records; it is recorded the same way.
+	// The preview returns text of the stored conversation, so every read is recorded.
 	m.auditRunRead(r, mc, ref, "sessions.run.handoff_preview")
 	writeJSON(w, http.StatusOK, dto)
 }
@@ -1149,14 +1189,15 @@ func writeSSE(rc *http.ResponseController, w http.ResponseWriter, event string, 
 const MaxAttachEvent = 6*maxOutputLine + 64<<10
 
 // auditAttach records that a principal attached to a live session (a privileged
-// read of operated I/O). Best-effort: a failed audit logs but never denies the
-// attach (RBAC already gated it) — mirroring the observe stream-open audit.
+// read of operated I/O), once per person and session per window: an SSE reconnect or a
+// ?before= page is the same read, not a new one. Best-effort: a failed audit logs but
+// never denies the attach (RBAC already gated it) — mirroring the observe stream-open audit.
 func (m *Module) auditAttach(r *http.Request, mc api.ModuleContext, ref string) {
-	m.auditRunRead(r, mc, ref, "sessions.run.attach")
+	m.auditActivityRead(r, mc, ref, "sessions.run.attach")
 }
 
-// auditRunRead is that record for any privileged read of a run's operated content:
-// the attach stream, and the handoff preview, which returns the stored conversation.
+// auditRunRead records every read of a run's operated content that nothing repeats on its
+// own: the handoff preview, which returns the stored conversation, and a subagent's transcript.
 func (m *Module) auditRunRead(r *http.Request, mc api.ModuleContext, ref, action string) {
 	if err := m.appendRunReadAudit(r, mc, ref, action); err != nil {
 		m.debugf("sessions: run read audit failed", "action", action, "err", err)
@@ -1175,11 +1216,8 @@ func (m *Module) handleRunInputWithImages(w http.ResponseWriter, r *http.Request
 	case body.WorkLeaseFence != nil:
 		writeJSON(w, http.StatusBadRequest, errorBody("attachments are not available on a session started by a work item"))
 		return
-	case !boundedText(body.Text, 0, maxWorkTextInputBytes):
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid request body"))
-		return
 	}
-	images, err := m.loadTurnImages(mc.Tenant, ref, body.Attachments)
+	images, err := m.loadTurnImages(mc.Tenant, ref, body.Attachments, len(body.Text))
 	if err != nil {
 		writeRunErr(w, err)
 		return
@@ -1188,14 +1226,19 @@ func (m *Module) handleRunInputWithImages(w http.ResponseWriter, r *http.Request
 		writeRuntimeControlErr(w, err)
 		return
 	}
+	m.titleFromFirstInput(r.Context(), mc, ref, body.Text)
 	writeJSON(w, http.StatusAccepted, map[string]any{"accepted": true})
 }
 
 func (m *Module) appendRunReadAudit(r *http.Request, mc api.ModuleContext, ref, action string) error {
 	return mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+		target, err := runAuditTarget(r.Context(), sc, ref)
+		if err != nil {
+			return err
+		}
 		_, e := sc.Audit().Append(r.Context(), model.AuditDraft{
 			Actor: mc.Principal.Actor(), ActorKind: mc.Principal.ActorKind(),
-			Action: action, TargetKind: runKind,
+			Action: action, TargetKind: runKind, TargetID: target,
 			Meta: map[string]any{"run_ref": ref},
 		})
 		return e
@@ -1211,9 +1254,13 @@ func (m *Module) auditReviewComment(r *http.Request, mc api.ModuleContext, ref s
 		return
 	}
 	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+		target, err := runAuditTarget(r.Context(), sc, ref)
+		if err != nil {
+			return err
+		}
 		_, e := sc.Audit().Append(r.Context(), model.AuditDraft{
 			Actor: mc.Principal.Actor(), ActorKind: mc.Principal.ActorKind(),
-			Action: "sessions.run.review_comment", TargetKind: runKind,
+			Action: "sessions.run.review_comment", TargetKind: runKind, TargetID: target,
 			Meta: map[string]any{"run_ref": ref, "path": place.Path, "line": place.Line, "side": place.Side},
 		})
 		return e

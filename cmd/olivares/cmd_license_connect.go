@@ -31,12 +31,16 @@ type connectCommonFlags struct {
 	timeout  time.Duration
 }
 
+// connectTimeout bounds one exchange with the licensing service: `license connect --timeout`'s
+// default, and the bound of the refresh `upgrade --connect` runs first.
+const connectTimeout = 60 * time.Second
+
 func (f *connectCommonFlags) register(cmd *cobra.Command) {
 	fl := cmd.Flags()
 	fl.StringVar(&f.dataDir, "data-dir", "", "data directory that holds this deployment's connected identity (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares)")
 	fl.StringVar(&f.endpoint, "endpoint", "", "licensing service origin (default "+defaultConnectEndpoint+" on first use; afterwards the one recorded in the data directory)")
 	fl.StringVar(&f.license, "license", "", "explicit license path the engine is started with; a connected credential is refused while it outranks the data directory")
-	fl.DurationVar(&f.timeout, "timeout", 60*time.Second, "overall network timeout")
+	fl.DurationVar(&f.timeout, "timeout", connectTimeout, "overall network timeout")
 }
 
 type connectIdentifierFlags struct {
@@ -600,7 +604,11 @@ func pendingIntent(st *connectState) string {
 // verified credential is installed before the gated download, so the unchanged license gate,
 // manifest signature, artifact digest, anti-rollback and minimum-version checks follow.
 func connectRefreshForUpgrade(ctx context.Context, o *upgradeOptions, out io.Writer) (token, endpoint string, err error) {
-	common := connectCommonFlags{dataDir: o.dataDir, endpoint: o.endpoint, license: o.license, timeout: o.timeout}
+	// upgrade's --timeout is a stall bound for downloads; this small exchange keeps its own total,
+	// over all its requests, as `license connect` does (connectContext).
+	ctx, cancel := context.WithTimeout(ctx, connectTimeout)
+	defer cancel()
+	common := connectCommonFlags{dataDir: o.dataDir, endpoint: o.endpoint, license: o.license, timeout: connectTimeout}
 	run, err := openConnectRun(&common, nil, nil)
 	if err != nil {
 		return "", "", err

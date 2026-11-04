@@ -80,8 +80,8 @@ permission it requires and the reference page its in-product help link opens.
 
 | Screen | Path | What it is | Requires | Reference |
 |---|---|---|---|---|
-| Estate | `/estate` | Inspect configured resources and their relationships, including work item dependencies. | `sessions:run:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
-| Inventory | `/inventory` | Discover and catalog the agents, MCP servers and models that connectors observed. | `inventory:catalog:read` | [reference/modules/i-inventory](/reference/modules/i-inventory/) |
+| Configured resources | `/estate` | What you have set up, and how its parts depend on each other, work items included. | `sessions:run:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
+| Discovered resources | `/inventory` | Agents, MCP servers and models that connectors have observed, and when each was last seen. | `inventory:catalog:read` | [reference/modules/i-inventory](/reference/modules/i-inventory/) |
 | Workspace | `/workspace` | Agents, sessions, resources and activity scoped to one workspace | `tenant:read` | [reference/modules/xx-multi-tenancy](/reference/modules/xx-multi-tenancy/) |
 
 ### AI

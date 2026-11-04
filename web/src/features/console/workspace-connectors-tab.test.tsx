@@ -46,6 +46,7 @@ vi.mock('./api', async (importOriginal) => {
   return { ...actual, consoleApi: api }
 })
 
+import { ApiError } from '@/lib/api/errors'
 import { consoleKeys } from './api'
 import { WorkspaceConnectorsTab } from './workspace-connectors-tab'
 
@@ -104,6 +105,59 @@ describe('WorkspaceConnectorsTab', () => {
     ).toBeInTheDocument()
     expect(api.listAssignments).not.toHaveBeenCalled()
     expect(api.listWsConnectors).not.toHaveBeenCalled()
+  })
+
+  it('a refused connector roster is said in both sections, and neither create action is offered', async () => {
+    api.listSources.mockRejectedValue(
+      new ApiError(403, 'forbidden', 'system:admin required'),
+    )
+    api.listConnectors.mockRejectedValue(
+      new ApiError(403, 'forbidden', 'system:admin required'),
+    )
+    wrap(<WorkspaceConnectorsTab />)
+
+    expect(await screen.findByText(/no assignments yet/i)).toBeInTheDocument()
+    // One refusal line per section: the assignment picker and the Kind list read the roster.
+    await waitFor(() =>
+      expect(screen.getAllByText(/you do not have access to/i)).toHaveLength(2),
+    )
+    expect(
+      screen.queryByRole('button', { name: /add assignment/i }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /create workspace connector/i }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('a refused connector roster does not block editing an existing workspace connector', async () => {
+    api.listConnectors.mockRejectedValue(
+      new ApiError(403, 'forbidden', 'system:admin required'),
+    )
+    api.listWsConnectors.mockResolvedValue({
+      items: [
+        {
+          id: 'wc1',
+          name: 'github-eng',
+          kind: 'github',
+          workspace_ref: 'eng',
+          poll_seconds: 60,
+          enabled: true,
+          status: 'pending',
+        },
+      ],
+      has_more: false,
+    })
+    const user = userEvent.setup()
+    wrap(<WorkspaceConnectorsTab />)
+
+    const row = (await screen.findByText('github-eng')).closest('tr')!
+    await user.click(within(row).getByRole('button', { name: /^edit$/i }))
+    const dialog = await screen.findByRole('dialog')
+    // The kind comes from the connector being edited; nothing in the dialog is refused.
+    expect(
+      within(dialog).queryByText(/you do not have access to/i),
+    ).not.toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: /save/i })).toBeEnabled()
   })
 
   it('edits an assignment with PUT instead of delete and recreate', async () => {

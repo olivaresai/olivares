@@ -168,6 +168,11 @@ then
   printf '%s\n' 'FAIL: release container identity mismatch' 'O1 J1-release-container: FAIL' 'O7 J7-release-container: FAIL' | tee "$FIRST_HOUR_ARTIFACTS/identity-failure.txt"
   exit 1
 fi
+# A chat session on the verified candidate bytes, before the browser: a tool that reads a
+# file over the runner's 1 MiB line limit must not end the session (Community 0.5 passed
+# every release check and ended its first real chat on exactly that). The tool is a
+# labelled stand-in; the engine, its runner and its API are the candidate's own.
+TMPDIR="$work" bash scripts/session-journey-smoke.sh --binary "$work/olivares" --label release-candidate --large-output
 "${compose[@]}" logs --no-color olivares | sed -n '/FIRST-BOOT SETUP/,/========================/p' | python3 -c '
 import re, sys
 from pathlib import Path

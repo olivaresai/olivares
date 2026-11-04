@@ -5,6 +5,7 @@ import { MoreHorizontal, type LucideIcon } from 'lucide-react'
 import {
   Fragment,
   isValidElement,
+  useContext,
   useLayoutEffect,
   useRef,
   useState,
@@ -14,6 +15,7 @@ import { useTranslation } from 'react-i18next'
 import { useIsPhone } from '@/lib/hooks/use-is-phone'
 import { cn } from '@/lib/utils'
 import { PagePrimaryActionSlot, PageSecondaryActionsSlot } from './page-actions'
+import { PagePlaceContext } from './page-place'
 
 /**
  * Shared page chrome: title and controls, then the complete description and notices.
@@ -23,6 +25,9 @@ import { PagePrimaryActionSlot, PageSecondaryActionsSlot } from './page-actions'
  */
 export interface PageHeaderProps {
   title: ReactNode
+  /** The heading stays for assistive technology but is not painted: a screen whose top
+   * bar already names it (the first screen, Now) does not say its name twice. */
+  titleHidden?: boolean
   description?: ReactNode
   /**
    * @deprecated Accepted and NOT rendered since the work-first pass. The icon chip
@@ -144,6 +149,7 @@ export const WORK_CHROME_ROW =
 
 export function PageHeader({
   title,
+  titleHidden = false,
   description,
   actions,
   primaryAction,
@@ -153,6 +159,9 @@ export function PageHeader({
   as: Tag = 'div',
 }: PageHeaderProps) {
   const { t } = useTranslation('common')
+  // The page a sidebar place opens is headed by the place: the place you click is the place
+  // you land on. The shell says so; anywhere else the page keeps its own title.
+  const placeName = useContext(PagePlaceContext)
   const row = useRef<HTMLDivElement>(null)
   const hasControls = useHasControls(row)
   const isPhone = useIsPhone()
@@ -171,8 +180,13 @@ export function PageHeader({
       {/* The actions wrap below the title before the title gets narrower than 10rem. */}
       <Tag className="flex min-w-0 flex-wrap items-start justify-between gap-x-2 gap-y-2 sm:gap-x-4">
         <div className="min-w-[min(100%,10rem)] flex-1">
-          <h1 className="min-w-0 break-words font-display text-title text-foreground">
-            {title}
+          <h1
+            className={cn(
+              'min-w-0 break-words font-display text-title text-foreground',
+              titleHidden && 'sr-only',
+            )}
+          >
+            {placeName ?? title}
           </h1>
         </div>
         <div

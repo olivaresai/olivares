@@ -283,6 +283,27 @@ describe('WorkComposer attachments', () => {
     )
   })
 
+  it('an image the engine is too busy to store now waits for its turn', async () => {
+    api.uploadAttachment.mockRejectedValueOnce(
+      new ApiError(
+        429,
+        'busy',
+        'other images are being stored; try again in a moment',
+        undefined,
+        {},
+        undefined,
+        '0',
+      ),
+    )
+    const field = await mount()
+    paste(field, pngFile('busy.png'))
+    expect(
+      await screen.findByRole('button', { name: 'Remove busy.png' }),
+    ).toBeTruthy()
+    expect(api.uploadAttachment).toHaveBeenCalledTimes(2)
+    expect(toasts.error).not.toHaveBeenCalled()
+  })
+
   it('pasting text is left to the field', async () => {
     const field = await mount()
     const event = fireEvent.paste(field, {

@@ -70,6 +70,7 @@ beforeEach(() => {
   router.navigate.mockReset()
   server.setupRequired = false
   server.pending = false
+  useSessionStore.setState({ engineUnreachable: false })
 })
 
 vi.mock('@tanstack/react-router', () => ({
@@ -137,6 +138,11 @@ vi.mock('./destination-sections', () => ({ DestinationSections: () => null }))
 vi.mock('./tenant-gate', () => ({
   TenantGate: ({ children }: { children: ReactNode }) => <>{children}</>,
 }))
+// Which sidebar place a page belongs to is pinned by places.test.ts and
+// document-title.test.tsx; it is not a region.
+vi.mock('./page-place-provider', () => ({
+  PagePlaceProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+}))
 vi.mock('@/features/navigation/permitted-visit', () => ({
   SettingsVisit: () => null,
 }))
@@ -151,6 +157,7 @@ import engineTools from '@/features/agentops/engine-tools.fixture.json'
 import { toolName } from '@/features/agentops/engine-tools'
 import { http } from '@/lib/api'
 import { ApiError } from '@/lib/api/errors'
+import { useSessionStore } from '@/stores/session'
 import { AppLayout } from './app-layout'
 
 const work = () => document.querySelector('main#main-content') as HTMLElement
@@ -311,6 +318,21 @@ it('never sends sign-in back to a sign-in page', () => {
   })
 })
 
+// Recovery that could not reach the engine says nothing about the session: the guard keeps
+// the page that was asked for, shows why, and offers sign-in without sending anyone there.
+it('shows the unreachable screen instead of redirecting to sign-in', () => {
+  auth.status = 'anonymous'
+  useSessionStore.setState({ engineUnreachable: true })
+  renderLayout()
+  expect(router.navigate).not.toHaveBeenCalled()
+  expect(screen.getByRole('status')).toHaveTextContent(/reach the engine/i)
+  expect(screen.queryByTestId('routed-content')).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
+    'href',
+    '/login',
+  )
+})
+
 describe('one left navigation', () => {
   it('draws the sidebar beside the sheet and nothing else that navigates, on a document page or a work page', () => {
     for (const path of ['/audit', '/sessions']) {
@@ -357,6 +379,9 @@ describe("the shell waits for the engine's tool table", () => {
     key: 'hermes',
     name: 'Hermes Agent',
     name_stem: 'hermes',
+    vendor: 'nous',
+    monogram: 'HA',
+    color: '#888892',
     session: true,
     bindings: [],
   }

@@ -37,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { toast } from '@/components/ui/toaster'
+import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { templatesApi, templatesKeys } from './api'
 import type { ApplyResult, TemplateDTO } from './types'
@@ -121,7 +122,14 @@ export function TemplateCard({ template, onEdit, onApply }: TemplateCardProps) {
       setConfirmArchive(false)
       toast.success(t('actions.archive'))
     },
-    onError: () => toast.error(t('errors.archiveFailed')),
+    // A 409 is the engine saying why: a department or group is assigned this template.
+    onError: (err) =>
+      toast.error(t('errors.archiveFailed'), {
+        description:
+          err instanceof ApiError && err.status === 409
+            ? err.message
+            : undefined,
+      }),
   })
 
   const isArchived = !!template.archived_at

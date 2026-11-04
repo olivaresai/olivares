@@ -19,6 +19,14 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
+// ErrCoreSchemaVersionAhead and ErrCoreSchemaVersionUnrecognized are Open's refusals of a
+// store whose core schema this binary does not know (a newer release migrated it). The
+// store is untouched; only a binary that knows that schema can open it.
+var (
+	ErrCoreSchemaVersionAhead        = sqlstore.ErrCoreSchemaVersionAhead
+	ErrCoreSchemaVersionUnrecognized = sqlstore.ErrCoreSchemaVersionUnrecognized
+)
+
 // Open constructs a Store for cfg, fanning each module's schema out through
 // register at construction time (the S02 §7 / schema seam: it runs once,
 // before any Scope exists). A nil register builds the core schema only.

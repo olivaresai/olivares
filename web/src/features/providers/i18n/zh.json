@@ -95,7 +95,11 @@
     "localNameHint": "此端点的显示名称，将显示在选择器中。",
     "advanced": "高级：自定义端点",
     "missingFields": "请填写缺少的字段：{{fields}}。",
-    "requiredEndpointHint": "请输入服务端点：https，或环回或私有网络地址上的普通 http。"
+    "requiredEndpointHint": "请输入服务端点：https，或环回或私有网络地址上的普通 http。",
+    "worksWith": "适用于 {{tools}}",
+    "otherKinds": "其他（自定义端点）",
+    "keyLink": "从 {{vendor}} 获取 API 密钥",
+    "docsLink": "{{vendor}} 设置指南"
   },
   "rotate": {
     "title": "更换此提供商的密钥",

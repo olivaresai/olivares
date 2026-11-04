@@ -4,33 +4,29 @@
 //
 // USAGE & COST, ONE CLICK FROM THE SIDEBAR (#3389): the official 5-hour and weekly windows
 // each account's tool reports, the account nearest its limit first, then what today's
-// sessions used. Both are reads the console already makes (the status bar's providers read
-// and Now's recent sessions, on the same cache keys), so this page never says a number the
-// bar or Now does not. A read this principal may not make is not made, and a figure nobody
-// reported is left out, never shown as 0.
+// sessions used. Both are reads the console already makes (the account list AI tools
+// shows, and Now's recent sessions, on the same cache keys), so this page never says a
+// number AI tools or Now does not. A read this principal may not make is not made, and a
+// figure nobody reported is left out, never shown as 0.
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { PageHeader } from '@/components/ui/page-header'
-import {
-  USAGE_WINDOWS,
-  useBackgroundProviders,
-  windowTone,
-} from '@/features/agent-tools/use-background-providers'
+import { useBackgroundProviders } from '@/features/agent-tools/use-background-providers'
+import { useProfileList } from '@/features/agent-tools/use-profiles'
+import { AccountUsage } from '@/features/agentops/account-usage'
 import { toolName } from '@/features/agentops/engine-tools'
+import { ToolMark } from '@/features/agentops/tool-mark'
 import { dayCost } from '@/features/home/now-sessions'
 import { useRecentSessions } from '@/features/home/use-recent-sessions'
 import { useViewAccess } from '@/features/navigation/authorization'
 import { viewById } from '@/features/navigation/model'
 import { useAuth } from '@/lib/auth/context'
+import { formatMicroUsd, formatTokens } from '@/lib/format'
 import {
-  formatDateTime,
-  formatMicroUsd,
-  formatPercent,
-  formatRelativeTime,
-  formatTokens,
-} from '@/lib/format'
-import { type AccountUsage, accountsNearestLimit } from './accounts'
-import '@/features/agent-tools/i18n'
+  accountsNearestLimit,
+  defaultLoginRows,
+  type UsageRow,
+} from './accounts'
 import './i18n'
 
 const ROW =
@@ -40,15 +36,10 @@ const LINK =
 
 export function UsageView() {
   const { t } = useTranslation('usage')
-  const { isSuperadmin } = useAuth()
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title={t('title')} description={t('subtitle')} />
-      {isSuperadmin ? (
-        <Accounts />
-      ) : (
-        <p className="text-caption text-text-2">{t('accounts.adminOnly')}</p>
-      )}
+      <Accounts />
       <Today />
     </div>
   )
@@ -56,21 +47,29 @@ export function UsageView() {
 
 function Accounts() {
   const { t } = useTranslation('usage')
+  const { can } = useAuth()
+  const accounts = useProfileList()
+  // The server user's own login: a system read, so only a system administrator makes it.
   const providers = useBackgroundProviders()
   const { listed } = useViewAccess()
+  // As on Today: a read this principal may not make is not made, and its section is not shown.
+  if (!can('sessions:account:read')) return null
   const tools = viewById('agent-tools')
   const details = tools && listed(tools) ? tools.path : null
-  const rows = accountsNearestLimit(providers.data?.providers ?? [])
+  const rows = accountsNearestLimit([
+    ...defaultLoginRows(providers.data?.providers ?? []),
+    ...(accounts.data?.accounts ?? []),
+  ])
   return (
     <section aria-labelledby="usage-accounts" className="flex flex-col gap-2">
       <h2 id="usage-accounts" className="text-body font-semibold">
         {t('accounts.heading')}
       </h2>
-      {providers.isPending ? (
+      {accounts.isPending ? (
         <p role="status" className="text-caption text-text-2">
           {t('accounts.loading')}
         </p>
-      ) : providers.isError ? (
+      ) : accounts.isError || providers.isError ? (
         <p role="alert" className="text-caption text-bad">
           {t('accounts.error')}
         </p>
@@ -79,7 +78,7 @@ function Accounts() {
       ) : (
         <ul className="flex flex-col">
           {rows.map((row) => (
-            <AccountRow key={row.instance} row={row} details={details} />
+            <AccountRow key={row.account_ref} account={row} details={details} />
           ))}
         </ul>
       )}
@@ -88,64 +87,33 @@ function Accounts() {
 }
 
 function AccountRow({
-  row,
+  account,
   details,
 }: {
-  row: AccountUsage
+  account: UsageRow
   details: string | null
 }) {
-  const { t } = useTranslation(['usage', 'agentTools'])
-  const login = t(
-    row.default
-      ? 'agentTools:providers.default'
-      : 'agentTools:providers.olivares',
-  )
-  const name = [toolName(row.driver), row.plan].filter(Boolean).join(' · ')
+  const { t } = useTranslation('usage')
+  const name = account.display_name || account.name
   return (
-    <li className={ROW} data-account={row.instance}>
+    <li className={ROW} data-account={account.account_ref}>
+      <ToolMark driver={account.driver} />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <p className="truncate text-body font-medium">{name}</p>
-        <p className="text-caption text-text-2 tabular-nums">
-          {row.windows.map((w, i) => {
-            const key = USAGE_WINDOWS[w.label as keyof typeof USAGE_WINDOWS]
-            return (
-              <span key={`${w.label}-${i}`}>
-                {i > 0 ? ' · ' : null}
-                <span className={windowTone(w.percent)}>
-                  {formatPercent(Math.round(w.percent), { digits: 0 })}{' '}
-                  {key ? t(`usage:windows.${key}`) : w.label}
-                </span>
-              </span>
-            )
-          })}
-          {row.resetsAt ? (
-            <>
-              {' · '}
-              <time
-                dateTime={row.resetsAt}
-                title={formatDateTime(row.resetsAt)}
-              >
-                {t('usage:accounts.resets', {
-                  when: formatRelativeTime(row.resetsAt),
-                })}
-              </time>
-            </>
-          ) : null}
-        </p>
+        <AccountUsage usage={account.usage} showUnknown className="truncate" />
         <p className="truncate text-caption text-text-3">
-          {[login, row.email].filter(Boolean).join(' · ')}
-          {row.stale
-            ? ` · ${t('usage:accounts.stale', { at: formatDateTime(row.checkedAt) })}`
-            : null}
+          {[toolName(account.driver), account.identity]
+            .filter(Boolean)
+            .join(' · ')}
         </p>
       </div>
       {details ? (
         <Link
           to={details as never}
           className={LINK}
-          aria-label={t('usage:accounts.detailsFor', { account: name })}
+          aria-label={t('accounts.detailsFor', { account: name })}
         >
-          {t('usage:accounts.details')}
+          {t('accounts.details')}
         </Link>
       ) : null}
     </li>

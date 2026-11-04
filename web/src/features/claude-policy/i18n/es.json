@@ -8,7 +8,8 @@
     "managedMcp": "MCP y plugins",
     "sandbox": "Sandbox y egress",
     "policyAsCode": "Policy-as-code",
-    "hitl": "HITL agente gestionado"
+    "hitl": "HITL agente gestionado",
+    "departmentInstructions": "Instrucciones de departamento"
   },
   "seam": {
     "badge": "Backend pendiente",
@@ -296,5 +297,20 @@
     "openFindings_one": "{{count}} hallazgo abierto",
     "openFindings_many": "{{count}} hallazgos abiertos",
     "openFindings_other": "{{count}} hallazgos abiertos"
+  },
+  "department": {
+    "title": "Archivo de instrucciones del departamento",
+    "hint": "El archivo de instrucciones de un departamento, generado a partir de lo que el departamento lleva: el mismo texto que reciben sus sesiones. Previsualícelo y publíquelo para las estaciones del departamento. Un departamento sin instrucciones retira su archivo publicado.",
+    "select": "Departamento",
+    "selectPlaceholder": "Elija un departamento",
+    "preview": "Previsualizar",
+    "publish": "Publicar",
+    "published": "Archivo de instrucciones publicado.",
+    "previewFailed": "No se pudo previsualizar el archivo del departamento",
+    "fileLabel": "Archivo de instrucciones del departamento",
+    "digest": "SHA-256 {{sha}}",
+    "revisions_one": "{{count}} revisión publicada",
+    "revisions_many": "{{count}} revisiones publicadas",
+    "revisions_other": "{{count}} revisiones publicadas"
   }
 }

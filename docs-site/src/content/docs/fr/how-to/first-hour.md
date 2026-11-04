@@ -22,8 +22,8 @@ Ouvrez l’adresse affichée. La première installation utilise un certificat
 auto-signé ; vérifiez que vous ouvrez bien votre propre serveur avant d’accepter
 l’avertissement du navigateur. Saisissez le jeton de configuration, votre adresse
 e-mail et un mot de passe pour créer le premier administrateur. Gardez le jeton
-et le mot de passe confidentiels. La console vous connecte et ouvre l’assistant
-de configuration.
+et le mot de passe confidentiels. La console vous connecte et ouvre
+Sessions, avec le champ de votre premier message à l’écran.
 
 Le conteneur exécute les outils sur le serveur. Un outil connecté sur votre
 ordinateur portable correspond à une autre installation ; sa connexion n’est pas
@@ -31,7 +31,7 @@ copiée dans le conteneur.
 
 ## 2. Choisir un outil et sa connexion
 
-Utilisez l’assistant ou ouvrez **Outils** (`/agent-tools`). Chaque outil indique
+Utilisez les cartes de Sessions ou ouvrez **Outils** (`/agent-tools`). Chaque outil indique
 s’il est installé et connecté. S’il manque, examinez son installation et
 approuvez-la. Utilisez la commande de connexion de l’outil et suivez son propre
 parcours de connexion. Pour Claude Code ou Codex, approuvez la connexion avec
@@ -75,7 +75,7 @@ cette indication dans **Outils**, puis revenez à la session.
 
 ## 4. Approuver une action
 
-Pour essayer une approbation, choisissez **Plus d’options → Demander avant chaque
+Pour essayer une approbation, choisissez **Ce que l’agent peut faire → Demander avant chaque
 action** au démarrage de la session. Demandez à l’outil d’exécuter une commande
 inoffensive dans le projet. Lorsqu’il demande l’autorisation, ouvrez **Règles**. La
 demande qui attend votre décision est marquée en orange et ouverte à côté de la file

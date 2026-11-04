@@ -47,6 +47,11 @@ type BundleInput struct {
 	SnapshotPath string
 	// SealedKeys maps an in-bundle path ("keys/<name>.enc") to its AES-GCM blob.
 	SealedKeys map[string][]byte
+	// Trees are the sealed directories to carry (PackTree, CollectTrees);
+	// WriteAuthenticatedBundle records them in the manifest. NotIncluded is the
+	// list of directories the backup left out.
+	Trees       []*PackedTree
+	NotIncluded []NotIncluded
 
 	// sealedSnapshot is the sealed twin of SnapshotPath that goes in the tar in its
 	// place. Only WriteAuthenticatedBundle sets it, so a caller cannot ship a
@@ -72,6 +77,13 @@ func WriteAuthenticatedBundle(w io.Writer, in BundleInput, cipher *KeyCipher) er
 		in.Manifest.Store.Encryption = snapshotEncChunked
 	}
 	in.Manifest.Format = ManifestFormat
+	in.Manifest.Trees, in.Manifest.NotIncluded = nil, in.NotIncluded
+	for _, p := range in.Trees {
+		in.Manifest.Trees = append(in.Manifest.Trees, p.Tree)
+	}
+	if err := validateTrees(in.Manifest.Trees); err != nil {
+		return err
+	}
 	if err := AuthenticateBundle(in, cipher); err != nil {
 		return err
 	}
@@ -121,6 +133,11 @@ func WriteBundle(w io.Writer, in BundleInput) error {
 			src = in.sealedSnapshot
 		}
 		if err := writeTarFile(tw, in.Manifest.Store.memberPath(), src); err != nil {
+			return err
+		}
+	}
+	for _, p := range in.Trees {
+		if err := writeTarFile(tw, p.Tree.Member, p.sealed); err != nil {
 			return err
 		}
 	}

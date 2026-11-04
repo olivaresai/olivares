@@ -146,7 +146,7 @@ func (t *statelessHTTPTransport) send(ctx context.Context, body []byte, hdr map[
 		}
 		return nil, resp.StatusCode, resp.Header.Get("WWW-Authenticate"), nil
 	}
-	reader := io.LimitReader(resp.Body, maxHTTPBody)
+	reader := io.LimitReader(resp.Body, MaxHTTPBody)
 	if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
 		res, err := responseFromSSE(reader, id, &t.obs)
 		return res, resp.StatusCode, "", err
@@ -168,7 +168,7 @@ func (t *statelessHTTPTransport) notify(ctx context.Context, method string, para
 		return err
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxHTTPBody))
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, MaxHTTPBody))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("mcp: http %s", resp.Status)
 	}
@@ -214,7 +214,7 @@ func (t *statelessHTTPTransport) listen(ctx context.Context, req rpcRequest, onE
 	}
 
 	acked, tornDown := false, false
-	err = scanSSE(io.LimitReader(resp.Body, maxHTTPBody), func(msg rpcMessage) error {
+	err = scanSSE(io.LimitReader(resp.Body, MaxHTTPBody), func(msg rpcMessage) error {
 		if msg.Method == "" {
 			if msg.isResponseTo(id) {
 				if msg.Error != nil {
@@ -427,7 +427,7 @@ func rpcErrorFromBody(resp *http.Response) *rpcError {
 	if !strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
 		return nil
 	}
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxHTTPBody))
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, MaxHTTPBody))
 	if err != nil {
 		return nil
 	}
@@ -458,7 +458,7 @@ func subscriptionIDOf(params json.RawMessage) string {
 // reader errors, or onMessage returns an error.
 func scanSSE(r io.Reader, onMessage func(rpcMessage) error) error {
 	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 0, 64*1024), maxHTTPBody)
+	sc.Buffer(make([]byte, 0, 64*1024), MaxHTTPBody)
 	var data strings.Builder
 	flush := func() error {
 		if data.Len() == 0 {

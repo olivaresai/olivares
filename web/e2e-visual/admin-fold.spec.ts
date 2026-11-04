@@ -107,6 +107,7 @@ test('Settings lists personal sections only, and License is its own page', async
     await expect(list.getByRole('button', { name, exact: true })).toHaveCount(0)
   await capture(page, 'settings')
 
+  await sidebar(page).getByRole('button', { name: 'More', exact: true }).click()
   await sidebar(page)
     .getByRole('link', { name: 'License', exact: true })
     .click()
@@ -194,6 +195,9 @@ test('measures the two Admin and Settings tasks of the 0.5 table in clicks from 
 
   await page.goto('/')
   clicks = 0
+  // A new person's navigation holds the first places; People & groups is under More.
+  await sidebar(page).getByRole('button', { name: 'More', exact: true }).click()
+  clicks++
   await sidebar(page)
     .getByRole('link', { name: 'People & groups', exact: true })
     .click()

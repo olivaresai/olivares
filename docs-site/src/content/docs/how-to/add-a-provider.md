@@ -146,7 +146,10 @@ For `anthropic`, `openai` and `xai`, OpenCode accepts only the vendor's own endp
 Gemini CLI uses a `gemini` provider key at Google's own API address; it accepts no
 custom endpoint. Install it under **AI tools** or with `olivares tool install gemini`.
 The official portable bundle needs Node.js 20 or newer on the engine host.
-For a Google account, create a Gemini profile and use
+Start with an API key. Since 18 June 2026 Gemini CLI works with a paid Gemini API key
+or a Gemini Code Assist Standard or Enterprise account; free personal Google accounts,
+Google AI Pro and Google AI Ultra no longer work.
+For a Code Assist Google account, create a Gemini profile and use
 `olivares tool login gemini --account <name>`; each profile has its own native
 `.gemini` authentication home. API-key profiles refuse conflicting native Google,
 Vertex or gateway settings rather than selecting another identity.
@@ -226,6 +229,7 @@ uses its authorized tool login and needs neither variable.
 
 ## Related
 
+- [Providers and tools](/reference/providers-and-tools/)
 - [Operate a provider session](/how-to/operate-provider-sessions/)
 - [Your first hour](/how-to/first-hour/)
 - [CLI reference](/reference/cli/)

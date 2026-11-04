@@ -173,6 +173,8 @@ describe('the console load guard (index.html)', () => {
     ['es', 'Recargando la consola…'],
     ['it', 'Ricaricamento della console…'],
     ['ko', '콘솔을 다시 불러오는 중…'],
+    ['uk', 'Консоль перезавантажується…'],
+    ['pt', 'A recarregar a consola…'],
   ])('says it in the console language (%s)', (lang, text) => {
     localStorage.setItem('olivares.lang', lang)
     failedScript()

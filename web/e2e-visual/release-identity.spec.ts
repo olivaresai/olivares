@@ -102,6 +102,7 @@ for (const theme of ['light', 'dark']) {
           page.getByRole('dialog', { name: 'New session' }),
         ).toBeVisible()
         await page
+          .getByRole('dialog', { name: 'New session' })
           .getByLabel('First message (optional)')
           .fill('Check the release identity')
         await page

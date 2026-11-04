@@ -271,15 +271,16 @@
     "submit": "Entregar",
     "message": "Mensaje del commit",
     "messageHint": "Solo se usa si la carpeta de la sesión tiene cambios. Por defecto, el título.",
-    "shipped": "Entregado: {{branch}} está subida.",
+    "shipped": "Entregado: <branch /> está subida.",
+    "shippedToast": "Entregado.",
     "pullRequest": "Pull request n.º {{number}}",
     "pullRequestOpen": "Abrir la pull request",
     "awaitingTitle": "Esperando la aprobación de otra persona",
     "awaitingBody": "Tus cambios están confirmados. Otra persona debe aprobar el push (aprobación {{id}}) antes de que salga. Cuando lo haya hecho, entrega de nuevo.",
     "again": "Entregar de nuevo",
     "incompleteTitle": "La entrega no terminó",
-    "incompletePush": "El push de {{branch}} no se aplicó ({{state}}). Revisa las intenciones de este destino y entrega de nuevo.",
-    "incompletePullRequest": "{{branch}} está subida, pero no se abrió la pull request ({{code}}). Entrega de nuevo para reintentarlo.",
+    "incompletePush": "El push de <branch /> no se aplicó ({{state}}). Revisa las intenciones de este destino y entrega de nuevo.",
+    "incompletePullRequest": "<branch /> está subida, pero no se abrió la pull request ({{code}}). Entrega de nuevo para reintentarlo.",
     "pullRequests": "Pull requests"
   }
 }

@@ -33,6 +33,10 @@ import { AccessReviewSection } from './roles-access-review-section'
 // Shared with the CLI fixture tests.
 import answer from './testdata/effective-rights.json'
 
+vi.mock('@tanstack/react-router', async () =>
+  (await import('@/test/fake-router')).fakeRouterModule(),
+)
+
 function renderSection() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },

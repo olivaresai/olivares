@@ -55,6 +55,7 @@ var corePermissions = map[string]string{
 	"saveSessionIdleSettings": "system:admin",
 	"getTracingSettings":      "system:admin",
 	"saveTracingSettings":     "system:admin",
+	"getHostStatus":           "system:admin",
 	// Agents + access graph (handlers_core.go).
 	"listAgents":      "agent:read",
 	"getAgent":        "agent:read",
@@ -240,6 +241,8 @@ var corePermissionExempt = map[string]bool{
 	"deleteWebAuthnCredential":    true,
 	"getPIVStatus":                true,
 	"elevatePIV":                  true,
+	// Any authenticated operator can report a failed view; the engine decides whether telemetry is on.
+	"reportConsoleError": true,
 }
 
 // stampCorePermissions walks the built paths object and stamps

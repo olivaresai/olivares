@@ -31,8 +31,11 @@ import (
 // ledger — a DR incident.
 func drDrillCmd() *cobra.Command {
 	var events int
-	var keepArtifacts bool
-	var scratchDSN, pgDumpPath, pgRestorePath string
+	var keepArtifacts, noRecord bool
+	var scratchDSN, pgDumpPath, pgRestorePath, from string
+	var rtoTarget, rpoTarget time.Duration
+	var sf drFlags
+	var kf kekFlags
 	cmd := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "write"},
 		Use:         "drill",
@@ -42,13 +45,25 @@ func drDrillCmd() *cobra.Command {
 			"verify). With --scratch-dsn it runs the same round trip on PostgreSQL, in\n" +
 			"throwaway databases it creates and removes, and prints that RTO next to the\n" +
 			"SQLite one. It does not check grants, key custody or effects after the restore\n" +
-			"point, and it never touches a real data directory (docs/DR-RUNBOOK.md §8).",
+			"point, and it never touches a real data directory (docs/DR-RUNBOOK.md §8).\n\n" +
+			"With --from it drills a REAL SQLite bundle instead: the bundle is restored into a\n" +
+			"throwaway directory with no engine and no network, its whole ledger is re-verified,\n" +
+			"and the report (measured RTO, the RPO the bundle gives now, both against the targets\n" +
+			"you pass) is sealed as a signed `dr.drill` event in this estate's audit ledger, where\n" +
+			"the audit archive and the evidence bundle carry it. Exit 7: it restored but missed a\n" +
+			"target.",
 		Example: "  olivares dr drill --events 100\n" +
-			"  olivares dr drill --events 100 --scratch-dsn env:OLIVARES_SCRATCH_DSN",
+			"  olivares dr drill --events 100 --scratch-dsn env:OLIVARES_SCRATCH_DSN\n" +
+			"  olivares dr drill --from /srv/backups/olivares-2026-07-14.drbundle --passphrase-file /run/secrets/dr-passphrase --rto-target 30m --rpo-target 24h",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := checkCMEKInstall(""); err != nil {
 				return err
+			}
+			if from != "" {
+				return drillFromBundle(cmd, drDrillFromOpts{
+					from: from, kf: kf, sf: sf, rtoTarget: rtoTarget, rpoTarget: rpoTarget, noRecord: noRecord, scratchDSN: scratchDSN,
+				})
 			}
 			ctx := cmd.Context()
 			w := cmd.OutOrStdout()
@@ -176,6 +191,12 @@ func drDrillCmd() *cobra.Command {
 	cmd.Flags().StringVar(&scratchDSN, "scratch-dsn", "", "also run the drill on PostgreSQL: maintenance DSN of a server where throwaway databases and roles may be created and dropped; accepts a file:/env: reference only")
 	cmd.Flags().StringVar(&pgDumpPath, "pg-dump", "pg_dump", "pg_dump executable (with --scratch-dsn only)")
 	cmd.Flags().StringVar(&pgRestorePath, "pg-restore", "pg_restore", "pg_restore executable (with --scratch-dsn only)")
+	cmd.Flags().StringVar(&from, "from", "", "drill this real SQLite DR bundle in a throwaway directory instead of a synthetic ledger, and seal the report in the audit ledger")
+	cmd.Flags().DurationVar(&rtoTarget, "rto-target", 0, "with --from: the RTO the restore must meet, for example 30m (0 sets none)")
+	cmd.Flags().DurationVar(&rpoTarget, "rpo-target", 0, "with --from: the oldest restore point you accept, for example 24h (0 sets none)")
+	cmd.Flags().BoolVar(&noRecord, "no-record", false, "with --from: a dry run, do not seal the report in the audit ledger")
+	addKEKFlags(cmd, &kf)
+	addDRStoreFlags(cmd, &sf)
 	return cmd
 }
 

@@ -20,6 +20,10 @@ export const VIEWS = [
     navigation: { kind: 'root' },
     helpHref: '/',
     icon: LayoutDashboard,
+    changes: [
+      { permission: 'sessions:run:write' },
+      { permission: 'governance:approval:admin' },
+    ],
     element: lazyView(HomeView),
   },
 ] satisfies ViewEntry[]

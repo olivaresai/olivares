@@ -41,7 +41,7 @@ Werkzeuganmeldung und benötigt keine der beiden Variablen. Siehe
 
 Öffnen Sie **Sitzungen → Neue Sitzung** und wählen Sie ein bereites Werkzeug. Die
 Engine füllt Profil und Ordner aus. Für die README-Compose-Installation wählen Sie
-**Ordner ändern** und geben `/project` ein, um an Ihrem eingebundenen Host-Projekt
+**Ordner → Anderer Ordner …** und geben `/project` ein, um an Ihrem eingebundenen Host-Projekt
 zu arbeiten. Mit dem Standardordner müssen Sie keinen Pfad eintippen. Lassen Sie
 **First message** leer, um zu starten, und schreiben Sie dann in der Unterhaltung,
 oder geben Sie die Nachricht ein, bevor Sie **Starten** drücken.
@@ -90,7 +90,7 @@ docker compose exec olivares olivares session follow first-hour
 
 ## Genehmigen, unterbrechen, stoppen und fortsetzen
 
-Unter **Weitere Optionen** veranlasst **Vor jeder Aktion nachfragen**, dass das
+Unter **Was der Agent tun darf** veranlasst **Vor jeder Aktion nachfragen**, dass das
 Werkzeug vor jeder Aktion fragt. Unter **Regeln** steht die Anfrage, die auf Sie
 wartet, offen neben der Warteschlange, mit ihrem Befehl, dem Ziel, das sie erreicht,
 und der Regel, die nachgefragt hat. Wählen Sie **Einmal genehmigen** (`A`) oder

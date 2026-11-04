@@ -7,6 +7,7 @@
 // thin clients for compatibility and the server answers 501. Local sign-in, passkeys,
 // TOTP and inbound SCIM use the same contracts in both editions.
 import { http } from '@/lib/api'
+import { auditApi } from '@/lib/api/endpoints'
 import type { RequestOptions } from '@/lib/api/client'
 import { ApiError } from '@/lib/api/errors'
 import type { ListResponse, LoginResponse } from '@/lib/api/types'
@@ -171,6 +172,10 @@ export const identityApi = {
       query: { ...params },
       signal: opts?.signal,
     }),
+
+  /** The ledger head (`head_seq`, 0 for an empty ledger), from the newest-events read the
+   *  engine does not record: the one way to address the END of a ledger that pages forwards. */
+  auditHead: async () => (await auditApi.recent({ limit: 1 })).head_seq,
 
   // --- Business: WIF object graph -----------------------------------------
   /** The rich fdis_/fdrl_/svac_ objects (CEL/lifetime/scope/jwks/subject) the linter

@@ -1,4 +1,23 @@
 {
+  "pathChip": {
+    "open": "Open in {{editor}}",
+    "copyRelative": "Copy relative path",
+    "copyFull": "Copy full path"
+  },
+  "race": {
+    "cleanupFailed": "The chosen branch is already merged. Some other worktrees remain; retry to finish discarding them.",
+    "title": "Compare sessions",
+    "hint": "Review each branch and its cost. Commit any edits you want to keep before choosing.",
+    "keep": "Keep this one",
+    "confirm": "Stop all sessions, merge {{name}} into the repository, and permanently discard the other worktrees and their unmerged changes?",
+    "confirmKeep": "Merge and discard the others",
+    "kept": "The chosen branch is merged. The other worktrees were discarded.",
+    "invalid": "Choose distinct worktree sessions from the same repository.",
+    "loadError": "Could not read every session. Check access and try again.",
+    "notStopped": "A session did not stop. No branches were merged or discarded.",
+    "failed": "Could not keep this session.",
+    "uncommitted": "Uncommitted changes and Git"
+  },
   "compact": {
     "context": "Context",
     "now": "Compact now",
@@ -9,6 +28,8 @@
     "failed": "Compaction was not confirmed. Your message was not sent."
   },
   "git": {
+    "init": "Initialize Git",
+    "noRepository": "This folder is not a Git repository.",
     "title": "Git",
     "branch": "Branch",
     "newBranch": "New branch",
@@ -94,7 +115,7 @@
     "lastSeen": "Last event",
     "minimalData": "Only metadata is shown. By design the engine never carries SQL, payloads or secrets here (minimal-data).",
     "viewAccess": "Access map",
-    "viewInventory": "Inventory"
+    "viewInventory": "Discovered resources"
   },
   "timeline": {
     "title": "Timeline",
@@ -308,7 +329,18 @@
     "unsnooze": "Unsnooze",
     "markDone": "Mark done",
     "markNotDone": "Mark not done",
+    "markUnread": "Mark unread",
+    "markRead": "Mark read",
+    "unreadMark": "Unread",
     "markFailed": "The mark could not be changed."
+  },
+  "undo": {
+    "archived": "Archived \"{{name}}\"",
+    "snoozed": "Snoozed \"{{name}}\"",
+    "done": "Marked \"{{name}}\" done",
+    "unpinned": "Unpinned \"{{name}}\"",
+    "changed": "This session changed; nothing was undone",
+    "failed": "The change could not be undone."
   },
   "surface": {
     "openBeside": "Open beside",
@@ -357,11 +389,6 @@
     "costUnknown": "cost not reported",
     "costPartial": "{{cost}} (partial)",
     "viewCosts": "View costs",
-    "planLabel": "The plan's usage windows of this session's login",
-    "planNotRead": "plan window not read",
-    "resets": "Resets {{when}} ({{at}})",
-    "stale": "last known",
-    "readAt": "Read {{at}}",
     "permission": "{{name}}: {{what}}",
     "full": "Full: runs without asking, confined by <policy>Olivares policy</policy>"
   },
@@ -419,7 +446,6 @@
     "identifiersHint": "References to copy. They are not the names on the scope line.",
     "wireTitle": "Selected line",
     "wireHint": "The selected line exactly as the tool sent it. The conversation is the default view.",
-    "wireEmpty": "Select a line in the conversation to see it exactly as the tool sent it.",
     "thisNode": "This node",
     "workTitle": "Session work authority",
     "workHint": "Recorded for the last launch. Every action checks current authorization.",
@@ -472,6 +498,11 @@
       "week": "{{percent}}% of the week"
     }
   },
+  "backgroundTasks": {
+    "label": "Background tasks",
+    "stop": "Stop {{name}}",
+    "stopFailed": "The task could not be stopped."
+  },
   "conversation": {
     "log": "Conversation",
     "waiting": "Waiting for the session…",
@@ -514,6 +545,7 @@
     "sentPending": "Sent. Waiting for the tool to take it.",
     "sentNotTaken": "The session ended before the tool took it.",
     "finishedIn": "Finished in {{duration}}",
+    "interrupted": "Interrupted by you",
     "escToInterrupt": "Esc to interrupt",
     "background": "In the background",
     "agentWorking": "Working",
@@ -588,6 +620,29 @@
     "fileTruncated": "Showing the first 256 KB.",
     "truncated": "Showing the newest {{count}} files."
   },
+  "checkpoints": {
+    "title": "Turns",
+    "hint": "What each message of this session changed in its folder. Rewind puts the files back as they were before a turn.",
+    "turn": "Turn {{n}}",
+    "filesChanged": "Files changed: {{n}}",
+    "showFiles": "Files",
+    "status": {
+      "added": "added",
+      "modified": "modified",
+      "deleted": "deleted"
+    },
+    "rewind": "Rewind",
+    "undo": "Undo the rewind",
+    "noWords": "(no text)",
+    "rewound": "Folder rewound ({{n}} files put back or removed). Your message is in the message box.",
+    "undone": "Rewind undone ({{n}} files put back or removed).",
+    "confirm": {
+      "title": "Rewind to before turn {{n}}?",
+      "description": "Files touched: {{n}}. They go back as they were before this turn; files the agent created since are removed.",
+      "action": "Rewind",
+      "conversation": "Only files change. The tool keeps its conversation. The message of this turn is put in the message box so you can edit it and send it again."
+    }
+  },
   "preview": {
     "title": "Preview",
     "hint": "The app this session serves on a local port. It runs in your browser, isolated from the console and outside the session's network limits.",
@@ -602,7 +657,9 @@
     "reload": "Reload",
     "newTab": "Open in a new tab",
     "openError": "The preview could not be opened. The port may have closed.",
-    "frameTitle": "Preview of port {{port}}"
+    "frameTitle": "Preview of port {{port}}",
+    "annotate": "Annotate",
+    "annotating": "Click an element in the page to leave a note on it."
   },
   "branchChanges": {
     "title": "Branch changes",
@@ -661,11 +718,13 @@
       "snoozed": "Snoozed",
       "archived": "Archived"
     },
+    "agentCount_one": "{{count}} agent",
+    "agentCount_other": "{{count}} agents",
     "more": "More",
     "back": "Back to sessions",
     "showTable": "Show as table",
     "filter": "Filter sessions…",
-    "recent": "Showing the {{n}} most recent",
+    "recent": "{{n}} most recent",
     "loadMore": "Load more",
     "noMatch": "No session matches."
   },
@@ -788,7 +847,6 @@
     "cancel": "Cancel",
     "archive": "Archive",
     "unarchive": "Unarchive",
-    "archived": "Archived. It is under Archived at the end of the list.",
     "unarchived": "Back in the list.",
     "copyLink": "Copy link",
     "copyId": "Copy session id",

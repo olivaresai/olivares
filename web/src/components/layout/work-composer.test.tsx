@@ -745,7 +745,7 @@ describe('WorkComposer layout and disclosure', () => {
     expect(field).toHaveAttribute('rows', '2')
     expect(field).toHaveAttribute(
       'placeholder',
-      'Ask anything, / for commands and skills',
+      'Ask anything, @ for files and folders, / for commands and skills',
     )
     expect(field.className).toContain('max-h-48')
     expect(field.className).toContain('resize-none')
@@ -1043,7 +1043,7 @@ describe('WorkComposer — attached session input', () => {
     await screen.findByTestId('launcher-input')
     expect(screen.getByTestId('launcher-input')).toHaveAttribute(
       'placeholder',
-      'Ask anything, / for commands and skills',
+      'Ask anything, @ for files and folders, / for commands and skills',
     )
     expect(screen.getByTestId('composer-advanced')).toBeInTheDocument()
     expect(
@@ -1239,7 +1239,7 @@ describe('WorkComposer — model and effort', () => {
       await user.click(await screen.findByLabelText('Service tier'))
       await user.click(screen.getByRole('option', { name: 'priority' }))
       await user.click(screen.getByLabelText('Effort'))
-      await user.click(screen.getByRole('option', { name: 'high' }))
+      await user.click(screen.getByRole('option', { name: 'High' }))
       api.profileModels.mockRejectedValue(new Error('Catalog offline'))
       await qc.invalidateQueries({
         predicate: (q) => q.queryKey.includes('models'),
@@ -1284,7 +1284,7 @@ describe('WorkComposer — model and effort', () => {
     expect(await screen.findByLabelText('Fast mode')).toHaveTextContent('On')
     expect(screen.queryByTestId('composer-new-with-choice')).toBeNull()
     await user.click(screen.getByLabelText('Effort'))
-    await user.click(screen.getByRole('option', { name: 'high' }))
+    await user.click(screen.getByRole('option', { name: 'High' }))
     await user.click(screen.getByTestId('composer-new-with-choice'))
     expect(useNewSessionDialog.getState().advanced).toMatchObject({
       fastMode: true,
@@ -1357,6 +1357,36 @@ describe('WorkComposer — model and effort', () => {
       model: 'claude-opus-5-5',
       fastMode: false,
     })
+  })
+
+  // The catalog names the exact id each selector launches on, so a session recorded under
+  // that id is matched to its selector and takes the selector's Fast mode support.
+  it('offers Fast On for a session recorded under the exact id its catalog selector launches on', async () => {
+    const user = userEvent.setup()
+    api.profileModels.mockResolvedValue({
+      state: 'fresh',
+      models: [
+        {
+          id: 'default',
+          launch_model: 'claude-opus-5-5',
+          supports_fast_mode: true,
+        },
+      ],
+    })
+    renderIntel(
+      <WorkComposer
+        attached={{
+          ...ATTACHED,
+          run: { ...ATTACHED.run, model_ref: 'claude-opus-5-5' },
+        }}
+      />,
+    )
+    await user.click(await screen.findByTestId('composer-tool-model'))
+    await user.click(await screen.findByLabelText('Fast mode'))
+    expect(screen.getByRole('option', { name: 'On' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
   })
 
   it('drops Fast On when another model is picked and hides unsupported speed controls', async () => {
@@ -1471,7 +1501,7 @@ describe('WorkComposer — model and effort', () => {
     await user.click(await screen.findByText('Claude Haiku 5.5'))
     expect(
       await screen.findByText(
-        'This session keeps Claude Code · Opus 5.5 · medium. A different choice starts a new session.',
+        'This session keeps Claude Code · Opus 5.5 · Medium. A different choice starts a new session.',
       ),
     ).toBeInTheDocument()
     await user.click(screen.getByTestId('composer-new-with-choice'))
@@ -1557,7 +1587,7 @@ describe('WorkComposer — model and effort', () => {
     await user.click(chip)
     await screen.findByText('Claude Haiku 5.5')
     await user.click(screen.getByLabelText('Effort'))
-    await user.click(await screen.findByRole('option', { name: 'high' }))
+    await user.click(await screen.findByRole('option', { name: 'High' }))
     await user.click(screen.getByTestId('composer-new-with-choice'))
     expect(useNewSessionDialog.getState().advanced).toMatchObject({
       model: 'opus-5-5',
@@ -1586,7 +1616,7 @@ describe('WorkComposer — model and effort', () => {
     await user.click(await screen.findByTestId('composer-tool-model'))
     await screen.findByText('Claude Haiku 5.5')
     await user.click(screen.getByLabelText('Effort'))
-    await user.click(await screen.findByRole('option', { name: 'high' }))
+    await user.click(await screen.findByRole('option', { name: 'High' }))
     await user.click(screen.getByTestId('composer-new-with-choice'))
     expect(useNewSessionDialog.getState().advanced).toMatchObject({
       model: '',
@@ -1670,7 +1700,9 @@ describe('WorkComposer — three pickers and a field that teaches', () => {
       const picker = await screen.findByTestId(id)
       const words = picker.querySelector('span')
       expect(words?.className.split(/\s+/)).toContain('truncate')
-      expect(picker.lastElementChild?.tagName.toLowerCase()).toBe('svg')
+      // The access is a label with a lock in front, not a picker: no chevron after it.
+      if (id !== 'composer-access')
+        expect(picker.lastElementChild?.tagName.toLowerCase()).toBe('svg')
     }
     // The effort is one short word: the model and the access give way before it.
     expect(screen.getByTestId('composer-effort').className).toContain(
@@ -1678,13 +1710,32 @@ describe('WorkComposer — three pickers and a field that teaches', () => {
     )
   })
 
-  it("opens the access picker on the session's permission, kept until a new session", async () => {
+  // #3987: the access cannot change inside a running session, so the chip is a label with
+  // a lock, not a picker with a chevron, and its button does not claim a choice was made.
+  it("shows the session's access as a locked label, kept until a new session", async () => {
     const user = userEvent.setup()
     renderIntel(<WorkComposer attached={attached} />)
-    await user.click(await screen.findByTestId('composer-access'))
+    const chip = await screen.findByTestId('composer-access')
+    expect(chip.querySelector('.lucide-chevron-down')).toBeNull()
+    expect(chip.querySelector('.lucide-lock')).not.toBeNull()
+    await user.click(chip)
+    const panel = await screen.findByTestId('composer-access-panel')
+    expect(panel).toHaveTextContent(/A different access starts a new session/)
     expect(
-      await screen.findByTestId('composer-access-panel'),
-    ).toHaveTextContent(/A different access starts a new session/)
+      within(panel).queryByRole('button', {
+        name: /with this choice/i,
+      }),
+    ).toBeNull()
+    await user.click(
+      within(panel).getByRole('button', {
+        name: 'New session with different access…',
+      }),
+    )
+    const { useNewSessionDialog } =
+      await import('@/features/first-hour/new-session-store')
+    expect(useNewSessionDialog.getState().advanced).toMatchObject({
+      open: true,
+    })
   })
 
   it('draws how full the context is when the tool reports its window, and nothing otherwise', async () => {
@@ -1757,7 +1808,7 @@ describe('WorkComposer — three pickers and a field that teaches', () => {
     renderIntel(<WorkComposer attached={attached} />)
     expect(await screen.findByTestId('launcher-input')).toHaveAttribute(
       'placeholder',
-      'Ask anything, / for commands and skills',
+      'Ask anything, @ for files and folders, / for commands and skills',
     )
   })
 })

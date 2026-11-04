@@ -47,6 +47,7 @@ func TestCoreOpenAPIPermissionAnnotations(t *testing.T) {
 		"deleteWebAuthnCredential":    true,
 		"getPIVStatus":                true,
 		"elevatePIV":                  true,
+		"reportConsoleError":          true,
 	}
 
 	h := newHarness(t)

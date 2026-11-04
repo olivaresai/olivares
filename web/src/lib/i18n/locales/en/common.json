@@ -106,7 +106,19 @@
     "scope": "in {{name}}",
     "footerMove": "move",
     "footerOpen": "open",
-    "footerCommands": "commands only"
+    "footerCommands": "commands only",
+    "objectActions": "For {{name}}",
+    "footerPeople": "people",
+    "footerSessions": "sessions",
+    "peopleHint": "Type a name."
+  },
+  "hintBar": {
+    "move": "move",
+    "open": "open",
+    "approve": "approve",
+    "deny": "deny",
+    "launcher": "launcher",
+    "command": "command"
   },
   "permissionWords": {
     "read": "read access",
@@ -327,11 +339,16 @@
         "last": "Last session",
         "open": "Open the session",
         "pin": "Pin or unpin it",
+        "undo": "Undo the last archive, snooze, done or unpin",
         "menu": "Open the session's actions menu"
       },
       "session": {
         "new": "New session",
         "previous": "Return to the previous session"
+      },
+      "list": {
+        "next": "Move to the next row",
+        "previous": "Move to the previous row"
       },
       "sourceDiff": {
         "nextFile": "Next file",
@@ -342,15 +359,20 @@
       "approvals": {
         "approve": "Approve the open request once",
         "deny": "Deny the open request"
+      },
+      "accessMap": {
+        "fullScreen": "Enter or leave the full-screen map"
       }
     },
     "when": {
       "railFocused": "in the session rail",
+      "outsideList": "outside a list",
       "launcherFocused": "in the launcher field",
       "workSurface": "on the sessions screen",
       "sessionHistory": "when a previous session is available",
       "paletteRecent": "in palette results with an empty query",
-      "approvalQueue": "in the approvals queue"
+      "approvalQueue": "in the approvals queue",
+      "accessMap": "on the access map"
     },
     "precedence": "When two rows share keys, the last one that applies wins.",
     "problems_one": "{{count}} binding could not be read and does not fire: {{commands}}",
@@ -404,7 +426,6 @@
     },
     "quoteReply": "Quote reply",
     "copy": {
-      "markdown": "Copy Markdown block",
       "message": "Copy message",
       "code": "Copy code",
       "copied": "Copied",

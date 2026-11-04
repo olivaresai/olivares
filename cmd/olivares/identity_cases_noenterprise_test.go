@@ -75,9 +75,9 @@ func editionLaneReadVerbs() []laneReadVerb {
 
 func editionPagingCounts() pagingCounts {
 	if thisEdition.name == "enterprise" {
-		return pagingCounts{107, 21, 23}
+		return pagingCounts{108, 22, 24}
 	}
-	return pagingCounts{105, 21, 23}
+	return pagingCounts{106, 22, 24}
 }
 
 func editionIdentityVerbCount() int { return 1 }

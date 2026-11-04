@@ -1,0 +1,210 @@
+{
+  "title": "Recursos descobertos",
+  "unnamed": "Sem nome",
+  "subtitle": "Todos os agentes, sessões, MCP, modelos e identidades que os conectores descobriram.",
+  "mcpPointer": "Adicione e governe servidores MCP em MCP e skills",
+  "refresh": "Atualizar",
+  "scope": {
+    "note": "Inventário de todo o tenant. O seletor de espaço de trabalho não filtra esta vista."
+  },
+  "summary": {
+    "total": "Entidades",
+    "active": "Ativas",
+    "stale": "Obsoletas",
+    "kinds": "Tipos"
+  },
+  "tabs": {
+    "catalog": "Catálogo",
+    "topology": "Topologia",
+    "coverage": "Cobertura de recolha"
+  },
+  "facets": {
+    "allKinds": "Todos os tipos",
+    "allStatus": "Todos os estados"
+  },
+  "status": {
+    "active": "Ativa",
+    "stale": "Obsoleta"
+  },
+  "cols": {
+    "name": "Nome",
+    "kind": "Tipo",
+    "status": "Estado",
+    "signals": "Sinais",
+    "hosts": "Anfitriões",
+    "lastSeen": "Visto pela última vez",
+    "occurrences": "Visto"
+  },
+  "searchPlaceholder": "Pesquisar nome, referência, sinal…",
+  "hostCount": "{{count}} anfitriões",
+  "kinds": {
+    "agent": "Agente",
+    "session": "Sessão",
+    "identity": "Identidade",
+    "mcp_server": "Servidor MCP",
+    "tool": "Ferramenta",
+    "resource": "Recurso",
+    "skill": "Skill",
+    "model": "Modelo",
+    "provider": "Fornecedor"
+  },
+  "detail": {
+    "ref": "Referência",
+    "id": "ID",
+    "firstSeen": "Visto pela primeira vez",
+    "lastSeen": "Visto pela última vez",
+    "relations": "Relações",
+    "viewAccess": "Mapa de acessos",
+    "viewSessions": "Sessões",
+    "gone": "Esta entrada já não está no catálogo.",
+    "noProjection": "Não há detalhes adicionais disponíveis para mostrar nesta entrada. Isto não determina se tem relações.",
+    "aiDiscovery": {
+      "unregistered_at_discovery": "Não registado na descoberta. Este ponto de acesso de IA era novo para o inventário; a sua governação atual é desconhecida. A cobertura limita-se ao registo do proxy configurado e aos anfitriões de IA.",
+      "unknown": "Ponto de acesso de IA observado. A sua governação é desconhecida. A cobertura limita-se ao registo do proxy configurado e aos anfitriões de IA."
+    }
+  },
+  "freshness": {
+    "title": "Atualidade do catálogo",
+    "independent": "A atualidade do catálogo e o histórico de observações são leituras independentes, não um único instantâneo atómico.",
+    "storedState": "Estado do catálogo guardado",
+    "storedHint": "Ativa e obsoleta são estados do catálogo guardados. Não são estado de funcionamento, disponibilidade nem cobertura da fonte.",
+    "localReception": "Última receção local",
+    "firstLocalReception": "Primeira receção local",
+    "sourceOccurred": "Ocorrência declarada pela fonte",
+    "sourceOccurredUnknown": "A fonte não declarou um instante de ocorrência.",
+    "timeUnknown": "Não há nenhum instante de receção disponível.",
+    "occurrenceCount": "Contagem de ocorrências no catálogo",
+    "occurrenceHint": "Isto conta as materializações da entidade no catálogo. Não é uma contagem de comprovativos, de entregas de factos correspondentes nem um total de cobertura."
+  },
+  "history": {
+    "title": "Histórico de observações",
+    "coverageUnknown": "Este histórico não determina a cobertura da fonte, a integridade da descoberta nem o estado de funcionamento atual.",
+    "loaded": "{{count}} carregados",
+    "empty": "Não há comprovativos guardados disponíveis. Isso não prova que esta entidade nunca foi observada.",
+    "refresh": "Atualizar histórico",
+    "loadMore": "Carregar mais",
+    "loading": "A carregar o histórico de observações",
+    "loadingMore": "A carregar mais comprovativos",
+    "receipt": "Comprovativo",
+    "eventType": "Tipo de evento",
+    "eventTypeEdge": "Aresta observada",
+    "eventTypeCost": "Custo amostrado",
+    "registration": "Registo na receção",
+    "registeredSnapshot": "Instantâneo histórico do registo",
+    "unattributed": "Não atribuído",
+    "invalid": "Instantâneo histórico incompleto",
+    "sourceId": "ID da fonte na receção",
+    "sourceRevision": "Revisão do registo aplicada",
+    "environmentRef": "Ambiente de execução",
+    "sourceOccurred": "Ocorrência declarada pela fonte",
+    "sourceOccurredUnknown": "A fonte não declarou um instante de ocorrência.",
+    "timeUnknown": "Não há nenhum instante de receção disponível.",
+    "firstReceived": "Primeira receção dos factos retidos",
+    "lastReceived": "Última entrega com os factos retidos",
+    "deliveries": "Entregas de factos correspondentes",
+    "conflict": "Reentrega conflituosa",
+    "conflictYes": "Está retida uma reentrega com factos diferentes. Isto não conta nem data essas variantes.",
+    "conflictNo": "Não há nenhuma reentrega conflituosa retida.",
+    "malformed": "Não é possível mostrar esta página de observações. Uma lista de itens em falta, uma continuação sem cursor utilizável ou um cursor que não avançou é um erro, não um histórico vazio."
+  },
+  "topology": {
+    "note": "Composição do parque por tipo. A utilização em tempo de execução (que agente executa que modelo/MCP) aparece em Sessões; o acesso a recursos (R/RW) no Mapa de acessos.",
+    "bands": {
+      "origins": "Quem age",
+      "capabilities": "O que podem usar",
+      "resources": "O que tocam",
+      "other": "Outros tipos"
+    },
+    "emptyTitle": "Ainda nada descoberto",
+    "emptyHint": "À medida que os conectores reportam atividade, o seu parque é catalogado aqui.",
+    "truncated": "A mostrar as primeiras {{n}} entidades",
+    "countsAreLoaded": "As contagens são dos itens carregados nesta página, não de todo o parque.",
+    "loadedOnPage": "{{count}} carregados nesta página",
+    "loadedCount": "{{count}} carregados"
+  },
+  "empty": {
+    "catalog": {
+      "title": "Ainda não foram descobertas entidades do parque",
+      "description": "As entidades aparecem à medida que as observações dos conectores reportam agentes, sessões, identidades, capacidades MCP, modelos, fornecedores ou recursos.",
+      "action": "Abrir capacidades"
+    }
+  },
+  "coverage": {
+    "title": "Cobertura de recolha",
+    "intro": "Lê as evidências de recolha de um registo de fonte aberto. Introduza os seletores do registo que o runtime tem atualmente aberto: um seletor mais antigo lê essa seleção histórica, não a lista atual.",
+    "form": {
+      "legend": "Seletores do registo de fonte",
+      "sourceId": "ID da fonte",
+      "sourceIdHint": "O ID persistente da linha da lista de fontes, não o seu nome.",
+      "sourceRevision": "Revisão da fonte",
+      "sourceRevisionHint": "A revisão da lista que o runtime abriu para este registo.",
+      "environmentRef": "Referência do ambiente",
+      "environmentRefHint": "O ambiente de execução que aplicou o registo.",
+      "submit": "Ler cobertura",
+      "required": "Introduza um valor.",
+      "tooLong": "Use no máximo {{max}} bytes.",
+      "revisionInvalid": "Introduza um número inteiro positivo."
+    },
+    "idle": "Introduza um ID de fonte, uma revisão da fonte e uma referência de ambiente para ler a cobertura de recolha. Nada é lido até os três serem válidos.",
+    "loading": "A ler a cobertura de recolha",
+    "refresh": "Ler novamente",
+    "scopeNote": "A cobertura descreve este registo e a sua consulta no intervalo observado. Não é um instantâneo global do parque nem uma autorização de fornecedor. Uma conclusão vazia não elimina recursos.",
+    "hasMore": "A resposta indica mais páginas. Isso é um indicador de continuação da lista, não evidência de integridade da recolha. Esta seleção tem no máximo uma versão atual (head).",
+    "unknownNote": "Desconhecida significa que as evidências guardadas não determinam a cobertura desta seleção. Uma seleção sem correspondência é lida como desconhecida, nunca como nenhuma nem como integridade herdada.",
+    "values": {
+      "complete": "Completa",
+      "partial": "Parcial",
+      "unavailable": "Indisponível",
+      "unsupported": "Não suportada",
+      "unknown": "Desconhecida"
+    },
+    "projections": {
+      "pending": "Pendente",
+      "committed": "Confirmada",
+      "failed": "Falhou"
+    },
+    "current": {
+      "title": "Evidências de recolha atuais",
+      "coverage": "Cobertura",
+      "reason": "Motivo",
+      "reasonNone": "Nenhum motivo registado",
+      "projection": "Projeção",
+      "projectionHint": "Os membros em fila ficam pendentes até o seu comprovativo ser confirmado. A enumeração, por si só, não os qualifica.",
+      "runId": "ID da execução",
+      "runOrder": "Ordem da execução",
+      "admitted": "Membros admitidos",
+      "committed": "Membros confirmados",
+      "expected": "Membros esperados",
+      "expectedOpen": "Não registado até o anfitrião fechar a execução.",
+      "rejection": "Motivo da rejeição",
+      "noRun": "Não há nenhuma execução de recolha registada para esta seleção. Cobertura desconhecida não é zero: não indica se a fonte tem recursos.",
+      "emptyComplete": "Esta execução foi concluída sem membros. Uma conclusão vazia não elimina recursos do catálogo."
+    },
+    "lastQualified": {
+      "title": "Último sucesso qualificado",
+      "note": "Qualificação histórica para este registo e âmbito exatos. É separada da enumeração atual, e evidências de rejeição posteriores não a reescrevem.",
+      "absent": "Não é reportado nenhum sucesso qualificado para este registo e âmbito. Está ausente até uma execução se qualificar, e a sua ausência nada diz sobre a execução atual."
+    },
+    "fields": {
+      "sourceId": "ID da fonte",
+      "sourceRevision": "Revisão da fonte",
+      "environmentRef": "Referência do ambiente",
+      "scopeContract": "Contrato de âmbito",
+      "family": "Família",
+      "requestedScope": "Impressão digital do âmbito pedido",
+      "fulfilledScope": "Impressão digital do âmbito cumprido",
+      "hostStarted": "Início da execução no anfitrião",
+      "hostFinished": "Fecho da execução no anfitrião",
+      "producerStarted": "Início da enumeração do produtor",
+      "producerFinished": "Fim da enumeração do produtor",
+      "qualified": "Qualificado em",
+      "notRecorded": "Não registado"
+    },
+    "error": {
+      "invalidTitle": "Seleção recusada",
+      "invalid": "O motor recusou esta seleção. O ID da fonte e a referência do ambiente não podem ser vazios e têm no máximo 128 bytes, e a revisão da fonte tem de ser um número inteiro positivo.",
+      "suspendedTitle": "Serviço do tenant suspenso",
+      "suspended": "O serviço deste tenant está suspenso ou fora de serviço, pelo que a cobertura de recolha não pode ser lida."
+    }
+  }
+}

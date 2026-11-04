@@ -95,7 +95,11 @@
     "localNameHint": "このエンドポイントの表示名です。選択リストに表示されます。",
     "advanced": "Advanced: custom endpoint",
     "missingFields": "未入力の項目を入力してください: {{fields}}。",
-    "requiredEndpointHint": "サービスのエンドポイントを入力してください。https を使うか、ループバックまたはプライベートネットワークのアドレスでは http を使えます。"
+    "requiredEndpointHint": "サービスのエンドポイントを入力してください。https を使うか、ループバックまたはプライベートネットワークのアドレスでは http を使えます。",
+    "worksWith": "{{tools}} で使えます",
+    "otherKinds": "その他（カスタムエンドポイント）",
+    "keyLink": "{{vendor}} で APIキーを取得",
+    "docsLink": "{{vendor}} の設定ガイド"
   },
   "rotate": {
     "title": "このプロバイダーのキーを交換",

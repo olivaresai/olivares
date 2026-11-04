@@ -54,7 +54,10 @@ vi.mock('@/features/extensions', async (orig) => ({
 
 import { agentOpsApi } from '@/features/agentops/api'
 import { ApiError } from '@/lib/api/errors'
-import { readinessOf } from '@/features/first-hour/readiness.fixture'
+import {
+  readinessOf,
+  chooseTool,
+} from '@/features/first-hour/readiness.fixture'
 import type { RunDTO } from '@/features/agentops/types'
 import { providersApi } from '@/features/providers/api'
 import { useSentTurns } from '@/features/sessions/sent-turns'
@@ -189,7 +192,7 @@ describe('the quick New session launch authority', () => {
       workspaceRef: '',
     })
     const user = userEvent.setup()
-    await user.click(screen.getByRole('radio', { name: 'Codex' }))
+    await chooseTool(user, 'Codex')
     expect(accessExtension.props).toEqual({
       sourceType: 'tool',
       sourceRef: 'claude',

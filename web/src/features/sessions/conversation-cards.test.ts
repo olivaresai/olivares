@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { describe, expect, it } from 'vitest'
-import { mapConversationFrames } from './conversation-frames'
+import { conversationModel, mapConversationFrames } from './conversation-frames'
 import { threadParts } from './conversation-work'
 
 // Claude Code's own tool inputs: AskUserQuestion, ExitPlanMode and TodoWrite.
@@ -107,5 +107,22 @@ describe('tool calls that ask, plan or list', () => {
     expect(parts.map((p) => p.kind)).toEqual(['work', 'card'])
     expect(parts[1]?.kind === 'card' && parts[1].item.toolId).toBe('t3')
     expect(threadParts(items, true).map((p) => p.kind)).toEqual(['work'])
+  })
+})
+
+describe('the session-start frame', () => {
+  it('is in the header, not a row of the thread, and stays readable for it', () => {
+    const items = mapConversationFrames([
+      JSON.stringify({
+        type: 'system',
+        subtype: 'init',
+        cwd: '/home/operator/project',
+        tools: ['Bash'],
+        model: 'claude-opus-5',
+      }),
+      call('Read', { file_path: '/a' }, 'r1'),
+    ])
+    expect(conversationModel(items)).toBe('claude-opus-5')
+    expect(threadParts(items).map((p) => p.kind)).toEqual(['work'])
   })
 })

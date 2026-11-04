@@ -18,6 +18,8 @@ export interface BackupListItem {
   engine: string
   tenant_count: number
   notes: string
+  /** How long the backup took to prepare; absent for an older bundle. */
+  duration_ms?: number
 }
 
 /** One tenant chain tip from core/dr.Manifest.Tenants. */
@@ -46,6 +48,17 @@ export interface Manifest {
   created_at: string
   tenants: ManifestTenant[]
   keys: ManifestKey[]
+  /** Directories the bundle leaves out, with the real path and the reason.
+   *  Absent in bundles taken before the list existed. */
+  not_included?: ManifestNotIncluded[]
+}
+
+/** One entry of core/dr.Manifest.NotIncluded. */
+export interface ManifestNotIncluded {
+  kind: string
+  name: string
+  path: string
+  reason: string
 }
 
 /** GET /v1/console/dr/backups/{id} — full detail with the decoded manifest. */
@@ -91,10 +104,14 @@ export interface RestoreUploadResponse {
 export interface DRSchedule {
   verify_cron?: string
   rpo_hours?: number
+  /** The restore time the operator commits to; the scheduled restore test is measured against it. */
+  rto_minutes?: number
   offsite?: DROffsite
   last_backup?: string
   backup_age_seconds?: number
   rpo_exceeded?: boolean
+  /** The last completed restore test took longer than `rto_minutes`. */
+  rto_exceeded?: boolean
   target_free_bytes?: number
   last_run?: string
   last_run_status?: string
@@ -105,6 +122,8 @@ export interface DRSchedule {
   last_verify?: string
   last_verify_status?: string
   last_verify_error?: string
+  /** How long the last completed restore test took, in milliseconds. */
+  last_verify_rto_ms?: number
   enabled: boolean
   cron: string
   retain_days: number

@@ -478,7 +478,7 @@
     "subtitle": "Planchers de cadence, plafonds de concurrence, exigences d’approbation, listes de cron autorisés et environnements bloqués pour les routines Claude Code. Les politiques qui se recouvrent se composent en gardant toujours la plus restrictive.",
     "search": "Rechercher des politiques de routines…",
     "newPolicy": "Nouvelle politique",
-    "enforcementCaption": "Ces contrôles s’appliquent à la déclaration d’une routine puis à chaque déclenchement. Une politique désactivée est conservée mais n’apporte rien à la composition.",
+    "enforcementCaption": "Ces contrôles s’appliquent à la déclaration d’une routine puis à chaque déclenchement. Une politique désactivée est conservée mais ne s’applique à rien.",
     "enabledYes": "Activée",
     "enabledNo": "Désactivée",
     "approvalYes": "Exigée",
@@ -497,7 +497,7 @@
       "envs": "Environnements bloqués"
     },
     "scope": {
-      "tenant": "Locataire",
+      "tenant": "Organisation",
       "workspace": "Espace de travail",
       "user": "Utilisateur"
     },
@@ -515,12 +515,12 @@
       "unreadableCaveat": "Le moteur n’a pas pu analyser cette colonne stockée. L’application refuse purement et simplement une telle politique : elle refuse par défaut au lieu d’autoriser quoi que ce soit."
     },
     "posture": {
-      "title": "Posture effective",
+      "title": "Règles en vigueur",
       "counts": "{{enabled}} activées sur {{total}} politiques",
       "workspaceRef": "Espace de travail",
       "userRef": "Utilisateur",
-      "defaultWorkspace": "Par défaut du locataire",
-      "noUser": "Aucun utilisateur propriétaire",
+      "defaultWorkspace": "Par défaut de l’organisation",
+      "noUser": "Aucun propriétaire",
       "resolve": "Résoudre",
       "indeterminate": "Cette résolution est indéterminée sur l’axe {{axis}}. L’application refuse par défaut ici : c’est un refus, pas une absence de contrôles.",
       "floor": "Plancher de cadence",
@@ -530,17 +530,17 @@
       "cap": "{{scope}} · max {{max}}",
       "origin": "Composée à partir de :",
       "none": "Aucune politique activée ne régit cette portée.",
-      "failed": "La posture n’a pas pu être lue",
+      "failed": "Les règles en vigueur n’ont pas pu être lues",
       "resolvedFor": "Résolu pour l’espace de travail {{workspace}} · utilisateur {{user}}",
       "stale": "la portée ci-dessus a changé ; relancez la résolution",
-      "unknownUser": "axe utilisateur sans réponse",
-      "unknownUserAxis": "Axe utilisateur sans réponse",
+      "unknownUser": "propriétaire inconnu",
+      "unknownUserAxis": "Propriétaire inconnu",
       "supersededByIndeterminate": "Les valeurs ci-dessous sont ce qui a été composé jusque-là. Ce n’est PAS le résultat : une résolution indéterminée est refusée purement et simplement, quoi qu’elles indiquent.",
-      "noneIndeterminate": "Aucune politique n'a été composée pour cette portée, et la résolution a été REFUSÉE sur un axe sans réponse — ce n'est pas la même chose qu'une absence de contrôles ici."
+      "noneIndeterminate": "Olivares n'a pas pu déterminer quelles politiques s'appliquent à cette portée, donc la recherche a été REFUSÉE — ce n'est pas la même chose qu'une absence de contrôles ici."
     },
     "remove": {
       "title": "Supprimer la politique de routines",
-      "body": "« {{name}} » cessera d’entrer dans la posture effective. Les routines qu’elle contraignait ne relèveront plus que des politiques restantes.",
+      "body": "« {{name}} » cessera de s’appliquer. Les routines qu’elle contraignait ne relèveront plus que des politiques restantes.",
       "confirm": "Supprimer la politique",
       "done": "Politique de routines supprimée"
     },
@@ -556,7 +556,7 @@
       "scopeImmutable": "Immuable après la création.",
       "scopeRef": "Référence de portée",
       "scopeRefRequired": "Une politique d’espace de travail ou d’utilisateur exige sa référence.",
-      "tenantScopeRef": "Une politique à l’échelle du locataire ne doit porter aucune référence.",
+      "tenantScopeRef": "Une politique à l’échelle de l’organisation ne doit porter aucune référence.",
       "enabled": "Politique activée",
       "floorToggle": "Appliquer un plancher de cadence",
       "floor": "Intervalle minimal (secondes)",

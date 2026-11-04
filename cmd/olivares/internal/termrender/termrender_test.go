@@ -564,3 +564,18 @@ func TestWrappedFieldsRichIsPlainPlusColour(t *testing.T) {
 		t.Fatal("nothing folded, so the property was not asserted at a fold")
 	}
 }
+
+// A table's marks are drawn for a person only: white letters on their color on a
+// colour terminal, the letters alone under NO_COLOR, nothing on a pipe.
+func TestTableMarks(t *testing.T) {
+	table := Table{Header: []string{"tool"}, Rows: [][]string{{"Codex"}, {"Z.ai"}}, Marks: []Mark{{"CX", "#129C6E"}, {"Z", "#329797"}}}
+	var colour, noColour, piped bytes.Buffer
+	screen(&colour, 80).Table(table)
+	New(&noColour, Options{LookupEnv: env(map[string]string{"NO_COLOR": ""}), IsTerminal: func(io.Writer) bool { return true }}).Table(table)
+	pipe(&piped).Table(table)
+	if !strings.Contains(colour.String(), "\x1b[1;38;2;255;255;255;48;2;18;156;110mCX\x1b[0m Codex") {
+		t.Errorf("colour terminal: %q", colour.String())
+	}
+	wantExact(t, noColour.String(), "TOOL\nCX Codex\nZ  Z.ai\n")
+	wantExact(t, piped.String(), "TOOL\nCodex\nZ.ai\n")
+}

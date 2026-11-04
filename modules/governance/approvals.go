@@ -445,7 +445,8 @@ func (m *Module) handleListApprovals(w http.ResponseWriter, r *http.Request, mc 
 		q.Filters = append(q.Filters, eq(colAction, v))
 	}
 	now := m.clock.Now()
-	out := listResponse[approvalDTO]{Items: []approvalDTO{}}
+	reader := m.newApprovalReader(r.Context(), mc)
+	out := listResponse[approvalReadDTO]{Items: []approvalReadDTO{}}
 	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
 		repo, err := sc.Ext(approvalKind)
 		if err != nil {
@@ -461,7 +462,11 @@ func (m *Module) handleListApprovals(w http.ResponseWriter, r *http.Request, mc 
 			return err
 		}
 		for _, rec := range recs {
-			out.Items = append(out.Items, toApprovalDTO(rec, now, liveRiskTier(pols, rec)))
+			item, err := reader.view(r.Context(), sc, rec, now, toApprovalDTO(rec, now, liveRiskTier(pols, rec)))
+			if err != nil {
+				return err
+			}
+			out.Items = append(out.Items, item)
 		}
 		out.Cursor, out.HasMore = page.Cursor, page.HasMore
 		return nil
@@ -481,8 +486,9 @@ func (m *Module) handleGetApproval(w http.ResponseWriter, r *http.Request, mc ap
 		return
 	}
 	now := m.clock.Now()
+	reader := m.newApprovalReader(r.Context(), mc)
 	var (
-		out   approvalDTO
+		out   approvalReadDTO
 		found bool
 	)
 	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
@@ -498,8 +504,9 @@ func (m *Module) handleGetApproval(w http.ResponseWriter, r *http.Request, mc ap
 		if err != nil {
 			return err
 		}
-		found, out = true, toApprovalDTO(rec, now, liveRiskTier(pols, rec))
-		return nil
+		found = true
+		out, err = reader.view(r.Context(), sc, rec, now, toApprovalDTO(rec, now, liveRiskTier(pols, rec)))
+		return err
 	})
 	if err != nil {
 		writeStoreError(w, err)
@@ -717,14 +724,9 @@ func (m *Module) decideApproval(ctx context.Context, data approvalData, mc api.M
 			// "knowably one party", so asking TwoDistinctPeople whether to refuse — rather
 			// than re-deciding from the verdict — is the whole rule. The verdict is read
 			// only to phrase the message.
-			requester := auth.PersonRef{User: rec.String(colRequestedByUser), Actor: rec.String(colRequestedBy)}
 			deciderRef := auth.PersonRef{User: deciderUser, Actor: mc.Principal.Actor()}
-			if ok, verdict := auth.TwoDistinctPeople(requester, deciderRef, auth.AcceptWhenUndetermined); !ok {
-				clientErr = "separation of duty: the requester cannot decide their own request"
-				if verdict == auth.PersonSameCredential {
-					clientErr = "separation of duty: this request was opened with the same credential you are deciding with, and no person stands behind it"
-				}
-				clientCode = http.StatusForbidden
+			if refusal := separationOfDutyRefusal(rec, deciderRef); refusal != "" {
+				clientErr, clientCode = refusal, http.StatusForbidden
 				return nil
 			}
 			if _, dup, err := findOne(ctx, decRepo, eq(colApprovalID, id.String()), eq(colDeciderUser, deciderUser)); err != nil {

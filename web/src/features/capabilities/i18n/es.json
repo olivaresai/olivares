@@ -19,8 +19,9 @@
     "managed": "Gestionado",
     "managedRev": "Gestionado · rev {{rev}}",
     "discovered": "Descubierto",
+    "caption": "Servidores que los conectores observaron, los conecte Olivares o no.",
     "empty": "No se han descubierto servidores MCP",
-    "emptyHint": "Los servidores aparecen aquí a medida que los planos de inventario e introspección los descubren.",
+    "emptyHint": "Los servidores aparecen aquí a medida que el inventario y la introspección los descubren.",
     "truncated": "Cargados {{n}} servidores; hay más"
   },
   "connection": {
@@ -127,7 +128,7 @@
     "endpoint": "Endpoint",
     "endpointHint": "Solo una referencia — nunca incrustes una credencial en el endpoint.",
     "scope": "Ámbito",
-    "scopeHint": "Etiqueta opcional de ámbito de despliegue/tenant (p. ej. team-a).",
+    "scopeHint": "Etiqueta opcional de ámbito de despliegue/organización (p. ej. team-a).",
     "enabled": "Activa",
     "note": "Nota",
     "secretRefs": "Referencias a secretos",
@@ -188,7 +189,7 @@
     },
     "server": {
       "title": "Aún no se han descubierto servidores MCP",
-      "description": "Los servidores MCP aparecen cuando las observaciones de los conectores los identifican en el inventario del tenant."
+      "description": "Los servidores MCP aparecen cuando las observaciones de los conectores los identifican en el inventario de la organización."
     },
     "skill": {
       "title": "Sin skills descubiertas",
@@ -196,7 +197,7 @@
     },
     "tool": {
       "title": "Aún no se han descubierto herramientas MCP",
-      "description": "Las herramientas aparecen cuando se notifican al inventario del tenant mediante la introspección MCP o la actividad de herramientas observada."
+      "description": "Las herramientas aparecen cuando se notifican al inventario de la organización mediante la introspección MCP o la actividad de herramientas observada."
     }
   },
   "truncatedHint": "Hay más filas de las que se ven; esta página las coge por id de fila (asignado al crear), así que faltan las posteriores. Que un servidor, una herramienta, una habilidad o una configuración NO salga aquí no prueba que no exista."

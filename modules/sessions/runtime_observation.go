@@ -57,7 +57,7 @@ func (m *Module) RecordSessionObservation(ctx context.Context, principal auth.Pr
 	belongs := func(ref string) bool { return ref == sid || ref == principal.SessionRunRef }
 	switch v := obs.(type) {
 	case sdkmodel.EdgeObservation:
-		if v.OriginKind != "session" || !belongs(v.OriginRef) {
+		if v.Source == sdkmodel.SignalSessionLaunch || v.OriginKind != "session" || !belongs(v.OriginRef) {
 			return auth.ErrUnauthenticated
 		}
 		v.OriginRef = sid

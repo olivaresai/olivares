@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/BurntSushi/toml"
+
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/olivaresai/olivares/core/secret"
@@ -187,7 +189,15 @@ func warnUnsealedSecretConfigs(log *slog.Logger) {
 var (
 	reProviderKey   = regexp.MustCompile(`(^|[^A-Za-z0-9])sk-[A-Za-z0-9_-]{16,}`) // OpenAI/Anthropic-style API keys
 	reAWSAccessKey  = regexp.MustCompile(`\b(?:AKIA|ASIA)[A-Z0-9]{16}\b`)         // an AWS access key id
-	reInlineCredURL = regexp.MustCompile(`://[^/\s:@]+:[^/\s@]+@`)                // user:password@host in a URL/DSN
+	reInlineCredURL = regexp.MustCompile(`://[^/\s:@]+:([^/\s@]+)@`)              // user:password@host in a URL/DSN; the password is submatch 1
+	// The other token shapes of the fleet plane's redactInlineCredentials (credentialTokenPatterns
+	// in its governance module): GitHub, Slack, Google, webhook signing secrets and JWTs.
+	reVendorToken = regexp.MustCompile(`(?:ghp|gho|ghu|ghs|github_pat)_[A-Za-z0-9_]{16,}|xox[a-z]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{30,}|whsec_[A-Za-z0-9]{8,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}`)
+	// reEnvVarName is the name of an environment variable, as the plane's envVarName.
+	reEnvVarName = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
+	// reSecretReference is a value that only points at a secret: a whole $VAR, ${VAR}, or
+	// OpenCode {env:NAME} / {file:PATH}, optionally after one auth scheme word ("Bearer ${TOKEN}").
+	reSecretReference = regexp.MustCompile(`^(?:[A-Za-z]+ )?(?:\$\{[A-Za-z_][A-Za-z0-9_]*\}|\$[A-Za-z_][A-Za-z0-9_]*|\{env:[A-Za-z_][A-Za-z0-9_]*\}|\{file:[^{}"'\s]+\})$`)
 )
 
 // configHasInlineSecret reports whether an UNSEALED operator config appears to
@@ -202,16 +212,47 @@ func configHasInlineSecret(b []byte) bool {
 	if bytes.Contains(b, []byte("PRIVATE KEY-----")) {
 		return true
 	}
+	// The parsed tree and the raw text are checked together: a parse never hides what the raw
+	// text carries. JSON has no comments, so its raw text is scanned for the self-delimiting token
+	// shapes only; the URL-password rule there would read `"https://h","args":["@x"]` as one URL.
 	var v any
 	if err := json.Unmarshal(b, &v); err == nil {
-		return jsonHasInlineSecret(v, "")
+		return jsonHasInlineSecret(v, "") || hasInlineTokenShape(string(b))
 	}
-	// Non-JSON payload (e.g. a PEM bundle): scan for strong secret VALUE shapes.
-	return hasInlineSecretValue(string(b))
+	// Anything else (a PEM bundle, Markdown instructions, TOML whose comments may carry a value)
+	// gets the whole raw scan. Markdown made only of headings is valid TOML holding nothing but
+	// comments, so its parse alone would find nothing.
+	if hasInlineSecretValue(string(b)) {
+		return true
+	}
+	// A TOML document (the Codex and Grok surfaces) is also walked like JSON, so a secret-named
+	// key such as `[mcp_servers.x.env] GITHUB_TOKEN = "..."` is judged by its name too.
+	var t map[string]any
+	if err := toml.Unmarshal(b, &t); err == nil {
+		return jsonHasInlineSecret(t, "")
+	}
+	return false
+}
+
+// hasInlineTokenShape reports a provider, AWS or vendor token anywhere in s.
+func hasInlineTokenShape(s string) bool {
+	return reProviderKey.MatchString(s) || reAWSAccessKey.MatchString(s) || reVendorToken.MatchString(s)
 }
 
 func hasInlineSecretValue(s string) bool {
-	return reProviderKey.MatchString(s) || reAWSAccessKey.MatchString(s) || reInlineCredURL.MatchString(s)
+	return hasInlineTokenShape(s) || hasLiteralURLPassword(s)
+}
+
+// hasLiteralURLPassword reports a user:password@ whose password is written out. A whole variable
+// in that place (scheme://user:${DB_PASS}@host) is expanded by the tool that reads the document,
+// so it carries no secret.
+func hasLiteralURLPassword(s string) bool {
+	for _, m := range reInlineCredURL.FindAllStringSubmatch(s, -1) {
+		if !reSecretReference.MatchString(m[1]) {
+			return true
+		}
+	}
+	return false
 }
 
 // jsonHasInlineSecret walks a decoded JSON value. A string leaf is a secret when
@@ -220,7 +261,12 @@ func hasInlineSecretValue(s string) bool {
 func jsonHasInlineSecret(v any, key string) bool {
 	switch t := v.(type) {
 	case map[string]any:
+		// Codex env_http_headers maps a header to the NAME of the variable that holds its value.
+		varNames := strings.HasSuffix(strings.ToLower(key), "env_http_headers")
 		for k, val := range t {
+			if s, ok := val.(string); ok && varNames && reEnvVarName.MatchString(s) {
+				continue
+			}
 			if jsonHasInlineSecret(val, k) {
 				return true
 			}
@@ -228,6 +274,12 @@ func jsonHasInlineSecret(v any, key string) bool {
 	case []any:
 		for _, val := range t {
 			if jsonHasInlineSecret(val, key) { // array elements inherit the parent key
+				return true
+			}
+		}
+	case []map[string]any: // a TOML array of tables
+		for _, val := range t {
+			if jsonHasInlineSecret(val, key) {
 				return true
 			}
 		}
@@ -259,6 +311,15 @@ func secretNameKey(key string) bool {
 			return true
 		}
 	}
+	// The other names of the fleet plane's credentialNames, in any spelling (GITHUB_TOKEN,
+	// apiKey, access-key, Authorization). Matched at the END of the name: apiKeyHelper names a
+	// command, bearer_token_env_var names a variable, max_tokens is a number.
+	squeezed := strings.NewReplacer("_", "", "-", "", ".", "").Replace(k)
+	for _, n := range []string{"token", "secret", "pwd", "apikey", "accesskey", "credential", "credentials", "authorization", "cookie"} {
+		if strings.HasSuffix(squeezed, n) {
+			return true
+		}
+	}
 	return false
 }
 
@@ -275,7 +336,7 @@ func isLiteralSecretValue(s string) bool {
 		return false
 	case strings.HasPrefix(s, "/"), strings.HasPrefix(s, "./"), strings.HasPrefix(s, "~"):
 		return false
-	case s == "********", strings.HasPrefix(s, "<"), strings.HasPrefix(s, "${"):
+	case s == "********", strings.HasPrefix(s, "<"), strings.HasPrefix(s, "${"), reSecretReference.MatchString(s):
 		return false
 	case isFlagLiteral(s):
 		return false

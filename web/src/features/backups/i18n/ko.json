@@ -30,6 +30,7 @@
       "date": "날짜",
       "filename": "파일 이름",
       "size": "크기",
+      "duration": "소요 시간",
       "engine": "엔진",
       "tenants": "테넌트",
       "notes": "메모"
@@ -88,6 +89,9 @@
     "freeSpace": "대상 여유 공간",
     "notAvailable": "사용할 수 없음",
     "overdue": "복구 시점 목표 초과",
+    "rtoMinutes": "복구 시간 목표(분)",
+    "rtoExceeded": "마지막 복원 테스트가 복구 시간 목표인 {{minutes}}분을 초과했습니다",
+    "restoreTook": "복원 테스트에 {{seconds}}초 걸렸습니다",
     "age": "{{hours}}시간 전",
     "offsiteLockMissing": "버킷 {{bucket}}은(는) 새 사본을 `COMPLIANCE` 모드로 잠그지 않으므로 이 서버의 자격 증명으로 삭제될 수 있습니다. 기본 `COMPLIANCE` 보존 기간으로 S3 Object Lock을 활성화하고 별도의 자격 증명으로 정리하세요.",
     "offsiteLockUnknown": "버킷 {{bucket}}의 Object Lock을 읽을 수 없어 이 사본들이 삭제로부터 보호되지 않을 수 있습니다."
@@ -164,6 +168,8 @@
     "tenants": "테넌트",
     "keys": "봉인된 키",
     "empty": "없음",
+    "notIncluded": "이 백업에 포함되지 않음",
+    "notIncludedHint": "이 경로는 복사되지 않습니다. 직접 백업하세요.",
     "loadFailed": "백업 세부 정보를 불러오지 못했습니다."
   },
   "empty": {

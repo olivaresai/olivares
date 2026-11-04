@@ -10,7 +10,8 @@
 // selection (GET /v1/m/skills/selection), the MCP servers from the tenant gateway
 // snapshot the launch configures from. Each item links to the page that manages it.
 import { useQueries, useQuery } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
+import { AppLink } from '@/components/ui/app-link'
+import type { ComponentProps, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { agentOpsApi } from '@/features/agentops/api'
 import { profileName } from '@/features/agentops/types'
@@ -255,7 +256,7 @@ export function InstalledHere({
         skillItems.set(key, {
           key,
           label: member.name,
-          href: `/capabilities?tab=skills&pack=${encodeURIComponent(member.pack_id)}`,
+          href: `/capabilities?tab=skills&pack=${encodeURIComponent(member.pack_id)}&skill=${encodeURIComponent(member.name)}`,
           detail: tool,
         })
       }
@@ -386,6 +387,18 @@ export function InstalledHere({
   )
 }
 
+/** An item's link: a page of the console moves by the router, a `#tool-…` box is on this page. */
+function ItemLink({
+  href,
+  ...props
+}: { href: string } & Omit<ComponentProps<'a'>, 'href'>) {
+  return href.startsWith('/') ? (
+    <AppLink href={href} {...props} />
+  ) : (
+    <a href={href} {...props} />
+  )
+}
+
 /** One kind of resource: its label, then each item as a link to its own page. */
 function Row({
   label,
@@ -417,12 +430,12 @@ function Row({
             {items.map((item) => (
               <li key={item.key} className="min-w-0">
                 {item.href ? (
-                  <a
+                  <ItemLink
                     href={item.href}
                     className="break-words text-body text-accent-text underline underline-offset-4"
                   >
                     {item.label}
-                  </a>
+                  </ItemLink>
                 ) : (
                   <span className="break-words text-body text-text">
                     {item.label}

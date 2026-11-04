@@ -64,7 +64,20 @@
     "waiting": "Attend une approbation",
     "needsYou": "Vous attend",
     "idle": "Inactive",
-    "approvalsUnread": "Les approbations n’ont pas pu être lues : les attentes d’approbation ne sont pas dessinées."
+    "approvalsUnread": "Les approbations ne sont pas encore lues ou n’ont pas pu l’être : les attentes d’approbation ne sont pas dessinées.",
+    "approvalsPartial": "Seule une partie des approbations a été lue : certaines attentes d’approbation peuvent ne pas être dessinées.",
+    "step": {
+      "Bash": "Exécute {{what}}",
+      "Read": "Lit {{what}}",
+      "Edit": "Modifie {{what}}",
+      "Write": "Écrit {{what}}",
+      "Grep": "Cherche {{what}}",
+      "Glob": "Cherche des fichiers {{what}}",
+      "WebFetch": "Lit {{what}}",
+      "WebSearch": "Cherche sur le web {{what}}",
+      "Task": "Travaille avec un agent",
+      "Agent": "Travaille avec un agent"
+    }
   },
   "summary": {
     "heading": "Résumé",
@@ -96,12 +109,5 @@
   "state": {
     "pendingIdle": "Requête non démarrée — ouvrez pour charger",
     "pendingPaused": "Requête en pause — en attente de reprise"
-  },
-  "proof": {
-    "verified": "Chaîne vérifiée à {{time}}",
-    "entries_one": "{{n}} entrée",
-    "entries_many": "{{n}} entrées",
-    "entries_other": "{{n}} entrées",
-    "broken": "Chaîne rompue : ouvrir le Registre"
   }
 }

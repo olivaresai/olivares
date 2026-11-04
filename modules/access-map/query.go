@@ -103,6 +103,11 @@ type PrivilegeDiff struct {
 	// over-provisioning, so they are kept out of the headline UnusedGrants.
 	// Additive — a caller that ignores the field simply sees a cleaner diff.
 	InventoryGrants []model.PrivilegeDrift
+	// GrantsDeclared reports that at least one grant (a permitted policy edge)
+	// exists. Without one nothing is permitted, so every observed access is
+	// unexpected by construction: a consumer must not headline that as a
+	// violation of a rule (#3936).
+	GrantsDeclared bool
 	// Truncated reports that drainDrift hit its page bound and the diff was
 	// reconciled over a PARTIAL window: rows past the bound are invisible, and a
 	// reconciling pair straddling it yields false drift. Never silent (docs/SECURITY-HARDENING.md
@@ -131,6 +136,8 @@ func (m *Module) Diff(ctx context.Context, tenant model.TenantID, actor, actorKi
 		}
 		out, err = reconcileDrift(ctx, sc, drifts)
 		out.Truncated = truncated
+		// A partial window cannot show that no grant exists: unknown counts as declared.
+		out.GrantsDeclared = out.GrantsDeclared || truncated
 		return err
 	})
 	return out, err
@@ -304,7 +311,7 @@ func reconcileDrift(ctx context.Context, sc store.Scope, drifts []model.Privileg
 	}
 
 	used := make([]bool, len(grants)) // decides UnusedGrants only — never consumption
-	var out PrivilegeDiff
+	out := PrivilegeDiff{GrantsDeclared: len(grants) > 0}
 	for _, o := range observed {
 		p, err := principal(o)
 		if err != nil {

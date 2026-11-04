@@ -281,7 +281,7 @@ describe('DeliverySheet — explicit Ack with the read version', () => {
     await user.click(screen.getByRole('button', { name: 'Re-read' }))
     await waitFor(() => expect(screen.queryByText('Deploy window')).toBeNull())
     expect(
-      screen.getByText('Not found, or not visible to this principal.'),
+      screen.getByText('Not found, or not visible to you.'),
     ).toBeInTheDocument()
     api.getDelivery.mockRejectedValueOnce(
       new ApiError(
@@ -296,7 +296,7 @@ describe('DeliverySheet — explicit Ack with the read version', () => {
     await user.click(screen.getByRole('button', { name: 'Re-read' }))
     expect(await screen.findByText(/could not look/)).toBeInTheDocument()
     expect(screen.queryByText('Deploy window')).toBeNull()
-    expect(screen.queryByText('No deliveries')).toBeNull()
+    expect(screen.queryByText('Your inbox is empty')).toBeNull()
   })
 
   it('a late read landing after the scope moved is discarded, not painted; the new scope reads afresh', async () => {
