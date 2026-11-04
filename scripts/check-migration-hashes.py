@@ -244,7 +244,7 @@ REVIEWED_BASE = {
                                       '857a6d70122953124624eb9cb9dd3d76506d6210e7cf15b5407333f6ff84f575'),
 }
 # Measured 2026-11-04: exact reviewed old/new fingerprints for 0.7 source refactors with no SQL migration edits; migration suites pass.
-REVIEWED_MIGRATIONS.update({
+for key, pairs in {
     'core/1': (('a534d53f4a7589e30045bee526ea60328ae6898252768ff6a103a2ac37bfb1d8',
          'bb1f8c88258b808b8254e4403123c2c8eac558c7e52a3707eb28ed0ea4dcbb87'),),
     'core/10': (('bfa7cf03272408daad35d40b9d7633be32903efc23d8c2a7d8b995964a2b16de',
@@ -283,15 +283,16 @@ REVIEWED_MIGRATIONS.update({
          'ecb1691e804b7edcdd40c3005a615cc0e5f8d6c04539e61d48b6a7d1c9f30241'),),
     'runner/core/internal/store/sqlstore/versioned_schema.go/reconcileVersionedOSAccountReservations/"schema_migrations_os_account_guards"/1': (('35f3b4146f1e1389dc0090aec02d53c5ff91bdc77576ef1a05d7cbfc28ab80a4',
          '58af44d7164747dc405ed8582a23c574eab8a5dbe01914573cd9f215ae5b01db'),),
-})
+}.items():
+    REVIEWED_MIGRATIONS[key] = REVIEWED_MIGRATIONS.get(key, ()) + pairs
 
-REVIEWED_BINDINGS.update({
+for key, pairs in {
     'core/binding/core/internal/store/sqlstore/store.go/openPrepared/buildCoreMigrationPlan/1': (('33fd1813557f335c77148596632848f266fd8c4e670ddcc38c0ca9c98aa507d3',
          'cd8e55b0af14972255e9d596e17c30e23cf17dc46e205e7d17b6ee511ab86026'),),
     'core/binding/core/internal/store/sqlstore/store.go/openPrepared/buildCoreMigrations/1': (('d2ba848889a9602d7375334cc201b925da0fd2e12ee33a26513422fa0f151841',
          '2a526aedc9a168f949e8b4162f07b18a1db1fe2b4db0682eb0a2b5c41dc76537'),),
-})
-
+}.items():
+    REVIEWED_BINDINGS[key] = REVIEWED_BINDINGS.get(key, ()) + pairs
 
 
 def git(*args):

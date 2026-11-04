@@ -140,9 +140,13 @@ else:
 # Stands in for scripts/session-journey-smoke.sh: records its arguments and the bytes of the
 # binary it was handed, and fails the way a session ended by a long output line does.
 CHAT_LEG = r'''#!/usr/bin/env bash
-python3 - "$@" <<'PY'
+python3 - "$0" "$@" <<'PY'
 import json, os, pathlib, sys
-args = sys.argv[1:]
+args = sys.argv[2:]
+binary_dir = pathlib.Path(args[1]).resolve().parent
+script = pathlib.Path(sys.argv[1]).resolve()
+assert script == binary_dir / 'scripts/session-journey-smoke.sh', script
+assert (binary_dir / 'scripts/install-service.sh').is_file()
 with pathlib.Path(os.environ['RUNNER_TEMP'], 'calls.jsonl').open('a') as calls:
     calls.write(json.dumps(['session-journey', *args, pathlib.Path(args[1]).read_bytes().decode()]) + '\n')
 if os.environ.get('CASE') == 'chat':
@@ -163,6 +167,7 @@ class ReleaseFirstHourTest(unittest.TestCase):
         shutil.copy(ROOT / 'scripts/release-first-hour.sh', root / 'scripts')
         shutil.copy(ROOT / 'scripts/assemble-runtime-context.sh', root / 'scripts')
         shutil.copy(ROOT / 'scripts/sanitize-first-hour.py', root / 'scripts')
+        shutil.copy(ROOT / 'scripts/install-service.sh', root / 'scripts')
         # The chat leg is its own script, tested on a real engine elsewhere; here only what the
         # orchestration hands it: the verified candidate binary, and a failure that stops the run.
         journey = root / 'scripts/session-journey-smoke.sh'

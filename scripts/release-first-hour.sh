@@ -181,8 +181,12 @@ nobody_dir=$(mktemp -d /tmp/olivares-first-hour-nobody.XXXXXX)
 chmod 0777 "$nobody_dir"
 cp "$work/olivares" "$nobody_dir/olivares"
 chmod 0755 "$nobody_dir/olivares"
+mkdir "$nobody_dir/scripts"
+cp scripts/session-journey-smoke.sh scripts/install-service.sh "$nobody_dir/scripts/"
+chmod 0755 "$nobody_dir/scripts/session-journey-smoke.sh"
+chmod 0644 "$nobody_dir/scripts/install-service.sh"
 if command -v sudo >/dev/null 2>&1 && id nobody >/dev/null 2>&1; then
-  sudo -u nobody env -u XDG_RUNTIME_DIR TMPDIR="$nobody_dir" bash scripts/session-journey-smoke.sh --binary "$nobody_dir/olivares" --label release-candidate --large-output
+  sudo -u nobody env -u XDG_RUNTIME_DIR TMPDIR="$nobody_dir" bash "$nobody_dir/scripts/session-journey-smoke.sh" --binary "$nobody_dir/olivares" --label release-candidate --large-output
 else
   TMPDIR="$work" bash scripts/session-journey-smoke.sh --binary "$work/olivares" --label release-candidate --large-output
 fi
