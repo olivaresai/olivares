@@ -34,14 +34,16 @@ See [versioning](INSTALL.md#versioning) for the release policy.
 
 - The workspace file browser uploads files into the displayed folder and downloads selected files and folders as one zip, with the same jail, size limit and DLP policy as a single read. `olivares agent workspace archive` provides the same download from the command line.
 - `olivares session usage` and `GET /v1/m/sessions/usage` total sessions, tokens and cost by model, account, provider or tool over a chosen time range. Missing reports stay null rather than becoming zero.
-- `olivares dr drill --from <bundle>` restores a real SQLite bundle into a throwaway directory, measures RTO and RPO, and records a signed audit event when a target is missed. Scheduled restore tests report the measured result in Backups.
-- Session rows offer unread, snooze, done and pin actions, including observed sessions. Undo reverses list actions without asking for confirmation; `olivares session unread`, `pin` and `unpin` provide the same operations from a terminal.
+- `olivares dr drill --from <bundle>` restores a real SQLite bundle into a throwaway directory, measures RTO and RPO against `--rto-target` and `--rpo-target`, and records a signed audit event when a target is missed (exit 7 and `dr_rto_exceeded`). Scheduled restore tests report the measured result in Backups.
+- Session rows offer unread, snooze, done and pin actions, including observed sessions. Undo reverses list actions without asking for confirmation; `olivares session unread`, `pin` and `unpin` provide the same operations from a terminal. `GET /runs` and `GET /runs/{ref}` report `unread`, with `POST` and `DELETE /runs/{ref}/unread` to change it. Observed live reads report `pinned` and `pinned_at`, and `POST` or `DELETE /v1/m/sessions/live/by-id/{live_ref}/pin` changes them.
 - Runaway sessions can be isolated in individual systemd scopes with memory and task ceilings. Provider-account usage and capacity are visible when choosing where a session starts.
 
 ### Changed
 
+- A confined child is not started when an engine user manager exists and the child cannot hide that manager's bus in user and mount namespaces; `olivares doctor` reports the refusal under `session-confinement`. Without a user manager, or without Landlock plus a mount namespace, the session starts without memory and task ceilings and says why. `OLIVARES_SESSION_MEMORY_MAX` and `OLIVARES_SESSION_TASKS_MAX` set those ceilings; `OLIVARES_SESSION_MAX_PER_USER` is off by default and refuses the next launch with 429 when enabled.
 - Sessions uses one clearer work list, with workspace grouping, persistent navigation and readable thread headers, details and side panels. Message actions, Markdown code, long transcripts, turn duration and cost, and empty or interrupted states use one consistent presentation on desktop and mobile.
 - Provider and model setup brings tools, accounts, sign-ins, presets, usage and capacity into a consistent flow. New session defaults to your own sessions, an account with capacity, and simple provider, model and folder pickers.
+- Community Groups shows a parent read-only; **Set parent** and **Remove parent** are in the Business console. A reply has one **Copy message** action; the separate **Copy Markdown block** is gone, while a code block keeps **Copy code**.
 - Installation, upgrade and licence prompts share a consistent interactive flow. Documentation redirects, localized pages, generated CLI references and provider guidance have been refreshed.
 
 ### Fixed

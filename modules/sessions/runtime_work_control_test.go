@@ -353,7 +353,7 @@ func TestInputForWorkPreEffectFailuresDoNotRecordAmbiguity(t *testing.T) {
 		}
 		fx.m.UseData(drop)
 		err := fx.m.InputForWork(
-			context.Background(), fx.tenant, fx.runRef, fx.lease.Fence, []byte(`{"type":"no-live"}`),
+			context.Background(), fx.tenant, fx.runRef, fx.lease.Fence, []byte(`{"type":"user"}`),
 		)
 		if !drop.fired() {
 			t.Fatal("test did not remove the live handle between durable check and Send")

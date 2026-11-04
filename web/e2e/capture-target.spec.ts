@@ -826,13 +826,14 @@ test.describe('capture target — a screen that looks broken or unfinished', () 
 
 test.describe('capture target — a font for every character the page prints', () => {
   const FUENTE = '<style>body{font-family:system-ui,sans-serif}</style>'
+  const ACCENTS = 'Español · Français · Русский · “quotes” — …' // language-data: glyph coverage
 
   test('rejects a character that no installed font draws, and accepts accents and Cyrillic', async ({
     page,
   }) => {
     await monta(
       page,
-      `${FUENTE}<main><h1>Settings</h1><p>Español · Français · Русский · “quotes” — …</p></main>`,
+      `${FUENTE}<main><h1>Settings</h1><p>${ACCENTS}</p></main>`,
     )
     await exigirInstanteLimpio(page, 'settings', { version: VERSION })
     // U+10FFFD is in no font: the same box stands in for every character a host cannot draw.

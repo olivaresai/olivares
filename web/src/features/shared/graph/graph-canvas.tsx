@@ -155,24 +155,24 @@ function spaceMeasuredNodes(nodes: Node[], gap: number): Node[] {
 }
 
 /**
- * Suelo de zoom del AJUSTE automático, **por llamante**.
+ * Minimum zoom for automatic fitting, **per caller**.
  *
- * ⛔ POR QUÉ EXISTE, medido sobre el access map: sin suelo, `fitView` hace lo que se
- * le pide —meter el grafo entero— aunque para lograrlo tenga que encoger a ~0,12, y
- * a ese factor una etiqueta `text-xs` (12 px) se pinta a ~1,5 px. Un ajuste que no
- * se puede leer no ha ajustado nada.
+ * ⛔ WHY THIS EXISTS, measured on the access map: without a floor, `fitView` does what
+ * it is asked — fit the whole graph — even when that shrinks it to about 0.12, which
+ * paints a `text-xs` label (12 px) at about 1.5 px. A fit that cannot be read has not
+ * fitted anything.
  *
- * El valor es 1: el texto más pequeño del lienzo mide 12 px a zoom 1, y tamaño
- * pintado = tamaño × zoom, así que 1 es lo más bajo con lo que el ajuste que elige
- * la página nunca pinta texto por debajo de 12 px. Un grafo que no cabe a ese zoom se
- * recorre; verlo entero es trabajo del nivel de detalle agrupado de quien llama.
+ * The value is 1: the smallest text on the canvas is 12 px at zoom 1, and painted size
+ * equals size × zoom, so 1 is the lowest value at which the page's chosen fit never
+ * paints text below 12 px. A graph that does not fit at that zoom is panned; showing
+ * everything is the grouped-detail level's job.
  *
- * ⛔ Y POR QUÉ NO ES GLOBAL, que es la corrección: lo puse como constante compartida
- * y el contraste `sol max` (F-02) midió el precio — `GraphCanvas` lo usan también
- * health, capabilities y sigma, y a **health le recorta el overview inicial con 15
- * nodos** (473 px de grafo en 440 de lienzo). Esas vistas no pidieron esto y su
- * problema no es el mismo. Quien quiera suelo lo pide; el valor por defecto es no
- * tenerlo, que es exactamente lo que había antes de este cambio.
+ * ⛔ AND WHY IT IS NOT GLOBAL, which is the correction: I made it a shared constant
+ * and the `sol max` contrast check (F-02) measured the cost — `GraphCanvas` is also
+ * used by health, capabilities and sigma, and **health's initial overview is clipped
+ * with 15 nodes** (473 px of graph in 440 px of canvas). Those views did not ask for
+ * this and their problem is different. Callers that want a floor opt in; the default
+ * is no floor, exactly as before this change.
  */
 export const LEGIBLE_FIT_MIN_ZOOM = 1
 

@@ -256,8 +256,8 @@ const SIN_TECHO_CONOCIDAS: Record<string, Record<string, string>> = {
   },
 }
 
-/** Features de pago (docs/editions.md): Community no lleva su fuente, así que sus exenciones sólo
- * se comprueban donde la feature existe. */
+/** Paid features (docs/editions.md): Community does not carry their source, so their exemptions
+ * are checked only where the feature exists. */
 const SOLO_EN_OVERLAY_DE_PAGO = new Set(['deploy'])
 
 describe('registro · toda ruta de lista pide su techo, en TODAS las features con api.ts', () => {
@@ -335,7 +335,7 @@ describe('registro · toda ruta de lista pide su techo, en TODAS las features co
     for (const [f, rutas] of Object.entries(SIN_TECHO_CONOCIDAS)) {
       const api = join(RAIZ, f, 'api.ts')
       if (!existsSync(api)) {
-        // Su fuente llega sólo con el overlay de pago: se comprueba en la build que la lleva.
+        // Its source arrives only with the paid overlay: check it in the build that carries it.
         if (!SOLO_EN_OVERLAY_DE_PAGO.has(f))
           sobran.push(`${f} (la feature ya no tiene api.ts)`)
         continue

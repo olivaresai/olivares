@@ -129,7 +129,11 @@ elif name == 'docker':
 elif name == 'git':
     if 'rev-parse' in args: print('1' * 40)
     if 'status' in args and case == 'dirty': print(' M scripts/release-first-hour.sh')
-else: raise AssertionError(name)
+else:
+    if name == 'sudo':
+        command = args.index('bash')
+        os.execvp(args[command], args[command:])
+    raise AssertionError(name)
 '''
 
 
@@ -178,7 +182,7 @@ class ReleaseFirstHourTest(unittest.TestCase):
         bindir.mkdir()
         # Any release metadata lookup would reintroduce the obsolete predecessor dependency.
         (bindir / 'sitecustomize.py').write_text("import urllib.request\ndef urlopen(*args, **kwargs):\n    raise AssertionError('first-hour must not require a published predecessor')\nurllib.request.urlopen = urlopen\n")
-        for name in ['docker', 'pnpm', 'goreleaser', 'git']:
+        for name in ['docker', 'pnpm', 'goreleaser', 'git', 'sudo']:
             tool = bindir / name
             tool.write_text(TOOL)
             tool.chmod(0o755)
@@ -235,6 +239,7 @@ class ReleaseFirstHourTest(unittest.TestCase):
                 self.assertEqual([args[0], *args[2:]], ['--binary', '--label', 'release-candidate', '--large-output'])
                 self.assertRegex(args[1], r'/first-hour\.[^/]+/olivares$')
                 self.assertEqual(binary, 'canonical release binary')
+                self.assertTrue(any(call[:6] == ['sudo', '-u', 'nobody', 'env', '-u', 'XDG_RUNTIME_DIR'] for call in calls))
                 self.assertLess(next(i for i, call in enumerate(calls) if call[:2] == ['docker', 'cp']), chat[0])
                 self.assertFalse(any(call[:2] == ['docker', 'create'] for call in calls[:chat[0]]))
             # Only the tags this run created are removed, after a build and on any outcome.

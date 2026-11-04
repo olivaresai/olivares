@@ -49,11 +49,11 @@ func TestSessionFollowShowsThePersonsMessages(t *testing.T) {
 	f := newFakeSessionEngine(t)
 	f.runs = []map[string]any{{"run_ref": "r1", "name": "demo", "state": "running", "provider_driver": "claude", "transport": "stream-json"}}
 	f.replay = []string{
-		`{"type":"user","isReplay":true,"message":{"role":"user","content":[{"type":"text","text":"¿Qué te pedí en mi primer mensaje?"}]}}`,
-		`{"type":"assistant","message":{"content":[{"type":"text","text":"Me pediste crear hola.txt."}]}}`,
-		`{"type":"user","isReplay":true,"message":{"role":"user","content":[{"type":"text","text":"Describe esta imagen"}]},"attachments":[{"id":"att_1","media_type":"image/png"}]}`,
+		`{"type":"user","isReplay":true,"message":{"role":"user","content":[{"type":"text","text":"What did I ask in my first message?"}]}}`,
+		`{"type":"assistant","message":{"content":[{"type":"text","text":"You asked me to create hola.txt."}]}}`,
+		`{"type":"user","isReplay":true,"message":{"role":"user","content":[{"type":"text","text":"Describe this image"}]},"attachments":[{"id":"att_1","media_type":"image/png"}]}`,
 		`{"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user for tool use]"}]}}`,
-		`{"type":"assistant","message":{"content":[{"type":"text","text":"Una captura de pantalla."}]}}`,
+		`{"type":"assistant","message":{"content":[{"type":"text","text":"A screenshot."}]}}`,
 	}
 	f.endAfterInput = true
 	close(f.sent) // no input: the stream ends after the replay
@@ -61,7 +61,7 @@ func TestSessionFollowShowsThePersonsMessages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("follow: %v\n%s", err, errb)
 	}
-	want := "› ¿Qué te pedí en mi primer mensaje?\nMe pediste crear hola.txt.\n› Describe esta imagen [image]\nUna captura de pantalla.\n"
+	want := "› What did I ask in my first message?\nYou asked me to create hola.txt.\n› Describe this image [image]\nA screenshot.\n"
 	if out != want {
 		t.Fatalf("follow =\n%s\nwant\n%s", out, want)
 	}

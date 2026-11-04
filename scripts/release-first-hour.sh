@@ -172,7 +172,15 @@ fi
 # file over the runner's 1 MiB line limit must not end the session (Community 0.5 passed
 # every release check and ended its first real chat on exactly that). The tool is a
 # labelled stand-in; the engine, its runner and its API are the candidate's own.
-TMPDIR="$work" bash scripts/session-journey-smoke.sh --binary "$work/olivares" --label release-candidate --large-output
+# Run the engine as a user with no user manager of its own. The hosted runner has one,
+# and required confinement correctly refuses to expose a child to it. This disposable
+# directory holds only synthetic test data; no user manager exists for `nobody`.
+chmod 0777 "$work"
+if command -v sudo >/dev/null 2>&1 && id nobody >/dev/null 2>&1; then
+  sudo -u nobody env -u XDG_RUNTIME_DIR TMPDIR="$work" bash scripts/session-journey-smoke.sh --binary "$work/olivares" --label release-candidate --large-output
+else
+  TMPDIR="$work" bash scripts/session-journey-smoke.sh --binary "$work/olivares" --label release-candidate --large-output
+fi
 "${compose[@]}" logs --no-color olivares | sed -n '/FIRST-BOOT SETUP/,/========================/p' | python3 -c '
 import re, sys
 from pathlib import Path
